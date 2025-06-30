@@ -8,10 +8,15 @@
 pub use crate::core::reasoner::{ReasoningTask, ReasoningResult, ClassificationResult, RealizationResult};
 
 use create::{
-    Error, Result
+    Error, Result,
+    ontology::{Ontology, ClassExpression, Individual, ObjectPropertyExpression, DataProperty, DataPropertyExpression, Axiom},
+    core::{
+        reasoner::Reasoner,
+        tableau::Tableau,
+    }
 };
 use std::{
-    collectin::{HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
     time::{Duration, Instant};
 };
