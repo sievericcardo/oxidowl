@@ -24,4 +24,7 @@ use std::{
 /// Reasoning service that provides high-level reasoning capabilities
 #[derive(Debug, Clone)]
 pub struct ReasoningService {
+    reasoner: Arc<RwLock<Reasoner>>,
+    cache_manager: Arc<RwLock<CacheManager>>,
+    config: ReasonerConfig,
 }
