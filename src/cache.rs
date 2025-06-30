@@ -71,3 +71,78 @@ imple Default for CacheConfig {
     }
 }
 
+/// Cache for concept satisfiability
+#[derive(Debug, Clone)]
+pub struct ConceptSatisfiabilityCache {
+    cache: Arc<RwLock<HashMap<ClassExpression, CacheEntry<bool>>>>,
+    config: CacheConfig,
+}
+
+impl ConceptSatisfiabilityCache {
+    pub fn new(config: CacheConfig) -> Self {
+        Self {
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            config,
+        }
+    }
+
+    pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
+        if !self.config.enable_satisfiability_cache {
+            return None; // Cache is disabled
+        }
+
+        let mut cache = self.cache.write().unwrap();
+        if let Some(entry) = cache.get_mut(expression) {
+            if !entry.is_expired(self.config.ttl) {
+                entry.hit(); // Increment hit count
+                return Some(entry.value);
+            } else {
+                cache.remove(expression); // Remove expired entry
+            }
+        } else {
+            // If not found, we can return None
+            return None;
+        }
+    }
+
+    pub fn put(&self, expression: ClassExpression, result: bool) {
+        if !self.config.enable_satisfiability_cache {
+            return; // Cache is disabled
+        }
+
+        let mut cache = self.cache.write().unwrap();
+
+        if cache.len() >= self.config.max_size {
+            // Evict the oldest entry if max size exceeded
+            self.evict_lru(&mut cache);
+        }
+        cache.insert(expression, CacheEntry::new(result));
+    }
+
+    fn evict_lru(&self, cache: &mut HashMap<ClassExpression, CacheEntry<bool>>) {
+        if let Some((key, _)) = cache.iter().min_by_key(|(_, entry)| entry.timestamp) {
+            cache.remove(key);
+        }
+    }
+
+    pub fn clear(&self) {
+        self.cache.write().unwrap().clear();
+    }
+
+    pub fn size(&self) -> usize {
+        self.cache.read().unwrap().len()
+    }
+
+    pub fn hit_rate(&self) -> f64 {
+        let cache = self.cache.read().unwrap();
+
+        let total_hits: u64 = cache.values().map(|entry| entry.hit_count).sum();
+        let entries = cache.len() as u64;
+
+        if entries == 0 {
+            0.0 // Avoid division by zero
+        } else {
+            total_hits as f64 / cache.len() as f64
+        }
+    }
+}
