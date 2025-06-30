@@ -101,3 +101,21 @@ pub enum CacheEvictionStrategy {
     /// Random eviction
     Random,
 }
+
+/// Server configuration for the reasoning service
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    /// Default port for the reasoning server
+    pub port: u16,
+    /// Default bind address for the server
+    pub bind_address: String,
+    /// Maximum number of concurrent connections
+    pub max_connections: usize,
+    /// Request timeout duration
+    pub request_timeout: Duration,
+    /// Enable CORS (Cross-Origin Resource Sharing) headers
+    pub enable_cors: bool,
+    /// Maximum request size in bytes
+    pub max_request_size: usize,
+}
+
