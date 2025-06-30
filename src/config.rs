@@ -212,3 +212,43 @@ impl Default for ReasonerConfig {
         }
     }
 }
+
+impl ReasonerConfig {
+    /// Load configuration from TOML file
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let content = fs::read_to_string(path)?;
+        let config: ReasonerConfig = toml::from_str(&content)
+            .map_err(|e| Error::configuration(format!("Failed to parse TOML config: {}", e)))?;
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Save configuration to TOML file
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let content = toml::to_string(self)
+            .map_err(|e| Error::configuration(format!("Failed to serialize TOML config: {}", e)))?;
+
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    /// Load configuration from JSON file
+    pub fn load_from_json<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let content = fs::read_to_string(path)?;
+        let config: ReasonerConfig = serde_json::from_str(&content)
+            .map_err(|e| Error::configuration(format!("Failed to parse JSON config: {}", e)))?;
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Save configuration to JSON file
+    pub fn save_to_json<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| Error::configuration(format!("Failed to serialize JSON config: {}", e)))?;
+
+        fs::write(path, content)?;
+        Ok(())
+    }
+}
