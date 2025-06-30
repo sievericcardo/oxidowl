@@ -195,11 +195,11 @@ impl ReasoningService {
     }
 
     // Get all direct superclasses of a class expression
-    pub async fn get_superclasses(&self, class: &ClassExpression) -> Result<HashSet<ClassExpression>> {
+    pub async fn get_superclasses(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let mut reasoner = self.reasoner.write().unwrap();
-        let superclasses = reasoner.get_superclasses(class).await?;
+        let reasoner = self.reasoner.write().unwrap();
+        let superclasses = reasoner.get_superclasses(&class, direct).await?;
 
         // Check timeout
         if let Some(timeout) = self.config.timeout {
@@ -216,11 +216,11 @@ impl ReasoningService {
     }
 
     /// Get all direct subclasses of a class expression
-    pub async fn get_subclasses(&self, class: &ClassExpression) -> Result<HashSet<ClassExpression>> {
+    pub async fn get_subclasses(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let mut reasoner = self.reasoner.write().unwrap();
-        let subclasses = reasoner.get_subclasses(class).await?;
+        let reasoner = self.reasoner.write().unwrap();
+        let subclasses = reasoner.get_subclasses(&class, direct).await?;
 
         // Check timeout
         if let Some(timeout) = self.config.timeout {
@@ -240,7 +240,7 @@ impl ReasoningService {
     pub async fn get_equivalent_classes(&self, class: &ClassExpression) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let reasoner = self.reasoner.write().unwrap();
         let equivalent_classes = reasoner.get_equivalent_classes(class).await?;
 
         // Check timeout
@@ -255,5 +255,395 @@ impl ReasoningService {
         // Log the time taken for the retrieval
         log::info!("Equivalent class retrieval completed in {:?}", start.elapsed());
         Ok(equivalent_classes)
+    }
+
+    /// Get all instances of a class expression
+    pub async fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<Individual>> {
+        let start = Instant::now();
+
+        let reasoner = self.reasoner.write().unwrap();
+        let instances = reasoner.get_instances(&class, direct).await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Instance retrieval timed out".into(),
+                });
+            }
+        }
+
+        // Log the time taken for the retrieval
+        log::info!("Instance retrieval completed in {:?}", start.elapsed());
+        Ok(instances)
+    }
+
+    /// Get all types of an individual
+    pub async fn get_types(&self, individual: &Individual, direct: bool) -> Result<HashSet<ClassExpression>> {
+        let start = Instant::now();
+
+        let reasoner = self.reasoner.write().unwrap();
+        let types = reasoner.get_types(&individual, direct).await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Type retrieval timed out".into(),
+                });
+            }
+        }
+
+        // Log the time taken for the retrieval
+        log::info!("Type retrieval completed in {:?}", start.elapsed());
+        Ok(types)
+    }
+
+    /// Check if an individual is an instance of a class expression
+    pub async fn is_instance_of(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
+        let types = self.get_types(individual, false).await?;
+        for class_type in &types {
+            if self.is_subsumed_by(class_type, concept).await? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Get object property values for an individual
+    pub async fn get_object_property_values(
+        &self,
+        individual: &Individual,
+        property: &ObjectPropertyExpression,
+    ) -> Result<HashSet<Individual>> {
+        let start = Instant::now();
+
+        let reasoner = self.reasoner.write().unwrap();
+        let values = reasoner.get_object_property_values(&individual, &property).await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Object property value retrieval timed out".into(),
+                });
+            }
+        }
+
+        // Log the time taken for the retrieval
+        log::info!("Object property value retrieval completed in {:?}", start.elapsed());
+        Ok(values)
+    }
+
+    /// Get data property values for an individual
+    pub async fn get_data_property_values(
+        &self,
+        individual: &Individual,
+        property: &DataPropertyExpression,
+    ) -> Result<HashSet<crate::ontology::Literal>> {
+        let start = Instant::now();
+
+        let reasoner = self.reasoner.write().unwrap();
+        let property_expr = DataPropertyExpression::DataProperty(property.clone());
+        let result = reasoner.get_data_property_values(&individual, &property_expr).await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Data property value retrieval timed out".into(),
+                });
+            }
+        }
+
+        // Convert Vec<String> to HashSet<Literal>
+        let literals: HashSet<crate::ontology::Literal> = result
+            .into_iter()
+            .map(|s| crate::ontology::Literal {
+                value: s,
+                datatype: url::Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap(),
+                language: None,
+            })
+            .collect();
+
+        // Log the time taken for the retrieval
+        log::info!("Data property value retrieval completed in {:?}", start.elapsed());
+        Ok(literals)
+    }
+
+    /// Classify the ontology (compute class hierarchy)
+    pub async fn classify(&self) -> Result<ClassificationResult> {
+        let start = Instant::now();
+
+        // Check cache
+        if self.config.enable_cache {
+            let cache_manager = self.cache_manager.read().unwrap();
+            if let Some(cached) = self.cache_manager.classification().get(ontology_hash) {
+                log::info!("Classification (cached) completed in {:?}", start.elapsed());
+                return Ok(ClassificationResult::new(cached));
+            }
+        }
+
+        let mut reasoner = self.reasoner.write().unwrap();
+        let result = reasoner.classify().await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Classification timed out".into(),
+                });
+            }
+        }
+
+        // Cache the result if caching is enabled
+        if self.config.enable_cache {
+            let mut cache_manager = self.cache_manager.write().unwrap();
+            self.cache_manager.classification().put(ontology_hash, result.hierarchy.clone());
+        }
+
+        // Log the time taken for classification
+        log::info!("Classification completed in {:?}", start.elapsed());
+        Ok(result)
+    }
+
+    /// Realize the ontology (compute individuals' types)
+    pub async fn realize(&self) -> Result<RealizationResult> {
+        let start = Instant::now();
+
+        // Check cache
+        if self.config.enable_cache {
+            let cache_manager = self.cache_manager.read().unwrap();
+            if let Some(cached) = self.cache_manager.realization().get(ontology_hash) {
+                log::info!("Realization (cached) completed in {:?}", start.elapsed());
+                return Ok(RealizationResult::new(cached));
+            }
+        }
+
+        let mut reasoner = self.reasoner.write().unwrap();
+        let result = reasoner.realize().await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Realization timed out".into(),
+                });
+            }
+        }
+
+        // Cache the result if caching is enabled
+        if self.config.enable_cache {
+            let mut cache_manager = self.cache_manager.write().unwrap();
+            self.cache_manager.realization().put(ontology_hash, result.types.clone());
+        }
+
+        // Log the time taken for realization
+        log::info!("Realization completed in {:?}", start.elapsed());
+        Ok(result)
+    }
+
+    /// Get explanation for an entailment
+    pub async fn explain_entailment(&self, axiom: &crate::ontology::Axiom) -> Result<Vec<ExplanationSet>> {
+        let start = Instant::now();
+
+        if !self.config.enable_explanation {
+            return Err(Error::Reasoning {
+                message: "Explanation is disabled in the configuration".into(),
+            });
+        }
+
+        let reasoner = self.reasoner.write().unwrap();
+        let explanations = reasoner.explain_entailment(&axiom).await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Explanation retrieval timed out".into(),
+                });
+            }
+        }
+
+        let explanation_sets: Vec<ExplanationSet> = result.into_iter()
+            .map(|axiom| {
+                let mut axioms = HashSet::new();
+                axioms.insert(axiom);
+                ExplanationSet::new(axioms)
+            })
+            .collect();
+
+        // Log the time taken for explanation retrieval
+        log::info!("Explanation retrieval completed in {:?}", start.elapsed());
+        Ok(explanations)
+    }
+
+    /// Get explanation for inconsistent ontology
+    pub async fn explain_inconsistency(&self) -> Result<Vec<ExplanationSet>> {
+        let start = Instant::now();
+
+        if !self.config.enable_explanation {
+            return Err(Error::Reasoning {
+                message: "Explanation is disabled in the configuration".into(),
+            });
+        }
+
+        let reasoner = self.reasoner.write().unwrap();
+        let explanations = reasoner.explain_inconsistency().await?;
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Inconsistency explanation retrieval timed out".into(),
+                });
+            }
+        }
+
+        let explanation_sets: Vec<ExplanationSet> = result.into_iter()
+            .map(|axiom| {
+                let mut axioms = HashSet::new();
+                axioms.insert(axiom);
+                ExplanationSet::new(axioms)
+            })
+            .collect();
+
+        // Log the time taken for explanation retrieval
+        log::info!("Inconsistency explanation retrieval completed in {:?}", start.elapsed());
+        Ok(explanation_sets)
+    }
+
+    /// Add axioms incrementally to the ontology
+    pub async fn add_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
+        let start = Instant::now();
+
+        if !self.config.enable_incremental {
+            return Err(Error::Reasoning {
+                message: "Incremental reasoning is disabled in the configuration".into(),
+            });
+        }
+
+        let mut reasoner = self.reasoner.write().unwrap();
+        for axiom in axioms {
+            reasoner.add_axiom(&axiom).await?;
+        }
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Axiom addition timed out".into(),
+                });
+            }
+        }
+
+        // Clear relevant caches
+        if self.config.enable_caching {
+            self.cache_manager.clear_all();
+        }
+
+        // Log the time taken for adding axioms
+        log::info!("Axioms added in {:?}", start.elapsed());
+        Ok(())
+    }
+
+    /// Remove axioms incrementally from the ontology
+    pub async fn remove_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
+        let start = Instant::now();
+
+        if !self.config.enable_incremental {
+            return Err(Error::Reasoning {
+                message: "Incremental reasoning is disabled in the configuration".into(),
+            });
+        }
+
+        let mut reasoner = self.reasoner.write().unwrap();
+        for axiom in axioms {
+            reasoner.remove_axiom(&axiom).await?;
+        }
+
+        // Check timeout
+        if let Some(timeout) = self.config.timeout {
+            if start.elapsed() > timeout {
+                return Err(Error::Timeout {
+                    message: "Axiom removal timed out".into(),
+                });
+            }
+        }
+
+        // Clear relevant caches
+        if self.config.enable_caching {
+            self.cache_manager.clear_all();
+        }
+
+        // Log the time taken for removing axioms
+        log::info!("Axioms removed in {:?}", start.elapsed());
+        Ok(())
+    }
+
+    /// Get reasoning statistics -- TODO: implement the actual statistics gathering
+    pub fn get_statistics(&self) -> ReasoningStatistics {
+        let reasoner = self.reasoner.read().unwrap();
+        let cache_stats = self.cache_manager.get_cache_stats();
+
+        Ok (ReasoningStatistics {
+            ontology_size: reasoner.get_ontology_size(),
+            reasoning_time: Duration::from_secs(0), // Would be tracked in real implementation
+            cache_stats,
+            memory_usage: 0, // Would be measured in real implementation
+        })
+    }
+
+    // Compute the hash of the ontology for caching
+    fn compute_ontology_hash(&self) -> Result<u64> {
+        // TODO: placeholder for the hash. Implement a proper hashing mechanism
+        let reasoner = self.reasoner.read().unwrap();
+        Ok(reasoner.get_ontology_size() as u64)
+    }
+
+    /// Query property chain reasoning
+    /// Implements role chain propagation: if R1 * R2 * ... * Rn c S, 
+    /// and we have a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
+    pub async fn query_property_chain(
+        &self, 
+        individual: &Individual, 
+        property_chain: &[ObjectPropertyExpression]
+    ) -> Result<HashSet<Individual>> {
+        let start = Instant::now();
+
+        if property_chain.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        if property_chain.len() == 1 {
+            // Single property - delegate to existing method
+            return self.get_object_property_values(individual, &property_chain[0]).await;
+        }
+
+        // Multi-step property chain reasoning
+        let mut current_individuals = HashSet::new();
+        current_individuals.insert(individual.clone());
+        
+        // Step through each property in the chain
+        for property in property_chain {
+            let mut next_individuals = HashSet::new();
+            
+            // For each current individual, follow the property
+            for curr_ind in &current_individuals {
+                let targets = self.get_object_property_values(curr_ind, property).await?;
+                next_individuals.extend(targets);
+            }
+            
+            current_individuals = next_individuals;
+            
+            // If no individuals remain, the chain is broken
+            if current_individuals.is_empty() {
+                break;
+            }
+        }
+
+        // Log the time taken for the property chain query
+        log::info!("Property chain query completed in {:?}", start.elapsed());
+        Ok(result)
     }
 }
