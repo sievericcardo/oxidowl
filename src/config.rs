@@ -148,3 +148,18 @@ pub enum LogLevel {
     /// Trace level logging
     Trace,
 }
+
+/// Performance configuration for the reasoner
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformanceConfig {
+    /// Number of threads for parallel reasoning
+    pub worker_threads: Option<usize>,
+    /// Enable or disable tableau expansion
+    pub enable_parallel_expansion: bool,
+    /// Enable or disable optimisations
+    pub enable_simd: bool,
+    /// Memory pool in MB
+    pub memory_pool_size_mb: u64,
+    /// Garbage collection threshold
+    pub gc_threshold: f64,
+}
