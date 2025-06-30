@@ -44,3 +44,17 @@ pub struct ReasoningConfig {
     /// Enable clash detection
     pub enable_clash_detection: bool,
 }
+
+
+/// Blocking strategy for the tableau algorithm
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BlockingStrategy {
+    /// Anywhere blocking
+    Anywhere,
+    /// Ancestor blocking
+    Ancestor,
+    /// Pairwise blocking
+    Pairwise,
+    /// Dynamic blocking (adaptive)
+    Dynamic,
+}
