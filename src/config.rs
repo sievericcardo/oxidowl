@@ -251,4 +251,47 @@ impl ReasonerConfig {
         fs::write(path, content)?;
         Ok(())
     }
+
+    /// Validate the configuration settings
+    pub fn validate(&self) -> Result<()> {
+        // Validate timeouts
+        if let Some(timeout) = self.reasoning.timeout {
+            if timeout.as_secs() == 0 {
+                return Err(Error::configuration("Timeout cannot be zero".to_string()));
+            }
+        }
+
+        // Validate memory limits
+        if let Some(max_memory) = self.reasoning.max_memory_mb {
+            if max_memory == 0 {
+                return Err(Error::configuration("Maximum memory cannot be zero".to_string()));
+            }
+        }
+
+        // Validate cache settings
+        if self.cache.max_cache_size_mb == 0 {
+            return Err(Error::configuration("Maximum cache size cannot be zero".to_string()));
+        }
+
+        // Validate server settings
+        if self.server.max_connections == 0 {
+            return Err(Error::configuration("Maximum connections cannot be zero".to_string()));
+        }
+
+        if self.server.request_timeout.as_secs() == 0 {
+            return Err(Error::configuration("Request timeout cannot be zero".to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// Get the worker threads to use
+    pub fn worker_thread_count(&self) -> usize {
+        self.performance.worker_threads.unwrap_or_else(|| num_cpus::get())
+    }
+
+    /// Check if parallel processing is enabled
+    pub fn is_parallel_processing_enabled(&self) -> bool {
+        self.performance.enable_parallel_expansion && self.worker_thread_count() > 1
+    }
 }
