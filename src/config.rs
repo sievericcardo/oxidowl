@@ -119,3 +119,32 @@ pub struct ServerConfig {
     pub max_request_size: usize,
 }
 
+/// Logging configuration for the reasoner
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    /// Logging level
+    pub level: LogLevel,
+    /// Enable or disable file logging
+    pub enable_file_logging: bool,
+    /// Path to the log file
+    pub log_file_path: Option<String>,
+    /// Log rotation settings in MB
+    pub log_rotation_size_mb: u64,
+    /// Maximum number of log files to keep
+    pub max_log_files: u32,
+}
+
+/// Logging levels
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum LogLevel {
+    /// Debug level logging
+    Debug,
+    /// Info level logging
+    Info,
+    /// Warning level logging
+    Warning,
+    /// Error level logging
+    Error,
+    /// Trace level logging
+    Trace,
+}
