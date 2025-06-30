@@ -58,3 +58,14 @@ pub enum BlockingStrategy {
     /// Dynamic blocking (adaptive)
     Dynamic,
 }
+
+/// Existential expansion strategy for the tableau
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ExpansionStrategy {
+    /// Creation order strategy
+    CreationOrder,
+    /// Individual reuse strategy
+    IndividualReuse,
+    /// Priority-based expansion
+    Priority,
+}
