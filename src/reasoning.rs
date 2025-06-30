@@ -6,3 +6,17 @@
 
 // Re-export core reasoner types for public API
 pub use crate::core::reasoner::{ReasoningTask, ReasoningResult, ClassificationResult, RealizationResult};
+
+use create::{
+    Error, Result
+};
+use std::{
+    collectin::{HashMap, HashSet},
+    sync::{Arc, RwLock},
+    time::{Duration, Instant};
+};
+
+/// Reasoning service that provides high-level reasoning capabilities
+#[derive(Debug, Clone)]
+pub struct ReasoningService {
+}
