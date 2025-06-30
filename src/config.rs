@@ -355,3 +355,17 @@ impl ReasonerConfig {
         config
     }
 }
+
+/// Network service configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    pub enable_owllink: bool,
+    pub enable_sparql: bool,
+    pub enable_http: bool,
+    pub enable_websocket: bool,
+    pub owllink_address: std::net::SocketAddr,
+    pub sparql_address: std::net::SocketAddr,
+    pub http_address: std::net::SocketAddr,
+    pub websocket_address: std::net::SocketAddr,
+    pub request_timeout_seconds: u64,
+}
