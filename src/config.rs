@@ -295,3 +295,63 @@ impl ReasonerConfig {
         self.performance.enable_parallel_expansion && self.worker_thread_count() > 1
     }
 }
+
+/// Create a configuration for specific use cases
+impl ReasonerConfig {
+    /// Configuration for large ontologies
+    pub fn large_ontology_config() -> Self {
+        let mut config = Self::default();
+        config.reasoning.max_memory_mb = Some(8192); // 8 GB
+        config.cache.max_cache_size_mb = 2048; // 2 GB
+        config.performance.memory_pool_size_mb = 1024; // 1 GB
+        config.reasoner.timeout = Some(Duration::from_secs(1800)); // 30 minutes
+        config.reasoning.max_expansion_depth = 200; // Increase depth for large ontologies
+        config.reasoning.enable_optimisations = true; // Enable optimisations
+        config
+    }
+
+    /// Configuration for web services
+    pub fn web_service_config() -> Self {
+        let mut config = Self::default();
+        config.server.max_connections = 500; // Increase for web service
+        config.server.request_timeout = Duration::from_secs(60); // 1 minute timeout
+        config.reasoning.timeout = Some(Duration::from_secs(120)); // 2 minutes
+        config.cache.persistence = true; // Enable cache persistence
+        config
+    }
+
+    /// Configuration for debugging and development
+    pub fn debug_config() -> Self {
+        let mut config = Self::default();
+        config.logging.level = LogLevel::Debug; // Set logging to debug level
+        config.reasoning.enable_explanations = true; // Enable explanations
+        config.reasoning.enable_clash_detection = false; // Disable clash detection for debugging
+        config.cache.enable_satisfiability_cache = false; // Disable satisfiability cache for debugging
+        config.performance.worker_threads = Some(1); // Use single thread for debugging
+        config
+    }
+
+    /// Configuration for production environments
+    pub fn production_config() -> Self {
+        let mut config = Self::default();
+        config.logging.level = LogLevel::Info; // Set logging to info level
+        config.reasoning.enable_explanations = false; // Disable explanations in production
+        config.reasoning.enable_clash_detection = true; // Enable clash detection
+        config.cache.enable_satisfiability_cache = true; // Enable satisfiability cache
+        config.performance.worker_threads = Some(8); // Use multiple threads for production
+        config.performance.enable_parallel_expansion = true; // Enable parallel expansion
+        config
+    }
+
+    /// Configuration for testing purposes
+    pub fn test_config() -> Self {
+        let mut config = Self::default();
+        config.logging.level = LogLevel::Debug; // Set logging to debug level for tests
+        config.reasoning.enable_explanations = true; // Enable explanations for tests
+        config.reasoning.enable_clash_detection = false; // Disable clash detection for tests
+        config.cache.enable_satisfiability_cache = true; // Enable satisfiability cache for tests
+        config.performance.worker_threads = Some(2); // Use 2 threads for testing
+        config.performance.enable_parallel_expansion = false; // Disable parallel expansion for tests
+        config
+    }
+}
