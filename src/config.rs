@@ -69,3 +69,35 @@ pub enum ExpansionStrategy {
     /// Priority-based expansion
     Priority,
 }
+
+/// Configuration for caching mechanisms
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    /// Enable satisfiability cache
+    pub enable_satisfiability_cache: bool,
+    /// Enable completion graph caching
+    pub enable_completion_graph_cache: bool,
+    /// Enable unsatisfiability cache
+    pub enable_unsatisfiability_cache: bool,
+    /// Maximum size of the cache in MB
+    pub max_cache_size_mb: u64,
+    /// Time to live for cache entries
+    pub cache_ttl: Option<std::time::Duration>,
+    /// Cache eviction strategy
+    pub eviction_strategy: CacheEvictionStrategy,
+    /// Cache persistence settings
+    pub persistence: bool,
+}
+
+/// Cache eviction strategies
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum CacheEvictionStrategy {
+    /// Least Recently Used (LRU) eviction
+    LRU,
+    /// Least Frequently Used (LFU) eviction
+    LFU,
+    /// Time-based eviction
+    TimeToLive,
+    /// Random eviction
+    Random,
+}
