@@ -163,3 +163,52 @@ pub struct PerformanceConfig {
     /// Garbage collection threshold
     pub gc_threshold: f64,
 }
+
+impl Default for ReasonerConfig {
+    fn default() -> Self {
+        Self {
+            reasoning: ReasoningConfig {
+                blocking_strategy: BlockingStrategy::Anywhere,
+                expansion_strategy: ExpansionStrategy::CreationOrder,
+                enable_optimisations: true,
+                timeout: Some(Duration::from_secs(300)), // 5 minutes
+                max_memory_mb: Some(4096), // 4 GB
+                incremental_reasoning: false,
+                enable_explanations: false,
+                max_expansion_depth: 100,
+                enable_clash_detection: true,
+            },
+            cache: CacheConfig {
+                enable_satisfiability_cache: true,
+                enable_completion_graph_cache: true,
+                enable_unsatisfiability_cache: false,
+                max_cache_size_mb: 1024, // 1 GB
+                cache_ttl: Some(Duration::from_secs(3600)),
+                eviction_strategy: CacheEvictionStrategy::LRU,
+                persistence: false,
+            },
+            server: ServerConfig {
+                port: 8080,
+                bind_address: "127.0.01".to_string(),
+                max_connections: 100,
+                request_timeout: Duration::from_secs(30),
+                enable_cors: true,
+                max_request_size: 50 * 1024 * 1024, // 50MB
+            },
+            logging: LoggingConfig {
+                level: LogLevel::Info,
+                enable_file_logging: false,
+                log_file_path: None,
+                log_rotation_size_mb: 100, // 100 MB
+                max_log_files: 5,
+            },
+            performance: PerformanceConfig {
+                worker_threads: Some(4), // Default to 4 threads
+                enable_parallel_expansion: true,
+                enable_simd: true,
+                memory_pool_size_mb: 512, // 512 MB
+                gc_threshold: 0.75, // 75% threshold for GC
+            },
+        }
+    }
+}
