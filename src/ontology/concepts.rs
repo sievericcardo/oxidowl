@@ -399,4 +399,238 @@ impl ClassExpression {
             }
         }
     }
+
+    /// Simplify the class expression by applying logic rules
+    pub fn simplify(&self) -> Result<ClassExpression> {
+        match self {
+            ClassExpression::ObjectIntersectionOf(expressions) => {
+                let simplified: Vec<_> = expressions
+                    .iter()
+                    .map(|e| e.simplify())
+                    .collect::<Result<Vec<_>>>()?;
+                    
+                // Remove duplicates and empty expressions
+                let mut unique_exprs = Vec::new();
+                let mut has_nothing = false;
+
+                for expr in simplfied {
+                    if let ClassExpression::Class(class) = &expr {
+                        if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+                            has_nothing = true;
+                            break; // Nothing dominates intersection
+                        } else if class.iri.as_str() != "http://www.w3.org/2002/07/owl#Thing" {
+                            continue; // Ignore Thing in intersection
+                        }
+                    }
+
+                    if !unique_exprs.contains(&expr) {
+                        unique_exprs.push(expr);
+                    }
+                }
+
+                if has_nothing {
+                    Self::nothing()
+                } else if unique_exprs.is_empty() {
+                    Self::thing() // Empty intersection is Thing
+                } else if unique_exprs.len() == 1 {
+                    unique_exprs.into_iter().next().unwrap() // Single expression
+                } else {
+                    ClassExpression::ObjectIntersectionOf(unique_exprs)
+                }
+            }
+
+            ClassExpression::ObjectUnionOf(expressions) => {
+                let simplified : Vec<_> = expressions
+                    .iter()
+                    .map(|e| e.simplify())
+                    .collect::<Result<Vec<_>>>()?;
+
+                // Remove duplicates and empty expressions
+                let mut unique_exprs = Vec::new();
+                let mut has_thing = false;
+
+                for expr in simplified {
+                    if let ClassExpression::Class(class) = &expr {
+                        if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+                            has_thing = true;
+                            break; // Thing dominates union
+                        } else if class.iri.as_str() != "http://www.w3.org/2002/07/owl#Nothing" {
+                            continue; // Ignore Nothing in union
+                        }
+                    }
+
+                    if !unique_exprs.contains(&expr) {
+                        unique_exprs.push(expr);
+                    }
+                }
+
+                if has_thing {
+                    Self::thing()
+                } else if unique_exprs.is_empty() {
+                    Self::nothing() // Empty union is Nothing
+                } else if unique_exprs.len() == 1 {
+                    unique_exprs.into_iter().next().unwrap() // Single expression
+                } else {
+                    ClassExpression::ObjectUnionOf(unique_exprs)
+                }
+            }
+
+            ClassExpression::ObjectComplementOf(expr) => {
+                let simplified = expr.simplify()?;
+
+                if let ClassExpression::ObjectComplementOf(inner) = simplified {
+                    // Double negation elimination
+                    inner.as_ref().clone()
+                } else if let ClassExpression::Class(class) = &simplified {
+                    if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+                        // Complement of Thing is Nothing
+                        ClassExpression::nothing()
+                    } else if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+                        // Complement of Nothing is Thing
+                        ClassExpression::thing()
+                    } else {
+                        // Complement of a named class remains unchanged
+                        ClassExpression::ObjectComplementOf(Box::new(simplified))
+                    }
+                } else {
+                    // Other expressions remain unchanged
+                    ClassExpression::ObjectComplementOf(Box::new(simplified))
+                }
+            }
+
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                let simplified_filler = filler.simplify()?;
+                ClassExpression::ObjectSomeValuesFrom {
+                    property: property.clone(),
+                    filler: Box::new(simplified_filler),
+                }
+            }
+
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                let simplified_filler = filler.simplify()?;
+                ClassExpression::ObjectAllValuesFrom {
+                    property: property.clone(),
+                    filler: Box::new(simplified_filler),
+                }
+            }
+
+            ClassExpression::ObjectHasValue { property, value } => {
+                // Has value restrictions do not simplify further
+                ClassExpression::ObjectHasValue {
+                    property: property.clone(),
+                    value: value.clone(),
+                }
+            }
+
+            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+                ClassExpression::ObjectMinCardinality {
+                    property: property.clone(),
+                    cardinality: *cardinality,
+                    filler: filler.as_ref().map(|f| Box::new(f.simplify())),
+                }
+            }
+
+            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
+                ClassExpression::ObjectMaxCardinality {
+                    property: property.clone(),
+                    cardinality: *cardinality,
+                    filler: filler.as_ref().map(|f| Box::new(f.simplify())),
+                }
+            }
+
+            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
+                ClassExpression::ObjectExactCardinality {
+                    property: property.clone(),
+                    cardinality: *cardinality,
+                    filler: filler.as_ref().map(|f| Box::new(f.simplify())),
+                }
+            }
+
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                // Data ranges do not simplify further
+                ClassExpression::DataSomeValuesFrom {
+                    property: property.clone(),
+                    filler: filler.clone(),
+                }
+            }
+
+            ClassExpression::DataAllValuesFrom { property, filler } => {
+                // Data ranges do not simplify further
+                ClassExpression::DataAllValuesFrom {
+                    property: property.clone(),
+                    filler: filler.clone(),
+                }
+            }
+
+            ClassExpression::DataHasValue { property, value } => {
+                // Has value restrictions do not simplify further
+                ClassExpression::DataHasValue {
+                    property: property.clone(),
+                    value: value.clone(),
+                }
+            }
+
+            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
+                ClassExpression::DataMinCardinality {
+                    property: property.clone(),
+                    cardinality: *cardinality,
+                    filler: filler.clone(),
+                }
+            }
+
+            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
+                ClassExpression::DataMaxCardinality {
+                    property: property.clone(),
+                    cardinality: *cardinality,
+                    filler: filler.clone(),
+                }
+            }
+
+            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
+                ClassExpression::DataExactCardinality {
+                    property: property.clone(),
+                    cardinality: *cardinality,
+                    filler: filler.clone(),
+                }
+            }
+
+            ClassExpression::AnnotationAssertion { property, subject, value } => {
+                // Annotation assertions do not simplify further
+                ClassExpression::AnnotationAssertion {
+                    property: property.clone(),
+                    subject: subject.clone(),
+                    value: value.clone(),
+                }
+            }
+
+            ClassExpression::SubAnnotationPropertyOf { sub_property, super_property } => {
+                // Sub-annotation property assertions do not simplify further
+                ClassExpression::SubAnnotationPropertyOf {
+                    sub_property: sub_property.clone(),
+                    super_property: super_property.clone(),
+                }
+            }
+
+            ClassExpression::AnnotationPropertyDomain { property, domain } => {
+                // Annotation property domains do not simplify further
+                ClassExpression::AnnotationPropertyDomain {
+                    property: property.clone(),
+                    domain: domain.clone(),
+                }
+            }
+
+            ClassExpression::AnnotationPropertyRange { property, range } => {
+                // Annotation property ranges do not simplify further
+                ClassExpression::AnnotationPropertyRange {
+                    property: property.clone(),
+                    range: range.clone(),
+                }
+            }
+
+            _ => {
+                // Other expressions remain unchanged
+                self.clone()
+            }
+        }
+    }
 }
