@@ -105,3 +105,104 @@ impl AnonymousIndividual {
         Self::new(Self::generate_unique_id())
     }
 }
+
+/// Individual assertion for ABox reasoning
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndividualAssertion {
+    /// Class assertion: the individual is an instance of a class.
+    ClassAssertion {
+        individual: Individual,
+        class: crate::ontology::ClassExpression,
+    },
+
+    /// Object property assertion: the individual has a relationship with another individual.
+    ObjectPropertyAssertion {
+        subject: Individual,
+        property: crate::ontology::ObjectPropertyExpression,
+        object: Individual,
+    },
+
+    /// Negative object property assertion: the individual does not have a relationship with another individual.
+    NegativeObjectPropertyAssertion {
+        subject: Individual,
+        property: crate::ontology::ObjectPropertyExpression,
+        object: Individual,
+    },
+
+    /// Data property assertion: the individual has a relationship with a data value.
+    DataPropertyAssertion {
+        subject: Individual,
+        property: crate::ontology::DataPropertyExpression,
+        value: crate::ontology::Literal,
+    },
+
+    /// Negative data property assertion: the individual does not have a relationship with a data value.
+    NegativeDataPropertyAssertion {
+        subject: Individual,
+        property: crate::ontology::DataPropertyExpression,
+        value: crate::ontology::Literal,
+    },
+
+    /// Same individuals assertion: the individual is equivalent to another individual.
+    SameIndividuals {
+        individuals: Vec<Individual>,
+    },
+
+    /// Different individuals assertion: the individual is not equivalent to another individual.
+    DifferentIndividuals {
+        individuals: Vec<Individual>,
+    },
+
+    /// Annotation assertion: the individual has an annotation.
+    AnnotationAssertion {
+        individual: Individual,
+        property: crate::ontology::AnnotationPropertyExpression,
+        value: crate::ontology::Literal,
+    },
+}
+
+impl IndividualAssertion {
+    /// Get the individual involved in the assertion.
+    pub fn individuals(&self) -> HashSet<Individual> {
+        let mut individuals = HashSet::new();
+
+        match self {
+            IndividualAssertion::ClassAssertion { individual, .. } => {
+                individuals.insert(individual.clone());
+            }
+            IndividualAssertion::ObjectPropertyAssertion { subject, object, .. } |
+            IndividualAssertion::NegativeObjectPropertyAssertion { subject, object, .. } => {
+                individuals.insert(subject.clone());
+                individuals.insert(object.clone());
+            }
+            IndividualAssertion::DataPropertyAssertion { subject, .. } |
+            IndividualAssertion::NegativeDataPropertyAssertion { subject, .. } => {
+                individuals.insert(subject.clone());
+            }
+            IndividualAssertion::SameIndividuals { individuals: inds } |
+            IndividualAssertion::DifferentIndividuals { individuals: inds } => {
+                individuals.extend(inds.iter().cloned());
+            }
+            IndividualAssertion::AnnotationAssertion { individual, .. } => {
+                individuals.insert(individual.clone());
+            }
+        }
+
+        individuals
+    }
+
+    /// Check if the assertion is positive (i.e., it asserts a relationship).
+    pub fn is_positive(&self) -> bool {
+        !matches!(
+            self,
+            IndividualAssertion::NegativeObjectPropertyAssertion { .. }
+                | IndividualAssertion::NegativeDataPropertyAssertion { .. }
+        )
+    }
+
+    /// Check if the assertion is negative (i.e., it denies a relationship).
+    pub fn is_negative(&self) -> bool {
+        !self.is_positive()
+    }
+}
+
