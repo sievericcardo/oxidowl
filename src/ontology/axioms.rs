@@ -382,3 +382,92 @@ pub struct AnnotationPropertyRangeAxiom {
     pub range: crate::ontology::DataRange,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
+
+impl AxiomTrait for Axiom {
+    fn axiom_id(&self) -> AxiomId {
+        match self {
+            Axiom::SubClassOf(axiom) => axiom.id,
+            Axiom::EquivalentClasses(axiom) => axiom.id,
+            Axiom::DisjointClasses(axiom) => axiom.id,
+            Axiom::DisjointUnion(axiom) => axiom.id,
+            Axiom::SubObjectPropertyOf(axiom) => axiom.id,
+            Axiom::EquivalentObjectProperties(axiom) => axiom.id,
+            Axiom::DisjointObjectProperties(axiom) => axiom.id,
+            Axiom::InverseObjectProperties(axiom) => axiom.id,
+            Axiom::ObjectPropertyDomain(axiom) => axiom.id,
+            Axiom::ObjectPropertyRange(axiom) => axiom.id,
+            Axiom::FunctionalObjectProperty(axiom) => axiom.id,
+            Axiom::InverseFunctionalObjectProperty(axiom) => axiom.id,
+            Axiom::ReflexiveObjectProperty(axiom) => axiom.id,
+            Axiom::IrreflexiveObjectProperty(axiom) => axiom.id,
+            Axiom::SymmetricObjectProperty(axiom) => axiom.id,
+            Axiom::AsymmetricObjectProperty(axiom) => axiom.id,
+            Axiom::TransitiveObjectProperty(axiom) => axiom.id,
+            Axiom::SubDataPropertyOf(axiom) => axiom.id,
+            Axiom::EquivalentDataProperties(axiom) => axiom.id,
+            Axiom::DisjointDataProperties(axiom) => axiom.id,
+            Axiom::DataPropertyDomain(axiom) => axiom.id,
+            Axiom::DataPropertyRange(axiom) => axiom.id,
+            Axiom::FunctionalDataProperty(axiom) => axiom.id,
+            Axiom::SameIndividual(axiom) => axiom.id,
+            Axiom::DifferentIndividuals(axiom) => axiom.id,
+            Axiom::ClassAssertion(axiom) => axiom.id,
+            Axiom::ObjectPropertyAssertion(axiom) => axiom.id,
+            Axiom::DataPropertyAssertion(axiom) => axiom.id,
+            Axiom::NegativeObjectPropertyAssertion(axiom) => axiom.id,
+            Axiom::NegativeDataPropertyAssertion(axiom) => axiom.id,
+            Axiom::AnnotationAssertion(axiom) => axiom.id,
+            Axiom::SubAnnotationPropertyOf(axiom) => axiom.id,
+            Axiom::AnnotationPropertyDomain(axiom) => axiom.id,
+            Axiom::AnnotationPropertyRange(axiom) => axiom.id,
+        }
+    }
+
+    fn axiom_type(&self) -> AxiomType {
+        match self {
+            Axiom::SubClassOf(_) => AxiomType::SubClassOf,
+            Axiom::EquivalentClasses(_) => AxiomType::EquivalentClasses,
+            Axiom::DisjointClasses(_) => AxiomType::DisjointClasses,
+            Axiom::DisjointUnion(_) => AxiomType::DisjointUnion,
+            Axiom::SubObjectPropertyOf(_) => AxiomType::SubObjectPropertyOf,
+            Axiom::EquivalentObjectProperties(_) => AxiomType::EquivalentObjectProperties,
+            Axiom::DisjointObjectProperties(_) => AxiomType::DisjointObjectProperties,
+            Axiom::InverseObjectProperties(_) => AxiomType::InverseObjectProperties,
+            Axiom::ObjectPropertyDomain(_) => AxiomType::ObjectPropertyDomain,
+            Axiom::ObjectPropertyRange(_) => AxiomType::ObjectPropertyRange,
+            Axiom::FunctionalObjectProperty(_) => AxiomType::FunctionalObjectProperty,
+            Axiom::InverseFunctionalObjectProperty(_) => AxiomType::InverseFunctionalObjectProperty,
+            Axiom::ReflexiveObjectProperty(_) => AxiomType::ReflexiveObjectProperty,
+            Axiom::IrreflexiveObjectProperty(_) => AxiomType::IrreflexiveObjectProperty,
+            Axiom::SymmetricObjectProperty(_) => AxiomType::SymmetricObjectProperty,
+            Axiom::AsymmetricObjectProperty(_) => AxiomType::AsymmetricObjectProperty,
+            Axiom::TransitiveObjectProperty(_) => AxiomType::TransitiveObjectProperty,
+            Axiom::SubDataPropertyOf(_) => AxiomType::SubDataPropertyOf,
+            Axiom::EquivalentDataProperties(_) => AxiomType::EquivalentDataProperties,
+            Axiom::DisjointDataProperties(_) => AxiomType::DisjointDataProperties,
+            Axiom::DataPropertyDomain(_) => AxiomType::DataPropertyDomain,
+            Axiom::DataPropertyRange(_) => AxiomType::DataPropertyRange,
+            Axiom::FunctionalDataProperty(_) => AxiomType::FunctionalDataProperty,
+            Axiom::SameIndividual(_) => AxiomType::SameIndividual,
+            Axiom::DifferentIndividuals(_) => AxiomType::DifferentIndividuals,
+            Axiom::ClassAssertion(_) => AxiomType::ClassAssertion,
+            Axiom::ObjectPropertyAssertion(_) => AxiomType::ObjectPropertyAssertion,
+            Axiom::DataPropertyAssertion(_) => AxiomType::DataPropertyAssertion,
+            Axiom::NegativeObjectPropertyAssertion(_) => AxiomType::NegativeObjectPropertyAssertion,
+            Axiom::NegativeDataPropertyAssertion(_) => AxiomType::NegativeDataPropertyAssertion,
+            Axiom::AnnotationAssertion(_) => AxiomType::AnnotationAssertion,
+            Axiom::SubAnnotationPropertyOf(_) => AxiomType::SubAnnotationPropertyOf,
+            Axiom::AnnotationPropertyDomain(_) => AxiomType::AnnotationPropertyDomain,
+            Axiom::AnnotationPropertyRange(_) => AxiomType::AnnotationPropertyRange,
+        }
+    }
+
+    fn is_logical(&self) -> bool {
+        !matches!(self,
+            Axiom::AnnotationAssertion(_) |
+            Axiom::SubAnnotationPropertyOf(_) |
+            Axiom::AnnotationPropertyDomain(_) |
+            Axiom::AnnotationPropertyRange(_)
+        )
+    }
+}
