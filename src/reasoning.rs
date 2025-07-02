@@ -647,3 +647,124 @@ impl ReasoningService {
         Ok(result)
     }
 }
+
+/// Explanation set for reasoning entailments
+#[derive(Debug, Clone)]
+pub struct ExplanationSet {
+    pub axioms: HashSet<crate::ontology::Axiom>,
+    pub minimal: bool,
+}
+
+impl ExplanationSet {
+    // Create a new explanation set
+    pub fn new(axioms: HashSet<crate::ontology::Axiom>) -> Self {
+        Self {
+            axioms,
+            minimal: true, // Default to minimal explanations
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.axioms.len()
+    }
+
+    pub fn is_minimal(&self) -> bool {
+        self.minimal
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.axioms.is_empty()
+    }
+}
+
+/// Reasoning statistics for the service
+#[derive(Debug, Clone)]
+pub struct ReasoningStatistics {
+    pub ontology_size: usize,
+    pub reasoning_time: Duration,
+    pub cache_stats: crate::cahce::CacheStats,
+    pub memory_usage: usize, // In bytes
+}
+
+pub struct QueryInterface {
+    reasoning_service: ReasoningService,
+}
+
+impl QueryInterface {
+    pub fn new(reasoning_service: ReasoningService) -> Self {
+        Self {
+            reasoning_service,
+        }
+    }
+
+    /// Execute a subsumption query
+    pub async fn execute_subsumption_query(
+        &self, 
+        subclass: ClassExpression, 
+        superclass: ClassExpression
+    ) -> Result<bool> {
+        self.reasoning_service.is_subsumed_by(&subclass, &superclass).await
+    }
+
+    /// Execute an instance query
+    pub async fn execute_instance_query(
+        &self, 
+        individual: Individual, 
+        class: ClassExpression
+    ) -> Result<bool> {
+        self.reasoning_service.is_instance_of(&individual, &class).await
+    }
+
+    pub async fn query_instances(
+        &self, 
+        class: ClassExpression, 
+        direct: bool
+    ) -> Result<HashSet<Individual>> {
+        self.reasoning_service.get_instances(&class, direct).await
+    }
+
+    /// Execute a property value query
+    pub async fn execute_property_value_query(
+        &self, 
+        individual: Individual, 
+        property_chain: Vec<ObjectPropertyExpression>
+    ) -> Result<HashSet<Individual>> {
+        if property_chain.len() == 1 {
+            // Single property query
+            self.reasoning_service.get_object_property_values(&individual, &property_chain[0]).await
+        } else {
+            // Multi-step property chain query
+            self.reasoning_service.query_property_chain(&individual, &property_chain).await
+        }
+    }
+
+    /// Execute batch queries
+    pub async fn batch_satisfiability_check (
+        &self,
+        concepts: Vec<ClassExpression>
+    ) -> Result<HashMap<ClassExpression, bool>> {
+        let mut results = HashMap::new();
+
+        for concept in concepts {
+            let result = self.reasoning_service.is_satisfiable(&concept).await?;
+            results.insert(concept, result);
+        }
+
+        Ok(results)
+    }
+
+    /// Execute batch subsumption check
+    pub async fn batch_subsumption_check(
+        &self,
+        queries: Vec<(ClassExpression, ClassExpression)>
+    ) -> Result<HashMap<(ClassExpression, ClassExpression), bool>> {
+        let mut results = HashMap::new();
+
+        for (subclass, superclass) in queries {
+            let result = self.reasoning_service.is_subsumed_by(&subclass, &superclass).await?;
+            results.insert((subclass, superclass), result);
+        }
+
+        Ok(results)
+    }
+}
