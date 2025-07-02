@@ -471,3 +471,126 @@ impl AxiomTrait for Axiom {
         )
     }
 }
+
+/// Axiom store to manage OWL 2 DL axioms.
+#[derive(Debug, Clone)]
+pub struct AxiomStore {
+    axioms: HashMap<AxiomId, Axiom>,
+    axioms_by_type: HashMap<AxiomType, HashSet<AxiomId>>,
+    next_id: AxiomId,
+}
+
+impl AxiomStore {
+    pub fn new() -> Self {
+        AxiomStore {
+            axioms: HashMap::new(),
+            axioms_by_type: HashMap::new(),
+            next_id: 1,
+        }
+    }
+
+    pub fn add_axiom(&mut self, axiom: Axiom) -> Result<AxiomId> {
+        let id = axiom.axiom_id();
+        if self.axioms.contains_key(&id) {
+            return Err(Error::AxiomAlreadyExists(id));
+        }
+
+        // Set the ID
+        match &mut axiom {
+            Axiom::SubClassOf(axiom) => axiom.id = id,
+            Axiom::EquivalentClasses(axiom) => axiom.id = id,
+            Axiom::DisjointClasses(axiom) => axiom.id = id,
+            Axiom::DisjointUnion(axiom) => axiom.id = id,
+            Axiom::SubObjectPropertyOf(axiom) => axiom.id = id,
+            Axiom::EquivalentObjectProperties(axiom) => axiom.id = id,
+            Axiom::DisjointObjectProperties(axiom) => axiom.id = id,
+            Axiom::InverseObjectProperties(axiom) => axiom.id = id,
+            Axiom::ObjectPropertyDomain(axiom) => axiom.id = id,
+            Axiom::ObjectPropertyRange(axiom) => axiom.id = id,
+            Axiom::FunctionalObjectProperty(axiom) => axiom.id = id,
+            Axiom::InverseFunctionalObjectProperty(axiom) => axiom.id = id,
+            Axiom::ReflexiveObjectProperty(axiom) => axiom.id = id,
+            Axiom::IrreflexiveObjectProperty(axiom) => axiom.id = id,
+            Axiom::SymmetricObjectProperty(axiom) => axiom.id = id,
+            Axiom::AsymmetricObjectProperty(axiom) => axiom.id = id,
+            Axiom::TransitiveObjectProperty(axiom) => axiom.id = id,
+            Axiom::SubDataPropertyOf(axiom) => axiom.id = id,
+            Axiom::EquivalentDataProperties(axiom) => axiom.id = id,
+            Axiom::DisjointDataProperties(axiom) => axiom.id = id,
+            Axiom::DataPropertyDomain(axiom) => axiom.id = id,
+            Axiom::DataPropertyRange(axiom) => axiom.id = id,
+            Axiom::FunctionalDataProperty(axiom) => axiom.id = id,
+            Axiom::SameIndividual(axiom) => axiom.id = id,
+            Axiom::DifferentIndividuals(axiom) => axiom.id = id,
+            Axiom::ClassAssertion(axiom) => axiom.id = id,
+            Axiom::ObjectPropertyAssertion(axiom) => axiom.id = id,
+            Axiom::DataPropertyAssertion(axiom) => axiom.id = id,
+            Axiom::NegativeObjectPropertyAssertion(axiom) => axiom.id = id,
+            Axiom::NegativeDataPropertyAssertion(axiom) => axiom.id = id,
+            Axiom::AnnotationAssertion(axiom) => axiom.id = id,
+            Axiom::SubAnnotationPropertyOf(axiom) => axiom.id = id,
+            Axiom::AnnotationPropertyDomain(axiom) => axiom.id = id,
+            Axiom::AnnotationPropertyRange(axiom) => axiom.id = id,
+        }
+
+        let axiom_type = axiom.axiom_type();
+        self.axioms.insert(id, axiom.clone());
+        self.axioms_by_type.entry(axiom_type).or_insert_with(HashSet::new).insert(id);
+
+        Ok(id)
+    }
+
+    pub fn get_axiom(&self, id: AxiomId) -> Option<&Axiom> {
+        self.axioms.get(&id)
+    }
+
+    pub fn get_axioms_by_type(&self, axiom_type: AxiomType) -> Vec<&Axiom> {
+        self.axioms_by_type.get(&axiom_type)
+            .map_or(Vec::new(), |ids| {
+                ids.iter()
+                    .filter_map(|id| self.axioms.get(id))
+                    .collect()
+            })
+    }
+
+    pub fn remove_axiom(&mut self, id: AxiomId) -> Result<()> {
+        if let Some(axiom) = self.axioms.remove(&id) {
+            let axiom_type = axiom.axiom_type();
+            if let Some(ids) = self.axioms_by_type.get_mut(&axiom_type) {
+                ids.remove(&id);
+                if ids.is_empty() {
+                    self.axioms_by_type.remove(&axiom_type);
+                }
+            }
+            Ok(())
+        } else {
+            Err(Error::AxiomNotFound(id))
+        }
+    }
+
+    pub fn all_axioms(&self) -> impl Iterator<Item = &Axiom> {
+        self.axioms.values()
+    }
+
+    pub fn logical_axioms(&self) -> impl Iterator<Item = &Axiom> {
+        self.axioms.values().filter(|axiom| axiom.is_logical())
+    }
+
+    pub fn annotation_axioms(&self) -> impl Iterator<Item = &Axiom> {
+        self.axioms.values().filter(|axiom| !axiom.is_logical())
+    }
+
+    pub fn len(&self) -> usize {
+        self.axioms.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.axioms.is_empty()
+    }
+}
+
+impl Default for AxiomStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
