@@ -634,3 +634,77 @@ impl ClassExpression {
         }
     }
 }
+
+/// Concept store for managing named classes and class expressions
+#[derive(Debug, Clone)]
+pub struct ConceptStore {
+    classes; HashMap<crate::ontology::IRI, Class>,
+    expressions: HashMap<ConceptId, ClassExpression>,
+    next_id: ConceptId,
+}
+
+impl ConceptStore {
+    pub fn new() -> Self {
+        let mut store = Self {
+            classes: HashMap::new(),
+            expressions: HashMap::new(),
+            next_id: 0,
+        }
+
+        // Built-in classes
+        store.add_class(Class::thing());
+        store.add_class(Class::nothing());
+
+        store
+    }
+
+    pub fn add_class(&mut self, class: Class) -> &Class {
+        let iri = class.iri.clone();
+        self.classes.entry(iri).or_insert(class)
+    }
+
+    pub fn get_class(&self, iri: &crate::ontology::IRI) -> Option<&Class> {
+        self.classes.get(iri)
+    }
+
+    pub fn get_or_create_class(&mut self, iri: crate::ontology::IRI) -> &Class {
+        if !self.classes.contains_key(&iri) {
+            let class = Class::new(iri.clone());
+            self.classes.insert(iri.clone(), class);
+        }
+        &self.classes[&iri]
+    }
+
+    pub fn add_expression(&mut self, expression: ClassExpression) -> ConceptId {
+        let id = self.next_id;
+        self.expressions.insert(id, expression);
+        self.next_id += 1;
+        id
+    }
+
+    pub fn get_expression(&self, id: ConceptId) -> Option<&ClassExpression> {
+        self.expressions.get(&id)
+    }
+
+    pub fn all_classes(&self) -> impl Iterator<Item = &Class> {
+        self.classes.values()
+    }
+
+    pub fn all_expressions(&self) -> impl Iterator<Item = &ClassExpression)> {
+        self.expressions.values()
+    }
+
+    pub fn len(&self) -> usize {
+        self.classes.len() + self.expressions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.classes.is_empty() && self.expressions.is_empty()
+    }
+}
+
+impl Default for ConceptStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
