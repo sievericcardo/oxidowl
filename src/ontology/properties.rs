@@ -190,3 +190,44 @@ impl ObjectPropertyExpression {
         }
     }
 }
+
+impl Role {
+    /// Create a new role for an object property expression
+    pub fn new_object_property(property: ObjectPropertyExpression) -> Self {
+        Role::ObjectProperty(property)
+    }
+
+    /// Create a new role for a data property
+    pub fn new_data_property(property: DataProperty) -> Self {
+        Role::DataProperty(property)
+    }
+
+
+    /// Check if the role is an object property
+    pub fn is_object_property(&self) -> bool {
+        matches!(self, Role::ObjectProperty(_))
+    }
+
+    /// Check if the role is a data property
+    pub fn is_data_property(&self) -> bool {
+        matches!(self, Role::DataProperty(_))
+    }
+
+    /// Get the object property expression if the role is an object property
+    pub fn as_object_property(&self) -> Option<&ObjectPropertyExpression> {
+        if let Role::ObjectProperty(property) = self {
+            Some(property)
+        } else {
+            None
+        }
+    }
+
+    /// Get the data property if the role is a data property
+    pub fn as_data_property(&self) -> Option<&DataProperty> {
+        if let Role::DataProperty(property) = self {
+            Some(property)
+        } else {
+            None
+        }
+    }
+}
