@@ -708,3 +708,115 @@ impl Default for DataPropertyHierarchy {
         Self::new()
     }
 }
+
+/// Store for properties
+#[derive(Debug, Clone)]
+pub struct PropertyStore {
+    object_properties: ObjectPropertyHierarchy,
+    data_properties: DataPropertyHierarchy,
+    annotation_properties: HashMap<crate::ontology::IRI, AnnotationProperty>,
+}
+
+impl PropertyStore {
+    /// Create a new property store
+    pub fn new() -> Self {
+        let mut store = Self {
+            object_properties: ObjectPropertyHierarchy::new(),
+            data_properties: DataPropertyHierarchy::new(),
+            annotation_properties: HashMap::new(),
+        }
+
+        // Add built-in properties
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedProperty".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedSource".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedTarget".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#versionInfo".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#deprecated".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#label".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#comment".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#seeAlso".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#isDefinedBy".to_string())));
+
+        store
+    }
+
+    /// Add an object property to the store
+    pub fn add_object_property(&mut self, property: ObjectProperty) -> &ObjectProperty {
+        self.object_properties.add_property(property)
+    }
+
+    /// Add a data property to the store
+    pub fn add_data_property(&mut self, property: DataProperty) -> &DataProperty {
+        self.data_properties.add_property(property)
+    }
+
+    /// Add an annotation property to the store
+    pub fn add_annotation_property(&mut self, property: AnnotationProperty) {
+        self.annotation_properties.insert(property.iri.clone(), property);
+    }
+
+    /// Get an object property by IRI
+    pub fn get_object_property(&self, iri: &crate::ontology::IRI) -> Option<&ObjectProperty> {
+        self.object_properties.get_property(iri)
+    }
+
+    /// Get a data property by IRI
+    pub fn get_data_property(&self, iri: &crate::ontology::IRI) -> Option<&DataProperty> {
+        self.data_properties.get_property(iri)
+    }
+
+    /// Get an annotation property by IRI
+    pub fn get_annotation_property(&self, iri: &crate::ontology::IRI) -> Option<&AnnotationProperty> {
+        self.annotation_properties.get(iri)
+    }
+
+    /// Get all object properties
+    pub fn all_object_properties(&self) -> impl Iterator<Item = &ObjectProperty> {
+        self.object_properties.all_properties()
+    }
+
+    /// Get all data properties
+    pub fn all_data_properties(&self) -> impl Iterator<Item = &DataProperty> {
+        self.data_properties.all_properties()
+    }
+
+    /// Get all annotation properties
+    pub fn all_annotation_properties(&self) -> impl Iterator<Item = &AnnotationProperty> {
+        self.annotation_properties.values()
+    }
+
+    pub fn object_properties(&self) -> &ObjectPropertyHierarchy {
+        &self.object_properties
+    }
+
+    pub fn object_properties_mut(&mut self) -> &mut ObjectPropertyHierarchy {
+        &mut self.object_properties
+    }
+
+    pub fn data_properties(&self) -> &DataPropertyHierarchy {
+        &self.data_properties
+    }
+
+    pub fn data_properties_mut(&mut self) -> &mut DataPropertyHierarchy {
+        &mut self.data_properties
+    }
+
+    pub fn add_annotation_property(&mut self, property: AnnotationProperty) -> &AnnotationProperty {
+        let iri = property.iri.clone();
+        self.annotation_properties.entry(iri).or_insert(property)
+    }
+
+    pub fn get_annotation_property(&self, iri: &crate::ontology::IRI) -> Option<&AnnotationProperty> {
+        self.annotation_properties.get(iri)
+    }
+
+    pub fn all_annotation_properties(&self) -> impl Iterator<Item = &AnnotationProperty> {
+        self.annotation_properties.values()
+    }
+}
+
+impl Default for PropertyStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
