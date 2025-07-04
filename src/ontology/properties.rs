@@ -231,3 +231,86 @@ impl Role {
         }
     }
 }
+
+/// Object property characteristics
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectPropertyCharacteristics {
+    pub functional: bool,
+    pub inverse_functional: bool,
+    pub symmetric: bool,
+    pub asymmetric: bool,
+    pub reflexive: bool,
+    pub irreflexive: bool,
+    pub transitive: bool,
+}
+
+impl ObjectPropertyCharacteristics {
+    /// Create a new set of object property characteristics
+    pub fn new() -> Self {
+        Self {
+            functional: false,
+            inverse_functional: false,
+            symmetric: false,
+            asymmetric: false,
+            reflexive: false,
+            irreflexive: false,
+            transitive: false,
+        }
+    }
+
+    /// Set the functional characteristic
+    pub fn set_functional(&mut self, value: bool) {
+        self.functional = value;
+    }
+
+    /// Set the inverse functional characteristic
+    pub fn set_inverse_functional(&mut self, value: bool) {
+        self.inverse_functional = value;
+    }
+
+    /// Set the symmetric characteristic
+    pub fn set_symmetric(&mut self, value: bool) {
+        self.symmetric = value;
+    }
+
+    /// Set the asymmetric characteristic
+    pub fn set_asymmetric(&mut self, value: bool) {
+        self.asymmetric = value;
+    }
+
+    /// Set the reflexive characteristic
+    pub fn set_reflexive(&mut self, value: bool) {
+        self.reflexive = value;
+    }
+
+    /// Set the irreflexive characteristic
+    pub fn set_irreflexive(&mut self, value: bool) {
+        self.irreflexive = value;
+    }
+
+    /// Set the transitive characteristic
+    pub fn set_transitive(&mut self, value: bool) {
+        self.transitive = value;
+    }
+
+    /// Check if the characteristics are consistent
+    pub fn is_consistent(&self) -> bool {
+        // Check for contradictions
+        if self.functional && self.inverse_functional {
+            return false; // Cannot be both functional and inverse functional
+        }
+        if self.symmetric && self.asymmetric {
+            return false; // Cannot be both symmetric and asymmetric
+        }
+        if self.reflexive && self.irreflexive {
+            return false; // Cannot be both reflexive and irreflexive
+        }
+        true
+    }
+}
+
+impl Default for ObjectPropertyCharacteristics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
