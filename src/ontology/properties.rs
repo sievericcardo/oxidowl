@@ -526,3 +526,185 @@ impl Default for ObjectPropertyHierarchy {
         Self::new()
     }
 }
+
+/// Property hierarchy for data properties
+#[derive(Debug, Clone)]
+pub struct DataPropertyHierarchy {
+    properties: HashMap<crate::ontology::IRI, DataProperty>,
+    sub_properties: HashMap<crate::ontology::IRI, HashSet<crate::ontology::IRI>>,
+    super_properties: HashMap<crate::ontology::IRI, HashSet<crate::ontology::IRI>>,
+    characteristics: HashMap<crate::ontology::IRI, DataPropertyCharacteristics>,
+    equivalent_properties: HashMap<crate::ontology::IRI, HashSet<crate::ontology::IRI>>,
+    disjoint_properties: HashMap<crate::ontology::IRI, HashSet<crate::ontology::IRI>>,
+    domains: HashMap<crate::ontology::IRI, HashSet<crate::ontology::ClassExpression>>,
+    ranges: HashMap<crate::ontology::IRI, HashSet<crate::ontology::ClassExpression>>,
+}
+
+impl DataPropertyHierarchy {
+    /// Create a new empty data property hierarchy
+    pub fn new() -> Self {
+        let mut hierarchy = Self {
+            properties: HashMap::new(),
+            sub_properties: HashMap::new(),
+            super_properties: HashMap::new(),
+            characteristics: HashMap::new(),
+            equivalent_properties: HashMap::new(),
+            disjoint_properties: HashMap::new(),
+            domains: HashMap::new(),
+            ranges: HashMap::new(),
+        };
+
+        // Add built-in properties
+        hierarchy.add_property(DataProperty::top());
+        hierarchy.add_property(DataProperty::bottom());
+
+        hierarchy
+    }
+
+    /// Add a data property to the hierarchy
+    pub fn add_property(&mut self, property: DataProperty) -> &DataProperty {
+        let iri = crate::ontology::IRI::new(property.iri.to_string());
+        self.properties.entry(iri.clone()).or_insert_with(|| {
+            self.characteristics.insert(iri.clone(), DataPropertyCharacteristics::new());
+            property
+        })
+    }
+
+    pub fn get_property(&self, iri: &crate::ontology::IRI) -> Option<&DataProperty> {
+        self.properties.get(iri)
+    }
+
+    pub fn add_sub_property(&mut self, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI) {
+        self.sub_properties
+            .entry(super_prop.clone())
+            .or_insert_with(HashSet::new)
+            .insert(sub.clone());
+        self.super_properties
+            .entry(sub.clone())
+            .or_insert_with(HashSet::new)
+            .insert(super_prop.clone());
+    }
+
+    pub fn get_sub_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+        self.sub_properties.get(iri)
+    }
+
+    pub fn get_super_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+        self.super_properties.get(iri)
+    }
+
+    pub fn get_characteristics(&self, iri: &crate::ontology::IRI) -> Option<&DataPropertyCharacteristics> {
+        self.characteristics.get(iri)
+    }
+
+    pub fn add_equivalent_property(&mut self, property: &crate::ontology::IRI, equivalent: &crate::ontology::IRI) {
+        self.equivalent_properties
+            .entry(property.clone())
+            .or_insert_with(HashSet::new)
+            .insert(equivalent.clone());
+        self.equivalent_properties
+            .entry(equivalent.clone())
+            .or_insert_with(HashSet::new)
+            .insert(property.clone());
+    }
+
+    pub fn get_equivalent_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+        self.equivalent_properties.get(iri)
+    }
+
+    pub fn add_disjoint_property(&mut self, property: &crate::ontology::IRI, disjoint: &crate::ontology::IRI) {
+        self.disjoint_properties
+            .entry(property.clone())
+            .or_insert_with(HashSet::new)
+            .insert(disjoint.clone());
+        self.disjoint_properties
+            .entry(disjoint.clone())
+            .or_insert_with(HashSet::new)
+            .insert(property.clone());
+    }
+
+    pub fn get_disjoint_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+        self.disjoint_properties.get(iri)
+    }
+
+    pub fn add_domain(&mut self, property: &crate::ontology::IRI, domain: crate::ontology::ClassExpression) {
+        self.domains
+            .entry(property.clone())
+            .or_insert_with(HashSet::new)
+            .insert(domain);
+    }
+
+    pub fn get_domains(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::ClassExpression>> {
+        self.domains.get(iri)
+    }
+
+    pub fn add_range(&mut self, property: &crate::ontology::IRI, range: crate::ontology::ClassExpression) {
+        self.ranges
+            .entry(property.clone())
+            .or_insert_with(HashSet::new)
+            .insert(range);
+    }
+
+    pub fn get_ranges(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::ClassExpression>> {
+        self.ranges.get(iri)
+    }
+
+    pub fn all_properties(&self) -> impl Iterator<Item = &DataProperty> {
+        self.properties.values()
+    }
+
+    pub fn is_functional(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+
+    pub fn is_inverse_functional(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+
+    pub fn is_symmetric(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+
+    pub fn is_asymmetric(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+
+    pub fn is_reflexive(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+
+    pub fn is_irreflexive(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+
+    pub fn is_transitive(&self, property: &crate::ontology::IRI) -> bool {
+        self.characteristics
+            .get(property)
+            .map(|c| c.functional)
+            .unwrap_or(false)
+    }
+}
+
+impl Default for DataPropertyHierarchy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
