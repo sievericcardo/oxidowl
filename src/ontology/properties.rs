@@ -314,3 +314,24 @@ impl Default for ObjectPropertyCharacteristics {
         Self::new()
     }
 }
+
+
+/// Data property characteristics
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataPropertyCharacteristics {
+    pub functional: bool,
+}
+
+impl DataPropertyCharacteristics {
+    /// Create a new set of data property characteristics
+    pub fn new() -> Self {
+        Self {
+            functional: false,
+        }
+    }
+
+    /// Set the functional characteristic
+    pub fn set_functional(&mut self, value: bool) {
+        self.functional = value;
+    }
+}
