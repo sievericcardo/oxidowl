@@ -534,3 +534,108 @@ impl DependencyTracker {
         self.set_factory.garbage_collect();
     }
 }
+
+impl DependencySetFactory {
+    /// Create a new factory
+    pub fn new() -> Self {
+        let empty_set = Arc::new(DependencySet::new());
+        let mut set_cache = HashMap::new();
+        let empty_key = DependencySetKey {
+            branching_points: BTreeSet::new(),
+            deterministic_deps: HashSet::new(),
+            nondeterministic_deps: HashSet::new(),
+        };
+        set_cache.insert(empty_key, empty_set.clone());
+
+        Self {
+            set_cache: HashMap::new(),
+            empty_set: Arc::new(DependencySet::new()),
+            usage_counters: HashMap::new(),
+        }
+    }
+
+
+    /// Get the empty dependency set
+    pub fn empty_set(&self) -> Arc<DependencySet> {
+        self.empty_set.clone()
+    }
+
+    /// Create a new dependency set
+    pub fn create_set(
+        &mut self,
+        branching_points: Vec<BranchingPoint>,
+        dependencies: Vec<(DependencyId, bool)>,
+    ) -> Arc<DependencySet> {
+        let key = DependencySetKey {
+            branching_points: branching_points.into_iter().collect(),
+            deterministic_deps: dependencies
+                .iter()
+                .filter(|(_, is_det)| *is_det)
+                .map(|(id, _)| *id)
+                .collect(),
+            nondeterministic_deps: dependencies
+                .iter()
+                .filter(|(_, is_det)| !*is_det)
+                .map(|(id, _)| *id)
+                .collect(),
+        };
+
+        if let Some(set) = self.set_cache.get(&key) {
+            *self.usage_counters.entry(key.clone()).or_insert(0) += 1;
+            return set.clone();
+        }
+
+        let new_set = DependencySet {
+            branching_points: key.branching_points.clone(),
+            deterministic_deps: key.deterministic_deps
+                .iter().cloned().collect(),
+            nondeterministic_deps: key.nondeterministic_deps
+                .iter().cloned().collect(),
+            ref_count: 1,
+        };
+
+        let arc_set = Arc::new(new_set);
+        self.set_cache.insert(key, arc_set.clone());
+        self.usage_counters.insert(key, 1);
+
+        arc_set
+    }
+
+    /// Union two dependency sets
+    pub fn union_set(&mut self, set1: &Arc<DependencySet>, set2: &Arc<DependencySet>) -> Arc<DependencySet> {
+        let branching_points: Vec<_> = set1.branching_points
+            .union(set2.branching_points())
+            .cloned()
+            .collect();
+        let deps: Vec<_> = set1.deterministic_deps
+            .union(&set2.deterministic_deps)
+            .map(|&id| (id, true))
+            .chain(
+                set1.nondeterministic_deps
+                    .union(&set2.nondeterministic_deps)
+                    .map(|&id| (id, false)),
+            )
+            .collect();
+        self.create_set(branching_points, deps)
+    }
+
+    /// Garbage collect unused dependency sets
+    pub fn garbage_collect(&mut self) {
+        let threshold = 1000;
+        if self.set_cache.len() < threshold {
+            return; // No need to collect if under threshold
+        }
+
+        // Remove sets with low usage
+        let to_remove: Vec<DependencySetKey> = self.usage_counters
+            .iter()
+            .filter(|(_, &count)| count < 2) // Keep sets used at least twice
+            .map(|(key, _)| key.clone())
+            .collect();
+
+        for key in to_remove {
+            self.set_cache.remove(&key);
+            self.usage_counters.remove(&key);
+        }
+    }
+}
