@@ -639,3 +639,57 @@ impl DependencySetFactory {
         }
     }
 }
+
+impl DependencyTrackPoint {
+    /// Get the branching level
+    pub fn branching_level(&self) -> BranchingPoint {
+        self.branching_level
+    }
+    
+    /// Get active dependencies
+    pub fn active_dependencies(&self) -> &HashSet<DependencyId> {
+        &self.active_dependencies
+    }
+    
+    /// Get timestamp
+    pub fn timestamp(&self) -> std::time::Instant {
+        self.timestamp
+    }
+}
+
+impl Default for DependencyTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for DependencyType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DependencyType::Deterministic { rule, source_concept } => 
+                write!(f, "Det[{}->{}]", rule, source_concept),
+            DependencyType::NonDeterministic { rule, choices, chosen_index } => 
+                write!(f, "NonDet[{}:{:?}@{:?}]", rule, choices, chosen_index),
+            DependencyType::Merge { source_node, target_node } => 
+                write!(f, "Merge[{}->{}]", source_node, target_node),
+            DependencyType::Implication { antecedent, consequent } => 
+                write!(f, "Impl[{}->{}]", antecedent, consequent),
+            DependencyType::Functional { role, individual } => 
+                write!(f, "Func[{}@{}]", role, individual),
+            DependencyType::Distinct { individuals } => 
+                write!(f, "Dist[{:?}]", individuals),
+            DependencyType::Nominal { nominal, individual } => 
+                write!(f, "Nom[{}@{}]", nominal, individual),
+            DependencyType::Expanded { existential, witness } => 
+                write!(f, "Exp[{}->{}]", existential, witness),
+            DependencyType::Datatype { constraint, value } => 
+                write!(f, "Data[{}@{}]", constraint, value),
+        }
+    }
+}
+
+impl Default for DependencySetFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
