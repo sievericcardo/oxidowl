@@ -18,7 +18,7 @@ pub type BranchingPoint = u64;
 
 /// Dependency set tracking concept derivations and branching dependencies
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DepepdencySet {
+pub struct DependencySet {
     /// Branching points the dependency set is associated with
     branching_points: BTreeSet<BranchingPoint>,
 
@@ -110,4 +110,84 @@ pub enum DependencyType {
         constraint: String,
         value: String,
     },
+}
+
+/// Status of the dependency node
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DependencyStatus {
+    /// Active dependency node
+    Active,
+
+    /// Inactive dependency node (e.g. backtracked)
+    Backtracked,
+
+    /// Suspended dependency node (part of a merge operation)
+    Suspended,
+
+    /// Removed dependency node (e.g. due to inconsistency)
+    Removed,
+}
+
+/// Dependency tracker managing the dependency graph and operations
+#[derive(Debug)]
+pub struct DependencyTracker {
+    /// Nodes
+    nodes: HashMap<DependencyId, DependencyNode>,
+
+    /// Next available dependency ID
+    next_id: DependencyId,
+
+    /// Current branching point
+    current_branching_level: BranchingPoint,
+
+    /// Stack of branching points
+    branching_stack: Vec<BranchingPoint>,
+
+    /// Dependency sets for efficient memory management
+    set_factory: DependencySetFactory,
+
+    /// Active dependencies at each branching point
+    active_dependencies: HashMap<BranchingPoint, HashSet<DependencyId>>,
+}
+
+/// Factory for creating and managing dependency sets\
+#[derive(Debug)]
+pub struct DependencySetFactory {
+    /// Cache of dependency sets
+    set_cache: HashMap<DependencyId, Arc<DependencySet>>,
+
+    /// Empty dependency set singleton
+    empty_set: Arc<DependencySet>,
+
+    /// Usage counters for garbage collection
+    usage_counters: HashMap<DependencySetKey, usize>,
+}
+
+/// Key for identifying dependency sets in the factory
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DependencySetKey {
+    branching_points: BTreeSet<BranchingPoint>,
+    deterministic_deps: HashSet<DependencyId>,
+    nondeterministic_deps: HashSet<DependencyId>,
+}
+
+impl std::hash::Hash for DependencySetKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.branching_points.hash(state);
+        self.deterministic_deps.hash(state);
+        self.nondeterministic_deps.hash(state);
+    }
+}
+
+/// Track point for dependency management
+#[derive(Debug, Clone)]
+pub struct DependencyTrackPoint {
+    /// Branching point identifier
+    branching_point: BranchingPoint,
+
+    /// Dependencies at this point
+    active_dependencies: HashSet<DependencyId>,
+
+    /// Timestamp for ordering
+    timestamp: std::time::Instant,
 }
