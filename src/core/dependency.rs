@@ -272,3 +272,72 @@ impl DependencySet {
         self.branching_points.contains(&branch_point) && other.branching_points.contains(&branch_point)
     }
 }
+
+impl DependencyNode {
+    /// Create a new dependency node
+    pub fn new(id: DependencyId, node_type: DependencyType) -> Self {
+        Self {
+            id,
+            node_type,
+            dependencies: DependencySet::new(),
+            dependents: HashSet::new(),
+            branching_point: None,
+            status: DependencyStatus::Active,
+        }
+    }
+
+    /// Get the ID of the dependency node
+    pub fn id(&self) -> DependencyId {
+        self.id
+    }
+
+    /// Get the type of the dependency node
+    pub fn node_type(&self) -> &DependencyType {
+        &self.node_type
+    }
+
+    /// Get the dependencies of this node
+    pub fn dependencies(&self) -> &DependencySet {
+        &self.dependencies
+    }
+
+    /// Add a dependency to this node
+    pub fn add_dependency(&mut self, dep_set: DependencySet) {
+        self.dependencies = self.dependencies.union(&dep_set);
+    }
+
+    /// Get the dependents of this node
+    pub fn dependents(&self) -> &HashSet<DependencyId> {
+        &self.dependents
+    }
+
+    /// Add a dependent node
+    pub fn add_dependent(&mut self, dep_id: DependencyId) {
+        self.dependents.insert(dep_id);
+    }
+
+    /// Remove a dependent node
+    pub fn remove_dependent(&mut self, dep_id: DependencyId) {
+        self.dependents.remove(&dep_id);
+    }
+
+    /// Get the status of the dependency node
+    pub fn status(&self) -> &DependencyStatus {
+        &self.status
+    }
+
+    /// Set the status of the dependency node
+    pub fn set_status(&mut self, status: DependencyStatus) {
+        self.status = status;
+    }
+
+    /// Set the branching point for this node
+    pub fn set_branching_point(&mut self, branching_point: BranchingPoint) {
+        self.branching_point = Some(branching_point);
+    }
+
+    /// Check if the node is active
+    pub fn is_active(&self) -> bool {
+        matches!(self.status, DependencyStatus::Active)
+    }
+}
