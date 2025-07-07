@@ -13,6 +13,6 @@ pub mod dependency;
 pub use reasoner::{Reasoner},
 pub use tableau::{Tableau, TableauState};
 pub use blocking::{BlockingStrategy, BlockingChecker};
-pub use completin::{CompletionRule, RuleApplication};
+pub use completion::{CompletionRule, RuleApplication};
 pub use dependency::{DependencyTracker, DependencySet};
 pub use expansion::{ExpansionStrategy, ExpansionManager};
