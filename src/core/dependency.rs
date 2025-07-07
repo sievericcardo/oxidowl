@@ -191,3 +191,84 @@ pub struct DependencyTrackPoint {
     /// Timestamp for ordering
     timestamp: std::time::Instant,
 }
+
+impl DependencySet {
+    /// Create an empty dependency set
+    pub fn new() -> Self {
+        Self {
+            branching_points: BTreeSet::new(),
+            deterministic_deps: HashSet::new(),
+            nondeterministic_deps: HashSet::new(),
+            ref_count: 0,
+        }
+    }
+
+    /// Create a dependency set with a single branching point
+    pub fn with_branching_point(branching_point: BranchingPoint) -> Self {
+        let mut set = Self::new();
+        set.branching_points.insert(branching_point);
+        set
+    }
+
+    /// Create a dependency set with a single dependency
+    pub fn with_dependency(dep_id: DependencyId, is_deterministic: bool) -> Self {
+        let mut set = Self::new();
+        if is_deterministic {
+            set.deterministic_deps.insert(dep_id);
+        } else {
+            set.nondeterministic_deps.insert(dep_id);
+        }
+        set
+    }
+
+    /// Union of two dependency sets
+    pub fn union(&self, other: &DependencySet) -> Self {
+        Self {
+            branching_points: self.branching_points.union(&other.branching_points).cloned().collect(),
+            deterministic_deps: self.deterministic_deps.union(&other.deterministic_deps).cloned().collect(),
+            nondeterministic_deps: self.nondeterministic_deps.union(&other.nondeterministic_deps).cloned().collect(),
+            ref_count: 0, // Ref count is managed externally
+        }
+    }
+
+    /// Add a branching point to the dependency set
+    pub fn add_branching_point(&mut self, branching_point: BranchingPoint) {
+        self.branching_points.insert(branching_point);
+    }
+
+    /// Add a dependency to the set
+    pub fn add_dependency(&mut self, dep_id: DependencyId, is_deterministic: bool) {
+        if is_deterministic {
+            self.deterministic_deps.insert(dep_id);
+        } else {
+            self.nondeterministic_deps.insert(dep_id);
+        }
+    }
+
+    /// Check if the set is empty
+    pub fn is_empty(&self) -> bool {
+        self.branching_points.is_empty()
+            && self.deterministic_deps.is_empty()
+            && self.nondeterministic_deps.is_empty()
+    }
+
+    /// Get all branching points
+    pub fn branching_points(&self) -> &BTreeSet<BranchingPoint> {
+        &self.branching_points
+    }
+
+    /// Get maximum branching point
+    pub fn max_branching_point(&self) -> Option<BranchingPoint> {
+        self.branching_points.iter().max().copied()
+    }
+
+    /// Check if the set is valid at a given branching point
+    pub fn is_valid_at(&self, branching_point: BranchingPoint) -> bool {
+        self.branching_points.iter().all(|&bp| bp <= branching_point)
+    }
+
+    /// Check if the set conflicts with another set at a given branching point
+    pub fn conflicts_with(&self, other: &DependencySet, branching_point: BranchingPoint) -> bool {
+        self.branching_points.contains(&branch_point) && other.branching_points.contains(&branch_point)
+    }
+}
