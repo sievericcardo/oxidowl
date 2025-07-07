@@ -341,3 +341,196 @@ impl DependencyNode {
         matches!(self.status, DependencyStatus::Active)
     }
 }
+
+impl DependencyTracker {
+    /// Create a new dependency tracker
+    pub fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            next_id: 0,
+            current_branching_level: 0,
+            branching_stack: Vec::new(),
+            set_factory: DependencySetFactory::new(),
+            active_dependencies: HashMap::new(),
+        }
+    }
+
+    /// Create a new dependency node
+    pub fn create_dependency(&mut self, node_type: DependencyType) -> DependencyId {
+        let id = self.next_id;
+        self.next_id += 1;
+
+        let node = DependencyNode::new(id, node_type);
+        self.nodes.insert(id, node);
+
+        // Add to current branching point
+        self.level_dependencies
+            .entry(self.current_branching_level)
+            .or_insert_with(HashSet::new)
+            .insert(id);
+
+        id
+    }
+
+    /// Get a dependency node by ID
+    pub fn get_dependency(&self, id: DependencyId) -> Option<&DependencyNode> {
+        self.nodes.get(&id)
+    }
+
+    /// Get a mutable reference to a dependency node by ID
+    pub fn get_dependency_mut(&mut self, id: DependencyId) -> Option<&mut DependencyNode> {
+        self.nodes.get_mut(&id)
+    }
+
+    /// Add a dependency to a node
+    pub fn add_dependency(&mut self, dependent: DependencyId, dependency: DependencyId) -> Result<()> {
+        if self.would_create_cycle(dependent, dependency) {
+            return Err(Error::internal("Dependency would create cycle"));
+        }
+
+        if let Some(dep_node) = self.nodes.get_mut(&dependent) {
+            dep_node.add_dependent(dependent);
+        }
+
+        if let Some(dependant_node) = self.nodes.get_mut(&dependency) {
+            let dep_set  DependencySet::with_dependency(dependency, true);
+            dependant_node.add_dependency(dep_set);
+        }
+
+        Ok(())
+    }
+
+    /// Create a branching point
+    pub fn create_branching_point(&mut self) -> BranchingPoint {
+        self.current_branching_level += 1;
+        self.branching_stack.push(self.current_branching_level);
+        self.level_dependencies.insert(self.current_branching_level, HashSet::new());
+        self.current_branching_level
+    }
+
+    /// Backtrack to a previous branching point
+    pub fn backtrack_to(&mut self, branching_point: BranchingPoint) -> Result<()> {
+        if !self.branching_stack.contains(&branching_point) {
+            return Err(Error::internal("Invalid branching point for backtrack"));
+        }
+        if branching_point > self.current_branching_level {
+            return Err(Error::internal("Cannot backtrack to a future branching point"));
+        }
+
+        // Make all dependencies at levels greater than the target inactive
+        for level in (branching_point + 1)..=self.current_branching_level {
+            if let Some(deps) = self.active_dependencies.get(&level) {
+                for &dep_id in deps {
+                    if let Some(node) = self.nodes.get_mut(&dep_id) {
+                        node.set_status(DependencyStatus::Backtracked);
+                    }
+                }
+            }
+            self.active_dependencies.remove(&level);
+        }
+
+        // Update current branching level
+        self.current_branching_level = branching_point;
+        while self.branching_stack.len() > 1 && self.branching_stack.last().unwrap() > &branching_point {
+            self.branching_stack.pop();
+        }
+        
+        Ok(())
+    }
+
+    /// Get current branching level
+    pub fn current_branching_level(&self) -> BranchingPoint {
+        self.current_branching_level
+    }
+
+    /// Create a dependency set
+    pub fn create_dependency_set(
+        &mut self,
+        branching_points: Vec<BranchingPoint>,
+        dependencies: Vec<(DependenciesId, bool)>,
+        Arc<DependencySet>
+    ) {
+        self.set_factory.create_set(branching_points, dependencies)
+    }
+
+    /// Get empty dependency set
+    pub fn empty_set(&self) -> Arc<DependencySet> {
+        self.set_factory.empty_set()
+    }
+
+    /// Check if a dependency would create a cycle
+    fn would_create_cycle(&self, from: DependencyId, to: DependencyId) -> Result<bool> {
+        if from == to {
+            return Ok(true); // Self-dependency is a cycle
+        }
+
+        // Simple cycle detection logic
+        let mut visited = HashSet::new();
+        let mut stack = vec![from];
+
+        while let Some(current) = stack.pop() {
+            if visited.contains(&current) {
+                if current == to {
+                    return Ok(true); // Cycle detected
+                }
+                continue;
+            }
+            visited.insert(current);
+
+            if current == from {
+                return Ok(true);
+            }
+
+            if let Some(node) = self.nodes.get(&current) {
+                for &dep in &node.dependencies.deterministic_deps {
+                    stack.push(dep);
+                }
+                for &dep in &node.dependencies.nondeterministic_deps {
+                    stack.push(dep);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Get all active dependencies
+    pub fn active_dependencies(&self) -> Vec<DependencyId> {
+        self.nodes.iter()
+            .filter(|(_, node)| node.is_active())
+            .map(|(&id, _)| id)
+            .collect()
+    }
+
+    /// Get dependencies at a specific branching point
+    pub fn dependencies_at(&self, branching_point: BranchingPoint) -> Vec<DependencyId> {
+        self.level_dependencies
+            .get(&branching_point)
+            .map_or_else(Vec::new, |deps| deps.iter().cloned().collect())
+    }
+
+    /// Create a track point for the current state
+    pub fn create_track_point(&self) -> DependencyTrackPoint {
+        DependencyTrackPoint {
+            branching_point: self.current_branching_level,
+            active_dependencies: self.active_dependencies.get(&self.current_branching_level).cloned().unwrap_or_default(),
+            timestamp: std::time::Instant::now(),
+        }
+    }
+
+    /// Check if a dependency set is consistent at a branching point
+    pub fn is_consistent_at(&self, dep_set: &DependencySet, branching_point: BranchingPoint) -> bool {
+        dep_set.is_valid_at(branching_point) && !dep_set.conflicts_with(&self.empty_set(), branching_point)
+    }
+
+    /// Clean up unused dependency sets
+    pub fn garbage_collect(&mut self) {
+        let active_deps: HashSet<_> = self.active_dependencies().into_iter().collect();
+        
+        self.nodes.retain(|&id, node| {
+            active_deps.contains(&id) || !node.dependents.is_empty()
+        });
+        
+        self.set_factory.garbage_collect();
+    }
+}
