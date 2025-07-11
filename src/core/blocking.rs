@@ -154,4 +154,30 @@ pub enum RuleContext {
         source: String,
         super_property: ObjectPropertyExpression,
     },
-}    
+}
+
+/// Set of completion rules with application strategies
+pub struct CompletionRuleSet {
+    /// Available rules in priority order
+    rules: Vec<CompletionRule>,
+    
+    /// Rule priority mapping
+    priorities: HashMap<CompletionRule, RulePriority>,
+
+    /// Rule applicability checkers
+    applicability: HashMap<CompletionRule, Box<dyn Fn(&RuleApplication) -> bool + Send + Sync>>,
+
+    /// Rule application handlers
+    handlers: HashMap<CompletionRule, Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>>,
+}
+
+impl std::fmt::Debug for CompletionRuleSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompletionRuleSet")
+            .field("rules", &self.rules)
+            .field("priorities", &self.priorities)
+            .field("applicability", &self.applicability.keys().collect::<Vec<_>>())
+            .field("handlers", &self.handlers.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
