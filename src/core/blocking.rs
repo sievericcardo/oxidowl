@@ -361,4 +361,23 @@ impl CompletionRuleSet {
             CompletionRule::Guess => false, // Applied by strategy
         }
     }
+
+    /// Apply a rule to a given application
+    pub fn apply_rule(&self, application: RuleApplication) -> Result<RuleResult> {
+        match application.rule {
+            CompletionRule::And => self.apply_and_rule(application),
+            CompletionRule::Or => self.apply_or_rule(application),
+            CompletionRule::Some => self.apply_some_rule(application),
+            CompletionRule::All => self.apply_all_rule(application),
+            CompletionRule::AtLeast => self.apply_at_least_rule(application),
+            CompletionRule::AtMost => self.apply_at_most_rule(application),
+            CompletionRule::Nominal => self.apply_nominal_rule(application),
+            CompletionRule::Self_ => self.apply_self_rule(application),
+            CompletionRule::Choose => self.apply_choose_rule(application),
+            CompletionRule::Datatype => self.apply_datatype_rule(application),
+            CompletionRule::Unfold => self.apply_unfold_rule(application),
+            CompletionRule::PropertyChain => self.apply_property_chain_rule(application),
+            CompletionRule::Guess => self.apply_guess_rule(application),
+        }
+    }
 }
