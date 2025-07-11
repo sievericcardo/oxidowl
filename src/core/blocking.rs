@@ -329,4 +329,36 @@ impl CompletionRuleSet {
             });
         }
     }
+
+    /// Get rule priority
+    pub fn get_priority(&self, rule: CompletionRule) -> RulePriority {
+        self.priorities.get(&rule).cloned().unwrap_or(RulePriority::Normal)
+    }
+
+    /// Get all applicable rules
+    pub fn get_applicable_rules(&self, concept: &ClassExpression) -> Vec<CompletionRule> {
+        self.rules.iter()
+            .filter(|&&rule| self.is_rule_applicable(*rule, concept))
+            .cloned()
+            .collect()
+    }
+
+    /// Check if a rule is applicable to a concept
+    pub fn is_rule_applicable(&self, rule: CompletionRule, concept: &ClassExpression) -> bool {
+        match rule {
+            CompletionRule::And => matches!(concept, ClassExpression::ObjectIntersectionOf(_)),
+            CompletionRule::Or => matches!(concept, ClassExpression::ObjectUnionOf(_)),
+            CompletionRule::Some => matches!(concept, ClassExpression::ObjectSomeValuesFrom { .. }),
+            CompletionRule::All => false, // Applied based on edges, not concepts
+            CompletionRule::AtLeast => matches!(concept, ClassExpression::ObjectMinCardinality { .. }),
+            CompletionRule::AtMost => matches!(concept, ClassExpression::ObjectMaxCardinality { .. }),
+            CompletionRule::Nominal => matches!(concept, ClassExpression::ObjectOneOf(_)),
+            CompletionRule::Self_ => matches!(concept, ClassExpression::ObjectHasSelf { .. }),
+            CompletionRule::Choose => false, // Applied by strategy
+            CompletionRule::Datatype => matches!(concept, ClassExpression::DataSomeValuesFrom { .. } | ClassExpression::DataAllValuesFrom { .. }),
+            CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
+            CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
+            CompletionRule::Guess => false, // Applied by strategy
+        }
+    }
 }
