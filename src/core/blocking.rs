@@ -380,4 +380,253 @@ impl CompletionRuleSet {
             CompletionRule::Guess => self.apply_guess_rule(application),
         }
     }
+
+    /// Apply the conjunction rule: A ⊓ B → A, B
+    fn apply_and_rule(&self, application: RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        if let RuleContext::Concept { concept, dependencies } = application.context {
+            if let ClassExpression::ObjectIntersectionOf(conjuncts) = concept {
+                for operand in conjuncts {
+                    for operand in conjuncts {
+                    result.concept_additions.push((
+                        application.node.clone(),
+                        operand,
+                        dependencies.clone(),
+                    ));
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Apply the disjunction rule: A ⊔ B → A | B (creates branching)
+    fn apply_or_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        if let RuleContext::Concept { concept, dependencies } = &application.context {
+            if let ClassExpression::ObjectUnionOf(operands) = concept {
+                // Create a branching point
+                result.branches.push(BranchInfo {
+                    rule: CompletionRule::Or,
+                    node: application.node.clone(),
+                    choices: operands.clone(),
+                    dependencies: dependencies.clone(),
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Apply the existential rule: ∃R.C → create new individual with R-edge and C
+    fn apply_some_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        if let RuleContext::Concept { concept, dependencies } = &application.context {
+            if let ClassExpression::ObjectSomeValuesFrom { property, filler } = concept {
+                // Generate a fresh individual name
+                let uuid_str = uuid::Uuid::new_v4().to_string();
+                let new_individual = format!("_gen_{}", &uuid_str[..8]);
+                
+                // Create the new individual
+                result.new_individuals.push((new_individual.clone(), dependencies.clone()));
+                
+                // Add the edge
+                result.edge_additions.push((
+                    application.node.clone(),
+                    new_individual.clone(),
+                    property.clone(),
+                    dependencies.clone(),
+                ));
+                
+                // Add the filler concept to the new individual
+                result.concept_additions.push((
+                    new_individual,
+                    (**filler).clone(),
+                    dependencies.clone(),
+                ));
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Apply the universal rule: ∀R.C with R-edge to y → C on y
+    fn apply_all_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        if let RuleContext::Role { role: _, from_node: _, to_node, concept } = &application.context {
+            // Add the concept to the target node
+            result.concept_additions.push((
+                to_node.clone(),
+                concept.clone(),
+                application.dependencies.clone(),
+            ));
+        }
+        
+        Ok(result)
+    }
+
+    /// Apply the at-least cardinality rule
+    fn apply_at_least_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+        
+        if let RuleContext::Cardinality { cardinality, role, filler, existing_successors } = &application.context {
+            let needed = *cardinality as usize;
+            let existing = existing_successors.len();
+            
+            if existing < needed {
+                // Create additional successors
+                for i in existing..needed {
+                    let new_individual = format!("_card_{}_{}", application.node, i);
+                    
+                    result.new_individuals.push((new_individual.clone(), application.dependencies.clone()));
+                    let object_property = match role {
+                        Role::ObjectProperty(obj_prop) => obj_prop.clone(),
+                        Role::DataProperty(_) => {
+                            return Err(crate::Error::reasoning("Cannot use data property in object property context"));
+                        }
+                    };
+                    
+                    result.edge_additions.push((
+                        application.node.clone(),
+                        new_individual.clone(),
+                        object_property,
+                        application.dependencies.clone(),
+                    ));
+                    
+                    if let Some(filler_concept) = filler {
+                        result.concept_additions.push((
+                            new_individual,
+                            filler_concept.clone(),
+                            application.dependencies.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+    
+    /// Apply the at-most cardinality rule
+    fn apply_at_most_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+        
+        if let RuleContext::Cardinality { cardinality, role: _, filler: _, existing_successors } = &application.context {
+            let allowed = *cardinality as usize;
+            let existing = existing_successors.len();
+            
+            if existing > allowed {
+                // Need to merge some successors or detect clash
+                // For simplicity, we'll create a merge for the first excess nodes
+                for i in allowed..existing {
+                    result.merges.push((
+                        existing_successors[i].clone(),
+                        existing_successors[allowed - 1].clone(),
+                        application.dependencies.clone(),
+                    ));
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+    
+    /// Apply the nominal rule
+    fn apply_nominal_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+        
+        if let RuleContext::Nominal { nominal, current_node } = &application.context {
+            // Merge current node with the nominal individual
+            result.merges.push((
+                current_node.clone(),
+                nominal.iri.to_string(),
+                application.dependencies.clone(),
+            ));
+        }
+        
+        Ok(result)
+    }
+    
+    /// Apply the self rule: ∀R.Self → R(x,x)
+    fn apply_self_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+        
+        if let RuleContext::Concept { concept, dependencies } = &application.context {
+            if let ClassExpression::ObjectHasSelf { property } = concept {
+                // Add a self-edge
+                result.edge_additions.push((
+                    application.node.clone(),
+                    application.node.clone(),
+                    property.clone(),
+                    dependencies.clone(),
+                ));
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Apply the choose rule (cardinality reasoning)
+    fn apply_choose_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
+        // This is a complex rule for cardinality reasoning
+        // Would handle non-deterministic choices for cardinality
+        // For now, we will return an empty result
+        Ok(RuleResult::empty())
+    }
+    
+    /// Apply datatype rules
+    fn apply_datatype_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
+        // TODO: Datatype reasoning implementation
+        // Would handle datatype constraints and value spaces
+        Ok(RuleResult::empty())
+    }
+    
+    /// Apply concept unfolding
+    fn apply_unfold_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
+        // TODO: Unfold concept definitions from TBox
+        // Would typically expand definitions into simpler forms
+        Ok(RuleResult::empty())
+    }
+    
+    /// Apply guess rule for generating individuals
+    fn apply_guess_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
+        // TODO: Generate individuals for functionality/cardinality reasoning
+        Ok(RuleResult::empty())
+    }
+
+    /// Apply property chain rule: R1 ∘ R2 ∘ ... ∘ Rn ⊑ S
+    /// If we have edges a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
+    fn apply_property_chain_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+        
+        if let RuleContext::PropertyChain { chain, super_property, from_node, to_node } = &application.context {
+            // Add the super property edge from start to end of the chain
+            result.edge_additions.push((
+                from_node.clone(),
+                to_node.clone(),
+                super_property.clone(),
+                application.dependencies.clone(),
+            ));
+        }
+        
+        Ok(result)
+    }
+    
+    /// Get all rules in priority order
+    pub fn rules_by_priority(&self) -> Vec<CompletionRule> {
+        let mut rules = self.rules.clone();
+        rules.sort_by_key(|r| self.get_priority(*r));
+        rules
+    }
+    
+    /// Check if any rules are applicable to a set of concepts
+    pub fn has_applicable_rules(&self, concepts: &[ClassExpression]) -> bool {
+        concepts.iter().any(|concept| {
+            self.rules.iter().any(|&rule| self.is_rule_applicable(rule, concept))
+        })
+    }
 }
