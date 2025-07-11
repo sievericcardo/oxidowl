@@ -263,3 +263,70 @@ pub struct BranchInfo {
     /// Dependencies for this branching
     pub dependencies: DependencySet,
 }
+
+/// Rule application strategy
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleApplicationStrategy {
+    /// Apply rules in a fixed order
+    Priority,
+
+    /// Apply deterministic rules first, then non-deterministic
+    DeterministicFirst,
+
+    /// Apply rules in breadth-first order
+    BreadthFirst,
+
+    /// Apply rules in depth-first order
+    DepthFirst,
+}
+
+impl CompletionRuleSet {
+    /// Create a new completion rule set
+    pub fn new() -> Self {
+        let mut rule_set = Self {
+            rules: Vec::new(),
+            priorities: HashMap::new(),
+            applicability: HashMap::new(),
+            handlers: HashMap::new(),
+        };
+
+        rule_set.add_standard_rules();
+        rule_set
+    }
+
+    /// Add standard OWL 2 DL completion rules to the set
+    fn add_standard_rules(&mut self) {
+        // Deterministic rules (highest priority)
+        self.add_rule(CompletionRule::And, RulePriority::Highest);
+        self.add_rule(CompletionRule::All, RulePriority::High);
+        self.add_rule(CompletionRule::Self_, RulePriority::High);
+        self.add_rule(CompletionRule::Unfold, RulePriority::High);
+        
+        // Existential expansion (normal priority)
+        self.add_rule(CompletionRule::Some, RulePriority::Normal);
+        self.add_rule(CompletionRule::Nominal, RulePriority::Normal);
+        
+        // Non-deterministic rules (low priority)
+        self.add_rule(CompletionRule::Or, RulePriority::Low);
+        self.add_rule(CompletionRule::AtLeast, RulePriority::Low);
+        self.add_rule(CompletionRule::AtMost, RulePriority::Low);
+        self.add_rule(CompletionRule::Choose, RulePriority::Low);
+        self.add_rule(CompletionRule::Guess, RulePriority::Low);
+
+        // Special rules
+        self.add_rule(CompletionRule::Datatype, RulePriority::Lowest);
+    }
+
+    /// Add a completion rule
+    pub fn add_rule(&mut self, rule: CompletionRule, priority: RulePriority) {
+        self.priorities.insert(rule, priority);
+        if !self.rules.contains(&rule) {
+            self.rules.push(rule);
+            // Sort the rules by priority
+            let priorities = &self.priorities;
+            self.rules.sort_by_key(|r| {
+                priorities.get(r).cloned().unwrap_or(RulePriority::Normal)
+            });
+        }
+    }
+}
