@@ -630,3 +630,50 @@ impl CompletionRuleSet {
         })
     }
 }
+
+impl RuleResult {
+    /// Create an empty rule result
+    pub fn empty() -> Self {
+        Self {
+            new_applications: Vec::new(),
+            concept_additions: Vec::new(),
+            edge_additions: Vec::new(),
+            new_individuals: Vec::new(),
+            merges: Vec::new(),
+            clashes: Vec::new(),
+            branches: Vec::new(),
+        }
+    }
+
+    /// Check if the result is empty
+    pub fn is_empty(&self) -> bool {
+        self.new_applications.is_empty() &&
+        self.concept_additions.is_empty() &&
+        self.edge_additions.is_empty() &&
+        self.new_individuals.is_empty() &&
+        self.merges.is_empty() &&
+        self.clashes.is_empty() &&
+        self.branches.is_empty()
+    }
+
+    /// Check if any clashes were detected
+    pub fn has_clash(&self) -> bool {
+        !self.clashes.is_empty()
+    }
+
+    /// Check if any branches were created
+    pub fn requires_branching(&self) -> bool {
+        !self.branches.is_empty()
+    }
+
+    /// Merge with another rule result
+    pub fn merge(&mut self, other: RuleResult) {
+        self.new_applications.extend(other.new_applications);
+        self.concept_additions.extend(other.concept_additions);
+        self.edge_additions.extend(other.edge_additions);
+        self.new_individuals.extend(other.new_individuals);
+        self.merges.extend(other.merges);
+        self.clashes.extend(other.clashes);
+        self.branches.extend(other.branches);
+    }
+}
