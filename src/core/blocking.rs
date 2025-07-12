@@ -92,3 +92,4 @@ impl BlockingChecker for AnywhereBlocking {
         signature.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
         signature
     }
+}
