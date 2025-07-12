@@ -735,3 +735,61 @@ impl ExistentialCandidate {
         }
     }
 }
+
+impl Ord for PrioritisedCandidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Lower priority values are higher priority (reverse order)
+        other.priority.cmp(&self.priority)
+            .then_with(|| self.insertion_order.cmp(&other.insertion_order))
+    }
+}
+
+impl PartialOrd for PrioritisedCandidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for PrioritisedCandidate {
+    fn eq(&self, other: &Self) -> bool {
+        self.priority == other.priority && self.insertion_order == other.insertion_order
+    }
+}
+
+impl Eq for PrioritizedCandidate {}
+
+impl Default for ExpansionConfig {
+    fn default() -> Self {
+        Self {
+            max_queue_size: 10000,
+            enable_caching: true,
+            delay_complex: true,
+            complexity_threshold: 10,
+            max_expansion_depth: 100,
+            prefer_witnesses: true,
+        }
+    }
+}
+
+impl Default for ComplexityWeights {
+    fn default() -> Self {
+        Self {
+            syntactic: 1.0,
+            role_successors: 2.0,
+            branching_factor: 3.0,
+            memory: 0.1,
+        }
+    }
+}
+
+impl Default for CreationOrderStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for ComplexityStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
