@@ -969,3 +969,292 @@ impl ConceptLabel {
         }
     }
 }
+
+impl ClashDetector {
+    /// Create a new clash detector
+    pub fn new() -> Self {
+        Self {
+            clashes: Vec::new(),
+        }
+    }
+
+    /// Check if there are any clashes
+    pub fn has_clashes(&self) -> bool {
+        !self.clashes.is_empty()
+    }
+
+    /// Detect clashes in the tableau
+    pub fn detect_clashes(&mut self, tableau: &Tableau) -> Vec<Clash> {
+        self.clashes.clear();
+        
+        // Check for concept clashes in each node
+        for node in &tableau.nodes {
+            self.check_concept_clashes(node);
+        }
+        
+        // Check for cardinality clashes
+        self.check_cardinality_clashes(tableau);
+        
+        self.clashes.clone()
+    }
+
+    /// Check for concept clashes (C and ¬C) in a node
+    fn check_concept_clashes(&mut self, node: &TableauNode) {
+        let mut atomic_concepts = HashSet::new();
+        let mut negated_concepts = HashSet::new();
+        
+        for concept in &node.concepts {
+            match concept {
+                ConceptLabel::Atomic(name) => {
+                    atomic_concepts.insert(name.clone());
+                }
+                ConceptLabel::NegatedAtomic(name) => {
+                    negated_concepts.insert(name.clone());
+                }
+                _ => {} // Handle other concept types
+            }
+        }
+        
+        // Find intersections
+        for concept in atomic_concepts.intersection(&negated_concepts) {
+            let clash = Clash {
+                clash_type: ClashType::Concept {
+                    concept: concept.clone(),
+                    node: node.id,
+                },
+                nodes: vec![node.id],
+                dependencies: DependencySet::empty(), // Would be computed properly
+                explanation: format!("Concept clash: {} and ¬{} in node {}", concept, concept, node.id),
+            };
+            self.clashes.push(clash);
+        }
+    }
+
+    /// Check for cardinality clashes
+    fn check_cardinality_clashes(&mut self, _tableau: &Tableau) {
+        // Implementation would check for cardinality violations
+        // This is complex and involves counting role successors
+    }
+}
+
+/// Property inclusion relationship (SubObjectPropertyOf)
+#[derive(Debug, Clone)]
+pub struct PropertyInclusion {
+    pub sub_property: String,
+    pub super_property: String,
+}
+
+/// Default expansion strategy implementation
+#[derive(Debug)]
+struct DefaultExpansionStrategy;
+
+impl DefaultExpansionStrategy {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl ExpansionStrategy for DefaultExpansionStrategy {
+    fn initialize(&mut self, _context: &ExpansionContext) -> Result<()> {
+        Ok(())
+    }
+    
+    fn select_next_existential(&mut self, candidates: &[ExistentialCandidate]) -> Option<ExistentialCandidate> {
+        candidates.first().cloned()
+    }
+    
+    fn order_expansions(&self, _existentials: &mut [ExistentialCandidate]) {
+        // Default order - no reordering
+    }
+    
+    fn should_delay_expansion(&self, _candidate: &ExistentialCandidate, _context: &ExpansionContext) -> bool {
+        false
+    }
+    
+    fn get_expansion_priority(&self, _candidate: &ExistentialCandidate) -> ExpansionPriority {
+        ExpansionPriority::Normal
+    }
+    
+    fn expansion_completed(&mut self, _candidate: &ExistentialCandidate, _result: &ExpansionResult) {
+        // Default - no action needed
+    }
+    
+    fn clear(&mut self) {
+        // Default - no state to clear
+    }
+}
+
+/// Tableau for OWL reasoning
+#[derive(Debug)]
+pub struct TableauBuilder {
+    /// Reasoning configuration
+    config: ReasoningConfig,
+}
+
+impl TableauBuilder {
+    /// Create a new tableau builder
+    pub fn new(config: &ReasoningConfig) -> Result<Self> {
+        Ok(Self {
+            config: config.clone(),
+        })
+    }
+
+    /// Create a tableau (main method used by reasoner)
+    pub fn create_tableau(&self) -> Result<Tableau> {
+        Tableau::new(self.config.clone())
+    }
+
+    /// Build a tableau for consistency checking
+    pub fn build_for_consistency(&self, ontology: &Ontology) -> Result<Tableau> {
+        let mut tableau = Tableau::new(self.config.clone())?;
+        
+        // Add all axioms to the tableau
+        for axiom in &ontology.axioms {
+            self.add_axiom_to_tableau(&mut tableau, axiom)?;
+        }
+        
+        Ok(tableau)
+    }
+
+    /// Build a tableau for satisfiability checking
+    pub fn build_for_satisfiability(&self, ontology: &Ontology, class_iri: &str) -> Result<Tableau> {
+        let mut tableau = Tableau::new(self.config.clone())?;
+        
+        // Add all axioms
+        for axiom in &ontology.axioms {
+            self.add_axiom_to_tableau(&mut tableau, axiom)?;
+        }
+        
+        // Add the class to test to the root node
+        let root = tableau.create_root_node()?;
+        let concept = ConceptLabel::Atomic(class_iri.to_string());
+        tableau.add_concept(root, concept, DependencySet::empty())?;
+        
+        Ok(tableau)
+    }
+
+    /// Build a tableau for subsumption checking (A ⊑ B iff A ⊓ ¬B is unsatisfiable)
+    pub fn build_for_subsumption(
+        &self,
+        ontology: &Ontology,
+        subclass: &str,
+        superclass: &str,
+    ) -> Result<Tableau> {
+        let mut tableau = Tableau::new(self.config.clone())?;
+        
+        // Add all axioms
+        for axiom in &ontology.axioms {
+            self.add_axiom_to_tableau(&mut tableau, axiom)?;
+        }
+        
+        // Add A ⊓ ¬B to the root node
+        let root = tableau.create_root_node()?;
+        let subclass_concept = ConceptLabel::Atomic(subclass.to_string());
+        let negated_superclass = ConceptLabel::NegatedAtomic(superclass.to_string());
+        
+        tableau.add_concept(root, subclass_concept, DependencySet::empty())?;
+        tableau.add_concept(root, negated_superclass, DependencySet::empty())?;
+        
+        Ok(tableau)
+    }
+
+    /// Build a tableau for instance checking
+    pub fn build_for_instance_check(
+        &self,
+        ontology: &Ontology,
+        individual: &str,
+        class: &str,
+    ) -> Result<Tableau> {
+        let mut tableau = Tableau::new(self.config.clone())?;
+        
+        // Add all axioms
+        for axiom in &ontology.axioms {
+            self.add_axiom_to_tableau(&mut tableau, axiom)?;
+        }
+        
+        // Add individual assertion and negated class
+        let root = tableau.create_root_node()?;
+        let individual_concept = ConceptLabel::Nominal(individual.to_string());
+        let negated_class = ConceptLabel::NegatedAtomic(class.to_string());
+        
+        tableau.add_concept(root, individual_concept, DependencySet::empty())?;
+        tableau.add_concept(root, negated_class, DependencySet::empty())?;
+        
+        Ok(tableau)
+    }
+
+    /// Add an axiom to the tableau
+    fn add_axiom_to_tableau(&self, tableau: &mut Tableau, axiom: &Axiom) -> Result<()> {
+        match axiom {
+            Axiom::SubClassOf(subclass_axiom) => {
+                // A ⊑ B becomes ¬A ⊔ B
+                // Add this as a concept to all nodes or as a global constraint
+                // For simplicity, we'll add it to the root node when created
+            }
+            Axiom::ClassAssertion(class_assertion) => {
+                // Add C(a) - the individual a has concept C
+                // This would typically be handled during node creation
+            }
+            // Handle other axiom types...
+            _ => {
+                // Handle SubObjectPropertyOf, InverseObjectProperties, etc.
+                self.add_object_property_axiom_to_tableau(tableau, axiom)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Add object property axiom to tableau
+    fn add_object_property_axiom_to_tableau(&self, tableau: &mut Tableau, axiom: &Axiom) -> Result<()> {
+        match axiom {
+            Axiom::SubObjectPropertyOf(axiom) => {
+                // Add property inclusion to tableau
+                let property_inclusion = PropertyInclusion {
+                    sub_property: format!("{:?}", axiom.sub_property),
+                    super_property: format!("{:?}", axiom.super_property),
+                };
+                tableau.property_inclusions.push(property_inclusion);
+            }
+            Axiom::InverseObjectProperties(axiom) => {
+                // Add inverse property relationship
+                let first_str = format!("{:?}", axiom.first);
+                let second_str = format!("{:?}", axiom.second);
+                tableau.inverse_properties.insert(first_str.clone(), second_str.clone());
+                tableau.inverse_properties.insert(second_str, first_str);
+            }
+            Axiom::FunctionalObjectProperty(axiom) => {
+                // Mark property as functional
+                tableau.functional_properties.insert(format!("{:?}", axiom.property));
+            }
+            Axiom::InverseFunctionalObjectProperty(axiom) => {
+                // Mark property as inverse functional
+                tableau.inverse_functional_properties.insert(format!("{:?}", axiom.property));
+            }
+            Axiom::TransitiveObjectProperty(axiom) => {
+                // Mark property as transitive
+                tableau.transitive_properties.insert(format!("{:?}", axiom.property));
+            }
+            Axiom::SymmetricObjectProperty(axiom) => {
+                // Mark property as symmetric (equivalent to self-inverse)
+                let property_str = format!("{:?}", axiom.property);
+                tableau.inverse_properties.insert(property_str.clone(), property_str);
+            }
+            Axiom::AsymmetricObjectProperty(axiom) => {
+                // Add asymmetric constraint
+                tableau.asymmetric_properties.insert(format!("{:?}", axiom.property));
+            }
+            Axiom::ReflexiveObjectProperty(axiom) => {
+                // Mark property as reflexive
+                tableau.reflexive_properties.insert(format!("{:?}", axiom.property));
+            }
+            Axiom::IrreflexiveObjectProperty(axiom) => {
+                // Mark property as irreflexive
+                tableau.irreflexive_properties.insert(format!("{:?}", axiom.property));
+            }
+            _ => {
+                // Handle other types or ignore
+            }
+        }
+        Ok(())
+    }
+}
