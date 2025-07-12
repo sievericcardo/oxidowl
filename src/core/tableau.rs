@@ -357,3 +357,514 @@ pub struct TableauStatistics {
     /// Time spent in blocking checks
     pub blocking_time: Duration,
 }
+
+impl Tableau {
+    /// Create a new empty tableau
+    pub fn new(config: ReasoningConfig) -> Self {
+        let blocking_strategy = BlockingStrategy::create_checker(&config)?;
+        // Create expansion strategy - placeholder implementation
+        let expansion_strategy = Box::new(DefaultExpansionStrategy::new());
+        let completion_rules = CompletionRuleSet::new();
+
+        Self {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            completion_rules,
+            blocking_strategy,
+            expansion_strategy,
+            dependency_tracker: DependencyTracker::new(),
+            pending_queue: VecDeque::new(),
+            clash_detector: ClashDetector::new(),
+            config,
+            statistics: TableauStatistics::default(),
+            state: TableauState::Unknown,
+            property_inclusions: Vec::new(),
+            inverse_properties: HashMap::new(),
+            functional_properties: HashSet::new(),
+            inverse_functional_properties: HashSet::new(),
+            transitive_properties: HashSet::new(),
+            asymmetric_properties: HashSet::new(),
+            reflexive_properties: HashSet::new(),
+            irreflexive_properties: HashSet::new(),
+        }
+    }
+
+    /// Run the tableau algorithm to completion
+    pub fn run(&mut self) -> Result<TableauState> {
+        let start_time = Instant::now();
+        debug!("Starting tableau expansion");
+        
+        // Initialize root node if needed
+        if self.nodes.is_empty() {
+            self.create_root_node()?;
+        }
+        
+        // Main expansion loop
+        while !self.pending_queue.is_empty() && self.state == TableauState::Unknown {
+            // Check for timeout
+            if let Some(timeout) = self.config.timeout {
+                if start_time.elapsed() > timeout {
+                    warn!("Tableau expansion timed out");
+                    self.state = TableauState::Unknown;
+                    break;
+                }
+            }
+            
+            // Get next rule application
+            let rule_app = self.pending_queue.pop_front().unwrap();
+            
+            // Apply the rule
+            self.apply_rule(rule_app)?;
+            
+            // Check for clashes
+            if self.clash_detector.has_clashes() {
+                debug!("Clash detected, tableau is unsatisfiable");
+                self.state = TableauState::Unsatisfiable;
+                break;
+            }
+            
+            // Update blocking information
+            self.update_blocking()?;
+            
+            // Check if tableau is complete
+            if self.is_complete() {
+                debug!("Tableau is complete and satisfiable");
+                self.state = TableauState::Satisfiable;
+                break;
+            }
+        }
+        
+        self.statistics.construction_time = start_time.elapsed();
+        debug!("Tableau expansion completed with state: {:?}", self.state);
+        
+        Ok(self.state)
+    }
+
+    /// Create the root node for the tableau
+    fn create_root_node(&mut self) -> Result<NodeId> {
+        let node_id = self.nodes.len();
+        let node = TableauNode {
+            id: node_id,
+            concepts: HashSet::new(),
+            node_type: NodeType::Root,
+            blocking_info: BlockingInfo::default(),
+            concept_dependencies: HashMap::new(),
+            status: NodeStatus::default(),
+        };
+        
+        self.nodes.push(node);
+        self.statistics.nodes_created += 1;
+        
+        Ok(node_id)
+    }
+
+    /// Create a new individual node
+    pub fn create_node(&mut self, node_type: NodeType) -> NodeId {
+        let node_id = self.nodes.len();
+        let node = TableauNode {
+            id: node_id,
+            concepts: HashSet::new(),
+            node_type,
+            blocking_info: BlockingInfo::default(),
+            concept_dependencies: HashMap::new(),
+            status: NodeStatus::default(),
+        };
+        
+        self.nodes.push(node);
+        self.statistics.nodes_created += 1;
+        
+        node_id
+    }
+
+    /// Add a concept to a node
+    pub fn add_concept(
+        &mut self,
+        node_id: NodeId,
+        concept: ConceptLabel,
+        dependencies: DependencySet,
+    ) -> Result<()> {
+        if node_id >= self.nodes.len() {
+            return Err(Error::internal(format!("Invalid node ID: {}", node_id)));
+        }
+        
+        let node = &mut self.nodes[node_id];
+        
+        // Check if concept is already present
+        if node.concepts.contains(&concept) {
+            return Ok(());
+        }
+        
+        // Add the concept
+        node.concepts.insert(concept.clone());
+        node.concept_dependencies.insert(concept.clone(), dependencies);
+        
+        // Queue applicable rules
+        self.queue_rules_for_concept(node_id, &concept)?;
+        
+        Ok(())
+    }
+
+    /// Add an edge between nodes
+    pub fn add_edge(
+        &mut self,
+        from: NodeId,
+        to: NodeId,
+        role: RoleLabel,
+        dependencies: DependencySet,
+    ) -> Result<()> {
+        let edge = TableauEdge {
+            from,
+            to,
+            role: role.clone(),
+            dependencies,
+        };
+        
+        self.edges.push(edge);
+        self.statistics.edges_created += 1;
+        
+        // Queue applicable rules for this edge
+        self.queue_rules_for_edge(from, to, &role)?;
+        
+        Ok(())
+    }
+
+    /// Apply a completion rule
+    fn apply_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        let start_time = Instant::now();
+        trace!("Applying rule: {:?} to node: {}", rule_app.rule, rule_app.node);
+        
+        match rule_app.rule {
+            CompletionRule::And => self.apply_and_rule(rule_app)?,
+            CompletionRule::Or => self.apply_or_rule(rule_app)?,
+            CompletionRule::Some => self.apply_some_rule(rule_app)?,
+            CompletionRule::All => self.apply_all_rule(rule_app)?,
+            CompletionRule::AtLeast => self.apply_at_least_rule(rule_app)?,
+            CompletionRule::AtMost => self.apply_at_most_rule(rule_app)?,
+            CompletionRule::Nominal => self.apply_nominal_rule(rule_app)?,
+            CompletionRule::Self_ => self.apply_self_rule(rule_app)?,
+            CompletionRule::Choose => self.apply_choose_rule(rule_app)?,
+            CompletionRule::Datatype => self.apply_datatype_rule(rule_app)?,
+            CompletionRule::Unfold => self.apply_unfold_rule(rule_app)?,
+            CompletionRule::PropertyChain => self.apply_property_chain_rule(rule_app)?,
+            CompletionRule::Guess => self.apply_guess_rule(rule_app)?,
+        }
+        
+        self.statistics.rule_applications += 1;
+        self.statistics.rule_application_time += start_time.elapsed();
+        
+        Ok(())
+    }
+
+    /// Apply conjunction rule (A ⊓ B → A, B)
+    fn apply_and_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        if let RuleContext::Concept { concept, dependencies } = rule_app.context {
+            if let ClassExpression::ObjectIntersectionOf(conjuncts) = concept {
+                let node_idx = self.get_node_index(&rule_app.node)?;
+                for conjunct in conjuncts {
+                    let conjunct_label = ConceptLabel::from_class_expression(&conjunct)?;
+                    self.add_concept(node_idx, conjunct_label, dependencies.clone())?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply disjunction rule (A ⊔ B → A | B)
+    fn apply_or_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        // This would involve creating choice points/branches
+        // For now, implement a simplified version
+        if let RuleContext::Concept { concept, dependencies } = rule_app.context {
+            if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
+                let node_idx = self.get_node_index(&rule_app.node)?;
+                // Create a choice point here
+                // For simplicity, just take the first disjunct
+                if let Some(first_disjunct) = disjuncts.into_iter().next() {
+                    let disjunct_label = ConceptLabel::from_class_expression(&first_disjunct)?;
+                    self.add_concept(node_idx, disjunct_label, dependencies)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply existential rule (∃R.C → create new node with R-edge and C)
+    fn apply_some_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        if let RuleContext::Concept { concept, dependencies } = rule_app.context {
+            let concept_label = ConceptLabel::from_class_expression(&concept)?;
+            if let ConceptLabel::Existential { role, filler } = concept_label {
+                let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
+                
+                // Check if there's already a suitable successor
+                let suitable_successor = self.find_suitable_successor(node_id, &role, &filler)?;
+                
+                if suitable_successor.is_none() {
+                    // Create new node
+                    let new_node = self.create_node(NodeType::Generated);
+                    
+                    // Add edge
+                    self.add_edge(node_id, new_node, role, dependencies.clone())?;
+                    
+                    // Add concept to new node
+                    self.add_concept(new_node, *filler, dependencies)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply universal rule (∀R.C with R-edge to y → C on y)
+    fn apply_all_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        if let RuleContext::Concept { concept, dependencies } = rule_app.context {
+            let concept_label = ConceptLabel::from_class_expression(&concept)?;
+            if let ConceptLabel::Universal { role, filler } = concept_label {
+                let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
+                
+                // Find all R-successors
+                let successors = self.find_role_successors(node_id, &role);
+                
+                for successor in successors {
+                    self.add_concept(successor, *filler.clone(), dependencies.clone())?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply at-least cardinality rule
+    fn apply_at_least_rule(&mut self, _rule_app: RuleApplication) -> Result<()> {
+        // Implementation would handle ≥n R.C rules
+        // This is complex and involves creating multiple nodes
+        Ok(())
+    }
+
+    /// Apply at-most cardinality rule
+    fn apply_at_most_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        // Implementation for ≤n R.C rules (at-most cardinality restrictions)
+        if let RuleContext::AtMost { node_id, cardinality, property, filler } = rule_app.context {
+            // Convert Role to RoleLabel for tableau operations
+            let role_label = RoleLabel::from_role(&property)?;
+            
+            // Find all R-successors of the node that are instances of C
+            let node_index = self.get_node_index(&node_id)?;
+            let successors = self.find_role_successors(node_index, &role_label);
+            let matching_successors: Vec<_> = successors.into_iter()
+                .filter(|successor_id| {
+                    self.node_contains_concept(successor_id, &filler).unwrap_or(false)
+                })
+                .collect();
+
+            // If we have more than n matching successors, we need to merge some
+            if matching_successors.len() > cardinality as usize {
+                debug!("At-most rule triggered: found {} successors for cardinality ≤{}", 
+                       matching_successors.len(), cardinality);
+                
+                // For now, detect clash (this should ideally try merging first)
+                // In a full implementation, we would attempt to merge compatible nodes
+                // and only declare a clash if merging fails
+                return Err(Error::reasoning("Cardinality clash: too many role successors"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply nominal rule (individuals)
+    fn apply_nominal_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        if let RuleContext::Concept { concept, dependencies } = rule_app.context {
+            if let ClassExpression::ObjectOneOf(individuals) = concept {
+                let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
+                
+                for individual in individuals {
+                    let individual_label = ConceptLabel::Nominal(individual.iri.to_string());
+                    self.add_concept(node_id, individual_label, dependencies.clone())?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply self rule (R.Self)
+    fn apply_self_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
+        if let RuleContext::Concept { concept, dependencies } = rule_app.context {
+            if let ClassExpression::ObjectHasSelf(role) = concept {
+                let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
+                
+                // Create a self-loop edge
+                let role_label = RoleLabel::from_role(&role)?;
+                self.add_edge(node_id, node_id, role_label, dependencies)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply choose rule (choice points)
+    fn apply_choose_rule(&mut self, _rule_app: RuleApplication) -> Result<()> {
+        // This would involve creating choice points for disjunctions
+        // For now, we can just log that this rule was applied
+        debug!("Choose rule applied, creating choice point");
+        Ok(())
+    }
+
+    /// Apply datatype rule (data properties)
+    fn apply_datatype_rule(&mut self, _rule_app: RuleApplication) -> Result<()> {
+        // Implementation for data properties would go here
+        // For now, we can just log that this rule was applied
+        debug!("Datatype rule applied, handling data properties");
+        Ok(())
+    }
+
+    /// Apply unfold rule (unfolding definitions)
+    fn apply_unfold_rule(&mut self, _rule_app: RuleApplication) -> Result<()> {
+        // This would involve unfolding definitions in the ontology
+        // For now, we can just log that this rule was applied
+        debug!("Unfold rule applied, unfolding definitions");
+        Ok(())
+    }
+
+    /// Apply property chain rule (complex role chains)
+    fn apply_property_chain_rule(&mut self, _rule_app: RuleApplication) -> Result<()> {
+        // TODO: Implement property chain rule application as follows:
+        // 1. Find property chain axioms from the ontology
+        // 2. Check for sequences of edges that match the chain
+        // 3. Add super property edges where chains are completed
+        debug!("Property chain rule applied, checking for property chains");
+        Ok(())
+    }
+
+    /// Check subsumption between two class expressions (placeholder)
+    pub fn check_subsumption(&self, _subclass: &ClassExpression, _superclass: &ClassExpression) -> Result<bool> {
+        // Placeholder implementation
+        // TODO: implement proper subsumption checking
+        Ok(false)
+    }
+
+    /// Queue completion rules for a newly added concept
+    fn queue_rules_for_concept(&mut self, node_id: NodeId, concept: &ConceptLabel) -> Result<()> {
+        // Determine which rules are applicable for this concept
+        let class_expr = concept.to_class_expression()?;
+        let applicable_rules = self.completion_rules.get_applicable_rules(&class_expr);
+        
+        for rule in applicable_rules {
+            let rule_app = RuleApplication {
+                rule,
+                node: node_id.to_string(),
+                context: RuleContext::Concept {
+                    concept: class_expr.clone(),
+                    dependencies: DependencySet::empty(), // Would be populated properly
+                },
+                priority: self.get_rule_priority(&rule),
+                dependencies: DependencySet::empty(), // Would be populated properly
+            };
+            
+            self.pending_queue.push_back(rule_app);
+        }
+        
+        // Sort queue by priority
+        self.pending_queue.make_contiguous().sort_by_key(|app| app.priority);
+        
+        Ok(())
+    }
+
+    /// Queue completion rules for a newly added edge
+    fn queue_rules_for_edge(&mut self, from: NodeId, to: NodeId, role: &RoleLabel) -> Result<()> {
+        // Queue universal rules that might apply
+        // TODO: check all universal concepts on the source node
+        Ok(())
+    }
+
+    /// Get priority for a completion rule
+    fn get_rule_priority(&self, rule: &CompletionRule) -> RulePriority {
+        match rule {
+            CompletionRule::And => RulePriority::Highest,
+            CompletionRule::All => RulePriority::High,
+            CompletionRule::Some => RulePriority::Normal,
+            CompletionRule::Or => RulePriority::Low,
+            CompletionRule::AtLeast | CompletionRule::AtMost => RulePriority::Low,
+            CompletionRule::Nominal => RulePriority::Normal,
+            CompletionRule::Self_ => RulePriority::Normal,
+            CompletionRule::Choose => RulePriority::Lowest,
+            CompletionRule::Datatype => RulePriority::High,
+            CompletionRule::Unfold => RulePriority::Highest,
+            CompletionRule::PropertyChain => RulePriority::High,
+            CompletionRule::Guess => RulePriority::Lowest,
+        }
+    }
+
+    /// Find a suitable successor for an existential restriction
+    fn find_suitable_successor(
+        &self,
+        node_id: NodeId,
+        role: &RoleLabel,
+        filler: &ConceptLabel,
+    ) -> Result<Option<NodeId>> {
+        // Look for existing R-successors that have the filler concept
+        for edge in &self.edges {
+            if edge.from == node_id && edge.role == *role {
+                let successor = &self.nodes[edge.to];
+                if successor.concepts.contains(filler) {
+                    return Ok(Some(edge.to));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Find all role successors of a node
+    fn find_role_successors(&self, node_id: NodeId, role: &RoleLabel) -> Vec<NodeId> {
+        self.edges
+            .iter()
+            .filter(|edge| edge.from == node_id && edge.role == *role)
+            .map(|edge| edge.to)
+            .collect()
+    }
+
+    /// Check if a node contains a specific concept
+    fn node_contains_concept(&self, node_id: &NodeId, concept: &ClassExpression) -> Result<bool> {
+        if let Some(node) = self.nodes.get(*node_id) {
+            // Check if the node's concept set contains the given concept
+            for concept_label in &node.concepts {
+                if let Ok(class_expr) = concept_label.to_class_expression() {
+                    if &class_expr == concept {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    /// Get the node index from a node ID string
+    fn get_node_index(&self, node_id: &str) -> Result<NodeId> {
+        // Simple implementation: try to parse the node_id as a number
+        // TODO: maintain a mapping from string IDs to indices
+        node_id.parse().map_err(|_| Error::reasoning("Invalid node ID"))
+    }
+
+    /// Update blocking information for all nodes
+    fn update_blocking(&mut self) -> Result<()> {
+        let start_time = Instant::now();
+        
+        // TODO: implement the blocking algorithm
+        self.statistics.blocking_time += start_time.elapsed();
+        Ok(())
+    }
+
+    /// Check if the tableau is complete (no more rules to apply)
+    fn is_complete(&self) -> bool {
+        self.pending_queue.is_empty() && !self.clash_detector.has_clashes()
+    }
+
+    /// Get the number of nodes in the tableau
+    pub fn get_node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Get the number of backtracking operations
+    pub fn get_backtrack_count(&self) -> usize {
+        self.statistics.backtracking_operations
+    }
+
+    /// Get the maximum depth reached
+    pub fn get_max_depth(&self) -> usize {
+        self.statistics.max_depth
+    }
+}
