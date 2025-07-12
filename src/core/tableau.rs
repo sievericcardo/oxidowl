@@ -868,3 +868,104 @@ impl Tableau {
         self.statistics.max_depth
     }
 }
+
+impl ConceptLabel {
+    /// Convert a class expression to a concept label
+    pub fn from_class_expression(class_expr: &ClassExpression) -> Result<Self> {
+        match class_expr {
+            ClassExpression::Class(class) => {
+                Ok(ConceptLabel::Atomic(class.iri.to_string()))
+            }
+            ClassExpression::ObjectComplementOf(inner) => {
+                match inner.as_ref() {
+                    ClassExpression::Class(class) => {
+                        Ok(ConceptLabel::NegatedAtomic(class.iri.to_string()))
+                    }
+                    _ => Ok(ConceptLabel::Complex(Box::new(class_expr.clone()))),
+                }
+            }
+            _ => Ok(ConceptLabel::Complex(Box::new(class_expr.clone()))),
+        }
+    }
+
+    /// Convert a concept label back to a class expression
+    pub fn to_class_expression(&self) -> Result<ClassExpression> {
+        match self {
+            ConceptLabel::Atomic(iri) => {
+                Ok(ClassExpression::Class(Class {
+                    iri: IRI::new(iri.to_string()).to_url()?,
+                }))
+            }
+            ConceptLabel::NegatedAtomic(iri) => {
+                Ok(ClassExpression::ObjectComplementOf(Box::new(ClassExpression::Class(Class {
+                    iri: IRI::new(iri.to_string()).to_url()?,
+                }))))
+            }
+            ConceptLabel::Complex(expr) => Ok(*expr.clone()),
+            ConceptLabel::Existential { role, filler } => {
+                let role_iri = match role {
+                    RoleLabel::Atomic(iri) => iri.clone(),
+                    RoleLabel::Inverse(iri) => iri.clone(),
+                };
+                Ok(ClassExpression::ObjectSomeValuesFrom {
+                    property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                        iri: url::Url::parse(&role_iri).map_err(|e| crate::Error::ontology_parsing(format!("Invalid IRI: {}", e)))?,
+                    }),
+                    filler: Box::new(filler.to_class_expression()?),
+                })
+            }
+            ConceptLabel::Universal { role, filler } => {
+                let role_iri = match role {
+                    RoleLabel::Atomic(iri) => iri.clone(),
+                    RoleLabel::Inverse(iri) => iri.clone(),
+                };
+                Ok(ClassExpression::ObjectAllValuesFrom {
+                    property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                        iri: IRI::new(role_iri).to_url()?,
+                    }),
+                    filler: Box::new(filler.to_class_expression()?),
+                })
+            }
+            ConceptLabel::AtLeast { cardinality, role, filler } => {
+                let role_iri = match role {
+                    RoleLabel::Atomic(iri) => iri.clone(),
+                    RoleLabel::Inverse(iri) => iri.clone(),
+                };
+                Ok(ClassExpression::ObjectMinCardinality {
+                    cardinality: *cardinality,
+                    property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                        iri: IRI::new(role_iri).to_url()?,
+                    }),
+                    filler: match filler.as_ref() {
+                        Some(f) => Some(Box::new(f.to_class_expression()?)),
+                        None => None,
+                    },
+                })
+            }
+            ConceptLabel::AtMost { cardinality, role, filler } => {
+                let role_iri = match role {
+                    RoleLabel::Atomic(iri) => iri.clone(),
+                    RoleLabel::Inverse(iri) => iri.clone(),
+                };
+                Ok(ClassExpression::ObjectMaxCardinality {
+                    cardinality: *cardinality,
+                    property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                        iri: IRI::new(role_iri).to_url()?,
+                    }),
+                    filler: match filler.as_ref() {
+                        Some(f) => Some(Box::new(f.to_class_expression()?)),
+                        None => None,
+                    },
+                })
+            }
+            ConceptLabel::Nominal(individual_iri) => {
+                // Convert nominal to ObjectOneOf with a single individual
+                Ok(ClassExpression::ObjectOneOf(vec![
+                    crate::ontology::Individual {
+                        iri: IRI::new(individual_iri.clone()).to_url()?,
+                    }
+                ]))
+            }
+        }
+    }
+}
