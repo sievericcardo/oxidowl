@@ -133,3 +133,68 @@ pub struct ExistentialCandidate {
     /// Creation timestamp
     pub created_at: std::time::Instant,
 }
+
+/// Expansion complexity metrics
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpansionComplexity {
+    /// Complexity of filler
+    pub syntactic_complexity: u32,
+
+    /// Number of role successors needed
+    pub role_successors: u32,
+
+    /// Estimated branching factor
+    pub branching_factor: u32,
+
+    /// Memory requirement estimate
+    pub memory_estimate: usize,
+}
+
+/// Priority for expansion ordering
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ExpansionPriority{
+    /// Immediate expansion required
+    Immediate = 0,
+
+    /// High priority expansion
+    High = 1,
+
+    /// Normal priority expansion
+    Normal = 2,
+
+    /// Low priority expansion
+    Low = 3,
+
+    /// Delayed expansion
+    Delayed = 4,
+}
+
+/// Wrapper for priority-based ordering
+#[derive(Debug, Clone)]
+struct PrioritzedCandidate {
+    candidate: ExistentialCandidate,
+    priority: ExpansionPriority,
+    insertion_order: u64,
+}
+
+/// Result of an expansion operation
+#[derive(Debug, Clone)]
+pub struct ExpansionResult {
+    /// New individuals created
+    pub new_individuals: Vec<String>,
+
+    /// New edges created
+    pub new_edges: Vec<(String, String, Role)>,
+
+    /// New concepts added
+    pub new_concepts: Vec<(String, ClassExpression)>,
+
+    /// Rule applications generated
+    pub rule_applications: Vec<RuleApplication>,
+
+    /// Expansion successful
+    pub success: bool,
+
+    /// Dependencies generated during expansion
+    pub dependencies: DependencySet,
+}
