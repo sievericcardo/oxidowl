@@ -210,3 +210,150 @@ impl RoleLabel {
         }
     }
 }
+
+/// Type of tableau node
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeType {
+    /// Regular individual node
+    Individual,
+    
+    /// Nominal node
+    Nominal,
+    
+    /// Generated node from existential expansion
+    Generated,
+    
+    /// Root node
+    Root,
+}
+
+/// Blocking information for a node
+#[derive(Debug, Clone, Default)]
+pub struct BlockingInfo {
+    /// Whether this node is blocked
+    pub is_blocked: bool,
+    
+    /// Node that blocks this one (if any)
+    pub blocker: Option<NodeId>,
+    
+    /// Nodes blocked by this one
+    pub blocks: HashSet<NodeId>,
+    
+    /// Blocking signature
+    pub signature: Option<Vec<ConceptLabel>>,
+}
+
+/// Status flags for tableau nodes
+#[derive(Debug, Clone, Default)]
+pub struct NodeStatus {
+    /// Whether the node has been fully expanded
+    pub fully_expanded: bool,
+    
+    /// Whether the node is involved in a clash
+    pub clashed: bool,
+    
+    /// Whether the node is being processed
+    pub processing: bool,
+}
+
+/// Rule application to be processed
+/// Priority levels for rule applications
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Priority {
+    /// Highest priority (deterministic rules)
+    Highest = 0,
+    
+    /// High priority (propagation rules)
+    High = 1,
+    
+    /// Normal priority (expansion rules)
+    Normal = 2,
+    
+    /// Low priority (non-deterministic rules)
+    Low = 3,
+    
+    /// Lowest priority (optimization rules)
+    Lowest = 4,
+}
+
+/// Clash detection and management
+#[derive(Debug)]
+pub struct ClashDetector {
+    /// Currently detected clashes
+    clashes: Vec<Clash>,
+}
+
+/// Representation of a clash in the tableau
+#[derive(Debug, Clone)]
+pub struct Clash {
+    /// Type of clash
+    pub clash_type: ClashType,
+    
+    /// Nodes involved in the clash
+    pub nodes: Vec<NodeId>,
+    
+    /// Dependencies that led to this clash
+    pub dependencies: DependencySet,
+    
+    /// Explanation for the clash
+    pub explanation: String,
+}
+
+/// Types of clashes that can occur
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClashType {
+    /// Concept clash (C and ¬C)
+    Concept {
+        concept: String,
+        node: NodeId,
+    },
+    
+    /// Cardinality clash
+    Cardinality {
+        role: RoleLabel,
+        node: NodeId,
+        min_cardinality: u32,
+        max_cardinality: u32,
+    },
+    
+    /// Functionality clash
+    Functionality {
+        role: RoleLabel,
+        node: NodeId,
+        individuals: Vec<NodeId>,
+    },
+    
+    /// Nominal clash
+    Nominal {
+        individual: String,
+        nodes: Vec<NodeId>,
+    },
+}
+
+/// Statistics about tableau construction and expansion
+#[derive(Debug, Default, Clone)]
+pub struct TableauStatistics {
+    /// Number of nodes created
+    pub nodes_created: usize,
+    
+    /// Number of edges created
+    pub edges_created: usize,
+    
+    /// Number of rule applications
+    pub rule_applications: usize,
+    
+    /// Number of backtracking operations
+    pub backtracking_operations: usize,
+    
+    /// Maximum depth reached
+    pub max_depth: usize,
+    
+    /// Time spent in tableau construction
+    pub construction_time: Duration,
+    
+    /// Time spent in rule application
+    pub rule_application_time: Duration,
+    
+    /// Time spent in blocking checks
+    pub blocking_time: Duration,
+}
