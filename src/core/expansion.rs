@@ -198,3 +198,130 @@ pub struct ExpansionResult {
     /// Dependencies generated during expansion
     pub dependencies: DependencySet,
 }
+
+/// Record of a completed expansion
+#[derive(Debug, Clone)]
+pub struct ExpansionRecord {
+    /// Candidate that was expanded
+    pub candidate: ExistentialCandidate,
+
+    /// Result of the expansion
+    pub result: ExpansionResult,
+
+    /// Timestamp when expansion was completed
+    pub timestamp: std::time::Instant,
+
+    /// Expansion strategy used
+    pub strategy_used: String,
+}
+
+/// Configuration for expansion management
+#[derive(Debug, Clone)]
+pub struct ExpansionConfig {
+    /// Maximum pending queue size
+    pub max_queue_size: usize,
+
+    /// Enable expansion caching
+    pub enable_caching: bool,
+
+    /// Delay complex expansions
+    pub delay_complex: bool,
+
+    /// Complexity threshold for delaying
+    pub complexity_threshold: u32,
+
+    /// Maximum expansion depth
+    pub max_expansion_depth: u32,
+
+    /// Prefer witnesses over new individuals
+    pub prefer_witnesses: bool,
+}
+
+/// Statistics about expansion operations
+#[derive(Debug, Default, Clone)]
+pub struct ExpansionStatistics {
+    /// Total expansions performed
+    pub total_expansions: u64,
+
+    /// Expansion using witnesses
+    pub witness_expansions: u64,
+
+    /// New individuals creations
+    pub new_individuals_creations: u64,
+
+    /// Expansions delayed
+    pub delayed_expansions: u64,
+
+    /// Average expansion time
+    pub average_expansion_time: std::time::Duration,
+
+    /// Total expansion time
+    pub total_expansion_time: std::time::Duration,
+}
+
+/// Creation order strategy
+#[derive(Debug)]
+pub struct CreationOrderStrategy {
+    /// Current insertion order for candidates
+    insertion_order: u64,
+}
+
+/// Complexity-based strategy
+#[derive(Debug)]
+pub struct ComplexityStrategy {
+    /// Weight factors for complexity metrics
+    weight: ComplexityWeights,
+}
+
+/// Role depth strategy
+#[derive(Debug)]
+pub struct RoleDepthStrategy {
+    /// Role depth cache
+    role_depths: HashMap<Role, u32>,
+    
+    /// Prefer shallow or deep roles
+    prefer_shallow: bool,
+}
+
+
+/// Hybrid strategy combining multiple approaches
+#[derive(Debug)]
+pub struct HybridStrategy {
+    /// Primary strategy
+    primary: Box<dyn ExpansionStrategy>,
+
+    /// Fallback strategy
+    fallbacks: Vec<Box<dyn ExpansionStrategy>>,
+
+    /// Strategy selection criteria
+    selection_criteria: StrategySelectionCriteria,
+}
+
+/// Weights for complexity metrics
+#[derive(Debug, Clone)]
+pub struct ComplexityWeights {
+    /// Weight for syntactic complexity
+    pub syntactic: f64,
+
+    /// Weight for role successors
+    pub role_successors: f64,
+
+    /// Weight for branching factor
+    pub branching_factor: f64,
+
+    /// Weight for memory estimate
+    pub memory_estimate: f64,
+}
+
+/// Criteria for selecting expansion strategies
+#[derive(Debug, Clone)]
+pub struct StrategySelectionCriteria {
+    /// Tableau size thresholds
+    pub size_thresholds: Vec<usize>,
+    
+    /// Complexity thresholds
+    pub complexity_thresholds: Vec<u32>,
+    
+    /// Time-based switching
+    pub time_based_switching: bool,
+}
