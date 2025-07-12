@@ -325,3 +325,207 @@ pub struct StrategySelectionCriteria {
     /// Time-based switching
     pub time_based_switching: bool,
 }
+
+impl ExpansionManager {
+    /// Create a new expansion manager with the given strategy
+    pub fn new(strategy: Box<dyn ExpansionStrategy>) -> Self {
+        Self {
+            strategy,
+            pending_queue: BinaryHeap::new(),
+            expanding: HashSet::new(),
+            expansion_history: HashMap::new(),
+            dependency_tracker: DependencyTracker::new(),
+            config: ExpansionConfig::default(),
+            statistics: ExpansionStatistics::default(),
+        }
+    }
+
+    /// Add an existential candidate to the pending queue
+    pub fn add_candidate(&mut self, candidate: ExistentialCandidate) -> Result<()> {
+        if self.pending_queue.len() >= self.config.max_queue_size {
+            return Err(Error::QueueFull);
+        }
+
+        let priority = self.strategy.get_expansion_priority(&candidate);
+        let prioritised_candidate = PrioritisedCandidate {
+            candidate,
+            priority,
+            insertion_order: self.next_insertion_order(),
+        };
+
+        self.pending_queue.push(prioritised_candidate);
+
+        Ok(())
+    }
+
+    /// Get the next existential to expand
+    pub fn next_expansion(&mut self, context: &ExpansionContext) -> Option<ExistentialCandidate> {
+        while let Some(prioritised) = self.pending_queue.pop() {
+            if self.expanding.contains(&prioritised.candidate.node) {
+                continue; // Already expanding this candidate
+            }
+
+            if self.strategy.should_delay_expansion(&prioritised.candidate, context) {
+                // Re-queue with lower priority
+                let delayed = PrioritizedCandidate {
+                    prioritised.candidate,
+                    priority: ExpansionPriority::Delayed,
+                    insertion_order: self.next_insertion_order(),
+                };
+                self.pending_queue.push(delayed); // Reinsert for later
+                self.statistics.delayed_expansions += 1;
+                continue;
+            }
+
+            self.expanding.insert(prioritised.candidate.node.clone());
+            return Some(prioritised.candidate);
+        }
+
+        None // No candidates available
+    }
+
+    /// Expand an existential candidate
+    pub fn expand_candidate(
+        &mut self,
+        candidate: ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> Result<ExpansionResult> {
+        let start_time = std::time::Instant::now();
+
+        let result = if self.config.prefer_witnesses && !candidate.potential_witnesses.is_empty() {
+            self.expand_with_witness(&candidate, context)?
+        } else {
+            self.expand_with_new_individual(&candidate, context)?
+        };
+
+        // Update statistics
+        let expansion_time = start_time.elapsed();
+        self.statistics.total_expansions += 1;
+        self.statistics.total_expansion_time += expansion_time;
+        self.statistics.average_expansion_time = 
+            self.statistics.total_expansion_time / self.statistics.total_expansions as u32;
+        
+        if result.new_individuals.is_empty() {
+            self.statistics.witness_expansions += 1;
+        } else {
+            self.statistics.new_individual_creations += 1;
+        }
+        
+        // Record expansion
+        let record = ExpansionRecord {
+            candidate: candidate.clone(),
+            result: result.clone(),
+            timestamp: start_time,
+            strategy_used: self.strategy_name(),
+        };
+        self.expansion_history.insert(candidate.node.clone(), record);
+        
+        // Notify strategy
+        self.strategy.expansion_completed(&candidate, &result);
+        
+        // Remove from expanding set
+        self.expanding.remove(&candidate.node);
+        
+        Ok(result)
+    }
+
+    /// Expand using an existing witness
+    fn expand_with_witness(
+        &self,
+        candidate: &ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> Result<ExpansionResult> {
+        let witness = candidate.potential_witnesses[0].clone(); // Use first witness
+        
+        let mut result = ExpansionResult {
+            new_individuals: Vec::new(),
+            new_edges: vec![(candidate.node.clone(), witness.clone(), Role::ObjectProperty(candidate.role.clone()))],
+            new_concepts: vec![(witness, candidate.filler.clone())],
+            rule_applications: Vec::new(),
+            success: true,
+            dependencies: candidate.dependencies.clone(),
+        };
+        
+        // Create rule application for adding filler concept
+        let rule_app = RuleApplication::concept(
+            CompletionRule::Some,
+            candidate.node.clone(),
+            candidate.existential.clone(),
+            candidate.dependencies.clone(),
+        );
+        result.rule_applications.push(rule_app);
+        
+        Ok(result)
+    }
+
+    /// Expand by creating a new individual
+    fn expand_with_new_individual(
+        &self,
+        candidate: &ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> Result<ExpansionResult> {
+        let uuid_str = uuid::Uuid::new_v4().to_string();
+        let new_individual = format!("_exist_{}_{}", candidate.node, &uuid_str[..8]);
+        
+        let mut result = ExpansionResult {
+            new_individuals: vec![new_individual.clone()],
+            new_edges: vec![(candidate.node.clone(), new_individual.clone(), Role::ObjectProperty(candidate.role.clone()))],
+            new_concepts: vec![(new_individual, candidate.filler.clone())],
+            rule_applications: Vec::new(),
+            success: true,
+            dependencies: candidate.dependencies.clone(),
+        };
+        
+        // Create rule application
+        let rule_app = RuleApplication::concept(
+            CompletionRule::Some,
+            candidate.node.clone(),
+            candidate.existential.clone(),
+            candidate.dependencies.clone(),
+        );
+        result.rule_applications.push(rule_app);
+        
+        Ok(result)
+    }
+
+    /// Check if there are pending expansions
+    pub fn has_pending_expansions(&self) -> bool {
+        !self.pending_queue.is_empty() || !self.expanding.is_empty()
+    }
+
+    /// Get pending expansion count
+    pub fn pending_count(&self) -> usize {
+        self.pending_queue.len()
+    }
+
+    /// Clear all pending expansions
+    pub fn clear_pending(&mut self) {
+        self.pending_queue.clear();
+        self.expanding.clear();
+        self.expansion_history.clear();
+        self.statistics = ExpansionStatistics::default();
+    }
+
+    /// Get expansion statistics
+    pub fn statistics(&self) -> &ExpansionStatistics {
+        &self.statistics
+    }
+
+    /// Set expansion strategy
+    pub fn set_strategy(&mut self, strategy: Box<dyn ExpansionStrategy>) {
+        self.strategy = strategy;
+    }
+
+    /// Get next insertion order number
+    fn next_insertion_order(&mut self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64
+    }
+
+    /// Get strategy name for recording
+    fn strategy_name(&self) -> String {
+        format!("{:?}", self.strategy)
+    }
+}
