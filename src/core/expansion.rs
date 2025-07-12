@@ -586,3 +586,152 @@ impl ExpansionStrategy for CreationOrderStrategy {
         self.insertion_order = 0; // Reset insertion order
     }
 }
+
+impl ComplexityStrategy {
+    /// Create a new complexity-based strategy
+    pub fn new() -> Self {
+        Self {
+            weights: ComplexityWeights::default(),
+        }
+    }
+    
+    /// Calculate complexity score
+    fn calculate_complexity_score(
+        &self,
+        candidate: &ExistentialCandidate
+    ) -> f64 {
+        let complexity = &candidate.complexity;
+        
+        self.weights.syntactic * complexity.syntactic_complexity as f64
+            + self.weights.role_successors * complexity.role_successors as f64
+            + self.weights.branching_factor * complexity.branching_factor as f64
+            + self.weights.memory * complexity.memory_estimate as f64
+    }
+}
+
+impl ExpansionStrategy for ComplexityStrategy {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
+        Ok(())
+    }
+
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
+        candidates.iter()
+            .min_by(|a, b| {
+                self.calculate_complexity_score(a)
+                    .partial_cmp(&self.calculate_complexity_score(b))
+                    .unwrap_or(Ordering::Equal)
+            })
+            .cloned()
+    }
+
+    fn order_expansions(
+        &mut self,
+        existentials: &[ExistentialCandidate],
+    ) {
+        existentials.sort_by(|a, b| {
+            self.calculate_complexity_score(b)
+                .partial_cmp(&self.calculate_complexity_score(a))
+                .unwrap_or(Ordering::Equal)
+        });
+    }
+
+    fn should_delay_expansion(
+        &self,
+        candidate: &ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> bool {
+        candidate.complexity.syntactic_complexity > self.config.complexity_threshold
+            && context.branching_depth > self.config.max_expansion_depth
+    }
+
+    fn get_expansion_priority(
+        &self,
+        candidate: &ExistentialCandidate,
+    ) -> ExpansionPriority {
+        let score = self.calculate_complexity_score(candidate);
+        
+        if score < 5.0 {
+            ExpansionPriority::High
+        } else if score < 15.0 {
+            ExpansionPriority::Normal
+        } else {
+            ExpansionPriority::Low
+        }
+    }
+
+    fn expansion_completed(
+        &mut self,
+        _candidate: &ExistentialCandidate,
+        _result: &ExpansionResult,
+    ) {
+        // No specific action needed on completion
+    }
+
+    fn clear(&mut self) {
+        // No state to clear in this strategy
+    }
+}
+
+impl ExistentialCandidate {
+    /// Create a new existential candidate
+    pub fn new(
+        node: String,
+        existential: ClassExpression,
+        dependencies: DependencySet,
+    ) -> Result<Self> {
+        let (role, filler) = match &existential {
+            ClassExpression::ObjectSomeValuesFrom { property, filler: f } => (property.clone(), (**f).clone()),
+            _ => return Err(Error::internal("Not an existential concept")),
+        };
+        
+        let complexity = Self::calculate_complexity(&existential);
+        
+        Ok(Self {
+            node,
+            existential,
+            role,
+            filler,
+            dependencies,
+            potential_witnesses: Vec::new(),
+            complexity,
+            created_at: std::time::Instant::now(),
+        })
+    }
+
+    /// Calculate expansion complexity
+    fn calculate_complexity(existential: &ClassExpression) -> ExpansionComplexity {
+        let syntactic_complexity = Self::syntactic_complexity(concept);
+
+        ExpansionComplexity {
+            syntactic_complexity,
+            role_successors: 1, // Basic estimation
+            branching_factor: if syntactic_complexity > 5 { 2 } else { 1 },
+            memory_estimate: syntactic_complexity as usize * 100,
+        }
+    }
+
+    /// Calculate syntactic complexity of a concept
+    fn syntactic_complexity(concept: &ClassExpression) -> u32 {
+        match concept {
+            ClassExpression::Class(_) => 1,
+            ClassExpression::ObjectIntersectionOf(operands) => 1 + operands.iter().map(|c| Self::syntactic_complexity(c)).sum::<u32>(),
+            ClassExpression::ObjectUnionOf(operands) => 2 + operands.iter().map(|c| Self::syntactic_complexity(c)).sum::<u32>(),
+            ClassExpression::ObjectSomeValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
+            ClassExpression::ObjectAllValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
+            ClassExpression::ObjectMinCardinality { filler: Some(f), .. } => 3 + Self::syntactic_complexity(f),
+            ClassExpression::ObjectMaxCardinality { filler: Some(f), .. } => 3 + Self::syntactic_complexity(f),
+            ClassExpression::ObjectComplementOf(inner) => 1 + Self::syntactic_complexity(inner),
+            _ => 1,
+        }
+    }
+
+    /// Add a potential witness to this candidate
+    pub fn add_witness(&mut self, witness: String) {
+        if !self.potential_witnesses.contains(&witness) {
+            self.potential_witnesses.push(witness);
+        }
+    }
+}
