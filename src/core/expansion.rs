@@ -529,3 +529,60 @@ impl ExpansionManager {
         format!("{:?}", self.strategy)
     }
 }
+
+impl CreationOrderStrategy {
+    /// Create a new creation order strategy
+    pub fn new() -> Self {
+        Self {
+            insertion_order: 0,
+        }
+    }
+}
+
+impl ExpansionStrategy for CreationOrderStrategy {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
+        self.insertion_order = 0;
+        Ok(())
+    }
+
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
+        candidates.first().cloned()
+    }
+
+    fn order_expansions(
+        &mut self,
+        existentials: &[ExistentialCandidate],
+    ) {
+        existentials.sort_by_key(|e| e.created_at);
+    }
+
+    fn should_delay_expansion(
+        &self,
+        _candidate: &ExistentialCandidate,
+        _context: &ExpansionContext,
+    ) -> bool {
+        false // Never delay in creation order strategy
+    }
+
+    fn get_expansion_priority(
+        &self,
+        _candidate: &ExistentialCandidate,
+    ) -> ExpansionPriority {
+        ExpansionPriority::Normal // Default priority
+    }
+
+    fn expansion_completed(
+        &mut self,
+        _candidate: &ExistentialCandidate,
+        _result: &ExpansionResult,
+    ) {
+        self.insertion_order += 1; // Increment insertion order on completion
+    }
+
+    fn clear(&mut self) {
+        self.insertion_order = 0; // Reset insertion order
+    }
+}
