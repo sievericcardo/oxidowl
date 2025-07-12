@@ -186,3 +186,27 @@ pub enum RoleLabel {
     /// Inverse role
     Inverse(String),
 }
+
+impl RoleLabel {
+    /// Convert a Role from the ontology to a RoleLabel
+    pub fn from_role(role: &Role) -> Result<Self> {
+        match role {
+            Role::ObjectProperty(prop_expr) => {
+                match prop_expr {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                        Ok(RoleLabel::Atomic(prop.iri.as_str().to_string()))
+                    }
+                    crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                        Ok(RoleLabel::Inverse(prop.iri.as_str().to_string()))
+                    }
+                    crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
+                        Err(Error::reasoning("Property chains cannot be converted to role labels directly"))
+                    }
+                }
+            }
+            Role::DataProperty(prop) => {
+                Ok(RoleLabel::Atomic(prop.iri.as_str().to_string()))
+            }
+        }
+    }
+}
