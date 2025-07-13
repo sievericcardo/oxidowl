@@ -255,3 +255,359 @@ impl BranchingPoint {
         total_cost / self.choices.len() as f64
     }
 }
+
+/// Strategies for selecting branching points
+#[derive(Debug, Clone, PartialEq)]
+pub enum BranchingStrategy {
+    /// Depth-first search
+    DepthFirst,
+    /// Breadth-first search
+    BreadthFirst,
+    /// Best-first search based on priority
+    BestFirst,
+    /// Custom strategy with user-defined priority function
+    Custom,
+}
+
+/// Statistics for branching operations
+#[derive(Debug, Default)]
+pub struct BranchingStats {
+    pub total_branching_points: usize,
+    pub total_choices_explored: usize,
+    pub total_backtracks: usize,
+    pub max_depth: usize,
+    pub average_branching_factor: f64,
+    pub clash_count: usize,
+    pub successful_branches: usize,
+}
+
+/// Manages branching points and backtracking in the hypertableau
+#[derive(Debug)]
+pub struct BranchingManager {
+    /// All branching points indexed by ID
+    branching_points: HashMap<BranchingPointId, BranchingPoint>,
+    
+    /// Stack of active branching points (for backtracking)
+    branching_stack: Vec<BranchingPointId>,
+    
+    /// Current path in the search tree
+    current_path: Vec<BranchingPointId>,
+    
+    /// Branching strategy to use
+    strategy: BranchingStrategy,
+    
+    /// Queue for breadth-first or best-first search
+    choice_queue: VecDeque<BranchingPointId>,
+    
+    /// Counter for generating unique IDs
+    next_branching_id: usize,
+    
+    /// Reference to dependency tracker for backtracking
+    dependency_tracker: Arc<Mutex<DependencyTracker>>,
+    
+    /// Statistics
+    stats: BranchingStats,
+    
+    /// Maximum depth to prevent infinite search
+    max_depth: Option<usize>,
+}
+
+impl BranchingManager {
+    /// Create a new branching manager
+    pub fn new(
+        strategy: BranchingStrategy,
+        dependency_tracker: Arc<Mutex<DependencyTracker>>,
+    ) -> Self {
+        Self {
+            branching_points: HashMap::new(),
+            branching_stack: Vec::new(),
+            current_path: Vec::new(),
+            strategy,
+            choice_queue: VecDeque::new(),
+            next_branching_id: 1,
+            dependency_tracker,
+            stats: BranchingStats::default(),
+            max_depth: Some(1000), // Default depth limit
+        }
+    }
+    
+    /// Create a new branching point
+    pub fn create_branching_point(
+        &mut self,
+        branching_type: BranchingType,
+        choices: Vec<BranchingChoice>,
+    ) -> Result<BranchingPointId> {
+        let id = BranchingPointId(self.next_branching_id);
+        self.next_branching_id += 1;
+        
+        let mut branching_point = BranchingPoint::new(id, branching_type, choices);
+        
+        // Set parent and level
+        if let Some(&parent_id) = self.current_path.last() {
+            let parent_level = self.branching_points
+                .get(&parent_id)
+                .map(|p| p.level)
+                .unwrap_or(0);
+            
+            branching_point.set_parent(parent_id, parent_level + 1);
+            
+            // Add as child to parent
+            if let Some(parent) = self.branching_points.get_mut(&parent_id) {
+                parent.add_child(id);
+            }
+        }
+        
+        // Check depth limit
+        if let Some(max_depth) = self.max_depth {
+            if branching_point.level >= max_depth {
+                return Err(Error::MaxDepthExceeded(branching_point.level));
+            }
+        }
+        
+        // Calculate priority
+        branching_point.calculate_priority();
+        
+        // Update statistics
+        self.stats.total_branching_points += 1;
+        self.stats.max_depth = self.stats.max_depth.max(branching_point.level);
+        
+        // Store branching point
+        self.branching_points.insert(id, branching_point);
+        
+        // Add to appropriate data structure based on strategy
+        match self.strategy {
+            BranchingStrategy::DepthFirst => {
+                self.branching_stack.push(id);
+            }
+            BranchingStrategy::BreadthFirst => {
+                self.choice_queue.push_back(id);
+            }
+            BranchingStrategy::BestFirst => {
+                // Insert in priority order
+                let priority = self.branching_points[&id].priority;
+                let insert_pos = self.choice_queue
+                    .iter()
+                    .position(|&other_id| {
+                        self.branching_points[&other_id].priority < priority
+                    })
+                    .unwrap_or(self.choice_queue.len());
+                self.choice_queue.insert(insert_pos, id);
+            }
+            BranchingStrategy::Custom => {
+                self.choice_queue.push_back(id);
+            }
+        }
+        
+        Ok(id)
+    }
+    
+    /// Get the next branching point to explore
+    pub fn get_next_branching_point(&mut self) -> Option<BranchingPointId> {
+        match self.strategy {
+            BranchingStrategy::DepthFirst => {
+                self.branching_stack.pop()
+            }
+            BranchingStrategy::BreadthFirst | 
+            BranchingStrategy::BestFirst | 
+            BranchingStrategy::Custom => {
+                self.choice_queue.pop_front()
+            }
+        }
+    }
+    
+    /// Make a choice at a branching point
+    pub fn make_choice(
+        &mut self,
+        branching_id: BranchingPointId,
+        choice_index: Option<usize>,
+    ) -> Result<Option<(ClassExpression, Individual)>> {
+        let branching_point = self.branching_points
+            .get_mut(&branching_id)
+            .ok_or(Error::BranchingPointNotFound(branching_id))?;
+        
+        // If no specific choice provided, get the next available one
+        let choice_index = choice_index
+            .or_else(|| branching_point.get_next_choice())
+            .ok_or(Error::NoBranchingChoicesAvailable)?;
+        
+        // Select the choice
+        branching_point.select_choice(choice_index)?;
+        
+        // Add to current path
+        self.current_path.push(branching_id);
+        
+        // Update statistics
+        self.stats.total_choices_explored += 1;
+        
+        // Get the assertion to make
+        let choice = branching_point.get_current_choice().unwrap();
+        Ok(Some((choice.assertion.clone(), choice.individual.clone())))
+    }
+    
+    /// Backtrack from the current branching point
+    pub fn backtrack(&mut self) -> Result<Option<BranchingPointId>> {
+        if self.current_path.is_empty() {
+            return Ok(None);
+        }
+        
+        // Get current branching point
+        let current_id = self.current_path.pop().unwrap();
+        
+        // Mark current choice as causing clash if needed
+        if let Some(branching_point) = self.branching_points.get_mut(&current_id) {
+            if let Some(choice_index) = branching_point.current_choice {
+                branching_point.choices[choice_index].mark_clash();
+                self.stats.clash_count += 1;
+            }
+        }
+        
+        // Backtrack dependencies
+        {
+            let mut tracker = self.dependency_tracker.lock().unwrap();
+            tracker.backtrack_branch(current_id)?;
+        }
+        
+        // Check if current branching point has more choices
+        let branching_point = &self.branching_points[&current_id];
+        if !branching_point.is_exhausted() {
+            // Add back to queue/stack for future exploration
+            match self.strategy {
+                BranchingStrategy::DepthFirst => {
+                    self.branching_stack.push(current_id);
+                }
+                BranchingStrategy::BreadthFirst | 
+                BranchingStrategy::BestFirst | 
+                BranchingStrategy::Custom => {
+                    self.choice_queue.push_back(current_id);
+                }
+            }
+        }
+        
+        self.stats.total_backtracks += 1;
+        
+        // Return the parent to continue from
+        Ok(self.current_path.last().copied())
+    }
+    
+    /// Mark current branch as successful
+    pub fn mark_success(&mut self) {
+        self.stats.successful_branches += 1;
+    }
+    
+    /// Get information about a branching point
+    pub fn get_branching_point(&self, id: BranchingPointId) -> Option<&BranchingPoint> {
+        self.branching_points.get(&id)
+    }
+    
+    /// Get current path in the search tree
+    pub fn get_current_path(&self) -> &[BranchingPointId] {
+        &self.current_path
+    }
+    
+    /// Check if there are any more branching points to explore
+    pub fn has_more_choices(&self) -> bool {
+        match self.strategy {
+            BranchingStrategy::DepthFirst => !self.branching_stack.is_empty(),
+            _ => !self.choice_queue.is_empty(),
+        }
+    }
+    
+    /// Get statistics
+    pub fn get_stats(&self) -> &BranchingStats {
+        &self.stats
+    }
+    
+    /// Set maximum search depth
+    pub fn set_max_depth(&mut self, max_depth: Option<usize>) {
+        self.max_depth = max_depth;
+    }
+    
+    /// Calculate average branching factor
+    pub fn calculate_average_branching_factor(&mut self) {
+        if self.branching_points.is_empty() {
+            self.stats.average_branching_factor = 0.0;
+            return;
+        }
+        
+        let total_choices: usize = self.branching_points
+            .values()
+            .map(|bp| bp.choices.len())
+            .sum();
+        
+        self.stats.average_branching_factor = 
+            total_choices as f64 / self.branching_points.len() as f64;
+    }
+    
+    /// Reset the branching manager
+    pub fn reset(&mut self) {
+        self.branching_points.clear();
+        self.branching_stack.clear();
+        self.current_path.clear();
+        self.choice_queue.clear();
+        self.next_branching_id = 1;
+        self.stats = BranchingStats::default();
+    }
+}
+
+/// Helper functions for creating branching points
+pub mod utils {
+    use super::*;
+    
+    /// Create choices for a ground disjunction
+    pub fn create_disjunction_choices(
+        disjunction: &GroundDisjunction,
+        individual: &Individual,
+    ) -> Vec<BranchingChoice> {
+        disjunction.disjuncts
+            .iter()
+            .enumerate()
+            .map(|(index, disjunct)| {
+                BranchingChoice::new(
+                    index,
+                    format!("Disjunct {}: {}", index, disjunct),
+                    disjunct.clone(),
+                    individual.clone(),
+                )
+            })
+            .collect()
+    }
+    
+    /// Create choices for an existential restriction
+    pub fn create_existential_choices(
+        property: &str,
+        filler: &ClassExpression,
+        individual: &Individual,
+    ) -> Vec<BranchingChoice> {
+        // For existential restrictions, we typically create one choice
+        // to assert the existence of a witness individual
+        vec![BranchingChoice::new(
+            0,
+            format!("Create witness for ∃{}.{}", property, filler),
+            filler.clone(),
+            individual.clone(),
+        )]
+    }
+    
+    /// Estimate cost for a branching choice based on complexity
+    pub fn estimate_choice_cost(assertion: &ClassExpression) -> f64 {
+        match assertion {
+            ClassExpression::Class(_) => 1.0,
+            ClassExpression::ObjectIntersectionOf(classes) => {
+                classes.iter().map(estimate_choice_cost).sum::<f64>() + 1.0
+            }
+            ClassExpression::ObjectUnionOf(classes) => {
+                classes.iter().map(estimate_choice_cost).sum::<f64>() + 2.0
+            }
+            ClassExpression::ObjectComplementOf(class) => {
+                estimate_choice_cost(class) + 1.5
+            }
+            ClassExpression::ObjectSomeValuesFrom(_, filler) => {
+                estimate_choice_cost(filler) + 3.0
+            }
+            ClassExpression::ObjectAllValuesFrom(_, filler) => {
+                estimate_choice_cost(filler) + 2.0
+            }
+            _ => 5.0, // Default high cost for complex expressions
+        }
+    }
+}
