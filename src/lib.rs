@@ -53,10 +53,9 @@ pub use crate::error::{Error, Result};
 pub use crate::ontology::{Ontology, OntologyFormat};
 pub use crate::core::reasoner::{ReasoningTask, ReasoningResult};
 
-/// Version information matching the original Konclude
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const NAME: &str = "Konclude-rs";
-pub const DESCRIPTION: &str = "Rust port of the Konclude OWL 2 DL reasoner";
+pub const NAME: &str = "Oxidowl";
+pub const DESCRIPTION: &str = "Rust OWL 2 DL reasoner";
 
 /// Build information
 pub fn version_info() -> String {
@@ -88,7 +87,7 @@ mod tests {
     #[test]
     fn test_version_info() {
         let info = version_info();
-        assert!(info.contains("Konclude-rs"));
+        assert!(info.contains("Oxidowl"));
         assert!(info.contains(VERSION));
     }
 
