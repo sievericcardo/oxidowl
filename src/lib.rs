@@ -17,7 +17,7 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use konclude_rs::{Reasoner, ReasonerConfig, OntologyFormat};
+//! use oxidowl::{Reasoner, ReasonerConfig, OntologyFormat};
 //!
 //! // Create a reasoner with default configuration
 //! let config = ReasonerConfig::default();
