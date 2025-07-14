@@ -3,7 +3,6 @@
 //! This module implements OWL 2 DL class expressions and concept representation
 //! following the OWL 2 specification structure.
 
-use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
 /// Identifier for concepts

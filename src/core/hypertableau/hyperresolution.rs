@@ -6,20 +6,15 @@
 
 use super::extension_tables::ExtensionManager;
 use crate::{
-    core::{
-        tableau::{TableauNode, TableauEdge},
-        dependency::DependencySet,
-        completion::CompletionRule,
-    },
-    ontology::{Ontology, ClassExpression, Individual, Axiom},
-    Error, Result,
+    Result,
 };
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
+    collections::{HashMap, HashSet},
     fmt,
 };
+
+use serde::{Serialize, Deserialize};
 
 /// Hyperresolution manager handles compilation and application of DL clauses
 #[derive(Debug)]
@@ -46,7 +41,7 @@ pub struct HyperresolutionManager {
 }
 
 /// Compiled information about DL clauses for efficient execution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CompiledDLClauseInfo {
     /// The clause evaluator
     evaluator_index: usize,
@@ -86,29 +81,29 @@ pub struct DLClauseEvaluator {
 #[derive(Debug, Clone)]
 pub struct DLClause {
     /// Body atoms (conditions)
-    body: Vec<Atom>,
+    pub body: Vec<Atom>,
     
     /// Head atoms (conclusions)
-    head: Vec<Atom>,
+    pub head: Vec<Atom>,
     
     /// Variables used in the clause
-    variables: HashSet<String>,
+    pub variables: HashSet<String>,
     
     /// Clause identifier
-    id: String,
+    pub id: String,
 }
 
 /// Atomic formula in DL clauses
 #[derive(Debug, Clone)]
 pub struct Atom {
     /// Predicate name
-    predicate: String,
+    pub predicate: String,
     
     /// Arguments (variables or constants)
-    arguments: Vec<String>,
+    pub arguments: Vec<String>,
     
     /// Whether this is a positive or negative atom
-    is_positive: bool,
+    pub is_positive: bool,
 }
 
 /// Worker for executing parts of clause evaluation
@@ -177,10 +172,11 @@ impl HyperresolutionManager {
         
         for clause in clauses {
             let body_key = self.create_body_key(&clause);
-            clauses_by_body.entry(body_key).or_insert_with(Vec::new).push(clause);
-            
+
             // Track maximum variables for buffer sizing
             self.max_variables = self.max_variables.max(clause.variables.len());
+
+            clauses_by_body.entry(body_key).or_insert_with(Vec::new).push(clause);
         }
         
         // Initialize values buffer
@@ -220,12 +216,12 @@ impl HyperresolutionManager {
         
         // Index by delta predicate for efficient lookup
         if let Some(first_body_atom) = self.evaluators[evaluator_index].body_clause.body.first() {
-            let predicate = &first_body_atom.predicate;
+            let predicate = &first_body_atom.predicate.clone();
             self.add_compiled_clause_info(predicate.clone(), clause_info.clone())?;
             
             // Add optimizations for atomic roles if enabled
-            if self.optimization_enabled && self.is_atomic_role_predicate(predicate) {
-                self.add_atomic_role_optimizations(predicate.clone(), clause_info)?;
+            if self.optimization_enabled && self.is_atomic_role_predicate(&predicate) {
+                self.add_atomic_role_optimizations(predicate, clause_info)?;
             }
         }
         
@@ -311,14 +307,27 @@ impl HyperresolutionManager {
     
     /// Apply DL clauses during tableau expansion
     pub fn apply_dl_clauses(&mut self, extension_manager: &mut ExtensionManager) -> Result<()> {
+        // Collect predicates to avoid borrowing conflicts
+        let predicates: Vec<(String, Vec<Vec<String>>)> = self.tuple_consumers_by_delta_predicate
+            .keys()
+            .map(|predicate| {
+                let delta_tuples = extension_manager.get_delta_old_tuples(predicate)
+                    .unwrap_or_else(|_| Vec::new());
+                (predicate.clone(), delta_tuples)
+            })
+            .collect();
+
         // Process all delta-old tuples
-        for (predicate, compiled_info) in &self.tuple_consumers_by_delta_predicate {
+        for (predicate, delta_tuples) in predicates {
             if extension_manager.contains_clash() {
                 break;
             }
             
             // Get delta-old tuples for this predicate
-            let delta_tuples = extension_manager.get_delta_old_tuples(predicate)?;
+            let compiled_info = self.tuple_consumers_by_delta_predicate
+                .get(&predicate)
+                .cloned()
+                .unwrap_or_default();
             
             for tuple in delta_tuples {
                 if extension_manager.contains_clash() {
@@ -326,10 +335,10 @@ impl HyperresolutionManager {
                 }
                 
                 // Apply optimization if available
-                if self.optimization_enabled && self.should_use_optimization(predicate, &tuple) {
-                    self.apply_optimized_clauses(predicate, &tuple, extension_manager)?;
+                if self.optimization_enabled && self.should_use_optimization(&predicate, &tuple) {
+                    self.apply_optimized_clauses(&predicate, &tuple, extension_manager)?;
                 } else {
-                    self.apply_unoptimized_clauses(compiled_info, &tuple, extension_manager)?;
+                    self.apply_unoptimized_clauses(&compiled_info, &tuple, extension_manager)?;
                 }
             }
         }
@@ -345,12 +354,12 @@ impl HyperresolutionManager {
         extension_manager: &mut ExtensionManager,
     ) -> Result<()> {
         // Try unguarded clauses first
-        if let Some(unguarded_info) = self.atomic_role_consumers_unguarded.get(predicate) {
-            self.apply_compiled_clause_chain(unguarded_info, tuple, extension_manager)?;
+        if let Some(unguarded_info) = self.atomic_role_consumers_unguarded.get(predicate).cloned() {
+            self.apply_compiled_clause_chain(&unguarded_info, tuple, extension_manager)?;
         }
         
         // Try guarded clauses
-        if let Some(guard_map) = self.atomic_role_consumers_by_guard_concept.get(predicate) {
+        if let Some(guard_map) = self.atomic_role_consumers_by_guard_concept.get(predicate).cloned() {
             // Check guards for first argument
             if tuple.len() >= 2 {
                 let node1_concepts = extension_manager.get_node_concepts(&tuple[0])?;
@@ -468,6 +477,29 @@ impl HyperresolutionManager {
             guard_optimizations: self.atomic_role_consumers_by_guard_concept.len(),
             unguarded_optimizations: self.atomic_role_consumers_unguarded.len(),
         }
+    }
+
+    /// Initialize the hyperresolution manager
+    pub fn initialize(&mut self, _dl_clauses: Vec<DLClause>) -> crate::Result<()> {
+        // TODO: Implement proper initialization
+        Ok(())
+    }
+    
+    /// Apply rules to derive new facts
+    pub fn apply_rules(&mut self, _extension_manager: &mut ExtensionManager, _branching_manager: &mut crate::core::hypertableau::branching::BranchingManager) -> crate::Result<bool> {
+        // TODO: Implement proper rule application
+        Ok(false)
+    }
+    
+    /// Reset the hyperresolution manager
+    pub fn reset(&mut self) {
+        // TODO: Implement proper reset
+        self.tuple_consumers_by_delta_predicate.clear();
+        self.atomic_role_consumers_by_guard_concept.clear();
+        self.atomic_role_consumers_unguarded.clear();
+        self.evaluators.clear();
+        self.values_buffer.clear();
+        self.max_variables = 0;
     }
 }
 
@@ -670,7 +702,7 @@ pub enum WorkerResult {
 }
 
 /// Statistics about hyperresolution performance
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HyperresolutionStatistics {
     pub total_clauses: usize,
     pub total_matches: u64,

@@ -7,16 +7,15 @@ use crate::{
     config::ReasoningConfig,
     core::{
         blocking::{BlockingStrategy, BlockingChecker},
-        expansion::{ExpansionStrategy, ExpansionManager, ExpansionContext, ExistentialCandidate, ExpansionPriority, ExpansionResult},
+        expansion::{ExpansionStrategy, ExpansionContext, ExistentialCandidate, ExpansionPriority, ExpansionResult},
         completion::{CompletionRule, CompletionRuleSet, RuleContext, RuleApplication, RulePriority},
         dependency::{DependencyTracker, DependencySet},
     },
-    ontology::{Ontology, ClassExpression, Individual, Axiom, ObjectProperty, ObjectPropertyExpression, IRI, Class, Role},
+    ontology::{Ontology, ClassExpression, Axiom, ObjectProperty, ObjectPropertyExpression, IRI, Class, Role},
     Error, Result,
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tracing::{debug, trace, warn};
@@ -866,6 +865,11 @@ impl Tableau {
     /// Get the maximum depth reached
     pub fn get_max_depth(&self) -> usize {
         self.statistics.max_depth
+    }
+
+    /// Get the current state of the tableau
+    pub fn get_state(&self) -> TableauState {
+        self.state
     }
 }
 

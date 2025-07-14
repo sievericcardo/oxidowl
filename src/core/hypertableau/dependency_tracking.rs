@@ -5,16 +5,16 @@
 //! between derived facts and their supporting evidence.
 
 use crate::{
-    ontology::{Individual, ClassExpression, Axiom},
-    Error, Result,
+    ontology::{Individual, ClassExpression},
+    Result,
 };
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
-    hash::{Hash, Hasher},
-    fmt,
+    hash::Hash,
 };
+
+use serde::{Serialize, Deserialize};
 
 /// Unique identifier for dependency sets
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -153,7 +153,7 @@ pub struct DependencyTracker {
 }
 
 /// Statistics for dependency tracking
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct DependencyStats {
     pub total_dependency_sets: usize,
     pub total_facts: usize,
@@ -276,7 +276,7 @@ impl DependencyTracker {
     }
     
     /// Get justification for a fact (trace back its dependencies)
-    pub fn get_justification(&self, fact_id: FactId) -> Result<Vec<DependencySetId>> {
+    pub fn get_justification(&mut self, fact_id: FactId) -> Result<Vec<DependencySetId>> {
         self.stats.justification_queries += 1;
         
         let mut justification = Vec::new();

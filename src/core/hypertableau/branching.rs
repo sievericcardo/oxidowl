@@ -4,20 +4,21 @@
 //! handling non-deterministic disjunctions in the hypertableau algorithm.
 
 use crate::{
-    ontology::{Individual, ClassExpression, Axiom},
+    ontology::{Individual, ClassExpression},
     Error, Result,
 };
 
 use super::{
-    dependency_tracking::{DependencyTracker, BranchingPointId, FactId},
-    ground_disjunction::GroundDisjunction,
+    dependency_tracking::{DependencyTracker, BranchingPointId},
+    ground_disjunction::{GroundDisjunction, DisjunctPredicate},
 };
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
-    fmt,
 };
+
+use serde::{Serialize, Deserialize};
 
 /// Different types of branching decisions
 #[derive(Debug, Clone, PartialEq)]
@@ -200,7 +201,7 @@ impl BranchingPoint {
     /// Select a specific choice
     pub fn select_choice(&mut self, choice_index: usize) -> Result<()> {
         if choice_index >= self.choices.len() {
-            return Err(Error::InvalidBranchingChoice(choice_index));
+            return Err(Error::invalid_branching_choice(choice_index));
         }
         
         self.current_choice = Some(choice_index);
@@ -270,7 +271,7 @@ pub enum BranchingStrategy {
 }
 
 /// Statistics for branching operations
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct BranchingStats {
     pub total_branching_points: usize,
     pub total_choices_explored: usize,
@@ -360,7 +361,7 @@ impl BranchingManager {
         // Check depth limit
         if let Some(max_depth) = self.max_depth {
             if branching_point.level >= max_depth {
-                return Err(Error::MaxDepthExceeded(branching_point.level));
+                return Err(Error::max_depth_exceeded(branching_point.level));
             }
         }
         
@@ -423,12 +424,12 @@ impl BranchingManager {
     ) -> Result<Option<(ClassExpression, Individual)>> {
         let branching_point = self.branching_points
             .get_mut(&branching_id)
-            .ok_or(Error::BranchingPointNotFound(branching_id))?;
+            .ok_or(Error::branching_point_not_found(format!("BranchingPoint({})", branching_id.0)))?;
         
         // If no specific choice provided, get the next available one
         let choice_index = choice_index
             .or_else(|| branching_point.get_next_choice())
-            .ok_or(Error::NoBranchingChoicesAvailable)?;
+            .ok_or(Error::no_branching_choices_available())?;
         
         // Select the choice
         branching_point.select_choice(choice_index)?;
@@ -561,13 +562,23 @@ pub mod utils {
         disjunction.disjuncts
             .iter()
             .enumerate()
-            .map(|(index, disjunct)| {
-                BranchingChoice::new(
-                    index,
-                    format!("Disjunct {}: {}", index, disjunct),
-                    disjunct.clone(),
-                    individual.clone(),
-                )
+            .filter_map(|(index, disjunct)| {
+                // Extract ClassExpression from DisjunctPredicate
+                match disjunct {
+                    DisjunctPredicate::Concept { concept, .. } => {
+                        Some(BranchingChoice::new(
+                            index,
+                            format!("Disjunct {}: {}", index, disjunct),
+                            concept.clone(),
+                            individual.clone(),
+                        ))
+                    }
+                    _ => {
+                        // For non-concept predicates, create a placeholder choice
+                        // TODO: handle other predicate types properly
+                        None
+                    }
+                }
             })
             .collect()
     }
@@ -601,10 +612,10 @@ pub mod utils {
             ClassExpression::ObjectComplementOf(class) => {
                 estimate_choice_cost(class) + 1.5
             }
-            ClassExpression::ObjectSomeValuesFrom(_, filler) => {
+            ClassExpression::ObjectSomeValuesFrom { property: _, filler } => {
                 estimate_choice_cost(filler) + 3.0
             }
-            ClassExpression::ObjectAllValuesFrom(_, filler) => {
+            ClassExpression::ObjectAllValuesFrom { property: _, filler } => {
                 estimate_choice_cost(filler) + 2.0
             }
             _ => 5.0, // Default high cost for complex expressions

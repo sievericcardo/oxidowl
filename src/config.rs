@@ -25,6 +25,8 @@ pub struct ReasonerConfig {
 /// Configuration for core reasoning tasks
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningConfig {
+    /// Tableau algorithm type to use
+    pub tableau_algorithm: TableauAlgorithm,
     /// Blocking strategy for the tableau algorithm
     pub blocking_strategy: BlockingStrategy,
     /// Strategy for expanding the tableau
@@ -43,6 +45,15 @@ pub struct ReasoningConfig {
     pub max_expansion_depth: u32,
     /// Enable clash detection
     pub enable_clash_detection: bool,
+}
+
+/// Tableau algorithm types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TableauAlgorithm {
+    /// Traditional tableau algorithm
+    Traditional,
+    /// HyperTableau algorithm (HermiT-style)
+    HyperTableau,
 }
 
 
@@ -168,6 +179,7 @@ impl Default for ReasonerConfig {
     fn default() -> Self {
         Self {
             reasoning: ReasoningConfig {
+                tableau_algorithm: TableauAlgorithm::Traditional,
                 blocking_strategy: BlockingStrategy::Anywhere,
                 expansion_strategy: ExpansionStrategy::CreationOrder,
                 enable_optimisations: true,

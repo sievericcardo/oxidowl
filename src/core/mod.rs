@@ -5,6 +5,7 @@
 
 pub mod reasoner;
 pub mod tableau;
+pub mod hypertableau;
 pub mod blocking;
 pub mod expansion;
 pub mod completion;

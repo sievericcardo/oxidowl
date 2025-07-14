@@ -4,24 +4,21 @@
 //! and debugging support for the hypertableau algorithm implementation.
 
 use crate::{
-    ontology::{Individual, ClassExpression, Axiom},
-    Error, Result,
+    ontology::Individual,
+    Error,
 };
 
 use super::{
-    dependency_tracking::{DependencyTracker, DependencyStats},
-    branching::{BranchingManager, BranchingStats, BranchingPointId},
-    ground_disjunction::GroundDisjunction,
-    hyperresolution::HyperresolutionStats,
-    clause_evaluator::ClauseEvaluationStats,
-    extension_tables::ExtensionStats,
+    dependency_tracking::{DependencyStats, BranchingPointId},
+    branching::BranchingStats,
+    hyperresolution::HyperresolutionStatistics,
+    clause_evaluator::EvaluationStatistics,
+    extension_tables::ExtensionStatistics,
 };
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
+    collections::{HashMap, VecDeque},
     time::{Duration, Instant},
-    fmt,
 };
 
 use serde::{Serialize, Deserialize};
@@ -118,13 +115,13 @@ pub struct ReasoningStats {
     pub branching_stats: BranchingStats,
     
     /// Hyperresolution statistics
-    pub hyperresolution_stats: HyperresolutionStats,
+    pub hyperresolution_stats: HyperresolutionStatistics,
     
     /// Clause evaluation statistics
-    pub clause_evaluation_stats: ClauseEvaluationStats,
+    pub clause_evaluation_stats: EvaluationStatistics,
     
     /// Extension table statistics
-    pub extension_stats: ExtensionStats,
+    pub extension_stats: ExtensionStatistics,
     
     /// Memory usage information
     pub memory_usage: MemoryUsage,
@@ -283,7 +280,6 @@ impl EventListener for ConsoleEventListener {
 }
 
 /// Main monitoring and statistics collection system
-#[derive(Debug)]
 pub struct TableauMonitor {
     /// Current monitoring level
     monitoring_level: MonitoringLevel,
@@ -326,6 +322,28 @@ struct PerformanceCache {
     calculation_interval: Duration,
 }
 
+impl std::fmt::Debug for TableauMonitor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TableauMonitor")
+            .field("monitoring_level", &self.monitoring_level)
+            .field("listeners_count", &self.listeners.len())
+            .field("event_history_size", &self.event_history.len())
+            .field("max_history_size", &self.max_history_size)
+            .field("start_time", &self.start_time)
+            .field("reasoning_start_time", &self.reasoning_start_time)
+            .field("stats", &self.stats)
+            .field("event_counters", &self.event_counters)
+            .field("facts_derived", &self.facts_derived)
+            .field("clauses_applied", &self.clauses_applied)
+            .field("branching_points_created", &self.branching_points_created)
+            .field("memory_samples_count", &self.memory_samples.len())
+            .field("memory_sample_interval", &self.memory_sample_interval)
+            .field("last_memory_sample", &self.last_memory_sample)
+            .field("performance_cache", &self.performance_cache)
+            .finish()
+    }
+}
+
 impl TableauMonitor {
     /// Create a new tableau monitor
     pub fn new(monitoring_level: MonitoringLevel) -> Self {
@@ -343,9 +361,9 @@ impl TableauMonitor {
                 cleanup_duration: Duration::default(),
                 dependency_stats: DependencyStats::default(),
                 branching_stats: BranchingStats::default(),
-                hyperresolution_stats: HyperresolutionStats::default(),
-                clause_evaluation_stats: ClauseEvaluationStats::default(),
-                extension_stats: ExtensionStats::default(),
+                hyperresolution_stats: HyperresolutionStatistics::default(),
+                clause_evaluation_stats: EvaluationStatistics::default(),
+                extension_stats: ExtensionStatistics::default(),
                 memory_usage: MemoryUsage::default(),
                 performance_metrics: PerformanceMetrics::default(),
                 error_counts: ErrorCounts::default(),
@@ -462,15 +480,15 @@ impl TableauMonitor {
         self.stats.branching_stats = stats.clone();
     }
     
-    pub fn update_hyperresolution_stats(&mut self, stats: &HyperresolutionStats) {
+    pub fn update_hyperresolution_stats(&mut self, stats: &HyperresolutionStatistics) {
         self.stats.hyperresolution_stats = stats.clone();
     }
     
-    pub fn update_clause_evaluation_stats(&mut self, stats: &ClauseEvaluationStats) {
+    pub fn update_clause_evaluation_stats(&mut self, stats: &EvaluationStatistics) {
         self.stats.clause_evaluation_stats = stats.clone();
     }
     
-    pub fn update_extension_stats(&mut self, stats: &ExtensionStats) {
+    pub fn update_extension_stats(&mut self, stats: &ExtensionStatistics) {
         self.stats.extension_stats = stats.clone();
     }
     

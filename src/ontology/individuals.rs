@@ -3,7 +3,6 @@
 //! This module implements OWL 2 DL individuals (named and anonymous)
 //! following the OWL 2 specification structure.
 
-use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
 /// Identifiers for OWL 2 DL individuals.

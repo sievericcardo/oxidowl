@@ -5,11 +5,10 @@
 //! and inference caches.
 
 use crate::{
-    Error, Result,
+    Result,
     ontology::{Ontology, ClassExpression, Individual, Class, IRI},
     core::{
-        reasoner::ReasoningTask,
-        tableau::{TableauNode, TableauEdge},
+        tableau::TableauNode,
     },
 };
 

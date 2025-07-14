@@ -3,7 +3,7 @@
 //! This module implements OWL 2 DL object properties, data properties, and annotation properties
 //! following the OWL 2 specification structure.
 
-use crate::{Error, Result};
+use crate::Result;
 use crate::ontology::{ObjectPropertyExpression, ObjectProperty};
 use std::collections::{HashMap, HashSet};
 

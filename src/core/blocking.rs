@@ -6,7 +6,7 @@
 use crate::{
     config::{BlockingStrategy as ConfigBlockingStrategy, ReasoningConfig},
     core::tableau::{TableauNode, ConceptLabel, NodeId},
-    Error, Result,
+    Result,
 };
 use std::collections::{HashMap, HashSet};
 

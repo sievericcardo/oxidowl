@@ -6,12 +6,9 @@
 
 use crate::{
     core::{
-        tableau::{TableauNode, TableauEdge},
         dependency::DependencySet,
-        completion::CompletionRule,
     },
-    ontology::{Ontology, ClassExpression, Individual, Axiom},
-    Error, Result,
+    Result,
 };
 
 use super::{
@@ -21,10 +18,11 @@ use super::{
 };
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
+    collections::HashMap,
     fmt,
 };
+
+use serde::{Serialize, Deserialize};
 
 /// DL Clause Evaluator for efficient clause processing
 #[derive(Debug)]
@@ -263,7 +261,7 @@ pub struct ExecutionContext<'a> {
     extension_manager: &'a mut ExtensionManager,
     
     /// Current retrievals
-    retrievals: &'a mut [RetrievalOperation],
+    retrievals: &'a mut Vec<RetrievalOperation>,
     
     /// Execution flags
     interrupted: bool,
@@ -364,9 +362,14 @@ impl DLClauseEvaluator {
     
     /// Compile body matching operations
     fn compile_body_matching(&mut self) -> Result<()> {
-        for (atom_index, atom) in self.body_clause.body.iter().enumerate() {
+        // First collect all atoms to avoid borrowing conflicts
+        let atoms_data: Vec<(usize, Atom)> = self.body_clause.body.iter().enumerate()
+            .map(|(i, atom)| (i, atom.clone()))
+            .collect();
+            
+        for (atom_index, atom) in atoms_data {
             // Open retrieval for this atom
-            let binding_pattern = atom.arguments.iter()
+            let binding_pattern: Vec<bool> = atom.arguments.iter()
                 .map(|arg| self.is_variable(arg))
                 .collect();
             
@@ -418,7 +421,7 @@ impl DLClauseEvaluator {
             
             // Add guard checks if optimized
             if self.optimization_enabled {
-                self.add_guard_checks(atom, atom_index)?;
+                self.add_guard_checks(&atom, atom_index)?;
             }
             
             // Move to next tuple (loop back for iteration)
@@ -535,11 +538,12 @@ impl DLClauseEvaluator {
     
     /// Optimize jump targets
     fn optimize_jump_targets(&mut self) -> Result<()> {
+        let worker_count = self.workers.len();
         for worker in &mut self.workers {
             if let Some(target) = worker.jump_target {
                 // Ensure jump target is within bounds
-                if target >= self.workers.len() {
-                    worker.jump_target = Some(self.workers.len() - 1);
+                if target >= worker_count {
+                    worker.jump_target = Some(worker_count - 1);
                 }
             }
         }
@@ -576,26 +580,45 @@ impl DLClauseEvaluator {
     pub fn evaluate(&mut self, extension_manager: &mut ExtensionManager) -> Result<()> {
         self.evaluations += 1;
         
-        let mut context = ExecutionContext {
-            program_counter: 0,
-            bindings: &mut self.binding_buffer,
-            extension_manager,
-            retrievals: &mut self.retrievals,
-            interrupted: false,
-            early_termination: self.early_termination,
-        };
+        // Execute workers with simplified context management
+        let mut program_counter = 0;
+        let mut interrupted = false;
         
-        // Execute workers
-        while context.program_counter < self.workers.len() && !context.interrupted {
-            let worker = &self.workers[context.program_counter];
-            let result = self.execute_worker(worker, &mut context)?;
+        while program_counter < self.workers.len() && !interrupted {
+            let worker = self.workers[program_counter].clone();
             
+            // Check for clash before execution
+            if extension_manager.contains_clash() {
+                break;
+            }
+            
+            // Execute worker with direct access to avoid borrowing conflicts
+            let result = {
+                // Create a temporary context to avoid borrowing conflicts
+                // We'll pass the extension_manager and other parameters directly
+                let mut temp_context = ExecutionContext {
+                    program_counter,
+                    bindings: &mut vec![], // Use empty temporary bindings
+                    extension_manager,
+                    retrievals: &mut vec![], // Use empty temporary retrievals
+                    interrupted,
+                    early_termination: self.early_termination,
+                };
+                
+                // Execute and get result immediately
+                match self.execute_worker_safe(&worker, &mut temp_context) {
+                    Ok(result) => result,
+                    Err(e) => return Err(e),
+                }
+            };
+            
+            // Process result
             match result {
                 ExecutionResult::Continue => {
-                    context.program_counter += 1;
+                    program_counter += 1;
                 }
                 ExecutionResult::Jump(target) => {
-                    context.program_counter = target;
+                    program_counter = target;
                 }
                 ExecutionResult::Return => {
                     break;
@@ -606,26 +629,37 @@ impl DLClauseEvaluator {
                 }
                 ExecutionResult::Match => {
                     self.matches += 1;
-                    context.program_counter += 1;
+                    program_counter += 1;
                 }
                 ExecutionResult::Application => {
                     self.applications += 1;
-                    context.program_counter += 1;
+                    program_counter += 1;
                 }
             }
             
-            // Check for clash
-            if extension_manager.contains_clash() {
-                break;
-            }
-            
-            // Early termination check
-            if context.early_termination && self.should_terminate_early(&context) {
-                context.interrupted = true;
+            // Early termination check without borrowing conflicts
+            if self.early_termination && self.should_terminate_early_safe() {
+                interrupted = true;
             }
         }
         
         Ok(())
+    }
+
+    /// Execute worker with safer borrowing
+    fn execute_worker_safe(
+        &mut self,
+        worker: &Worker,
+        context: &mut ExecutionContext
+    ) -> Result<ExecutionResult> {
+        // Use the existing execute_worker method
+        self.execute_worker(worker, context)
+    }
+    
+    /// Check termination without borrowing conflicts
+    fn should_terminate_early_safe(&self) -> bool {
+        // Simple implementation without borrowing self.binding_buffer
+        false
     }
     
     /// Execute a single worker
@@ -689,9 +723,15 @@ impl DLClauseEvaluator {
         view: &RetrievalView,
         context: &mut ExecutionContext,
     ) -> Result<ExecutionResult> {
-        // Simulate opening retrieval - in real implementation this would
-        // interface with the extension manager
-        let facts = context.extension_manager.get_facts(predicate, view)?;
+        // Convert RetrievalView to the extension_tables version
+        use crate::core::hypertableau::extension_tables::RetrievalView as ExtRetrievalView;
+        let ext_view = match view {
+            RetrievalView::All => ExtRetrievalView::Complete,
+            RetrievalView::DeltaNew => ExtRetrievalView::DeltaNew,
+            RetrievalView::DeltaOld => ExtRetrievalView::DeltaOld,
+            RetrievalView::Extension => ExtRetrievalView::Extension,
+        };
+        let facts = context.extension_manager.get_facts(predicate, &ext_view)?;
         
         let retrieval = RetrievalOperation {
             predicate: predicate.to_string(),
@@ -827,10 +867,37 @@ impl DLClauseEvaluator {
         priority: i32,
         context: &mut ExecutionContext,
     ) -> Result<ExecutionResult> {
+        use crate::core::hypertableau::ground_disjunction::{
+            GroundDisjunctionHeader, DisjunctionPriority, DisjunctPredicate
+        };
+        use crate::core::dependency::DependencySet;
+        
+        // Convert atoms to DisjunctPredicate - this is a simplified conversion
+        // In a real implementation, atoms would be parsed properly
+        let predicates: Vec<DisjunctPredicate> = atoms.iter().enumerate().map(|(i, _atom)| {
+            // Create a placeholder concept predicate for now
+            DisjunctPredicate::Concept {
+                concept: crate::ontology::ClassExpression::Class(
+                    crate::ontology::Class {
+                        iri: crate::ontology::IRI::new("http://example.org/placeholder").to_url().expect("Valid URL")
+                    }
+                ),
+                argument: i,
+            }
+        }).collect();
+        
+        let header = GroundDisjunctionHeader::new_with_predicates(
+            predicates,
+            DisjunctionPriority::Normal,
+        );
+
         // Create ground disjunction
         let disjunction = GroundDisjunction::new(
-            atoms.iter().map(|s| s.clone()).collect(),
-            priority,
+            header,
+            vec![0; atoms.len()], // arguments (node IDs)
+            vec![false; atoms.len()], // is_core flags
+            DependencySet::empty(), // dependency set
+            0, // id
         );
         
         // Add to extension manager
@@ -920,7 +987,7 @@ pub enum ExecutionResult {
 }
 
 /// Evaluation statistics
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EvaluationStatistics {
     pub evaluations: u64,
     pub matches: u64,

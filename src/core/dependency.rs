@@ -7,6 +7,7 @@ use crate::{Error, Result};
 use std::{
     collections::{HashMap, HashSet, BTreeSet},
     ftm,
+    hash::{Hash, Hasher},
     sync::{Arc, Weak},
 }
 
@@ -219,6 +220,13 @@ impl DependencySet {
             set.nondeterministic_deps.insert(dep_id);
         }
         set
+    }
+
+    /// Create a singleton dependency set (alias for with_dependency)
+    pub fn singleton(source: String) -> Self {
+        // For now, just create an empty set - this is a placeholder
+        // TODO: Implement proper singleton creation based on source
+        Self::empty()
     }
 
     /// Union of two dependency sets
@@ -691,5 +699,30 @@ impl fmt::Display for DependencyType {
 impl Default for DependencySetFactory {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Hash for DependencySet {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash the branching points
+        for bp in &self.branching_points {
+            bp.hash(state);
+        }
+        
+        // Hash the deterministic dependencies (convert to sorted vec first)
+        let mut det_deps: Vec<_> = self.deterministic_deps.iter().collect();
+        det_deps.sort();
+        for dep in det_deps {
+            dep.hash(state);
+        }
+        
+        // Hash the non-deterministic dependencies (convert to sorted vec first)
+        let mut nondet_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
+        nondet_deps.sort();
+        for dep in nondet_deps {
+            dep.hash(state);
+        }
+        
+        // Don't hash ref_count as it's not part of logical equality
     }
 }

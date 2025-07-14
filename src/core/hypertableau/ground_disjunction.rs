@@ -8,12 +8,11 @@ use crate::{
         dependency::DependencySet,
         hypertableau::extension_tables::ExtensionManager,
     },
-    ontology::{ClassExpression, ObjectProperty, Individual},
+    ontology::{ClassExpression, ObjectProperty},
     Error, Result,
 };
 
 use std::{
-    collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
 };
@@ -157,23 +156,23 @@ impl GroundDisjunction {
     ) -> Result<bool> {
         match predicate {
             DisjunctPredicate::Concept { concept, argument } => {
-                let node_id = self.arguments[*argument];
-                extension_manager.contains_concept_assertion(node_id, concept)
+                let node_id = format!("node_{}", self.arguments[*argument]);
+                Ok(extension_manager.contains_concept_assertion(&node_id, concept))
             }
             DisjunctPredicate::Role { property, subject, object } => {
-                let subj_id = self.arguments[*subject];
-                let obj_id = self.arguments[*object];
-                extension_manager.contains_role_assertion(subj_id, obj_id, property)
+                let subj_id = format!("node_{}", self.arguments[*subject]);
+                let obj_id = format!("node_{}", self.arguments[*object]);
+                Ok(extension_manager.contains_role_assertion(&subj_id, property, &obj_id))
             }
             DisjunctPredicate::Equality { left, right } => {
-                let left_id = self.arguments[*left];
-                let right_id = self.arguments[*right];
-                extension_manager.are_nodes_equal(left_id, right_id)
+                let left_id = format!("node_{}", self.arguments[*left]);
+                let right_id = format!("node_{}", self.arguments[*right]);
+                Ok(extension_manager.are_nodes_equal(&left_id, &right_id))
             }
             DisjunctPredicate::Inequality { left, right } => {
-                let left_id = self.arguments[*left];
-                let right_id = self.arguments[*right];
-                extension_manager.are_nodes_unequal(left_id, right_id)
+                let left_id = format!("node_{}", self.arguments[*left]);
+                let right_id = format!("node_{}", self.arguments[*right]);
+                Ok(extension_manager.are_nodes_unequal(&left_id, &right_id))
             }
         }
     }
@@ -202,38 +201,38 @@ impl GroundDisjunction {
     ) -> Result<bool> {
         match predicate {
             DisjunctPredicate::Concept { concept, argument } => {
-                let node_id = self.arguments[*argument];
+                let node_id = format!("node_{}", self.arguments[*argument]);
                 extension_manager.add_concept_assertion_with_dependency(
-                    node_id,
-                    concept.clone(),
+                    &node_id,
+                    concept,
                     dependency_tracker.clone(),
                 )
             }
             DisjunctPredicate::Role { property, subject, object } => {
-                let subj_id = self.arguments[*subject];
-                let obj_id = self.arguments[*object];
+                let subj_id = format!("node_{}", self.arguments[*subject]);
+                let obj_id = format!("node_{}", self.arguments[*object]);
                 extension_manager.add_role_assertion_with_dependency(
-                    subj_id,
-                    obj_id,
-                    property.clone(),
+                    &subj_id,
+                    property,
+                    &obj_id,
                     dependency_tracker.clone(),
                 )
             }
             DisjunctPredicate::Equality { left, right } => {
-                let left_id = self.arguments[*left];
-                let right_id = self.arguments[*right];
+                let left_id = format!("node_{}", self.arguments[*left]);
+                let right_id = format!("node_{}", self.arguments[*right]);
                 extension_manager.add_equality_with_dependency(
-                    left_id,
-                    right_id,
+                    &left_id,
+                    &right_id,
                     dependency_tracker.clone(),
                 )
             }
             DisjunctPredicate::Inequality { left, right } => {
-                let left_id = self.arguments[*left];
-                let right_id = self.arguments[*right];
+                let left_id = format!("node_{}", self.arguments[*left]);
+                let right_id = format!("node_{}", self.arguments[*right]);
                 extension_manager.add_inequality_with_dependency(
-                    left_id,
-                    right_id,
+                    &left_id,
+                    &right_id,
                     dependency_tracker.clone(),
                 )
             }
@@ -259,6 +258,17 @@ impl GroundDisjunction {
     pub fn get_priority(&self) -> DisjunctionPriority {
         self.header.priority
     }
+
+    /// Get disjuncts (compatibility method)
+    pub fn disjuncts(&self) -> &Vec<DisjunctPredicate> {
+        &self.header.predicates
+    }
+    
+    /// Get individual (compatibility method) - returns first argument as string
+    pub fn individual(&self) -> String {
+        // For compatibility, return the first argument as a string representation
+        self.arguments.first().map(|&id| format!("node_{}", id)).unwrap_or_else(|| "unknown".to_string())
+    }
 }
 
 impl GroundDisjunctionHeader {
@@ -279,6 +289,23 @@ impl GroundDisjunctionHeader {
             priority,
         }
     }
+
+    /// Create a new ground disjunction header with predicates
+    pub fn new_with_predicates(
+        mut predicates: Vec<DisjunctPredicate>,
+        priority: DisjunctionPriority,
+    ) -> Self {
+        // Sort predicates by complexity (simpler first)
+        predicates.sort_by_key(|p| Self::predicate_complexity(p));
+        
+        let sorted_disjunct_indices: Vec<usize> = (0..predicates.len()).collect();
+        
+        Self {
+            predicates,
+            sorted_disjunct_indices,
+            priority,
+        }
+    }
     
     /// Calculate the complexity of a predicate for sorting
     fn predicate_complexity(predicate: &DisjunctPredicate) -> u32 {
@@ -289,11 +316,9 @@ impl GroundDisjunctionHeader {
                 // More complex concepts get higher scores
                 match concept {
                     ClassExpression::Class(_) => 3,
-                    ClassExpression::ObjectSomeValuesFrom { .. } => 10,
-                    ClassExpression::ObjectAllValuesFrom { .. } => 8,
-                    ClassExpression::ObjectIntersectionOf { operands } => 4 + operands.len() as u32,
-                    ClassExpression::ObjectUnionOf { operands } => 5 + operands.len() as u32,
-                    _ => 6,
+                    ClassExpression::ObjectSomeValuesFrom { .. } => 5,
+                    ClassExpression::ObjectAllValuesFrom { .. } => 6,
+                    _ => 4,
                 }
             }
             DisjunctPredicate::Role { .. } => 4,
@@ -336,7 +361,7 @@ impl fmt::Display for DisjunctPredicate {
                 write!(f, "{}(x{})", concept, argument)
             }
             DisjunctPredicate::Role { property, subject, object } => {
-                write!(f, "{}(x{}, x{})", property.iri(), subject, object)
+                write!(f, "{}(x{}, x{})", property.iri, subject, object)
             }
             DisjunctPredicate::Equality { left, right } => {
                 write!(f, "x{} = x{}", left, right)

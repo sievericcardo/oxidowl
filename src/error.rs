@@ -58,6 +58,34 @@ pub enum Error {
     /// Internal logic error
     #[error("Internal logic error: {message}")]
     Internal { message: String },
+
+    /// Invalid input errors
+    #[error("Invalid input: {message}")]
+    InvalidInput { message: String },
+
+    /// Invalid disjunct index
+    #[error("Invalid disjunct index: {index}")]
+    InvalidDisjunctIndex { index: usize },
+
+    /// Invalid branching choice
+    #[error("Invalid branching choice: {index}")]
+    InvalidBranchingChoice { index: usize },
+
+    /// Maximum depth exceeded
+    #[error("Maximum depth exceeded: {depth}")]
+    MaxDepthExceeded { depth: usize },
+
+    /// Branching point not found
+    #[error("Branching point not found: {id}")]
+    BranchingPointNotFound { id: String },
+
+    /// No branching choices available
+    #[error("No branching choices available")]
+    NoBranchingChoicesAvailable,
+
+    /// Resource exhausted (alternative form)
+    #[error("Resource exhausted: {message}")]
+    ResourceExhausted { message: String },
 }
 
 /// Specialized error for reasoner operations
@@ -147,6 +175,45 @@ impl Error {
             message: message.into(),
         }
     }
+
+    /// Create an invalid input error
+    pub fn invalid_input<S: Into<String>>(message: S) -> Self {
+        Self::InvalidInput {
+            message: message.into(),
+        }
+    }
+
+    /// Create an invalid disjunct index error
+    pub fn invalid_disjunct_index(index: usize) -> Self {
+        Self::InvalidDisjunctIndex { index }
+    }
+
+    /// Create an invalid branching choice error
+    pub fn invalid_branching_choice(index: usize) -> Self {
+        Self::InvalidBranchingChoice { index }
+    }
+
+    /// Create a max depth exceeded error
+    pub fn max_depth_exceeded(depth: usize) -> Self {
+        Self::MaxDepthExceeded { depth }
+    }
+
+    /// Create a branching point not found error
+    pub fn branching_point_not_found<S: Into<String>>(id: S) -> Self {
+        Self::BranchingPointNotFound { id: id.into() }
+    }
+
+    /// Create a no branching choices available error
+    pub fn no_branching_choices_available() -> Self {
+        Self::NoBranchingChoicesAvailable
+    }
+
+    /// Create a resource exhausted error
+    pub fn resource_exhausted<S: Into<String>>(message: S) -> Self {
+        Self::ResourceExhausted {
+            message: message.into(),
+        }
+    }
 }
 
 /// Error categories
@@ -178,10 +245,17 @@ impl Error {
             Error::Config { .. } => ErrorCategory::Config,
             Error::Network { .. } => ErrorCategory::Network,
             Error::Cache { .. }
-                | Error::ResourceExhaustion
+                | Error::ResourceExhaustion { .. }
+                | Error::ResourceExhausted { .. }
                 | Error::Timeout { .. } => ErrorCategory::Resource,
             Error::Unsupported { .. }
                 | Error::Internal { .. } => ErrorCategory::Internal,
+            Error::InvalidInput { .. }
+                | Error::InvalidDisjunctIndex { .. }
+                | Error::InvalidBranchingChoice { .. }
+                | Error::MaxDepthExceeded { .. }
+                | Error::BranchingPointNotFound { .. }
+                | Error::NoBranchingChoicesAvailable => ErrorCategory::Internal,
         }
     }
 
@@ -196,10 +270,17 @@ impl Error {
             Error::Reasoning { .. }
             | Error::Cache { .. }
             | Error::ResourceExhaustion { .. }
+            | Error::ResourceExhausted { .. }
             | Error::Timeout { .. }
             | Error::Network { .. } => true,
             Error::Io { .. } 
             | Error::Internal { .. } => false,
+            Error::InvalidInput { .. }
+            | Error::InvalidDisjunctIndex { .. }
+            | Error::InvalidBranchingChoice { .. }
+            | Error::MaxDepthExceeded { .. }
+            | Error::BranchingPointNotFound { .. }
+            | Error::NoBranchingChoicesAvailable => false,
         }
     }
 }

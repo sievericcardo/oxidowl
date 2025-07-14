@@ -16,25 +16,22 @@ use crate::{
     core::{
         tableau::{TableauNode, TableauEdge, TableauState},
         blocking::BlockingChecker,
-        dependency::DependencySet,
-        completion::CompletionRule,
     },
-    ontology::{Ontology, ClassExpression, Individual, Axiom},
-    Error, Result,
+    ontology::{Ontology, Individual},
+    Result,
 };
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
     time::Instant,
 };
 
-use ground_disjunction::{GroundDisjunction, GroundDisjunctionHeader};
+use ground_disjunction::{GroundDisjunction, DisjunctPredicate};
 use hyperresolution::HyperresolutionManager;
-use clause_evaluator::DLClauseEvaluator;
 use extension_tables::ExtensionManager;
-use dependency_tracking::{DependencyTracker, BranchingPointId, FactId};
-use branching::{BranchingManager, BranchingStrategy, BranchingType, BranchingChoice};
+use dependency_tracking::DependencyTracker;
+use branching::{BranchingManager, BranchingStrategy, BranchingType};
 use monitor::{TableauMonitor, MonitoringLevel, ReasoningStats};
 
 /// Main HyperTableau structure combining HermiT's algorithm with
@@ -126,8 +123,8 @@ impl HyperTableau {
         config: ReasoningConfig,
         blocking_checker: Box<dyn BlockingChecker>,
     ) -> Result<Self> {
-        let extension_manager = ExtensionManager::new(&config)?;
-        let hyperresolution_manager = HyperresolutionManager::new(&config)?;
+        let extension_manager = ExtensionManager::new();
+        let hyperresolution_manager = HyperresolutionManager::new(Vec::new(), true)?;
         let dependency_tracker = Arc::new(Mutex::new(DependencyTracker::new()));
         let branching_manager = BranchingManager::new(
             BranchingStrategy::DepthFirst, // Default strategy
@@ -222,7 +219,7 @@ impl HyperTableau {
             &self.dependency_tracker.lock().unwrap().get_stats()
         );
         self.monitor.update_branching_stats(self.branching_manager.get_stats());
-        self.monitor.update_hyperresolution_stats(self.hyperresolution_manager.get_stats());
+        self.monitor.update_hyperresolution_stats(&self.hyperresolution_manager.get_statistics());
         self.monitor.update_extension_stats(self.extension_manager.get_stats());
         
         self.monitor.finish()
@@ -271,20 +268,16 @@ impl HyperTableau {
         
         let new_disjunctions = self.hyperresolution_manager.apply_rules(
             &mut self.extension_manager,
-            &self.dependency_tracker.lock().unwrap(),
+            &mut self.branching_manager,
         )?;
         
         self.statistics.clause_evaluation_time += start_time.elapsed();
-        self.statistics.clause_evaluations += new_disjunctions.len() as u64;
         
-        if !new_disjunctions.is_empty() {
-            for disjunction in new_disjunctions {
-                self.add_ground_disjunction(disjunction);
-            }
-            Ok(true)
-        } else {
-            Ok(false)
+        if new_disjunctions {
+            self.statistics.clause_evaluations += 1;
         }
+        
+        Ok(new_disjunctions)
     }
     
     /// Process pending ground disjunctions
@@ -298,11 +291,17 @@ impl HyperTableau {
             }
             
             let disjunction = &self.ground_disjunctions[disjunction_id];
+
+            // Log monitoring event
+            // Log disjunction processing
+            let individual_str = disjunction.individual();
+            let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
+            let individual = Individual { iri: individual_iri.to_url()? };
             
             // Log monitoring event
             self.monitor.log_event(monitor::events::ground_disjunction_processing(
                 format!("{:?}", disjunction),
-                disjunction.individual.clone(),
+                individual,
                 disjunction.disjuncts.len(),
                 std::time::Duration::default(),
             ));
@@ -342,30 +341,42 @@ impl HyperTableau {
                 )?
             };
             
-            self.extension_manager.add_concept_assertion(
-                &disjunction.individual,
-                &disjunction.disjuncts[0],
-            )?;
-            
-            self.monitor.log_event(monitor::events::fact_derived(
-                format!("Direct disjunct: {}", disjunction.disjuncts[0]),
-                disjunction.individual.clone(),
-                0,
-            ));
+             // Extract concept from the first disjunct
+            if let DisjunctPredicate::Concept { concept, .. } = &disjunction.disjuncts()[0] {
+                self.extension_manager.add_concept_assertion(
+                    &disjunction.individual(),
+                    concept,
+                )?;
+                
+                // Create Individual for monitoring
+                let individual_str = disjunction.individual();
+                let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
+                let individual = Individual { iri: individual_iri.to_url()? };
+                
+                self.monitor.log_event(monitor::events::fact_derived(
+                    format!("Direct disjunct: {}", disjunction.disjuncts()[0]),
+                    individual,
+                    0,
+                ));
+            }
             
             return Ok(true);
         }
         
         // Create branching point for multiple disjuncts
+        let individual_str = disjunction.individual();
+        let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
+        let individual = Individual { iri: individual_iri.to_url()? };
+
         let choices = branching::utils::create_disjunction_choices(
             &disjunction,
-            &disjunction.individual,
+            &individual,
         );
         
         let branch_id = self.branching_manager.create_branching_point(
             BranchingType::GroundDisjunction {
                 disjunction: disjunction.clone(),
-                individual: disjunction.individual.clone(),
+                individual: individual.clone(),
             },
             choices,
         )?;
@@ -382,7 +393,7 @@ impl HyperTableau {
                 )?
             };
             
-            self.extension_manager.add_concept_assertion(&individual, &assertion)?;
+            self.extension_manager.add_concept_assertion(&individual.iri.to_string(), &assertion)?;
             
             self.monitor.log_event(monitor::events::fact_derived(
                 format!("Branching choice: {}", assertion),
@@ -421,7 +432,7 @@ impl HyperTableau {
                     )?
                 };
                 
-                self.extension_manager.add_concept_assertion(&individual, &assertion)?;
+                self.extension_manager.add_concept_assertion(&individual.iri.to_string(), &assertion)?;
                 return Ok(true);
             }
         }
@@ -488,7 +499,12 @@ impl HyperTableau {
     /// Update final statistics after reasoning
     fn update_final_statistics(&mut self) {
         self.statistics.max_depth = self.branching_manager.get_stats().max_depth as u32;
-        self.statistics.cache_hit_ratio = self.extension_manager.get_stats().cache_hit_ratio;
+        let ext_stats = self.extension_manager.get_statistics();
+        self.statistics.cache_hit_ratio = if ext_stats.cache_hits + ext_stats.cache_misses > 0 {
+            ext_stats.cache_hits as f64 / (ext_stats.cache_hits + ext_stats.cache_misses) as f64
+        } else {
+            0.0
+        };
         
         // Calculate averages and final metrics
         self.branching_manager.calculate_average_branching_factor();
@@ -499,31 +515,43 @@ impl HyperTableau {
         self.state
     }
     
-    /// Get internal statistics
+    /// Get current statistics
     pub fn get_statistics(&self) -> &HyperTableauStatistics {
         &self.statistics
     }
-    
-    /// Check if the tableau is satisfiable
-    pub fn is_satisfiable(&self) -> bool {
-        matches!(self.state, TableauState::Satisfiable) && !self.is_closed
+}
+
+// Import the HyperTableauInterface trait from the reasoner module
+use crate::core::reasoner::HyperTableauInterface;
+
+/// Implementation of HyperTableauInterface for integration with the main reasoner
+impl HyperTableauInterface for HyperTableau {
+    fn run(&mut self) -> Result<TableauState> {
+        self.run()
     }
     
-    /// Check if reasoning is complete
-    pub fn is_reasoning_complete(&self) -> bool {
-        self.is_complete || self.is_closed
+    fn get_node_count(&self) -> usize {
+        self.nodes.len()
+    }
+    
+    fn get_backtrack_count(&self) -> usize {
+        self.statistics.backtracks as usize
+    }
+    
+    fn get_max_depth(&self) -> usize {
+        self.statistics.max_depth as usize
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::blocking::SimpleBlockingChecker;
+    use crate::core::blocking::AnywhereBlocking;
     
     #[test]
     fn test_hypertableau_creation() {
         let config = ReasoningConfig::default();
-        let blocking_checker = Box::new(SimpleBlockingChecker::new());
+        let blocking_checker = Box::new(AnywhereBlocking::new());
         
         let tableau = HyperTableau::new(config, blocking_checker);
         assert!(tableau.is_ok());
@@ -536,7 +564,7 @@ mod tests {
     #[test]
     fn test_monitoring_level_setting() {
         let config = ReasoningConfig::default();
-        let blocking_checker = Box::new(SimpleBlockingChecker::new());
+        let blocking_checker = Box::new(AnywhereBlocking::new());
         
         let mut tableau = HyperTableau::new(config, blocking_checker).unwrap();
         tableau.set_monitoring_level(MonitoringLevel::Debug);
@@ -547,7 +575,7 @@ mod tests {
     #[test]
     fn test_branching_strategy_setting() {
         let config = ReasoningConfig::default();
-        let blocking_checker = Box::new(SimpleBlockingChecker::new());
+        let blocking_checker = Box::new(AnywhereBlocking::new());
         
         let mut tableau = HyperTableau::new(config, blocking_checker).unwrap();
         tableau.set_branching_strategy(BranchingStrategy::BestFirst);
@@ -559,7 +587,7 @@ mod tests {
     #[test]
     fn test_state_reset() {
         let config = ReasoningConfig::default();
-        let blocking_checker = Box::new(SimpleBlockingChecker::new());
+        let blocking_checker = Box::new(AnywhereBlocking::new());
         
         let mut tableau = HyperTableau::new(config, blocking_checker).unwrap();
         
@@ -578,7 +606,7 @@ mod tests {
     #[test]
     fn test_ground_disjunction_handling() {
         let config = ReasoningConfig::default();
-        let blocking_checker = Box::new(SimpleBlockingChecker::new());
+        let blocking_checker = Box::new(AnywhereBlocking::new());
         
         let mut tableau = HyperTableau::new(config, blocking_checker).unwrap();
         
@@ -602,7 +630,7 @@ mod tests {
     #[test]
     fn test_statistics_tracking() {
         let config = ReasoningConfig::default();
-        let blocking_checker = Box::new(SimpleBlockingChecker::new());
+        let blocking_checker = Box::new(AnywhereBlocking::new());
         
         let mut tableau = HyperTableau::new(config, blocking_checker).unwrap();
         

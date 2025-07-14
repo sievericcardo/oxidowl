@@ -5,11 +5,9 @@
 
 use crate::{
     cache::{CacheManager},
-    config::ReasonerConfig,
+    config::{ReasonerConfig, TableauAlgorithm},
     core::{
         tableau::{Tableau, TableauBuilder, TableauState},
-        blocking::BlockingStrategy,
-        expansion::ExpansionStrategy,
     },
     ontology::{Ontology, OntologyFormat, ClassExpression, Individual, Axiom, ObjectPropertyExpression, DataPropertyExpression},
     Error, Result,
@@ -20,7 +18,76 @@ use std::{
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
-use tracing::{debug, info, trace, warn};
+use log::{info, warn, debug};
+
+/// Wrapper for different tableau algorithm implementations
+pub enum TableauAlgorithmInstance {
+    Traditional(Tableau),
+    HyperTableau(Box<dyn HyperTableauInterface>), // Add when HyperTableau is ready
+}
+
+/// Interface for HyperTableau implementation (placeholder for now)
+pub trait HyperTableauInterface: Send + Sync {
+    fn run(&mut self) -> Result<TableauState>;
+    fn get_node_count(&self) -> usize;
+    fn get_backtrack_count(&self) -> usize;
+    fn get_max_depth(&self) -> usize;
+}
+
+impl TableauAlgorithmInstance {
+    /// Run the tableau algorithm
+    pub fn run(&mut self) -> Result<TableauState> {
+        match self {
+            TableauAlgorithmInstance::Traditional(tableau) => tableau.run(),
+            TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.run(),
+        }
+    }
+    
+    /// Get node count for statistics
+    pub fn get_node_count(&self) -> usize {
+        match self {
+            TableauAlgorithmInstance::Traditional(tableau) => tableau.get_node_count(),
+            TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.get_node_count(),
+        }
+    }
+    
+    /// Get backtrack count for statistics
+    pub fn get_backtrack_count(&self) -> usize {
+        match self {
+            TableauAlgorithmInstance::Traditional(tableau) => tableau.get_backtrack_count(),
+            TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.get_backtrack_count(),
+        }
+    }
+    
+    /// Get maximum depth for statistics
+    pub fn get_max_depth(&self) -> usize {
+        match self {
+            TableauAlgorithmInstance::Traditional(tableau) => tableau.get_max_depth(),
+            TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.get_max_depth(),
+        }
+    }
+}
+
+/// Common trait for all tableau algorithm implementations
+pub trait TableauRunner: Send + Sync {
+    /// Run the tableau algorithm for consistency checking
+    fn run(&mut self) -> Result<TableauState>;
+    
+    /// Get node count for statistics
+    fn get_node_count(&self) -> usize;
+    
+    /// Get backtrack count for statistics
+    fn get_backtrack_count(&self) -> usize;
+    
+    /// Get maximum depth for statistics
+    fn get_max_depth(&self) -> usize;
+    
+    /// Check if the tableau is consistent
+    fn is_consistent(&self) -> bool;
+    
+    /// Check if the tableau is completed (no more expansions possible)
+    fn is_completed(&self) -> bool;
+}
 
 /// Reasoning task types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -100,6 +167,156 @@ impl RealizationResult {
         }
 
         Ok(())
+    }
+}
+
+/// Factory for creating tableau algorithm instances
+pub struct TableauFactory {
+    config: ReasonerConfig,
+    tableau_builder: TableauBuilder,
+}
+
+impl TableauFactory {
+    pub fn new(config: ReasonerConfig) -> Result<Self> {
+        Ok(Self {
+            tableau_builder: TableauBuilder::new(&config.reasoning)?,
+            config,
+        })
+    }
+    
+    /// Create a tableau runner based on the configured algorithm
+    pub fn create_for_consistency(&self, ontology: &Ontology) -> Result<Box<dyn TableauRunner>> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                let tableau = self.tableau_builder.build_for_consistency(ontology)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+            TableauAlgorithm::HyperTableau => {
+                // Try to create HyperTableau, fall back to Traditional if compilation errors prevent it
+                warn!("HyperTableau not yet fully integrated, falling back to Traditional tableau");
+                let tableau = self.tableau_builder.build_for_consistency(ontology)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
+    }
+    
+    /// Create a tableau runner for subsumption checking
+    pub fn create_for_subsumption(
+        &self, 
+        ontology: &Ontology, 
+        subclass: &ClassExpression, 
+        superclass: &ClassExpression
+    ) -> Result<Box<dyn TableauRunner>> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                // Convert ClassExpression to string for the current tableau builder interface
+                let subclass_str = &format!("{}", subclass);
+                let superclass_str = &format!("{}", superclass);
+                let tableau = self.tableau_builder.build_for_subsumption(ontology, subclass_str, superclass_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+            TableauAlgorithm::HyperTableau => {
+                // For now, fall back to traditional for specific reasoning tasks
+                warn!("HyperTableau not yet supported for subsumption checking, using Traditional tableau");
+                let subclass_str = &format!("{}", subclass);
+                let superclass_str = &format!("{}", superclass);
+                let tableau = self.tableau_builder.build_for_subsumption(ontology, subclass_str, superclass_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
+    }
+    
+    /// Create a tableau runner for satisfiability checking
+    pub fn create_for_satisfiability(
+        &self, 
+        ontology: &Ontology, 
+        class_expr: &ClassExpression
+    ) -> Result<Box<dyn TableauRunner>> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                // Convert ClassExpression to string for the current tableau builder interface
+                let class_str = &format!("{}", class_expr);
+                let tableau = self.tableau_builder.build_for_satisfiability(ontology, class_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+            TableauAlgorithm::HyperTableau => {
+                warn!("HyperTableau not yet supported for satisfiability checking, using Traditional tableau");
+                let class_str = &format!("{}", class_expr);
+                let tableau = self.tableau_builder.build_for_satisfiability(ontology, class_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
+    }
+    
+    /// Create a tableau runner for instance checking
+    pub fn create_for_instance_check(
+        &self, 
+        ontology: &Ontology, 
+        individual: &Individual, 
+        class_expr: &ClassExpression
+    ) -> Result<Box<dyn TableauRunner>> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                // Convert Individual and ClassExpression to string for the current tableau builder interface
+                let individual_str = &individual.iri.to_string();
+                let class_str = &format!("{}", class_expr);
+                let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+            TableauAlgorithm::HyperTableau => {
+                warn!("HyperTableau not yet supported for instance checking, using Traditional tableau");
+                let individual_str = &individual.iri.to_string();
+                let class_str = &format!("{}", class_expr);
+                let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
+    }
+    
+    /// Create HyperTableau or fallback to Traditional if compilation errors prevent it
+    fn create_hypertableau_or_fallback(&self, ontology: &Ontology) -> Result<Box<dyn TableauRunner>> {
+        warn!("HyperTableau not yet fully integrated, falling back to Traditional tableau");
+        let tableau = self.tableau_builder.build_for_consistency(ontology)?;
+        Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+    }
+}
+
+/// Traditional tableau runner wrapper
+pub struct TraditionalTableauRunner {
+    tableau: Tableau,
+}
+
+impl TraditionalTableauRunner {
+    pub fn new(tableau: Tableau) -> Self {
+        Self { tableau }
+    }
+}
+
+impl TableauRunner for TraditionalTableauRunner {
+    fn run(&mut self) -> Result<TableauState> {
+        self.tableau.run()
+    }
+    
+    fn get_node_count(&self) -> usize {
+        self.tableau.get_node_count()
+    }
+    
+    fn get_backtrack_count(&self) -> usize {
+        self.tableau.get_backtrack_count()
+    }
+    
+    fn get_max_depth(&self) -> usize {
+        self.tableau.get_max_depth()
+    }
+    
+    fn is_consistent(&self) -> bool {
+        // Check if the tableau reached a consistent state
+        !matches!(self.tableau.get_state(), TableauState::Unsatisfiable)
+    }
+    
+    fn is_completed(&self) -> bool {
+        // Check if the tableau has completed processing
+        matches!(self.tableau.get_state(), TableauState::Satisfiable | TableauState::Unsatisfiable)
     }
 }
 
@@ -218,7 +435,7 @@ impl Reasoner {
         let ontology_guard = ontology.read().unwrap();
         
         // Build tableau for consistency checking
-        let tableau = self.tableau_builder.build_for_consistency(&ontology_guard)?;
+        let mut tableau = self.create_tableau_algorithm(&ontology_guard)?;
         
         // Run tableau algorithm
         let result = self.run_tableau_consistency_check(tableau)?;
@@ -258,7 +475,7 @@ impl Reasoner {
         let ontology_guard = ontology.read().unwrap();
         
         // Build tableau for satisfiability checking
-        let tableau = self.tableau_builder.build_for_satisfiability(&ontology_guard, class_iri)?;
+        let tableau = self.create_tableau_algorithm_for_satisfiability(&ontology_guard, class_iri)?;
         
         // Run tableau algorithm
         let result = self.run_tableau_satisfiability_check(tableau)?;
@@ -290,7 +507,7 @@ impl Reasoner {
         let ontology_guard = ontology.read().unwrap();
         
         // Build tableau for subsumption checking
-        let tableau = self.tableau_builder.build_for_subsumption(&ontology_guard, subclass, superclass)?;
+        let tableau = self.create_tableau_algorithm_for_subsumption(&ontology_guard, subclass, superclass)?;
         
         // Run tableau algorithm
         let result = self.run_tableau_subsumption_check(tableau)?;
@@ -442,7 +659,7 @@ impl Reasoner {
         let ontology_guard = ontology.read().unwrap();
         
         // Build tableau for instance checking
-        let tableau = self.tableau_builder.build_for_instance_check(&ontology_guard, individual, class)?;
+        let tableau = self.create_tableau_algorithm_for_instance_check(&ontology_guard, individual, class)?;
         
         // Run tableau algorithm
         let result = self.run_tableau_instance_check(tableau)?;
@@ -493,7 +710,9 @@ impl Reasoner {
         }
 
         // Use tableau to check subsumption
-        let tableau = self.tableau_builder.create_tableau()?;
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+        let tableau = self.tableau_builder.build_for_consistency(&ontology_guard)?;
         let result = tableau.check_subsumption(subclass, superclass)?;
 
         // Store in cache
@@ -678,7 +897,7 @@ impl Reasoner {
 
     // Private methods for running tableau algorithms
 
-    fn run_tableau_consistency_check(&mut self, mut tableau: Tableau) -> Result<bool> {
+    fn run_tableau_consistency_check(&mut self, mut tableau: TableauAlgorithmInstance) -> Result<bool> {
         debug!("Running tableau consistency check");
         
         let result = tableau.run()?;
@@ -696,7 +915,7 @@ impl Reasoner {
         }
     }
 
-    fn run_tableau_satisfiability_check(&mut self, mut tableau: Tableau) -> Result<bool> {
+    fn run_tableau_satisfiability_check(&mut self, mut tableau: TableauAlgorithmInstance) -> Result<bool> {
         debug!("Running tableau satisfiability check");
         
         let result = tableau.run()?;
@@ -714,7 +933,7 @@ impl Reasoner {
         }
     }
 
-    fn run_tableau_subsumption_check(&mut self, mut tableau: Tableau) -> Result<bool> {
+    fn run_tableau_subsumption_check(&mut self, mut tableau: TableauAlgorithmInstance) -> Result<bool> {
         debug!("Running tableau subsumption check");
         
         // For subsumption A ⊑ B, we check if A ⊓ ¬B is unsatisfiable
@@ -733,7 +952,7 @@ impl Reasoner {
         }
     }
 
-    fn run_tableau_instance_check(&mut self, mut tableau: Tableau) -> Result<bool> {
+    fn run_tableau_subsumption_check(&mut self, mut tableau: TableauAlgorithmInstance) -> Result<bool> {
         debug!("Running tableau instance check");
         
         // For instance checking a ∈ C, we check if {a} ⊓ ¬C is unsatisfiable
@@ -774,5 +993,99 @@ impl Reasoner {
             // TODO: implement proper complex expression reasoning
             Ok(false)
         }
+    }
+
+    // Private methods for tableau algorithm creation
+
+    /// Create a tableau algorithm instance based on configuration
+    fn create_tableau_algorithm(&self, ontology: &Ontology) -> Result<TableauAlgorithmInstance> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                let tableau = self.tableau_builder.build_for_consistency(ontology)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+            TableauAlgorithm::HyperTableau => {
+                // Try to create HyperTableau, fall back to Traditional if not available
+                self.create_hypertableau_instance(ontology)
+            }
+        }
+    }
+    
+    /// Create a tableau algorithm instance for subsumption checking
+    fn create_tableau_algorithm_for_subsumption(
+        &self,
+        ontology: &Ontology,
+        subclass: &str,
+        superclass: &str,
+    ) -> Result<TableauAlgorithmInstance> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                let tableau = self.tableau_builder.build_for_subsumption(ontology, subclass, superclass)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+            TableauAlgorithm::HyperTableau => {
+                warn!("HyperTableau not yet supported for subsumption checking, using Traditional tableau");
+                let tableau = self.tableau_builder.build_for_subsumption(ontology, subclass, superclass)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+        }
+    }
+    
+    /// Create a tableau algorithm instance for satisfiability checking
+    fn create_tableau_algorithm_for_satisfiability(
+        &self,
+        ontology: &Ontology,
+        class_iri: &str,
+    ) -> Result<TableauAlgorithmInstance> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                let tableau = self.tableau_builder.build_for_satisfiability(ontology, class_iri)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+            TableauAlgorithm::HyperTableau => {
+                warn!("HyperTableau not yet supported for satisfiability checking, using Traditional tableau");
+                let tableau = self.tableau_builder.build_for_satisfiability(ontology, class_iri)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+        }
+    }
+    
+    /// Create a tableau algorithm instance for instance checking
+    fn create_tableau_algorithm_for_instance_check(
+        &self,
+        ontology: &Ontology,
+        individual: &str,
+        class: &str,
+    ) -> Result<TableauAlgorithmInstance> {
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Traditional => {
+                let tableau = self.tableau_builder.build_for_instance_check(ontology, individual, class)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+            TableauAlgorithm::HyperTableau => {
+                warn!("HyperTableau not yet supported for instance checking, using Traditional tableau");
+                let tableau = self.tableau_builder.build_for_instance_check(ontology, individual, class)?;
+                Ok(TableauAlgorithmInstance::Traditional(tableau))
+            }
+        }
+    }
+
+    /// Create a HyperTableau instance or fall back to Traditional
+    fn create_hypertableau_instance(&self, ontology: &Ontology) -> Result<TableauAlgorithmInstance> {
+        use crate::core::hypertableau::HyperTableau;
+        use crate::core::blocking::AnywhereBlocking;
+        
+        info!("Creating HyperTableau instance for reasoning");
+        
+        // Create a blocking checker (use default for now)
+        let blocking_checker = Box::new(AnywhereBlocking::new());
+        
+        // Create HyperTableau instance
+        let mut hypertableau = HyperTableau::new(self.config.reasoning.clone(), blocking_checker)?;
+        
+        // Initialize with the ontology
+        hypertableau.initialize(ontology)?;
+        
+        Ok(TableauAlgorithmInstance::HyperTableau(Box::new(hypertableau)))
     }
 }

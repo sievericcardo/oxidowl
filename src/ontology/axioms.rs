@@ -3,7 +3,6 @@
 //! This module implements the various types of axioms in OWL 2 DL ontologies,
 //! following the OWL 2 specification structure.
 
-usa crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
 /// Unique identifier for an OWL 2 DL axiom.
