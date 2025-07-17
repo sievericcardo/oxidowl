@@ -13,7 +13,7 @@ use super::{
     branching::BranchingStats,
     hyperresolution::HyperresolutionStatistics,
     clause_evaluator::EvaluationStatistics,
-    extension_tables::ExtensionStatistics,
+    extension_table::ExtensionStatistics,
 };
 
 use std::{
