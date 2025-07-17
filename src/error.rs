@@ -86,6 +86,14 @@ pub enum Error {
     /// Resource exhausted (alternative form)
     #[error("Resource exhausted: {message}")]
     ResourceExhausted { message: String },
+
+    /// Invalid property chain
+    #[error("Invalid property chain: {message}")]
+    InvalidPropertyChain { message: String },
+
+    /// Invalid assertion
+    #[error("Invalid assertion: {message}")]
+    InvalidAssertion { message: String },
 }
 
 /// Specialized error for reasoner operations
@@ -241,7 +249,7 @@ impl Error {
                 | Error::XmlParsing { .. } 
                 | Error::Io { .. } => ErrorCategory::Input,
             Error::Reasoning { .. }
-                | Error::Sparql => ErrorCategory::Reasoning,
+                | Error::Sparql { .. } => ErrorCategory::Reasoning,
             Error::Config { .. } => ErrorCategory::Config,
             Error::Network { .. } => ErrorCategory::Network,
             Error::Cache { .. }
@@ -255,7 +263,9 @@ impl Error {
                 | Error::InvalidBranchingChoice { .. }
                 | Error::MaxDepthExceeded { .. }
                 | Error::BranchingPointNotFound { .. }
-                | Error::NoBranchingChoicesAvailable => ErrorCategory::Internal,
+                | Error::NoBranchingChoicesAvailable 
+                | Error::InvalidPropertyChain { .. }
+                | Error::InvalidAssertion { .. } => ErrorCategory::Internal,
         }
     }
 
@@ -266,7 +276,7 @@ impl Error {
             | Error::XmlParsing { .. }
             | Error::Config { .. }
             | Error::Sparql { .. }
-            | Errpr::Unsupported { .. } => false,
+            | Error::Unsupported { .. } => false,
             Error::Reasoning { .. }
             | Error::Cache { .. }
             | Error::ResourceExhaustion { .. }
@@ -280,7 +290,9 @@ impl Error {
             | Error::InvalidBranchingChoice { .. }
             | Error::MaxDepthExceeded { .. }
             | Error::BranchingPointNotFound { .. }
-            | Error::NoBranchingChoicesAvailable => false,
+            | Error::NoBranchingChoicesAvailable 
+            | Error::InvalidPropertyChain { .. }
+            | Error::InvalidAssertion { .. } => false,
         }
     }
 }
