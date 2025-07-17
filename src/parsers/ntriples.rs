@@ -2,14 +2,15 @@
 //!
 //! This module implements parsing of OWL 2 ontologies from N-Triples format.
 
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Write, Read},
+    path::Path,
+};
+
 use crate::{
     Error, Result,
     ontology::{Ontology, ClassExpression, Individual, IRI},
-};
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    path::Path,
 };
 
 /// N-Triples Parser
@@ -43,7 +44,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
 
         let parts: Vec<&str> = trimmed.split_whitespace().collect();
         if parts.len() < 3 {
-            return Err(Error::parse("Invalid N-Triples format".to_string()));
+            return Err(Error::ontology_parsing("Invalid N-Triples format".to_string()));
         }
 
         let subject = IRI::from(parts[0]);
