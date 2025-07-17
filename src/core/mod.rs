@@ -11,7 +11,7 @@ pub mod expansion;
 pub mod completion;
 pub mod dependency;
 
-pub use reasoner::{Reasoner},
+pub use reasoner::{Reasoner};
 pub use tableau::{Tableau, TableauState};
 pub use blocking::{BlockingStrategy, BlockingChecker};
 pub use completion::{CompletionRule, RuleApplication};
