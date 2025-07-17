@@ -6,7 +6,7 @@
 pub mod ground_disjunction;
 pub mod hyperresolution;
 pub mod clause_evaluator;
-pub mod extension_tables;
+pub mod extension_table;
 pub mod dependency_tracking;
 pub mod branching;
 pub mod monitor;
@@ -29,7 +29,7 @@ use std::{
 
 use ground_disjunction::{GroundDisjunction, DisjunctPredicate};
 use hyperresolution::HyperresolutionManager;
-use extension_tables::ExtensionManager;
+use extension_table::ExtensionManager;
 use dependency_tracking::DependencyTracker;
 use branching::{BranchingManager, BranchingStrategy, BranchingType};
 use monitor::{TableauMonitor, MonitoringLevel, ReasoningStats};
@@ -296,7 +296,7 @@ impl HyperTableau {
             // Log disjunction processing
             let individual_str = disjunction.individual();
             let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
-            let individual = Individual { iri: individual_iri.to_url()? };
+            let individual = Individual::named(individual_iri);
             
             // Log monitoring event
             self.monitor.log_event(monitor::events::ground_disjunction_processing(
@@ -351,7 +351,7 @@ impl HyperTableau {
                 // Create Individual for monitoring
                 let individual_str = disjunction.individual();
                 let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
-                let individual = Individual { iri: individual_iri.to_url()? };
+                let individual = Individual::named(individual_iri);
                 
                 self.monitor.log_event(monitor::events::fact_derived(
                     format!("Direct disjunct: {}", disjunction.disjuncts()[0]),
@@ -366,7 +366,7 @@ impl HyperTableau {
         // Create branching point for multiple disjuncts
         let individual_str = disjunction.individual();
         let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
-        let individual = Individual { iri: individual_iri.to_url()? };
+        let individual = Individual::named(individual_iri);
 
         let choices = branching::utils::create_disjunction_choices(
             &disjunction,
@@ -432,7 +432,7 @@ impl HyperTableau {
                     )?
                 };
                 
-                self.extension_manager.add_concept_assertion(&individual.iri.to_string(), &assertion)?;
+                self.extension_manager.add_concept_assertion(&individual.to_string(), &assertion)?;
                 return Ok(true);
             }
         }
