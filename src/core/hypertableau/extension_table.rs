@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    dependency_tracking::GroundDisjunction,
+    ground_disjunction::GroundDisjunction,
 };
 
 use std::{
