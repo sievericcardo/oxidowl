@@ -965,9 +965,7 @@ impl ConceptLabel {
             ConceptLabel::Nominal(individual_iri) => {
                 // Convert nominal to ObjectOneOf with a single individual
                 Ok(ClassExpression::ObjectOneOf(vec![
-                    crate::ontology::Individual {
-                        iri: IRI::new(individual_iri.clone()).to_url()?,
-                    }
+                    crate::ontology::Individual::named(IRI::new(individual_iri.clone()))
                 ]))
             }
         }
@@ -1059,7 +1057,7 @@ impl DefaultExpansionStrategy {
 }
 
 impl ExpansionStrategy for DefaultExpansionStrategy {
-    fn initialize(&mut self, _context: &ExpansionContext) -> Result<()> {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
         Ok(())
     }
     
@@ -1067,7 +1065,7 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
         candidates.first().cloned()
     }
     
-    fn order_expansions(&self, _existentials: &mut [ExistentialCandidate]) {
+    fn order_expansions(&mut self, _existentials: &mut [ExistentialCandidate]) {
         // Default order - no reordering
     }
     
@@ -1077,14 +1075,6 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
     
     fn get_expansion_priority(&self, _candidate: &ExistentialCandidate) -> ExpansionPriority {
         ExpansionPriority::Normal
-    }
-    
-    fn expansion_completed(&mut self, _candidate: &ExistentialCandidate, _result: &ExpansionResult) {
-        // Default - no action needed
-    }
-    
-    fn clear(&mut self) {
-        // Default - no state to clear
     }
 }
 
