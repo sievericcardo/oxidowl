@@ -106,7 +106,7 @@ pub enum RuleContext {
     /// Context for role-based rules (SOME, ALL, etc.)
     Role {
         role: Role,
-        source: String
+        source: String,
         target: String,
         concept: ClassExpression,
     },
@@ -388,7 +388,6 @@ impl CompletionRuleSet {
         if let RuleContext::Concept { concept, dependencies } = application.context {
             if let ClassExpression::ObjectIntersectionOf(conjuncts) = concept {
                 for operand in conjuncts {
-                    for operand in conjuncts {
                     result.concept_additions.push((
                         application.node.clone(),
                         operand,
