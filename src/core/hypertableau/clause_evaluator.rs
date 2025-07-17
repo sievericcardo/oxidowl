@@ -14,7 +14,7 @@ use crate::{
 use super::{
     ground_disjunction::{GroundDisjunction, GroundDisjunctionHeader},
     hyperresolution::{DLClause, Atom},
-    extension_tables::ExtensionManager,
+    extension_table::ExtensionManager,
 };
 
 use std::{
@@ -723,8 +723,8 @@ impl DLClauseEvaluator {
         view: &RetrievalView,
         context: &mut ExecutionContext,
     ) -> Result<ExecutionResult> {
-        // Convert RetrievalView to the extension_tables version
-        use crate::core::hypertableau::extension_tables::RetrievalView as ExtRetrievalView;
+        // Convert RetrievalView to the extension_table version
+        use crate::core::hypertableau::extension_table::RetrievalView as ExtRetrievalView;
         let ext_view = match view {
             RetrievalView::All => ExtRetrievalView::Complete,
             RetrievalView::DeltaNew => ExtRetrievalView::DeltaNew,
