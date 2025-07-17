@@ -230,7 +230,7 @@ impl ReasonerConfig {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: ReasonerConfig = toml::from_str(&content)
-            .map_err(|e| Error::configuration(format!("Failed to parse TOML config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e)))?;
 
         config.validate()?;
         Ok(config)
@@ -239,7 +239,7 @@ impl ReasonerConfig {
     /// Save configuration to TOML file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = toml::to_string(self)
-            .map_err(|e| Error::configuration(format!("Failed to serialize TOML config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to serialize TOML config: {}", e)))?;
 
         fs::write(path, content)?;
         Ok(())
@@ -249,7 +249,7 @@ impl ReasonerConfig {
     pub fn load_from_json<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: ReasonerConfig = serde_json::from_str(&content)
-            .map_err(|e| Error::configuration(format!("Failed to parse JSON config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e)))?;
 
         config.validate()?;
         Ok(config)
@@ -258,7 +258,7 @@ impl ReasonerConfig {
     /// Save configuration to JSON file
     pub fn save_to_json<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| Error::configuration(format!("Failed to serialize JSON config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to serialize JSON config: {}", e)))?;
 
         fs::write(path, content)?;
         Ok(())
@@ -269,29 +269,29 @@ impl ReasonerConfig {
         // Validate timeouts
         if let Some(timeout) = self.reasoning.timeout {
             if timeout.as_secs() == 0 {
-                return Err(Error::configuration("Timeout cannot be zero".to_string()));
+                return Err(Error::config("Timeout cannot be zero".to_string()));
             }
         }
 
         // Validate memory limits
         if let Some(max_memory) = self.reasoning.max_memory_mb {
             if max_memory == 0 {
-                return Err(Error::configuration("Maximum memory cannot be zero".to_string()));
+                return Err(Error::config("Maximum memory cannot be zero".to_string()));
             }
         }
 
         // Validate cache settings
         if self.cache.max_cache_size_mb == 0 {
-            return Err(Error::configuration("Maximum cache size cannot be zero".to_string()));
+            return Err(Error::config("Maximum cache size cannot be zero".to_string()));
         }
 
         // Validate server settings
         if self.server.max_connections == 0 {
-            return Err(Error::configuration("Maximum connections cannot be zero".to_string()));
+            return Err(Error::config("Maximum connections cannot be zero".to_string()));
         }
 
         if self.server.request_timeout.as_secs() == 0 {
-            return Err(Error::configuration("Request timeout cannot be zero".to_string()));
+            return Err(Error::config("Request timeout cannot be zero".to_string()));
         }
 
         Ok(())
@@ -316,7 +316,7 @@ impl ReasonerConfig {
         config.reasoning.max_memory_mb = Some(8192); // 8 GB
         config.cache.max_cache_size_mb = 2048; // 2 GB
         config.performance.memory_pool_size_mb = 1024; // 1 GB
-        config.reasoner.timeout = Some(Duration::from_secs(1800)); // 30 minutes
+        config.reasoning.timeout = Some(Duration::from_secs(1800)); // 30 minutes
         config.reasoning.max_expansion_depth = 200; // Increase depth for large ontologies
         config.reasoning.enable_optimisations = true; // Enable optimisations
         config
