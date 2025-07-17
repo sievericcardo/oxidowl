@@ -6,10 +6,10 @@
 use crate::{Error, Result};
 use std::{
     collections::{HashMap, HashSet, BTreeSet},
-    ftm,
+    fmt,
     hash::{Hash, Hasher},
     sync::{Arc, Weak},
-}
+};
 
 /// Identifier for the dependency nodes
 pub type DependencyId = u64;
@@ -401,7 +401,7 @@ impl DependencyTracker {
         }
 
         if let Some(dependant_node) = self.nodes.get_mut(&dependency) {
-            let dep_set  DependencySet::with_dependency(dependency, true);
+            let dep_set = DependencySet::with_dependency(dependency, true);
             dependant_node.add_dependency(dep_set);
         }
 
@@ -456,8 +456,8 @@ impl DependencyTracker {
         &mut self,
         branching_points: Vec<BranchingPoint>,
         dependencies: Vec<(DependenciesId, bool)>,
-        Arc<DependencySet>
-    ) {
+    ) -> Arc<DependencySet>
+    {
         self.set_factory.create_set(branching_points, dependencies)
     }
 
