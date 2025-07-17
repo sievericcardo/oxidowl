@@ -2,14 +2,15 @@
 //!
 //! This module implements parsing of OWL 2 ontologies from Functional Syntax.
 
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Write, Read},
+    path::Path,
+};
+
 use crate::{
     Error, Result,
     ontology::{Ontology, ClassExpression, Individual, IRI},
-};
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    path::Path,
 };
 
 /// Functional Syntax Parser
