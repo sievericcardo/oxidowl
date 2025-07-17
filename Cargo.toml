@@ -50,7 +50,7 @@ parking_lot = "0.12"
 seahash = "4.1"  # Fast hash function for signatures
 fxhash = "0.2"   # Fast hash map for performance-critical operations
 roaring = "0.11" # Compressed bitmaps for efficient set operations
-lru = "0.14"     # LRU cache for blocking candidates
+lru = "0.16"     # LRU cache for blocking candidates
 
 # Performance profiling (optional)
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
@@ -78,11 +78,12 @@ num-rational = "0.4"
 num-traits = "0.2"
 
 # Configuration management
-config = "0.13"
+config = "0.15.13"
 
 # JSON and XML parsing for ontology formats
-quick-xml = "0.37"
+quick-xml = "0.38"
 roxmltree = "0.20"
+toml = "0.9.2"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
