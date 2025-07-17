@@ -50,13 +50,13 @@ pub struct CacheConfig {
     pub max_size: usize, // Maximum number of entries in the cache
     pub ttl: Duration, // Time to live for cache entries
     pub enable_concept_cache: bool,
-    pub enable subsumption_cache: bool,
+    pub enable_subsumption_cache: bool,
     pub enable_satisfiability_cache: bool,
     pub enable_classification_cache: bool,
     pub enable_realization_cache: bool,
 }
 
-imple Default for CacheConfig {
+impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             max_size: 10000, // Default maximum size
@@ -144,4 +144,51 @@ impl ConceptSatisfiabilityCache {
             total_hits as f64 / cache.len() as f64
         }
     }
+}
+
+/// Cache manager that coordinates different caches
+#[derive(Debug, Clone)]
+pub struct CacheManager {
+    concept_cache: ConceptSatisfiabilityCache,
+    config: CacheConfig,
+}
+
+impl CacheManager {
+    pub fn new(config: CacheConfig) -> Self {
+        Self {
+            concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
+            config,
+        }
+    }
+
+    /// Clear all caches
+    pub fn clear_all(&self) {
+        self.concept_cache.clear();
+    }
+
+    /// Get cache statistics
+    pub fn get_stats(&self) -> CacheStats {
+        CacheStats {
+            concept_cache_size: self.concept_cache.size(),
+            concept_cache_hit_rate: self.concept_cache.hit_rate(),
+        }
+    }
+
+    /// Get the concept satisfiability cache
+    pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
+        &self.concept_cache
+    }
+}
+
+impl Default for CacheManager {
+    fn default() -> Self {
+        Self::new(CacheConfig::default())
+    }
+}
+
+/// Cache statistics
+#[derive(Debug, Clone)]
+pub struct CacheStats {
+    pub concept_cache_size: usize,
+    pub concept_cache_hit_rate: f64,
 }
