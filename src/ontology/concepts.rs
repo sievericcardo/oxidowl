@@ -11,33 +11,33 @@ pub type ConceptId = u64;
 /// Named OWL classes
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Class {
-    pub iri: crate::ontologies::IRI,
+    pub iri: crate::ontology::IRI,
 }
 
 impl Class {
-    pub fn new(iri: crate::ontologies::IRI) -> Self {
+    pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
 
     pub fn thing() -> Self {
-        Self::new(crate::ontologies::IRI::new("http://www.w3.org/2002/07/owl#Thing"))
+        Self::new(crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"))
     }
 
     pub fn nothing() -> Self {
-        Self::new(crate::ontologies::IRI::new("http://www.w3.org/2002/07/owl#Nothing"))
+        Self::new(crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"))
     }
 
     pub fn is_thing(&self) -> bool {
-        self.iri == crate::ontologies::IRI::new("http://www.w3.org/2002/07/owl#Thing")
+        self.iri == crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing")
     }
 
     pub fn is_nothing(&self) -> bool {
-        self.iri == crate::ontologies::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
+        self.iri == crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
     }
 }
 
-/// OWL 2 DL Class Expression
-#[derive(Debug, Clone, PartialEq)]
+/// OWL 2 DL Class expressions
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClassExpression {
     /// Named class
     Class(Class),
@@ -48,122 +48,124 @@ pub enum ClassExpression {
     /// Union of class expressions (ObjectUnionOf)
     ObjectUnionOf(Vec<ClassExpression>),
 
+    /// Enumeration of individuals (ObjectOneOf)
+    ObjectOneOf(Vec<crate::ontology::Individual>),
+
     /// Object property restriction (ObjectSomeValuesFrom)
     ObjectSomeValuesFrom {
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         filler: Box<ClassExpression>,
     },
 
     /// Object property restriction (ObjectAllValuesFrom)
     ObjectAllValuesFrom {
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         filler: Box<ClassExpression>,
     },
 
     /// Object property restriction (ObjectHasValue)
     ObjectHasValue {
-        property: crate::ontologies::ObjectPropertyExpression,
-        value: crate::ontologies::Individual,
+        property: crate::ontology::ObjectPropertyExpression,
+        value: crate::ontology::Individual,
     },
 
     /// Object property restriction (ObjectHasSelf)
     ObjectHasSelf {
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
     },
 
     /// Object property restriction (ObjectMinCardinality)
     ObjectMinCardinality {
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         cardinality: u32,
         filler: Box<ClassExpression>,
     },
 
     /// Object property restriction (ObjectMaxCardinality)
     ObjectMaxCardinality {
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         cardinality: u32,
         filler: Box<ClassExpression>,
     },
 
     /// Object property restriction (ObjectExactCardinality)
     ObjectExactCardinality {
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         cardinality: u32,
         filler: Box<ClassExpression>,
     },
 
     /// Data property restriction (DataSomeValuesFrom)
     DataSomeValuesFrom {
-        property: crate::ontologies::DataPropertyExpression,
+        property: crate::ontology::DataPropertyExpression,
         filler: crate::ontology::DataRange,
     },
 
     /// Data property restriction (DataAllValuesFrom)
     DataAllValuesFrom {
-        property: crate::ontologies::DataPropertyExpression,
+        property: crate::ontology::DataPropertyExpression,
         filler: crate::ontology::DataRange,
     },
 
     /// Data property restriction (DataHasValue)
     DataHasValue {
-        property: crate::ontologies::DataPropertyExpression,
-        value: crate::ontologies::Literal,
+        property: crate::ontology::DataPropertyExpression,
+        value: crate::ontology::Literal,
     },
 
     /// Data property restriction (DataMinCardinality)
     DataMinCardinality {
-        property: crate::ontologies::DataPropertyExpression,
+        property: crate::ontology::DataPropertyExpression,
         cardinality: u32,
         filler: crate::ontology::DataRange,
     },
 
     /// Data property restriction (DataMaxCardinality)
     DataMaxCardinality {
-        property: crate::ontologies::DataPropertyExpression,
+        property: crate::ontology::DataPropertyExpression,
         cardinality: u32,
         filler: crate::ontology::DataRange,
     },
 
     /// Data property restriction (DataExactCardinality)
     DataExactCardinality {
-        property: crate::ontologies::DataPropertyExpression,
+        property: crate::ontology::DataPropertyExpression,
         cardinality: u32,
         filler: crate::ontology::DataRange,
     },
 
     /// Negation of a class expression (ObjectComplementOf)
-
     ObjectComplementOf(Box<ClassExpression>),
 
     /// Annotation assertion (AnnotationAssertion)
     AnnotationAssertion {
-        property: crate::ontologies::AnnotationPropertyExpression,
-        subject: crate::ontologies::IRI,
-        value: crate::ontologies::Literal,
+        property: crate::ontology::AnnotationPropertyExpression,
+        subject: crate::ontology::IRI,
+        value: crate::ontology::Literal,
     },
 
     /// Sub-annotation property of (SubAnnotationPropertyOf)
     SubAnnotationPropertyOf {
-        sub_property: crate::ontologies::AnnotationPropertyExpression,
-        super_property: crate::ontologies::AnnotationPropertyExpression,
+        sub_property: crate::ontology::AnnotationPropertyExpression,
+        super_property: crate::ontology::AnnotationPropertyExpression,
     },
 
     /// Annotation property domain (AnnotationPropertyDomain)
     AnnotationPropertyDomain {
-        property: crate::ontologies::AnnotationPropertyExpression,
-        domain: ClassExpression,
+        property: crate::ontology::AnnotationPropertyExpression,
+        domain: Box<ClassExpression>,
     },
 
     /// Annotation property range (AnnotationPropertyRange)
     AnnotationPropertyRange {
-        property: crate::ontologies::AnnotationPropertyExpression,
-        range: ClassExpression,
+        property: crate::ontology::AnnotationPropertyExpression,
+        range: Box<ClassExpression>,
     },
 }
 
 impl ClassExpression {
     /// Create a class expression from a named class
-    pub fn class(iri: crate::ontologies::IRI) -> Self {
+    pub fn class(iri: crate::ontology::IRI) -> Self {
         ClassExpression::Class(Class::new(iri))
     }
 
@@ -179,7 +181,7 @@ impl ClassExpression {
 
     /// Create an intersection of class expressions
     pub fn intersection_of(expressions: Vec<ClassExpression>) -> Self {
-        if expression.is_empty() {
+        if expressions.is_empty() {
             Self::thing() // Intersection of nothing is Thing
         } else if expressions.len() == 1 {
             expressions.into_iter().next().unwrap() // Single expression
@@ -206,7 +208,7 @@ impl ClassExpression {
 
     /// Create an existential restriction (some values from)
     pub fn some_values_from(
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         filler: ClassExpression,
     ) -> Self {
         ClassExpression::ObjectSomeValuesFrom {
@@ -217,7 +219,7 @@ impl ClassExpression {
 
     /// Create a universal restriction (all values from)
     pub fn all_values_from(
-        property: crate::ontologies::ObjectPropertyExpression,
+        property: crate::ontology::ObjectPropertyExpression,
         filler: ClassExpression,
     ) -> Self {
         ClassExpression::ObjectAllValuesFrom {
@@ -321,11 +323,6 @@ impl ClassExpression {
                 }
             }
 
-            ClassExpression::ObjectComplementOf(expr)) if negated => {
-                // Double negation elimination
-                expr.to_nnf_helper(false)
-            }
-
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 if negated {
                     // Negation of some values from becomes all values from
@@ -400,19 +397,19 @@ impl ClassExpression {
     }
 
     /// Simplify the class expression by applying logic rules
-    pub fn simplify(&self) -> Result<ClassExpression> {
+    pub fn simplify(&self) -> crate::Result<ClassExpression> {
         match self {
             ClassExpression::ObjectIntersectionOf(expressions) => {
                 let simplified: Vec<_> = expressions
                     .iter()
                     .map(|e| e.simplify())
-                    .collect::<Result<Vec<_>>>()?;
+                    .collect::<crate::Result<Vec<_>>>()?;
                     
                 // Remove duplicates and empty expressions
                 let mut unique_exprs = Vec::new();
                 let mut has_nothing = false;
 
-                for expr in simplfied {
+                for expr in simplified {
                     if let ClassExpression::Class(class) = &expr {
                         if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
                             has_nothing = true;
@@ -637,7 +634,7 @@ impl ClassExpression {
 /// Concept store for managing named classes and class expressions
 #[derive(Debug, Clone)]
 pub struct ConceptStore {
-    classes; HashMap<crate::ontology::IRI, Class>,
+    classes: HashMap<crate::ontology::IRI, Class>,
     expressions: HashMap<ConceptId, ClassExpression>,
     next_id: ConceptId,
 }
@@ -648,7 +645,7 @@ impl ConceptStore {
             classes: HashMap::new(),
             expressions: HashMap::new(),
             next_id: 0,
-        }
+        };
 
         // Built-in classes
         store.add_class(Class::thing());
@@ -689,7 +686,7 @@ impl ConceptStore {
         self.classes.values()
     }
 
-    pub fn all_expressions(&self) -> impl Iterator<Item = &ClassExpression)> {
+    pub fn all_expressions(&self) -> impl Iterator<Item = &ClassExpression> {
         self.expressions.values()
     }
 
