@@ -3,14 +3,16 @@
 //! This module implements OWL 2 DL individuals (named and anonymous)
 //! following the OWL 2 specification structure.
 
+use crate::Error;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 /// Identifiers for OWL 2 DL individuals.
 pub type IndividualId = u64;
 
 /// Represents an OWL 2 DL individual.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Individual {
+pub enum Individual {
     /// Named individual identifier.
     Named(NamedIndividual),
 
@@ -34,7 +36,7 @@ pub struct AnonymousIndividual {
 impl Individual {
     /// Creates a new named individual from an IRI.
     pub fn named(iri: crate::ontology::IRI) -> Self {
-        Individual::Named(NamedIndividual { iri )
+        Individual::Named(NamedIndividual { iri })
     }
 
     /// Creates a new anonymous individual with a unique identifier.
@@ -74,7 +76,16 @@ impl Individual {
     pub fn to_string(&self) -> String {
         match self {
             Individual::Named(named) => named.iri.to_string(),
-            Individual::Anonymous(anon) => format!("_:{}", anonymous.id),
+            Individual::Anonymous(anon) => format!("_:{}", anon.id),
+        }
+    }
+}
+
+impl fmt::Display for Individual {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Individual::Named(named) => write!(f, "{}", named.iri),
+            Individual::Anonymous(anon) => write!(f, "_:{}", anon.id),
         }
     }
 }
@@ -274,17 +285,17 @@ impl IndividualStore {
         match &assertion {
             IndividualAssertion::ClassAssertion { individual, class } => {
                 if !self.is_valid_class_assertion(individual, class) {
-                    return Err(Error::InvalidAssertion);
+                    return Err(Error::InvalidAssertion { message: "Invalid class assertion".to_string() });
                 }
             }
             IndividualAssertion::ObjectPropertyAssertion { subject, object, property } => {
                 if !self.is_valid_object_property_assertion(subject, object, property) {
-                    return Err(Error::InvalidAssertion);
+                    return Err(Error::InvalidAssertion { message: "Invalid object property assertion".to_string() });
                 }
             }
             IndividualAssertion::DataPropertyAssertion { subject, value, property } => {
                 if !self.is_valid_data_property_assertion(subject, value, property) {
-                    return Err(Error::InvalidAssertion);
+                    return Err(Error::InvalidAssertion { message: "Invalid data property assertion".to_string() });
                 }
             }
             _ => {}
@@ -393,10 +404,10 @@ impl IndividualStore {
             .iter()
             .filter_map(|assertion| {
                 if let IndividualAssertion::SameIndividuals { individuals } = assertion {
-                    if individuals.contains(individual) {
+                    if individuals.contains(&self.individual) {
                         Some(individuals
                             .iter()
-                            .filter(|&ind| ind != individual)
+                            .filter(|&ind| ind != &self.individual)
                             .collect::<Vec<&Individual>>())
                     } else {
                         None
@@ -415,10 +426,10 @@ impl IndividualStore {
             .iter()
             .filter_map(|assertion| {
                 if let IndividualAssertion::DifferentIndividuals { individuals } = assertion {
-                    if individuals.contains(individual) {
+                    if individuals.contains(&self.individual) {
                         Some(individuals
                             .iter()
-                            .filter(|&ind| ind != individual)
+                            .filter(|&ind| ind != &self.individual)
                             .collect::<Vec<_>>())
                     } else {
                         None
