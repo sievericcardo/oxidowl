@@ -3,10 +3,29 @@
 //! This module implements the various types of axioms in OWL 2 DL ontologies,
 //! following the OWL 2 specification structure.
 
+use crate::Error;
 use std::collections::{HashMap, HashSet};
 
 /// Unique identifier for an OWL 2 DL axiom.
 pub type AxiomId = u64;
+
+/// OWL 2 DL Entity types for declarations
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Entity {
+    Class(crate::ontology::IRI),
+    ObjectProperty(crate::ontology::IRI),
+    DataProperty(crate::ontology::IRI),
+    AnnotationProperty(crate::ontology::IRI),
+    NamedIndividual(crate::ontology::IRI),
+    Datatype(crate::ontology::IRI),
+}
+
+/// Declaration axiom for OWL 2 DL entities
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DeclarationAxiom {
+    pub id: AxiomId,
+    pub entity: Entity,
+}
 
 /// Trait for OWL 2 DL axioms.
 pub trait AxiomTrait {
@@ -14,7 +33,7 @@ pub trait AxiomTrait {
     fn axiom_id(&self) -> AxiomId;
 
     /// Returns the type of the axiom.
-    fn axiom_type(&self) -> String;
+    fn axiom_type(&self) -> AxiomType;
     
     /// Returns whether the axiom is logical.
     fn is_logical(&self) -> bool;
@@ -23,6 +42,9 @@ pub trait AxiomTrait {
 /// Types of OWL 2 DL axioms.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AxiomType {
+    // Declaration Axioms
+    Declaration,
+    
     // Class Axioms
     SubClassOf,
     EquivalentClasses,
@@ -69,8 +91,11 @@ pub enum AxiomType {
 }
 
 /// Axiom enum representing all OWL 2 DL axioms.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Axiom {
+    // Declaration Axioms
+    Declaration(DeclarationAxiom),
+    
     // Class Axioms
     SubClassOf(SubClassOfAxiom),
     EquivalentClasses(EquivalentClassesAxiom),
@@ -326,7 +351,7 @@ pub struct DataPropertyAssertionAxiom {
     pub id: AxiomId,
     pub individual: crate::ontology::Individual,
     pub property: crate::ontology::DataPropertyExpression,
-    pub value: crate::ontology::DataValue,
+    pub value: crate::ontology::Literal,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
@@ -344,7 +369,7 @@ pub struct NegativeDataPropertyAssertionAxiom {
     pub id: AxiomId,
     pub individual: crate::ontology::Individual,
     pub property: crate::ontology::DataPropertyExpression,
-    pub value: crate::ontology::DataValue,
+    pub value: crate::ontology::Literal,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
@@ -385,6 +410,7 @@ pub struct AnnotationPropertyRangeAxiom {
 impl AxiomTrait for Axiom {
     fn axiom_id(&self) -> AxiomId {
         match self {
+            Axiom::Declaration(axiom) => axiom.id,
             Axiom::SubClassOf(axiom) => axiom.id,
             Axiom::EquivalentClasses(axiom) => axiom.id,
             Axiom::DisjointClasses(axiom) => axiom.id,
@@ -424,6 +450,7 @@ impl AxiomTrait for Axiom {
 
     fn axiom_type(&self) -> AxiomType {
         match self {
+            Axiom::Declaration(_) => AxiomType::Declaration,
             Axiom::SubClassOf(_) => AxiomType::SubClassOf,
             Axiom::EquivalentClasses(_) => AxiomType::EquivalentClasses,
             Axiom::DisjointClasses(_) => AxiomType::DisjointClasses,
@@ -463,6 +490,7 @@ impl AxiomTrait for Axiom {
 
     fn is_logical(&self) -> bool {
         !matches!(self,
+            Axiom::Declaration(_) |
             Axiom::AnnotationAssertion(_) |
             Axiom::SubAnnotationPropertyOf(_) |
             Axiom::AnnotationPropertyDomain(_) |
@@ -488,10 +516,10 @@ impl AxiomStore {
         }
     }
 
-    pub fn add_axiom(&mut self, axiom: Axiom) -> Result<AxiomId> {
+    pub fn add_axiom(&mut self, axiom: Axiom) -> crate::Result<AxiomId> {
         let id = axiom.axiom_id();
         if self.axioms.contains_key(&id) {
-            return Err(Error::AxiomAlreadyExists(id));
+            return Err(crate::Error::AxiomAlreadyExists(id));
         }
 
         // Set the ID
@@ -552,7 +580,7 @@ impl AxiomStore {
             })
     }
 
-    pub fn remove_axiom(&mut self, id: AxiomId) -> Result<()> {
+    pub fn remove_axiom(&mut self, id: AxiomId) -> crate::Result<()> {
         if let Some(axiom) = self.axioms.remove(&id) {
             let axiom_type = axiom.axiom_type();
             if let Some(ids) = self.axioms_by_type.get_mut(&axiom_type) {
