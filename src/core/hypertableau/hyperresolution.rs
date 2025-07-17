@@ -4,7 +4,7 @@
 //! Hyperresolution is a core component of the hypertableau algorithm that
 //! compiles and applies DL clauses efficiently during tableau expansion.
 
-use super::extension_tables::ExtensionManager;
+use super::extension_table::ExtensionManager;
 use crate::{
     Result,
 };
