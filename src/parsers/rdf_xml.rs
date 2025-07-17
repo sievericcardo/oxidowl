@@ -1,15 +1,16 @@
-//! RDF XML Parser
+//! RDF/XML Parser
 //!
 //! This module implements parsing of OWL 2 ontologies from RDF/XML format.
+
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Write, Read},
+    path::Path,
+};
 
 use crate::{
     Error, Result,
     ontology::{Ontology, ClassExpression, Individual, IRI},
-};
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    path::Path,
 };
 
 /// RDF XML Parser
@@ -59,4 +60,6 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     // TODO: Implement serialization to RDF XML
     writeln!(file, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\" xmlns:owl=\"http://www.w3.org/2002/07/owl#\">")?;
     writeln!(file, "  <!-- Placeholder for RDF/XML serialization -->")?;
+    writeln!(file, "</rdf:RDF>")?;
+    Ok(())
 }

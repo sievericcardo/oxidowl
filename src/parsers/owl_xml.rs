@@ -13,7 +13,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{BufReader, Read},
+    io::{BufReader, Read, Write},
     path::Path,
 };
 
@@ -411,4 +411,6 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
             }
         }
     }
+    writeln!(file, "</Ontology>")?;
+    Ok(())
 }
