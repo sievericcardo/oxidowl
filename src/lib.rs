@@ -40,11 +40,11 @@ pub mod cache;
 pub mod config;
 pub mod core;
 pub mod error;
-pub mod network;
+// pub mod network;
 pub mod ontology;
 pub mod parsers;
 pub mod reasoning;
-pub mod utils;
+// pub mod utils;
 
 // Re-export main types for convenience
 pub use crate::core::reasoner::{Reasoner};
