@@ -12,6 +12,7 @@ use crate::{
     ontology::{ClassExpression, Individual, Role, ObjectPropertyExpression},
     Error, Result,
 };
+
 use std::{
     collections::{HashMap, HashSet, VecDeque, BinaryHeap},
     cmp::Ordering,
@@ -32,7 +33,7 @@ pub trait ExpansionStrategy: fmt::Debug + Send + Sync {
     /// Determine expansion order for multiple existentials
     fn order_expansions(
         &mut self,
-        existentials: &[ExistentialCandidate],
+        existentials: &mut [ExistentialCandidate],
     );
 
     /// Check if expansion should be delayed
@@ -46,7 +47,7 @@ pub trait ExpansionStrategy: fmt::Debug + Send + Sync {
     fn get_expansion_priority(
         &self,
         candidate: &ExistentialCandidate,
-    );
+    ) -> ExpansionPriority;
 
     /// Notify about completed expansion
     fn expansion_completed(
@@ -66,7 +67,7 @@ pub struct ExpansionManager {
     strategy: Box<dyn ExpansionStrategy>,
 
     /// Queue of pending existential candidates
-    pending_queue: BinaryHeap<PrioritisedCandidate>,
+    pending_queue: BinaryHeap<PrioritzedCandidate>,
 
     /// Currently expanding candidates
     expanding: HashSet<String>,
@@ -78,7 +79,7 @@ pub struct ExpansionManager {
     dependency_tracker: DependencyTracker,
 
     /// Configuration options
-    config: ExistentialConfig,
+    config: ExpansionConfig,
 
     /// Statistics
     statistics: ExpansionStatistics,
@@ -136,7 +137,7 @@ pub struct ExistentialCandidate {
 
 /// Expansion complexity metrics
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExpansionComplexity {
+pub struct ExpansionComplexity {
     /// Complexity of filler
     pub syntactic_complexity: u32,
 
@@ -347,7 +348,7 @@ impl ExpansionManager {
         }
 
         let priority = self.strategy.get_expansion_priority(&candidate);
-        let prioritised_candidate = PrioritisedCandidate {
+        let prioritised_candidate = PrioritzedCandidate {
             candidate,
             priority,
             insertion_order: self.next_insertion_order(),
@@ -368,7 +369,7 @@ impl ExpansionManager {
             if self.strategy.should_delay_expansion(&prioritised.candidate, context) {
                 // Re-queue with lower priority
                 let delayed = PrioritizedCandidate {
-                    prioritised.candidate,
+                    candidate: prioritised.candidate,
                     priority: ExpansionPriority::Delayed,
                     insertion_order: self.next_insertion_order(),
                 };
@@ -736,7 +737,7 @@ impl ExistentialCandidate {
     }
 }
 
-impl Ord for PrioritisedCandidate {
+impl Ord for PrioritzedCandidate {
     fn cmp(&self, other: &Self) -> Ordering {
         // Lower priority values are higher priority (reverse order)
         other.priority.cmp(&self.priority)
@@ -744,13 +745,13 @@ impl Ord for PrioritisedCandidate {
     }
 }
 
-impl PartialOrd for PrioritisedCandidate {
+impl PartialOrd for PrioritzedCandidate {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for PrioritisedCandidate {
+impl PartialEq for PrioritzedCandidate {
     fn eq(&self, other: &Self) -> bool {
         self.priority == other.priority && self.insertion_order == other.insertion_order
     }
