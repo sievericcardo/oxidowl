@@ -3,7 +3,7 @@
 //! This module implements OWL 2 DL object properties, data properties, and annotation properties
 //! following the OWL 2 specification structure.
 
-use crate::Result;
+use crate::{Result, Error};
 use crate::ontology::{ObjectPropertyExpression, ObjectProperty};
 use std::collections::{HashMap, HashSet};
 
@@ -20,7 +20,7 @@ pub struct AnnotationProperty {
 }
 
 /// Role (interface for Object and Data Properties in tableau reasoning)
-##[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Role {
     ObjectProperty(crate::ontology::ObjectPropertyExpression),
     DataProperty(DataProperty),
@@ -51,12 +51,12 @@ impl DataProperty {
 
     /// Create the top data property (owl:topDataProperty)
     pub fn top() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topDataProperty".to_string())).unwrap()
+        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topDataProperty".to_string()))
     }
 
     /// Create the bottom data property (owl:bottomDataProperty)
     pub fn bottom() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomDataProperty".to_string())).unwrap()
+        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomDataProperty".to_string()))
     }
 }
 
@@ -68,12 +68,12 @@ impl AnnotationProperty {
 
     /// Create the top annotation property (owl:topAnnotationProperty)
     pub fn top() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topAnnotationProperty".to_string())).unwrap()
+        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topAnnotationProperty".to_string()))
     }
 
     /// Create the bottom annotation property (owl:bottomAnnotationProperty)
     pub fn bottom() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomAnnotationProperty".to_string())).unwrap()
+        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomAnnotationProperty".to_string()))
     }
 }
 
@@ -91,11 +91,12 @@ impl ObjectPropertyExpression {
     /// Create a property chain expression
     pub fn property_chain(properties: Vec<ObjectProperty>) -> Result<Self> {
         if properties.is_empty() {
-            return Err(Error::InvalidPropertyChain("Property chain cannot be empty".to_string()));
+            return Err(Error::InvalidPropertyChain { message: "Property chain cannot be empty".to_string() });
         } else if properties.len() == 1 {
             return Err(crate::Error::ontology_parsing("Property chain must contain at least 2 properties"));
         }
-        Ok(ObjectPropertyExpression::PropertyChain(properties))
+        let property_expressions: Vec<ObjectPropertyExpression> = properties.into_iter().map(ObjectPropertyExpression::ObjectProperty).collect();
+        Ok(ObjectPropertyExpression::PropertyChain(property_expressions))
     }
 
     /// Check if the expression is a simple property expression
@@ -136,7 +137,7 @@ impl ObjectPropertyExpression {
     }
 
     /// Get the inverse object property if the expression is an inverse property
-    pub fn as_inverse_object_property(&self) -> &ObjectPropertyExpression {
+    pub fn get_inverse(&self) -> ObjectPropertyExpression {
         match self {
             ObjectPropertyExpression::ObjectProperty(property) => {
                 ObjectPropertyExpression::InverseObjectProperty(property.clone())
@@ -144,7 +145,7 @@ impl ObjectPropertyExpression {
             ObjectPropertyExpression::InverseObjectProperty(property) => {
                 ObjectPropertyExpression::ObjectProperty(property.clone())
             }
-            ObjectPropertyExpression::PropertyChain(_) => {
+            ObjectPropertyExpression::PropertyChain(chain) => {
                 // Inverse of a property chain is the reverse chain with each property inverted
                 let inverse_chain: Vec<ObjectPropertyExpression> = chain
                     .iter()
@@ -181,9 +182,9 @@ impl ObjectPropertyExpression {
             ObjectPropertyExpression::InverseObjectProperty(property) => ObjectPropertyExpression::InverseObjectProperty(property.clone()),
             ObjectPropertyExpression::PropertyChain(chain) => {
                 // Simplify each property in the chain
-                let simplified_chain: Vec<ObjectProperty> = chain
+                let simplified_chain: Vec<ObjectPropertyExpression> = chain
                     .iter()
-                    .map(|p| p.simlify())
+                    .map(|p| p.simplify())
                     .collect();
                 ObjectPropertyExpression::PropertyChain(simplified_chain)
             }
@@ -366,13 +367,15 @@ impl ObjectPropertyHierarchy {
         };
 
         // Add built-in properties
-        hierarchy.add_property(ObjectProperty::top().expect("Built-in top property should be valid"));
-        hierarchy.add_property(ObjectProperty::bottom().expect("Built-in bottom property should be valid"));
+        hierarchy.add_property(ObjectProperty::top());
+        hierarchy.add_property(ObjectProperty::bottom());
+        
+        hierarchy
     }
 
     /// Add an object property to the hierarchy
     pub fn add_property(&mut self, property: ObjectProperty) -> &ObjectProperty {
-        let iri = crate::ontology::IRI::new(property.iri.to_string());
+        let iri = crate::ontology::IRI::new(&property.iri.to_string());
         self.properties.entry(iri.clone()).or_insert_with(|| {
             self.characteristics.insert(iri.clone(), ObjectPropertyCharacteristics::new());
             property
@@ -383,8 +386,8 @@ impl ObjectPropertyHierarchy {
         self.properties.get(iri)
     }
 
-    pub fn add_sub_property(&mut setf, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI){
-        sub.sub_properties
+    pub fn add_sub_property(&mut self, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI){
+        self.sub_properties
             .entry(super_prop.clone())
             .or_insert_with(HashSet::new)
             .insert(sub.clone());
@@ -472,7 +475,7 @@ impl ObjectPropertyHierarchy {
     }
 
     pub fn is_functional(&self, property: &crate::ontology::IRI) -> bool {
-        self.chainistics
+        self.characteristics
             .get(property)
             .map(|c| c.functional)
             .unwrap_or(false)
@@ -563,7 +566,7 @@ impl DataPropertyHierarchy {
 
     /// Add a data property to the hierarchy
     pub fn add_property(&mut self, property: DataProperty) -> &DataProperty {
-        let iri = crate::ontology::IRI::new(property.iri.to_string());
+        let iri = crate::ontology::IRI::new(&property.iri.to_string());
         self.properties.entry(iri.clone()).or_insert_with(|| {
             self.characteristics.insert(iri.clone(), DataPropertyCharacteristics::new());
             property
@@ -724,7 +727,7 @@ impl PropertyStore {
             object_properties: ObjectPropertyHierarchy::new(),
             data_properties: DataPropertyHierarchy::new(),
             annotation_properties: HashMap::new(),
-        }
+        };
 
         // Add built-in properties
         store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedProperty".to_string())));
