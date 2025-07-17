@@ -6,7 +6,7 @@
 use crate::{
     core::{
         dependency::DependencySet,
-        hypertableau::extension_tables::ExtensionManager,
+        hypertableau::extension_table::ExtensionManager,
     },
     ontology::{ClassExpression, ObjectProperty},
     Error, Result,
