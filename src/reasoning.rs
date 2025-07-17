@@ -7,18 +7,20 @@
 // Re-export core reasoner types for public API
 pub use crate::core::reasoner::{ReasoningTask, ReasoningResult, ClassificationResult, RealizationResult};
 
-use create::{
+use crate::{
     Error, Result,
     ontology::{Ontology, ClassExpression, Individual, ObjectPropertyExpression, DataProperty, DataPropertyExpression, Axiom},
     core::{
         reasoner::Reasoner,
         tableau::Tableau,
-    }
+    },
+    cache::{CacheManager, CacheConfig},
+    config::ReasonerConfig,
 };
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
-    time::{Duration, Instant};
+    time::{Duration, Instant},
 };
 
 /// Reasoning service that provides high-level reasoning capabilities
@@ -29,35 +31,12 @@ pub struct ReasoningService {
     config: ReasonerConfig,
 }
 
-/// Configuration for the reasoning service
-#[derive(Debug, Clone)]
-pub struct ReasonerConfig {
-    pub enable_cache: bool,
-    val timeout: Option<Duration>,
-    pub max_concurrent_tasks: usize,
-    pub enable_explanation: bool,
-    pub enable_incremental: bool,
-}
-
-impl Default for ReasonerConfig {
-    fn default() -> Self {
-        Self {
-            enable_cache: true,
-            timeout: Some(Duration::from_secs(300)), // Default timeout of 5 minutes
-            max_concurrent_tasks: 4,
-            enable_explanation: false,
-            enable_incremental: false,
-        }
-    }
-}
-
 impl ReasoningService {
     /// Creates a new reasoning service with the given ontology and configuration
     pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
-        let reasoner_config = crate::config::ReasonerConfig::default();
-        let reasoner = Reasoner::new(reasoner_config).expect("Failed to create reasoner");
+        let reasoner = Reasoner::new(config.clone()).expect("Failed to create reasoner");
         let mut reasoner_with_ontology = reasoner;
-        reasoner_with_ontology.load_ontology(ontology).unwrap().expect("Failed to load ontology");
+        reasoner_with_ontology.load_ontology(ontology).expect("Failed to load ontology");
 
         Self {
             reasoner: Arc::new(RwLock::new(reasoner_with_ontology)),
@@ -79,7 +58,7 @@ impl ReasoningService {
         }
 
         let mut reasoner = self.reasoner.write().unwrap();
-        let result = reasoner.is_consistent().await?;
+        let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
         if self.config.enable_cache {
@@ -115,15 +94,15 @@ impl ReasoningService {
 
         let mut reasoner = self.reasoner.write().unwrap();
         
-        /// Convert ClassExpression to IRI
-        let class_iri = match concept {
+        // Convert ClassExpression to IRI
+        let class_iri = match expression {
             ClassExpression::Class(class) => class.iri.to_string(),
                 _ => return Err(Error::Reasoning {
-                    message: "Invalid class expression for satisfiability check".to_String(),
+                    message: "Invalid class expression for satisfiability check".to_string(),
                 }),
         };
 
-        let result = reasoner.is_class_satisfiable(&class_iri).await?;
+        let result = reasoner.is_class_satisfiable(&class_iri)?;
 
         // Cache the result if caching is enabled
         if self.config.enable_cache {
@@ -303,7 +282,7 @@ impl ReasoningService {
     pub async fn is_instance_of(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
         let types = self.get_types(individual, false).await?;
         for class_type in &types {
-            if self.is_subsumed_by(class_type, concept).await? {
+            if self.is_subsumed_by(class_type, class).await? {
                 return Ok(true);
             }
         }
@@ -378,6 +357,7 @@ impl ReasoningService {
         // Check cache
         if self.config.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
+            let ontology_hash = self.calculate_ontology_hash();
             if let Some(cached) = self.cache_manager.classification().get(ontology_hash) {
                 log::info!("Classification (cached) completed in {:?}", start.elapsed());
                 return Ok(ClassificationResult::new(cached));
@@ -399,6 +379,7 @@ impl ReasoningService {
         // Cache the result if caching is enabled
         if self.config.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
+            let ontology_hash = self.calculate_ontology_hash();
             self.cache_manager.classification().put(ontology_hash, result.hierarchy.clone());
         }
 
@@ -414,6 +395,7 @@ impl ReasoningService {
         // Check cache
         if self.config.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
+            let ontology_hash = self.calculate_ontology_hash();
             if let Some(cached) = self.cache_manager.realization().get(ontology_hash) {
                 log::info!("Realization (cached) completed in {:?}", start.elapsed());
                 return Ok(RealizationResult::new(cached));
@@ -435,6 +417,7 @@ impl ReasoningService {
         // Cache the result if caching is enabled
         if self.config.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
+            let ontology_hash = self.calculate_ontology_hash();
             self.cache_manager.realization().put(ontology_hash, result.types.clone());
         }
 
@@ -465,7 +448,7 @@ impl ReasoningService {
             }
         }
 
-        let explanation_sets: Vec<ExplanationSet> = result.into_iter()
+        let explanation_sets: Vec<ExplanationSet> = explanations.into_iter()
             .map(|axiom| {
                 let mut axioms = HashSet::new();
                 axioms.insert(axiom);
@@ -500,7 +483,7 @@ impl ReasoningService {
             }
         }
 
-        let explanation_sets: Vec<ExplanationSet> = result.into_iter()
+        let explanation_sets: Vec<ExplanationSet> = explanations.into_iter()
             .map(|axiom| {
                 let mut axioms = HashSet::new();
                 axioms.insert(axiom);
@@ -584,14 +567,14 @@ impl ReasoningService {
     /// Get reasoning statistics -- TODO: implement the actual statistics gathering
     pub fn get_statistics(&self) -> ReasoningStatistics {
         let reasoner = self.reasoner.read().unwrap();
-        let cache_stats = self.cache_manager.get_cache_stats();
+        let cache_stats = self.cache_manager.read().unwrap().get_stats();
 
-        Ok (ReasoningStatistics {
+        ReasoningStatistics {
             ontology_size: reasoner.get_ontology_size(),
             reasoning_time: Duration::from_secs(0), // Would be tracked in real implementation
             cache_stats,
             memory_usage: 0, // Would be measured in real implementation
-        })
+        }
     }
 
     // Compute the hash of the ontology for caching
@@ -644,7 +627,7 @@ impl ReasoningService {
 
         // Log the time taken for the property chain query
         log::info!("Property chain query completed in {:?}", start.elapsed());
-        Ok(result)
+        Ok(current_individuals)
     }
 }
 
@@ -682,7 +665,7 @@ impl ExplanationSet {
 pub struct ReasoningStatistics {
     pub ontology_size: usize,
     pub reasoning_time: Duration,
-    pub cache_stats: crate::cahce::CacheStats,
+    pub cache_stats: crate::cache::CacheStats,
     pub memory_usage: usize, // In bytes
 }
 
@@ -766,5 +749,32 @@ impl QueryInterface {
         }
 
         Ok(results)
+    }
+}
+
+impl ReasoningService {
+    /// Create a new ReasoningService
+    pub fn new() -> Self {
+        Self {
+            ontology: Arc::new(RwLock::new(Ontology::new())),
+            reasoner: Arc::new(RwLock::new(Box::new(HyperTableau::new(
+                ReasoningConfig::default(),
+                Box::new(crate::core::blocking::AnywhereBlocking::new()),
+            ).unwrap()))),
+            cache_manager: Arc::new(RwLock::new(CacheManager::new(CacheConfig::default()))),
+            config: ReasonerConfig::default(),
+        }
+    }
+
+    /// Calculate a hash for the current ontology
+    fn calculate_ontology_hash(&self) -> u64 {
+        let ontology = self.ontology.read().unwrap();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        
+        // Hash the number of axioms as a simple fingerprint
+        let axiom_count = ontology.axioms().len();
+        std::hash::Hash::hash(&axiom_count, &mut hasher);
+        
+        std::hash::Hasher::finish(&hasher)
     }
 }
