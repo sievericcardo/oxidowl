@@ -47,17 +47,21 @@ pub fn parse(content: &str) -> Result<Ontology> {
             return Err(Error::ontology_parsing("Invalid N-Triples format".to_string()));
         }
 
-        let subject = IRI::from(parts[0]);
-        let predicate = IRI::from(parts[1]);
+        let subject = IRI::from(parts[0].to_string());
+        let predicate = IRI::from(parts[1].to_string());
         let object = parts[2];
 
         match predicate.as_str() {
             "rdf:type" => {
                 if object.starts_with("<") && object.ends_with(">") {
-                    let class = ClassExpression::from(IRI::from(object));
-                    ontology.add_class(subject, class);
+                    let class = crate::ontology::Class {
+                        iri: IRI::from(object.to_string())
+                    };
+                    ontology.add_class(class);
                 } else if object.starts_with("_:") {
-                    let individual = Individual::from(object);
+                    let individual = crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
+                        iri: IRI::from(object.to_string())
+                    });
                     ontology.add_individual(subject, individual);
                 }
             }
@@ -89,11 +93,13 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
         .map_err(|e| Error::io(format!("Failed to create file: {}", e)))?;
     
     for (subject, class) in ontology.classes() {
-        writeln!(file, "{} rdf:type {} .", subject, class)?;
+        writeln!(file, "{} rdf:type {} .", subject, class.iri)?;
     }
     
     for (subject, individual) in ontology.individuals() {
-        writeln!(file, "{} rdf:type {} .", subject, individual)?;
+        if let Some(iri) = individual.iri() {
+            writeln!(file, "{} rdf:type Individual .", iri)?;
+        }
     }
     
     Ok(())

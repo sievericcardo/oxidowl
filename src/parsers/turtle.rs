@@ -12,6 +12,13 @@ use std::{
     path::Path,
 };
 
+/// Generate a unique axiom ID
+fn generate_axiom_id() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
 /// Turtle Parser
 #[derive(Debug, Clone)]
 pub struct TurtleParser {
@@ -155,7 +162,7 @@ impl TurtleParser {
                             // Class declaration
                             let class = crate::ontology::Class {
                                 iri: url::Url::parse(&triple.subject)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                             };
                             ontology.add_class(class);
                         }
@@ -163,7 +170,7 @@ impl TurtleParser {
                             // Object property declaration
                             let property = crate::ontology::ObjectProperty {
                                 iri: url::Url::parse(&triple.subject)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                             };
                             ontology.add_object_property(property);
                         }
@@ -178,10 +185,11 @@ impl TurtleParser {
                             );
                             let class = crate::ontology::Class {
                                 iri: url::Url::parse(&class_uri)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                             };
                             
                             let axiom = crate::ontology::ClassAssertionAxiom {
+                                id: generate_axiom_id(),
                                 individual,
                                 class: ClassExpression::Class(class),
                                 annotations: vec![],
@@ -195,14 +203,15 @@ impl TurtleParser {
                 if let TripleObject::Uri(superclass_uri) = triple.object {
                     let subclass = crate::ontology::Class {
                         iri: url::Url::parse(&triple.subject)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                     };
                     let superclass = crate::ontology::Class {
                         iri: url::Url::parse(&superclass_uri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                     };
                     
                     let axiom = crate::ontology::SubClassOfAxiom {
+                        id: generate_axiom_id(),
                         subclass: ClassExpression::Class(subclass),
                         superclass: ClassExpression::Class(superclass),
                         annotations: vec![],
@@ -222,6 +231,7 @@ impl TurtleParser {
                     };
                     
                     let axiom = crate::ontology::SubObjectPropertyOfAxiom {
+                        id: generate_axiom_id(),
                         sub_property: crate::ontology::ObjectPropertyExpression::ObjectProperty(subprop),
                         super_property: crate::ontology::ObjectPropertyExpression::ObjectProperty(superprop),
                         annotations: vec![],
@@ -252,6 +262,7 @@ impl TurtleParser {
                     };
                     
                     let axiom = crate::ontology::ObjectPropertyAssertionAxiom {
+                        id: generate_axiom_id(),
                         property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                         source: subject,
                         target: object,
@@ -311,14 +322,14 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     }
     
     // Write class declarations
-    for class in ontology.classes() {
-        content.push_str(&format!("<{}> rdf:type owl:Class .\n", class));
+    for (iri, _class) in ontology.classes() {
+        content.push_str(&format!("<{}> rdf:type owl:Class .\n", iri));
     }
     content.push_str("\n");
     
     // Write object property declarations
     for prop in ontology.object_properties() {
-        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop));
+        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
     }
     content.push_str("\n");
     
@@ -334,14 +345,18 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
             }
             crate::ontology::Axiom::ClassAssertion(assertion) => {
                 if let ClassExpression::Class(class) = &assertion.class {
-                    content.push_str(&format!("<{}> rdf:type <{}> .\n", 
-                        assertion.individual.iri, class.iri));
+                    if let Some(individual_iri) = assertion.individual.iri() {
+                        content.push_str(&format!("<{}> rdf:type <{}> .\n", 
+                            individual_iri, class.iri));
+                    }
                 }
             }
             crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
                 if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
-                    content.push_str(&format!("<{}> <{}> <{}> .\n",
-                        assertion.subject.iri, prop.iri, assertion.object.iri));
+                    if let (Some(source_iri), Some(target_iri)) = (assertion.source.iri(), assertion.target.iri()) {
+                        content.push_str(&format!("<{}> <{}> <{}> .\n",
+                            source_iri, prop.iri, target_iri));
+                    }
                 }
             }
             _ => {

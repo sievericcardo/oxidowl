@@ -13,9 +13,18 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufRead, BufReader, Write, Read},
+    collections::HashMap,
     path::Path,
 };
+use url::Url;
+
+/// Generate a unique axiom ID
+fn generate_axiom_id() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    COUNTER.fetch_add(1, Ordering::SeqCst)
+}
 
 /// OWL XML Parser
 #[derive(Debug, Clone)]
@@ -53,7 +62,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
     // Extract ontology IRI if present
     if let Some(iri) = root.attribute("ontologyIRI") {
         if let Ok(url) = url::Url::parse(iri) {
-            ontology.iri = Some(url);
+            ontology.iri = Some(url.into());
         }
     }
     
@@ -111,30 +120,34 @@ fn parse_declaration(element: &roxmltree::Node) -> Result<Axiom> {
         match child.tag_name().name() {
             "Class" => {
                 if let Some(iri) = child.attribute("IRI") {
-                    return            Ok(Axiom::Declaration(DeclarationAxiom {
-                entity: Entity::Class(IRI::new(iri)),
-            }));
+                    return Ok(Axiom::Declaration(DeclarationAxiom {
+                        id: generate_axiom_id(),
+                        entity: Entity::Class(IRI::new(iri)),
+                    }));
                 }
             }
             "ObjectProperty" => {
                 if let Some(iri) = child.attribute("IRI") {
-                    return            Ok(Axiom::Declaration(DeclarationAxiom {
-                entity: Entity::ObjectProperty(IRI::new(iri)),
-            }));
+                    return Ok(Axiom::Declaration(DeclarationAxiom {
+                        id: generate_axiom_id(),
+                        entity: Entity::ObjectProperty(IRI::new(iri)),
+                    }));
                 }
             }
             "DataProperty" => {
                 if let Some(iri) = child.attribute("IRI") {
-                    return            Ok(Axiom::Declaration(DeclarationAxiom {
-                entity: Entity::DataProperty(IRI::new(iri)),
-            }));
+                    return Ok(Axiom::Declaration(DeclarationAxiom {
+                        id: generate_axiom_id(),
+                        entity: Entity::DataProperty(IRI::new(iri)),
+                    }));
                 }
             }
             "NamedIndividual" => {
                 if let Some(iri) = child.attribute("IRI") {
-                    return            Ok(Axiom::Declaration(DeclarationAxiom {
-                entity: Entity::NamedIndividual(IRI::new(iri)),
-            }));
+                    return Ok(Axiom::Declaration(DeclarationAxiom {
+                        id: generate_axiom_id(),
+                        entity: Entity::NamedIndividual(IRI::new(iri)),
+                    }));
                 }
             }
             _ => {}
@@ -155,6 +168,7 @@ fn parse_subclass_of(element: &roxmltree::Node) -> Result<Axiom> {
     let superclass = parse_class_expression(&children[1])?;
     
     Ok(Axiom::SubClassOf(crate::ontology::SubClassOfAxiom {
+        id: generate_axiom_id(),
         subclass,
         superclass,
         annotations: Vec::new(),
@@ -175,6 +189,7 @@ fn parse_equivalent_classes(element: &roxmltree::Node) -> Result<Axiom> {
     }
     
     Ok(Axiom::EquivalentClasses(crate::ontology::EquivalentClassesAxiom {
+        id: generate_axiom_id(),
         classes: class_expressions,
         annotations: Vec::new(),
     }))
@@ -191,6 +206,7 @@ fn parse_class_assertion(element: &roxmltree::Node) -> Result<Axiom> {
     let individual = parse_individual(&children[1])?;
     
     Ok(Axiom::ClassAssertion(crate::ontology::ClassAssertionAxiom {
+        id: generate_axiom_id(),
         class: class_expression,
         individual,
         annotations: Vec::new(),
@@ -209,6 +225,7 @@ fn parse_object_property_assertion(element: &roxmltree::Node) -> Result<Axiom> {
     let target = parse_individual(&children[2])?;
     
     Ok(Axiom::ObjectPropertyAssertion(crate::ontology::ObjectPropertyAssertionAxiom {
+        id: generate_axiom_id(),
         property,
         source: source,
         target: target,
@@ -227,6 +244,7 @@ fn parse_sub_object_property_of(element: &roxmltree::Node) -> Result<Axiom> {
     let super_property = parse_object_property_expression(&children[1])?;
     
     Ok(Axiom::SubObjectPropertyOf(crate::ontology::SubObjectPropertyOfAxiom {
+        id: generate_axiom_id(),
         sub_property,
         super_property,
         annotations: Vec::new(),
@@ -243,6 +261,7 @@ fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> 
     let property = parse_object_property_expression(&children[0])?;
     
     Ok(Axiom::FunctionalObjectProperty(crate::ontology::FunctionalObjectPropertyAxiom {
+        id: generate_axiom_id(),
         property,
         annotations: Vec::new(),
     }))
@@ -254,7 +273,7 @@ fn parse_class_expression(element: &roxmltree::Node) -> Result<ClassExpression> 
         "Class" => {
             if let Some(iri) = element.attribute("IRI") {
                 Ok(ClassExpression::Class(Class {
-                    iri: IRI::new(iri).to_url()?,
+                    iri: IRI::new(iri).to_url()?.into(),
                 }))
             } else {
                 Err(Error::io("Class element missing IRI attribute".to_string()))
@@ -351,7 +370,7 @@ fn parse_individual(element: &roxmltree::Node) -> Result<Individual> {
     match element.tag_name().name() {
         "NamedIndividual" => {
             if let Some(iri) = element.attribute("IRI") {
-                Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri).to_url()? }))
+                Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri).to_url()?.into() }))
             } else {
                 Err(Error::io("NamedIndividual element missing IRI attribute".to_string()))
             }
@@ -388,26 +407,41 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
                 writeln!(file, "  <Declaration><{} IRI=\"{}\"/></Declaration>", decl.entity.entity_type(), decl.entity.iri)?;
             }
             Axiom::SubClassOf(axiom) => {
-                writeln!(file, "  <SubClassOf><Class IRI=\"{}\"/><Class IRI=\"{}\"/></SubClassOf>", axiom.subclass.iri, axiom.superclass.iri)?;
+                if let (Some(subclass_iri), Some(superclass_iri)) = (axiom.subclass.iri(), axiom.superclass.iri()) {
+                    writeln!(file, "  <SubClassOf><Class IRI=\"{}\"/><Class IRI=\"{}\"/></SubClassOf>", subclass_iri, superclass_iri)?;
+                }
             }
             Axiom::EquivalentClasses(axiom) => {
                 writeln!(file, "  <EquivalentClasses>",)?;
                 for class in &axiom.classes {
-                    writeln!(file, "    <Class IRI=\"{}\"/>", class.iri)?;
+                    if let Some(class_iri) = class.iri() {
+                        writeln!(file, "    <Class IRI=\"{}\"/>", class_iri)?;
+                    }
                 }
                 writeln!(file, "  </EquivalentClasses>")?;
             }
             Axiom::ClassAssertion(axiom) => {
-                writeln!(file, "  <ClassAssertion><Class IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/></ClassAssertion>", axiom.class.iri, axiom.individual.iri)?;
+                if let (Some(class_iri), Some(individual_iri)) = (axiom.class.iri(), axiom.individual.iri()) {
+                    writeln!(file, "  <ClassAssertion><Class IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/></ClassAssertion>", class_iri, individual_iri)?;
+                }
             }
             Axiom::ObjectPropertyAssertion(axiom) => {
-                writeln!(file, "  <ObjectPropertyAssertion><ObjectProperty IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/></ObjectPropertyAssertion>", axiom.property.iri, axiom.subject.iri, axiom.object.iri)?;
+                if let (Some(source_iri), Some(target_iri)) = (axiom.source.iri(), axiom.target.iri()) {
+                    if let Some(property_iri) = axiom.property.iri() {
+                        writeln!(file, "  <ObjectPropertyAssertion><ObjectProperty IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/></ObjectPropertyAssertion>", 
+                            property_iri, source_iri, target_iri)?;
+                    }
+                }
             }
             Axiom::SubObjectPropertyOf(axiom) => {
-                writeln!(file, "  <SubObjectPropertyOf><ObjectProperty IRI=\"{}\"/><ObjectProperty IRI=\"{}\"/></SubObjectPropertyOf>", axiom.sub_property.iri, axiom.super_property.iri)?;
+                if let (Some(sub_iri), Some(super_iri)) = (axiom.sub_property.iri(), axiom.super_property.iri()) {
+                    writeln!(file, "  <SubObjectPropertyOf><ObjectProperty IRI=\"{}\"/><ObjectProperty IRI=\"{}\"/></SubObjectPropertyOf>", sub_iri, super_iri)?;
+                }
             }
             Axiom::FunctionalObjectProperty(axiom) => {
-                writeln!(file, "  <FunctionalObjectProperty><ObjectProperty IRI=\"{}\"/></FunctionalObjectProperty>", axiom.property.iri)?;
+                if let Some(property_iri) = axiom.property.iri() {
+                    writeln!(file, "  <FunctionalObjectProperty><ObjectProperty IRI=\"{}\"/></FunctionalObjectProperty>", property_iri)?;
+                }
             }
         }
     }
