@@ -364,7 +364,7 @@ impl ClassExpression {
             // For other expressions, wrap in complement if negated
             (expr, true) => ClassExpression::ObjectComplementOf(Box::new(expr.clone())),
             (expr, false) => expr.clone(),
-            _ => self.clone(), // Other expressions remain unchanged
+            _ => Ok(self.clone()), // Other expressions remain unchanged
         }
     }
 
@@ -433,13 +433,13 @@ impl ClassExpression {
                 }
 
                 if has_nothing {
-                    Self::nothing()
+                    Ok(Self::nothing())
                 } else if unique_exprs.is_empty() {
-                    Self::thing() // Empty intersection is Thing
+                    Ok(Self::thing()) // Empty intersection is Thing
                 } else if unique_exprs.len() == 1 {
-                    unique_exprs.into_iter().next().unwrap() // Single expression
+                    Ok(unique_exprs.into_iter().next().unwrap()) // Single expression
                 } else {
-                    ClassExpression::ObjectIntersectionOf(unique_exprs)
+                    Ok(ClassExpression::ObjectIntersectionOf(unique_exprs))
                 }
             }
 
@@ -447,7 +447,7 @@ impl ClassExpression {
                 let simplified : Vec<_> = expressions
                     .iter()
                     .map(|e| e.simplify())
-                    .collect::<Result<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 // Remove duplicates and empty expressions
                 let mut unique_exprs = Vec::new();
@@ -469,13 +469,13 @@ impl ClassExpression {
                 }
 
                 if has_thing {
-                    Self::thing()
+                    Ok(Self::thing())
                 } else if unique_exprs.is_empty() {
-                    Self::nothing() // Empty union is Nothing
+                    Ok(Self::nothing()) // Empty union is Nothing
                 } else if unique_exprs.len() == 1 {
-                    unique_exprs.into_iter().next().unwrap() // Single expression
+                    Ok(unique_exprs.into_iter().next().unwrap()) // Single expression
                 } else {
-                    ClassExpression::ObjectUnionOf(unique_exprs)
+                    Ok(ClassExpression::ObjectUnionOf(unique_exprs))
                 }
             }
 
@@ -484,70 +484,82 @@ impl ClassExpression {
 
                 if let ClassExpression::ObjectComplementOf(inner) = simplified {
                     // Double negation elimination
-                    inner.as_ref().clone()
+                    Ok(inner.as_ref().clone())
                 } else if let ClassExpression::Class(class) = &simplified {
                     if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
                         // Complement of Thing is Nothing
-                        ClassExpression::nothing()
+                        Ok(ClassExpression::nothing())
                     } else if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
                         // Complement of Nothing is Thing
-                        ClassExpression::thing()
+                        Ok(ClassExpression::thing())
                     } else {
                         // Complement of a named class remains unchanged
-                        ClassExpression::ObjectComplementOf(Box::new(simplified))
+                        Ok(ClassExpression::ObjectComplementOf(Box::new(simplified)))
                     }
                 } else {
                     // Other expressions remain unchanged
-                    ClassExpression::ObjectComplementOf(Box::new(simplified))
+                    Ok(ClassExpression::ObjectComplementOf(Box::new(simplified)))
                 }
             }
 
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 let simplified_filler = filler.simplify()?;
-                ClassExpression::ObjectSomeValuesFrom {
+                Ok(ClassExpression::ObjectSomeValuesFrom {
                     property: property.clone(),
                     filler: Box::new(simplified_filler),
-                }
+                })
             }
 
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 let simplified_filler = filler.simplify()?;
-                ClassExpression::ObjectAllValuesFrom {
+                Ok(ClassExpression::ObjectAllValuesFrom {
                     property: property.clone(),
                     filler: Box::new(simplified_filler),
-                }
+                })
             }
 
             ClassExpression::ObjectHasValue { property, value } => {
                 // Has value restrictions do not simplify further
-                ClassExpression::ObjectHasValue {
+                Ok(ClassExpression::ObjectHasValue {
                     property: property.clone(),
                     value: value.clone(),
-                }
+                })
             }
 
             ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectMinCardinality {
+                Ok(ClassExpression::ObjectMinCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
-                    filler: filler.as_ref().map(|f| Box::new(f.simplify())),
-                }
+                    filler: if let Some(f) = filler {
+                        Some(Box::new(f.simplify()?))
+                    } else {
+                        None
+                    },
+                })
             }
 
             ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectMaxCardinality {
+                Ok(ClassExpression::ObjectMaxCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
-                    filler: filler.as_ref().map(|f| Box::new(f.simplify())),
-                }
+                    filler: if let Some(f) = filler {
+                        Some(Box::new(f.simplify()?))
+                    } else {
+                        None
+                    },
+                })
             }
 
             ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectExactCardinality {
+                Ok(ClassExpression::ObjectExactCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
-                    filler: filler.as_ref().map(|f| Box::new(f.simplify())),
-                }
+                    filler: if let Some(f) = filler {
+                        Some(Box::new(f.simplify()?))
+                    } else {
+                        None
+                    },
+                })
             }
 
             ClassExpression::DataSomeValuesFrom { property, filler } => {
