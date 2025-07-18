@@ -459,7 +459,7 @@ impl ReasoningService {
 
         // Log the time taken for explanation retrieval
         log::info!("Explanation retrieval completed in {:?}", start.elapsed());
-        Ok(explanations)
+        Ok(explanation_sets)
     }
 
     /// Get explanation for inconsistent ontology
@@ -523,7 +523,7 @@ impl ReasoningService {
 
         // Clear relevant caches
         if self.config.cache.enable_satisfiability_cache {
-            self.cache_manager.clear_all();
+            self.cache_manager.write().unwrap().clear_all();
         }
 
         // Log the time taken for adding axioms
@@ -557,7 +557,7 @@ impl ReasoningService {
 
         // Clear relevant caches
         if self.config.cache.enable_satisfiability_cache {
-            self.cache_manager.clear_all();
+            self.cache_manager.write().unwrap().clear_all();
         }
 
         // Log the time taken for removing axioms
@@ -614,7 +614,7 @@ impl ReasoningService {
             
             // For each current individual, follow the property
             for curr_ind in &current_individuals {
-                let targets = self.get_object_property_values(curr_ind, property)?;
+                let targets = self.get_object_property_values(curr_ind, property).await?;
                 next_individuals.extend(targets);
             }
             
@@ -730,7 +730,7 @@ impl QueryInterface {
         let mut results = HashMap::new();
 
         for concept in concepts {
-            let result = self.reasoning_service.is_satisfiable(&concept)?;
+            let result = self.reasoning_service.is_satisfiable(&concept).await?;
             results.insert(concept, result);
         }
 
@@ -745,7 +745,7 @@ impl QueryInterface {
         let mut results = HashMap::new();
 
         for (subclass, superclass) in queries {
-            let result = self.reasoning_service.is_subsumed_by(&subclass, &superclass)?;
+            let result = self.reasoning_service.is_subsumed_by(&subclass, &superclass).await?;
             results.insert((subclass, superclass), result);
         }
 
