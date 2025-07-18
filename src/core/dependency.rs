@@ -3,40 +3,69 @@
 //! This module provides dependency tracking capabilities for backtracking
 //! and maintaining the reasoning dependency graph.
 
-use cr        for dep in &self.deterministic_deps {
-            dep.hash(state);
-        }
-        for dep in &self.non_deterministic_deps {
-            dep.hash(state);
-        }e::{Error, Result};
+use crate::{Error, Result};
 use std::{
-    collections::{HashMap, HashSet, BTreeSet},
-    fmt,
+    collections::{HashMap, HashSet, BTreeSet, BinaryHeap},
+    sync::Arc,
     hash::{Hash, Hasher},
-    sync::{Arc, Weak},
+    fmt,
 };
 
-/// Identifier for the dependency nodes
+/// Unique identifier for a dependency
 pub type DependencyId = u64;
 
-/// Identifier for branching points in the dependency graph
-pub type BranchingPoint = u64;
+/// Unique identifier for a branching point
+pub type BranchingPoint = u32;
 
-/// Dependency set tracking concept derivations and branching dependencies
+/// A dependency represents a reasoning step that can be backtracked
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Dependency {
+    /// Unique identifier for this dependency
+    pub id: DependencyId,
+    
+    /// Type of dependency
+    pub dependency_type: DependencyType,
+    
+    /// Source of the dependency
+    pub source: String,
+    
+    /// Branching point where this dependency was created
+    pub branching_point: BranchingPoint,
+}
+
+/// Set of dependencies
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DependencySet {
     /// Branching points the dependency set is associated with
-    branching_points: BTreeSet<BranchingPoint>,
-
-    /// Deterministic dependencies
-    deterministic_deps: HashSet<DependencyId>,
-
-    /// Non-deterministic dependencies
-    nondeterministic_deps: HashSet<DependencyId>,
-
-    /// Reference count for the dependency set
-    ref_count: usize,
+    pub branching_points: BTreeSet<BranchingPoint>,
+    
+    /// Deterministic dependencies (must be satisfied)
+    pub deterministic_deps: HashSet<DependencyId>,
+    
+    /// Non-deterministic dependencies (choices made)
+    pub nondeterministic_deps: HashSet<DependencyId>,
 }
+
+impl Hash for DependencySet {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash branching points
+        for bp in &self.branching_points {
+            bp.hash(state);
+        }
+        // Hash deterministic dependencies
+        for dep in &self.deterministic_deps {
+            dep.hash(state);
+        }
+        // Hash non-deterministic dependencies (sorted for consistency)
+        let mut sorted_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
+        sorted_deps.sort();
+        for dep in sorted_deps {
+            dep.hash(state);
+        }
+    }
+}
+
+/// Dependency set tracking concept derivations and branching dependencies
 
 /// Dependency node representing a reasoning step or choice point
 #[derive(Debug, Clone)]
@@ -61,7 +90,7 @@ pub struct DependencyNode {
 }
 
 /// Type of dependency node
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DependencyType {
     /// Deterministic dependency (e.g. AND, SOME)
     Deterministic {
@@ -180,8 +209,20 @@ struct DependencySetKey {
 impl std::hash::Hash for DependencySetKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.branching_points.hash(state);
-        self.deterministic_deps.hash(state);
-        self.nondeterministic_deps.hash(state);
+        
+        // Hash deterministic dependencies (sort for consistency)
+        let mut det_deps: Vec<_> = self.deterministic_deps.iter().collect();
+        det_deps.sort();
+        for dep in det_deps {
+            dep.hash(state);
+        }
+        
+        // Hash non-deterministic dependencies (sort for consistency)
+        let mut nondet_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
+        nondet_deps.sort();
+        for dep in nondet_deps {
+            dep.hash(state);
+        }
     }
 }
 
@@ -205,7 +246,6 @@ impl DependencySet {
             branching_points: BTreeSet::new(),
             deterministic_deps: HashSet::new(),
             nondeterministic_deps: HashSet::new(),
-            ref_count: 0,
         }
     }
 
@@ -245,7 +285,6 @@ impl DependencySet {
             branching_points: self.branching_points.union(&other.branching_points).cloned().collect(),
             deterministic_deps: self.deterministic_deps.union(&other.deterministic_deps).cloned().collect(),
             nondeterministic_deps: self.nondeterministic_deps.union(&other.nondeterministic_deps).cloned().collect(),
-            ref_count: 0, // Ref count is managed externally
         }
     }
 
@@ -609,7 +648,6 @@ impl DependencySetFactory {
                 .iter().cloned().collect(),
             nondeterministic_deps: key.nondeterministic_deps
                 .iter().cloned().collect(),
-            ref_count: 1,
         };
 
         let arc_set = Arc::new(new_set);
@@ -647,7 +685,7 @@ impl DependencySetFactory {
         // Remove sets with low usage
         let to_remove: Vec<DependencySetKey> = self.usage_counters
             .iter()
-            .filter(|(_, &count)| count < 2) // Keep sets used at least twice
+            .filter(|&(_, count)| *count < 2) // Keep sets used at least twice
             .map(|(key, _)| key.clone())
             .collect();
 
@@ -709,30 +747,5 @@ impl fmt::Display for DependencyType {
 impl Default for DependencySetFactory {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Hash for DependencySet {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // Hash the branching points
-        for bp in &self.branching_points {
-            bp.hash(state);
-        }
-        
-        // Hash the deterministic dependencies (convert to sorted vec first)
-        let mut det_deps: Vec<_> = self.deterministic_deps.iter().collect();
-        det_deps.sort();
-        for dep in det_deps {
-            dep.hash(state);
-        }
-        
-        // Hash the non-deterministic dependencies (convert to sorted vec first)
-        let mut nondet_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
-        nondet_deps.sort();
-        for dep in nondet_deps {
-            dep.hash(state);
-        }
-        
-        // Don't hash ref_count as it's not part of logical equality
     }
 }
