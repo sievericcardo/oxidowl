@@ -804,11 +804,6 @@ impl PropertyStore {
         &mut self.data_properties
     }
 
-    pub fn add_annotation_property(&mut self, property: AnnotationProperty) -> &AnnotationProperty {
-        let iri = property.iri.clone();
-        self.annotation_properties.entry(iri).or_insert(property)
-    }
-
     pub fn get_annotation_property(&self, iri: &crate::ontology::IRI) -> Option<&AnnotationProperty> {
         self.annotation_properties.get(iri)
     }
