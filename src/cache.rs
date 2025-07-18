@@ -98,6 +98,7 @@ impl ConceptSatisfiabilityCache {
                 return Some(entry.value);
             } else {
                 cache.remove(expression); // Remove expired entry
+                return None;
             }
         } else {
             // If not found, we can return None
