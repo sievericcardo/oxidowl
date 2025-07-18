@@ -404,9 +404,9 @@ impl Ontology {
         use std::fs::File;
         use std::io::Read;
         
-        let mut file = File::open(path.as_ref()).map_err(|e| Error::io(e))?;
+        let mut file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
         let mut contents = String::new();
-        file.read_to_string(&mut contents).map_err(|e| Error::io(e))?;
+        file.read_to_string(&mut contents).map_err(|e| Error::io(e.to_string()))?;
         
         // Parse based on format or file extension
         let format = format.unwrap_or_else(|| {

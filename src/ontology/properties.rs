@@ -803,14 +803,6 @@ impl PropertyStore {
     pub fn data_properties_mut(&mut self) -> &mut DataPropertyHierarchy {
         &mut self.data_properties
     }
-
-    pub fn get_annotation_property(&self, iri: &crate::ontology::IRI) -> Option<&AnnotationProperty> {
-        self.annotation_properties.get(iri)
-    }
-
-    pub fn all_annotation_properties(&self) -> impl Iterator<Item = &AnnotationProperty> {
-        self.annotation_properties.values()
-    }
 }
 
 impl Default for PropertyStore {
