@@ -302,7 +302,7 @@ impl HyperTableau {
             self.monitor.log_event(monitor::events::ground_disjunction_processing(
                 format!("{:?}", disjunction),
                 individual,
-                disjunction.disjuncts.len(),
+                disjunction.disjuncts().len(),
                 std::time::Duration::default(),
             ));
             
@@ -329,11 +329,11 @@ impl HyperTableau {
         let disjunction = self.ground_disjunctions[disjunction_id].clone();
         
         // If only one disjunct, apply it directly
-        if disjunction.disjuncts.len() == 1 {
+        if disjunction.disjuncts().len() == 1 {
             let fact_id = {
                 let mut tracker = self.dependency_tracker.lock().unwrap();
                 tracker.create_fact(
-                    format!("Direct disjunct: {}", disjunction.disjuncts[0]),
+                    format!("Direct disjunct: {}", disjunction.disjuncts()[0]),
                     dependency_tracking::utils::clause_application_dependency(
                         disjunction_id,
                         vec![], // TODO: Add premise facts
