@@ -117,16 +117,19 @@ pub struct ExistentialCandidate {
     pub node: String,
 
     /// The existential concept to expand
-    pub concept: ClassExpression,
+    pub existential: ClassExpression,
 
     /// Associated role for the existential
     pub role: ObjectPropertyExpression,
+
+    /// The filler concept 
+    pub filler: ClassExpression,
 
     /// Dependencies for this candidate
     pub dependencies: DependencySet,
 
     /// Potential witness
-    pub potential_witness: Vec<String>,
+    pub potential_witnesses: Vec<String>,
 
     /// Expansion complexity estimate
     pub complexity: ExpansionComplexity,
@@ -271,7 +274,7 @@ pub struct CreationOrderStrategy {
 #[derive(Debug)]
 pub struct ComplexityStrategy {
     /// Weight factors for complexity metrics
-    weight: ComplexityWeights,
+    weights: ComplexityWeights,
 }
 
 /// Role depth strategy
@@ -555,7 +558,7 @@ impl ExpansionStrategy for CreationOrderStrategy {
 
     fn order_expansions(
         &mut self,
-        existentials: &[ExistentialCandidate],
+        existentials: &mut [ExistentialCandidate],
     ) {
         existentials.sort_by_key(|e| e.created_at);
     }
@@ -606,7 +609,7 @@ impl ComplexityStrategy {
         self.weights.syntactic * complexity.syntactic_complexity as f64
             + self.weights.role_successors * complexity.role_successors as f64
             + self.weights.branching_factor * complexity.branching_factor as f64
-            + self.weights.memory * complexity.memory_estimate as f64
+            + self.weights.memory_estimate * complexity.memory_estimate as f64
     }
 }
 
@@ -630,7 +633,7 @@ impl ExpansionStrategy for ComplexityStrategy {
 
     fn order_expansions(
         &mut self,
-        existentials: &[ExistentialCandidate],
+        existentials: &mut [ExistentialCandidate],
     ) {
         existentials.sort_by(|a, b| {
             self.calculate_complexity_score(b)
@@ -644,8 +647,8 @@ impl ExpansionStrategy for ComplexityStrategy {
         candidate: &ExistentialCandidate,
         context: &ExpansionContext,
     ) -> bool {
-        candidate.complexity.syntactic_complexity > self.config.complexity_threshold
-            && context.branching_depth > self.config.max_expansion_depth
+        candidate.complexity.syntactic_complexity > 10 // reasonable default threshold
+            && context.branching_depth > 100 // reasonable default max depth
     }
 
     fn get_expansion_priority(
@@ -778,7 +781,7 @@ impl Default for ComplexityWeights {
             syntactic: 1.0,
             role_successors: 2.0,
             branching_factor: 3.0,
-            memory: 0.1,
+            memory_estimate: 0.1,
         }
     }
 }
