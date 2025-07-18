@@ -120,7 +120,8 @@ impl ConceptSatisfiabilityCache {
 
     fn evict_lru(&self, cache: &mut HashMap<ClassExpression, CacheEntry<bool>>) {
         if let Some((key, _)) = cache.iter().min_by_key(|(_, entry)| entry.timestamp) {
-            cache.remove(key);
+            let key_to_remove = key.clone();
+            cache.remove(&key_to_remove);
         }
     }
 
