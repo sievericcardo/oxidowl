@@ -98,6 +98,14 @@ pub enum Error {
     /// Queue full error
     #[error("Queue full")]
     QueueFull,
+    
+    /// Axiom already exists error
+    #[error("Axiom already exists")]
+    AxiomAlreadyExists,
+    
+    /// Axiom not found error
+    #[error("Axiom not found")]
+    AxiomNotFound,
 }
 
 /// Specialized error for reasoner operations
@@ -270,7 +278,9 @@ impl Error {
                 | Error::NoBranchingChoicesAvailable 
                 | Error::InvalidPropertyChain { .. }
                 | Error::InvalidAssertion { .. }
-                | Error::QueueFull => ErrorCategory::Internal,
+                | Error::QueueFull 
+                | Error::AxiomAlreadyExists
+                | Error::AxiomNotFound => ErrorCategory::Internal,
         }
     }
 
@@ -298,7 +308,9 @@ impl Error {
             | Error::NoBranchingChoicesAvailable 
             | Error::InvalidPropertyChain { .. }
             | Error::InvalidAssertion { .. }
-            | Error::QueueFull => false,
+            | Error::QueueFull 
+            | Error::AxiomAlreadyExists
+            | Error::AxiomNotFound => false,
         }
     }
 }
