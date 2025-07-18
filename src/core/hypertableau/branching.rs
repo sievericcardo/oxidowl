@@ -559,7 +559,7 @@ pub mod utils {
         disjunction: &GroundDisjunction,
         individual: &Individual,
     ) -> Vec<BranchingChoice> {
-        disjunction.disjuncts
+        disjunction.disjuncts()
             .iter()
             .enumerate()
             .filter_map(|(index, disjunct)| {
