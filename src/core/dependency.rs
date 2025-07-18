@@ -277,7 +277,7 @@ impl DependencySet {
 
     /// Check if the set conflicts with another set at a given branching point
     pub fn conflicts_with(&self, other: &DependencySet, branching_point: BranchingPoint) -> bool {
-        self.branching_points.contains(&branch_point) && other.branching_points.contains(&branch_point)
+        self.branching_points.contains(&branching_point) && other.branching_points.contains(&branching_point)
     }
 }
 
@@ -455,7 +455,7 @@ impl DependencyTracker {
     pub fn create_dependency_set(
         &mut self,
         branching_points: Vec<BranchingPoint>,
-        dependencies: Vec<(DependenciesId, bool)>,
+        dependencies: Vec<(DependencyId, bool)>,
     ) -> Arc<DependencySet>
     {
         self.set_factory.create_set(branching_points, dependencies)
