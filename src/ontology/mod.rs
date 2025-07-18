@@ -271,16 +271,8 @@ pub struct Annotation {
 /// Main ontology structure containing all axioms and metadata
 #[derive(Debug, Clone)]
 pub struct Ontology {
-    /// Class axioms
-    pub class_axioms: Vec<axioms::ClassAxiom>,
-    /// Object property axioms
-    pub object_property_axioms: Vec<axioms::ObjectPropertyAxiom>,
-    /// Data property axioms
-    pub data_property_axioms: Vec<axioms::DataPropertyAxiom>,
-    /// Annotation property axioms
-    pub annotation_property_axioms: Vec<axioms::AnnotationPropertyAxiom>,
-    /// Individual axioms
-    pub individual_axioms: Vec<axioms::IndividualAxiom>,
+    /// All axioms
+    pub axioms: Vec<axioms::Axiom>,
     /// Ontology annotations
     pub annotations: Vec<Annotation>,
     /// Ontology IRI
@@ -295,11 +287,7 @@ impl Ontology {
     /// Create a new empty ontology
     pub fn new() -> Self {
         Self {
-            class_axioms: Vec::new(),
-            object_property_axioms: Vec::new(),
-            data_property_axioms: Vec::new(),
-            annotation_property_axioms: Vec::new(),
-            individual_axioms: Vec::new(),
+            axioms: Vec::new(),
             annotations: Vec::new(),
             iri: None,
             version_iri: None,
@@ -307,33 +295,67 @@ impl Ontology {
         }
     }
     
-    /// Add a class axiom
-    pub fn add_class_axiom(&mut self, axiom: axioms::ClassAxiom) {
-        self.class_axioms.push(axiom);
+    /// Set the ontology IRI
+    pub fn set_iri(&mut self, iri: IRI) {
+        self.iri = Some(iri);
     }
     
-    /// Add an object property axiom
-    pub fn add_object_property_axiom(&mut self, axiom: axioms::ObjectPropertyAxiom) {
-        self.object_property_axioms.push(axiom);
+    /// Get the ontology IRI
+    pub fn get_iri(&self) -> Option<&IRI> {
+        self.iri.as_ref()
     }
     
-    /// Add a data property axiom
-    pub fn add_data_property_axiom(&mut self, axiom: axioms::DataPropertyAxiom) {
-        self.data_property_axioms.push(axiom);
+    /// Add an axiom to the ontology
+    pub fn add_axiom(&mut self, axiom: axioms::Axiom) {
+        self.axioms.push(axiom);
     }
     
-    /// Add an individual axiom
-    pub fn add_individual_axiom(&mut self, axiom: axioms::IndividualAxiom) {
-        self.individual_axioms.push(axiom);
+    /// Get all axioms
+    pub fn axioms(&self) -> &[axioms::Axiom] {
+        &self.axioms
     }
     
-    /// Get all axioms as a single iterator
-    pub fn all_axioms(&self) -> impl Iterator<Item = &axioms::Axiom> {
-        self.class_axioms.iter().map(|a| a as &axioms::Axiom)
-            .chain(self.object_property_axioms.iter().map(|a| a as &axioms::Axiom))
-            .chain(self.data_property_axioms.iter().map(|a| a as &axioms::Axiom))
-            .chain(self.annotation_property_axioms.iter().map(|a| a as &axioms::Axiom))
-            .chain(self.individual_axioms.iter().map(|a| a as &axioms::Axiom))
+    /// Add a class (placeholder for compatibility)
+    pub fn add_class(&mut self, class: concepts::Class) {
+        // This creates a declaration axiom for the class
+        let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
+            id: 0, // TODO: proper ID generation
+            entity: axioms::Entity::Class(class.iri), // TODO: proper conversion
+        });
+        self.add_axiom(axiom);
+    }
+    
+    /// Add an object property (placeholder for compatibility)
+    pub fn add_object_property(&mut self, property: properties::ObjectProperty) {
+        // This creates a declaration axiom for the property
+        let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
+            id: 0, // TODO: proper ID generation
+            entity: axioms::Entity::ObjectProperty(property.iri), // TODO: proper conversion
+        });
+        self.add_axiom(axiom);
+    }
+    
+    /// Add an individual (placeholder for compatibility)
+    pub fn add_individual(&mut self, _subject: IRI, _individual: individuals::Individual) {
+        // TODO: implement proper individual handling
+    }
+    
+    /// Get classes (placeholder for compatibility)
+    pub fn classes(&self) -> Vec<(IRI, concepts::Class)> {
+        // TODO: extract classes from axioms
+        vec![]
+    }
+    
+    /// Get individuals (placeholder for compatibility)
+    pub fn individuals(&self) -> Vec<(IRI, individuals::Individual)> {
+        // TODO: extract individuals from axioms
+        vec![]
+    }
+    
+    /// Get object properties (placeholder for compatibility)
+    pub fn object_properties(&self) -> Vec<properties::ObjectProperty> {
+        // TODO: extract object properties from axioms
+        vec![]
     }
 }
 
@@ -346,6 +368,8 @@ impl Default for Ontology {
 /// Supported ontology formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OntologyFormat {
+    /// Auto-detect format
+    Auto,
     /// OWL Functional Syntax
     Functional,
     /// OWL/XML
@@ -364,6 +388,7 @@ impl OntologyFormat {
     /// Get the file extension for this format
     pub fn extension(&self) -> &'static str {
         match self {
+            OntologyFormat::Auto => "",
             OntologyFormat::Functional => "owx",
             OntologyFormat::OwlXml => "owl",
             OntologyFormat::RdfXml => "rdf",
