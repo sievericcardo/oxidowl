@@ -952,24 +952,7 @@ impl Reasoner {
         }
     }
 
-    fn run_tableau_subsumption_check(&mut self, mut tableau: TableauAlgorithmInstance) -> Result<bool> {
-        debug!("Running tableau instance check");
-        
-        // For instance checking a ∈ C, we check if {a} ⊓ ¬C is unsatisfiable
-        let result = tableau.run()?;
-        
-        // Update statistics
-        self.statistics.tableau_nodes_created += tableau.get_node_count() as u64;
-        self.statistics.backtracking_operations += tableau.get_backtrack_count() as u64;
-        self.statistics.max_tableau_depth = 
-            self.statistics.max_tableau_depth.max(tableau.get_max_depth());
-        
-        match result {
-            TableauState::Satisfiable => Ok(false),
-            TableauState::Unsatisfiable => Ok(true),
-            TableauState::Unknown => Err(Error::reasoning("Tableau returned unknown result")),
-        }
-    }
+    /// Run a tableau instance check for individuals
 
     /// Check if one class expression is a subclass of another
     fn is_subclass_of_expressions(&mut self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
