@@ -412,7 +412,7 @@ impl ExpansionManager {
         if result.new_individuals.is_empty() {
             self.statistics.witness_expansions += 1;
         } else {
-            self.statistics.new_individual_creations += 1;
+            self.statistics.new_individuals_creations += 1;
         }
         
         // Record expansion
