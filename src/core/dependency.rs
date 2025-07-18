@@ -204,6 +204,11 @@ impl DependencySet {
         }
     }
 
+    /// Create an empty dependency set (alias for new)
+    pub fn empty() -> Self {
+        Self::new()
+    }
+
     /// Create a dependency set with a single branching point
     pub fn with_branching_point(branching_point: BranchingPoint) -> Self {
         let mut set = Self::new();
