@@ -51,6 +51,8 @@ impl CompletionRule {
     /// Apply the completion rule
     pub fn apply(&self, application: &RuleApplication) -> Result<Vec<RuleApplication>> {
         match self {
+            CompletionRule::And => Ok(vec![application.clone()]),
+            CompletionRule::Or => Ok(vec![application.clone()]),
             CompletionRule::Some => Ok(vec![application.clone()]),
             CompletionRule::All => Ok(vec![application.clone()]),
             CompletionRule::AtLeast => Ok(vec![application.clone()]),
@@ -348,7 +350,7 @@ impl CompletionRuleSet {
     /// Get all applicable rules
     pub fn get_applicable_rules(&self, concept: &ClassExpression) -> Vec<CompletionRule> {
         self.rules.iter()
-            .filter(|&&rule| self.is_rule_applicable(*rule, concept))
+            .filter(|&rule| self.is_rule_applicable(*rule, concept))
             .cloned()
             .collect()
     }
