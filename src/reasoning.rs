@@ -13,9 +13,10 @@ use crate::{
     core::{
         reasoner::Reasoner,
         tableau::Tableau,
+        hypertableau::HyperTableau,
     },
-    cache::{CacheManager, CacheConfig},
-    config::ReasonerConfig,
+    config::{ReasonerConfig, ReasoningConfig, CacheConfig},
+    cache::CacheManager,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -756,11 +757,7 @@ impl ReasoningService {
     /// Create a new ReasoningService
     pub fn new() -> Self {
         Self {
-            ontology: Arc::new(RwLock::new(Ontology::new())),
-            reasoner: Arc::new(RwLock::new(Box::new(HyperTableau::new(
-                ReasoningConfig::default(),
-                Box::new(crate::core::blocking::AnywhereBlocking::new()),
-            ).unwrap()))),
+            reasoner: Arc::new(RwLock::new(Reasoner::new(ReasonerConfig::default())?)),
             cache_manager: Arc::new(RwLock::new(CacheManager::new(CacheConfig::default()))),
             config: ReasonerConfig::default(),
         }
@@ -768,10 +765,10 @@ impl ReasoningService {
 
     /// Calculate a hash for the current ontology
     fn calculate_ontology_hash(&self) -> u64 {
-        let ontology = self.ontology.read().unwrap();
+        let reasoner = self.reasoner.read().unwrap();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         
-        // Hash the number of axioms as a simple fingerprint
+        // Hash based on reasoner state as a simple fingerprint
         let axiom_count = ontology.axioms().len();
         std::hash::Hash::hash(&axiom_count, &mut hasher);
         
