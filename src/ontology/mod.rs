@@ -286,6 +286,26 @@ pub struct Annotation {
     pub value: AnnotationValue,
 }
 
+/// Ontology signature containing all entities
+#[derive(Debug, Clone, Default)]
+pub struct Signature {
+    /// All classes in the ontology
+    pub classes: Vec<concepts::Class>,
+    /// All object properties in the ontology
+    pub object_properties: Vec<ObjectProperty>,
+    /// All data properties in the ontology
+    pub data_properties: Vec<DataProperty>,
+    /// All individuals in the ontology
+    pub individuals: Vec<individuals::Individual>,
+}
+
+impl Signature {
+    /// Create a new empty signature
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 /// Main ontology structure containing all axioms and metadata
 #[derive(Debug, Clone)]
 pub struct Ontology {
@@ -341,6 +361,37 @@ impl Ontology {
     /// Get all axioms
     pub fn axioms(&self) -> &[axioms::Axiom] {
         &self.axioms
+    }
+
+    /// Get the signature of the ontology
+    pub fn signature(&self) -> Signature {
+        let mut signature = Signature::new();
+        
+        // Extract entities from axioms
+        for axiom in &self.axioms {
+            match axiom {
+                axioms::Axiom::Declaration(decl) => {
+                    match &decl.entity {
+                        axioms::Entity::Class(iri) => {
+                            signature.classes.push(concepts::Class { iri: iri.clone() });
+                        }
+                        axioms::Entity::ObjectProperty(iri) => {
+                            signature.object_properties.push(ObjectProperty { iri: iri.clone() });
+                        }
+                        axioms::Entity::DataProperty(iri) => {
+                            signature.data_properties.push(DataProperty { iri: iri.clone() });
+                        }
+                        axioms::Entity::Individual(iri) => {
+                            signature.individuals.push(individuals::Individual::Named(individuals::NamedIndividual { iri: iri.clone() }));
+                        }
+                    }
+                }
+                // TODO: Extract entities from other axiom types
+                _ => {}
+            }
+        }
+        
+        signature
     }
     
     /// Add a class (placeholder for compatibility)
