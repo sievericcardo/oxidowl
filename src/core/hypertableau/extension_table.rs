@@ -750,7 +750,7 @@ impl ExtensionTable {
             
             Ok(())
         } else {
-            Err(Error::InvalidInput("Invalid retrieval ID".to_string()))
+            Err(Error::InvalidInput { message: "Invalid retrieval ID".to_string() })
         }
     }
     
@@ -771,7 +771,7 @@ impl ExtensionTable {
                 Ok(None)
             }
         } else {
-            Err(Error::InvalidInput("Invalid retrieval ID".to_string()))
+            Err(Error::InvalidInput { message: "Invalid retrieval ID".to_string() })
         }
     }
     
@@ -780,7 +780,7 @@ impl ExtensionTable {
         if let Some(retrieval) = self.active_retrievals.get(retrieval_id) {
             Ok(retrieval.position < retrieval.results.len())
         } else {
-            Err(Error::InvalidInput("Invalid retrieval ID".to_string()))
+            Err(Error::InvalidInput { message: "Invalid retrieval ID".to_string() })
         }
     }
     
@@ -791,7 +791,7 @@ impl ExtensionTable {
             retrieval.results.clear();
             Ok(())
         } else {
-            Err(Error::InvalidInput("Invalid retrieval ID".to_string()))
+            Err(Error::InvalidInput { message: "Invalid retrieval ID".to_string() })
         }
     }
     

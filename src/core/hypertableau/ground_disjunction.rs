@@ -185,7 +185,7 @@ impl GroundDisjunction {
         dependency_tracker: &DependencySet,
     ) -> Result<bool> {
         if disjunct_index >= self.header.predicates.len() {
-            return Err(Error::InvalidDisjunctIndex(disjunct_index));
+            return Err(Error::InvalidDisjunctIndex { index: disjunct_index });
         }
         
         let predicate = &self.header.predicates[disjunct_index];

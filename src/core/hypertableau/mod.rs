@@ -220,7 +220,7 @@ impl HyperTableau {
         );
         self.monitor.update_branching_stats(self.branching_manager.get_stats());
         self.monitor.update_hyperresolution_stats(&self.hyperresolution_manager.get_statistics());
-        self.monitor.update_extension_stats(self.extension_manager.get_stats());
+        self.monitor.update_extension_stats(self.extension_manager.get_statistics());
         
         self.monitor.finish()
     }
@@ -393,7 +393,7 @@ impl HyperTableau {
                 )?
             };
             
-            self.extension_manager.add_concept_assertion(&individual.iri.to_string(), &assertion)?;
+            self.extension_manager.add_concept_assertion(&individual.iri().map(|iri| iri.to_string()).unwrap_or("anonymous".to_string()), &assertion)?;
             
             self.monitor.log_event(monitor::events::fact_derived(
                 format!("Branching choice: {}", assertion),
