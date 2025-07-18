@@ -651,7 +651,7 @@ impl DependencySetFactory {
         };
 
         let arc_set = Arc::new(new_set);
-        self.set_cache.insert(key, arc_set.clone());
+        self.set_cache.insert(key.clone(), arc_set.clone());
         self.usage_counters.insert(key, 1);
 
         arc_set
