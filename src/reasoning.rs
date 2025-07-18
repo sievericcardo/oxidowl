@@ -755,12 +755,12 @@ impl QueryInterface {
 
 impl ReasoningService {
     /// Create a new ReasoningService
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             reasoner: Arc::new(RwLock::new(Reasoner::new(ReasonerConfig::default())?)),
-            cache_manager: Arc::new(RwLock::new(CacheManager::new(CacheConfig::default()))),
+            cache_manager: Arc::new(RwLock::new(CacheManager::new(crate::cache::CacheConfig::default()))),
             config: ReasonerConfig::default(),
-        }
+        })
     }
 
     /// Calculate a hash for the current ontology
@@ -769,7 +769,7 @@ impl ReasoningService {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         
         // Hash based on reasoner state as a simple fingerprint
-        let axiom_count = ontology.axioms().len();
+        let axiom_count = reasoner.ontology.axioms().len();
         std::hash::Hash::hash(&axiom_count, &mut hasher);
         
         std::hash::Hasher::finish(&hasher)
