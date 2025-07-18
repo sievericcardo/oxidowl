@@ -94,6 +94,10 @@ pub enum Error {
     /// Invalid assertion
     #[error("Invalid assertion: {message}")]
     InvalidAssertion { message: String },
+
+    /// Queue full error
+    #[error("Queue full")]
+    QueueFull,
 }
 
 /// Specialized error for reasoner operations
@@ -265,7 +269,8 @@ impl Error {
                 | Error::BranchingPointNotFound { .. }
                 | Error::NoBranchingChoicesAvailable 
                 | Error::InvalidPropertyChain { .. }
-                | Error::InvalidAssertion { .. } => ErrorCategory::Internal,
+                | Error::InvalidAssertion { .. }
+                | Error::QueueFull => ErrorCategory::Internal,
         }
     }
 
@@ -292,7 +297,8 @@ impl Error {
             | Error::BranchingPointNotFound { .. }
             | Error::NoBranchingChoicesAvailable 
             | Error::InvalidPropertyChain { .. }
-            | Error::InvalidAssertion { .. } => false,
+            | Error::InvalidAssertion { .. }
+            | Error::QueueFull => false,
         }
     }
 }
