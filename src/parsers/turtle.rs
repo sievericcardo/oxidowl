@@ -4,7 +4,7 @@
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, IRI},
+    ontology::{Ontology, ClassExpression, Individual, NamedIndividual, IRI},
 };
 use std::{
     fs::File,
@@ -169,10 +169,13 @@ impl TurtleParser {
                         }
                         _ => {
                             // Class assertion
-                            let individual = crate::ontology::Individual {
-                                iri: url::Url::parse(&triple.subject)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                            };
+                            let individual = crate::ontology::Individual::Named(
+                                crate::ontology::NamedIndividual {
+                                    iri: url::Url::parse(&triple.subject)
+                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                        .into(), // Convert URL to IRI
+                                }
+                            );
                             let class = crate::ontology::Class {
                                 iri: url::Url::parse(&class_uri)
                                     .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
@@ -229,14 +232,20 @@ impl TurtleParser {
             _ => {
                 // Handle other property assertions
                 if let TripleObject::Uri(object_uri) = triple.object {
-                    let subject = crate::ontology::Individual {
-                        iri: url::Url::parse(&triple.subject)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                    };
-                    let object = crate::ontology::Individual {
-                        iri: url::Url::parse(&object_uri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                    };
+                    let subject = crate::ontology::Individual::Named(
+                        crate::ontology::NamedIndividual {
+                            iri: url::Url::parse(&triple.subject)
+                                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                .into(), // Convert URL to IRI
+                        }
+                    );
+                    let object = crate::ontology::Individual::Named(
+                        crate::ontology::NamedIndividual {
+                            iri: url::Url::parse(&object_uri)
+                                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                .into(), // Convert URL to IRI
+                        }
+                    );
                     let property = crate::ontology::ObjectProperty {
                         iri: url::Url::parse(&triple.predicate)
                             .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
