@@ -542,7 +542,7 @@ impl AxiomStore {
         }
     }
 
-    pub fn add_axiom(&mut self, axiom: Axiom) -> crate::Result<AxiomId> {
+    pub fn add_axiom(&mut self, mut axiom: Axiom) -> crate::Result<AxiomId> {
         let id = axiom.axiom_id();
         if self.axioms.contains_key(&id) {
                             return Err(crate::Error::AxiomAlreadyExists);
@@ -584,6 +584,9 @@ impl AxiomStore {
             Axiom::SubAnnotationPropertyOf(axiom) => axiom.id = id,
             Axiom::AnnotationPropertyDomain(axiom) => axiom.id = id,
             Axiom::AnnotationPropertyRange(axiom) => axiom.id = id,
+            Axiom::Declaration(_) => {
+                // Declaration axioms don't need ID assignment
+            }
         }
 
         let axiom_type = axiom.axiom_type();

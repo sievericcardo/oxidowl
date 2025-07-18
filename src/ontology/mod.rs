@@ -16,7 +16,6 @@ pub use axioms::*;
 pub use concepts::*;
 pub use individuals::*;
 pub use properties::*;
-pub use concepts::*;
 pub use individuals::*;  
 pub use properties::*;
 
@@ -388,6 +387,12 @@ impl Ontology {
                         }
                         axioms::Entity::NamedIndividual(iri) => {
                             signature.individuals.push(individuals::Individual::Named(individuals::NamedIndividual { iri: iri.clone() }));
+                        }
+                        axioms::Entity::AnnotationProperty(_prop) => {
+                            // Handle annotation property
+                        }
+                        axioms::Entity::Datatype(_datatype) => {
+                            // Handle datatype
                         }
                     }
                 }
