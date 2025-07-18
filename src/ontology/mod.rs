@@ -281,6 +281,8 @@ pub struct Ontology {
     pub version_iri: Option<IRI>,
     /// Imports
     pub imports: Vec<IRI>,
+    /// Next axiom ID
+    next_id: u64,
 }
 
 impl Ontology {
@@ -292,7 +294,15 @@ impl Ontology {
             iri: None,
             version_iri: None,
             imports: Vec::new(),
+            next_id: 1,
         }
+    }
+    
+    /// Generate next axiom ID
+    fn next_axiom_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
     
     /// Set the ontology IRI
@@ -319,18 +329,18 @@ impl Ontology {
     pub fn add_class(&mut self, class: concepts::Class) {
         // This creates a declaration axiom for the class
         let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
-            id: 0, // TODO: proper ID generation
-            entity: axioms::Entity::Class(class.iri), // TODO: proper conversion
+            id: self.next_axiom_id(),
+            entity: axioms::Entity::Class(class.iri),
         });
         self.add_axiom(axiom);
     }
     
     /// Add an object property (placeholder for compatibility)
-    pub fn add_object_property(&mut self, property: properties::ObjectProperty) {
+    pub fn add_object_property(&mut self, property: ObjectProperty) {
         // This creates a declaration axiom for the property
         let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
-            id: 0, // TODO: proper ID generation
-            entity: axioms::Entity::ObjectProperty(property.iri), // TODO: proper conversion
+            id: self.next_axiom_id(),
+            entity: axioms::Entity::ObjectProperty(property.iri),
         });
         self.add_axiom(axiom);
     }
@@ -353,7 +363,7 @@ impl Ontology {
     }
     
     /// Get object properties (placeholder for compatibility)
-    pub fn object_properties(&self) -> Vec<properties::ObjectProperty> {
+    pub fn object_properties(&self) -> Vec<ObjectProperty> {
         // TODO: extract object properties from axioms
         vec![]
     }
@@ -401,6 +411,7 @@ impl OntologyFormat {
     /// Get the media type for this format
     pub fn media_type(&self) -> &'static str {
         match self {
+            OntologyFormat::Auto => "",
             OntologyFormat::Functional => "text/owl-functional",
             OntologyFormat::OwlXml => "application/owl+xml",
             OntologyFormat::RdfXml => "application/rdf+xml",
