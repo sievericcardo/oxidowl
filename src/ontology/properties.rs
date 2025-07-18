@@ -234,7 +234,7 @@ impl Role {
 }
 
 /// Object property characteristics
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectPropertyCharacteristics {
     pub functional: bool,
     pub inverse_functional: bool,
@@ -318,7 +318,7 @@ impl Default for ObjectPropertyCharacteristics {
 
 
 /// Data property characteristics
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataPropertyCharacteristics {
     pub functional: bool,
 }
@@ -338,7 +338,7 @@ impl DataPropertyCharacteristics {
 }
 
 /// Property hierarchy
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectPropertyHierarchy {
     properties: HashMap<crate::ontology::IRI, ObjectProperty>,
     sub_properties: HashMap<crate::ontology::IRI, HashSet<crate::ontology::IRI>>,
@@ -531,7 +531,7 @@ impl Default for ObjectPropertyHierarchy {
 }
 
 /// Property hierarchy for data properties
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataPropertyHierarchy {
     properties: HashMap<crate::ontology::IRI, DataProperty>,
     sub_properties: HashMap<crate::ontology::IRI, HashSet<crate::ontology::IRI>>,
@@ -713,7 +713,7 @@ impl Default for DataPropertyHierarchy {
 }
 
 /// Store for properties
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PropertyStore {
     object_properties: ObjectPropertyHierarchy,
     data_properties: DataPropertyHierarchy,

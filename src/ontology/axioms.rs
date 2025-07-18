@@ -168,7 +168,7 @@ pub enum Axiom {
 }
 
 /// Class Axioms
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubClassOfAxiom {
     pub id: AxiomId,
     pub subclass: crate::ontology::ClassExpression,
@@ -176,21 +176,21 @@ pub struct SubClassOfAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EquivalentClassesAxiom {
     pub id: AxiomId,
     pub classes: Vec<crate::ontology::ClassExpression>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DisjointClassesAxiom {
     pub id: AxiomId,
     pub classes: Vec<crate::ontology::ClassExpression>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DisjointUnionAxiom {
     pub id: AxiomId,
     pub class: crate::ontology::ClassExpression,
@@ -199,7 +199,7 @@ pub struct DisjointUnionAxiom {
 }
 
 /// Object Property Axioms
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubObjectPropertyOfAxiom {
     pub id: AxiomId,
     pub sub_property: crate::ontology::ObjectPropertyExpression,
@@ -207,21 +207,21 @@ pub struct SubObjectPropertyOfAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EquivalentObjectPropertiesAxiom {
     pub id: AxiomId,
     pub properties: Vec<crate::ontology::ObjectPropertyExpression>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DisjointObjectPropertiesAxiom {
     pub id: AxiomId,
     pub properties: Vec<crate::ontology::ObjectPropertyExpression>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InverseObjectPropertiesAxiom {
     pub id: AxiomId,
     pub property1: crate::ontology::ObjectPropertyExpression,
@@ -229,7 +229,7 @@ pub struct InverseObjectPropertiesAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectPropertyDomainAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
@@ -237,7 +237,7 @@ pub struct ObjectPropertyDomainAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectPropertyRangeAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
@@ -245,49 +245,49 @@ pub struct ObjectPropertyRangeAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionalObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InverseFunctionalObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReflexiveObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IrreflexiveObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymmetricObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AsymmetricObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TransitiveObjectPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::ObjectPropertyExpression,
@@ -295,7 +295,7 @@ pub struct TransitiveObjectPropertyAxiom {
 }
 
 /// Data Property Axioms
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubDataPropertyOfAxiom {
     pub id: AxiomId,
     pub sub_property: crate::ontology::DataPropertyExpression,
@@ -303,21 +303,21 @@ pub struct SubDataPropertyOfAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EquivalentDataPropertiesAxiom {
     pub id: AxiomId,
     pub properties: Vec<crate::ontology::DataPropertyExpression>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DisjointDataPropertiesAxiom {
     pub id: AxiomId,
     pub properties: Vec<crate::ontology::DataPropertyExpression>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataPropertyDomainAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::DataPropertyExpression,
@@ -325,7 +325,7 @@ pub struct DataPropertyDomainAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataPropertyRangeAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::DataPropertyExpression,
@@ -333,7 +333,7 @@ pub struct DataPropertyRangeAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionalDataPropertyAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::DataPropertyExpression,
@@ -341,21 +341,21 @@ pub struct FunctionalDataPropertyAxiom {
 }
 
 /// Individual Axioms
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SameIndividualAxiom {
     pub id: AxiomId,
     pub individuals: Vec<crate::ontology::Individual>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DifferentIndividualsAxiom {
     pub id: AxiomId,
     pub individuals: Vec<crate::ontology::Individual>,
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClassAssertionAxiom {
     pub id: AxiomId,
     pub individual: crate::ontology::Individual,
@@ -363,7 +363,7 @@ pub struct ClassAssertionAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectPropertyAssertionAxiom {
     pub id: AxiomId,
     pub source: crate::ontology::Individual,
@@ -372,7 +372,7 @@ pub struct ObjectPropertyAssertionAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataPropertyAssertionAxiom {
     pub id: AxiomId,
     pub individual: crate::ontology::Individual,
@@ -381,7 +381,7 @@ pub struct DataPropertyAssertionAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NegativeObjectPropertyAssertionAxiom {
     pub id: AxiomId,
     pub source: crate::ontology::Individual,
@@ -390,7 +390,7 @@ pub struct NegativeObjectPropertyAssertionAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NegativeDataPropertyAssertionAxiom {
     pub id: AxiomId,
     pub individual: crate::ontology::Individual,
@@ -400,7 +400,7 @@ pub struct NegativeDataPropertyAssertionAxiom {
 }
 
 /// Annotation Axioms
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnnotationAssertionAxiom {
     pub id: AxiomId,
     pub subject: crate::ontology::AnnotationSubject,
@@ -409,7 +409,7 @@ pub struct AnnotationAssertionAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubAnnotationPropertyOfAxiom {
     pub id: AxiomId,
     pub sub_property: crate::ontology::AnnotationProperty,
@@ -417,7 +417,7 @@ pub struct SubAnnotationPropertyOfAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnnotationPropertyDomainAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::AnnotationProperty,
@@ -425,7 +425,7 @@ pub struct AnnotationPropertyDomainAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnnotationPropertyRangeAxiom {
     pub id: AxiomId,
     pub property: crate::ontology::AnnotationProperty,
@@ -545,7 +545,7 @@ impl AxiomStore {
     pub fn add_axiom(&mut self, axiom: Axiom) -> crate::Result<AxiomId> {
         let id = axiom.axiom_id();
         if self.axioms.contains_key(&id) {
-            return Err(crate::Error::AxiomAlreadyExists(id));
+                            return Err(crate::Error::AxiomAlreadyExists);
         }
 
         // Set the ID
@@ -617,7 +617,7 @@ impl AxiomStore {
             }
             Ok(())
         } else {
-            Err(Error::AxiomNotFound(id))
+            Err(Error::AxiomNotFound)
         }
     }
 

@@ -357,6 +357,11 @@ impl Ontology {
     pub fn add_axiom(&mut self, axiom: axioms::Axiom) {
         self.axioms.push(axiom);
     }
+
+    /// Remove an axiom from the ontology
+    pub fn remove_axiom(&mut self, axiom: &axioms::Axiom) {
+        self.axioms.retain(|a| a != axiom);
+    }
     
     /// Get all axioms
     pub fn axioms(&self) -> &[axioms::Axiom] {
@@ -364,7 +369,7 @@ impl Ontology {
     }
 
     /// Get the signature of the ontology
-    pub fn signature(&self) -> Signature {
+    pub fn signature(&self) -> Result<Signature> {
         let mut signature = Signature::new();
         
         // Extract entities from axioms
@@ -376,12 +381,12 @@ impl Ontology {
                             signature.classes.push(concepts::Class { iri: iri.clone() });
                         }
                         axioms::Entity::ObjectProperty(iri) => {
-                            signature.object_properties.push(ObjectProperty { iri: iri.clone() });
+                            signature.object_properties.push(ObjectProperty { iri: iri.to_url()? });
                         }
                         axioms::Entity::DataProperty(iri) => {
-                            signature.data_properties.push(DataProperty { iri: iri.clone() });
+                            signature.data_properties.push(DataProperty { iri: iri.to_url()? });
                         }
-                        axioms::Entity::Individual(iri) => {
+                        axioms::Entity::NamedIndividual(iri) => {
                             signature.individuals.push(individuals::Individual::Named(individuals::NamedIndividual { iri: iri.clone() }));
                         }
                     }
@@ -391,7 +396,53 @@ impl Ontology {
             }
         }
         
-        signature
+        Ok(signature)
+    }
+    
+    /// Load an ontology from a file
+    pub fn from_file<P: AsRef<std::path::Path>>(path: P, format: Option<String>) -> Result<Self> {
+        use std::fs::File;
+        use std::io::Read;
+        
+        let mut file = File::open(path.as_ref()).map_err(|e| Error::io(e))?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).map_err(|e| Error::io(e))?;
+        
+        // Parse based on format or file extension
+        let format = format.unwrap_or_else(|| {
+            path.as_ref()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|s| s.to_lowercase())
+                .unwrap_or_else(|| "owl".to_string())
+        });
+        
+        match format.as_str() {
+            "owl" | "xml" => {
+                // Use OWL XML parser
+                crate::parsers::owl_xml::parse(&contents)
+            }
+            "ttl" | "turtle" => {
+                // Use Turtle parser
+                crate::parsers::turtle::parse(&contents)
+            }
+            "rdf" | "rdfxml" => {
+                // Use RDF/XML parser
+                crate::parsers::rdf_xml::parse(&contents)
+            }
+            "nt" | "ntriples" => {
+                // Use N-Triples parser
+                crate::parsers::ntriples::parse(&contents)
+            }
+            "functional" | "func" => {
+                // Use Functional syntax parser
+                crate::parsers::functional::parse(&contents)
+            }
+            _ => {
+                // Default to OWL XML
+                crate::parsers::owl_xml::parse(&contents)
+            }
+        }
     }
     
     /// Add a class (placeholder for compatibility)

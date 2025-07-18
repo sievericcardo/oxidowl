@@ -125,7 +125,7 @@ impl AnonymousIndividual {
 }
 
 /// Individual assertion for ABox reasoning
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IndividualAssertion {
     /// Class assertion: the individual is an instance of a class.
     ClassAssertion {
@@ -261,7 +261,7 @@ impl IndividualAssertion {
 }
 
 /// Store for managing individuals and their assertions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndividualStore {
     /// Map of named individuals by their identifiers.
     named_individuals: HashMap<crate::ontology::IRI, NamedIndividual>,

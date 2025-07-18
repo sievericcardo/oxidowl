@@ -275,11 +275,14 @@ impl ClassExpression {
             }
             ClassExpression::ObjectSomeValuesFrom { filler, .. } |
             ClassExpression::ObjectAllValuesFrom { filler, .. } |
-            ClassExpression::ObjectHasValue { value: filler, .. } |
             ClassExpression::ObjectMinCardinality { filler, .. } |
             ClassExpression::ObjectMaxCardinality { filler, .. } |
             ClassExpression::ObjectExactCardinality { filler, .. } => {
                 filler.collect_classes(signature);
+            }
+            ClassExpression::ObjectHasValue { value, .. } => {
+                // ObjectHasValue has an individual value, not a class expression
+                // No classes to collect from individuals
             }
             ClassExpression::DataSomeValuesFrom { filler, .. } |
             ClassExpression::DataAllValuesFrom { filler, .. } |
@@ -362,9 +365,13 @@ impl ClassExpression {
             }
 
             // For other expressions, wrap in complement if negated
-            (expr, true) => ClassExpression::ObjectComplementOf(Box::new(expr.clone())),
-            (expr, false) => expr.clone(),
-            _ => Ok(self.clone()), // Other expressions remain unchanged
+            _ => {
+                if negated {
+                    ClassExpression::ObjectComplementOf(Box::new(self.clone()))
+                } else {
+                    self.clone()
+                }
+            }
         }
     }
 
@@ -530,11 +537,7 @@ impl ClassExpression {
                 Ok(ClassExpression::ObjectMinCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
-                    filler: if let Some(f) = filler {
-                        Some(Box::new(f.simplify()?))
-                    } else {
-                        None
-                    },
+                    filler: Box::new(filler.simplify()?),
                 })
             }
 
@@ -542,11 +545,7 @@ impl ClassExpression {
                 Ok(ClassExpression::ObjectMaxCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
-                    filler: if let Some(f) = filler {
-                        Some(Box::new(f.simplify()?))
-                    } else {
-                        None
-                    },
+                    filler: Box::new(filler.simplify()?),
                 })
             }
 
@@ -554,11 +553,7 @@ impl ClassExpression {
                 Ok(ClassExpression::ObjectExactCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
-                    filler: if let Some(f) = filler {
-                        Some(Box::new(f.simplify()?))
-                    } else {
-                        None
-                    },
+                    filler: Box::new(filler.simplify()?),
                 })
             }
 
@@ -652,7 +647,7 @@ impl ClassExpression {
 }
 
 /// Concept store for managing named classes and class expressions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConceptStore {
     classes: HashMap<crate::ontology::IRI, Class>,
     expressions: HashMap<ConceptId, ClassExpression>,

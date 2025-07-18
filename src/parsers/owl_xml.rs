@@ -443,6 +443,9 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
                     writeln!(file, "  <FunctionalObjectProperty><ObjectProperty IRI=\"{}\"/></FunctionalObjectProperty>", property_iri)?;
                 }
             }
+            _ => {
+                // TODO: Implement serialization for other axiom types
+            }
         }
     }
     writeln!(file, "</Ontology>")?;
