@@ -51,7 +51,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             if let Some(result) = cache_manager.get_consistency_result(&self.reasoner.read().unwrap().ontology) {
                 return Ok(result);
@@ -62,13 +62,13 @@ impl ReasoningService {
         let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_consistency_result(&reasoner.ontology, result);
         }
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Consistency check timed out".into(),
@@ -86,7 +86,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             if let Some(result) = cache_manager.get_satisfiability_result(expression) {
                 return Ok(result);
@@ -106,13 +106,13 @@ impl ReasoningService {
         let result = reasoner.is_class_satisfiable(&class_iri)?;
 
         // Cache the result if caching is enabled
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_satisfiability_result(expression.clone(), result);
         }
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Satisfiability check timed out".into(),
@@ -130,7 +130,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             if let Some(result) = cache_manager.get_subsumption_result(subclass, superclass) {
                 return Ok(result);
@@ -141,13 +141,13 @@ impl ReasoningService {
         let result = reasoner.is_subsumed_by(subclass, superclass).await?;
 
         // Cache the result if caching is enabled
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Subsumption check timed out".into(),
@@ -182,7 +182,7 @@ impl ReasoningService {
         let superclasses = reasoner.get_superclasses(&class, direct).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Direct superclass retrieval timed out".into(),
@@ -203,7 +203,7 @@ impl ReasoningService {
         let subclasses = reasoner.get_subclasses(&class, direct).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Direct subclass retrieval timed out".into(),
@@ -224,7 +224,7 @@ impl ReasoningService {
         let equivalent_classes = reasoner.get_equivalent_classes(class).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Equivalent class retrieval timed out".into(),
@@ -245,7 +245,7 @@ impl ReasoningService {
         let instances = reasoner.get_instances(&class, direct).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Instance retrieval timed out".into(),
@@ -266,7 +266,7 @@ impl ReasoningService {
         let types = reasoner.get_types(&individual, direct).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Type retrieval timed out".into(),
@@ -302,7 +302,7 @@ impl ReasoningService {
         let values = reasoner.get_object_property_values(&individual, &property).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Object property value retrieval timed out".into(),
@@ -328,7 +328,7 @@ impl ReasoningService {
         let result = reasoner.get_data_property_values(&individual, &property_expr).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Data property value retrieval timed out".into(),
@@ -356,7 +356,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             if let Some(cached) = self.cache_manager.classification().get(ontology_hash) {
@@ -369,7 +369,7 @@ impl ReasoningService {
         let result = reasoner.classify().await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Classification timed out".into(),
@@ -378,7 +378,7 @@ impl ReasoningService {
         }
 
         // Cache the result if caching is enabled
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             self.cache_manager.classification().put(ontology_hash, result.hierarchy.clone());
@@ -394,7 +394,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             if let Some(cached) = self.cache_manager.realization().get(ontology_hash) {
@@ -407,7 +407,7 @@ impl ReasoningService {
         let result = reasoner.realize().await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Realization timed out".into(),
@@ -416,7 +416,7 @@ impl ReasoningService {
         }
 
         // Cache the result if caching is enabled
-        if self.config.enable_cache {
+        if self.config.cache.enable_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             self.cache_manager.realization().put(ontology_hash, result.types.clone());
@@ -431,7 +431,7 @@ impl ReasoningService {
     pub async fn explain_entailment(&self, axiom: &crate::ontology::Axiom) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
-        if !self.config.enable_explanation {
+        if !self.config.reasoning.enable_explanations {
             return Err(Error::Reasoning {
                 message: "Explanation is disabled in the configuration".into(),
             });
@@ -441,7 +441,7 @@ impl ReasoningService {
         let explanations = reasoner.explain_entailment(&axiom).await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Explanation retrieval timed out".into(),
@@ -466,7 +466,7 @@ impl ReasoningService {
     pub async fn explain_inconsistency(&self) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
-        if !self.config.enable_explanation {
+        if !self.config.reasoning.enable_explanations {
             return Err(Error::Reasoning {
                 message: "Explanation is disabled in the configuration".into(),
             });
@@ -476,7 +476,7 @@ impl ReasoningService {
         let explanations = reasoner.explain_inconsistency().await?;
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Inconsistency explanation retrieval timed out".into(),
@@ -501,7 +501,7 @@ impl ReasoningService {
     pub async fn add_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
         let start = Instant::now();
 
-        if !self.config.enable_incremental {
+        if !self.config.reasoning.incremental_reasoning {
             return Err(Error::Reasoning {
                 message: "Incremental reasoning is disabled in the configuration".into(),
             });
@@ -513,7 +513,7 @@ impl ReasoningService {
         }
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Axiom addition timed out".into(),
@@ -522,7 +522,7 @@ impl ReasoningService {
         }
 
         // Clear relevant caches
-        if self.config.enable_caching {
+        if self.config.cache.enable_cache {
             self.cache_manager.clear_all();
         }
 
@@ -535,7 +535,7 @@ impl ReasoningService {
     pub async fn remove_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
         let start = Instant::now();
 
-        if !self.config.enable_incremental {
+        if !self.config.reasoning.incremental_reasoning {
             return Err(Error::Reasoning {
                 message: "Incremental reasoning is disabled in the configuration".into(),
             });
@@ -547,7 +547,7 @@ impl ReasoningService {
         }
 
         // Check timeout
-        if let Some(timeout) = self.config.timeout {
+        if let Some(timeout) = self.config.reasoning.timeout {
             if start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Axiom removal timed out".into(),
@@ -556,7 +556,7 @@ impl ReasoningService {
         }
 
         // Clear relevant caches
-        if self.config.enable_caching {
+        if self.config.cache.enable_cache {
             self.cache_manager.clear_all();
         }
 
@@ -769,7 +769,11 @@ impl ReasoningService {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         
         // Hash based on reasoner state as a simple fingerprint
-        let axiom_count = reasoner.ontology.axioms().len();
+        let axiom_count = if let Ok(ontology) = reasoner.get_ontology() {
+            ontology.read().unwrap().axioms().len()
+        } else {
+            0
+        };
         std::hash::Hash::hash(&axiom_count, &mut hasher);
         
         std::hash::Hasher::finish(&hasher)
