@@ -2,7 +2,7 @@
 //!
 //! This module provides the core ontology types and structures for OWL 2 DL reasoning.
 
-use crate::Result;
+use crate::{Error, Result};
 use std::collections::HashMap;
 use url::Url;
 
