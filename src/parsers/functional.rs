@@ -13,6 +13,13 @@ use crate::{
     ontology::{Ontology, ClassExpression, Individual, NamedIndividual, IRI},
 };
 
+/// Generate a unique axiom ID
+fn generate_axiom_id() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
 /// Functional Syntax Parser
 #[derive(Debug, Clone)]
 pub struct FunctionalParser {
@@ -231,6 +238,7 @@ impl FunctionalParser {
                                 let class = crate::ontology::Class {
                                     iri: url::Url::parse(&iri)
                                         .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                        .into()
                                 };
                                 ontology.add_class(class);
                                 position += 1;
@@ -288,14 +296,15 @@ impl FunctionalParser {
                 
                 let subclass = crate::ontology::Class {
                     iri: url::Url::parse(&sub_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                 };
                 let superclass = crate::ontology::Class {
                     iri: url::Url::parse(&super_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                 };
                 
                 let axiom = crate::ontology::SubClassOfAxiom {
+                    id: generate_axiom_id(),
                     subclass: ClassExpression::Class(subclass),
                     superclass: ClassExpression::Class(superclass),
                     annotations: vec![],
@@ -331,7 +340,7 @@ impl FunctionalParser {
                 
                 let class = crate::ontology::Class {
                     iri: url::Url::parse(&class_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
                 };
                 let individual = crate::ontology::Individual::Named(
                     crate::ontology::NamedIndividual {
@@ -342,6 +351,7 @@ impl FunctionalParser {
                 );
                 
                 let axiom = crate::ontology::ClassAssertionAxiom {
+                    id: generate_axiom_id(),
                     class: ClassExpression::Class(class),
                     individual,
                     annotations: vec![],
@@ -396,6 +406,7 @@ impl FunctionalParser {
                 );
                 
                 let axiom = crate::ontology::ObjectPropertyAssertionAxiom {
+                    id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                     source: subject,
                     target: object,
