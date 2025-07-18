@@ -52,6 +52,12 @@ impl From<String> for IRI {
     }
 }
 
+impl From<Url> for IRI {
+    fn from(url: Url) -> Self {
+        Self { value: url.to_string() }
+    }
+}
+
 impl std::fmt::Display for IRI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
@@ -126,6 +132,18 @@ impl std::fmt::Display for ObjectPropertyExpression {
                 }
                 write!(f, ")")
             }
+        }
+    }
+    
+}
+
+impl ObjectPropertyExpression {
+    /// Get the IRI if this is a simple object property
+    pub fn iri(&self) -> Option<&url::Url> {
+        match self {
+            ObjectPropertyExpression::ObjectProperty(prop) => Some(&prop.iri),
+            ObjectPropertyExpression::InverseObjectProperty(prop) => Some(&prop.iri),
+            ObjectPropertyExpression::PropertyChain(_) => None,
         }
     }
 }
@@ -340,7 +358,7 @@ impl Ontology {
         // This creates a declaration axiom for the property
         let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
             id: self.next_axiom_id(),
-            entity: axioms::Entity::ObjectProperty(property.iri),
+            entity: axioms::Entity::ObjectProperty(property.iri.into()),
         });
         self.add_axiom(axiom);
     }
