@@ -5,7 +5,7 @@
 use crate::{
     Error, Result,
     ontology::{
-        Ontology, ClassExpression, Individual, IRI, Axiom, ObjectPropertyExpression, Entity, DeclarationAxiom,
+        Ontology, ClassExpression, Individual, NamedIndividual, IRI, Axiom, ObjectPropertyExpression, Entity, DeclarationAxiom,
         Class, ObjectProperty,
         axioms::{SubClassOfAxiom, EquivalentClassesAxiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, 
                 SubObjectPropertyOfAxiom, FunctionalObjectPropertyAxiom}
@@ -210,8 +210,8 @@ fn parse_object_property_assertion(element: &roxmltree::Node) -> Result<Axiom> {
     
     Ok(Axiom::ObjectPropertyAssertion(crate::ontology::ObjectPropertyAssertionAxiom {
         property,
-        subject: source,
-        object: target,
+        source: source,
+        target: target,
         annotations: Vec::new(),
     }))
 }
@@ -351,7 +351,7 @@ fn parse_individual(element: &roxmltree::Node) -> Result<Individual> {
     match element.tag_name().name() {
         "NamedIndividual" => {
             if let Some(iri) = element.attribute("IRI") {
-                Ok(Individual { iri: IRI::new(iri).to_url()? })
+                Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri).to_url()? }))
             } else {
                 Err(Error::io("NamedIndividual element missing IRI attribute".to_string()))
             }
