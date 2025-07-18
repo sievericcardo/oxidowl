@@ -359,13 +359,13 @@ pub struct TableauStatistics {
 
 impl Tableau {
     /// Create a new empty tableau
-    pub fn new(config: ReasoningConfig) -> Self {
+    pub fn new(config: ReasoningConfig) -> Result<Self> {
         let blocking_strategy = BlockingStrategy::create_checker(&config)?;
         // Create expansion strategy - placeholder implementation
         let expansion_strategy = Box::new(DefaultExpansionStrategy::new());
         let completion_rules = CompletionRuleSet::new();
 
-        Self {
+        Ok(Self {
             nodes: Vec::new(),
             edges: Vec::new(),
             completion_rules,
@@ -385,7 +385,7 @@ impl Tableau {
             asymmetric_properties: HashSet::new(),
             reflexive_properties: HashSet::new(),
             irreflexive_properties: HashSet::new(),
-        }
+        })
     }
 
     /// Run the tableau algorithm to completion
@@ -545,7 +545,7 @@ impl Tableau {
             CompletionRule::Datatype => self.apply_datatype_rule(rule_app)?,
             CompletionRule::Unfold => self.apply_unfold_rule(rule_app)?,
             CompletionRule::PropertyChain => self.apply_property_chain_rule(rule_app)?,
-            CompletionRule::Guess => self.apply_guess_rule(rule_app)?,
+            CompletionRule::Guess => self.apply_rule(rule_app)?,
         }
         
         self.statistics.rule_applications += 1;
@@ -673,7 +673,7 @@ impl Tableau {
                 let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
                 
                 for individual in individuals {
-                    let individual_label = ConceptLabel::Nominal(individual.iri.to_string());
+                    let individual_label = ConceptLabel::Nominal(individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string()));
                     self.add_concept(node_id, individual_label, dependencies.clone())?;
                 }
             }
@@ -684,7 +684,7 @@ impl Tableau {
     /// Apply self rule (R.Self)
     fn apply_self_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
         if let RuleContext::Concept { concept, dependencies } = rule_app.context {
-            if let ClassExpression::ObjectHasSelf(role) = concept {
+            if let ClassExpression::ObjectHasSelf { property: _ } = concept {
                 let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
                 
                 // Create a self-loop edge
@@ -925,7 +925,7 @@ impl ConceptLabel {
                 };
                 Ok(ClassExpression::ObjectAllValuesFrom {
                     property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                        iri: IRI::new(role_iri).to_url()?,
+                        iri: IRI::new(&role_iri).to_url()?,
                     }),
                     filler: Box::new(filler.to_class_expression()?),
                 })
