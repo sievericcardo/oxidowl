@@ -684,10 +684,11 @@ impl Tableau {
     /// Apply self rule (R.Self)
     fn apply_self_rule(&mut self, rule_app: RuleApplication) -> Result<()> {
         if let RuleContext::Concept { concept, dependencies } = rule_app.context {
-            if let ClassExpression::ObjectHasSelf { property: _ } = concept {
+            if let ClassExpression::ObjectHasSelf { property } = concept {
                 let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
                 
                 // Create a self-loop edge
+                let role = Role::ObjectProperty(property.clone());
                 let role_label = RoleLabel::from_role(&role)?;
                 self.add_edge(node_id, node_id, role_label, dependencies)?;
             }
@@ -941,8 +942,8 @@ impl ConceptLabel {
                         iri: IRI::new(&role_iri).to_url()?.into(),
                     }),
                     filler: match filler.as_ref() {
-                        Some(f) => f.to_class_expression()?,
-                        None => None,
+                        Some(f) => Box::new(f.to_class_expression()?),
+                        None => Box::new(ClassExpression::thing()),
                     },
                 })
             }
@@ -957,8 +958,8 @@ impl ConceptLabel {
                         iri: IRI::new(&role_iri).to_url()?.into(),
                     }),
                     filler: match filler.as_ref() {
-                        Some(f) => f.to_class_expression()?,
-                        None => None,
+                        Some(f) => Box::new(f.to_class_expression()?),
+                        None => Box::new(ClassExpression::thing()),
                     },
                 })
             }
