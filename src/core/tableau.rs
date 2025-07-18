@@ -897,12 +897,12 @@ impl ConceptLabel {
         match self {
             ConceptLabel::Atomic(iri) => {
                 Ok(ClassExpression::Class(Class {
-                    iri: IRI::new(iri.to_string()).to_url()?,
+                    iri: IRI::new(iri).to_url()?.into(),
                 }))
             }
             ConceptLabel::NegatedAtomic(iri) => {
                 Ok(ClassExpression::ObjectComplementOf(Box::new(ClassExpression::Class(Class {
-                    iri: IRI::new(iri.to_string()).to_url()?,
+                    iri: IRI::new(iri).to_url()?.into(),
                 }))))
             }
             ConceptLabel::Complex(expr) => Ok(*expr.clone()),
@@ -938,10 +938,10 @@ impl ConceptLabel {
                 Ok(ClassExpression::ObjectMinCardinality {
                     cardinality: *cardinality,
                     property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                        iri: IRI::new(role_iri).to_url()?,
+                        iri: IRI::new(&role_iri).to_url()?.into(),
                     }),
                     filler: match filler.as_ref() {
-                        Some(f) => Some(Box::new(f.to_class_expression()?)),
+                        Some(f) => f.to_class_expression()?,
                         None => None,
                     },
                 })
@@ -954,10 +954,10 @@ impl ConceptLabel {
                 Ok(ClassExpression::ObjectMaxCardinality {
                     cardinality: *cardinality,
                     property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                        iri: IRI::new(role_iri).to_url()?,
+                        iri: IRI::new(&role_iri).to_url()?.into(),
                     }),
                     filler: match filler.as_ref() {
-                        Some(f) => Some(Box::new(f.to_class_expression()?)),
+                        Some(f) => f.to_class_expression()?,
                         None => None,
                     },
                 })
@@ -965,7 +965,7 @@ impl ConceptLabel {
             ConceptLabel::Nominal(individual_iri) => {
                 // Convert nominal to ObjectOneOf with a single individual
                 Ok(ClassExpression::ObjectOneOf(vec![
-                    crate::ontology::Individual::named(IRI::new(individual_iri.clone()))
+                    crate::ontology::Individual::named(IRI::new(&individual_iri.clone()))
                 ]))
             }
         }
@@ -1075,6 +1075,14 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
     
     fn get_expansion_priority(&self, _candidate: &ExistentialCandidate) -> ExpansionPriority {
         ExpansionPriority::Normal
+    }
+
+    fn expansion_completed(&mut self, _candidate: &ExistentialCandidate, _result: &ExpansionResult) {
+        // Default implementation - no action needed
+    }
+
+    fn clear(&mut self) {
+        // Default implementation - no state to clear
     }
 }
 
@@ -1211,8 +1219,8 @@ impl TableauBuilder {
             }
             Axiom::InverseObjectProperties(axiom) => {
                 // Add inverse property relationship
-                let first_str = format!("{:?}", axiom.first);
-                let second_str = format!("{:?}", axiom.second);
+                let first_str = format!("{:?}", axiom.property1);
+                let second_str = format!("{:?}", axiom.property2);
                 tableau.inverse_properties.insert(first_str.clone(), second_str.clone());
                 tableau.inverse_properties.insert(second_str, first_str);
             }
