@@ -879,7 +879,7 @@ impl DLClauseEvaluator {
             DisjunctPredicate::Concept {
                 concept: crate::ontology::ClassExpression::Class(
                     crate::ontology::Class {
-                        iri: crate::ontology::IRI::new("http://example.org/placeholder").to_url().expect("Valid URL")
+                        iri: crate::ontology::IRI::new("http://example.org/placeholder").to_url().expect("Valid URL").into()
                     }
                 ),
                 argument: i,

@@ -221,7 +221,7 @@ impl HyperresolutionManager {
             
             // Add optimizations for atomic roles if enabled
             if self.optimization_enabled && self.is_atomic_role_predicate(&predicate) {
-                self.add_atomic_role_optimizations(predicate, clause_info)?;
+                self.add_atomic_role_optimizations(predicate.to_string(), clause_info)?;
             }
         }
         
