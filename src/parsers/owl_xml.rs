@@ -404,7 +404,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     for axiom in ontology.axioms() {
         match axiom {
             Axiom::Declaration(decl) => {
-                writeln!(file, "  <Declaration><{} IRI=\"{}\"/></Declaration>", decl.entity.entity_type(), decl.entity.iri)?;
+                writeln!(file, "  <Declaration><{} IRI=\"{}\"/></Declaration>", decl.entity.entity_type(), decl.entity.iri())?;
             }
             Axiom::SubClassOf(axiom) => {
                 if let (Some(subclass_iri), Some(superclass_iri)) = (axiom.subclass.iri(), axiom.superclass.iri()) {
