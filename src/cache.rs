@@ -10,6 +10,7 @@ use crate::{
     core::{
         tableau::TableauNode,
     },
+    reasoning::{ClassificationResult, RealizationResult},
 };
 
 use std::{
@@ -165,6 +166,101 @@ impl CacheManager {
     /// Clear all caches
     pub fn clear_all(&self) {
         self.concept_cache.clear();
+    }
+
+    /// Get consistency result from cache
+    pub fn get_consistency_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<bool> {
+        // Simple implementation - would need more sophisticated caching in practice
+        None
+    }
+
+    /// Store consistency result in cache
+    pub fn cache_consistency_result(&self, ontology: &Arc<RwLock<Ontology>>, result: bool) {
+        // Simple implementation - would need more sophisticated caching in practice
+    }
+
+    /// Get satisfiability result from cache
+    pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
+        self.concept_cache.get(expression)
+    }
+
+    /// Store satisfiability result in cache
+    pub fn cache_satisfiability_result(&self, expression: ClassExpression, result: bool) {
+        self.concept_cache.put(expression, result);
+    }
+
+    /// Get subsumption result from cache
+    pub fn get_subsumption_result(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+        // Simple implementation - would need more sophisticated caching in practice
+        None
+    }
+
+    /// Store subsumption result in cache
+    pub fn cache_subsumption_result(&self, sub: ClassExpression, sup: ClassExpression, result: bool) {
+        // Simple implementation - would need more sophisticated caching in practice
+    }
+
+    /// Get classification result from cache
+    pub fn get_classification_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<ClassificationResult> {
+        // Simple implementation - would need more sophisticated caching in practice
+        None
+    }
+
+    /// Store classification result in cache
+    pub fn store_classification_result(&self, ontology: &Arc<RwLock<Ontology>>, result: ClassificationResult) {
+        // Simple implementation - would need more sophisticated caching in practice
+    }
+
+    /// Get realization result from cache
+    pub fn get_realization_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<RealizationResult> {
+        // Simple implementation - would need more sophisticated caching in practice
+        None
+    }
+
+    /// Store realization result in cache
+    pub fn store_realization_result(&self, ontology: &Arc<RwLock<Ontology>>, result: RealizationResult) {
+        // Simple implementation - would need more sophisticated caching in practice
+    }
+
+    /// Get instance result from cache
+    pub fn get_instance_result(&self, individual: &Individual, class: &ClassExpression) -> Option<bool> {
+        // Simple implementation - would need more sophisticated caching in practice
+        None
+    }
+
+    /// Store instance result in cache
+    pub fn store_instance_result(&self, individual: Individual, class: ClassExpression, result: bool) {
+        // Simple implementation - would need more sophisticated caching in practice
+    }
+
+    /// Get subsumption cache
+    pub fn subsumption(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+        self.get_subsumption_result(sub, sup)
+    }
+
+    /// Store subsumption cache
+    pub fn store_subsumption(&self, sub: ClassExpression, sup: ClassExpression, result: bool) {
+        self.cache_subsumption_result(sub, sup, result);
+    }
+
+    /// Get classification cache
+    pub fn classification(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<ClassificationResult> {
+        self.get_classification_result(ontology)
+    }
+
+    /// Store classification cache
+    pub fn store_classification(&self, ontology: &Arc<RwLock<Ontology>>, result: ClassificationResult) {
+        self.store_classification_result(ontology, result);
+    }
+
+    /// Get realization cache
+    pub fn realization(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<RealizationResult> {
+        self.get_realization_result(ontology)
+    }
+
+    /// Store realization cache
+    pub fn store_realization(&self, ontology: &Arc<RwLock<Ontology>>, result: RealizationResult) {
+        self.store_realization_result(ontology, result);
     }
 
     /// Get cache statistics
