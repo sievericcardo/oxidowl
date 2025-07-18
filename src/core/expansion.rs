@@ -726,18 +726,10 @@ impl ExistentialCandidate {
             ClassExpression::ObjectSomeValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
             ClassExpression::ObjectAllValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
             ClassExpression::ObjectMinCardinality { filler, .. } => {
-                if let Some(f) = filler {
-                    3 + Self::syntactic_complexity(f)
-                } else {
-                    3
-                }
+                3 + Self::syntactic_complexity(filler)
             }
             ClassExpression::ObjectMaxCardinality { filler, .. } => {
-                if let Some(f) = filler {
-                    3 + Self::syntactic_complexity(f)
-                } else {
-                    3
-                }
+                3 + Self::syntactic_complexity(filler)
             }
             ClassExpression::ObjectComplementOf(inner) => 1 + Self::syntactic_complexity(inner),
             _ => 1,
