@@ -79,6 +79,14 @@ impl Individual {
             Individual::Anonymous(anon) => format!("_:{}", anon.id),
         }
     }
+
+    /// Get the IRI if this is a named individual
+    pub fn iri(&self) -> Option<&crate::ontology::IRI> {
+        match self {
+            Individual::Named(named) => Some(&named.iri),
+            Individual::Anonymous(_) => None,
+        }
+    }
 }
 
 impl fmt::Display for Individual {
@@ -214,6 +222,42 @@ impl IndividualAssertion {
     pub fn is_negative(&self) -> bool {
         !self.is_positive()
     }
+
+    /// Get the property from an object property assertion
+    pub fn property(&self) -> Option<&crate::ontology::ObjectPropertyExpression> {
+        match self {
+            IndividualAssertion::ObjectPropertyAssertion { property, .. } |
+            IndividualAssertion::NegativeObjectPropertyAssertion { property, .. } => Some(property),
+            _ => None,
+        }
+    }
+
+    /// Get the object from an object property assertion
+    pub fn object(&self) -> Option<&Individual> {
+        match self {
+            IndividualAssertion::ObjectPropertyAssertion { object, .. } |
+            IndividualAssertion::NegativeObjectPropertyAssertion { object, .. } => Some(object),
+            _ => None,
+        }
+    }
+
+    /// Get the value from a data property assertion
+    pub fn value(&self) -> Option<&crate::ontology::Literal> {
+        match self {
+            IndividualAssertion::DataPropertyAssertion { value, .. } |
+            IndividualAssertion::NegativeDataPropertyAssertion { value, .. } => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Get the data property from a data property assertion
+    pub fn data_property(&self) -> Option<&crate::ontology::DataPropertyExpression> {
+        match self {
+            IndividualAssertion::DataPropertyAssertion { property, .. } |
+            IndividualAssertion::NegativeDataPropertyAssertion { property, .. } => Some(property),
+            _ => None,
+        }
+    }
 }
 
 /// Store for managing individuals and their assertions.
@@ -280,7 +324,7 @@ impl IndividualStore {
     }
 
     /// Add an individual assertion to the store.
-    pub fn add_assertion(&mut self, assertion: IndividualAssertion) {
+    pub fn add_assertion(&mut self, assertion: IndividualAssertion) -> Result<(), Error> {
         // Validate the assertion before adding it
         match &assertion {
             IndividualAssertion::ClassAssertion { individual, class } => {
@@ -310,6 +354,25 @@ impl IndividualStore {
         }
 
         self.assertions.push(assertion);
+        Ok(())
+    }
+
+    /// Validate class assertion
+    fn is_valid_class_assertion(&self, individual: &Individual, class: &crate::ontology::ClassExpression) -> bool {
+        // Basic validation - can be extended with more sophisticated checks
+        true
+    }
+
+    /// Validate object property assertion
+    fn is_valid_object_property_assertion(&self, subject: &Individual, object: &Individual, property: &crate::ontology::ObjectPropertyExpression) -> bool {
+        // Basic validation - can be extended with more sophisticated checks
+        true
+    }
+
+    /// Validate data property assertion
+    fn is_valid_data_property_assertion(&self, subject: &Individual, value: &crate::ontology::Literal, property: &crate::ontology::DataPropertyExpression) -> bool {
+        // Basic validation - can be extended with more sophisticated checks
+        true
     }
 
     /// Get all assertions
@@ -349,9 +412,9 @@ impl IndividualStore {
         self.assertions
             .iter()
             .filter_map(|assertion| {
-                if let IndividualAssertion::ObjectPropertyAssertion { subject: sub, property: _, object: _ } = assertion {
+                if let IndividualAssertion::ObjectPropertyAssertion { subject: sub, property, object } = assertion {
                     if sub == individual {
-                        Some((assertion.property(), assertion.object()))
+                        Some((property, object))
                     } else {
                         None
                     }
@@ -367,9 +430,9 @@ impl IndividualStore {
         self.assertions
             .iter()
             .filter_map(|assertion| {
-                if let IndividualAssertion::DataPropertyAssertion { subject: sub, property: _, value: _ } = assertion {
+                if let IndividualAssertion::DataPropertyAssertion { subject: sub, property, value } = assertion {
                     if sub == individual {
-                        Some((assertion.property(), assertion.value()))
+                        Some((property, value))
                     } else {
                         None
                     }
@@ -381,7 +444,7 @@ impl IndividualStore {
     }
 
     /// Get data property assertions for a specific individual
-    pub fn data_property_assertions_for_individual(&self, individual: &Individual) -> Vec<(&crate::ontology::DataProperty, &crate::ontology::Literal)> {
+    pub fn data_property_assertions_for_individual(&self, individual: &Individual) -> Vec<(&crate::ontology::DataPropertyExpression, &crate::ontology::Literal)> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -399,15 +462,15 @@ impl IndividualStore {
     }
 
     /// Get individuals that are explicitly stated to be the same
-    pub fn same_individuals(&self) -> Vec<&Individual> {
+    pub fn same_individuals(&self, individual: &Individual) -> Vec<&Individual> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
                 if let IndividualAssertion::SameIndividuals { individuals } = assertion {
-                    if individuals.contains(&self.individual) {
+                    if individuals.contains(individual) {
                         Some(individuals
                             .iter()
-                            .filter(|&ind| ind != &self.individual)
+                            .filter(|&ind| ind != individual)
                             .collect::<Vec<&Individual>>())
                     } else {
                         None
@@ -421,15 +484,15 @@ impl IndividualStore {
     }
 
     /// Get individuals that are stated to be different
-    pub fn different_individuals(&self) -> Vec<&Individual> {
+    pub fn different_individuals(&self, individual: &Individual) -> Vec<&Individual> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
                 if let IndividualAssertion::DifferentIndividuals { individuals } = assertion {
-                    if individuals.contains(&self.individual) {
+                    if individuals.contains(individual) {
                         Some(individuals
                             .iter()
-                            .filter(|&ind| ind != &self.individual)
+                            .filter(|&ind| ind != individual)
                             .collect::<Vec<_>>())
                     } else {
                         None
