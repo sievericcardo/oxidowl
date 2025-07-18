@@ -20,6 +20,32 @@ pub enum Entity {
     Datatype(crate::ontology::IRI),
 }
 
+impl Entity {
+    /// Get the entity type as a string
+    pub fn entity_type(&self) -> &'static str {
+        match self {
+            Entity::Class(_) => "Class",
+            Entity::ObjectProperty(_) => "ObjectProperty",
+            Entity::DataProperty(_) => "DataProperty",
+            Entity::AnnotationProperty(_) => "AnnotationProperty",
+            Entity::NamedIndividual(_) => "NamedIndividual",
+            Entity::Datatype(_) => "Datatype",
+        }
+    }
+
+    /// Get the IRI of the entity
+    pub fn iri(&self) -> &crate::ontology::IRI {
+        match self {
+            Entity::Class(iri) => iri,
+            Entity::ObjectProperty(iri) => iri,
+            Entity::DataProperty(iri) => iri,
+            Entity::AnnotationProperty(iri) => iri,
+            Entity::NamedIndividual(iri) => iri,
+            Entity::Datatype(iri) => iri,
+        }
+    }
+}
+
 /// Declaration axiom for OWL 2 DL entities
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeclarationAxiom {
