@@ -388,8 +388,8 @@ impl FunctionalParser {
                 
                 let axiom = crate::ontology::ObjectPropertyAssertionAxiom {
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
-                    subject,
-                    object,
+                    source: subject,
+                    target: object,
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::ObjectPropertyAssertion(axiom));
