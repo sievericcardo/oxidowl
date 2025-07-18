@@ -51,9 +51,9 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
-            if let Some(result) = cache_manager.get_consistency_result(&self.reasoner.read().unwrap().ontology) {
+            if let Some(result) = cache_manager.get_consistency_result(&self.reasoner.read().unwrap().get_ontology().unwrap()) {
                 return Ok(result);
             }
         }
@@ -62,9 +62,9 @@ impl ReasoningService {
         let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
-            cache_manager.cache_consistency_result(&reasoner.ontology, result);
+            cache_manager.cache_consistency_result(&reasoner.get_ontology().unwrap(), result);
         }
 
         // Check timeout
@@ -86,7 +86,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             if let Some(result) = cache_manager.get_satisfiability_result(expression) {
                 return Ok(result);
@@ -106,7 +106,7 @@ impl ReasoningService {
         let result = reasoner.is_class_satisfiable(&class_iri)?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_satisfiability_result(expression.clone(), result);
         }
@@ -130,7 +130,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             if let Some(result) = cache_manager.get_subsumption_result(subclass, superclass) {
                 return Ok(result);
@@ -138,10 +138,10 @@ impl ReasoningService {
         }
 
         let reasoner = self.reasoner.write().unwrap();
-        let result = reasoner.is_subsumed_by(subclass, superclass).await?;
+        let result = reasoner.is_subsumed_by(subclass, superclass)?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
@@ -162,15 +162,15 @@ impl ReasoningService {
 
     // Check equivalence of two class expressions
     pub async fn is_equivalent_to(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
-        let subsumes_1_2 = self.is_subsumed_by(class1, class2).await?;
-        let subsumes_2_1 = self.is_subsumed_by(class2, class1).await?;
+        let subsumes_1_2 = self.is_subsumed_by(class1, class2)?;
+        let subsumes_2_1 = self.is_subsumed_by(class2, class1)?;
         Ok(subsumes_1_2 && subsumes_2_1)
     }
 
     // Check disjointness of two class expressions
     pub async fn is_disjoint_with(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
         let intersection = ClassExpression::ObjectIntersectionOf(vec![class1.clone(), class2.clone()]);
-        let satisfiable = self.is_satisfiable(&intersection).await?;
+        let satisfiable = self.is_satisfiable(&intersection)?;
         Ok(!satisfiable)
     }
 
@@ -179,7 +179,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let superclasses = reasoner.get_superclasses(&class, direct).await?;
+        let superclasses = reasoner.get_superclasses(&class, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -200,7 +200,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let subclasses = reasoner.get_subclasses(&class, direct).await?;
+        let subclasses = reasoner.get_subclasses(&class, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -221,7 +221,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let equivalent_classes = reasoner.get_equivalent_classes(class).await?;
+        let equivalent_classes = reasoner.get_equivalent_classes(class)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -242,7 +242,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let instances = reasoner.get_instances(&class, direct).await?;
+        let instances = reasoner.get_instances(&class, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -263,7 +263,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let types = reasoner.get_types(&individual, direct).await?;
+        let types = reasoner.get_types(&individual, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -281,9 +281,9 @@ impl ReasoningService {
 
     /// Check if an individual is an instance of a class expression
     pub async fn is_instance_of(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
-        let types = self.get_types(individual, false).await?;
+        let types = self.get_types(individual, false)?;
         for class_type in &types {
-            if self.is_subsumed_by(class_type, class).await? {
+            if self.is_subsumed_by(class_type, class)? {
                 return Ok(true);
             }
         }
@@ -299,7 +299,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let values = reasoner.get_object_property_values(&individual, &property).await?;
+        let values = reasoner.get_object_property_values(&individual, &property)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -325,7 +325,7 @@ impl ReasoningService {
 
         let reasoner = self.reasoner.write().unwrap();
         let property_expr = DataPropertyExpression::DataProperty(property.clone());
-        let result = reasoner.get_data_property_values(&individual, &property_expr).await?;
+        let result = reasoner.get_data_property_values(&individual, &property_expr)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -356,7 +356,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             if let Some(cached) = self.cache_manager.classification().get(ontology_hash) {
@@ -366,7 +366,7 @@ impl ReasoningService {
         }
 
         let mut reasoner = self.reasoner.write().unwrap();
-        let result = reasoner.classify().await?;
+        let result = reasoner.classify()?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -378,7 +378,7 @@ impl ReasoningService {
         }
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             self.cache_manager.classification().put(ontology_hash, result.hierarchy.clone());
@@ -394,7 +394,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             if let Some(cached) = self.cache_manager.realization().get(ontology_hash) {
@@ -404,7 +404,7 @@ impl ReasoningService {
         }
 
         let mut reasoner = self.reasoner.write().unwrap();
-        let result = reasoner.realize().await?;
+        let result = reasoner.realize()?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -416,7 +416,7 @@ impl ReasoningService {
         }
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             self.cache_manager.realization().put(ontology_hash, result.types.clone());
@@ -438,7 +438,7 @@ impl ReasoningService {
         }
 
         let reasoner = self.reasoner.write().unwrap();
-        let explanations = reasoner.explain_entailment(&axiom).await?;
+        let explanations = reasoner.explain_entailment(&axiom)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -473,7 +473,7 @@ impl ReasoningService {
         }
 
         let reasoner = self.reasoner.write().unwrap();
-        let explanations = reasoner.explain_inconsistency().await?;
+        let explanations = reasoner.explain_inconsistency()?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -509,7 +509,7 @@ impl ReasoningService {
 
         let mut reasoner = self.reasoner.write().unwrap();
         for axiom in axioms {
-            reasoner.add_axiom(&axiom).await?;
+            reasoner.add_axiom(&axiom)?;
         }
 
         // Check timeout
@@ -522,7 +522,7 @@ impl ReasoningService {
         }
 
         // Clear relevant caches
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             self.cache_manager.clear_all();
         }
 
@@ -543,7 +543,7 @@ impl ReasoningService {
 
         let mut reasoner = self.reasoner.write().unwrap();
         for axiom in axioms {
-            reasoner.remove_axiom(&axiom).await?;
+            reasoner.remove_axiom(&axiom)?;
         }
 
         // Check timeout
@@ -556,7 +556,7 @@ impl ReasoningService {
         }
 
         // Clear relevant caches
-        if self.config.cache.enable_cache {
+        if self.config.cache.enable_satisfiability_cache {
             self.cache_manager.clear_all();
         }
 
@@ -614,7 +614,7 @@ impl ReasoningService {
             
             // For each current individual, follow the property
             for curr_ind in &current_individuals {
-                let targets = self.get_object_property_values(curr_ind, property).await?;
+                let targets = self.get_object_property_values(curr_ind, property)?;
                 next_individuals.extend(targets);
             }
             
@@ -730,7 +730,7 @@ impl QueryInterface {
         let mut results = HashMap::new();
 
         for concept in concepts {
-            let result = self.reasoning_service.is_satisfiable(&concept).await?;
+            let result = self.reasoning_service.is_satisfiable(&concept)?;
             results.insert(concept, result);
         }
 
@@ -745,7 +745,7 @@ impl QueryInterface {
         let mut results = HashMap::new();
 
         for (subclass, superclass) in queries {
-            let result = self.reasoning_service.is_subsumed_by(&subclass, &superclass).await?;
+            let result = self.reasoning_service.is_subsumed_by(&subclass, &superclass)?;
             results.insert((subclass, superclass), result);
         }
 
@@ -754,15 +754,6 @@ impl QueryInterface {
 }
 
 impl ReasoningService {
-    /// Create a new ReasoningService
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            reasoner: Arc::new(RwLock::new(Reasoner::new(ReasonerConfig::default())?)),
-            cache_manager: Arc::new(RwLock::new(CacheManager::new(crate::cache::CacheConfig::default()))),
-            config: ReasonerConfig::default(),
-        })
-    }
-
     /// Calculate a hash for the current ontology
     fn calculate_ontology_hash(&self) -> u64 {
         let reasoner = self.reasoner.read().unwrap();
