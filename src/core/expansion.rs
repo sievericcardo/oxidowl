@@ -67,7 +67,7 @@ pub struct ExpansionManager {
     strategy: Box<dyn ExpansionStrategy>,
 
     /// Queue of pending existential candidates
-    pending_queue: BinaryHeap<PrioritzedCandidate>,
+    pending_queue: BinaryHeap<PrioritisedCandidate>,
 
     /// Currently expanding candidates
     expanding: HashSet<String>,
@@ -172,7 +172,7 @@ pub enum ExpansionPriority{
 
 /// Wrapper for priority-based ordering
 #[derive(Debug, Clone)]
-struct PrioritzedCandidate {
+struct PrioritisedCandidate {
     candidate: ExistentialCandidate,
     priority: ExpansionPriority,
     insertion_order: u64,
@@ -348,7 +348,7 @@ impl ExpansionManager {
         }
 
         let priority = self.strategy.get_expansion_priority(&candidate);
-        let prioritised_candidate = PrioritzedCandidate {
+        let prioritised_candidate = PrioritisedCandidate {
             candidate,
             priority,
             insertion_order: self.next_insertion_order(),
@@ -368,7 +368,7 @@ impl ExpansionManager {
 
             if self.strategy.should_delay_expansion(&prioritised.candidate, context) {
                 // Re-queue with lower priority
-                let delayed = PrioritizedCandidate {
+                let delayed = PrioritisedCandidate {
                     candidate: prioritised.candidate,
                     priority: ExpansionPriority::Delayed,
                     insertion_order: self.next_insertion_order(),
@@ -704,7 +704,7 @@ impl ExistentialCandidate {
 
     /// Calculate expansion complexity
     fn calculate_complexity(existential: &ClassExpression) -> ExpansionComplexity {
-        let syntactic_complexity = Self::syntactic_complexity(concept);
+        let syntactic_complexity = Self::syntactic_complexity(existential);
 
         ExpansionComplexity {
             syntactic_complexity,
@@ -737,7 +737,7 @@ impl ExistentialCandidate {
     }
 }
 
-impl Ord for PrioritzedCandidate {
+impl Ord for PrioritisedCandidate {
     fn cmp(&self, other: &Self) -> Ordering {
         // Lower priority values are higher priority (reverse order)
         other.priority.cmp(&self.priority)
@@ -745,19 +745,19 @@ impl Ord for PrioritzedCandidate {
     }
 }
 
-impl PartialOrd for PrioritzedCandidate {
+impl PartialOrd for PrioritisedCandidate {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for PrioritzedCandidate {
+impl PartialEq for PrioritisedCandidate {
     fn eq(&self, other: &Self) -> bool {
         self.priority == other.priority && self.insertion_order == other.insertion_order
     }
 }
 
-impl Eq for PrioritizedCandidate {}
+impl Eq for PrioritisedCandidate {}
 
 impl Default for ExpansionConfig {
     fn default() -> Self {
