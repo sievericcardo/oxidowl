@@ -258,14 +258,14 @@ impl TableauFactory {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Traditional => {
                 // Convert Individual and ClassExpression to string for the current tableau builder interface
-                let individual_str = &individual.iri.to_string();
+                let individual_str = &individual.iri().to_string();
                 let class_str = &format!("{}", class_expr);
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
             TableauAlgorithm::HyperTableau => {
                 warn!("HyperTableau not yet supported for instance checking, using Traditional tableau");
-                let individual_str = &individual.iri.to_string();
+                let individual_str = &individual.iri().to_string();
                 let class_str = &format!("{}", class_expr);
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
@@ -953,12 +953,30 @@ impl Reasoner {
     }
 
     /// Run a tableau instance check for individuals
+    fn run_tableau_instance_check(&mut self, mut tableau: TableauAlgorithmInstance) -> Result<bool> {
+        debug!("Running tableau instance check");
+        
+        // For instance checking a ∈ C, we check if {a} ⊓ ¬C is unsatisfiable
+        let result = tableau.run()?;
+        
+        // Update statistics
+        self.statistics.tableau_nodes_created += tableau.get_node_count() as u64;
+        self.statistics.backtracking_operations += tableau.get_backtrack_count() as u64;
+        self.statistics.max_tableau_depth = 
+            self.statistics.max_tableau_depth.max(tableau.get_max_depth());
+        
+        match result {
+            TableauState::Satisfiable => Ok(false),
+            TableauState::Unsatisfiable => Ok(true),
+            TableauState::Unknown => Err(Error::reasoning("Tableau returned unknown result")),
+        }
+    }
 
     /// Check if one class expression is a subclass of another
     fn is_subclass_of_expressions(&mut self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
         // For now, delegate to existing tableau-based subsumption checking
         if let (ClassExpression::Class(sub), ClassExpression::Class(sup)) = (subclass, superclass) {
-            self.is_subclass_of(&sub.iri.to_string(), &sup.iri.to_string())
+            self.is_subclass_of(&sub.iri().to_string(), &sup.iri().to_string())
         } else {
             // For complex expressions, we'd need more sophisticated reasoning
             // TODO: implement proper complex expression reasoning
@@ -970,7 +988,7 @@ impl Reasoner {
     fn is_instance_of_expression(&mut self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
         // For now, delegate to existing instance checking for named classes
         if let ClassExpression::Class(cls) = class {
-            self.is_instance_of(&individual.iri.to_string(), &cls.iri.to_string())
+            self.is_instance_of(&individual.iri().to_string(), &cls.iri().to_string())
         } else {
             // For complex expressions, we'd need more sophisticated reasoning
             // TODO: implement proper complex expression reasoning
