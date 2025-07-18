@@ -247,6 +247,14 @@ impl ClassExpression {
         }
     }
 
+    /// Get the IRI if this is a named class
+    pub fn iri(&self) -> Option<&crate::ontology::IRI> {
+        match self {
+            ClassExpression::Class(class) => Some(&class.iri),
+            _ => None,
+        }
+    }
+
     /// Get all named classes referenced in this class expression
     pub fn signature(&self) -> HashSet<Class> {
         let mut signature = HashSet::new();
@@ -544,88 +552,88 @@ impl ClassExpression {
 
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 // Data ranges do not simplify further
-                ClassExpression::DataSomeValuesFrom {
+                Ok(ClassExpression::DataSomeValuesFrom {
                     property: property.clone(),
                     filler: filler.clone(),
-                }
+                })
             }
 
             ClassExpression::DataAllValuesFrom { property, filler } => {
                 // Data ranges do not simplify further
-                ClassExpression::DataAllValuesFrom {
+                Ok(ClassExpression::DataAllValuesFrom {
                     property: property.clone(),
                     filler: filler.clone(),
-                }
+                })
             }
 
             ClassExpression::DataHasValue { property, value } => {
                 // Has value restrictions do not simplify further
-                ClassExpression::DataHasValue {
+                Ok(ClassExpression::DataHasValue {
                     property: property.clone(),
                     value: value.clone(),
-                }
+                })
             }
 
             ClassExpression::DataMinCardinality { property, cardinality, filler } => {
-                ClassExpression::DataMinCardinality {
+                Ok(ClassExpression::DataMinCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
                     filler: filler.clone(),
-                }
+                })
             }
 
             ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
-                ClassExpression::DataMaxCardinality {
+                Ok(ClassExpression::DataMaxCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
                     filler: filler.clone(),
-                }
+                })
             }
 
             ClassExpression::DataExactCardinality { property, cardinality, filler } => {
-                ClassExpression::DataExactCardinality {
+                Ok(ClassExpression::DataExactCardinality {
                     property: property.clone(),
                     cardinality: *cardinality,
                     filler: filler.clone(),
-                }
+                })
             }
 
             ClassExpression::AnnotationAssertion { property, subject, value } => {
                 // Annotation assertions do not simplify further
-                ClassExpression::AnnotationAssertion {
+                Ok(ClassExpression::AnnotationAssertion {
                     property: property.clone(),
                     subject: subject.clone(),
                     value: value.clone(),
-                }
+                })
             }
 
             ClassExpression::SubAnnotationPropertyOf { sub_property, super_property } => {
                 // Sub-annotation property assertions do not simplify further
-                ClassExpression::SubAnnotationPropertyOf {
+                Ok(ClassExpression::SubAnnotationPropertyOf {
                     sub_property: sub_property.clone(),
                     super_property: super_property.clone(),
-                }
+                })
             }
 
             ClassExpression::AnnotationPropertyDomain { property, domain } => {
                 // Annotation property domains do not simplify further
-                ClassExpression::AnnotationPropertyDomain {
+                Ok(ClassExpression::AnnotationPropertyDomain {
                     property: property.clone(),
                     domain: domain.clone(),
-                }
+                })
             }
 
             ClassExpression::AnnotationPropertyRange { property, range } => {
                 // Annotation property ranges do not simplify further
-                ClassExpression::AnnotationPropertyRange {
+                Ok(ClassExpression::AnnotationPropertyRange {
                     property: property.clone(),
                     range: range.clone(),
-                }
+                })
             }
 
             _ => {
                 // Other expressions remain unchanged
-                self.clone()
+                Ok(self.clone())
             }
         }
     }
