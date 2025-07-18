@@ -162,15 +162,15 @@ impl ReasoningService {
 
     // Check equivalence of two class expressions
     pub async fn is_equivalent_to(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
-        let subsumes_1_2 = self.is_subsumed_by(class1, class2)?;
-        let subsumes_2_1 = self.is_subsumed_by(class2, class1)?;
+        let subsumes_1_2 = self.is_subsumed_by(class1, class2).await?;
+        let subsumes_2_1 = self.is_subsumed_by(class2, class1).await?;
         Ok(subsumes_1_2 && subsumes_2_1)
     }
 
     // Check disjointness of two class expressions
     pub async fn is_disjoint_with(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
         let intersection = ClassExpression::ObjectIntersectionOf(vec![class1.clone(), class2.clone()]);
-        let satisfiable = self.is_satisfiable(&intersection)?;
+        let satisfiable = self.is_satisfiable(&intersection).await?;
         Ok(!satisfiable)
     }
 
@@ -192,7 +192,7 @@ impl ReasoningService {
 
         // Log the time taken for the retrieval
         log::info!("Direct superclass retrieval completed in {:?}", start.elapsed());
-        Ok(superclasses)
+        Ok(superclasses.into_iter().collect())
     }
 
     /// Get all direct subclasses of a class expression
@@ -213,7 +213,7 @@ impl ReasoningService {
 
         // Log the time taken for the retrieval
         log::info!("Direct subclass retrieval completed in {:?}", start.elapsed());
-        Ok(subclasses)
+        Ok(subclasses.into_iter().collect())
     }
 
     /// Get all equivalent classes of a class expression
@@ -234,7 +234,7 @@ impl ReasoningService {
 
         // Log the time taken for the retrieval
         log::info!("Equivalent class retrieval completed in {:?}", start.elapsed());
-        Ok(equivalent_classes)
+        Ok(equivalent_classes.into_iter().collect())
     }
 
     /// Get all instances of a class expression
@@ -255,7 +255,7 @@ impl ReasoningService {
 
         // Log the time taken for the retrieval
         log::info!("Instance retrieval completed in {:?}", start.elapsed());
-        Ok(instances)
+        Ok(instances.into_iter().collect())
     }
 
     /// Get all types of an individual
@@ -276,14 +276,14 @@ impl ReasoningService {
 
         // Log the time taken for the retrieval
         log::info!("Type retrieval completed in {:?}", start.elapsed());
-        Ok(types)
+        Ok(types.into_iter().collect())
     }
 
     /// Check if an individual is an instance of a class expression
     pub async fn is_instance_of(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
-        let types = self.get_types(individual, false)?;
+        let types = self.get_types(individual, false).await?;
         for class_type in &types {
-            if self.is_subsumed_by(class_type, class)? {
+            if self.is_subsumed_by(class_type, class).await? {
                 return Ok(true);
             }
         }
@@ -312,7 +312,7 @@ impl ReasoningService {
 
         // Log the time taken for the retrieval
         log::info!("Object property value retrieval completed in {:?}", start.elapsed());
-        Ok(values)
+        Ok(values.into_iter().collect())
     }
 
     /// Get data property values for an individual
@@ -324,8 +324,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let property_expr = DataPropertyExpression::DataProperty(property.clone());
-        let result = reasoner.get_data_property_values(&individual, &property_expr)?;
+        let result = reasoner.get_data_property_values(&individual, property)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -341,7 +340,7 @@ impl ReasoningService {
             .into_iter()
             .map(|s| crate::ontology::Literal {
                 value: s,
-                datatype: url::Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap(),
+                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap()),
                 language: None,
             })
             .collect();
@@ -359,9 +358,9 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            if let Some(cached) = self.cache_manager.classification().get(ontology_hash) {
+            if let Some(cached) = self.cache_manager.read().unwrap().get_classification_result(&self.ontology.as_ref().unwrap()) {
                 log::info!("Classification (cached) completed in {:?}", start.elapsed());
-                return Ok(ClassificationResult::new(cached));
+                return Ok(cached);
             }
         }
 
@@ -381,7 +380,7 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            self.cache_manager.classification().put(ontology_hash, result.hierarchy.clone());
+            cache_manager.store_classification_result(&self.ontology.as_ref().unwrap(), result.clone());
         }
 
         // Log the time taken for classification
@@ -397,9 +396,9 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            if let Some(cached) = self.cache_manager.realization().get(ontology_hash) {
+            if let Some(cached) = cache_manager.get_realization_result(&self.ontology.as_ref().unwrap()) {
                 log::info!("Realization (cached) completed in {:?}", start.elapsed());
-                return Ok(RealizationResult::new(cached));
+                return Ok(cached);
             }
         }
 
@@ -419,7 +418,7 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            self.cache_manager.realization().put(ontology_hash, result.types.clone());
+            cache_manager.store_realization_result(&self.ontology.as_ref().unwrap(), result.clone());
         }
 
         // Log the time taken for realization
