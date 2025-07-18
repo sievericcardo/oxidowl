@@ -3,7 +3,12 @@
 //! This module provides dependency tracking capabilities for backtracking
 //! and maintaining the reasoning dependency graph.
 
-use crate::{Error, Result};
+use cr        for dep in &self.deterministic_deps {
+            dep.hash(state);
+        }
+        for dep in &self.non_deterministic_deps {
+            dep.hash(state);
+        }e::{Error, Result};
 use std::{
     collections::{HashMap, HashSet, BTreeSet},
     fmt,
@@ -155,7 +160,7 @@ pub struct DependencyTracker {
 #[derive(Debug)]
 pub struct DependencySetFactory {
     /// Cache of dependency sets
-    set_cache: HashMap<DependencyId, Arc<DependencySet>>,
+    set_cache: HashMap<DependencySetKey, Arc<DependencySet>>,
 
     /// Empty dependency set singleton
     empty_set: Arc<DependencySet>,
@@ -377,7 +382,7 @@ impl DependencyTracker {
         self.nodes.insert(id, node);
 
         // Add to current branching point
-        self.level_dependencies
+        self.active_dependencies
             .entry(self.current_branching_level)
             .or_insert_with(HashSet::new)
             .insert(id);
@@ -397,7 +402,7 @@ impl DependencyTracker {
 
     /// Add a dependency to a node
     pub fn add_dependency(&mut self, dependent: DependencyId, dependency: DependencyId) -> Result<()> {
-        if self.would_create_cycle(dependent, dependency) {
+        if self.would_create_cycle(dependent, dependency)? {
             return Err(Error::internal("Dependency would create cycle"));
         }
 
@@ -417,7 +422,7 @@ impl DependencyTracker {
     pub fn create_branching_point(&mut self) -> BranchingPoint {
         self.current_branching_level += 1;
         self.branching_stack.push(self.current_branching_level);
-        self.level_dependencies.insert(self.current_branching_level, HashSet::new());
+        self.active_dependencies.insert(self.current_branching_level, HashSet::new());
         self.current_branching_level
     }
 
@@ -517,7 +522,7 @@ impl DependencyTracker {
 
     /// Get dependencies at a specific branching point
     pub fn dependencies_at(&self, branching_point: BranchingPoint) -> Vec<DependencyId> {
-        self.level_dependencies
+        self.active_dependencies
             .get(&branching_point)
             .map_or_else(Vec::new, |deps| deps.iter().cloned().collect())
     }
@@ -656,7 +661,7 @@ impl DependencySetFactory {
 impl DependencyTrackPoint {
     /// Get the branching level
     pub fn branching_level(&self) -> BranchingPoint {
-        self.branching_level
+        self.branching_point
     }
     
     /// Get active dependencies
