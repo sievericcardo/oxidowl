@@ -100,6 +100,20 @@ pub struct CacheConfig {
     pub persistence: bool,
 }
 
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enable_satisfiability_cache: true,
+            enable_completion_graph_cache: true,
+            enable_unsatisfiability_cache: true,
+            max_cache_size_mb: 100,
+            cache_ttl: None,
+            eviction_strategy: CacheEvictionStrategy::LRU,
+            persistence: false,
+        }
+    }
+}
+
 /// Cache eviction strategies
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum CacheEvictionStrategy {
