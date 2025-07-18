@@ -258,14 +258,14 @@ impl TableauFactory {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Traditional => {
                 // Convert Individual and ClassExpression to string for the current tableau builder interface
-                let individual_str = &individual.iri().to_string();
+                let individual_str = &individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
                 let class_str = &format!("{}", class_expr);
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
             TableauAlgorithm::HyperTableau => {
                 warn!("HyperTableau not yet supported for instance checking, using Traditional tableau");
-                let individual_str = &individual.iri().to_string();
+                let individual_str = &individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
                 let class_str = &format!("{}", class_expr);
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
@@ -370,7 +370,17 @@ pub struct ReasoningStatistics {
 impl Reasoner {
     /// Create a new reasoner with the given configuration
     pub fn new(config: ReasonerConfig) -> Result<Self> {
-        let cache_manager = Arc::new(CacheManager::new(config.cache.clone()));
+        let cache_config = crate::cache::CacheConfig {
+            enable_consistency_cache: config.cache.enable_consistency_cache,
+            enable_satisfiability_cache: config.cache.enable_satisfiability_cache,
+            enable_subsumption_cache: config.cache.enable_subsumption_cache,
+            enable_instance_cache: config.cache.enable_instance_cache,
+            enable_classification_cache: config.cache.enable_classification_cache,
+            enable_realization_cache: config.cache.enable_realization_cache,
+            cache_size: config.cache.cache_size,
+            ttl: config.cache.ttl,
+        };
+        let cache_manager = Arc::new(CacheManager::new(cache_config));
         let tableau_builder = TableauBuilder::new(&config.reasoning)?;
         
         Ok(Self {
@@ -391,11 +401,11 @@ impl Reasoner {
         info!("Loading ontology from: {}", path.as_ref().display());
         let start_time = Instant::now();
         
-        let ontology = Ontology::from_file(path, format)?;
+        let ontology = Ontology::from_file(path, Some(format.to_string()))?;
         self.ontology = Some(Arc::new(RwLock::new(ontology)));
         
         // Clear caches when new ontology is loaded
-        self.cache_manager.clear_all();
+        self.cache_manager.write().unwrap().clear_all();
         
         let load_time = start_time.elapsed();
         info!("Ontology loaded in {:?}", load_time);
@@ -426,9 +436,11 @@ impl Reasoner {
         info!("Checking ontology consistency");
         
         // Check cache first
-        if let Some(cached_result) = self.cache_manager.get_consistency_result() {
-            debug!("Consistency result found in cache");
-            return Ok(cached_result);
+        if let Some(ontology) = &self.ontology {
+            if let Some(cached_result) = self.cache_manager.read().unwrap().get_consistency_result(ontology) {
+                debug!("Consistency result found in cache");
+                return Ok(cached_result);
+            }
         }
         
         let ontology = self.get_ontology()?;
@@ -441,7 +453,9 @@ impl Reasoner {
         let result = self.run_tableau_consistency_check(tableau)?;
         
         // Cache the result
-        self.cache_manager.store_consistency_result(result);
+        if let Some(ontology) = &self.ontology {
+            self.cache_manager.write().unwrap().cache_consistency_result(ontology, result);
+        }
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
@@ -466,10 +480,13 @@ impl Reasoner {
         }
         
         // Check cache first
-        if let Some(cached_result) = self.cache_manager.get_satisfiability_result(class_iri) {
-            debug!("Satisfiability result found in cache for: {}", class_iri);
-            return Ok(cached_result);
-        }
+        // TODO: Implement proper class expression parsing
+        // if let Some(class_expr) = self.parse_class_expression(class_iri) {
+        //     if let Some(cached_result) = self.cache_manager.read().unwrap().get_satisfiability_result(&class_expr) {
+        //         debug!("Satisfiability result found in cache for: {}", class_iri);
+        //         return Ok(cached_result);
+        //     }
+        // }
         
         let ontology = self.get_ontology()?;
         let ontology_guard = ontology.read().unwrap();
@@ -481,7 +498,8 @@ impl Reasoner {
         let result = self.run_tableau_satisfiability_check(tableau)?;
         
         // Cache the result
-        self.cache_manager.store_satisfiability_result(class_iri.to_string(), result);
+        // TODO: Implement proper class expression parsing for caching
+        // self.cache_manager.write().unwrap().cache_satisfiability_result(class_expr, result);
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
@@ -498,10 +516,11 @@ impl Reasoner {
         info!("Checking subsumption: {} ⊑ {}", subclass, superclass);
         
         // Check cache first
-        if let Some(cached_result) = self.cache_manager.get_subsumption_result(subclass, superclass) {
-            debug!("Subsumption result found in cache");
-            return Ok(cached_result);
-        }
+        // TODO: Implement proper class expression parsing for caching
+        // if let Some(cached_result) = self.cache_manager.read().unwrap().get_subsumption_result(subclass, superclass) {
+        //     debug!("Subsumption result found in cache");
+        //     return Ok(cached_result);
+        // }
         
         let ontology = self.get_ontology()?;
         let ontology_guard = ontology.read().unwrap();
@@ -728,7 +747,7 @@ impl Reasoner {
             let mut superclasses = Vec::new();
             
             // Get all classes from the signature
-            for class in &ontology_guard.signature.classes {
+            for class in &ontology_guard.signature().classes {
                 let class_expr = ClassExpression::Class(class.clone());
                 if self.is_subsumed_by(concept, &class_expr)? && concept != &class_expr {
                     superclasses.push(class_expr);
@@ -748,7 +767,7 @@ impl Reasoner {
             let mut subclasses = Vec::new();
             
             // Get all classes from the signature
-            for class in &ontology_guard.signature.classes {
+            for class in &ontology_guard.signature().classes {
                 let class_expr = ClassExpression::Class(class.clone());
                 if self.is_subsumed_by(&class_expr, concept)? && concept != &class_expr {
                     subclasses.push(class_expr);
@@ -768,7 +787,7 @@ impl Reasoner {
             let mut equivalent_classes = Vec::new();
             
             // Get all classes from the signature
-            for class in &ontology_guard.signature.classes {
+            for class in &ontology_guard.signature().classes {
                 let class_expr = ClassExpression::Class(class.clone());
                 if concept != &class_expr {
                     let subsumes_1_2 = self.is_subsumed_by(concept, &class_expr)?;
@@ -792,7 +811,7 @@ impl Reasoner {
             let mut instances = Vec::new();
             
             // Get all individuals from the signature
-            for individual in &ontology_guard.signature.individuals {
+            for individual in &ontology_guard.signature().individuals {
                 // TODO: use tableau reasoning
                 instances.push(individual.clone());
             }
@@ -810,7 +829,7 @@ impl Reasoner {
             let mut types = Vec::new();
             
             // Get all classes from the signature
-            for class in &ontology_guard.signature.classes {
+            for class in &ontology_guard.signature().classes {
                 let class_expr = ClassExpression::Class(class.clone());
                 // TODO: use tableau reasoning
                 types.push(class_expr);
@@ -976,7 +995,7 @@ impl Reasoner {
     fn is_subclass_of_expressions(&mut self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
         // For now, delegate to existing tableau-based subsumption checking
         if let (ClassExpression::Class(sub), ClassExpression::Class(sup)) = (subclass, superclass) {
-            self.is_subclass_of(&sub.iri().to_string(), &sup.iri().to_string())
+            self.is_subclass_of(&sub.iri.to_string(), &sup.iri.to_string())
         } else {
             // For complex expressions, we'd need more sophisticated reasoning
             // TODO: implement proper complex expression reasoning
@@ -988,7 +1007,7 @@ impl Reasoner {
     fn is_instance_of_expression(&mut self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
         // For now, delegate to existing instance checking for named classes
         if let ClassExpression::Class(cls) = class {
-            self.is_instance_of(&individual.iri().to_string(), &cls.iri().to_string())
+            self.is_instance_of(&individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string()), &cls.iri.to_string())
         } else {
             // For complex expressions, we'd need more sophisticated reasoning
             // TODO: implement proper complex expression reasoning
