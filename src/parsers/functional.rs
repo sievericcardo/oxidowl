@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, IRI},
+    ontology::{Ontology, ClassExpression, Individual, NamedIndividual, IRI},
 };
 
 /// Functional Syntax Parser
@@ -333,10 +333,13 @@ impl FunctionalParser {
                     iri: url::Url::parse(&class_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
                 };
-                let individual = crate::ontology::Individual {
-                    iri: url::Url::parse(&individual_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                };
+                let individual = crate::ontology::Individual::Named(
+                    crate::ontology::NamedIndividual {
+                        iri: url::Url::parse(&individual_iri)
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .into(), // Convert URL to IRI
+                    }
+                );
                 
                 let axiom = crate::ontology::ClassAssertionAxiom {
                     class: ClassExpression::Class(class),
@@ -377,14 +380,20 @@ impl FunctionalParser {
                     iri: url::Url::parse(&prop_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
                 };
-                let subject = crate::ontology::Individual {
-                    iri: url::Url::parse(&subj_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                };
-                let object = crate::ontology::Individual {
-                    iri: url::Url::parse(&obj_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                };
+                let subject = crate::ontology::Individual::Named(
+                    crate::ontology::NamedIndividual {
+                        iri: url::Url::parse(&subj_iri)
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .into(), // Convert URL to IRI
+                    }
+                );
+                let object = crate::ontology::Individual::Named(
+                    crate::ontology::NamedIndividual {
+                        iri: url::Url::parse(&obj_iri)
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .into(), // Convert URL to IRI
+                    }
+                );
                 
                 let axiom = crate::ontology::ObjectPropertyAssertionAxiom {
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
