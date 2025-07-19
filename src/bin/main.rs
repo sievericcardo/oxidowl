@@ -254,7 +254,7 @@ fn setup_logging(verbosity: u8, quiet: bool) {
 fn load_configuration(config_path: Option<&std::path::Path>) -> Result<ReasonerConfig> {
     if let Some(path) = config_path {
         info!("Loading configuration from: {}", path.display());
-        ReasonerConfig::from_file(path)
+        ReasonerConfig::load_from_file(path)
     } else {
         Ok(ReasonerConfig::default())
     }
