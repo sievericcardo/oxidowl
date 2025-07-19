@@ -358,9 +358,13 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            if let Some(cached) = self.cache_manager.read().unwrap().get_classification_result(&self.ontology.as_ref().unwrap()) {
-                log::info!("Classification (cached) completed in {:?}", start.elapsed());
-                return Ok(cached);
+            // Get ontology from reasoner
+            let reasoner = self.reasoner.read().unwrap();
+            if let Ok(ontology) = reasoner.get_ontology() {
+                if let Some(cached) = cache_manager.get_classification_result(&ontology) {
+                    log::info!("Classification (cached) completed in {:?}", start.elapsed());
+                    return Ok(cached);
+                }
             }
         }
 
@@ -380,7 +384,11 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            cache_manager.store_classification_result(&self.ontology.as_ref().unwrap(), result.clone());
+            // Get ontology from reasoner
+            let reasoner = self.reasoner.read().unwrap();
+            if let Ok(ontology) = reasoner.get_ontology() {
+                cache_manager.store_classification_result(&ontology, result.clone());
+            }
         }
 
         // Log the time taken for classification
@@ -396,9 +404,13 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            if let Some(cached) = cache_manager.get_realization_result(&self.ontology.as_ref().unwrap()) {
-                log::info!("Realization (cached) completed in {:?}", start.elapsed());
-                return Ok(cached);
+            // Get ontology from reasoner
+            let reasoner = self.reasoner.read().unwrap();
+            if let Ok(ontology) = reasoner.get_ontology() {
+                if let Some(cached) = cache_manager.get_realization_result(&ontology) {
+                    log::info!("Realization (cached) completed in {:?}", start.elapsed());
+                    return Ok(cached);
+                }
             }
         }
 
@@ -418,7 +430,11 @@ impl ReasoningService {
         if self.config.cache.enable_satisfiability_cache {
             let mut cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
-            cache_manager.store_realization_result(&self.ontology.as_ref().unwrap(), result.clone());
+            // Get ontology from reasoner
+            let reasoner = self.reasoner.read().unwrap();
+            if let Ok(ontology) = reasoner.get_ontology() {
+                cache_manager.store_realization_result(&ontology, result.clone());
+            }
         }
 
         // Log the time taken for realization
