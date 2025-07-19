@@ -49,7 +49,7 @@ async fn test_pump1_classification() -> Result<()> {
     
     assert!(is_instance, "pump1 should be classified as OperationalR385");
     
-    println!("✅ pump1 correctly classified as OperationalR385");
+    println!("pump1 correctly classified as OperationalR385");
     Ok(())
 }
 
@@ -70,7 +70,7 @@ async fn test_pump1_operational_classification() -> Result<()> {
     
     assert!(is_instance, "pump1 should be classified as Operational");
     
-    println!("✅ pump1 correctly classified as Operational");
+    println!("pump1 correctly classified as Operational");
     Ok(())
 }
 
@@ -91,7 +91,7 @@ async fn test_pump1_pump_classification() -> Result<()> {
     
     assert!(is_instance, "pump1 should be classified as Pump");
     
-    println!("✅ pump1 correctly classified as Pump");
+    println!("pump1 correctly classified as Pump");
     Ok(())
 }
 
@@ -117,7 +117,7 @@ async fn test_pump_disjoint_union() -> Result<()> {
     assert!(is_equivalent, 
         "The union 'Maintenance or Operational or Overheating or Underheating' should be equivalent to 'Pump'");
     
-    println!("✅ Pump disjoint union property verified");
+    println!("Pump disjoint union property verified");
     Ok(())
 }
 
@@ -144,7 +144,7 @@ async fn test_all_pumps_classification() -> Result<()> {
     assert!(reasoning_service.is_instance_of(&pump3, &maintenance_r365).await?, 
         "pump3 should be MaintenanceR365");
     
-    println!("✅ All pumps correctly classified based on their properties");
+    println!("All pumps correctly classified based on their properties");
     Ok(())
 }
 
@@ -193,7 +193,7 @@ async fn test_dl_queries() -> Result<()> {
         Err(e) => panic!("Error checking Pump satisfiability: {}", e),
     }
     
-    println!("✅ All DL queries executed successfully");
+    println!("All DL queries executed successfully");
     Ok(())
 }
 
@@ -206,7 +206,7 @@ async fn test_greenhouse_consistency() -> Result<()> {
     
     assert!(is_consistent, "The greenhouse ontology should be consistent");
     
-    println!("✅ Greenhouse ontology is consistent");
+    println!("Greenhouse ontology is consistent");
     Ok(())
 }
 
@@ -228,7 +228,7 @@ async fn test_class_hierarchy() -> Result<()> {
     let is_subclass = reasoning_service.is_subclass_of(&operational, &pump).await?;
     assert!(is_subclass, "Operational should be a subclass of Pump");
     
-    println!("✅ Class hierarchy correctly inferred");
+    println!("Class hierarchy correctly inferred");
     Ok(())
 }
 
@@ -245,6 +245,6 @@ async fn test_property_restrictions() -> Result<()> {
     let satisfies_restriction = reasoning_service.is_instance_of(&pump1, &operational_r385).await?;
     assert!(satisfies_restriction, "pump1 should satisfy OperationalR385 temperature restrictions");
     
-    println!("✅ Property restrictions correctly evaluated");
+    println!("Property restrictions correctly evaluated");
     Ok(())
 }

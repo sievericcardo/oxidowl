@@ -20,7 +20,7 @@ async fn test_reasoning_service_creation() {
     let _reasoning_service = ReasoningService::new(ontology, config);
     
     // Basic creation should work
-    println!("✅ ReasoningService created successfully");
+    println!("ReasoningService created successfully");
 }
 
 #[tokio::test]
@@ -30,5 +30,5 @@ async fn test_basic_functionality() {
     let _reasoning_service = ReasoningService::new(ontology, config);
     
     // For now, just test that we can create the service
-    println!("✅ Basic functionality test passed");
+    println!("Basic functionality test passed");
 }

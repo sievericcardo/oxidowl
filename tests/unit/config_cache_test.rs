@@ -18,7 +18,7 @@ fn test_reasoner_config_creation() {
     assert!(config.reasoning.enable_blocking);
     assert!(config.cache.enable_satisfiability_cache);
     
-    println!("✅ ReasonerConfig creation works");
+    println!("ReasonerConfig creation works");
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn test_config_validation() -> Result<()> {
         Err(_) => println!("Correctly rejected zero memory limit"),
     }
     
-    println!("✅ Config validation works");
+    println!("Config validation works");
     Ok(())
 }
 
@@ -68,7 +68,7 @@ fn test_config_presets() {
     assert_eq!(web_config.server.max_connections, 500);
     assert_eq!(web_config.server.request_timeout, Duration::from_secs(60));
     
-    println!("✅ Config presets work");
+    println!("Config presets work");
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn test_logging_levels() {
         assert!(config.validate().is_ok());
     }
     
-    println!("✅ Logging levels work");
+    println!("Logging levels work");
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn test_tableau_algorithms() {
     config.reasoning.tableau_algorithm = TableauAlgorithm::HyperTableau;
     assert!(config.validate().is_ok());
     
-    println!("✅ Tableau algorithms work");
+    println!("Tableau algorithms work");
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn test_monitoring_levels() {
         assert!(config.validate().is_ok());
     }
     
-    println!("✅ Monitoring levels work");
+    println!("Monitoring levels work");
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn test_cache_creation() {
     assert_eq!(cache.size(), 0);
     assert!(cache.is_empty());
     
-    println!("✅ ReasoningCache creation works");
+    println!("ReasoningCache creation works");
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn test_cache_operations() {
         _ => panic!("Expected boolean cache entry"),
     }
     
-    println!("✅ Cache operations work");
+    println!("Cache operations work");
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn test_cache_key_types() {
     assert_ne!(satisfiability_key, consistency_key);
     assert_ne!(subsumption_key, consistency_key);
     
-    println!("✅ Cache key types work");
+    println!("Cache key types work");
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn test_cache_entry_types() {
         _ => panic!("Expected classes entry"),
     }
     
-    println!("✅ Cache entry types work");
+    println!("Cache entry types work");
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn test_cache_expiration() {
     cache.cleanup_expired();
     assert!(cache.get(&key).is_none());
     
-    println!("✅ Cache expiration works");
+    println!("Cache expiration works");
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn test_cache_size_limits() {
     // Should not exceed max size
     assert!(cache.size() <= 2);
     
-    println!("✅ Cache size limits work");
+    println!("Cache size limits work");
 }
 
 #[test]
@@ -308,7 +308,7 @@ fn test_cache_statistics() {
     assert_eq!(stats.misses, 1);
     assert_eq!(stats.entries, 1);
     
-    println!("✅ Cache statistics work");
+    println!("Cache statistics work");
 }
 
 #[test]
@@ -338,7 +338,7 @@ fn test_cache_persistence() -> Result<()> {
     assert_eq!(new_cache.size(), 1);
     assert!(new_cache.get(&key1).is_some());
     
-    println!("✅ Cache persistence works");
+    println!("Cache persistence works");
     Ok(())
 }
 
@@ -377,7 +377,7 @@ fn test_cache_thread_safety() {
     
     assert_eq!(cache.size(), 5);
     
-    println!("✅ Cache thread safety works");
+    println!("Cache thread safety works");
 }
 
 #[test]
@@ -392,7 +392,7 @@ fn test_config_serialization() -> Result<()> {
     let deserialized: ReasonerConfig = serde_json::from_str(&json)?;
     assert_eq!(deserialized.logging.level, config.logging.level);
     
-    println!("✅ Config serialization works");
+    println!("Config serialization works");
     Ok(())
 }
 
@@ -427,7 +427,7 @@ max_cache_size_mb = 256
     assert!(config.reasoning.enable_blocking);
     assert_eq!(config.reasoning.timeout, Some(Duration::from_secs(60)));
     
-    println!("✅ Config file loading works");
+    println!("Config file loading works");
     Ok(())
 }
 
@@ -446,5 +446,5 @@ fn test_environment_config() {
     std::env::remove_var("OXIDOWL_LOG_LEVEL");
     std::env::remove_var("OXIDOWL_ENABLE_CACHE");
     
-    println!("✅ Environment config works");
+    println!("Environment config works");
 }

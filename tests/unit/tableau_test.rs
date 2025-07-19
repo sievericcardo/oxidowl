@@ -19,7 +19,7 @@ fn test_tableau_creation() -> Result<()> {
     assert_eq!(tableau.get_state(), TableauState::Satisfiable);
     assert!(!tableau.is_closed());
     
-    println!("✅ Tableau creation works");
+    println!("Tableau creation works");
     Ok(())
 }
 
@@ -35,7 +35,7 @@ fn test_tableau_node_creation() -> Result<()> {
     assert_eq!(node.id, node_id);
     assert_eq!(node.node_type, NodeType::Individual);
     
-    println!("✅ Tableau node creation works");
+    println!("Tableau node creation works");
     Ok(())
 }
 
@@ -53,7 +53,7 @@ fn test_concept_addition() -> Result<()> {
     let node = tableau.get_node(node_id)?;
     assert!(node.concepts.contains(&concept));
     
-    println!("✅ Concept addition works");
+    println!("Concept addition works");
     Ok(())
 }
 
@@ -75,7 +75,7 @@ fn test_tableau_expansion() -> Result<()> {
     let expansions = tableau.get_applicable_expansions();
     assert!(!expansions.is_empty(), "Should have applicable expansions for disjunction");
     
-    println!("✅ Tableau expansion works");
+    println!("Tableau expansion works");
     Ok(())
 }
 
@@ -97,7 +97,7 @@ fn test_clash_detection() -> Result<()> {
     let clashes = tableau.detect_clashes();
     assert!(!clashes.is_empty(), "Should detect clash between A and ¬A");
     
-    println!("✅ Clash detection works");
+    println!("Clash detection works");
     Ok(())
 }
 
@@ -111,7 +111,7 @@ fn test_tableau_builder() -> Result<()> {
     
     assert_eq!(tableau.get_state(), TableauState::Satisfiable);
     
-    println!("✅ TableauBuilder works");
+    println!("TableauBuilder works");
     Ok(())
 }
 
@@ -126,7 +126,7 @@ fn test_tableau_satisfiability() -> Result<()> {
     // Should be satisfiable for a simple class
     assert_eq!(tableau.get_state(), TableauState::Satisfiable);
     
-    println!("✅ Tableau satisfiability checking works");
+    println!("Tableau satisfiability checking works");
     Ok(())
 }
 
@@ -141,7 +141,7 @@ fn test_tableau_subsumption() -> Result<()> {
     // Should build tableau for subsumption check
     assert!(tableau.get_node_count() > 0);
     
-    println!("✅ Tableau subsumption checking works");
+    println!("Tableau subsumption checking works");
     Ok(())
 }
 
@@ -156,7 +156,7 @@ fn test_tableau_instance_check() -> Result<()> {
     // Should build tableau for instance check
     assert!(tableau.get_node_count() > 0);
     
-    println!("✅ Tableau instance checking works");
+    println!("Tableau instance checking works");
     Ok(())
 }
 
@@ -171,7 +171,7 @@ fn test_tableau_factory() -> Result<()> {
     // Should create a tableau runner
     assert!(runner.get_node_count() >= 0);
     
-    println!("✅ TableauFactory works");
+    println!("TableauFactory works");
     Ok(())
 }
 
@@ -194,7 +194,7 @@ fn test_dependency_tracking() -> Result<()> {
         assert!(!concept_deps.is_empty());
     }
     
-    println!("✅ Dependency tracking works");
+    println!("Dependency tracking works");
     Ok(())
 }
 
@@ -215,7 +215,7 @@ fn test_tableau_completion() -> Result<()> {
     // (depending on implementation details)
     println!("Tableau completion status: {}", is_complete);
     
-    println!("✅ Tableau completion check works");
+    println!("Tableau completion check works");
     Ok(())
 }
 
@@ -243,7 +243,7 @@ fn test_tableau_blocking() -> Result<()> {
     
     println!("Blocking status for node {}: {:?}", node2_id, blocking_status);
     
-    println!("✅ Tableau blocking works");
+    println!("Tableau blocking works");
     Ok(())
 }
 
@@ -275,6 +275,6 @@ fn test_tableau_backtracking() -> Result<()> {
     let node = tableau.get_node(node_id)?;
     println!("Node after backtracking has {} concepts", node.concepts.len());
     
-    println!("✅ Tableau backtracking works");
+    println!("Tableau backtracking works");
     Ok(())
 }

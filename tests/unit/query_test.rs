@@ -81,7 +81,7 @@ fn test_dl_query_parser_creation() {
     // Basic creation should work
     assert!(true);
     
-    println!("✅ DLQueryParser creation works");
+    println!("DLQueryParser creation works");
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn test_simple_class_parsing() -> Result<()> {
         _ => panic!("Expected simple class expression"),
     }
     
-    println!("✅ Simple class parsing works");
+    println!("Simple class parsing works");
     Ok(())
 }
 
@@ -118,7 +118,7 @@ fn test_tokenization() -> Result<()> {
     let tokens = parser.tokenize("<http://example.org/Animal> and <http://example.org/Dog>")?;
     assert_eq!(tokens, vec!["<http://example.org/Animal>", "and", "<http://example.org/Dog>"]);
     
-    println!("✅ Tokenization works");
+    println!("Tokenization works");
     Ok(())
 }
 
@@ -144,7 +144,7 @@ fn test_boolean_operations_parsing() -> Result<()> {
         _ => panic!("Expected union expression"),
     }
     
-    println!("✅ Boolean operations parsing works");
+    println!("Boolean operations parsing works");
     Ok(())
 }
 
@@ -164,7 +164,7 @@ fn test_negation_parsing() -> Result<()> {
         _ => panic!("Expected complement expression"),
     }
     
-    println!("✅ Negation parsing works");
+    println!("Negation parsing works");
     Ok(())
 }
 
@@ -179,7 +179,7 @@ async fn test_dl_query_engine_creation() -> Result<()> {
     // Basic creation should work
     assert!(true);
     
-    println!("✅ DLQueryEngine creation works");
+    println!("DLQueryEngine creation works");
     Ok(())
 }
 
@@ -199,7 +199,7 @@ async fn test_instances_query() -> Result<()> {
         Err(e) => panic!("Error querying Animal instances: {}", e),
     }
     
-    println!("✅ Instances query works");
+    println!("Instances query works");
     Ok(())
 }
 
@@ -219,7 +219,7 @@ async fn test_subclasses_query() -> Result<()> {
         Err(e) => panic!("Error querying Animal subclasses: {}", e),
     }
     
-    println!("✅ Subclasses query works");
+    println!("Subclasses query works");
     Ok(())
 }
 
@@ -248,7 +248,7 @@ async fn test_satisfiability_query() -> Result<()> {
         Err(e) => panic!("Error checking contradictory satisfiability: {}", e),
     }
     
-    println!("✅ Satisfiability query works");
+    println!("Satisfiability query works");
     Ok(())
 }
 
@@ -268,7 +268,7 @@ async fn test_subsumption_query() -> Result<()> {
         Err(e) => panic!("Error checking subsumption: {}", e),
     }
     
-    println!("✅ Subsumption query works");
+    println!("Subsumption query works");
     Ok(())
 }
 
@@ -287,7 +287,7 @@ async fn test_complex_class_expressions() -> Result<()> {
         Err(e) => panic!("Error checking complex expression: {}", e),
     }
     
-    println!("✅ Complex class expressions work");
+    println!("Complex class expressions work");
     Ok(())
 }
 
@@ -307,7 +307,7 @@ fn test_query_result_formatting() {
     let formatted = format!("{}", boolean_result);
     assert!(formatted.contains("true"));
     
-    println!("✅ Query result formatting works");
+    println!("Query result formatting works");
 }
 
 #[test]
@@ -318,7 +318,7 @@ fn test_query_type_detection() {
     assert_eq!(QueryType::from_string("satisfiable: Dog"), QueryType::Satisfiability);
     assert_eq!(QueryType::from_string("subsumes: Animal, Dog"), QueryType::Subsumption);
     
-    println!("✅ Query type detection works");
+    println!("Query type detection works");
 }
 
 #[tokio::test]
@@ -347,7 +347,7 @@ async fn test_error_handling() -> Result<()> {
         }
     }
     
-    println!("✅ Error handling works");
+    println!("Error handling works");
     Ok(())
 }
 
@@ -378,7 +378,7 @@ async fn test_batch_queries() -> Result<()> {
         }
     }
     
-    println!("✅ Batch queries work");
+    println!("Batch queries work");
     Ok(())
 }
 
@@ -404,6 +404,6 @@ async fn test_direct_reasoning_methods() -> Result<()> {
     let types = reasoning_service.get_types(&fido, false).await?;
     println!("Fido types: {:?}", types);
     
-    println!("✅ Direct reasoning methods work");
+    println!("Direct reasoning methods work");
     Ok(())
 }

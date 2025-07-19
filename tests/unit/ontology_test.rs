@@ -21,7 +21,7 @@ fn test_ontology_creation() {
     assert_eq!(ontology.individuals().len(), 0);
     assert_eq!(ontology.axioms().len(), 0);
     
-    println!("✅ Ontology creation works");
+    println!("Ontology creation works");
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn test_class_management() {
     assert!(ontology.contains_class(&animal_class.iri));
     assert!(ontology.contains_class(&dog_class.iri));
     
-    println!("✅ Class management works");
+    println!("Class management works");
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn test_individual_management() {
         assert!(ontology.contains_individual(fido_iri));
     }
     
-    println!("✅ Individual management works");
+    println!("Individual management works");
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn test_axiom_management() {
     
     assert_eq!(ontology.axioms().len(), 1);
     
-    println!("✅ Axiom management works");
+    println!("Axiom management works");
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn test_class_assertion() {
     
     assert_eq!(ontology.axioms().len(), 1);
     
-    println!("✅ Class assertion works");
+    println!("Class assertion works");
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn test_object_property_management() {
     
     assert_eq!(ontology.object_properties().len(), 2);
     
-    println!("✅ Object property management works");
+    println!("Object property management works");
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn test_iri_functionality() {
     
     assert_eq!(iri1.to_string(), "http://example.org/Animal");
     
-    println!("✅ IRI functionality works");
+    println!("IRI functionality works");
 }
 
 #[test]
@@ -168,7 +168,7 @@ fn test_class_expression_creation() {
         _ => panic!("Should be an intersection expression"),
     }
     
-    println!("✅ Class expression creation works");
+    println!("Class expression creation works");
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn test_concept_store() {
     assert!(store.contains_class(&animal_class.iri));
     assert!(store.contains_class(&dog_class.iri));
     
-    println!("✅ ConceptStore works");
+    println!("ConceptStore works");
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn test_individual_store() {
     
     assert_eq!(store.individuals().len(), 2);
     
-    println!("✅ IndividualStore works");
+    println!("IndividualStore works");
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn test_property_store() {
     
     assert_eq!(store.object_properties().len(), 2);
     
-    println!("✅ PropertyStore works");
+    println!("PropertyStore works");
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn test_axiom_store() {
     
     assert_eq!(store.axioms().len(), 1);
     
-    println!("✅ AxiomStore works");
+    println!("AxiomStore works");
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn test_anonymous_individuals() {
     // Anonymous individuals should not have IRIs
     assert!(anon_individual.iri().is_none());
     
-    println!("✅ Anonymous individuals work");
+    println!("Anonymous individuals work");
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn test_ontology_queries() {
     let subclass_axioms = ontology.get_subclass_axioms();
     assert_eq!(subclass_axioms.len(), 0); // No subclass axioms added
     
-    println!("✅ Ontology queries work");
+    println!("Ontology queries work");
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn test_ontology_statistics() {
     assert_eq!(stats.individual_count, 1);
     assert_eq!(stats.axiom_count, 1);
     
-    println!("✅ Ontology statistics work");
+    println!("Ontology statistics work");
 }
 
 #[test]
@@ -347,6 +347,6 @@ fn test_ontology_validation() -> Result<()> {
     let validation_result = ontology.validate();
     assert!(validation_result.is_ok(), "Valid ontology should pass validation");
     
-    println!("✅ Ontology validation works");
+    println!("Ontology validation works");
     Ok(())
 }

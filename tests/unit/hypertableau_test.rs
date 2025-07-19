@@ -28,7 +28,7 @@ fn test_hypertableau_creation() -> Result<()> {
     assert_eq!(tableau.get_state(), TableauState::Satisfiable);
     assert!(!tableau.is_reasoning_complete());
     
-    println!("✅ HyperTableau creation works");
+    println!("HyperTableau creation works");
     Ok(())
 }
 
@@ -55,7 +55,7 @@ fn test_extension_manager() -> Result<()> {
     assert!(manager.contains_concept_assertion(individual, &concept));
     assert!(manager.contains_role_assertion(subject, &property, object));
     
-    println!("✅ ExtensionManager works");
+    println!("ExtensionManager works");
     Ok(())
 }
 
@@ -85,7 +85,7 @@ fn test_ground_disjunction() -> Result<()> {
     assert_eq!(disjunction.get_id(), 0);
     assert_eq!(disjunction.get_arguments().len(), 1);
     
-    println!("✅ GroundDisjunction works");
+    println!("GroundDisjunction works");
     Ok(())
 }
 
@@ -113,7 +113,7 @@ fn test_tableau_monitor() -> Result<()> {
     let stats = monitor.get_statistics();
     assert!(stats.events_logged >= 1);
     
-    println!("✅ TableauMonitor works");
+    println!("TableauMonitor works");
     Ok(())
 }
 
@@ -153,7 +153,7 @@ fn test_branching_manager() -> Result<()> {
         assert!(branch.disjunction_id == 1);
     }
     
-    println!("✅ BranchingManager works");
+    println!("BranchingManager works");
     Ok(())
 }
 
@@ -179,7 +179,7 @@ fn test_dependency_tracking() -> Result<()> {
     deps.merge(other_deps);
     assert!(deps.contains_axiom("axiom3"));
     
-    println!("✅ Dependency tracking works");
+    println!("Dependency tracking works");
     Ok(())
 }
 
@@ -201,7 +201,7 @@ fn test_clash_detection() -> Result<()> {
     let clashes = manager.detect_clashes();
     assert!(!clashes.is_empty(), "Should detect clash between A and ¬A");
     
-    println!("✅ Clash detection works");
+    println!("Clash detection works");
     Ok(())
 }
 
@@ -220,7 +220,7 @@ fn test_hypertableau_reasoning() -> Result<()> {
     // Test that tableau is in consistent state
     assert_eq!(tableau.get_state(), TableauState::Satisfiable);
     
-    println!("✅ HyperTableau reasoning works");
+    println!("HyperTableau reasoning works");
     Ok(())
 }
 
@@ -245,7 +245,7 @@ fn test_extension_table_operations() -> Result<()> {
     let stats = manager.get_statistics();
     assert!(stats.total_facts >= 1);
     
-    println!("✅ Extension table operations work");
+    println!("Extension table operations work");
     Ok(())
 }
 
@@ -269,7 +269,7 @@ fn test_blocking_in_hypertableau() -> Result<()> {
     let is_blocked = tableau.check_blocking(node2_id);
     println!("Node {} blocking status: {:?}", node2_id, is_blocked);
     
-    println!("✅ Blocking in HyperTableau works");
+    println!("Blocking in HyperTableau works");
     Ok(())
 }
 
@@ -310,7 +310,7 @@ fn test_disjunction_priority_handling() -> Result<()> {
     // High priority should be processed first
     assert!(tableau.has_pending_disjunctions());
     
-    println!("✅ Disjunction priority handling works");
+    println!("Disjunction priority handling works");
     Ok(())
 }
 
@@ -336,7 +336,7 @@ fn test_backtracking() -> Result<()> {
     let facts_after_restore = tableau.extension_manager.get_statistics().total_facts;
     assert!(facts_after_restore <= initial_facts, "Facts should be restored");
     
-    println!("✅ Backtracking works");
+    println!("Backtracking works");
     Ok(())
 }
 
@@ -358,7 +358,7 @@ fn test_statistics_collection() -> Result<()> {
     assert_eq!(stats.backtracks, 2);
     assert_eq!(stats.facts_derived, 20);
     
-    println!("✅ Statistics collection works");
+    println!("Statistics collection works");
     Ok(())
 }
 
@@ -380,7 +380,7 @@ fn test_hypertableau_state_management() -> Result<()> {
     assert_eq!(tableau.get_state(), TableauState::Satisfiable);
     assert!(!tableau.is_closed());
     
-    println!("✅ HyperTableau state management works");
+    println!("HyperTableau state management works");
     Ok(())
 }
 
@@ -415,6 +415,6 @@ fn test_rule_application() -> Result<()> {
     // Should make progress by handling the disjunction
     println!("Progress made: {}", progress_made);
     
-    println!("✅ Rule application works");
+    println!("Rule application works");
     Ok(())
 }

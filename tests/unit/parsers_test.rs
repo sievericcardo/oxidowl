@@ -100,7 +100,7 @@ fn test_turtle_parser_creation() {
     let parser = TurtleParser::new();
     
     assert!(true);
-    println!("✅ TurtleParser creation works");
+    println!("TurtleParser creation works");
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_turtle_parsing() -> Result<()> {
     assert!(ontology.individuals().len() >= 1); // Fido
     assert!(ontology.axioms().len() >= 1); // SubClassOf, ClassAssertion
     
-    println!("✅ Turtle parsing works - classes: {}, individuals: {}, axioms: {}", 
+    println!("Turtle parsing works - classes: {}, individuals: {}, axioms: {}", 
              ontology.classes().len(), ontology.individuals().len(), ontology.axioms().len());
     Ok(())
 }
@@ -125,7 +125,7 @@ fn test_ntriples_parser_creation() {
     let parser = NTriplesParser::new();
     
     assert!(true);
-    println!("✅ NTriplesParser creation works");
+    println!("NTriplesParser creation works");
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn test_ntriples_parsing() -> Result<()> {
     assert!(ontology.classes().len() >= 2);
     assert!(ontology.individuals().len() >= 1);
     
-    println!("✅ N-Triples parsing works - classes: {}, individuals: {}, axioms: {}", 
+    println!("N-Triples parsing works - classes: {}, individuals: {}, axioms: {}", 
              ontology.classes().len(), ontology.individuals().len(), ontology.axioms().len());
     Ok(())
 }
@@ -149,7 +149,7 @@ fn test_rdf_xml_parser_creation() {
     let parser = RdfXmlParser::new();
     
     assert!(true);
-    println!("✅ RdfXmlParser creation works");
+    println!("RdfXmlParser creation works");
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn test_rdf_xml_parsing() -> Result<()> {
     assert!(ontology.classes().len() >= 2);
     assert!(ontology.individuals().len() >= 1);
     
-    println!("✅ RDF/XML parsing works - classes: {}, individuals: {}, axioms: {}", 
+    println!("RDF/XML parsing works - classes: {}, individuals: {}, axioms: {}", 
              ontology.classes().len(), ontology.individuals().len(), ontology.axioms().len());
     Ok(())
 }
@@ -173,7 +173,7 @@ fn test_owl_xml_parser_creation() {
     let parser = OwlXmlParser::new();
     
     assert!(true);
-    println!("✅ OwlXmlParser creation works");
+    println!("OwlXmlParser creation works");
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn test_owl_xml_parsing() -> Result<()> {
     assert!(ontology.individuals().len() >= 1);
     assert!(ontology.axioms().len() >= 2); // SubClassOf + ClassAssertion
     
-    println!("✅ OWL XML parsing works - classes: {}, individuals: {}, axioms: {}", 
+    println!("OWL XML parsing works - classes: {}, individuals: {}, axioms: {}", 
              ontology.classes().len(), ontology.individuals().len(), ontology.axioms().len());
     Ok(())
 }
@@ -198,7 +198,7 @@ fn test_functional_parser_creation() {
     let parser = FunctionalParser::new();
     
     assert!(true);
-    println!("✅ FunctionalParser creation works");
+    println!("FunctionalParser creation works");
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn test_functional_parsing() -> Result<()> {
     assert!(ontology.individuals().len() >= 1);
     assert!(ontology.axioms().len() >= 2);
     
-    println!("✅ Functional syntax parsing works - classes: {}, individuals: {}, axioms: {}", 
+    println!("Functional syntax parsing works - classes: {}, individuals: {}, axioms: {}", 
              ontology.classes().len(), ontology.individuals().len(), ontology.axioms().len());
     Ok(())
 }
@@ -229,7 +229,7 @@ fn test_format_detection() {
     assert_eq!(OntologyFormat::from_extension("ofn"), OntologyFormat::Functional);
     assert_eq!(OntologyFormat::from_extension("unknown"), OntologyFormat::Auto);
     
-    println!("✅ Format detection works");
+    println!("Format detection works");
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn test_format_auto_detection() -> Result<()> {
     let xml_format = OntologyFormat::detect_from_content(SIMPLE_RDF_XML)?;
     assert!(xml_format == OntologyFormat::RdfXml || xml_format == OntologyFormat::OwlXml);
     
-    println!("✅ Auto format detection works");
+    println!("Auto format detection works");
     Ok(())
 }
 
@@ -263,7 +263,7 @@ fn test_parser_error_handling() {
         }
     }
     
-    println!("✅ Parser error handling works");
+    println!("Parser error handling works");
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn test_empty_ontology_parsing() -> Result<()> {
     assert_eq!(ontology.classes().len(), 0);
     assert_eq!(ontology.individuals().len(), 0);
     
-    println!("✅ Empty ontology parsing works");
+    println!("Empty ontology parsing works");
     Ok(())
 }
 
@@ -321,7 +321,7 @@ fn test_complex_turtle_parsing() -> Result<()> {
     assert!(ontology.individuals().len() >= 3); // Fido, Buddy, John
     assert!(ontology.object_properties().len() >= 1); // hasChild
     
-    println!("✅ Complex Turtle parsing works - classes: {}, individuals: {}, properties: {}", 
+    println!("Complex Turtle parsing works - classes: {}, individuals: {}, properties: {}", 
              ontology.classes().len(), ontology.individuals().len(), ontology.object_properties().len());
     Ok(())
 }
@@ -351,7 +351,7 @@ fn test_datatype_properties_parsing() -> Result<()> {
     // Should have parsed datatype properties
     assert!(ontology.data_properties().len() >= 1); // hasAge
     
-    println!("✅ Datatype properties parsing works");
+    println!("Datatype properties parsing works");
     Ok(())
 }
 
@@ -380,7 +380,7 @@ fn test_annotations_parsing() -> Result<()> {
     // Should have parsed classes with annotations
     assert!(ontology.classes().len() >= 2);
     
-    println!("✅ Annotations parsing works");
+    println!("Annotations parsing works");
     Ok(())
 }
 
@@ -405,7 +405,7 @@ ex2:Dog rdf:type owl:Class ;
     // Should handle different namespaces correctly
     assert!(ontology.classes().len() >= 2);
     
-    println!("✅ Namespace handling works");
+    println!("Namespace handling works");
     Ok(())
 }
 
@@ -421,7 +421,7 @@ fn test_parser_factory() -> Result<()> {
     // Should create appropriate parser types
     assert!(true);
     
-    println!("✅ Parser factory works");
+    println!("Parser factory works");
     Ok(())
 }
 
@@ -445,6 +445,6 @@ fn test_parser_with_base_iri() -> Result<()> {
     // Should handle base IRI correctly
     assert!(ontology.classes().len() >= 2);
     
-    println!("✅ Base IRI handling works");
+    println!("Base IRI handling works");
     Ok(())
 }
