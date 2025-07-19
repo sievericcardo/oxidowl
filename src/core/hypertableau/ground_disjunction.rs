@@ -8,7 +8,7 @@ use crate::{
         dependency::DependencySet,
         hypertableau::extension_table::ExtensionManager,
     },
-    ontology::{ClassExpression, ObjectProperty},
+    ontology::{ClassExpression, ObjectProperty, ObjectPropertyExpression},
     Error, Result,
 };
 
@@ -162,7 +162,8 @@ impl GroundDisjunction {
             DisjunctPredicate::Role { property, subject, object } => {
                 let subj_id = format!("node_{}", self.arguments[*subject]);
                 let obj_id = format!("node_{}", self.arguments[*object]);
-                Ok(extension_manager.contains_role_assertion(&subj_id, property, &obj_id))
+                let property_expr = ObjectPropertyExpression::ObjectProperty(property.clone());
+                Ok(extension_manager.contains_role_assertion(&subj_id, &property_expr, &obj_id))
             }
             DisjunctPredicate::Equality { left, right } => {
                 let left_id = format!("node_{}", self.arguments[*left]);
@@ -211,9 +212,10 @@ impl GroundDisjunction {
             DisjunctPredicate::Role { property, subject, object } => {
                 let subj_id = format!("node_{}", self.arguments[*subject]);
                 let obj_id = format!("node_{}", self.arguments[*object]);
+                let prop_expr = ObjectPropertyExpression::ObjectProperty(property.clone());
                 extension_manager.add_role_assertion_with_dependency(
                     &subj_id,
-                    property,
+                    &prop_expr,
                     &obj_id,
                     dependency_tracker.clone(),
                 )
