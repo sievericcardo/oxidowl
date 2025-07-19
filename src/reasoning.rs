@@ -17,6 +17,7 @@ use crate::{
     },
     config::{ReasonerConfig, ReasoningConfig, CacheConfig},
     cache::CacheManager,
+    query::{DLQueryEngine, DLQuery, QueryResult},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -241,7 +242,7 @@ impl ReasoningService {
     pub async fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<Individual>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = self.reasoner.write().unwrap();
         let instances = reasoner.get_instances(&class, direct)?;
 
         // Check timeout
@@ -262,7 +263,7 @@ impl ReasoningService {
     pub async fn get_types(&self, individual: &Individual, direct: bool) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = self.reasoner.write().unwrap();
         let types = reasoner.get_types(&individual, direct)?;
 
         // Check timeout
@@ -394,6 +395,18 @@ impl ReasoningService {
         // Log the time taken for classification
         log::info!("Classification completed in {:?}", start.elapsed());
         Ok(result)
+    }
+
+    /// Execute a DL query using Manchester Syntax
+    pub async fn dl_query(&self, query_string: &str) -> Result<QueryResult> {
+        let query_engine = DLQueryEngine::new(self.clone());
+        query_engine.execute_query(query_string).await
+    }
+
+    /// Parse a DL query without executing it
+    pub fn parse_dl_query(&self, query_string: &str) -> Result<DLQuery> {
+        let query_engine = DLQueryEngine::new(self.clone());
+        query_engine.parse_query(query_string)
     }
 
     /// Realize the ontology (compute individuals' types)
@@ -580,24 +593,61 @@ impl ReasoningService {
         Ok(())
     }
 
-    /// Get reasoning statistics -- TODO: implement the actual statistics gathering
+    /// Get reasoning statistics
     pub fn get_statistics(&self) -> ReasoningStatistics {
         let reasoner = self.reasoner.read().unwrap();
         let cache_stats = self.cache_manager.read().unwrap().get_stats();
 
+        // Get statistics from the reasoner
+        let reasoner_stats = reasoner.get_statistics();
+
         ReasoningStatistics {
             ontology_size: reasoner.get_ontology_size(),
-            reasoning_time: Duration::from_secs(0), // Would be tracked in real implementation
+            reasoning_time: reasoner_stats.total_reasoning_time,
             cache_stats,
-            memory_usage: 0, // Would be measured in real implementation
+            memory_usage: self.estimate_memory_usage(),
         }
+    }
+
+    /// Estimate current memory usage
+    fn estimate_memory_usage(&self) -> usize {
+        // Simple estimation based on cache size and other factors
+        let cache_stats = self.cache_manager.read().unwrap().get_stats();
+        cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
+        (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10 // Conservative fraction of max allowed
     }
 
     // Compute the hash of the ontology for caching
     fn compute_ontology_hash(&self) -> Result<u64> {
-        // TODO: placeholder for the hash. Implement a proper hashing mechanism
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
         let reasoner = self.reasoner.read().unwrap();
-        Ok(reasoner.get_ontology_size() as u64)
+        if let Ok(ontology) = reasoner.get_ontology() {
+            let ontology_guard = ontology.read().unwrap();
+            
+            let mut hasher = DefaultHasher::new();
+            
+            // Hash axiom count and basic signature information
+            if let Ok(signature) = ontology_guard.signature() {
+                signature.classes.len().hash(&mut hasher);
+                signature.object_properties.len().hash(&mut hasher);
+                signature.data_properties.len().hash(&mut hasher);
+                signature.individuals.len().hash(&mut hasher);
+                
+                // Hash some class names for uniqueness
+                for class in signature.classes.iter().take(10) {
+                    class.iri.to_string().hash(&mut hasher);
+                }
+            }
+            
+            // Hash TBox and ABox axiom counts
+            ontology_guard.axioms().len().hash(&mut hasher);
+            
+            Ok(hasher.finish())
+        } else {
+            Ok(0)
+        }
     }
 
     /// Query property chain reasoning
