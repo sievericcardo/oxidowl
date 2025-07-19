@@ -98,6 +98,10 @@ pub enum Error {
     /// Queue full error
     #[error("Queue full")]
     QueueFull,
+
+    /// DL Query parsing error
+    #[error("DL Query error: {message}")]
+    DLQuery { message: String },
     
     /// Axiom already exists error
     #[error("Axiom already exists")]
@@ -164,6 +168,13 @@ impl Error {
     /// Cache error constructor
     pub fn cache<S: Into<String>>(message: S) -> Self {
         Self::Cache {
+            message: message.into(),
+        }
+    }
+
+    /// DL Query error constructor
+    pub fn dl_query<S: Into<String>>(message: S) -> Self {
+        Self::DLQuery {
             message: message.into(),
         }
     }
@@ -281,6 +292,7 @@ impl Error {
                 | Error::QueueFull 
                 | Error::AxiomAlreadyExists
                 | Error::AxiomNotFound => ErrorCategory::Internal,
+            Error::DLQuery { .. } => ErrorCategory::Input,
         }
     }
 
@@ -311,6 +323,7 @@ impl Error {
             | Error::QueueFull 
             | Error::AxiomAlreadyExists
             | Error::AxiomNotFound => false,
+            Error::DLQuery { .. } => false,
         }
     }
 }
