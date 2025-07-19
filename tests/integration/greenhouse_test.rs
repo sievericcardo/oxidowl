@@ -90,11 +90,25 @@ async fn test_greenhouse_reasoning_service() {
     let ontology = load_greenhouse_ontology()
         .expect("Should be able to load greenhouse ontology");
     let config = ReasonerConfig::test_config();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let reasoning_service = ReasoningService::new(ontology.clone(), config);
+    
+    // Debug: Check if ontology has axioms
+    println!("Ontology has {} axioms", ontology.axioms.len());
+    for (i, axiom) in ontology.axioms.iter().take(5).enumerate() {
+        println!("Axiom {}: {:?}", i, axiom);
+    }
     
     // Test basic consistency check
     let consistency_result = reasoning_service.is_consistent().await;
-    assert!(consistency_result.is_ok(), "Consistency check should succeed");
+    match &consistency_result {
+        Ok(is_consistent) => {
+            println!("Consistency check succeeded: {}", is_consistent);
+        }
+        Err(e) => {
+            println!("Consistency check failed with error: {:?}", e);
+        }
+    }
+    assert!(consistency_result.is_ok(), "Consistency check should succeed: {:?}", consistency_result);
     
     println!("Greenhouse reasoning service created and tested successfully");
 }
