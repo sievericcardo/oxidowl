@@ -94,6 +94,9 @@ pub struct Tableau {
     
     /// Reference to the ontology for axiom querying
     reasoner_ontology: Option<std::sync::Arc<crate::ontology::Ontology>>,
+    
+    /// Node ID mapping for string-based node identifiers
+    node_id_mapping: HashMap<String, NodeId>,
 }
 
 /// Individual node in the tableau
@@ -751,13 +754,8 @@ impl Tableau {
         
         debug!("Property chain rule applied, checking for property chains");
         
-        // Get property chain axioms from the ontology if available
-        if let Some(ontology) = &self.ontology {
-            // For each node, check if it participates in property chains
-            for node_id in 0..self.nodes.len() {
-                self.check_property_chains_from_node(node_id, ontology)?;
-            }
-        }
+        // TODO: Get property chain axioms from the ontology when available
+        // This would require passing ontology as parameter or storing reference
         
         Ok(())
     }
@@ -766,13 +764,13 @@ impl Tableau {
     fn check_property_chains_from_node(&mut self, node_id: usize, ontology: &Ontology) -> Result<()> {
         // Get all outgoing edges from this node
         let outgoing_edges: Vec<_> = self.edges.iter()
-            .filter(|edge| edge.source == node_id)
+            .filter(|edge| edge.from == node_id)
             .collect();
         
         // For each pair of outgoing edges, check if they form a chain
         for edge1 in &outgoing_edges {
             for edge2 in &outgoing_edges {
-                if edge1.target != edge2.source {
+                if edge1.to != edge2.from {
                     continue; // Not a chain
                 }
                 
@@ -832,7 +830,7 @@ impl Tableau {
                     }
                     crate::ontology::axioms::Axiom::EquivalentObjectProperties(axiom) => {
                         // Check for equivalent property expressions that include chains
-                        for prop_expr in &axiom.object_property_expressions {
+                        for prop_expr in &axiom.properties {
                             if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = prop_expr {
                                 if chain.len() == 2 {
                                     let first_matches = match &chain[0] {
@@ -846,7 +844,7 @@ impl Tableau {
                                     
                                     if first_matches && second_matches {
                                         // Check if any other expression in the equivalence is our result property
-                                        for other_expr in &axiom.object_property_expressions {
+                                        for other_expr in &axiom.properties {
                                             if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = other_expr {
                                                 if prop.iri.as_str() == result_prop {
                                                     return true;
@@ -883,11 +881,11 @@ impl Tableau {
         // Check for trivial cases
         match (subclass, superclass) {
             // Everything is subclass of Thing
-            (_, ClassExpression::Class(ref cls)) if cls.is_thing() => {
+            (_, ClassExpression::Class(cls)) if cls.is_thing() => {
                 return Ok(true);
             }
             // Nothing is subclass of everything
-            (ClassExpression::Class(ref cls), _) if cls.is_nothing() => {
+            (ClassExpression::Class(cls), _) if cls.is_nothing() => {
                 return Ok(true);
             }
             // Intersection subsumption: A ⊓ B ⊑ A and A ⊓ B ⊑ B
@@ -905,17 +903,8 @@ impl Tableau {
             _ => {}
         }
         
-        // Check if we have explicit subsumption in the ontology
-        if let Some(ontology) = &self.ontology {
-            // Look for SubClassOf axioms
-            for axiom in &ontology.axioms {
-                if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
-                    if sub_axiom.subclass == *subclass && sub_axiom.superclass == *superclass {
-                        return Ok(true);
-                    }
-                }
-            }
-        }
+        // TODO: Check if we have explicit subsumption in the ontology
+        // This would require passing the ontology as a parameter or storing a reference
         
         // More complex subsumption checking would require full reasoning
         // For now, return false for cases we can't easily determine
@@ -952,60 +941,59 @@ impl Tableau {
     /// Queue completion rules for a newly added edge
     fn queue_rules_for_edge(&mut self, from: NodeId, to: NodeId, role: &RoleLabel) -> Result<()> {
         // Check all universal concepts on the source node
-        if let Some(source_node) = self.get_node(from) {
-            let source_concepts = source_node.concept_labels.clone();
+        if from < self.nodes.len() {
+            let source_node = &self.nodes[from];
+            let source_concepts = source_node.concepts.clone();
             
             for concept in source_concepts {
                 match concept {
-                    ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                    ConceptLabel::Universal { role: concept_role, filler } => {
                         // Check if this universal restriction applies to our edge
-                        let applies = match property {
-                            ObjectPropertyExpression::ObjectProperty(prop) => {
-                                // Check if the edge role matches this property
-                                role.name == prop.iri.as_str()
-                            }
-                            ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                                // For inverse properties, we need to check the reverse direction
-                                // This is complex and would require additional edge tracking
-                                false // Simplified for now
-                            }
-                            ObjectPropertyExpression::PropertyChain(_) => {
-                                // Property chains in universal restrictions are complex
-                                false // Simplified for now
-                            }
-                        };
-                        
-                        if applies {
+                        if concept_role.name() == role.name() {
                             // Queue rule to add the filler concept to the target node
                             let rule_app = RuleApplication {
                                 rule: CompletionRule::All,
-                                node: to,
-                                context: RuleContext::UniversalRestriction {
-                                    source: from,
-                                    property: property.clone(),
-                                    filler: filler.as_ref().clone(),
+                                node: to.to_string(),
+                                context: RuleContext::Role {
+                                    role: Role { iri: IRI::from(concept_role.name().to_string()) },
+                                    source: from.to_string(),
+                                    target: to.to_string(),
+                                    concept: ClassExpression::Class(crate::ontology::concepts::Class {
+                                        iri: IRI::from("universal_filler".to_string())
+                                    }),
                                 },
-                                priority: self.get_rule_priority(&CompletionRule::All) as i32,
+                                priority: self.get_rule_priority(&CompletionRule::All),
                                 dependencies: DependencySet::empty(),
                             };
                             
                             self.pending_queue.push_back(rule_app);
                         }
                     }
-                    ClassExpression::DataAllValuesFrom { property, range: _ } => {
-                        // Handle data property universal restrictions
-                        // This would require checking data property edges
-                        // Simplified implementation for now
-                    }
-                    ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                    ConceptLabel::AtLeast { cardinality, role: concept_role, filler } => {
                         // Check if we need to enforce minimum cardinality constraints
-                        // This involves counting existing edges and potentially creating new ones
-                        self.check_min_cardinality_constraint(from, *cardinality, property, filler.as_deref())?;
+                        if concept_role.name() == role.name() {
+                            self.check_min_cardinality_constraint(
+                                from, 
+                                cardinality, 
+                                &ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                                    iri: IRI::from(concept_role.name().to_string())
+                                }), 
+                                None
+                            )?;
+                        }
                     }
-                    ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
+                    ConceptLabel::AtMost { cardinality, role: concept_role, filler } => {
                         // Check if we violate maximum cardinality constraints
-                        // This involves counting existing edges and detecting clashes
-                        self.check_max_cardinality_constraint(from, *cardinality, property, filler.as_deref())?;
+                        if concept_role.name() == role.name() {
+                            self.check_max_cardinality_constraint(
+                                from, 
+                                cardinality, 
+                                &ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                                    iri: IRI::from(concept_role.name().to_string())
+                                }), 
+                                None
+                            )?;
+                        }
                     }
                     _ => {
                         // Other concept types don't generate rules for edges
@@ -1032,7 +1020,7 @@ impl Tableau {
             if edge.from == node {
                 let edge_matches = match property {
                     ObjectPropertyExpression::ObjectProperty(prop) => {
-                        edge.role.name == prop.iri.as_str()
+                        edge.role.name() == prop.iri.as_str()
                     }
                     _ => false, // Simplified
                 };
@@ -1040,8 +1028,10 @@ impl Tableau {
                 if edge_matches {
                     // If there's a filler, check if the target satisfies it
                     if let Some(filler_concept) = filler {
-                        if let Some(target_node) = self.get_node(edge.to) {
-                            if target_node.concept_labels.contains(filler_concept) {
+                        if edge.to < self.nodes.len() {
+                            let target_node = &self.nodes[edge.to];
+                            let filler_label = ConceptLabel::from_class_expression(filler_concept)?;
+                            if target_node.concepts.contains(&filler_label) {
                                 count += 1;
                             }
                         }
@@ -1078,7 +1068,7 @@ impl Tableau {
             if edge.from == node {
                 let edge_matches = match property {
                     ObjectPropertyExpression::ObjectProperty(prop) => {
-                        edge.role.name == prop.iri.as_str()
+                        edge.role.name() == prop.iri.as_str()
                     }
                     _ => false, // Simplified
                 };
@@ -1086,8 +1076,10 @@ impl Tableau {
                 if edge_matches {
                     // If there's a filler, check if the target satisfies it
                     if let Some(filler_concept) = filler {
-                        if let Some(target_node) = self.get_node(edge.to) {
-                            if target_node.concept_labels.contains(filler_concept) {
+                        if edge.to < self.nodes.len() {
+                            let target_node = &self.nodes[edge.to];
+                            let filler_label = ConceptLabel::from_class_expression(filler_concept)?;
+                            if target_node.concepts.contains(&filler_label) {
                                 count += 1;
                                 targets.push(edge.to);
                             }
@@ -1172,7 +1164,7 @@ impl Tableau {
     }
 
     /// Get the node index from a node ID string
-    fn get_node_index(&self, node_id: &str) -> Result<NodeId> {
+    pub fn get_node_index(&self, node_id: &str) -> Result<NodeId> {
         // Use the maintained mapping from string IDs to indices
         self.node_id_mapping.get(node_id)
             .copied()
@@ -1183,17 +1175,20 @@ impl Tableau {
     pub fn add_node_with_id(&mut self, node_id: String, concept_labels: Vec<ClassExpression>) -> Result<NodeId> {
         let node_index = self.nodes.len();
         
+        // Convert ClassExpressions to ConceptLabels
+        let mut concepts = HashSet::new();
+        for class_expr in concept_labels {
+            let concept_label = ConceptLabel::from_class_expression(&class_expr)?;
+            concepts.insert(concept_label);
+        }
+        
         let node = TableauNode {
             id: node_index,
-            concept_labels,
-            individual_name: Some(node_id.clone()),
-            blocking_info: BlockingInfo::default(),
-            parent: None,
-            depth: 0,
-            branch_id: 0,
-            dependency_set: DependencySet::empty(),
+            concepts,
             node_type: NodeType::Individual,
-            data_values: Vec::new(),
+            blocking_info: BlockingInfo::default(),
+            concept_dependencies: HashMap::new(),
+            status: NodeStatus::default(),
         };
         
         self.nodes.push(node);

@@ -1274,7 +1274,7 @@ impl Reasoner {
                     };
                     
                     if matches_individual {
-                        concepts.push(assertion.class_expression.clone());
+                        concepts.push(assertion.class.clone());
                     }
                 }
             }
@@ -1298,13 +1298,13 @@ impl Reasoner {
                         let node_id = if let Ok(existing_id) = tableau.get_node_index(individual_name) {
                             existing_id
                         } else {
-                            tableau.add_node_with_id(individual_name.to_string(), vec![assertion.class_expression.clone()])?
+                            tableau.add_node_with_id(individual_name.to_string(), vec![assertion.class.clone()])?
                         };
                         
                         // Add the concept to the node if not already present
                         if let Some(node) = tableau.get_node_mut(node_id) {
-                            if !node.concept_labels.contains(&assertion.class_expression) {
-                                node.concept_labels.push(assertion.class_expression.clone());
+                            if !node.concept_labels.contains(&assertion.class) {
+                                node.concept_labels.push(assertion.class.clone());
                             }
                         }
                     }
