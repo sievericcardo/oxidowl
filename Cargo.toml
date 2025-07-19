@@ -1,0 +1,122 @@
+[package]
+name = "oxidowl"
+version = "0.1.0"
+edition = "2024"
+description = "A high-performance Description Logic reasoner using hypertableau algorithms with parallel computation"
+license = "BSD-3-Clause"
+repository = "https://github.com/sievericcardo/oxidowl"
+keywords = ["description-logic", "reasoner", "tableau", "parallel", "ontology"]
+categories = ["algorithms", "concurrency", "science"]
+
+#[lib]
+#name = "oxidowl"
+#path = "src/lib.rs"
+
+[[bin]]
+name = "oxidowl"
+path = "src/bin/main.rs"
+
+[[bin]]
+name = "run_performance_tests"
+path = "src/bin/performance_tests.rs"
+
+[dependencies]
+# Core dependencies
+tokio = { version = "1.45", features = ["full"] }
+futures = "0.3"
+rayon = {  version = "1.10", optional = true }
+dashmap = { version = "6.1", optional = true }
+im = "15.1"  # Immutable data structures
+smallvec = "1.15"
+ahash = "0.8"
+bitflags = "2.9"
+thiserror = "2.0"
+anyhow = "1.0"
+num_cpus = "1.17"
+crossbeam = { version = "0.8", optional = true }
+
+# Serialization
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+
+# Logging and tracing
+log = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI (for binary)
+clap = { version = "4.5", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+plotters = { version = "0.3", optional = true }
+
+# Synchronization primitives
+parking_lot = "0.12"
+
+# Hash computation and advanced data structures
+seahash = "4.1"  # Fast hash function for signatures
+fxhash = "0.2"   # Fast hash map for performance-critical operations
+roaring = "0.11" # Compressed bitmaps for efficient set operations
+lru = "0.16"     # LRU cache for blocking candidates
+
+# Performance profiling (optional)
+pprof = { version = "0.15", features = ["flamegraph"], optional = true }
+
+# OWL integration and reasoning infrastructure
+# owlapi = { version = "0.3", optional = true }  # Not available on crates.io
+# rdf = { version = "0.3", optional = true }      # Not available on crates.io
+# sophia = { version = "0.8", optional = true }   # May need specific version
+rio_api = "0.8"
+rio_turtle = "0.8"
+rio_xml = "0.8"
+
+# String handling and utilities
+regex = "1.11"
+uuid = { version = "1.17", features = ["v4"] }
+url = "2.3"
+
+# File I/O and path handling
+tempfile = "3.5"
+walkdir = "2.3"
+
+# Numerical computing
+num-bigint = "0.4"
+num-rational = "0.4"
+num-traits = "0.2"
+
+# Configuration management
+config = "0.15.13"
+
+# JSON and XML parsing for ontology formats
+quick-xml = "0.38"
+roxmltree = "0.20"
+toml = "0.9.2"
+
+[dev-dependencies]
+criterion = { version = "0.6", features = ["html_reports"] }
+proptest = "1.7"
+env_logger = "0.11"
+tempfile = "3.5"
+serial_test = "3.0"
+
+[features]
+default = ["parallel", "cache"]
+profiling = ["pprof"]
+parallel = ["rayon", "crossbeam"]
+cache = ["dashmap"]
+debug = []
+# owl-integration = ["owlapi", "rdf", "sophia"]  # Disabled until proper deps are available
+
+[[example]]
+name = "dl_query_example"
+path = "examples/dl_query_example.rs"
+
+[[bench]]
+name = "reasoning_benchmark"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
