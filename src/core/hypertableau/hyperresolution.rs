@@ -480,24 +480,76 @@ impl HyperresolutionManager {
     }
 
     /// Initialize the hyperresolution manager
-    pub fn initialize(&mut self, _dl_clauses: Vec<DLClause>) -> crate::Result<()> {
-        // TODO: Implement proper initialization
+    pub fn initialize(&mut self, dl_clauses: Vec<DLClause>) -> crate::Result<()> {
+        // Clear any existing state
+        self.clear();
+        
+        // Process each DL clause and set up appropriate evaluators
+        for clause in dl_clauses {
+            let evaluator = DLClauseEvaluator::new(clause, Vec::new(), true)?;
+            self.evaluators.push(evaluator);
+        }
+        
+        // Build index mappings for efficient rule application
+        self.build_consumer_indices()?;
+        
+        Ok(())
+    }
+    
+    /// Build consumer indices for efficient rule application
+    fn build_consumer_indices(&mut self) -> crate::Result<()> {
+        for (idx, evaluator) in self.evaluators.iter().enumerate() {
+            // Index evaluators by the predicates they consume
+            for predicate in evaluator.get_consumed_predicates() {
+                let clause_info = CompiledDLClauseInfo {
+                    evaluator_index: idx,
+                    next: None,
+                    index_in_list: 0,
+                    priority: 0,
+                };
+                self.tuple_consumers_by_delta_predicate.insert(predicate, clause_info);
+            }
+        }
         Ok(())
     }
     
     /// Apply rules to derive new facts
-    pub fn apply_rules(&mut self, _extension_manager: &mut ExtensionManager, _branching_manager: &mut crate::core::hypertableau::branching::BranchingManager) -> crate::Result<bool> {
-        // TODO: Implement proper rule application
-        Ok(false)
+    pub fn apply_rules(&mut self, extension_manager: &mut ExtensionManager, _branching_manager: &mut crate::core::hypertableau::branching::BranchingManager) -> crate::Result<bool> {
+        let mut new_facts_derived = false;
+        
+        // Process delta tuples for each predicate with active evaluators
+        for (predicate, clause_info) in &self.tuple_consumers_by_delta_predicate {
+            if let Some(new_tuples) = extension_manager.get_new_tuples(predicate) {
+                let evaluator_idx = clause_info.evaluator_index;
+                if evaluator_idx < self.evaluators.len() {
+                    let evaluator = &mut self.evaluators[evaluator_idx];
+                    for tuple in new_tuples {
+                        // Apply the evaluator to each new tuple
+                        if evaluator.evaluate(&tuple, extension_manager).is_ok() {
+                            new_facts_derived = true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(new_facts_derived)
     }
     
     /// Reset the hyperresolution manager
     pub fn reset(&mut self) {
-        // TODO: Implement proper reset
+        // Clear all indexing structures
         self.tuple_consumers_by_delta_predicate.clear();
         self.atomic_role_consumers_by_guard_concept.clear();
         self.atomic_role_consumers_unguarded.clear();
+        
+        // Clear all evaluators
+        for evaluator in &mut self.evaluators {
+            evaluator.clear();
+        }
         self.evaluators.clear();
+        
+        // Reset internal state
         self.values_buffer.clear();
         self.max_variables = 0;
     }
@@ -622,6 +674,18 @@ impl DLClauseEvaluator {
     pub fn clear(&mut self) {
         self.variable_bindings.clear();
         self.program_counter = 0;
+    }
+    
+    /// Get predicates consumed by this evaluator
+    pub fn get_consumed_predicates(&self) -> Vec<String> {
+        let mut predicates = Vec::new();
+        
+        // Extract predicates from body clause atoms
+        for atom in &self.body_clause.body {
+            predicates.push(atom.predicate.clone());
+        }
+        
+        predicates
     }
 }
 

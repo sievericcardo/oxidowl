@@ -542,6 +542,13 @@ impl ExtensionManager {
         self.get_facts(predicate, &RetrievalView::DeltaOld)
     }
     
+    /// Get new tuples for a predicate (for hyperresolution)
+    pub fn get_new_tuples(&self, predicate: &str) -> Option<Vec<Vec<String>>> {
+        // For now, return all current facts as "new" tuples
+        // In a full implementation, this would track actual delta changes
+        self.get_facts(predicate, &RetrievalView::Complete).ok()
+    }
+    
     /// Get concepts for a node (used by hyperresolution)
     pub fn get_node_concepts(&self, node: &str) -> Result<Vec<String>> {
         let mut concepts = Vec::new();
@@ -602,27 +609,78 @@ impl ExtensionManager {
     }
 
     /// Check if a concept assertion exists
-    pub fn contains_concept_assertion(&self, _node_id: &str, _concept: &crate::ontology::ClassExpression) -> bool {
-        // TODO: Implement proper concept assertion checking
-        false
+    pub fn contains_concept_assertion(&self, node_id: &str, concept: &crate::ontology::ClassExpression) -> bool {
+        // Create predicate key for the concept
+        let predicate_key = format!("{}#{}", concept, node_id);
+        
+        // Check if we have an extension table for this predicate
+        if let Some(table) = self.tables.get(&predicate_key) {
+            // Check if the table contains the node
+            table.contains_tuple(&[node_id.to_string()])
+        } else {
+            // For simple named classes, check if node is in that class's extension
+            if let crate::ontology::ClassExpression::Class(class) = concept {
+                let class_key = class.iri.as_str();
+                if let Some(table) = self.tables.get(class_key) {
+                    return table.contains_tuple(&[node_id.to_string()]);
+                }
+            }
+            false
+        }
     }
     
     /// Check if a role assertion exists
-    pub fn contains_role_assertion(&self, _subj_id: &str, _property: &crate::ontology::ObjectPropertyExpression, _obj_id: &str) -> bool {
-        // Simplified implementation - would need to check binary extension tables
-        false
+    pub fn contains_role_assertion(&self, subj_id: &str, property: &crate::ontology::ObjectPropertyExpression, obj_id: &str) -> bool {
+        // Create predicate key for the role
+        let property_key = match property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                prop.iri.as_str()
+            }
+            _ => return false, // TODO: Handle complex property expressions
+        };
+        
+        // Check if we have an extension table for this property
+        if let Some(table) = self.tables.get(property_key) {
+            table.contains_tuple(&[subj_id.to_string(), obj_id.to_string()])
+        } else {
+            false
+        }
     }
 
     /// Check if two nodes are equal
-    pub fn are_nodes_equal(&self, _left_id: &str, _right_id: &str) -> bool {
-        // Simplified implementation - would check equality facts
+    pub fn are_nodes_equal(&self, left_id: &str, right_id: &str) -> bool {
+        // Check direct equality
+        if left_id == right_id {
+            return true;
+        }
+        
+        // Check if there's an explicit equality fact
+        let equality_key = "owl:sameAs";
+        if let Some(table) = self.tables.get(equality_key) {
+            return table.contains_tuple(&[left_id.to_string(), right_id.to_string()]) ||
+                   table.contains_tuple(&[right_id.to_string(), left_id.to_string()]);
+        }
+        
         false
     }
 
     /// Check if two nodes are unequal
-    pub fn are_nodes_unequal(&self, _left_id: &str, _right_id: &str) -> bool {
-        // Simplified implementation - would check inequality facts
-        false
+    pub fn are_nodes_unequal(&self, left_id: &str, right_id: &str) -> bool {
+        // Check if there's an explicit inequality fact
+        let inequality_key = "owl:differentFrom";
+        if let Some(table) = self.tables.get(inequality_key) {
+            return table.contains_tuple(&[left_id.to_string(), right_id.to_string()]) ||
+                   table.contains_tuple(&[right_id.to_string(), left_id.to_string()]);
+        }
+        
+        // If they are explicitly equal, they cannot be unequal
+        if self.are_nodes_equal(left_id, right_id) {
+            return false;
+        }
+        
+        // By default, different individuals are assumed to be unequal unless proven otherwise
+        // This implements the unique name assumption
+        left_id != right_id
     }
 
     /// Ensure an individual exists in the extension tables
@@ -741,11 +799,27 @@ impl ExtensionManager {
     
     /// Reset the extension manager
     pub fn reset(&mut self) {
-        // TODO: Implement proper reset
+        // Clear all extension tables
         self.extension_tables.clear();
+        
+        // Reset binary and ternary tables
         self.binary_extension_table = ExtensionTable::new(2);
         self.ternary_extension_table = ExtensionTable::new(3);
+        
+        // Reset clash manager
         self.clash_manager = ClashManager::new();
+        
+        // Reset dependency factory
+        self.dependency_factory = DependencySetFactory::new();
+        
+        // Clear buffers
+        self.binary_tuple_buffer.clear();
+        self.binary_tuple_buffer.resize(2, String::new());
+        self.ternary_tuple_buffer.clear();
+        self.ternary_tuple_buffer.resize(3, String::new());
+        
+        // Reset flags and statistics
+        self.add_active = false;
         self.statistics = ExtensionStatistics::default();
     }
 }
@@ -1089,4 +1163,12 @@ impl fmt::Display for ExtensionStatistics {
             self.clashes_detected, self.retrievals_performed, self.delta_operations, self.memory_usage
         )
     }
+}
+
+/// Generate a unique identifier for objects
+pub fn generate_unique_id() -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+    format!("id_{}", id)
 }

@@ -271,6 +271,53 @@ impl GroundDisjunction {
         // For compatibility, return the first argument as a string representation
         self.arguments.first().map(|&id| format!("node_{}", id)).unwrap_or_else(|| "unknown".to_string())
     }
+    
+    /// Create a ground disjunction from a class expression
+    pub fn from_class_expression(
+        class_expr: ClassExpression,
+        individual: crate::ontology::Individual,
+        dependencies: DependencySet,
+    ) -> Result<Self> {
+        use crate::ontology::ClassExpression;
+        
+        let mut predicates = Vec::new();
+        let arguments = vec![0]; // Single argument for the individual
+        let is_core = vec![true]; // Mark as core
+        
+        match class_expr {
+            ClassExpression::ObjectUnionOf(disjuncts) => {
+                for (i, disjunct) in disjuncts.into_iter().enumerate() {
+                    predicates.push(DisjunctPredicate::Concept {
+                        concept: disjunct,
+                        argument: 0, // All refer to the same individual
+                    });
+                }
+            }
+            // For non-union expressions, treat as single disjunct
+            other => {
+                predicates.push(DisjunctPredicate::Concept {
+                    concept: other,
+                    argument: 0,
+                });
+            }
+        }
+        
+        let priority = if predicates.len() <= 2 {
+            DisjunctionPriority::High
+        } else {
+            DisjunctionPriority::Normal
+        };
+        
+        let header = GroundDisjunctionHeader::new(predicates, priority)?;
+        
+        Ok(GroundDisjunction::new(
+            header,
+            arguments,
+            is_core,
+            dependencies,
+            crate::core::hypertableau::extension_table::generate_unique_id(),
+        ))
+    }
 }
 
 impl GroundDisjunctionHeader {

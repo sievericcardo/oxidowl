@@ -573,10 +573,48 @@ pub mod utils {
                             individual.clone(),
                         ))
                     }
-                    _ => {
-                        // For non-concept predicates, create a placeholder choice
-                        // TODO: handle other predicate types properly
-                        None
+                    DisjunctPredicate::Role { property, subject, object } => {
+                        // For role assertions, create a choice that represents the role assertion
+                        // This is used when we need to decide whether a role holds between individuals
+                        use crate::ontology::{ClassExpression, Class, IRI};
+                        
+                        let role_concept = ClassExpression::ObjectSomeValuesFrom {
+                            property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property.clone()),
+                            filler: Box::new(ClassExpression::Class(Class::new(IRI::new("http://www.w3.org/2002/07/owl#Thing")))),
+                        };
+                        
+                        Some(BranchingChoice::new(
+                            index,
+                            format!("Role assertion: {}({}, {})", property.iri.as_str(), subject, object),
+                            role_concept,
+                            individual.clone(),
+                        ))
+                    }
+                    DisjunctPredicate::Equality { left, right } => {
+                        // For equality assertions, create a choice representing the equality
+                        use crate::ontology::ClassExpression;
+                        
+                        let equality_concept = ClassExpression::ObjectOneOf(vec![individual.clone()]);
+                        
+                        Some(BranchingChoice::new(
+                            index,
+                            format!("Equality: x{} = x{}", left, right),
+                            equality_concept,
+                            individual.clone(),
+                        ))
+                    }
+                    DisjunctPredicate::Inequality { left, right } => {
+                        // For inequality assertions, create a choice representing the inequality
+                        use crate::ontology::ClassExpression;
+                        
+                        let inequality_concept = ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectOneOf(vec![individual.clone()])));
+                        
+                        Some(BranchingChoice::new(
+                            index,
+                            format!("Inequality: x{} ≠ x{}", left, right),
+                            inequality_concept,
+                            individual.clone(),
+                        ))
                     }
                 }
             })
