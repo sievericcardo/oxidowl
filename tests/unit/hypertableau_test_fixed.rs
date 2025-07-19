@@ -3,7 +3,7 @@
 use oxidowl::{
     config::ReasonerConfig,
     core::hypertableau::HyperTableau,
-    core::blocking::AnywhereBlocking,
+    core::blocking::BlockingChecker,
     ontology::Ontology,
 };
 
@@ -11,7 +11,7 @@ use oxidowl::{
 fn test_hypertableau_creation() {
     let ontology = Ontology::new();
     let config = ReasonerConfig::test_config();
-    let blocking_checker = Box::new(AnywhereBlocking::new());
+    let blocking_checker = BlockingChecker::new();
     
     // Use correct config type (reasoning subfield) 
     let _tableau = HyperTableau::new(config.reasoning, blocking_checker);
@@ -23,7 +23,7 @@ fn test_hypertableau_creation() {
 fn test_basic_hypertableau_functionality() {
     let ontology = Ontology::new(); 
     let config = ReasonerConfig::test_config();
-    let blocking_checker = Box::new(AnywhereBlocking::new());
+    let blocking_checker = BlockingChecker::new();
     
     let _tableau = HyperTableau::new(config.reasoning, blocking_checker);
     
@@ -35,7 +35,7 @@ fn test_basic_hypertableau_functionality() {
 fn test_ontology_integration() {
     let _ontology = Ontology::new();
     let config = ReasonerConfig::test_config();
-    let blocking_checker = Box::new(AnywhereBlocking::new());
+    let blocking_checker = BlockingChecker::new();
     
     let _tableau = HyperTableau::new(config.reasoning, blocking_checker);
     
