@@ -17,12 +17,12 @@ use crate::{
         tableau::{TableauNode, TableauEdge, TableauState},
         blocking::BlockingChecker,
     },
-    ontology::{Ontology, Individual, ClassExpression},
+    ontology::{Ontology, Individual, ClassExpression, ObjectPropertyExpression, Axiom},
     Result,
 };
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, VecDeque, HashSet},
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -115,6 +115,9 @@ pub struct HyperTableauStatistics {
     
     /// Maximum depth reached
     pub max_depth: u32,
+    
+    /// Facts derived during reasoning
+    pub facts_derived: u64,
 }
 
 impl HyperTableau {
@@ -443,9 +446,44 @@ impl HyperTableau {
     
     /// Apply blocking strategies
     fn apply_blocking(&mut self) -> Result<()> {
-        // TODO: Implement blocking strategies
-        // This would check for blocking conditions and apply them
+        // Check for blocking opportunities
+        // This implements a simple anywhere blocking strategy
+        let individuals: Vec<String> = self.extension_manager
+            .get_all_individuals()
+            .unwrap_or_default();
+
+        for blocker in &individuals {
+            for blocked in &individuals {
+                if blocker != blocked && self.can_block(blocker, blocked)? {
+                    self.extension_manager.add_blocking(blocker.clone(), blocked.clone())?;
+                    
+                    self.monitor.log_event(monitor::events::blocking_operation(
+                        blocker.clone(),
+                        blocked.clone(),
+                        "anywhere".to_string(),
+                        std::time::Duration::default(),
+                    ));
+                }
+            }
+        }
+        
         Ok(())
+    }
+
+    /// Check if one individual can block another
+    fn can_block(&self, blocker: &str, blocked: &str) -> Result<bool> {
+        // Simple blocking: blocker blocks blocked if blocker has all concepts that blocked has
+        let blocker_concepts = self.extension_manager.get_individual_concepts(blocker)?;
+        let blocked_concepts = self.extension_manager.get_individual_concepts(blocked)?;
+        
+        // Blocker can block blocked if blocked's concepts are a subset of blocker's concepts
+        for concept in &blocked_concepts {
+            if !blocker_concepts.contains(concept) {
+                return Ok(false);
+            }
+        }
+        
+        Ok(true)
     }
     
     /// Add a ground disjunction to the processing queue
@@ -459,20 +497,255 @@ impl HyperTableau {
     
     /// Compile ontology axioms to DL clauses
     fn compile_ontology_to_clauses(&self, ontology: &Ontology) -> Result<Vec<hyperresolution::DLClause>> {
-        // TODO: Implement clause compilation from ontology
-        // This would translate OWL axioms to DL clauses
-        Ok(vec![])
+        let mut clauses = Vec::new();
+        
+        // Compile TBox axioms (subclass, equivalent class axioms)
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::SubClassOf(subclass_axiom) => {
+                    let clause = self.compile_subclass_axiom(subclass_axiom)?;
+                    clauses.push(clause);
+                }
+                Axiom::EquivalentClasses(equiv_axiom) => {
+                    let equiv_clauses = self.compile_equivalent_classes_axiom(equiv_axiom)?;
+                    clauses.extend(equiv_clauses);
+                }
+                _ => {
+                    // Handle other axiom types as needed
+                }
+            }
+        }
+        
+        // Compile ABox axioms (class assertions, property assertions)
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::ClassAssertion(class_assertion) => {
+                    let clause = self.compile_class_assertion(class_assertion)?;
+                    clauses.push(clause);
+                }
+                Axiom::ObjectPropertyAssertion(prop_assertion) => {
+                    let clause = self.compile_object_property_assertion(prop_assertion)?;
+                    clauses.push(clause);
+                }
+                _ => {
+                    // Handle other ABox axioms
+                }
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile a subclass axiom to DL clause
+    fn compile_subclass_axiom(&self, axiom: &crate::ontology::SubClassOfAxiom) -> Result<hyperresolution::DLClause> {
+        // SubClassOf(A, B) becomes ¬A(x) ∨ B(x)
+        let var_x = "x".to_string();
+        
+        let subclass_atom = self.compile_class_expression_to_atom(&axiom.subclass, &var_x, true)?; // negated
+        let superclass_atom = self.compile_class_expression_to_atom(&axiom.superclass, &var_x, false)?; // positive
+        
+        Ok(hyperresolution::DLClause {
+            head: vec![superclass_atom],
+            body: vec![subclass_atom],
+            variables: HashSet::from([var_x]),
+            id: axiom.id.to_string(),
+        })
+    }
+
+    /// Compile equivalent classes axiom to DL clauses
+    fn compile_equivalent_classes_axiom(&self, axiom: &crate::ontology::EquivalentClassesAxiom) -> Result<Vec<hyperresolution::DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // EquivalentClasses(A, B) becomes A(x) ≡ B(x), which is two implications
+        for i in 0..axiom.classes.len() {
+            for j in (i+1)..axiom.classes.len() {
+                let var_x = "x".to_string();
+                
+                // A(x) → B(x): ¬A(x) ∨ B(x)
+                let a_atom = self.compile_class_expression_to_atom(&axiom.classes[i], &var_x, true)?;
+                let b_atom = self.compile_class_expression_to_atom(&axiom.classes[j], &var_x, false)?;
+                
+                clauses.push(hyperresolution::DLClause {
+                    head: vec![b_atom],
+                    body: vec![a_atom],
+                    variables: HashSet::from([var_x.clone()]),
+                    id: format!("{}_forward_{}", axiom.id, i),
+                });
+                
+                // B(x) → A(x): ¬B(x) ∨ A(x)
+                let b_atom_neg = self.compile_class_expression_to_atom(&axiom.classes[j], &var_x, true)?;
+                let a_atom_pos = self.compile_class_expression_to_atom(&axiom.classes[i], &var_x, false)?;
+                
+                clauses.push(hyperresolution::DLClause {
+                    head: vec![a_atom_pos],
+                    body: vec![b_atom_neg],
+                    variables: HashSet::from([var_x]),
+                    id: format!("{}_backward_{}", axiom.id, i),
+                });
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile a class assertion to DL clause
+    fn compile_class_assertion(&self, axiom: &crate::ontology::ClassAssertionAxiom) -> Result<hyperresolution::DLClause> {
+        // ClassAssertion(A, a) becomes A(a)
+        let individual_name = match &axiom.individual {
+            Individual::Named(named) => named.iri.to_string(),
+            Individual::Anonymous(anon) => anon.id.clone(),
+        };
+        
+        let atom = self.compile_class_expression_to_atom(&axiom.class, &individual_name, false)?;
+        
+        Ok(hyperresolution::DLClause {
+            head: vec![atom],
+            body: vec![],
+            variables: HashSet::new(),
+            id: axiom.id.to_string(),
+        })
+    }
+
+    /// Compile an object property assertion to DL clause
+    fn compile_object_property_assertion(&self, axiom: &crate::ontology::ObjectPropertyAssertionAxiom) -> Result<hyperresolution::DLClause> {
+        // ObjectPropertyAssertion(R, a, b) becomes R(a, b)
+        let subject_name = match &axiom.source {
+            Individual::Named(named) => named.iri.to_string(),
+            Individual::Anonymous(anon) => anon.id.clone(),
+        };
+        
+        let object_name = match &axiom.target {
+            Individual::Named(named) => named.iri.to_string(),
+            Individual::Anonymous(anon) => anon.id.clone(),
+        };
+        
+        let property_iri = match &axiom.property {
+            ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.to_string(),
+            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                format!("inverse({})", prop.iri.to_string())
+            }
+            ObjectPropertyExpression::PropertyChain(_chain) => {
+                // For now, treat property chains as a single property
+                // This is a simplification - proper handling would require complex reasoning
+                "property_chain".to_string()
+            }
+        };
+        
+        let atom = hyperresolution::Atom {
+            predicate: property_iri,
+            arguments: vec![subject_name, object_name],
+            is_positive: true,
+        };
+        
+        Ok(hyperresolution::DLClause {
+            head: vec![atom],
+            body: vec![],
+            variables: HashSet::new(),
+            id: axiom.id.to_string(),
+        })
+    }
+
+    /// Compile a class expression to an atom
+    fn compile_class_expression_to_atom(&self, expr: &ClassExpression, variable: &str, negated: bool) -> Result<hyperresolution::Atom> {
+        match expr {
+            ClassExpression::Class(class) => {
+                Ok(hyperresolution::Atom {
+                    predicate: class.iri.to_string(),
+                    arguments: vec![variable.to_string()],
+                    is_positive: !negated,
+                })
+            }
+            _ => {
+                // For complex expressions, we'd need to create additional clauses
+                // For now, return a placeholder
+                Ok(hyperresolution::Atom {
+                    predicate: "complex_expression".to_string(),
+                    arguments: vec![variable.to_string()],
+                    is_positive: !negated,
+                })
+            }
+        }
     }
     
     /// Create initial nodes from ABox individuals
     fn create_initial_nodes(&mut self, ontology: &Ontology) -> Result<()> {
-        // TODO: Create tableau nodes for ABox individuals
+        // Get all individuals from the ABox
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::ClassAssertion(class_assertion) => {
+                    let individual_name = match &class_assertion.individual {
+                        Individual::Named(named) => named.iri.to_string(),
+                        Individual::Anonymous(anon) => anon.id.clone(),
+                    };
+                    
+                    // Create node for this individual if not already exists
+                    self.extension_manager.ensure_individual_exists(&individual_name)?;
+                }
+                Axiom::ObjectPropertyAssertion(prop_assertion) => {
+                    let subject_name = match &prop_assertion.source {
+                        Individual::Named(named) => named.iri.to_string(),
+                        Individual::Anonymous(anon) => anon.id.clone(),
+                    };
+                    
+                    let object_name = match &prop_assertion.target {
+                        Individual::Named(named) => named.iri.to_string(),
+                        Individual::Anonymous(anon) => anon.id.clone(),
+                    };
+                    
+                    // Create nodes for both individuals
+                    self.extension_manager.ensure_individual_exists(&subject_name)?;
+                    self.extension_manager.ensure_individual_exists(&object_name)?;
+                }
+                _ => {
+                    // Handle other ABox axioms as needed
+                }
+            }
+        }
+        
         Ok(())
     }
     
     /// Apply initial concept assertions from ABox
     fn apply_initial_assertions(&mut self, ontology: &Ontology) -> Result<()> {
-        // TODO: Apply initial concept and role assertions
+        let start_fact_count = self.statistics.facts_derived;
+        
+        // Apply class assertions
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::ClassAssertion(class_assertion) => {
+                    let individual_name = match &class_assertion.individual {
+                        Individual::Named(named) => named.iri.to_string(),
+                        Individual::Anonymous(anon) => anon.id.clone(),
+                    };
+                    
+                    // Add the class assertion to extension tables
+                    self.extension_manager.add_concept_assertion(&individual_name, &class_assertion.class)?;
+                    self.statistics.facts_derived += 1;
+                }
+                Axiom::ObjectPropertyAssertion(prop_assertion) => {
+                    let subject_name = match &prop_assertion.source {
+                        Individual::Named(named) => named.iri.to_string(),
+                        Individual::Anonymous(anon) => anon.id.clone(),
+                    };
+                    
+                    let object_name = match &prop_assertion.target {
+                        Individual::Named(named) => named.iri.to_string(),
+                        Individual::Anonymous(anon) => anon.id.clone(),
+                    };
+                    
+                    // Add the property assertion to extension tables
+                    self.extension_manager.add_role_assertion(&subject_name, &prop_assertion.property, &object_name)?;
+                    self.statistics.facts_derived += 1;
+                }
+                _ => {
+                    // Handle other ABox axioms (data property assertions, etc.)
+                }
+            }
+        }
+        
+        let initial_facts = self.statistics.facts_derived - start_fact_count;
+        log::info!("Applied {} initial assertions from ABox", initial_facts);
+        
         Ok(())
     }
     
