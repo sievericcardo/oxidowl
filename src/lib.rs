@@ -43,13 +43,18 @@ pub mod error;
 // pub mod network;
 pub mod ontology;
 pub mod parsers;
+pub mod query;
 pub mod reasoning;
 // pub mod utils;
 
 // Re-export main types for convenience
 pub use crate::core::reasoner::{Reasoner};
-pub use crate::config::{ReasonerConfig, TableauAlgorithm};
+pub use crate::reasoning::{ReasoningService};
+pub use crate::query::{DLQueryEngine, DLQuery, QueryResult, QueryType};
+
+// Re-export error types
 pub use crate::error::{Error, Result};
+pub use crate::config::{ReasonerConfig, TableauAlgorithm};
 pub use crate::ontology::{Ontology, OntologyFormat};
 pub use crate::core::reasoner::{ReasoningTask, ReasoningResult};
 
