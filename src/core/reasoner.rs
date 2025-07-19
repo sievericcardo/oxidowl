@@ -416,7 +416,7 @@ impl Reasoner {
     pub fn load_ontology(&mut self, ontology: Ontology) -> Result<()> {
         info!("Loading ontology from memory");
         self.ontology = Some(Arc::new(RwLock::new(ontology)));
-        self.cache_manager.clear_all();
+        self.cache_manager.write().unwrap().clear_all();
         Ok(())
     }
 
@@ -531,11 +531,12 @@ impl Reasoner {
         let result = self.run_tableau_subsumption_check(tableau)?;
         
         // Cache the result
-        self.cache_manager.write().unwrap().cache_subsumption_result(
-            subclass.clone(),
-            superclass.clone(),
-            result,
-        );
+        // TODO: Implement proper class expression parsing for caching
+        // self.cache_manager.write().unwrap().cache_subsumption_result(
+        //     subclass.clone(),
+        //     superclass.clone(),
+        //     result,
+        // );
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
@@ -871,7 +872,7 @@ impl Reasoner {
         if let Some(ontology) = &mut self.ontology {
             let mut ontology_guard = ontology.write().unwrap();
             ontology_guard.add_axiom(axiom.clone());
-            self.cache_manager.clear_all();
+            self.cache_manager.write().unwrap().clear_all();
             Ok(())
         } else {
             Err(Error::reasoning("No ontology loaded"))
@@ -883,7 +884,7 @@ impl Reasoner {
         if let Some(ontology) = &mut self.ontology {
             let mut ontology_guard = ontology.write().unwrap();
             ontology_guard.remove_axiom(axiom);
-            self.cache_manager.clear_all();
+            self.cache_manager.write().unwrap().clear_all();
             Ok(())
         } else {
             Err(Error::reasoning("No ontology loaded"))
@@ -903,7 +904,7 @@ impl Reasoner {
     /// Reset the reasoner
     pub fn reset(&mut self) -> Result<()> {
         self.ontology = None;
-        self.cache_manager.clear_all();
+        self.cache_manager.write().unwrap().clear_all();
         Ok(())
     }
 
