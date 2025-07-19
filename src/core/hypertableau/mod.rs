@@ -17,7 +17,7 @@ use crate::{
         tableau::{TableauNode, TableauEdge, TableauState},
         blocking::BlockingChecker,
     },
-    ontology::{Ontology, Individual},
+    ontology::{Ontology, Individual, ClassExpression},
     Result,
 };
 
@@ -449,7 +449,7 @@ impl HyperTableau {
     }
     
     /// Add a ground disjunction to the processing queue
-    fn add_ground_disjunction(&mut self, disjunction: GroundDisjunction) {
+    pub fn add_ground_disjunction(&mut self, disjunction: GroundDisjunction) {
         self.ground_disjunctions.push_back(disjunction);
         
         if self.first_unprocessed_disjunction.is_none() {
@@ -518,6 +518,22 @@ impl HyperTableau {
     /// Get current statistics
     pub fn get_statistics(&self) -> &HyperTableauStatistics {
         &self.statistics
+    }
+    
+    /// Check if reasoning is complete
+    pub fn is_reasoning_complete(&self) -> bool {
+        // Reasoning is complete if:
+        // 1. The tableau is closed (unsatisfiable), or
+        // 2. The tableau state is unknown (timeout/error), or 
+        // 3. We have a satisfiable state AND all disjunctions have been processed
+        match self.state {
+            TableauState::Unsatisfiable | TableauState::Unknown => true,
+            TableauState::Satisfiable => {
+                // For satisfiable state, check if we have processed all disjunctions
+                // and the tableau has been properly initialized (has some ground disjunctions or has been run)
+                self.first_unprocessed_disjunction.is_none() && !self.ground_disjunctions.is_empty()
+            }
+        }
     }
 }
 
@@ -610,16 +626,30 @@ mod tests {
         
         let mut tableau = HyperTableau::new(config, blocking_checker).unwrap();
         
-        // Create a simple ground disjunction
-        let disjunction = GroundDisjunction {
-            individual: Individual::new("test_ind".to_string()),
-            disjuncts: vec![
-                ClassExpression::Class("A".to_string()),
-                ClassExpression::Class("B".to_string()),
-            ],
-            priority: 1.0,
-            ..Default::default()
-        };
+        // Create a simple ground disjunction using proper constructor
+        use crate::core::hypertableau::ground_disjunction::{GroundDisjunctionHeader, DisjunctPredicate, DisjunctionPriority};
+        use crate::core::dependency::DependencySet;
+        use crate::ontology::concepts::Class;
+        
+        let predicates = vec![
+            DisjunctPredicate::Concept {
+                concept: ClassExpression::Class(Class::new(crate::ontology::IRI::new("A"))),
+                argument: 0,
+            },
+            DisjunctPredicate::Concept {
+                concept: ClassExpression::Class(Class::new(crate::ontology::IRI::new("B"))),
+                argument: 0,
+            },
+        ];
+        
+        let header = GroundDisjunctionHeader::new(predicates, DisjunctionPriority::Normal);
+        let disjunction = GroundDisjunction::new(
+            header,
+            vec![0], // arguments (node IDs)
+            vec![false], // is_core
+            DependencySet::empty(),
+            0, // id
+        );
         
         tableau.add_ground_disjunction(disjunction);
         
