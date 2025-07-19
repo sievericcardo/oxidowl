@@ -19,6 +19,31 @@ fn generate_axiom_id() -> u64 {
     COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
+/// Parse an IRI from a string, handling both absolute and relative URIs
+fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
+    // Try to parse as absolute URL first
+    if let Ok(url) = url::Url::parse(uri_str) {
+        Ok(url)
+    } else {
+        // If it's not a valid absolute URL, treat it as a simple IRI string
+        // This handles relative URIs and other IRI formats
+        if uri_str.is_empty() {
+            Err(Error::ontology_parsing("Empty IRI string"))
+        } else {
+            // Create a simple URL-like structure for the IRI
+            // Use a dummy base for relative URIs to make them parseable
+            let full_uri = if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
+                uri_str.to_string()
+            } else {
+                format!("http://example.org/{}", uri_str.trim_start_matches('#'))
+            };
+            
+            url::Url::parse(&full_uri)
+                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))
+        }
+    }
+}
+
 /// Turtle Parser
 #[derive(Debug, Clone)]
 pub struct TurtleParser {
@@ -49,6 +74,7 @@ impl TurtleParser {
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
         let mut ontology = Ontology::new();
         let mut prefixes = std::collections::HashMap::<String, String>::new();
+        let mut base_uri: Option<String> = None;
         
         // Split content into lines for basic processing
         let lines: Vec<&str> = content.lines().collect();
@@ -69,12 +95,16 @@ impl TurtleParser {
             
             // Handle base declarations
             if trimmed.starts_with("@base") {
-                // Parse base declaration (simplified)
+                if let Some(start) = trimmed.find('<') {
+                    if let Some(end) = trimmed.find('>') {
+                        base_uri = Some(trimmed[start+1..end].to_string());
+                    }
+                }
                 continue;
             }
             
             // Handle basic triple patterns
-            if let Ok(triple) = self.parse_triple(trimmed, &prefixes) {
+            if let Ok(triple) = self.parse_triple(trimmed, &prefixes, &base_uri) {
                 self.process_triple(&mut ontology, triple)?;
             }
         }
@@ -102,16 +132,17 @@ impl TurtleParser {
     fn parse_triple(
         &self, 
         line: &str, 
-        prefixes: &std::collections::HashMap<String, String>
+        prefixes: &std::collections::HashMap<String, String>,
+        base_uri: &Option<String>
     ) -> Result<Triple> {
         // Very basic triple parsing - splits on whitespace
         let parts: Vec<&str> = line.trim_end_matches('.').split_whitespace().collect();
         
         if parts.len() >= 3 {
-            let subject = self.expand_uri(parts[0], prefixes)?;
-            let predicate = self.expand_uri(parts[1], prefixes)?;
+            let subject = self.expand_uri(parts[0], prefixes, base_uri)?;
+            let predicate = self.expand_uri(parts[1], prefixes, base_uri)?;
             let object = if parts[2].starts_with('<') || parts[2].contains(':') {
-                TripleObject::Uri(self.expand_uri(parts[2], prefixes)?)
+                TripleObject::Uri(self.expand_uri(parts[2], prefixes, base_uri)?)
             } else {
                 TripleObject::Literal(parts[2].to_string())
             };
@@ -126,11 +157,23 @@ impl TurtleParser {
     fn expand_uri(
         &self, 
         uri: &str, 
-        prefixes: &std::collections::HashMap<String, String>
+        prefixes: &std::collections::HashMap<String, String>,
+        base_uri: &Option<String>
     ) -> Result<String> {
         if uri.starts_with('<') && uri.ends_with('>') {
-            // Full URI
-            Ok(uri[1..uri.len()-1].to_string())
+            // Full URI in angle brackets
+            let inner_uri = &uri[1..uri.len()-1];
+            
+            // Check if it's a relative URI that needs base resolution
+            if !inner_uri.contains("://") && !inner_uri.starts_with("http") {
+                if let Some(base) = base_uri {
+                    Ok(format!("{}{}", base, inner_uri))
+                } else {
+                    Ok(inner_uri.to_string())
+                }
+            } else {
+                Ok(inner_uri.to_string())
+            }
         } else if let Some(colon_pos) = uri.find(':') {
             // Prefixed URI
             let prefix = &uri[..colon_pos];
@@ -144,11 +187,23 @@ impl TurtleParser {
                     "rdf" => Ok(format!("http://www.w3.org/1999/02/22-rdf-syntax-ns#{}", local)),
                     "rdfs" => Ok(format!("http://www.w3.org/2000/01/rdf-schema#{}", local)),
                     "owl" => Ok(format!("http://www.w3.org/2002/07/owl#{}", local)),
-                    _ => Ok(uri.to_string()),
+                    _ => {
+                        // If we have a base URI and this looks like a relative reference
+                        if let Some(base) = base_uri {
+                            Ok(format!("{}{}", base, uri))
+                        } else {
+                            Ok(uri.to_string())
+                        }
+                    }
                 }
             }
         } else {
-            Ok(uri.to_string())
+            // Bare local name - use base URI if available
+            if let Some(base) = base_uri {
+                Ok(format!("{}{}", base, uri))
+            } else {
+                Ok(uri.to_string())
+            }
         }
     }
     
@@ -161,16 +216,14 @@ impl TurtleParser {
                         "http://www.w3.org/2002/07/owl#Class" => {
                             // Class declaration
                             let class = crate::ontology::Class {
-                                iri: url::Url::parse(&triple.subject)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                                iri: parse_iri_to_url(&triple.subject)?.into()
                             };
                             ontology.add_class(class);
                         }
                         "http://www.w3.org/2002/07/owl#ObjectProperty" => {
                             // Object property declaration
                             let property = crate::ontology::ObjectProperty {
-                                iri: url::Url::parse(&triple.subject)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                                iri: parse_iri_to_url(&triple.subject)?
                             };
                             ontology.add_object_property(property);
                         }
@@ -178,14 +231,11 @@ impl TurtleParser {
                             // Class assertion
                             let individual = crate::ontology::Individual::Named(
                                 crate::ontology::NamedIndividual {
-                                    iri: url::Url::parse(&triple.subject)
-                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                                        .into(), // Convert URL to IRI
+                                    iri: parse_iri_to_url(&triple.subject)?.into()
                                 }
                             );
                             let class = crate::ontology::Class {
-                                iri: url::Url::parse(&class_uri)
-                                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                                iri: parse_iri_to_url(&class_uri)?.into()
                             };
                             
                             let axiom = crate::ontology::ClassAssertionAxiom {
@@ -202,12 +252,10 @@ impl TurtleParser {
             "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
                 if let TripleObject::Uri(superclass_uri) = triple.object {
                     let subclass = crate::ontology::Class {
-                        iri: url::Url::parse(&triple.subject)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                        iri: parse_iri_to_url(&triple.subject)?.into()
                     };
                     let superclass = crate::ontology::Class {
-                        iri: url::Url::parse(&superclass_uri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                        iri: parse_iri_to_url(&superclass_uri)?.into()
                     };
                     
                     let axiom = crate::ontology::SubClassOfAxiom {
@@ -222,12 +270,10 @@ impl TurtleParser {
             "http://www.w3.org/2000/01/rdf-schema#subPropertyOf" => {
                 if let TripleObject::Uri(superprop_uri) = triple.object {
                     let subprop = crate::ontology::ObjectProperty {
-                        iri: url::Url::parse(&triple.subject)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        iri: parse_iri_to_url(&triple.subject)?
                     };
                     let superprop = crate::ontology::ObjectProperty {
-                        iri: url::Url::parse(&superprop_uri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        iri: parse_iri_to_url(&superprop_uri)?
                     };
                     
                     let axiom = crate::ontology::SubObjectPropertyOfAxiom {
@@ -244,21 +290,16 @@ impl TurtleParser {
                 if let TripleObject::Uri(object_uri) = triple.object {
                     let subject = crate::ontology::Individual::Named(
                         crate::ontology::NamedIndividual {
-                            iri: url::Url::parse(&triple.subject)
-                                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                                .into(), // Convert URL to IRI
+                            iri: parse_iri_to_url(&triple.subject)?.into()
                         }
                     );
                     let object = crate::ontology::Individual::Named(
                         crate::ontology::NamedIndividual {
-                            iri: url::Url::parse(&object_uri)
-                                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
-                                .into(), // Convert URL to IRI
+                            iri: parse_iri_to_url(&object_uri)?.into()
                         }
                     );
                     let property = crate::ontology::ObjectProperty {
-                        iri: url::Url::parse(&triple.predicate)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        iri: parse_iri_to_url(&triple.predicate)?
                     };
                     
                     let axiom = crate::ontology::ObjectPropertyAssertionAxiom {
