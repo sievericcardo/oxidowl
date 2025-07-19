@@ -680,6 +680,24 @@ pub mod events {
         }
     }
     
+    pub fn blocking_operation(
+        blocker: String,
+        blocked: String,
+        blocking_type: String,
+        duration: Duration,
+    ) -> MonitoredEvent {
+        // Convert strings to Individual objects for the event
+        let blocker_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", blocker));
+        let blocked_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", blocked));
+        
+        MonitoredEvent::BlockingOperation {
+            blocker: Individual::named(blocker_iri),
+            blocked: Individual::named(blocked_iri),
+            blocking_type,
+            duration,
+        }
+    }
+
     pub fn fact_derived(
         fact_description: String,
         individual: Individual,
