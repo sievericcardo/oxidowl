@@ -470,9 +470,26 @@ impl Ontology {
         self.add_axiom(axiom);
     }
     
-    /// Add an individual (placeholder for compatibility)
-    pub fn add_individual(&mut self, _subject: IRI, _individual: individuals::Individual) {
-        // TODO: implement proper individual handling
+    /// Add an individual and its declaration axiom
+    pub fn add_individual(&mut self, subject: IRI, individual: individuals::Individual) {
+        // Add a declaration axiom for the individual
+        let declaration = axioms::DeclarationAxiom {
+            entity: match individual {
+                individuals::Individual::Named(ref named) => {
+                    axioms::Entity::NamedIndividual(named.iri.clone())
+                }
+                individuals::Individual::Anonymous(_) => {
+                    // Anonymous individuals are not typically declared
+                    return;
+                }
+            },
+            annotations: vec![],
+        };
+        
+        self.add_axiom(axioms::Axiom::Declaration(declaration));
+        
+        // Also store in internal tracking if needed
+        // For now, the axiom storage is sufficient
     }
     
     /// Get classes by extracting them from declaration axioms
@@ -493,10 +510,54 @@ impl Ontology {
         classes
     }
     
-    /// Get individuals (placeholder for compatibility)
+    /// Extract individuals from the axioms
     pub fn individuals(&self) -> Vec<(IRI, individuals::Individual)> {
-        // TODO: extract individuals from axioms
-        vec![]
+        let mut individuals = Vec::new();
+        
+        for axiom in &self.axioms {
+            match axiom {
+                // Extract from declaration axioms
+                axioms::Axiom::Declaration(decl) => {
+                    if let axioms::Entity::NamedIndividual(iri) = &decl.entity {
+                        let individual = individuals::Individual::named(iri.clone());
+                        individuals.push((iri.clone(), individual));
+                    }
+                }
+                // Extract from class assertion axioms
+                axioms::Axiom::ClassAssertion(assertion) => {
+                    let iri = match &assertion.individual {
+                        individuals::Individual::Named(named) => &named.iri,
+                        individuals::Individual::Anonymous(_) => continue, // Skip anonymous
+                    };
+                    
+                    // Only add if not already present
+                    if !individuals.iter().any(|(existing_iri, _)| existing_iri == iri) {
+                        individuals.push((iri.clone(), assertion.individual.clone()));
+                    }
+                }
+                // Extract from object property assertion axioms
+                axioms::Axiom::ObjectPropertyAssertion(assertion) => {
+                    // Extract subject
+                    if let individuals::Individual::Named(named) = &assertion.subject {
+                        if !individuals.iter().any(|(existing_iri, _)| existing_iri == &named.iri) {
+                            individuals.push((named.iri.clone(), assertion.subject.clone()));
+                        }
+                    }
+                    
+                    // Extract object
+                    if let individuals::Individual::Named(named) = &assertion.object {
+                        if !individuals.iter().any(|(existing_iri, _)| existing_iri == &named.iri) {
+                            individuals.push((named.iri.clone(), assertion.object.clone()));
+                        }
+                    }
+                }
+                _ => {
+                    // TODO: Extract individuals from other axiom types as needed
+                }
+            }
+        }
+        
+        individuals
     }
     
     /// Get object properties by extracting them from declaration axioms
