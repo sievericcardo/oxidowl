@@ -91,6 +91,9 @@ pub struct Tableau {
     
     /// Irreflexive properties
     irreflexive_properties: HashSet<String>,
+    
+    /// Reference to the ontology for axiom querying
+    reasoner_ontology: Option<std::sync::Arc<crate::ontology::Ontology>>,
 }
 
 /// Individual node in the tableau
@@ -396,6 +399,8 @@ impl Tableau {
             asymmetric_properties: HashSet::new(),
             reflexive_properties: HashSet::new(),
             irreflexive_properties: HashSet::new(),
+            node_id_mapping: HashMap::new(),
+            reasoner_ontology: None,
         })
     }
 
@@ -778,7 +783,7 @@ impl Tableau {
                     edge2.role.name());
                 
                 // If such a chain exists, add the derived edge
-                if self.has_property_chain(&edge1.role, &edge2.role, &chain_property) {
+                if self.has_property_chain(edge1.role.name(), edge2.role.name(), &chain_property) {
                     let new_edge = TableauEdge {
                         from: edge1.from,
                         to: edge2.to,
@@ -795,11 +800,75 @@ impl Tableau {
         Ok(())
     }
     
-    /// Check if a property chain exists (placeholder)
-    fn has_property_chain(&self, _prop1: &str, _prop2: &str, _result_prop: &str) -> bool {
-        // TODO: Query the ontology for actual property chain axioms
-        // For now, just return false as a placeholder
+    /// Check if a property chain exists
+    fn has_property_chain(&self, prop1: &str, prop2: &str, result_prop: &str) -> bool {
+        // Query the ontology for actual property chain axioms
+        if let Some(ontology) = &self.reasoner_ontology {
+            for axiom in ontology.axioms() {
+                match axiom {
+                    crate::ontology::axioms::Axiom::SubObjectPropertyOf(axiom) => {
+                        // Check if this is a property chain axiom
+                        if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = &axiom.sub_property {
+                            // Check if this chain matches our pattern
+                            if chain.len() == 2 {
+                                let first_matches = match &chain[0] {
+                                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str() == prop1,
+                                    _ => false,
+                                };
+                                let second_matches = match &chain[1] {
+                                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str() == prop2,
+                                    _ => false,
+                                };
+                                let result_matches = match &axiom.super_property {
+                                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str() == result_prop,
+                                    _ => false,
+                                };
+                                
+                                if first_matches && second_matches && result_matches {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    crate::ontology::axioms::Axiom::EquivalentObjectProperties(axiom) => {
+                        // Check for equivalent property expressions that include chains
+                        for prop_expr in &axiom.object_property_expressions {
+                            if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = prop_expr {
+                                if chain.len() == 2 {
+                                    let first_matches = match &chain[0] {
+                                        crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str() == prop1,
+                                        _ => false,
+                                    };
+                                    let second_matches = match &chain[1] {
+                                        crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str() == prop2,
+                                        _ => false,
+                                    };
+                                    
+                                    if first_matches && second_matches {
+                                        // Check if any other expression in the equivalence is our result property
+                                        for other_expr in &axiom.object_property_expressions {
+                                            if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = other_expr {
+                                                if prop.iri.as_str() == result_prop {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
         false
+    }
+    
+    /// Add a reference to the ontology for property chain checking
+    pub fn set_ontology(&mut self, ontology: std::sync::Arc<crate::ontology::Ontology>) {
+        self.reasoner_ontology = Some(ontology);
     }
 
     /// Check subsumption between two class expressions
@@ -882,8 +951,162 @@ impl Tableau {
 
     /// Queue completion rules for a newly added edge
     fn queue_rules_for_edge(&mut self, from: NodeId, to: NodeId, role: &RoleLabel) -> Result<()> {
-        // Queue universal rules that might apply
-        // TODO: check all universal concepts on the source node
+        // Check all universal concepts on the source node
+        if let Some(source_node) = self.get_node(from) {
+            let source_concepts = source_node.concept_labels.clone();
+            
+            for concept in source_concepts {
+                match concept {
+                    ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                        // Check if this universal restriction applies to our edge
+                        let applies = match property {
+                            ObjectPropertyExpression::ObjectProperty(prop) => {
+                                // Check if the edge role matches this property
+                                role.name == prop.iri.as_str()
+                            }
+                            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                                // For inverse properties, we need to check the reverse direction
+                                // This is complex and would require additional edge tracking
+                                false // Simplified for now
+                            }
+                            ObjectPropertyExpression::PropertyChain(_) => {
+                                // Property chains in universal restrictions are complex
+                                false // Simplified for now
+                            }
+                        };
+                        
+                        if applies {
+                            // Queue rule to add the filler concept to the target node
+                            let rule_app = RuleApplication {
+                                rule: CompletionRule::All,
+                                node: to,
+                                context: RuleContext::UniversalRestriction {
+                                    source: from,
+                                    property: property.clone(),
+                                    filler: filler.as_ref().clone(),
+                                },
+                                priority: self.get_rule_priority(&CompletionRule::All) as i32,
+                                dependencies: DependencySet::empty(),
+                            };
+                            
+                            self.pending_queue.push_back(rule_app);
+                        }
+                    }
+                    ClassExpression::DataAllValuesFrom { property, range: _ } => {
+                        // Handle data property universal restrictions
+                        // This would require checking data property edges
+                        // Simplified implementation for now
+                    }
+                    ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                        // Check if we need to enforce minimum cardinality constraints
+                        // This involves counting existing edges and potentially creating new ones
+                        self.check_min_cardinality_constraint(from, *cardinality, property, filler.as_deref())?;
+                    }
+                    ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
+                        // Check if we violate maximum cardinality constraints
+                        // This involves counting existing edges and detecting clashes
+                        self.check_max_cardinality_constraint(from, *cardinality, property, filler.as_deref())?;
+                    }
+                    _ => {
+                        // Other concept types don't generate rules for edges
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Check minimum cardinality constraint
+    fn check_min_cardinality_constraint(
+        &mut self, 
+        node: NodeId, 
+        min_cardinality: u32, 
+        property: &ObjectPropertyExpression,
+        filler: Option<&ClassExpression>
+    ) -> Result<()> {
+        // Count existing edges that satisfy the constraint
+        let mut count = 0;
+        
+        for edge in &self.edges {
+            if edge.from == node {
+                let edge_matches = match property {
+                    ObjectPropertyExpression::ObjectProperty(prop) => {
+                        edge.role.name == prop.iri.as_str()
+                    }
+                    _ => false, // Simplified
+                };
+                
+                if edge_matches {
+                    // If there's a filler, check if the target satisfies it
+                    if let Some(filler_concept) = filler {
+                        if let Some(target_node) = self.get_node(edge.to) {
+                            if target_node.concept_labels.contains(filler_concept) {
+                                count += 1;
+                            }
+                        }
+                    } else {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        
+        // If we don't have enough edges, we might need to create more
+        // This is complex and typically handled by choose rules
+        if count < min_cardinality {
+            debug!("Minimum cardinality constraint not satisfied: {} < {}", count, min_cardinality);
+            // In a full implementation, this would trigger witness creation
+        }
+        
+        Ok(())
+    }
+    
+    /// Check maximum cardinality constraint
+    fn check_max_cardinality_constraint(
+        &mut self, 
+        node: NodeId, 
+        max_cardinality: u32, 
+        property: &ObjectPropertyExpression,
+        filler: Option<&ClassExpression>
+    ) -> Result<()> {
+        // Count existing edges that satisfy the constraint
+        let mut count = 0;
+        let mut targets = Vec::new();
+        
+        for edge in &self.edges {
+            if edge.from == node {
+                let edge_matches = match property {
+                    ObjectPropertyExpression::ObjectProperty(prop) => {
+                        edge.role.name == prop.iri.as_str()
+                    }
+                    _ => false, // Simplified
+                };
+                
+                if edge_matches {
+                    // If there's a filler, check if the target satisfies it
+                    if let Some(filler_concept) = filler {
+                        if let Some(target_node) = self.get_node(edge.to) {
+                            if target_node.concept_labels.contains(filler_concept) {
+                                count += 1;
+                                targets.push(edge.to);
+                            }
+                        }
+                    } else {
+                        count += 1;
+                        targets.push(edge.to);
+                    }
+                }
+            }
+        }
+        
+        // If we have too many edges, we have a clash or need merging
+        if count > max_cardinality {
+            warn!("Maximum cardinality constraint violated: {} > {}", count, max_cardinality);
+            // In a full implementation, this would trigger merging or clash detection
+            self.state = TableauState::Unsatisfiable;
+        }
+        
         Ok(())
     }
 
@@ -950,9 +1173,33 @@ impl Tableau {
 
     /// Get the node index from a node ID string
     fn get_node_index(&self, node_id: &str) -> Result<NodeId> {
-        // Simple implementation: try to parse the node_id as a number
-        // TODO: maintain a mapping from string IDs to indices
-        node_id.parse().map_err(|_| Error::reasoning("Invalid node ID"))
+        // Use the maintained mapping from string IDs to indices
+        self.node_id_mapping.get(node_id)
+            .copied()
+            .ok_or_else(|| Error::reasoning(format!("Node ID not found: {}", node_id)))
+    }
+    
+    /// Add a new node with string ID mapping
+    pub fn add_node_with_id(&mut self, node_id: String, concept_labels: Vec<ClassExpression>) -> Result<NodeId> {
+        let node_index = self.nodes.len();
+        
+        let node = TableauNode {
+            id: node_index,
+            concept_labels,
+            individual_name: Some(node_id.clone()),
+            blocking_info: BlockingInfo::default(),
+            parent: None,
+            depth: 0,
+            branch_id: 0,
+            dependency_set: DependencySet::empty(),
+            node_type: NodeType::Individual,
+            data_values: Vec::new(),
+        };
+        
+        self.nodes.push(node);
+        self.node_id_mapping.insert(node_id, node_index);
+        
+        Ok(node_index)
     }
 
     /// Update blocking information for all nodes
@@ -963,14 +1210,14 @@ impl Tableau {
         // and there's an ancestor with the same labels
         for i in 0..self.nodes.len() {
             if let Some(current_node) = self.nodes.get(i) {
-                if current_node.blocked {
+                if current_node.blocking_info.is_blocked {
                     continue; // Skip already blocked nodes
                 }
                 
                 // Find potential blocker nodes (ancestors with same concept labels)
                 for j in 0..i {
                     if let Some(potential_blocker) = self.nodes.get(j) {
-                        if potential_blocker.blocked {
+                        if potential_blocker.blocking_info.is_blocked {
                             continue; // Skip blocked nodes as potential blockers
                         }
                         
@@ -979,8 +1226,8 @@ impl Tableau {
                            !current_node.concepts.is_empty() {
                             // Block the current node
                             if let Some(node_to_block) = self.nodes.get_mut(i) {
-                                node_to_block.blocked = true;
-                                node_to_block.blocker = Some(j);
+                                node_to_block.blocking_info.is_blocked = true;
+                                node_to_block.blocking_info.blocker = Some(j);
                             }
                             break;
                         }
