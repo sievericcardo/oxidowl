@@ -189,6 +189,23 @@ pub struct PerformanceConfig {
     pub gc_threshold: f64,
 }
 
+impl Default for ReasoningConfig {
+    fn default() -> Self {
+        Self {
+            tableau_algorithm: TableauAlgorithm::Traditional,
+            blocking_strategy: BlockingStrategy::Anywhere,
+            expansion_strategy: ExpansionStrategy::CreationOrder,
+            enable_optimisations: true,
+            timeout: Some(Duration::from_secs(300)), // 5 minutes
+            max_memory_mb: Some(4096), // 4 GB
+            incremental_reasoning: false,
+            enable_explanations: false,
+            max_expansion_depth: 100,
+            enable_clash_detection: true,
+        }
+    }
+}
+
 impl Default for ReasonerConfig {
     fn default() -> Self {
         Self {
