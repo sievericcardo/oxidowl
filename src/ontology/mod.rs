@@ -475,10 +475,22 @@ impl Ontology {
         // TODO: implement proper individual handling
     }
     
-    /// Get classes (placeholder for compatibility)
+    /// Get classes by extracting them from declaration axioms
     pub fn classes(&self) -> Vec<(IRI, concepts::Class)> {
-        // TODO: extract classes from axioms
-        vec![]
+        let mut classes = Vec::new();
+        
+        for axiom in &self.axioms {
+            if let axioms::Axiom::Declaration(decl) = axiom {
+                if let axioms::Entity::Class(iri) = &decl.entity {
+                    let class = concepts::Class {
+                        iri: iri.clone(),
+                    };
+                    classes.push((iri.clone(), class));
+                }
+            }
+        }
+        
+        classes
     }
     
     /// Get individuals (placeholder for compatibility)
@@ -487,10 +499,25 @@ impl Ontology {
         vec![]
     }
     
-    /// Get object properties (placeholder for compatibility)
+    /// Get object properties by extracting them from declaration axioms
     pub fn object_properties(&self) -> Vec<ObjectProperty> {
-        // TODO: extract object properties from axioms
-        vec![]
+        let mut properties = Vec::new();
+        
+        for axiom in &self.axioms {
+            if let axioms::Axiom::Declaration(decl) = axiom {
+                if let axioms::Entity::ObjectProperty(iri) = &decl.entity {
+                    // Need to convert IRI to URL for ObjectProperty
+                    if let Ok(url) = iri.to_url() {
+                        let property = ObjectProperty {
+                            iri: url,
+                        };
+                        properties.push(property);
+                    }
+                }
+            }
+        }
+        
+        properties
     }
 }
 
