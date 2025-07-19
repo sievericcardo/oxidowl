@@ -308,7 +308,7 @@ impl GroundDisjunction {
             DisjunctionPriority::Normal
         };
         
-        let header = GroundDisjunctionHeader::new(predicates, priority)?;
+        let header = GroundDisjunctionHeader::new(predicates, priority);
         
         Ok(GroundDisjunction::new(
             header,
