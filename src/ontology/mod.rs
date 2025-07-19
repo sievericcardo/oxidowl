@@ -198,6 +198,42 @@ pub enum DataRange {
     },
 }
 
+impl std::fmt::Display for DataRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataRange::Datatype(url) => write!(f, "{}", url),
+            DataRange::DataIntersectionOf(ranges) => {
+                write!(f, "(")?;
+                for (i, range) in ranges.iter().enumerate() {
+                    if i > 0 { write!(f, " ⊓ ")?; }
+                    write!(f, "{}", range)?;
+                }
+                write!(f, ")")
+            },
+            DataRange::DataUnionOf(ranges) => {
+                write!(f, "(")?;
+                for (i, range) in ranges.iter().enumerate() {
+                    if i > 0 { write!(f, " ⊔ ")?; }
+                    write!(f, "{}", range)?;
+                }
+                write!(f, ")")
+            },
+            DataRange::DataComplementOf(range) => write!(f, "¬{}", range),
+            DataRange::DataOneOf(literals) => {
+                write!(f, "{{")?;
+                for (i, literal) in literals.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{:?}", literal)?;
+                }
+                write!(f, "}}")
+            },
+            DataRange::DatatypeRestriction { datatype, restrictions: _ } => {
+                write!(f, "{}[restrictions]", datatype)
+            },
+        }
+    }
+}
+
 /// Facet restriction for datatype restrictions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FacetRestriction {
@@ -421,6 +457,7 @@ impl Ontology {
     pub fn add_individual(&mut self, subject: IRI, individual: individuals::Individual) {
         // Add a declaration axiom for the individual
         let declaration = axioms::DeclarationAxiom {
+            id: self.next_axiom_id(),
             entity: match individual {
                 individuals::Individual::Named(ref named) => {
                     axioms::Entity::NamedIndividual(named.iri.clone())
@@ -430,7 +467,6 @@ impl Ontology {
                     return;
                 }
             },
-            annotations: vec![],
         };
         
         self.add_axiom(axioms::Axiom::Declaration(declaration));
