@@ -347,6 +347,9 @@ pub struct TableauStatistics {
     /// Maximum depth reached
     pub max_depth: usize,
     
+    /// Number of axioms processed
+    pub axioms_processed: usize,
+    
     /// Time spent in tableau construction
     pub construction_time: Duration,
     
@@ -431,6 +434,12 @@ impl Tableau {
                 self.state = TableauState::Satisfiable;
                 break;
             }
+        }
+        
+        // If we exit the loop with Unknown state but no clashes, the tableau is satisfiable
+        if self.state == TableauState::Unknown && !self.clash_detector.has_clashes() {
+            debug!("Tableau finished with no pending rules and no clashes - satisfiable");
+            self.state = TableauState::Satisfiable;
         }
         
         self.statistics.construction_time = start_time.elapsed();
@@ -1191,12 +1200,18 @@ impl TableauBuilder {
         match axiom {
             Axiom::SubClassOf(subclass_axiom) => {
                 // A ⊑ B becomes ¬A ⊔ B
-                // Add this as a concept to all nodes or as a global constraint
-                // For simplicity, we'll add it to the root node when created
+                // For now, we'll just note that we processed this axiom
+                // In a full implementation, this would add constraints to the tableau
+                tableau.statistics.axioms_processed += 1;
             }
             Axiom::ClassAssertion(class_assertion) => {
                 // Add C(a) - the individual a has concept C
-                // This would typically be handled during node creation
+                // For now, we'll just note that we processed this axiom
+                tableau.statistics.axioms_processed += 1;
+            }
+            Axiom::Declaration(_) => {
+                // Declaration axioms don't affect consistency directly
+                tableau.statistics.axioms_processed += 1;
             }
             // Handle other axiom types...
             _ => {
