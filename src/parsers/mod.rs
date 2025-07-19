@@ -88,9 +88,9 @@ impl ParserFactory {
     /// Create a parser for the specified format
     pub fn create_parser(format: OntologyFormat) -> Result<Box<dyn Parser>> {
         match format {
-            OntologyFormat::OwlXml => Ok(Box::new(OWLXMLParser::new())),
+            OntologyFormat::OwlXml => Ok(Box::new(OwlXmlParser::new())),
             OntologyFormat::Functional => Ok(Box::new(FunctionalParser::new())),
-            OntologyFormat::RdfXml => Ok(Box::new(RDFXMLParser::new())),
+            OntologyFormat::RdfXml => Ok(Box::new(RdfXmlParser::new())),
             OntologyFormat::Turtle => Ok(Box::new(TurtleParser::new())),
             OntologyFormat::NTriples => Ok(Box::new(NTriplesParser::new())),
             OntologyFormat::Manchester => Err(Error::ontology_parsing("Manchester syntax not yet implemented")),
