@@ -7,9 +7,9 @@ use crate::{
     cache::{CacheManager},
     config::{ReasonerConfig, TableauAlgorithm},
     core::{
-        tableau::{Tableau, TableauBuilder, TableauState},
+        tableau::{Tableau, TableauBuilder, TableauState, RoleLabel},
     },
-    ontology::{Ontology, OntologyFormat, ClassExpression, Individual, Axiom, ObjectPropertyExpression, DataPropertyExpression},
+    ontology::{Ontology, OntologyFormat, ClassExpression, Individual, Axiom, ObjectPropertyExpression, DataPropertyExpression, IRI},
     Error, Result,
 };
 use std::{
@@ -868,8 +868,60 @@ impl Reasoner {
     /// Get object property values for an individual
     pub fn get_object_property_values(&self, individual: &Individual, property: &ObjectPropertyExpression) -> Result<Vec<Individual>> {
         if let Some(ontology) = &self.ontology {
-            // TODO:  use tableau reasoning
-            Ok(Vec::new())
+            // Use tableau reasoning to find property values
+            let mut tableau = self.create_tableau()?;
+            tableau.set_ontology(ontology.clone());
+            
+            // Create a query by asserting the individual exists and checking what it's connected to
+            let individual_name = match individual {
+                Individual::Named(named) => named.iri.as_str(),
+                Individual::Anonymous(_) => return Ok(Vec::new()), // Can't query anonymous individuals directly
+            };
+            
+            // Add the individual to the tableau
+            let individual_concepts = self.get_individual_concepts_from_ontology(individual_name)?;
+            let node_id = tableau.add_node_with_id(individual_name.to_string(), individual_concepts)?;
+            
+            // Process the ontology to build the tableau
+            self.load_ontology_into_tableau(&mut tableau, ontology)?;
+            
+            // Run tableau completion
+            tableau.run()?;
+            
+            // Extract property values from the completed tableau
+            let mut values = Vec::new();
+            
+            // Find all edges from our individual with the specified property
+            for edge in tableau.edges() {
+                if edge.from == node_id {
+                    let property_matches = match property {
+                        ObjectPropertyExpression::ObjectProperty(prop) => {
+                            edge.role.name == prop.iri.as_str()
+                        }
+                        ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                            // For inverse properties, we need to check reverse edges
+                            false // Simplified for now
+                        }
+                        ObjectPropertyExpression::PropertyChain(_) => {
+                            // Property chains require more complex checking
+                            false // Simplified for now
+                        }
+                    };
+                    
+                    if property_matches {
+                        if let Some(target_node) = tableau.get_node(edge.to) {
+                            if let Some(target_name) = &target_node.individual_name {
+                                // Create individual from the target
+                                if let Ok(iri) = IRI::from(target_name.clone()) {
+                                    values.push(Individual::named(iri));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Ok(values)
         } else {
             Err(Error::reasoning("No ontology loaded"))
         }
@@ -878,8 +930,49 @@ impl Reasoner {
     /// Get data property values for an individual
     pub fn get_data_property_values(&self, individual: &Individual, property: &DataPropertyExpression) -> Result<Vec<String>> {
         if let Some(ontology) = &self.ontology {
-            // TODO:  use tableau reasoning
-            Ok(Vec::new())
+            // Use tableau reasoning to find data property values
+            let mut tableau = self.create_tableau()?;
+            tableau.set_ontology(ontology.clone());
+            
+            let individual_name = match individual {
+                Individual::Named(named) => named.iri.as_str(),
+                Individual::Anonymous(_) => return Ok(Vec::new()),
+            };
+            
+            // Add the individual to the tableau
+            let individual_concepts = self.get_individual_concepts_from_ontology(individual_name)?;
+            let node_id = tableau.add_node_with_id(individual_name.to_string(), individual_concepts)?;
+            
+            // Process the ontology to build the tableau
+            self.load_ontology_into_tableau(&mut tableau, ontology)?;
+            
+            // Run tableau completion
+            tableau.run()?;
+            
+            // Extract data property values
+            let mut values = Vec::new();
+            
+            // Check for explicit data property assertions in the ontology
+            for axiom in ontology.axioms() {
+                if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
+                    let matches_individual = match &assertion.source {
+                        Individual::Named(named) => named.iri.as_str() == individual_name,
+                        _ => false,
+                    };
+                    
+                    let matches_property = match property {
+                        DataPropertyExpression::DataProperty(prop) => {
+                            assertion.property.iri.as_str() == prop.iri.as_str()
+                        }
+                    };
+                    
+                    if matches_individual && matches_property {
+                        values.push(assertion.target.to_string());
+                    }
+                }
+            }
+            
+            Ok(values)
         } else {
             Err(Error::reasoning("No ontology loaded"))
         }
@@ -1164,5 +1257,94 @@ impl Reasoner {
         hypertableau.initialize(ontology)?;
         
         Ok(TableauAlgorithmInstance::HyperTableau(Box::new(hypertableau)))
+    }
+    
+    /// Get concepts for an individual from the ontology
+    fn get_individual_concepts_from_ontology(&self, individual_name: &str) -> Result<Vec<ClassExpression>> {
+        let mut concepts = Vec::new();
+        
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                    let matches_individual = match &assertion.individual {
+                        Individual::Named(named) => named.iri.as_str() == individual_name,
+                        _ => false,
+                    };
+                    
+                    if matches_individual {
+                        concepts.push(assertion.class_expression.clone());
+                    }
+                }
+            }
+        }
+        
+        Ok(concepts)
+    }
+    
+    /// Load ontology axioms into a tableau
+    fn load_ontology_into_tableau(&self, tableau: &mut Tableau, ontology: &Arc<RwLock<Ontology>>) -> Result<()> {
+        let ontology_guard = ontology.read().unwrap();
+        
+        // Process class assertion axioms to create nodes
+        for axiom in ontology_guard.axioms() {
+            match axiom {
+                crate::ontology::axioms::Axiom::ClassAssertion(assertion) => {
+                    if let Individual::Named(named) = &assertion.individual {
+                        let individual_name = named.iri.as_str();
+                        
+                        // Try to get existing node or create new one
+                        let node_id = if let Ok(existing_id) = tableau.get_node_index(individual_name) {
+                            existing_id
+                        } else {
+                            tableau.add_node_with_id(individual_name.to_string(), vec![assertion.class_expression.clone()])?
+                        };
+                        
+                        // Add the concept to the node if not already present
+                        if let Some(node) = tableau.get_node_mut(node_id) {
+                            if !node.concept_labels.contains(&assertion.class_expression) {
+                                node.concept_labels.push(assertion.class_expression.clone());
+                            }
+                        }
+                    }
+                }
+                crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) => {
+                    // Create nodes for subject and object, then add edge
+                    let subject_name = match &assertion.source {
+                        Individual::Named(named) => named.iri.as_str(),
+                        _ => continue,
+                    };
+                    let object_name = match &assertion.target {
+                        Individual::Named(named) => named.iri.as_str(),
+                        _ => continue,
+                    };
+                    
+                    // Ensure both nodes exist
+                    let subject_id = if let Ok(existing_id) = tableau.get_node_index(subject_name) {
+                        existing_id
+                    } else {
+                        tableau.add_node_with_id(subject_name.to_string(), Vec::new())?
+                    };
+                    
+                    let object_id = if let Ok(existing_id) = tableau.get_node_index(object_name) {
+                        existing_id
+                    } else {
+                        tableau.add_node_with_id(object_name.to_string(), Vec::new())?
+                    };
+                    
+                    // Add edge between nodes
+                    if let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
+                        let role_label = RoleLabel::Atomic(prop.iri.as_str().to_string());
+                        tableau.add_edge(subject_id, object_id, &role_label)?;
+                    }
+                }
+                _ => {
+                    // Handle other axiom types as needed
+                }
+            }
+        }
+        
+        Ok(())
     }
 }
