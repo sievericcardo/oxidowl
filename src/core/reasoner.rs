@@ -580,7 +580,10 @@ impl Reasoner {
 
             for superclass in &classes {
                 if subclass != superclass {
-                    if self.is_subclass_of_expressions(subclass, superclass)? {
+                    // Convert to string representations for now (simplified)
+                    let sub_str = format!("{:?}", subclass);
+                    let sup_str = format!("{:?}", superclass);
+                    if self.is_subclass_of(&sub_str, &sup_str)? {
                         superclasses.insert(superclass.clone());
                     }
                 }
@@ -811,15 +814,21 @@ impl Reasoner {
     }
 
     /// Get all instances of a class expression
-    pub fn get_instances(&self, concept: &ClassExpression, direct: bool) -> Result<Vec<Individual>> {
+    pub fn get_instances(&mut self, concept: &ClassExpression, direct: bool) -> Result<Vec<Individual>> {
         if let Some(ontology) = &self.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let individuals = {
+                let ontology_guard = ontology.read().unwrap();
+                // Get all individuals from the signature
+                ontology_guard.signature().unwrap().individuals.clone()
+            }; // Drop the read lock here
+            
             let mut instances = Vec::new();
             
-            // Get all individuals from the signature
-            for individual in &ontology_guard.signature().unwrap().individuals {
-                // TODO: use tableau reasoning
-                instances.push(individual.clone());
+            for individual in &individuals {
+                // Use tableau reasoning to check if individual is instance of concept
+                if self.is_instance_of_expression(individual, concept)? {
+                    instances.push(individual.clone());
+                }
             }
             
             Ok(instances)
@@ -829,16 +838,27 @@ impl Reasoner {
     }
 
     /// Get all types of an individual
-    pub fn get_types(&self, individual: &Individual, direct: bool) -> Result<Vec<ClassExpression>> {
+    pub fn get_types(&mut self, individual: &Individual, direct: bool) -> Result<Vec<ClassExpression>> {
         if let Some(ontology) = &self.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let classes = {
+                let ontology_guard = ontology.read().unwrap();
+                // Get all classes from the signature
+                ontology_guard.signature().unwrap().classes.clone()
+            }; // Drop the read lock here
+            
             let mut types = Vec::new();
             
-            // Get all classes from the signature
-            for class in &ontology_guard.signature().unwrap().classes {
+            for class in &classes {
                 let class_expr = ClassExpression::Class(class.clone());
-                // TODO: use tableau reasoning
-                types.push(class_expr);
+                // Use tableau reasoning to check if individual has this type
+                if self.is_instance_of_expression(individual, &class_expr)? {
+                    types.push(class_expr);
+                }
+            }
+            
+            if direct {
+                // Filter to only direct types (most specific ones)
+                types = self.filter_direct_types(types, individual)?;
             }
             
             Ok(types)
@@ -997,18 +1017,6 @@ impl Reasoner {
         }
     }
 
-    /// Check if one class expression is a subclass of another
-    fn is_subclass_of_expressions(&mut self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
-        // For now, delegate to existing tableau-based subsumption checking
-        if let (ClassExpression::Class(sub), ClassExpression::Class(sup)) = (subclass, superclass) {
-            self.is_subclass_of(&sub.iri.to_string(), &sup.iri.to_string())
-        } else {
-            // For complex expressions, we'd need more sophisticated reasoning
-            // TODO: implement proper complex expression reasoning
-            Ok(false)
-        }
-    }
-
     /// Check if an individual is an instance of a class expression
     fn is_instance_of_expression(&mut self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
         // For now, delegate to existing instance checking for named classes
@@ -1016,9 +1024,45 @@ impl Reasoner {
             self.is_instance_of(&individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string()), &cls.iri.to_string())
         } else {
             // For complex expressions, we'd need more sophisticated reasoning
-            // TODO: implement proper complex expression reasoning
-            Ok(false)
+            // For now, create a tableau to check instance relationship
+            if let Some(ontology) = &self.ontology {
+                let ontology_guard = ontology.read().unwrap();
+                
+                // Convert individual and class to strings for the tableau builder
+                let individual_str = individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
+                let class_str = format!("{:?}", class); // Simplified class representation
+                
+                // Build tableau for instance checking
+                let tableau = self.create_tableau_algorithm_for_instance_check(&ontology_guard, &individual_str, &class_str)?;
+                drop(ontology_guard); // Release the read lock before calling mutable method
+                self.run_tableau_instance_check(tableau)
+            } else {
+                Ok(false)
+            }
         }
+    }
+
+    /// Filter types to only include direct (most specific) types
+    fn filter_direct_types(&self, types: Vec<ClassExpression>, _individual: &Individual) -> Result<Vec<ClassExpression>> {
+        let mut direct_types = Vec::new();
+        
+        // For each type, check if it's subsumed by any other type
+        for candidate in &types {
+            let mut is_direct = true;
+            
+            for other in &types {
+                if candidate != other && self.is_subsumed_by(candidate, other)? {
+                    is_direct = false;
+                    break;
+                }
+            }
+            
+            if is_direct {
+                direct_types.push(candidate.clone());
+            }
+        }
+        
+        Ok(direct_types)
     }
 
     // Private methods for tableau algorithm creation
