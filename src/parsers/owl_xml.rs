@@ -26,20 +26,76 @@ fn generate_axiom_id() -> u64 {
     COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
-/// OWL XML Parser
+/// Configuration for the OWL/XML parser
 #[derive(Debug, Clone)]
-pub struct OWLXMLParser {
-    // TODO: add a parser configuration
+pub struct OwlXmlParserConfig {
+    /// Whether to validate XML schema (default: true)
+    pub validate_schema: bool,
+    
+    /// Whether to validate OWL 2 semantics (default: true)
+    pub validate_owl_semantics: bool,
+    
+    /// Whether to allow OWL 1 constructs (default: true)
+    pub allow_owl1_constructs: bool,
+    
+    /// Whether to preserve annotations (default: true)
+    pub preserve_annotations: bool,
+    
+    /// Maximum nesting depth for class expressions (default: 50)
+    pub max_nesting_depth: usize,
+    
+    /// Whether to use strict OWL/XML compliance (default: false)
+    pub strict_mode: bool,
+    
+    /// Whether to ignore unknown elements (default: false)
+    pub ignore_unknown_elements: bool,
 }
 
-impl OWLXMLParser {
-    /// Create a new OWL XML parser
-    pub fn new() -> Self {
-        Self {}
+impl Default for OwlXmlParserConfig {
+    fn default() -> Self {
+        Self {
+            validate_schema: true,
+            validate_owl_semantics: true,
+            allow_owl1_constructs: true,
+            preserve_annotations: true,
+            max_nesting_depth: 50,
+            strict_mode: false,
+            ignore_unknown_elements: false,
+        }
     }
 }
 
-impl Default for OWLXMLParser {
+/// OWL/XML Parser
+#[derive(Debug, Clone)]
+pub struct OwlXmlParser {
+    config: OwlXmlParserConfig,
+}
+
+impl OwlXmlParser {
+    /// Create a new OWL/XML parser with default configuration
+    pub fn new() -> Self {
+        Self { 
+            config: OwlXmlParserConfig::default(),
+        }
+    }
+    
+    /// Create a new OWL/XML parser with custom configuration
+    pub fn with_config(config: OwlXmlParserConfig) -> Self {
+        Self { config }
+    }
+    
+    /// Get the current configuration
+    pub fn config(&self) -> &OwlXmlParserConfig {
+        &self.config
+    }
+    
+    /// Set a new configuration
+    pub fn set_config(&mut self, config: OwlXmlParserConfig) {
+        self.config = config;
+    }
+}
+
+impl Default for OwlXmlParser {
     fn default() -> Self {
         Self::new()
     }
