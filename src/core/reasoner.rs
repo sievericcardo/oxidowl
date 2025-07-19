@@ -479,13 +479,12 @@ impl Reasoner {
         }
         
         // Check cache first
-        // TODO: Implement proper class expression parsing
-        // if let Some(class_expr) = self.parse_class_expression(class_iri) {
-        //     if let Some(cached_result) = self.cache_manager.read().unwrap().get_satisfiability_result(&class_expr) {
-        //         debug!("Satisfiability result found in cache for: {}", class_iri);
-        //         return Ok(cached_result);
-        //     }
-        // }
+        if let Some(class_expr) = self.parse_class_expression(class_iri) {
+            if let Some(cached_result) = self.cache_manager.read().unwrap().get_satisfiability_result(&class_expr) {
+                debug!("Satisfiability result found in cache for: {}", class_iri);
+                return Ok(cached_result);
+            }
+        }
         
         let ontology = self.get_ontology()?;
         let ontology_guard = ontology.read().unwrap();
@@ -497,8 +496,9 @@ impl Reasoner {
         let result = self.run_tableau_satisfiability_check(tableau)?;
         
         // Cache the result
-        // TODO: Implement proper class expression parsing for caching
-        // self.cache_manager.write().unwrap().cache_satisfiability_result(class_expr, result);
+        if let Some(class_expr) = self.parse_class_expression(class_iri) {
+            self.cache_manager.write().unwrap().cache_satisfiability_result(class_expr, result);
+        }
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
@@ -515,11 +515,12 @@ impl Reasoner {
         info!("Checking subsumption: {} ⊑ {}", subclass, superclass);
         
         // Check cache first
-        // TODO: Implement proper class expression parsing for caching
-        // if let Some(cached_result) = self.cache_manager.read().unwrap().get_subsumption_result(subclass, superclass) {
-        //     debug!("Subsumption result found in cache");
-        //     return Ok(cached_result);
-        // }
+        if let (Some(sub_expr), Some(sup_expr)) = (self.parse_class_expression(subclass), self.parse_class_expression(superclass)) {
+            if let Some(cached_result) = self.cache_manager.read().unwrap().get_subsumption_result(&sub_expr, &sup_expr) {
+                debug!("Subsumption result found in cache");
+                return Ok(cached_result);
+            }
+        }
         
         let ontology = self.get_ontology()?;
         let ontology_guard = ontology.read().unwrap();
@@ -531,12 +532,9 @@ impl Reasoner {
         let result = self.run_tableau_subsumption_check(tableau)?;
         
         // Cache the result
-        // TODO: Implement proper class expression parsing for caching
-        // self.cache_manager.write().unwrap().cache_subsumption_result(
-        //     subclass.clone(),
-        //     superclass.clone(),
-        //     result,
-        // );
+        if let (Some(sub_expr), Some(sup_expr)) = (self.parse_class_expression(subclass), self.parse_class_expression(superclass)) {
+            self.cache_manager.write().unwrap().cache_subsumption_result(sub_expr, sup_expr, result);
+        }
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
@@ -1015,6 +1013,15 @@ impl Reasoner {
             TableauState::Unsatisfiable => Ok(true),
             TableauState::Unknown => Err(Error::reasoning("Tableau returned unknown result")),
         }
+    }
+
+    /// Parse a class IRI string into a ClassExpression
+    fn parse_class_expression(&self, class_iri: &str) -> Option<ClassExpression> {
+        // For now, assume it's a named class
+        // In a full implementation, this would parse complex class expressions
+        Some(ClassExpression::Class(crate::ontology::Class {
+            iri: crate::ontology::IRI::from(class_iri),
+        }))
     }
 
     /// Check if an individual is an instance of a class expression

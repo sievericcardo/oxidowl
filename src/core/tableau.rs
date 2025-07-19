@@ -208,6 +208,14 @@ impl RoleLabel {
             }
         }
     }
+
+    /// Get the role name as a string
+    pub fn name(&self) -> &str {
+        match self {
+            RoleLabel::Atomic(name) => name,
+            RoleLabel::Inverse(name) => name,
+        }
+    }
 }
 
 /// Type of tableau node
@@ -731,18 +739,117 @@ impl Tableau {
 
     /// Apply property chain rule (complex role chains)
     fn apply_property_chain_rule(&mut self, _rule_app: RuleApplication) -> Result<()> {
-        // TODO: Implement property chain rule application as follows:
+        // Implement property chain rule application as follows:
         // 1. Find property chain axioms from the ontology
         // 2. Check for sequences of edges that match the chain
         // 3. Add super property edges where chains are completed
+        
         debug!("Property chain rule applied, checking for property chains");
+        
+        // Get property chain axioms from the ontology if available
+        if let Some(ontology) = &self.ontology {
+            // For each node, check if it participates in property chains
+            for node_id in 0..self.nodes.len() {
+                self.check_property_chains_from_node(node_id, ontology)?;
+            }
+        }
+        
         Ok(())
     }
+    
+    /// Check property chains starting from a specific node
+    fn check_property_chains_from_node(&mut self, node_id: usize, ontology: &Ontology) -> Result<()> {
+        // Get all outgoing edges from this node
+        let outgoing_edges: Vec<_> = self.edges.iter()
+            .filter(|edge| edge.source == node_id)
+            .collect();
+        
+        // For each pair of outgoing edges, check if they form a chain
+        for edge1 in &outgoing_edges {
+            for edge2 in &outgoing_edges {
+                if edge1.target != edge2.source {
+                    continue; // Not a chain
+                }
+                
+                // Check if there's a property chain axiom for this combination
+                // This is a simplified check - in practice would query the ontology
+                let chain_property = format!("chain_{}_{}", 
+                    edge1.role.name(), 
+                    edge2.role.name());
+                
+                // If such a chain exists, add the derived edge
+                if self.has_property_chain(&edge1.role, &edge2.role, &chain_property) {
+                    let new_edge = TableauEdge {
+                        from: edge1.from,
+                        to: edge2.to,
+                        role: RoleLabel::Atomic(chain_property),
+                        dependencies: edge1.dependencies.union(&edge2.dependencies),
+                    };
+                    
+                    self.edges.push(new_edge);
+                    debug!("Added property chain edge: {} -> {}", edge1.from, edge2.to);
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Check if a property chain exists (placeholder)
+    fn has_property_chain(&self, _prop1: &str, _prop2: &str, _result_prop: &str) -> bool {
+        // TODO: Query the ontology for actual property chain axioms
+        // For now, just return false as a placeholder
+        false
+    }
 
-    /// Check subsumption between two class expressions (placeholder)
-    pub fn check_subsumption(&self, _subclass: &ClassExpression, _superclass: &ClassExpression) -> Result<bool> {
-        // Placeholder implementation
-        // TODO: implement proper subsumption checking
+    /// Check subsumption between two class expressions
+    pub fn check_subsumption(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
+        // Implement basic subsumption checking
+        
+        // Exact match
+        if subclass == superclass {
+            return Ok(true);
+        }
+        
+        // Check for trivial cases
+        match (subclass, superclass) {
+            // Everything is subclass of Thing
+            (_, ClassExpression::Class(ref cls)) if cls.is_thing() => {
+                return Ok(true);
+            }
+            // Nothing is subclass of everything
+            (ClassExpression::Class(ref cls), _) if cls.is_nothing() => {
+                return Ok(true);
+            }
+            // Intersection subsumption: A ⊓ B ⊑ A and A ⊓ B ⊑ B
+            (ClassExpression::ObjectIntersectionOf(conjuncts), _) => {
+                if conjuncts.contains(superclass) {
+                    return Ok(true);
+                }
+            }
+            // Union subsumption: A ⊑ A ⊔ B and B ⊑ A ⊔ B  
+            (_, ClassExpression::ObjectUnionOf(disjuncts)) => {
+                if disjuncts.contains(subclass) {
+                    return Ok(true);
+                }
+            }
+            _ => {}
+        }
+        
+        // Check if we have explicit subsumption in the ontology
+        if let Some(ontology) = &self.ontology {
+            // Look for SubClassOf axioms
+            for axiom in &ontology.axioms {
+                if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
+                    if sub_axiom.subclass == *subclass && sub_axiom.superclass == *superclass {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        
+        // More complex subsumption checking would require full reasoning
+        // For now, return false for cases we can't easily determine
         Ok(false)
     }
 
@@ -852,7 +959,36 @@ impl Tableau {
     fn update_blocking(&mut self) -> Result<()> {
         let start_time = Instant::now();
         
-        // TODO: implement the blocking algorithm
+        // Simple blocking algorithm: mark nodes as blocked if they have identical label sets
+        // and there's an ancestor with the same labels
+        for i in 0..self.nodes.len() {
+            if let Some(current_node) = self.nodes.get(i) {
+                if current_node.blocked {
+                    continue; // Skip already blocked nodes
+                }
+                
+                // Find potential blocker nodes (ancestors with same concept labels)
+                for j in 0..i {
+                    if let Some(potential_blocker) = self.nodes.get(j) {
+                        if potential_blocker.blocked {
+                            continue; // Skip blocked nodes as potential blockers
+                        }
+                        
+                        // Check if concepts match (simple subset blocking)
+                        if current_node.concepts.is_subset(&potential_blocker.concepts) &&
+                           !current_node.concepts.is_empty() {
+                            // Block the current node
+                            if let Some(node_to_block) = self.nodes.get_mut(i) {
+                                node_to_block.blocked = true;
+                                node_to_block.blocker = Some(j);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
         self.statistics.blocking_time += start_time.elapsed();
         Ok(())
     }
