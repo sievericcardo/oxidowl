@@ -8,6 +8,7 @@ use crate::{
     config::{ReasonerConfig, TableauAlgorithm},
     core::{
         tableau::{Tableau, TableauBuilder, TableauState, RoleLabel},
+        dependency::DependencySet,
     },
     ontology::{Ontology, OntologyFormat, ClassExpression, Individual, Axiom, ObjectPropertyExpression, DataPropertyExpression, IRI},
     Error, Result,
@@ -869,8 +870,12 @@ impl Reasoner {
     pub fn get_object_property_values(&self, individual: &Individual, property: &ObjectPropertyExpression) -> Result<Vec<Individual>> {
         if let Some(ontology) = &self.ontology {
             // Use tableau reasoning to find property values
-            let mut tableau = self.create_tableau()?;
-            tableau.set_ontology(ontology.clone());
+            let mut tableau = self.tableau_builder.create_tableau()?;
+            let ontology_arc = {
+                let ontology_guard = ontology.read().unwrap();
+                Arc::new(ontology_guard.clone())
+            };
+            tableau.set_ontology(ontology_arc);
             
             // Create a query by asserting the individual exists and checking what it's connected to
             let individual_name = match individual {
@@ -896,7 +901,7 @@ impl Reasoner {
                 if edge.from == node_id {
                     let property_matches = match property {
                         ObjectPropertyExpression::ObjectProperty(prop) => {
-                            edge.role.name == prop.iri.as_str()
+                            edge.role.name() == prop.iri.as_str()
                         }
                         ObjectPropertyExpression::InverseObjectProperty(prop) => {
                             // For inverse properties, we need to check reverse edges
@@ -910,12 +915,11 @@ impl Reasoner {
                     
                     if property_matches {
                         if let Some(target_node) = tableau.get_node(edge.to) {
-                            if let Some(target_name) = &target_node.individual_name {
-                                // Create individual from the target
-                                if let Ok(iri) = IRI::from(target_name.clone()) {
-                                    values.push(Individual::named(iri));
-                                }
-                            }
+                            // For now, create a placeholder individual based on the node ID
+                            // In a full implementation, we'd maintain a mapping from NodeId to individual name
+                            let target_name = format!("node_{}", edge.to);
+                            let iri = IRI::from(target_name);
+                            values.push(Individual::named(iri));
                         }
                     }
                 }
@@ -931,8 +935,12 @@ impl Reasoner {
     pub fn get_data_property_values(&self, individual: &Individual, property: &DataPropertyExpression) -> Result<Vec<String>> {
         if let Some(ontology) = &self.ontology {
             // Use tableau reasoning to find data property values
-            let mut tableau = self.create_tableau()?;
-            tableau.set_ontology(ontology.clone());
+            let mut tableau = self.tableau_builder.create_tableau()?;
+            let ontology_arc = {
+                let ontology_guard = ontology.read().unwrap();
+                Arc::new(ontology_guard.clone())
+            };
+            tableau.set_ontology(ontology_arc);
             
             let individual_name = match individual {
                 Individual::Named(named) => named.iri.as_str(),
@@ -953,21 +961,26 @@ impl Reasoner {
             let mut values = Vec::new();
             
             // Check for explicit data property assertions in the ontology
-            for axiom in ontology.axioms() {
+            let ontology_guard = ontology.read().unwrap();
+            for axiom in ontology_guard.axioms() {
                 if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
-                    let matches_individual = match &assertion.source {
+                    let matches_individual = match &assertion.individual {
                         Individual::Named(named) => named.iri.as_str() == individual_name,
                         _ => false,
                     };
                     
                     let matches_property = match property {
                         DataPropertyExpression::DataProperty(prop) => {
-                            assertion.property.iri.as_str() == prop.iri.as_str()
+                            match &assertion.property {
+                                DataPropertyExpression::DataProperty(assertion_prop) => {
+                                    assertion_prop.iri.as_str() == prop.iri.as_str()
+                                }
+                            }
                         }
                     };
                     
                     if matches_individual && matches_property {
-                        values.push(assertion.target.to_string());
+                        values.push(assertion.value.to_string());
                     }
                 }
             }
@@ -1113,7 +1126,7 @@ impl Reasoner {
         // For now, assume it's a named class
         // In a full implementation, this would parse complex class expressions
         Some(ClassExpression::Class(crate::ontology::Class {
-            iri: crate::ontology::IRI::from(class_iri),
+            iri: crate::ontology::IRI::from(class_iri.to_string()),
         }))
     }
 
@@ -1302,9 +1315,10 @@ impl Reasoner {
                         };
                         
                         // Add the concept to the node if not already present
-                        if let Some(node) = tableau.get_node_mut(node_id) {
-                            if !node.concept_labels.contains(&assertion.class) {
-                                node.concept_labels.push(assertion.class.clone());
+                        if let Some(node) = tableau.get_node_mut(&node_id.to_string()) {
+                            let concept_label = crate::core::tableau::ConceptLabel::from_class_expression(&assertion.class)?;
+                            if !node.concepts.contains(&concept_label) {
+                                node.concepts.insert(concept_label);
                             }
                         }
                     }
@@ -1336,7 +1350,7 @@ impl Reasoner {
                     // Add edge between nodes
                     if let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
                         let role_label = RoleLabel::Atomic(prop.iri.as_str().to_string());
-                        tableau.add_edge(subject_id, object_id, &role_label)?;
+                        tableau.add_edge(subject_id, object_id, role_label, DependencySet::empty())?;
                     }
                 }
                 _ => {

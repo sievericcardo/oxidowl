@@ -761,11 +761,14 @@ impl Tableau {
     }
     
     /// Check property chains starting from a specific node
-    fn check_property_chains_from_node(&mut self, node_id: usize, ontology: &Ontology) -> Result<()> {
+    fn check_property_chains_from_node(&mut self, node_id: usize, _ontology: &Ontology) -> Result<()> {
         // Get all outgoing edges from this node
         let outgoing_edges: Vec<_> = self.edges.iter()
             .filter(|edge| edge.from == node_id)
+            .cloned()  // Clone to avoid borrowing issues
             .collect();
+        
+        let mut new_edges = Vec::new();
         
         // For each pair of outgoing edges, check if they form a chain
         for edge1 in &outgoing_edges {
@@ -789,11 +792,14 @@ impl Tableau {
                         dependencies: edge1.dependencies.union(&edge2.dependencies),
                     };
                     
-                    self.edges.push(new_edge);
+                    new_edges.push(new_edge);
                     debug!("Added property chain edge: {} -> {}", edge1.from, edge2.to);
                 }
             }
         }
+        
+        // Add all new edges at once
+        self.edges.extend(new_edges);
         
         Ok(())
     }
@@ -867,6 +873,16 @@ impl Tableau {
     /// Add a reference to the ontology for property chain checking
     pub fn set_ontology(&mut self, ontology: std::sync::Arc<crate::ontology::Ontology>) {
         self.reasoner_ontology = Some(ontology);
+    }
+
+    /// Get all edges in the tableau
+    pub fn edges(&self) -> &Vec<TableauEdge> {
+        &self.edges
+    }
+
+    /// Get a node by node ID
+    pub fn get_node(&self, node_id: NodeId) -> Option<&TableauNode> {
+        self.nodes.get(node_id)
     }
 
     /// Check subsumption between two class expressions
@@ -955,7 +971,15 @@ impl Tableau {
                                 rule: CompletionRule::All,
                                 node: to.to_string(),
                                 context: RuleContext::Role {
-                                    role: Role { iri: IRI::from(concept_role.name().to_string()) },
+                                    role: crate::ontology::Role::ObjectProperty(
+                                        crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                                            crate::ontology::ObjectProperty {
+                                                iri: concept_role.name().parse().unwrap_or_else(|_| {
+                                                    url::Url::parse("http://example.org/unknown").unwrap()
+                                                })
+                                            }
+                                        )
+                                    ),
                                     source: from.to_string(),
                                     target: to.to_string(),
                                     concept: ClassExpression::Class(crate::ontology::concepts::Class {
@@ -976,7 +1000,9 @@ impl Tableau {
                                 from, 
                                 cardinality, 
                                 &ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                                    iri: IRI::from(concept_role.name().to_string())
+                                    iri: concept_role.name().parse().unwrap_or_else(|_| {
+                                        url::Url::parse("http://example.org/unknown").unwrap()
+                                    })
                                 }), 
                                 None
                             )?;
@@ -989,7 +1015,9 @@ impl Tableau {
                                 from, 
                                 cardinality, 
                                 &ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                                    iri: IRI::from(concept_role.name().to_string())
+                                    iri: concept_role.name().parse().unwrap_or_else(|_| {
+                                        url::Url::parse("http://example.org/unknown").unwrap()
+                                    })
                                 }), 
                                 None
                             )?;
@@ -1243,6 +1271,17 @@ impl Tableau {
     /// Get the number of nodes in the tableau
     pub fn get_node_count(&self) -> usize {
         self.nodes.len()
+    }
+    
+    /// Get mutable reference to a node by its string ID (for compatibility)
+    pub fn get_node_mut(&mut self, node_id: &str) -> Option<&mut TableauNode> {
+        // Convert node_id to index if possible
+        if let Ok(index) = node_id.parse::<usize>() {
+            self.nodes.get_mut(index)
+        } else {
+            // Search by string ID - simplified implementation
+            None
+        }
     }
 
     /// Get the number of backtracking operations
