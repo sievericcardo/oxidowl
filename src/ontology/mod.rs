@@ -422,7 +422,7 @@ impl Ontology {
                 // Use N-Triples parser
                 crate::parsers::ntriples::parse(&contents)
             }
-            "functional" | "func" => {
+            "functional" | "func" | "ofn" => {
                 // Use Functional syntax parser
                 crate::parsers::functional::parse(&contents)
             }
@@ -616,12 +616,25 @@ impl OntologyFormat {
             OntologyFormat::Manchester => "text/owl-manchester",
         }
     }
-    
+
+    /// Get the format string for parsing
+    pub fn format_string(&self) -> &'static str {
+        match self {
+            OntologyFormat::Auto => "auto",
+            OntologyFormat::Functional => "functional",
+            OntologyFormat::OwlXml => "owl",
+            OntologyFormat::RdfXml => "rdf",
+            OntologyFormat::Turtle => "ttl",
+            OntologyFormat::NTriples => "nt",
+            OntologyFormat::Manchester => "omn",
+        }
+    }
+
     /// Try to detect format from file extension
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_lowercase().as_str() {
-            "owx" => Some(OntologyFormat::Functional),
-            "owl" => Some(OntologyFormat::OwlXml),
+            "owx" => Some(OntologyFormat::OwlXml),
+            "owl" | "ofn" => Some(OntologyFormat::Functional),
             "rdf" => Some(OntologyFormat::RdfXml),
             "ttl" => Some(OntologyFormat::Turtle),
             "nt" => Some(OntologyFormat::NTriples),

@@ -400,8 +400,14 @@ impl Reasoner {
     ) -> Result<()> {
         info!("Loading ontology from: {}", path.as_ref().display());
         let start_time = Instant::now();
+
+        let forma_string = if format == OntologyFormat::Auto {
+            None
+        } else {
+            Some(format.format_string().to_string())
+        };
         
-        let ontology = Ontology::from_file(path, Some(format!("{:?}", format)))?;
+        let ontology = Ontology::from_file(path, forma_string)?;
         self.ontology = Some(Arc::new(RwLock::new(ontology)));
         
         // Clear caches when new ontology is loaded
