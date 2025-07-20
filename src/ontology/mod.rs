@@ -520,17 +520,17 @@ impl Ontology {
                 }
                 // Extract from object property assertion axioms
                 axioms::Axiom::ObjectPropertyAssertion(assertion) => {
-                    // Extract subject
-                    if let individuals::Individual::Named(named) = &assertion.subject {
+                    // Extract source
+                    if let individuals::Individual::Named(named) = &assertion.source {
                         if !individuals.iter().any(|(existing_iri, _)| existing_iri == &named.iri) {
-                            individuals.push((named.iri.clone(), assertion.subject.clone()));
+                            individuals.push((named.iri.clone(), assertion.source.clone()));
                         }
                     }
                     
-                    // Extract object
-                    if let individuals::Individual::Named(named) = &assertion.object {
+                    // Extract target
+                    if let individuals::Individual::Named(named) = &assertion.target {
                         if !individuals.iter().any(|(existing_iri, _)| existing_iri == &named.iri) {
-                            individuals.push((named.iri.clone(), assertion.object.clone()));
+                            individuals.push((named.iri.clone(), assertion.target.clone()));
                         }
                     }
                 }

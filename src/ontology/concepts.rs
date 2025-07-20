@@ -793,6 +793,18 @@ impl fmt::Display for ClassExpression {
             ClassExpression::DataExactCardinality { property, cardinality, filler } => {
                 write!(f, "={} {}.{}", cardinality, property, filler)
             }
+            ClassExpression::AnnotationAssertion { property, subject, value } => {
+                write!(f, "AnnotationAssertion({}, {}, {})", property, subject, value)
+            }
+            ClassExpression::SubAnnotationPropertyOf { sub_property, super_property } => {
+                write!(f, "SubAnnotationPropertyOf({}, {})", sub_property, super_property)
+            }
+            ClassExpression::AnnotationPropertyDomain { property, domain } => {
+                write!(f, "AnnotationPropertyDomain({}, {})", property, domain)
+            }
+            ClassExpression::AnnotationPropertyRange { property, range } => {
+                write!(f, "AnnotationPropertyRange({}, {})", property, range)
+            }
         }
     }
 }
