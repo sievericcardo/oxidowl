@@ -208,7 +208,8 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     writeln!(file, "         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"")?;
     writeln!(file, "         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">")?;
     writeln!(file, "  <!-- Ontology serialization -->")?;
-    writeln!(file, "  <owl:Ontology rdf:about=\"{}\" />", ontology.iri().as_str())?;
+    let iri_str = ontology.iri.as_ref().map(|iri| iri.as_str()).unwrap_or("http://example.org/ontology");
+    writeln!(file, "  <owl:Ontology rdf:about=\"{}\" />", iri_str)?;
     writeln!(file, "  <!-- TODO: Implement complete RDF/XML serialization -->")?;
     writeln!(file, "</rdf:RDF>")?;
     Ok(())
