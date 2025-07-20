@@ -363,10 +363,16 @@ impl Ontology {
                             signature.classes.push(concepts::Class { iri: iri.clone() });
                         }
                         axioms::Entity::ObjectProperty(iri) => {
-                            signature.object_properties.push(ObjectProperty { iri: iri.to_url()? });
+                            // Try to convert to URL, but continue if it fails (for relative IRIs)
+                            if let Ok(url) = iri.to_url() {
+                                signature.object_properties.push(ObjectProperty { iri: url });
+                            }
                         }
                         axioms::Entity::DataProperty(iri) => {
-                            signature.data_properties.push(DataProperty { iri: iri.to_url()? });
+                            // Try to convert to URL, but continue if it fails (for relative IRIs)
+                            if let Ok(url) = iri.to_url() {
+                                signature.data_properties.push(DataProperty { iri: url });
+                            }
                         }
                         axioms::Entity::NamedIndividual(iri) => {
                             signature.individuals.push(individuals::Individual::Named(individuals::NamedIndividual { iri: iri.clone() }));
