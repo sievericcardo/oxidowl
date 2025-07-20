@@ -16,6 +16,13 @@ use std::{
     fmt,
 };
 
+/// Helper function to convert string to Individual
+fn string_to_individual(node_id: String) -> Individual {
+    Individual::Named(crate::ontology::NamedIndividual {
+        iri: crate::ontology::IRI::from(node_id),
+    })
+}
+
 /// Completion rules for tableau expansion
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompletionRule {
@@ -421,7 +428,7 @@ impl CompletionRuleSet {
                 for conjunct in conjuncts {
                     // Add each conjunct to the same individual
                     result.concept_additions.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         conjunct.clone(),
                         dependencies.clone(),
                     ));
@@ -442,22 +449,24 @@ impl CompletionRuleSet {
                 // Create branching choices for each disjunct
                 let mut choices = Vec::new();
                 for (index, disjunct) in disjuncts.iter().enumerate() {
+                    let individual = string_to_individual(application.node.clone());
                     choices.push(crate::core::hypertableau::branching::BranchingChoice::new(
                         index,
                         format!("Disjunct {}: {}", index, disjunct),
                         disjunct.clone(),
-                        application.node.clone(),
+                        individual,
                     ));
                 }
                 
                 // Create branching point
+                let individual = string_to_individual(application.node.clone());
                 let branching_type = crate::core::hypertableau::branching::BranchingType::GroundDisjunction {
                     disjunction: crate::core::hypertableau::ground_disjunction::GroundDisjunction::from_class_expression(
                         concept.clone(),
-                        application.node.clone(),
+                        individual.clone(),
                         dependencies.clone(),
                     )?,
-                    individual: application.node.clone(),
+                    individual: individual.clone(),
                 };
                 
                 result.branching_points.push((branching_type, choices));
@@ -479,7 +488,7 @@ impl CompletionRuleSet {
                 
                 // Add role assertion between current individual and witness
                 result.role_additions.push((
-                    application.node.clone(),
+                    string_to_individual(application.node.clone()),
                     witness_individual.clone(),
                     property.clone(),
                     dependencies.clone(),
@@ -504,7 +513,7 @@ impl CompletionRuleSet {
         if let RuleContext::Role { role: _, source: _, target, concept } = &application.context {
             // Add the concept to the target node
             result.concept_additions.push((
-                target.clone(),
+                string_to_individual(target.clone()),
                 concept.clone(),
                 application.dependencies.clone(),
             ));
@@ -543,7 +552,7 @@ impl CompletionRuleSet {
                     
                     if let Some(filler_concept) = filler {
                         result.concept_additions.push((
-                            new_individual,
+                            string_to_individual(new_individual),
                             filler_concept.clone(),
                             application.dependencies.clone(),
                         ));
@@ -635,7 +644,7 @@ impl CompletionRuleSet {
                     
                     // Add data property assertion
                     result.data_assertions.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         witness_value.clone(),
                         property.clone(),
                         dependencies.clone(),
@@ -655,7 +664,7 @@ impl CompletionRuleSet {
                     
                     // For now, just record the constraint for later validation
                     result.universal_constraints.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         property.clone(),
                         ClassExpression::DataAllValuesFrom { property: property.clone(), filler: filler.clone() },
                         dependencies.clone(),
@@ -664,7 +673,7 @@ impl CompletionRuleSet {
                 ClassExpression::DataHasValue { property, value } => {
                     // Add specific data property assertion
                     result.data_assertions.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         value.to_string(), // Convert literal to string
                         property.clone(),
                         dependencies.clone(),
@@ -691,7 +700,7 @@ impl CompletionRuleSet {
                 if let Some(definition) = self.get_concept_definition(named_class) {
                     // Add the definition as a new concept assertion
                     result.concept_additions.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         definition,
                         dependencies.clone(),
                     ));
@@ -716,7 +725,7 @@ impl CompletionRuleSet {
                         
                         // Add role assertion to witness
                         result.role_additions.push((
-                            application.node.clone(),
+                            string_to_individual(application.node.clone()),
                             witness.clone(),
                             property.clone(),
                             dependencies.clone(),
@@ -742,7 +751,7 @@ impl CompletionRuleSet {
                     
                     // Add constraint for later validation
                     result.cardinality_constraints.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         property.clone(),
                         *cardinality,
                         (**filler).clone(),
@@ -758,7 +767,7 @@ impl CompletionRuleSet {
                         let witness = Individual::fresh();
                         
                         result.role_additions.push((
-                            application.node.clone(),
+                            string_to_individual(application.node.clone()),
                             witness.clone(),
                             property.clone(),
                             dependencies.clone(),
@@ -773,7 +782,7 @@ impl CompletionRuleSet {
                     
                     // Add max constraint (max part)
                     result.cardinality_constraints.push((
-                        application.node.clone(),
+                        string_to_individual(application.node.clone()),
                         property.clone(),
                         *cardinality,
                         (**filler).clone(),
