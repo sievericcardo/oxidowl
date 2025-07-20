@@ -66,6 +66,10 @@ enum Commands {
         #[arg(short, long, value_name = "FILE")]
         input: PathBuf,
 
+        /// Default namespace for entity resolution
+        #[arg(short, long, value_name = "NAMESPACE")]
+        namespace: Option<String>,
+
         /// Output file for class hierarchy
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
@@ -118,6 +122,10 @@ enum Commands {
         /// DL query string (Manchester Syntax)
         #[arg(short, long, value_name = "QUERY")]
         query: String,
+
+        /// Default namespace for query parsing
+        #[arg(short, long, value_name = "NAMESPACE")]
+        namespace: Option<String>,
 
         /// Output file for query results
         #[arg(short, long, value_name = "FILE")]
@@ -286,8 +294,8 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
         Commands::Consistency { input, output, format } => {
             execute_consistency_check(input, output, format, config).await
         }
-        Commands::Classification { input, output, format } => {
-            execute_classification(input, output, format, config).await
+        Commands::Classification { input, namespace, output, format } => {
+            execute_classification(input, namespace, output, format, config).await
         }
         Commands::Satisfiability { input, class_iri, output, format } => {
             execute_satisfiability_check(input, class_iri, output, format, config).await
@@ -295,10 +303,11 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
         Commands::Realization { input, output, format } => {
             execute_realization(input, output, format, config).await
         }
-        Commands::Query { input, query, output, format } => {
+        Commands::Query { input, query, namespace, output, format } => {
             execute_dl_query(
                 input.to_str().unwrap(), 
                 &query, 
+                namespace.as_deref(), 
                 output.as_ref().map(|p| p.to_str().unwrap()), 
                 "json", // Always use JSON for now
                 config
@@ -356,11 +365,16 @@ async fn execute_consistency_check(
 
 async fn execute_classification(
     input: PathBuf,
+    namespace: Option<String>,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Performing classification on: {}", input.display());
+    
+    if let Some(ref ns) = namespace {
+        info!("Using default namespace: {}", ns);
+    }
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
@@ -411,6 +425,7 @@ async fn execute_satisfiability_check(
 async fn execute_dl_query(
     ontology_file: &str,
     query: &str,
+    namespace: Option<&str>,
     output_file: Option<&str>,
     format: &str,
     config: ReasonerConfig,
@@ -424,7 +439,28 @@ async fn execute_dl_query(
 
     // Create reasoning service and query engine
     let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology.read().unwrap().clone(), config);
-    let query_engine = oxidowl::query::DLQueryEngine::new(reasoning_service);
+    
+    // Create query engine with optional namespace
+    let query_engine = if let Some(ns) = namespace {
+        oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, ns.to_string())
+    } else {
+        // Try to auto-detect namespace from ontology IRI, fallback to default
+        let default_namespace = ontology.read().unwrap()
+            .get_iri()
+            .map(|iri| {
+                let iri_str = iri.as_str();
+                if iri_str.ends_with('#') {
+                    iri_str.to_string()
+                } else if iri_str.ends_with('/') {
+                    iri_str.to_string()
+                } else {
+                    format!("{}#", iri_str)
+                }
+            })
+            .unwrap_or_else(|| "http://example.org/ontology#".to_string());
+        
+        oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, default_namespace)
+    };
 
     // Execute the query
     let result = query_engine.execute_query(query).await?;
