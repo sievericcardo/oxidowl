@@ -22,6 +22,7 @@ use std::{
 #[derive(Debug)]
 pub struct DLQueryEngine {
     reasoning_service: ReasoningService,
+    default_namespace: Option<String>,
 }
 
 /// A parsed DL query
@@ -70,7 +71,32 @@ impl DLQueryEngine {
     pub fn new(reasoning_service: ReasoningService) -> Self {
         Self {
             reasoning_service,
+            default_namespace: None,
         }
+    }
+
+    /// Create a new DL query engine with a specific default namespace
+    pub fn new_with_namespace(reasoning_service: ReasoningService, namespace: String) -> Self {
+        Self {
+            reasoning_service,
+            default_namespace: Some(namespace),
+        }
+    }
+
+    /// Get the default namespace from the ontology or use provided namespace
+    fn get_default_namespace(&self) -> Result<String> {
+        // Use provided namespace if available
+        if let Some(ref namespace) = self.default_namespace {
+            return Ok(namespace.clone());
+        }
+
+        // Try to get the ontology IRI to determine the default namespace
+        // For now, we'll try to extract it from the loaded ontology in the reasoning service
+        // This is a simplified approach - in a full implementation, 
+        // we'd track prefixes and default namespaces more systematically
+        
+        // Default fallback namespace
+        Ok("http://example.org/ontology#".to_string())
     }
 
     /// Parse and execute a DL query string
@@ -128,7 +154,8 @@ impl DLQueryEngine {
 
     /// Parse a DL query string into a structured query
     pub fn parse_query(&self, query_string: &str) -> Result<DLQuery> {
-        let parser = DLQueryParser::new();
+        let default_namespace = self.get_default_namespace()?;
+        let parser = DLQueryParser::with_namespace(default_namespace);
         parser.parse(query_string)
     }
 
@@ -155,12 +182,22 @@ impl DLQueryEngine {
 
 /// Parser for DL query strings in Manchester Syntax
 pub struct DLQueryParser {
-    // Future: Add configuration for syntax variations
+    default_namespace: String,
 }
 
 impl DLQueryParser {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            // Use a generic default namespace that will be overridden
+            default_namespace: "http://example.org/ontology#".to_string(),
+        }
+    }
+
+    /// Create parser with custom default namespace
+    pub fn with_namespace(namespace: String) -> Self {
+        Self {
+            default_namespace: namespace,
+        }
     }
 
     /// Parse a query string into a DL query
@@ -392,13 +429,13 @@ impl DLQueryParser {
     fn parse_class_name(&self, name: &str) -> Result<ClassExpression> {
         let iri = if name.contains(':') {
             // Handle prefixed names - for now, just treat as full IRI
-            IRI::new(&format!("http://example.org/{}", name))
+            IRI::new(&format!("{}{}", self.default_namespace, name.split(':').last().unwrap_or(name)))
         } else if name.starts_with('<') && name.ends_with('>') {
             // Handle full IRIs in angle brackets
             IRI::new(&name[1..name.len()-1])
         } else {
-            // Handle simple names
-            IRI::new(&format!("http://example.org/{}", name))
+            // Handle simple names - use the default namespace
+            IRI::new(&format!("{}{}", self.default_namespace, name))
         };
         
         Ok(ClassExpression::Class(Class::new(iri)))
@@ -407,11 +444,11 @@ impl DLQueryParser {
     /// Parse a property name into an object property expression
     fn parse_property_name(&self, name: &str) -> Result<ObjectPropertyExpression> {
         let iri = if name.contains(':') {
-            IRI::new(&format!("http://example.org/{}", name))
+            IRI::new(&format!("{}{}", self.default_namespace, name.split(':').last().unwrap_or(name)))
         } else if name.starts_with('<') && name.ends_with('>') {
             IRI::new(&name[1..name.len()-1])
         } else {
-            IRI::new(&format!("http://example.org/{}", name))
+            IRI::new(&format!("{}{}", self.default_namespace, name))
         };
         
         Ok(ObjectPropertyExpression::ObjectProperty(ObjectProperty::new(iri)?))
