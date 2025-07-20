@@ -730,14 +730,42 @@ impl Reasoner {
             return Ok(cached_result);
         }
         
-        let ontology = self.get_ontology()?;
-        let ontology_guard = ontology.read().unwrap();
-        
-        // Build tableau for instance checking
-        let tableau = self.create_tableau_algorithm_for_instance_check(&ontology_guard, individual, class)?;
-        
-        // Run tableau algorithm
-        let result = self.run_tableau_instance_check(tableau)?;
+        // Use actual ontology axioms to determine instance relationships
+        let result = if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            let mut is_instance = false;
+            
+            // First, check for direct class assertions
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) = axiom {
+                    // Check if this is our individual
+                    let individual_iri = match &class_assertion.individual {
+                        crate::ontology::Individual::Named(named) => named.iri.as_str(),
+                        _ => continue,
+                    };
+                    
+                    if individual_iri == individual {
+                        // Check if the asserted class matches or is a subclass of our target class
+                        if let crate::ontology::ClassExpression::Class(asserted_class) = &class_assertion.class {
+                            if asserted_class.iri.as_str() == class {
+                                is_instance = true;
+                                break;
+                            }
+                            
+                            // Check if the asserted class is a subclass of our target class
+                            if self.is_subclass_of_target(&asserted_class.iri.as_str(), class, &ontology_guard) {
+                                is_instance = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            is_instance
+        } else {
+            false
+        };
         
         // Cache the result
         self.cache_manager.write().unwrap().store_instance_result(
@@ -747,6 +775,37 @@ impl Reasoner {
         );
         
         Ok(result)
+    }
+
+    /// Helper method to check if a class is a subclass of a target class
+    fn is_subclass_of_target(&self, class_iri: &str, target_class: &str, ontology: &crate::ontology::Ontology) -> bool {
+        // Direct match
+        if class_iri == target_class {
+            return true;
+        }
+        
+        // Check SubClassOf axioms
+        for axiom in ontology.axioms() {
+            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                if let (crate::ontology::ClassExpression::Class(sub_class), 
+                        crate::ontology::ClassExpression::Class(super_class)) = 
+                    (&subclass_axiom.subclass, &subclass_axiom.superclass) {
+                    
+                    if sub_class.iri.as_str() == class_iri && super_class.iri.as_str() == target_class {
+                        return true;
+                    }
+                    
+                    // Recursive check for transitive subsumption
+                    if sub_class.iri.as_str() == class_iri {
+                        if self.is_subclass_of_target(&super_class.iri.as_str(), target_class, ontology) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        false
     }
 
     /// Execute a SPARQL query against the ontology
@@ -817,17 +876,70 @@ impl Reasoner {
     }
 
     /// Get all subclasses of a class expression
-    pub fn get_subclasses(&self, concept: &ClassExpression, direct: bool) -> Result<Vec<ClassExpression>> {
+    pub fn get_subclasses(&self, concept: &ClassExpression, _direct: bool) -> Result<Vec<ClassExpression>> {
         if let Some(ontology) = &self.ontology {
             let ontology_guard = ontology.read().unwrap();
             let mut subclasses = Vec::new();
             
-            // Get all classes from the signature
-            for class in &ontology_guard.signature().unwrap().classes {
-                let class_expr = ClassExpression::Class(class.clone());
-                if self.is_subsumed_by(&class_expr, concept)? && concept != &class_expr {
-                    subclasses.push(class_expr);
+            if let ClassExpression::Class(target_class) = concept {
+                debug!("Looking for subclasses of: {}", target_class.iri.as_str());
+                debug!("Total axioms in ontology: {}", ontology_guard.axioms().len());
+                
+                // First, let's count all axiom types to understand the ontology structure
+                let mut axiom_type_counts = std::collections::HashMap::new();
+                for axiom in ontology_guard.axioms() {
+                    let axiom_type = match axiom {
+                        crate::ontology::axioms::Axiom::SubClassOf(_) => "SubClassOf",
+                        crate::ontology::axioms::Axiom::EquivalentClasses(_) => "EquivalentClasses",
+                        crate::ontology::axioms::Axiom::DisjointClasses(_) => "DisjointClasses",
+                        crate::ontology::axioms::Axiom::ClassAssertion(_) => "ClassAssertion",
+                        crate::ontology::axioms::Axiom::ObjectPropertyAssertion(_) => "ObjectPropertyAssertion",
+                        crate::ontology::axioms::Axiom::Declaration(_) => "Declaration",
+                        _ => "Other",
+                    };
+                    *axiom_type_counts.entry(axiom_type).or_insert(0) += 1;
                 }
+                
+                debug!("Axiom type breakdown:");
+                for (axiom_type, count) in &axiom_type_counts {
+                    debug!("  {}: {}", axiom_type, count);
+                }
+                
+                // Look for SubClassOf axioms in the ontology
+                let mut subclass_axiom_count = 0;
+                for axiom in ontology_guard.axioms() {
+                    match axiom {
+                        crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
+                            subclass_axiom_count += 1;
+                            // Check if the superclass matches our target
+                            if let ClassExpression::Class(super_class) = &subclass_axiom.superclass {
+                                debug!("Checking SubClassOf axiom #{}: {} -> {}", 
+                                       subclass_axiom_count,
+                                       if let ClassExpression::Class(sub) = &subclass_axiom.subclass { 
+                                           sub.iri.as_str() 
+                                       } else { 
+                                           "complex" 
+                                       },
+                                       super_class.iri.as_str());
+                                
+                                if target_class.iri.as_str() == super_class.iri.as_str() {
+                                    // Add the subclass to our results
+                                    debug!("Found subclass: {}", 
+                                           if let ClassExpression::Class(sub) = &subclass_axiom.subclass { 
+                                               sub.iri.as_str() 
+                                           } else { 
+                                               "complex" 
+                                           });
+                                    subclasses.push(subclass_axiom.subclass.clone());
+                                }
+                            }
+                        }
+                        _ => {
+                            // Count other axiom types for debugging
+                        }
+                    }
+                }
+                debug!("Found {} SubClassOf axioms total", subclass_axiom_count);
             }
             
             Ok(subclasses)
@@ -835,6 +947,7 @@ impl Reasoner {
             Err(Error::reasoning("No ontology loaded"))
         }
     }
+
 
     /// Get all equivalent classes of a class expression
     pub fn get_equivalent_classes(&self, concept: &ClassExpression) -> Result<Vec<ClassExpression>> {
