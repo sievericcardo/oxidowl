@@ -7,12 +7,14 @@ use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{
     config::ReasonerConfig,
     core::reasoner::Reasoner,
-    ontology::OntologyFormat,
+    ontology::{Ontology, OntologyFormat},
     Result,
 };
+use serde_json;
 use std::{
     fs,
     path::PathBuf,
+    sync::{Arc, RwLock},
     time::Instant,
 };
 use tracing::{error, info, Level};
@@ -99,6 +101,25 @@ enum Commands {
         input: PathBuf,
 
         /// Output file for realization results
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+
+        /// Input format
+        #[arg(short, long, value_enum)]
+        format: Option<InputFormat>,
+    },
+
+    /// Execute DL query
+    Query {
+        /// Input ontology file
+        #[arg(short, long, value_name = "FILE")]
+        input: PathBuf,
+
+        /// DL query string (Manchester Syntax)
+        #[arg(short, long, value_name = "QUERY")]
+        query: String,
+
+        /// Output file for query results
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
 
@@ -274,6 +295,15 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
         Commands::Realization { input, output, format } => {
             execute_realization(input, output, format, config).await
         }
+        Commands::Query { input, query, output, format } => {
+            execute_dl_query(
+                input.to_str().unwrap(), 
+                &query, 
+                output.as_ref().map(|p| p.to_str().unwrap()), 
+                "json", // Always use JSON for now
+                config
+            ).await
+        }
         Commands::OwlLinkFile { input, output } => {
             execute_owllink_file(input, output, config).await
         }
@@ -375,6 +405,45 @@ async fn execute_satisfiability_check(
         println!("Result: {}", if is_satisfiable { "satisfiable" } else { "unsatisfiable" });
     }
     
+    Ok(())
+}
+
+async fn execute_dl_query(
+    ontology_file: &str,
+    query: &str,
+    output_file: Option<&str>,
+    format: &str,
+    config: ReasonerConfig,
+) -> Result<()> {
+    // Create reasoner and load ontology
+    let mut reasoner = Reasoner::new(config.clone())?;
+    reasoner.load_ontology_from_file(ontology_file, OntologyFormat::Auto)?;
+
+    // Get the ontology from the reasoner
+    let ontology = reasoner.get_ontology()?;
+
+    // Create reasoning service and query engine
+    let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology.read().unwrap().clone(), config);
+    let query_engine = oxidowl::query::DLQueryEngine::new(reasoning_service);
+
+    // Execute the query
+    let result = query_engine.execute_query(query).await?;
+
+    // Format and output the result
+    let output = match format {
+        "json" => format!("{{\"query\": \"{}\", \"result\": \"{:?}\"}}", query, result),
+        "text" => format!("{:?}", result),
+        _ => return Err(oxidowl::Error::io("Unsupported format. Use 'json' or 'text'".to_string())),
+    };
+
+    // Write to file or stdout
+    if let Some(file_path) = output_file {
+        std::fs::write(file_path, output)?;
+        println!("Query result saved to {}", file_path);
+    } else {
+        println!("{}", output);
+    }
+
     Ok(())
 }
 
