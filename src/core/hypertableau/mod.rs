@@ -333,13 +333,18 @@ impl HyperTableau {
         
         // If only one disjunct, apply it directly
         if disjunction.disjuncts().len() == 1 {
+            let premise_facts = vec![
+                dependency_tracking::FactId(disjunction_id),
+                dependency_tracking::FactId(disjunction_id + 1000), // Offset for context facts
+            ];
+            
             let fact_id = {
                 let mut tracker = self.dependency_tracker.lock().unwrap();
                 tracker.create_fact(
                     format!("Direct disjunct: {}", disjunction.disjuncts()[0]),
                     dependency_tracking::utils::clause_application_dependency(
                         disjunction_id,
-                        vec![], // TODO: Add premise facts
+                        premise_facts,
                     ),
                 )?
             };

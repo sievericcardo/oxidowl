@@ -719,3 +719,92 @@ impl Default for ConceptStore {
         Self::new()
     }
 }
+
+use std::fmt;
+
+impl fmt::Display for ClassExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClassExpression::Class(class) => write!(f, "{}", class.iri.as_str()),
+            ClassExpression::ObjectIntersectionOf(classes) => {
+                write!(f, "(")?;
+                for (i, class) in classes.iter().enumerate() {
+                    if i > 0 { write!(f, " ⊓ ")?; }
+                    write!(f, "{}", class)?;
+                }
+                write!(f, ")")
+            }
+            ClassExpression::ObjectUnionOf(classes) => {
+                write!(f, "(")?;
+                for (i, class) in classes.iter().enumerate() {
+                    if i > 0 { write!(f, " ⊔ ")?; }
+                    write!(f, "{}", class)?;
+                }
+                write!(f, ")")
+            }
+            ClassExpression::ObjectComplementOf(class) => {
+                write!(f, "¬{}", class)
+            }
+            ClassExpression::ObjectOneOf(individuals) => {
+                write!(f, "{{")?;
+                for (i, individual) in individuals.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{}", individual)?;
+                }
+                write!(f, "}}")
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                write!(f, "∃{}.{}", property, filler)
+            }
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                write!(f, "∀{}.{}", property, filler)
+            }
+            ClassExpression::ObjectHasValue { property, value } => {
+                write!(f, "∃{}.{{{}}}", property, value)
+            }
+            ClassExpression::ObjectHasSelf { property } => {
+                write!(f, "∃{}.Self", property)
+            }
+            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+                write!(f, "≥{} {}.{}", cardinality, property, filler)
+            }
+            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
+                write!(f, "≤{} {}.{}", cardinality, property, filler)
+            }
+            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
+                write!(f, "={} {}.{}", cardinality, property, filler)
+            }
+            // Data property restrictions
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                write!(f, "∃{}.{}", property, filler)
+            }
+            ClassExpression::DataAllValuesFrom { property, filler } => {
+                write!(f, "∀{}.{}", property, filler)
+            }
+            ClassExpression::DataHasValue { property, value } => {
+                write!(f, "∃{}.{{{}}}", property, value)
+            }
+            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
+                write!(f, "≥{} {}.{}", cardinality, property, filler)
+            }
+            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
+                write!(f, "≤{} {}.{}", cardinality, property, filler)
+            }
+            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
+                write!(f, "={} {}.{}", cardinality, property, filler)
+            }
+            ClassExpression::AnnotationAssertion { property, subject, value } => {
+                write!(f, "AnnotationAssertion({}, {}, {})", property, subject, value)
+            }
+            ClassExpression::SubAnnotationPropertyOf { sub_property, super_property } => {
+                write!(f, "SubAnnotationPropertyOf({}, {})", sub_property, super_property)
+            }
+            ClassExpression::AnnotationPropertyDomain { property, domain } => {
+                write!(f, "AnnotationPropertyDomain({}, {})", property, domain)
+            }
+            ClassExpression::AnnotationPropertyRange { property, range } => {
+                write!(f, "AnnotationPropertyRange({}, {})", property, range)
+            }
+        }
+    }
+}

@@ -9,9 +9,9 @@ pub mod turtle;
 pub mod ntriples;
 
 // Re-export parser structs and functions
-pub use owl_xml::{OWLXMLParser, parse as parse_owl_xml, parse_file as parse_owl_xml_file, save_file as save_owl_xml_file};
+pub use owl_xml::{OwlXmlParser, parse as parse_owl_xml, parse_file as parse_owl_xml_file, save_file as save_owl_xml_file};
 pub use functional::{FunctionalParser, parse as parse_functional, parse_file as parse_functional_file, save_file as save_functional_file};
-pub use rdf_xml::{RDFXMLParser, parse as parse_rdf_xml, parse_file as parse_rdf_xml_file, save_file as save_rdf_xml_file};
+pub use rdf_xml::{RdfXmlParser, parse as parse_rdf_xml, parse_file as parse_rdf_xml_file, save_file as save_rdf_xml_file};
 pub use turtle::{TurtleParser, parse as parse_turtle, parse_file as parse_turtle_file, save_file as save_turtle_file};
 pub use ntriples::{NTriplesParser, parse as parse_ntriples, parse_file as parse_ntriples_file, save_file as save_ntriples_file};
 
@@ -88,9 +88,9 @@ impl ParserFactory {
     /// Create a parser for the specified format
     pub fn create_parser(format: OntologyFormat) -> Result<Box<dyn Parser>> {
         match format {
-            OntologyFormat::OwlXml => Ok(Box::new(OWLXMLParser::new())),
+            OntologyFormat::OwlXml => Ok(Box::new(OwlXmlParser::new())),
             OntologyFormat::Functional => Ok(Box::new(FunctionalParser::new())),
-            OntologyFormat::RdfXml => Ok(Box::new(RDFXMLParser::new())),
+            OntologyFormat::RdfXml => Ok(Box::new(RdfXmlParser::new())),
             OntologyFormat::Turtle => Ok(Box::new(TurtleParser::new())),
             OntologyFormat::NTriples => Ok(Box::new(NTriplesParser::new())),
             OntologyFormat::Manchester => Err(Error::ontology_parsing("Manchester syntax not yet implemented")),
@@ -118,7 +118,7 @@ pub trait Serializer {
 }
 
 // Implement Parser trait for all parsers
-impl Parser for OWLXMLParser {
+impl Parser for OwlXmlParser {
     fn parse(&self, input: &str) -> Result<Ontology> {
         owl_xml::parse(input)
     }
@@ -138,7 +138,7 @@ impl Parser for FunctionalParser {
     }
 }
 
-impl Parser for RDFXMLParser {
+impl Parser for RdfXmlParser {
     fn parse(&self, input: &str) -> Result<Ontology> {
         rdf_xml::parse(input)
     }

@@ -63,59 +63,6 @@ impl std::fmt::Display for IRI {
     }
 }
 
-// Display implementation for ClassExpression to support formatting in HyperTableau
-impl std::fmt::Display for ClassExpression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ClassExpression::Class(class) => write!(f, "{}", class.iri),
-            ClassExpression::ObjectIntersectionOf(operands) => {
-                write!(f, "(")?;
-                for (i, operand) in operands.iter().enumerate() {
-                    if i > 0 { write!(f, " ⊓ ")?; }
-                    write!(f, "{}", operand)?;
-                }
-                write!(f, ")")
-            },
-            ClassExpression::ObjectUnionOf(operands) => {
-                write!(f, "(")?;
-                for (i, operand) in operands.iter().enumerate() {
-                    if i > 0 { write!(f, " ⊔ ")?; }
-                    write!(f, "{}", operand)?;
-                }
-                write!(f, ")")
-            },
-            ClassExpression::ObjectComplementOf(operand) => write!(f, "¬{}", operand),
-            ClassExpression::ObjectOneOf(individuals) => {
-                write!(f, "{{")?;
-                for (i, individual) in individuals.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
-                    write!(f, "{}", individual)?;
-                }
-                write!(f, "}}")
-            },
-            ClassExpression::ObjectSomeValuesFrom { property, filler } => 
-                write!(f, "∃{}.{}", property, filler),
-            ClassExpression::ObjectAllValuesFrom { property, filler } => 
-                write!(f, "∀{}.{}", property, filler),
-            ClassExpression::ObjectHasValue { property, value } => 
-                write!(f, "∃{}.{{{}}}", property, value),
-            ClassExpression::ObjectHasSelf { property } => 
-                write!(f, "∃{}.Self", property),
-            ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
-                write!(f, "≥{} {}.{}", cardinality, property, filler)
-            },
-            ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
-                write!(f, "≤{} {}.{}", cardinality, property, filler)
-            },
-            ClassExpression::ObjectExactCardinality { cardinality, property, filler } => {
-                write!(f, "={} {}.{}", cardinality, property, filler)
-            },
-            // For data property expressions, just use a simplified representation
-            _ => write!(f, "ComplexExpression"),
-        }
-    }
-}
-
 impl std::fmt::Display for ObjectPropertyExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -249,6 +196,42 @@ pub enum DataRange {
         datatype: url::Url,
         restrictions: Vec<FacetRestriction>,
     },
+}
+
+impl std::fmt::Display for DataRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataRange::Datatype(url) => write!(f, "{}", url),
+            DataRange::DataIntersectionOf(ranges) => {
+                write!(f, "(")?;
+                for (i, range) in ranges.iter().enumerate() {
+                    if i > 0 { write!(f, " ⊓ ")?; }
+                    write!(f, "{}", range)?;
+                }
+                write!(f, ")")
+            },
+            DataRange::DataUnionOf(ranges) => {
+                write!(f, "(")?;
+                for (i, range) in ranges.iter().enumerate() {
+                    if i > 0 { write!(f, " ⊔ ")?; }
+                    write!(f, "{}", range)?;
+                }
+                write!(f, ")")
+            },
+            DataRange::DataComplementOf(range) => write!(f, "¬{}", range),
+            DataRange::DataOneOf(literals) => {
+                write!(f, "{{")?;
+                for (i, literal) in literals.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{:?}", literal)?;
+                }
+                write!(f, "}}")
+            },
+            DataRange::DatatypeRestriction { datatype, restrictions: _ } => {
+                write!(f, "{}[restrictions]", datatype)
+            },
+        }
+    }
 }
 
 /// Facet restriction for datatype restrictions
@@ -470,9 +453,26 @@ impl Ontology {
         self.add_axiom(axiom);
     }
     
-    /// Add an individual (placeholder for compatibility)
-    pub fn add_individual(&mut self, _subject: IRI, _individual: individuals::Individual) {
-        // TODO: implement proper individual handling
+    /// Add an individual and its declaration axiom
+    pub fn add_individual(&mut self, subject: IRI, individual: individuals::Individual) {
+        // Add a declaration axiom for the individual
+        let declaration = axioms::DeclarationAxiom {
+            id: self.next_axiom_id(),
+            entity: match individual {
+                individuals::Individual::Named(ref named) => {
+                    axioms::Entity::NamedIndividual(named.iri.clone())
+                }
+                individuals::Individual::Anonymous(_) => {
+                    // Anonymous individuals are not typically declared
+                    return;
+                }
+            },
+        };
+        
+        self.add_axiom(axioms::Axiom::Declaration(declaration));
+        
+        // Also store in internal tracking if needed
+        // For now, the axiom storage is sufficient
     }
     
     /// Get classes by extracting them from declaration axioms
@@ -493,10 +493,54 @@ impl Ontology {
         classes
     }
     
-    /// Get individuals (placeholder for compatibility)
+    /// Extract individuals from the axioms
     pub fn individuals(&self) -> Vec<(IRI, individuals::Individual)> {
-        // TODO: extract individuals from axioms
-        vec![]
+        let mut individuals = Vec::new();
+        
+        for axiom in &self.axioms {
+            match axiom {
+                // Extract from declaration axioms
+                axioms::Axiom::Declaration(decl) => {
+                    if let axioms::Entity::NamedIndividual(iri) = &decl.entity {
+                        let individual = individuals::Individual::named(iri.clone());
+                        individuals.push((iri.clone(), individual));
+                    }
+                }
+                // Extract from class assertion axioms
+                axioms::Axiom::ClassAssertion(assertion) => {
+                    let iri = match &assertion.individual {
+                        individuals::Individual::Named(named) => &named.iri,
+                        individuals::Individual::Anonymous(_) => continue, // Skip anonymous
+                    };
+                    
+                    // Only add if not already present
+                    if !individuals.iter().any(|(existing_iri, _)| existing_iri == iri) {
+                        individuals.push((iri.clone(), assertion.individual.clone()));
+                    }
+                }
+                // Extract from object property assertion axioms
+                axioms::Axiom::ObjectPropertyAssertion(assertion) => {
+                    // Extract source
+                    if let individuals::Individual::Named(named) = &assertion.source {
+                        if !individuals.iter().any(|(existing_iri, _)| existing_iri == &named.iri) {
+                            individuals.push((named.iri.clone(), assertion.source.clone()));
+                        }
+                    }
+                    
+                    // Extract target
+                    if let individuals::Individual::Named(named) = &assertion.target {
+                        if !individuals.iter().any(|(existing_iri, _)| existing_iri == &named.iri) {
+                            individuals.push((named.iri.clone(), assertion.target.clone()));
+                        }
+                    }
+                }
+                _ => {
+                    // TODO: Extract individuals from other axiom types as needed
+                }
+            }
+        }
+        
+        individuals
     }
     
     /// Get object properties by extracting them from declaration axioms

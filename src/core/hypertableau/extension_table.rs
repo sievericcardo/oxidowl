@@ -376,10 +376,11 @@ impl ExtensionManager {
                 self.get_extension_table(arity); // This creates the table if it doesn't exist
             }
             
-            // Now check for clash without borrowing the table mutably
-            // For now, we'll skip the actual clash check to avoid borrow issues
-            // TODO:  refactor the clash detection to work with immutable references or restructure the data
-            false
+            // Check for clashes by examining the fact being added
+            // Look for contradictory facts (e.g., A(x) and ¬A(x))
+            let clash_detected = self.detect_fact_clash(&predicate, &args);
+            
+            clash_detected
         };
         
         if clash_detected {
@@ -430,9 +431,8 @@ impl ExtensionManager {
             }
             
             // Now check for clash without borrowing the table mutably
-            // For now, we'll skip the actual clash check to avoid borrow issues
-            // TODO: refactor the clash detection to work with immutable references or restructure the data
-            false
+            // Simple clash detection that works with immutable references
+            self.detect_fact_clash(&predicate, &args)
         };
         
         if clash_detected {
@@ -542,6 +542,13 @@ impl ExtensionManager {
         self.get_facts(predicate, &RetrievalView::DeltaOld)
     }
     
+    /// Get new tuples for a predicate (for hyperresolution)
+    pub fn get_new_tuples(&self, predicate: &str) -> Option<Vec<Vec<String>>> {
+        // For now, return all current facts as "new" tuples
+        // In a full implementation, this would track actual delta changes
+        self.get_facts(predicate, &RetrievalView::Complete).ok()
+    }
+    
     /// Get concepts for a node (used by hyperresolution)
     pub fn get_node_concepts(&self, node: &str) -> Result<Vec<String>> {
         let mut concepts = Vec::new();
@@ -602,27 +609,193 @@ impl ExtensionManager {
     }
 
     /// Check if a concept assertion exists
-    pub fn contains_concept_assertion(&self, _node_id: &str, _concept: &crate::ontology::ClassExpression) -> bool {
-        // TODO: Implement proper concept assertion checking
+    pub fn contains_concept_assertion(&self, node_id: &str, concept: &crate::ontology::ClassExpression) -> bool {
+        // For simple named classes, check if node is in that class's extension
+        if let crate::ontology::ClassExpression::Class(class) = concept {
+            let class_name = class.iri.as_str();
+            if let Some(table) = self.get_table_for_arity(1) {
+                return table.has_fact(class_name, &[node_id.to_string()]).unwrap_or(false);
+            }
+        }
+        // For complex expressions, we'd need more sophisticated handling
         false
     }
     
     /// Check if a role assertion exists
-    pub fn contains_role_assertion(&self, _subj_id: &str, _property: &crate::ontology::ObjectPropertyExpression, _obj_id: &str) -> bool {
-        // Simplified implementation - would need to check binary extension tables
+    pub fn contains_role_assertion(&self, subj_id: &str, property: &crate::ontology::ObjectPropertyExpression, obj_id: &str) -> bool {
+        match property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                let property_name = prop.iri.as_str();
+                // Check if we have the assertion in the binary table
+                if let Some(table) = self.get_table_for_arity(2) {
+                    table.has_fact(property_name, &[subj_id.to_string(), obj_id.to_string()]).unwrap_or(false)
+                } else {
+                    false
+                }
+            }
+            crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                // For inverse property P^-, check if (obj, subj) is in P
+                let property_name = prop.iri.as_str();
+                if let Some(table) = self.get_table_for_arity(2) {
+                    // Inverse property: if we want to check P^-(a,b), we check P(b,a)
+                    table.has_fact(property_name, &[obj_id.to_string(), subj_id.to_string()]).unwrap_or(false)
+                } else {
+                    false
+                }
+            }
+            crate::ontology::ObjectPropertyExpression::PropertyChain(chain) => {
+                // For property chains, we need to check if there's a path
+                // This is a simplified implementation - full reasoning would require more sophisticated path checking
+                if chain.len() == 2 {
+                    // Simple case: check if there exists an intermediate individual z such that
+                    // first_prop(subj, z) and second_prop(z, obj)
+                    self.check_property_chain_simple(subj_id, obj_id, chain)
+                } else {
+                    // For longer chains, we'd need recursive checking
+                    // For now, return false as this requires complex reasoning
+                    false
+                }
+            }
+        }
+    }
+    
+    /// Check simple property chain of length 2
+    fn check_property_chain_simple(&self, subj_id: &str, obj_id: &str, chain: &[crate::ontology::ObjectPropertyExpression]) -> bool {
+        if chain.len() != 2 {
+            return false;
+        }
+        
+        // Get the property names
+        let first_prop = match &chain[0] {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str(),
+            _ => return false, // Skip complex expressions in chains for now
+        };
+        
+        let second_prop = match &chain[1] {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str(),
+            _ => return false,
+        };
+        
+        // Check if there exists an intermediate individual
+        if let Some(table) = self.get_table_for_arity(2) {
+            // Get all facts for the first property
+            if let Ok(first_facts) = table.get_facts_for_predicate(first_prop, &crate::core::hypertableau::extension_table::RetrievalView::Complete) {
+                for fact in first_facts {
+                    if fact.len() == 2 && fact[0] == subj_id {
+                        let intermediate = &fact[1];
+                        // Check if second property connects intermediate to obj
+                        if table.has_fact(second_prop, &[intermediate.clone(), obj_id.to_string()]).unwrap_or(false) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
         false
     }
 
     /// Check if two nodes are equal
-    pub fn are_nodes_equal(&self, _left_id: &str, _right_id: &str) -> bool {
-        // Simplified implementation - would check equality facts
+    pub fn are_nodes_equal(&self, left_id: &str, right_id: &str) -> bool {
+        // Check direct equality
+        if left_id == right_id {
+            return true;
+        }
+        
+        // Check if there's an explicit equality fact
+        let equality_key = "SameAs";
+        if let Some(table) = self.get_table_for_arity(2) {
+            return table.has_fact(equality_key, &[left_id.to_string(), right_id.to_string()]).unwrap_or(false) ||
+                   table.has_fact(equality_key, &[right_id.to_string(), left_id.to_string()]).unwrap_or(false);
+        }
+        
         false
+    }
+    
+    /// Detect if adding a fact would create a clash
+    fn detect_fact_clash(&self, predicate: &str, args: &[String]) -> bool {
+        let arity = args.len();
+        
+        // Check for explicit negation clashes
+        if predicate.starts_with("¬") || predicate.starts_with("neg_") {
+            // If we're adding ¬A(x), check if A(x) already exists
+            let positive_pred = if predicate.starts_with("¬") {
+                &predicate[3..] // Remove ¬ prefix (3 bytes for UTF-8)
+            } else {
+                &predicate[4..] // Remove "neg_" prefix
+            };
+            
+            // Check if the positive fact already exists
+            if let Some(table) = self.get_table_for_arity(arity) {
+                if table.has_fact(positive_pred, args).unwrap_or(false) {
+                    return true; // Clash detected
+                }
+            }
+        } else {
+            // If we're adding A(x), check if ¬A(x) already exists
+            let neg_pred1 = format!("¬{}", predicate);
+            let neg_pred2 = format!("neg_{}", predicate);
+            
+            if let Some(table) = self.get_table_for_arity(arity) {
+                if table.has_fact(&neg_pred1, args).unwrap_or(false) ||
+                   table.has_fact(&neg_pred2, args).unwrap_or(false) {
+                    return true; // Clash detected
+                }
+            }
+        }
+        
+        // Check for disjoint class conflicts (basic implementation)
+        if args.len() == 1 && !predicate.contains("_") {
+            // This is likely a concept assertion C(a)
+            // Check if there are any known disjoint concepts
+            let disjoint_concepts = self.get_disjoint_concepts(predicate);
+            if let Some(table) = self.get_table_for_arity(arity) {
+                for disjoint in disjoint_concepts {
+                    if table.has_fact(&disjoint, args).unwrap_or(false) {
+                        return true; // Disjoint class clash
+                    }
+                }
+            }
+        }
+        
+        false
+    }
+    
+    /// Get table for specific arity (immutable access)
+    fn get_table_for_arity(&self, arity: usize) -> Option<&ExtensionTable> {
+        match arity {
+            2 => Some(&self.binary_extension_table),
+            3 => Some(&self.ternary_extension_table),
+            _ => self.extension_tables.get(&arity),
+        }
+    }
+    
+    /// Get concepts known to be disjoint with the given concept
+    fn get_disjoint_concepts(&self, _concept: &str) -> Vec<String> {
+        // Placeholder: In a full implementation, this would query the ontology
+        // for disjoint class axioms
+        vec![]
     }
 
     /// Check if two nodes are unequal
-    pub fn are_nodes_unequal(&self, _left_id: &str, _right_id: &str) -> bool {
-        // Simplified implementation - would check inequality facts
-        false
+    pub fn are_nodes_unequal(&self, left_id: &str, right_id: &str) -> bool {
+        // Check if there's an explicit inequality fact
+        let inequality_key = "DifferentFrom";
+        if let Some(table) = self.get_table_for_arity(2) {
+            if table.has_fact(inequality_key, &[left_id.to_string(), right_id.to_string()]).unwrap_or(false) ||
+               table.has_fact(inequality_key, &[right_id.to_string(), left_id.to_string()]).unwrap_or(false) {
+                return true;
+            }
+        }
+        
+        // If they are explicitly equal, they cannot be unequal
+        if self.are_nodes_equal(left_id, right_id) {
+            return false;
+        }
+        
+        // By default, different individuals are assumed to be unequal unless proven otherwise
+        // This implements the unique name assumption
+        left_id != right_id
     }
 
     /// Ensure an individual exists in the extension tables
@@ -741,11 +914,27 @@ impl ExtensionManager {
     
     /// Reset the extension manager
     pub fn reset(&mut self) {
-        // TODO: Implement proper reset
+        // Clear all extension tables
         self.extension_tables.clear();
+        
+        // Reset binary and ternary tables
         self.binary_extension_table = ExtensionTable::new(2);
         self.ternary_extension_table = ExtensionTable::new(3);
+        
+        // Reset clash manager
         self.clash_manager = ClashManager::new();
+        
+        // Reset dependency factory
+        self.dependency_factory = DependencySetFactory::new();
+        
+        // Clear buffers
+        self.binary_tuple_buffer.clear();
+        self.binary_tuple_buffer.resize(2, String::new());
+        self.ternary_tuple_buffer.clear();
+        self.ternary_tuple_buffer.resize(3, String::new());
+        
+        // Reset flags and statistics
+        self.add_active = false;
         self.statistics = ExtensionStatistics::default();
     }
 }
@@ -1089,4 +1278,17 @@ impl fmt::Display for ExtensionStatistics {
             self.clashes_detected, self.retrievals_performed, self.delta_operations, self.memory_usage
         )
     }
+}
+
+/// Generate a unique identifier for objects
+pub fn generate_unique_id() -> usize {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+/// Generate a unique string identifier for objects  
+pub fn generate_unique_string_id() -> String {
+    let id = generate_unique_id();
+    format!("id_{}", id)
 }

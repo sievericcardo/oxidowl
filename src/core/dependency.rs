@@ -274,9 +274,18 @@ impl DependencySet {
 
     /// Create a singleton dependency set (alias for with_dependency)
     pub fn singleton(source: String) -> Self {
-        // For now, just create an empty set - this is a placeholder
-        // TODO: Implement proper singleton creation based on source
-        Self::empty()
+        // Create a dependency ID from the source string hash
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        source.hash(&mut hasher);
+        let dep_id = hasher.finish();
+        
+        // Create a new set with this single dependency
+        let mut set = Self::empty();
+        set.deterministic_deps.insert(dep_id);
+        set
     }
 
     /// Union of two dependency sets

@@ -44,16 +44,68 @@ fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
     }
 }
 
+/// Configuration for the Turtle parser
+#[derive(Debug, Clone)]
+pub struct TurtleParserConfig {
+    /// Whether to allow relative IRIs (default: true)
+    pub allow_relative_iris: bool,
+    
+    /// Whether to validate IRIs during parsing (default: true)
+    pub validate_iris: bool,
+    
+    /// Whether to ignore comments (default: true)
+    pub ignore_comments: bool,
+    
+    /// Whether to allow blank node labels (default: true)
+    pub allow_blank_nodes: bool,
+    
+    /// Maximum prefix resolution depth (default: 10)
+    pub max_prefix_depth: usize,
+    
+    /// Whether to perform strict Turtle compliance checking (default: false)
+    pub strict_mode: bool,
+}
+
+impl Default for TurtleParserConfig {
+    fn default() -> Self {
+        Self {
+            allow_relative_iris: true,
+            validate_iris: true,
+            ignore_comments: true,
+            allow_blank_nodes: true,
+            max_prefix_depth: 10,
+            strict_mode: false,
+        }
+    }
+}
+
 /// Turtle Parser
 #[derive(Debug, Clone)]
 pub struct TurtleParser {
-    // TODO: add a parser configuration
+    config: TurtleParserConfig,
 }
 
 impl TurtleParser {
-    /// Create a new Turtle parser
+    /// Create a new Turtle parser with default configuration
     pub fn new() -> Self {
-        Self {}
+        Self { 
+            config: TurtleParserConfig::default(),
+        }
+    }
+    
+    /// Create a new Turtle parser with custom configuration
+    pub fn with_config(config: TurtleParserConfig) -> Self {
+        Self { config }
+    }
+    
+    /// Get the current configuration
+    pub fn config(&self) -> &TurtleParserConfig {
+        &self.config
+    }
+    
+    /// Set a new configuration
+    pub fn set_config(&mut self, config: TurtleParserConfig) {
+        self.config = config;
     }
 }
 
@@ -82,9 +134,22 @@ impl TurtleParser {
         for line in lines {
             let trimmed = line.trim();
             
-            // Skip empty lines and comments
-            if trimmed.is_empty() || trimmed.starts_with('#') {
+            // Skip empty lines 
+            if trimmed.is_empty() {
                 continue;
+            }
+            
+            // Skip comments if configured to do so
+            if trimmed.starts_with('#') {
+                if self.config.ignore_comments {
+                    continue;
+                } else {
+                    // In strict mode, we might want to preserve comments for validation
+                    if self.config.strict_mode {
+                        // TODO: Store comment for validation purposes
+                    }
+                    continue;
+                }
             }
             
             // Handle prefix declarations
