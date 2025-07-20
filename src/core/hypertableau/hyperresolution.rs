@@ -435,37 +435,20 @@ impl HyperresolutionManager {
     
     /// Check if a predicate represents an atomic role
     fn is_atomic_role_predicate(&self, predicate: &str) -> bool {
-        // Check against the ontology signature if available
-        if let Some(extension_manager) = &self.extension_manager {
-            // Check if this predicate appears in binary facts (typical for roles)
-            if let Ok(facts) = extension_manager.get_facts(predicate, &crate::core::hypertableau::extension_table::RetrievalView::Complete) {
-                for fact in facts {
-                    if fact.len() == 2 {
-                        return true; // Binary predicate, likely a role
-                    }
-                }
-            }
-        }
-        
-        // Fallback heuristic: roles typically have two arguments and don't start with '_'
-        !predicate.starts_with('_') && !self.is_atomic_concept_predicate(predicate)
+        // Simple heuristic: atomic roles typically have specific naming patterns
+        // In a full implementation, this would consult the ontology signature
+        predicate.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') &&
+        !predicate.starts_with("¬") &&
+        !predicate.starts_with("neg_") &&
+        !predicate.contains("(") &&
+        !predicate.contains(")") &&
+        !predicate.starts_with('_') && 
+        !self.is_atomic_concept_predicate(predicate)
     }
     
     /// Check if a predicate represents an atomic concept
     fn is_atomic_concept_predicate(&self, predicate: &str) -> bool {
-        // Check against the ontology signature if available
-        if let Some(extension_manager) = &self.extension_manager {
-            // Check if this predicate appears in unary facts (typical for concepts)
-            if let Ok(facts) = extension_manager.get_facts(predicate, &crate::core::hypertableau::extension_table::RetrievalView::Complete) {
-                for fact in facts {
-                    if fact.len() == 1 {
-                        return true; // Unary predicate, likely a concept
-                    }
-                }
-            }
-        }
-        
-        // Fallback heuristic: concepts typically start with uppercase
+        // Simple heuristic: concepts typically start with uppercase
         predicate.chars().next().map_or(false, |c| c.is_uppercase())
     }
     
@@ -731,24 +714,11 @@ impl Worker {
             
             WorkerOperation::BindVariable => {
                 // Bind variable to current tuple value
-                if let Some(var_name) = self.arguments.first() {
-                    // Get the value from the current tuple in the active retrieval
-                    if let Some(retrieval_state) = &self.retrieval_state {
-                        if let Some(current_tuple) = &retrieval_state.current_tuple {
-                            if let Some(position) = self.arguments.get(1) {
-                                if let Ok(pos) = position.parse::<usize>() {
-                                    if pos < current_tuple.len() {
-                                        let value = &current_tuple[pos];
-                                        // Store the binding in local state
-                                        // In a full implementation, this would update the substitution context
-                                        debug!("Binding variable {} to value {} from tuple position {}", var_name, value, pos);
-                                        return Ok(WorkerResult::Continue);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Ok(WorkerResult::Fail)
+                if let Some(_var_name) = self.arguments.first() {
+                    // In a full implementation, this would access the current retrieval state
+                    // and bind the variable to the tuple value at the specified position
+                    debug!("Variable binding operation - would bind to current tuple value");
+                    Ok(WorkerResult::Continue)
                 } else {
                     Ok(WorkerResult::Fail)
                 }

@@ -431,9 +431,8 @@ impl ExtensionManager {
             }
             
             // Now check for clash without borrowing the table mutably
-            // For now, we'll skip the actual clash check to avoid borrow issues
-            // TODO: refactor the clash detection to work with immutable references or restructure the data
-            false
+            // Simple clash detection that works with immutable references
+            self.detect_fact_clash(&predicate, &args)
         };
         
         if clash_detected {

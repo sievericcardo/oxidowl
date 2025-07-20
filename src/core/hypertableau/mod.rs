@@ -334,8 +334,8 @@ impl HyperTableau {
         // If only one disjunct, apply it directly
         if disjunction.disjuncts().len() == 1 {
             let premise_facts = vec![
-                format!("premise_{}", disjunction_id),
-                format!("context_{}", disjunction.individual()),
+                dependency_tracking::FactId(disjunction_id),
+                dependency_tracking::FactId(disjunction_id + 1000), // Offset for context facts
             ];
             
             let fact_id = {
