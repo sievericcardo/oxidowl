@@ -19,6 +19,22 @@ use std::{
 };
 use url::Url;
 
+/// Resolve a potentially relative IRI against a base IRI
+fn resolve_iri(iri: &str, base_iri: Option<&url::Url>) -> Result<url::Url> {
+    // If it's already an absolute URL, return it as-is
+    if let Ok(absolute_url) = url::Url::parse(iri) {
+        return Ok(absolute_url);
+    }
+    
+    // If we have a base IRI, resolve the relative IRI against it
+    if let Some(base) = base_iri {
+        return base.join(iri).map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{}' against base '{}': {}", iri, base, e)));
+    }
+    
+    // No base IRI provided for relative IRI
+    Err(Error::ontology_parsing(format!("Relative IRI '{}' provided without base IRI", iri)))
+}
+
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -115,12 +131,17 @@ pub fn parse(content: &str) -> Result<Ontology> {
         return Err(Error::io("Root element must be Ontology".to_string()));
     }
     
-    // Extract ontology IRI if present
-    if let Some(iri) = root.attribute("ontologyIRI") {
+    // Extract ontology IRI if present and use as base for resolving relative IRIs
+    let base_iri = if let Some(iri) = root.attribute("ontologyIRI") {
         if let Ok(url) = url::Url::parse(iri) {
-            ontology.iri = Some(url.into());
+            ontology.iri = Some(url.clone().into());
+            Some(url)
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
     
     // Parse declarations and axioms
     for child in root.children().filter(|n| n.is_element()) {
@@ -131,17 +152,17 @@ pub fn parse(content: &str) -> Result<Ontology> {
                 }
             }
             "SubClassOf" => {
-                if let Ok(axiom) = parse_subclass_of(&child) {
+                if let Ok(axiom) = parse_subclass_of(&child, base_iri.as_ref()) {
                     ontology.add_axiom(axiom);
                 }
             }
             "EquivalentClasses" => {
-                if let Ok(axiom) = parse_equivalent_classes(&child) {
+                if let Ok(axiom) = parse_equivalent_classes(&child, base_iri.as_ref()) {
                     ontology.add_axiom(axiom);
                 }
             }
             "ClassAssertion" => {
-                if let Ok(axiom) = parse_class_assertion(&child) {
+                if let Ok(axiom) = parse_class_assertion(&child, base_iri.as_ref()) {
                     ontology.add_axiom(axiom);
                 }
             }
@@ -214,14 +235,14 @@ fn parse_declaration(element: &roxmltree::Node) -> Result<Axiom> {
 }
 
 /// Parse a SubClassOf element
-fn parse_subclass_of(element: &roxmltree::Node) -> Result<Axiom> {
+fn parse_subclass_of(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
     if children.len() != 2 {
         return Err(Error::io("SubClassOf must have exactly 2 children".to_string()));
     }
     
-    let subclass = parse_class_expression(&children[0])?;
-    let superclass = parse_class_expression(&children[1])?;
+    let subclass = parse_class_expression(&children[0], base_iri)?;
+    let superclass = parse_class_expression(&children[1], base_iri)?;
     
     Ok(Axiom::SubClassOf(crate::ontology::SubClassOfAxiom {
         id: generate_axiom_id(),
@@ -232,11 +253,11 @@ fn parse_subclass_of(element: &roxmltree::Node) -> Result<Axiom> {
 }
 
 /// Parse an EquivalentClasses element
-fn parse_equivalent_classes(element: &roxmltree::Node) -> Result<Axiom> {
+fn parse_equivalent_classes(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let mut class_expressions = Vec::new();
     
     for child in element.children().filter(|n| n.is_element()) {
-        let expr = parse_class_expression(&child)?;
+        let expr = parse_class_expression(&child, base_iri)?;
         class_expressions.push(expr);
     }
     
@@ -252,13 +273,13 @@ fn parse_equivalent_classes(element: &roxmltree::Node) -> Result<Axiom> {
 }
 
 /// Parse a ClassAssertion element
-fn parse_class_assertion(element: &roxmltree::Node) -> Result<Axiom> {
+fn parse_class_assertion(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
     if children.len() != 2 {
         return Err(Error::io("ClassAssertion must have exactly 2 children".to_string()));
     }
     
-    let class_expression = parse_class_expression(&children[0])?;
+    let class_expression = parse_class_expression(&children[0], base_iri)?;
     let individual = parse_individual(&children[1])?;
     
     Ok(Axiom::ClassAssertion(crate::ontology::ClassAssertionAxiom {
@@ -324,12 +345,13 @@ fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> 
 }
 
 /// Parse a class expression
-fn parse_class_expression(element: &roxmltree::Node) -> Result<ClassExpression> {
+fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<ClassExpression> {
     match element.tag_name().name() {
         "Class" => {
             if let Some(iri) = element.attribute("IRI") {
+                let resolved_iri = resolve_iri(iri, base_iri)?;
                 Ok(ClassExpression::Class(Class {
-                    iri: IRI::new(iri).to_url()?.into(),
+                    iri: resolved_iri.into(),
                 }))
             } else {
                 Err(Error::io("Class element missing IRI attribute".to_string()))
@@ -338,14 +360,14 @@ fn parse_class_expression(element: &roxmltree::Node) -> Result<ClassExpression> 
         "ObjectIntersectionOf" => {
             let mut operands = Vec::new();
             for child in element.children().filter(|n| n.is_element()) {
-                operands.push(parse_class_expression(&child)?);
+                operands.push(parse_class_expression(&child, base_iri)?);
             }
             Ok(ClassExpression::ObjectIntersectionOf(operands))
         }
         "ObjectUnionOf" => {
             let mut operands = Vec::new();
             for child in element.children().filter(|n| n.is_element()) {
-                operands.push(parse_class_expression(&child)?);
+                operands.push(parse_class_expression(&child, base_iri)?);
             }
             Ok(ClassExpression::ObjectUnionOf(operands))
         }
@@ -354,7 +376,7 @@ fn parse_class_expression(element: &roxmltree::Node) -> Result<ClassExpression> 
             if children.len() != 1 {
                 return Err(Error::io("ObjectComplementOf must have exactly 1 child".to_string()));
             }
-            let operand = Box::new(parse_class_expression(&children[0])?);
+            let operand = Box::new(parse_class_expression(&children[0], base_iri)?);
             Ok(ClassExpression::ObjectComplementOf(operand))
         }
         "ObjectSomeValuesFrom" => {
@@ -363,7 +385,7 @@ fn parse_class_expression(element: &roxmltree::Node) -> Result<ClassExpression> 
                 return Err(Error::io("ObjectSomeValuesFrom must have exactly 2 children".to_string()));
             }
             let property = parse_object_property_expression(&children[0])?;
-            let filler = Box::new(parse_class_expression(&children[1])?);
+            let filler = Box::new(parse_class_expression(&children[1], base_iri)?);
             Ok(ClassExpression::ObjectSomeValuesFrom { property, filler })
         }
         "ObjectAllValuesFrom" => {
@@ -372,7 +394,7 @@ fn parse_class_expression(element: &roxmltree::Node) -> Result<ClassExpression> 
                 return Err(Error::io("ObjectAllValuesFrom must have exactly 2 children".to_string()));
             }
             let property = parse_object_property_expression(&children[0])?;
-            let filler = Box::new(parse_class_expression(&children[1])?);
+            let filler = Box::new(parse_class_expression(&children[1], base_iri)?);
             Ok(ClassExpression::ObjectAllValuesFrom { property, filler })
         }
         "ObjectOneOf" => {
