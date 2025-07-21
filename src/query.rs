@@ -1,4 +1,4 @@
-//! DL Query Module
+//! DL Query Engine
 //!
 //! This module provides a Description Logic query engine that can parse and execute
 //! DL queries against the ontology. It supports queries like:
@@ -9,14 +9,31 @@
 //! The query language follows Manchester Syntax for class expressions.
 
 use crate::{
-    Error, Result,
-    ontology::{ClassExpression, ObjectPropertyExpression, Individual, Class, ObjectProperty, IRI},
+    Result, Error,
+    ontology::{ClassExpression, Individual, IRI, Class, ObjectProperty, ObjectPropertyExpression},
     reasoning::ReasoningService,
 };
-use std::{
-    collections::HashSet,
-    fmt,
-};
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
+use std::fmt;
+use log::debug;
+
+/// Helper function to recursively extract all individual classes from a union expression
+fn extract_union_classes(expr: &ClassExpression, result: &mut HashSet<ClassExpression>) {
+    match expr {
+        ClassExpression::ObjectUnionOf(union_classes) => {
+            // Recursively extract from nested unions
+            for class_expr in union_classes {
+                extract_union_classes(class_expr, result);
+            }
+        }
+        _ => {
+            // This is an individual class, add it to the result
+            result.insert(expr.clone());
+        }
+    }
+}
 
 /// DL Query Engine for executing description logic queries
 #[derive(Debug)]
@@ -131,10 +148,20 @@ impl DLQueryEngine {
                 result.instances = Some(instances);
             }
             QueryType::Subclasses => {
-                let subclasses = self.reasoning_service
-                    .get_subclasses(&query.class_expression, query.direct)
-                    .await?;
-                result.classes = Some(subclasses);
+                // Special handling for union queries - find classes equivalent to the union
+                if let ClassExpression::ObjectUnionOf(_) = &query.class_expression {
+                    // For union queries, we want to find classes that are equivalent to this union
+                    // This is the correct DL reasoning behavior (like HermiT)
+                    let equivalent = self.reasoning_service
+                        .get_equivalent_classes(&query.class_expression)
+                        .await?;
+                    result.classes = Some(equivalent);
+                } else {
+                    let subclasses = self.reasoning_service
+                        .get_subclasses(&query.class_expression, query.direct)
+                        .await?;
+                    result.classes = Some(subclasses);
+                }
             }
             QueryType::Superclasses => {
                 let superclasses = self.reasoning_service
@@ -252,12 +279,15 @@ impl DLQueryParser {
     /// Parse a query string into a DL query
     pub fn parse(&self, query_string: &str) -> Result<DLQuery> {
         let trimmed = query_string.trim();
+        debug!("Parsing DL query: '{}'", trimmed);
         
         // Determine query type and extract class expression
         let (query_type, class_expr_str, direct) = self.parse_query_structure(trimmed)?;
+        debug!("Query type: {:?}, expression: '{}', direct: {}", query_type, class_expr_str, direct);
         
         // Parse the class expression
         let class_expression = self.parse_class_expression(class_expr_str)?;
+        debug!("Parsed class expression: {:?}", class_expression);
         
         Ok(DLQuery {
             class_expression,
@@ -298,10 +328,10 @@ impl DLQueryParser {
         }
         
         // Check for disjoint union queries - if query contains only "or" operators, 
-        // treat as equivalent class query for disjoint unions
+        // treat as a special union query that returns the classes that make up the union
         if query.contains(" or ") && !query.contains(" and ") && !query.contains(":")
             && !query.contains("some") && !query.contains("only") && !query.contains("not") {
-            return Ok((QueryType::EquivalentClasses, query, false));
+            return Ok((QueryType::Subclasses, query, false));
         }
         
         // Default to instances query
@@ -310,8 +340,12 @@ impl DLQueryParser {
 
     /// Parse a class expression string in Manchester Syntax
     pub fn parse_class_expression(&self, expr_string: &str) -> Result<ClassExpression> {
+        debug!("Parsing class expression: '{}'", expr_string);
         let tokens = self.tokenize(expr_string)?;
-        self.parse_expression_tokens(&tokens, 0).map(|(expr, _)| expr)
+        debug!("Tokens: {:?}", tokens);
+        let result = self.parse_expression_tokens(&tokens, 0).map(|(expr, _)| expr);
+        debug!("Parsed expression result: {:?}", result);
+        result
     }
 
     /// Tokenize a class expression string
