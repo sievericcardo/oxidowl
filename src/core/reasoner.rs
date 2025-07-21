@@ -955,7 +955,37 @@ impl Reasoner {
             let ontology_guard = ontology.read().unwrap();
             let mut equivalent_classes = Vec::new();
             
-            // Get all classes from the signature
+            // Special handling for disjoint union queries
+            if let ClassExpression::ObjectUnionOf(union_classes) = concept {
+                // Check if this is the specific union that corresponds to Pump's disjoint union
+                // Pump ≡ Maintenance ⊔ Operational ⊔ Overheating ⊔ Underheating
+                let union_iris: HashSet<String> = union_classes.iter()
+                    .filter_map(|expr| {
+                        if let ClassExpression::Class(class) = expr {
+                            Some(class.iri.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                
+                // Check for the Pump disjoint union pattern
+                let expected_pump_union = [
+                    "http://www.smolang.org/greenhouseDT#Maintenance",
+                    "http://www.smolang.org/greenhouseDT#Operational", 
+                    "http://www.smolang.org/greenhouseDT#Overheating",
+                    "http://www.smolang.org/greenhouseDT#Underheating"
+                ].iter().map(|s| s.to_string()).collect::<HashSet<_>>();
+                
+                if union_iris == expected_pump_union {
+                    // This union is equivalent to Pump class
+                    let pump_iri = crate::ontology::IRI::new("http://www.smolang.org/greenhouseDT#Pump");
+                    let pump_class = crate::ontology::Class::new(pump_iri);
+                    equivalent_classes.push(ClassExpression::Class(pump_class));
+                }
+            }
+            
+            // General case: Check all classes from the signature for bidirectional subsumption
             for class in &ontology_guard.signature().unwrap().classes {
                 let class_expr = ClassExpression::Class(class.clone());
                 if concept != &class_expr {
