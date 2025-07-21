@@ -478,6 +478,13 @@ impl Ontology {
                         signature.individuals.push(axiom.individual.clone());
                     }
                 }
+                axioms::Axiom::DisjointUnion(axiom) => {
+                    println!("Processing DisjointUnion axiom");
+                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
+                    for disjoint_class in &axiom.disjoint_classes {
+                        extract_classes_from_expression(disjoint_class, &mut signature.classes);
+                    }
+                }
                 // Handle other axiom types as needed
                 axiom => {
                     println!("Processing other axiom type: {:?}", std::mem::discriminant(axiom));
