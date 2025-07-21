@@ -457,26 +457,55 @@ impl DLQueryParser {
 
 impl fmt::Display for QueryResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Query: {:?}", self.query.query_type)?;
-        writeln!(f, "Expression: {:?}", self.query.class_expression)?;
+        // Extract a readable name from class expression
+        let class_name = match &self.query.class_expression {
+            ClassExpression::Class(class) => {
+                let iri_str = class.iri.to_string();
+                if let Some(name) = iri_str.split('#').last() {
+                    name.to_string()
+                } else if let Some(name) = iri_str.split('/').last() {
+                    name.to_string()
+                } else {
+                    iri_str
+                }
+            }
+            _ => format!("{:?}", self.query.class_expression)
+        };
+
+        writeln!(f, "Query: {:?} of {}", self.query.query_type, class_name)?;
         writeln!(f, "Execution time: {:?}", self.execution_time)?;
         
         if let Some(ref instances) = self.instances {
-            writeln!(f, "Instances ({}):", instances.len())?;
+            writeln!(f, "\nInstances ({}):", instances.len())?;
             for instance in instances {
                 writeln!(f, "  - {:?}", instance)?;
             }
         }
         
         if let Some(ref classes) = self.classes {
-            writeln!(f, "Classes ({}):", classes.len())?;
+            writeln!(f, "\nResults ({}):", classes.len())?;
             for class in classes {
-                writeln!(f, "  - {:?}", class)?;
+                match class {
+                    ClassExpression::Class(c) => {
+                        let iri_str = c.iri.to_string();
+                        let name = if let Some(name) = iri_str.split('#').last() {
+                            name
+                        } else if let Some(name) = iri_str.split('/').last() {
+                            name
+                        } else {
+                            &iri_str
+                        };
+                        writeln!(f, "  - {}", name)?;
+                    }
+                    _ => {
+                        writeln!(f, "  - {:?}", class)?;
+                    }
+                }
             }
         }
         
         if let Some(satisfiable) = self.satisfiable {
-            writeln!(f, "Satisfiable: {}", satisfiable)?;
+            writeln!(f, "\nSatisfiable: {}", satisfiable)?;
         }
         
         Ok(())
