@@ -83,6 +83,14 @@ impl DLQueryEngine {
         }
     }
 
+    /// Create a new DL query engine with reasoning service and optional namespace
+    pub fn with_config(reasoning_service: ReasoningService, namespace: Option<String>) -> Self {
+        Self {
+            reasoning_service,
+            default_namespace: namespace,
+        }
+    }
+
     /// Get the default namespace from the ontology or use provided namespace
     fn get_default_namespace(&self) -> Result<String> {
         // Use provided namespace if available
@@ -178,6 +186,47 @@ impl DLQueryEngine {
     pub async fn is_satisfiable(&self, class_expression: &ClassExpression) -> Result<bool> {
         self.reasoning_service.is_satisfiable(class_expression).await
     }
+
+    /// Execute a query for equivalent classes of a class expression
+    pub async fn get_equivalent_classes(&self, class_expression: &ClassExpression) -> Result<HashSet<ClassExpression>> {
+        self.reasoning_service.get_equivalent_classes(class_expression).await
+    }
+
+    /// Execute a disjoint union query to find classes equivalent to the union
+    /// This method takes a list of class expressions and finds classes that are
+    /// equivalent to their disjoint union
+    pub async fn find_disjoint_union_equivalent(&self, classes: Vec<ClassExpression>) -> Result<HashSet<ClassExpression>> {
+        // Create a union of the provided classes
+        let union_expr = if classes.len() == 1 {
+            classes.into_iter().next().unwrap()
+        } else {
+            ClassExpression::ObjectUnionOf(classes)
+        };
+        
+        // Find equivalent classes to this union
+        self.get_equivalent_classes(&union_expr).await
+    }
+
+    /// Parse and execute a union query (e.g., "ClassA or ClassB or ClassC")
+    /// and find equivalent classes
+    pub async fn execute_union_query(&self, union_query: &str) -> Result<QueryResult> {
+        // Force this to be treated as an equivalent classes query
+        let modified_query = format!("equivalent-classes: {}", union_query);
+        self.execute_query(&modified_query).await
+    }
+
+    /// Set the default namespace for this query engine
+    pub fn set_namespace(&mut self, namespace: String) {
+        self.default_namespace = Some(namespace);
+    }
+
+    /// Get the current default namespace
+    pub fn get_namespace(&self) -> Option<&String> {
+        self.default_namespace.as_ref()
+    }
+
+    // Note: Convenience methods removed temporarily due to type system complexity
+    // They will be implemented in a future version with proper error handling
 }
 
 /// Parser for DL query strings in Manchester Syntax
@@ -241,8 +290,18 @@ impl DLQueryParser {
         if let Some(expr) = query.strip_prefix("equivalent:") {
             return Ok((QueryType::EquivalentClasses, expr.trim(), false));
         }
+        if let Some(expr) = query.strip_prefix("equivalent-classes:") {
+            return Ok((QueryType::EquivalentClasses, expr.trim(), false));
+        }
         if let Some(expr) = query.strip_prefix("satisfiable:") {
             return Ok((QueryType::Satisfiable, expr.trim(), false));
+        }
+        
+        // Check for disjoint union queries - if query contains only "or" operators, 
+        // treat as equivalent class query for disjoint unions
+        if query.contains(" or ") && !query.contains(" and ") && !query.contains(":")
+            && !query.contains("some") && !query.contains("only") && !query.contains("not") {
+            return Ok((QueryType::EquivalentClasses, query, false));
         }
         
         // Default to instances query
@@ -483,7 +542,13 @@ impl fmt::Display for QueryResult {
         }
         
         if let Some(ref classes) = self.classes {
-            writeln!(f, "\nResults ({}):", classes.len())?;
+            let result_label = match self.query.query_type {
+                QueryType::Subclasses => "Subclasses",
+                QueryType::Superclasses => "Superclasses", 
+                QueryType::EquivalentClasses => "Equivalent Classes",
+                _ => "Results"
+            };
+            writeln!(f, "\n{} ({}):", result_label, classes.len())?;
             for class in classes {
                 match class {
                     ClassExpression::Class(c) => {
