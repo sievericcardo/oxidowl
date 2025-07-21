@@ -1687,6 +1687,7 @@ dependencies = [
  "config",
  "criterion",
  "crossbeam",
+ "curie",
  "dashmap",
  "env_logger",
  "futures",
