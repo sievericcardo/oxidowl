@@ -7,12 +7,14 @@ use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{
     config::ReasonerConfig,
     core::reasoner::Reasoner,
-    ontology::OntologyFormat,
+    ontology::{Ontology, OntologyFormat},
     Result,
 };
+use serde_json;
 use std::{
     fs,
     path::PathBuf,
+    sync::{Arc, RwLock},
     time::Instant,
 };
 use tracing::{error, info, Level};
@@ -64,6 +66,10 @@ enum Commands {
         #[arg(short, long, value_name = "FILE")]
         input: PathBuf,
 
+        /// Default namespace for entity resolution
+        #[arg(short, long, value_name = "NAMESPACE")]
+        namespace: Option<String>,
+
         /// Output file for class hierarchy
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
@@ -99,6 +105,29 @@ enum Commands {
         input: PathBuf,
 
         /// Output file for realization results
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+
+        /// Input format
+        #[arg(short, long, value_enum)]
+        format: Option<InputFormat>,
+    },
+
+    /// Execute DL query
+    Query {
+        /// Input ontology file
+        #[arg(short, long, value_name = "FILE")]
+        input: PathBuf,
+
+        /// DL query string (Manchester Syntax)
+        #[arg(short, long, value_name = "QUERY")]
+        query: String,
+
+        /// Default namespace for query parsing
+        #[arg(short, long, value_name = "NAMESPACE")]
+        namespace: Option<String>,
+
+        /// Output file for query results
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
 
@@ -260,19 +289,59 @@ fn load_configuration(config_path: Option<&std::path::Path>) -> Result<ReasonerC
     }
 }
 
+/// Helper function to extract class names from complex class expressions
+fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression) -> String {
+    match expr {
+        oxidowl::ontology::ClassExpression::Class(class) => {
+            // Extract just the class name from the IRI
+            let iri_str = class.iri.to_string();
+            if let Some(name) = iri_str.split('#').last() {
+                name.to_string()
+            } else if let Some(name) = iri_str.split('/').last() {
+                name.to_string()
+            } else {
+                iri_str
+            }
+        }
+        oxidowl::ontology::ClassExpression::ObjectUnionOf(union_classes) => {
+            let class_names: Vec<String> = union_classes.iter()
+                .map(|c| extract_class_names_from_expression(c))
+                .collect();
+            class_names.join(" or ")
+        }
+        oxidowl::ontology::ClassExpression::ObjectIntersectionOf(intersection_classes) => {
+            let class_names: Vec<String> = intersection_classes.iter()
+                .map(|c| extract_class_names_from_expression(c))
+                .collect();
+            class_names.join(" and ")
+        }
+        _ => format!("{:?}", expr)
+    }
+}
+
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
         Commands::Consistency { input, output, format } => {
             execute_consistency_check(input, output, format, config).await
         }
-        Commands::Classification { input, output, format } => {
-            execute_classification(input, output, format, config).await
+        Commands::Classification { input, namespace, output, format } => {
+            execute_classification(input, namespace, output, format, config).await
         }
         Commands::Satisfiability { input, class_iri, output, format } => {
             execute_satisfiability_check(input, class_iri, output, format, config).await
         }
         Commands::Realization { input, output, format } => {
             execute_realization(input, output, format, config).await
+        }
+        Commands::Query { input, query, namespace, output, format } => {
+            execute_dl_query(
+                input.to_str().unwrap(), 
+                &query, 
+                namespace.as_deref(), 
+                output.as_ref().map(|p| p.to_str().unwrap()), 
+                "json", // Always use JSON for now
+                config
+            ).await
         }
         Commands::OwlLinkFile { input, output } => {
             execute_owllink_file(input, output, config).await
@@ -326,11 +395,16 @@ async fn execute_consistency_check(
 
 async fn execute_classification(
     input: PathBuf,
+    namespace: Option<String>,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Performing classification on: {}", input.display());
+    
+    if let Some(ref ns) = namespace {
+        info!("Using default namespace: {}", ns);
+    }
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
@@ -375,6 +449,84 @@ async fn execute_satisfiability_check(
         println!("Result: {}", if is_satisfiable { "satisfiable" } else { "unsatisfiable" });
     }
     
+    Ok(())
+}
+
+async fn execute_dl_query(
+    ontology_file: &str,
+    query: &str,
+    namespace: Option<&str>,
+    output_file: Option<&str>,
+    format: &str,
+    config: ReasonerConfig,
+) -> Result<()> {
+    // Create reasoner and load ontology
+    let mut reasoner = Reasoner::new(config.clone())?;
+    reasoner.load_ontology_from_file(ontology_file, OntologyFormat::Auto)?;
+
+    // Get the ontology from the reasoner
+    let ontology = reasoner.get_ontology()?;
+
+    // Create reasoning service and query engine
+    let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology.read().unwrap().clone(), config);
+    
+    // Create query engine with optional namespace
+    let query_engine = if let Some(ns) = namespace {
+        oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, ns.to_string())
+    } else {
+        // Try to auto-detect namespace from ontology IRI, fallback to default
+        let default_namespace = ontology.read().unwrap()
+            .get_iri()
+            .map(|iri| {
+                let iri_str = iri.as_str();
+                if iri_str.ends_with('#') {
+                    iri_str.to_string()
+                } else if iri_str.ends_with('/') {
+                    iri_str.to_string()
+                } else {
+                    format!("{}#", iri_str)
+                }
+            })
+            .unwrap_or_else(|| "http://example.org/ontology#".to_string());
+        
+        oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, default_namespace)
+    };
+
+    // Execute the query
+    let result = query_engine.execute_query(query).await?;
+
+    // Format and output the result
+    let output = match format {
+        "json" => {
+            // Extract readable class names for JSON output
+            let classes_vec: Vec<String> = if let Some(ref classes) = result.classes {
+                classes.iter().map(|c| {
+                    extract_class_names_from_expression(c)
+                }).collect()
+            } else {
+                Vec::new()
+            };
+            
+            if result.classes.is_some() {
+                format!("{{\"query\": \"{}\", \"classes\": {:?}, \"execution_time\": \"{:?}\"}}", 
+                       query, classes_vec, result.execution_time)
+            } else {
+                format!("{{\"query\": \"{}\", \"result\": \"No results\", \"execution_time\": \"{:?}\"}}", 
+                       query, result.execution_time)
+            }
+        }
+        "text" => format!("{}", result), // Use Display format instead of Debug
+        _ => return Err(oxidowl::Error::io("Unsupported format. Use 'json' or 'text'".to_string())),
+    };
+
+    // Write to file or stdout
+    if let Some(file_path) = output_file {
+        std::fs::write(file_path, output)?;
+        println!("Query result saved to {}", file_path);
+    } else {
+        println!("{}", output);
+    }
+
     Ok(())
 }
 

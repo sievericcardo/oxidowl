@@ -1,0 +1,583 @@
+Prefix(:=<http://www.smolang.org/greenhouseDT#>)
+Prefix(ast:=<http://www.smolang.org/greenhouseDT#>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<http://www.smolang.org/greenhouseDT>
+
+Declaration(Class(ast:BadHealthState))
+Declaration(Class(ast:Basil))
+Declaration(Class(ast:DeadHealthState))
+Declaration(Class(ast:GoodHealthState))
+Declaration(Class(ast:Greenhouse))
+Declaration(Class(ast:HealthState))
+Declaration(Class(ast:Maintenance))
+Declaration(Class(ast:MaintenanceR365))
+Declaration(Class(ast:MaintenanceR385))
+Declaration(Class(ast:MaintenanceWPS27))
+Declaration(Class(ast:Operational))
+Declaration(Class(ast:OperationalR365))
+Declaration(Class(ast:OperationalR385))
+Declaration(Class(ast:OperationalWPS27))
+Declaration(Class(ast:Overheating))
+Declaration(Class(ast:OverheatingR365))
+Declaration(Class(ast:OverheatingR385))
+Declaration(Class(ast:OverheatingWPS27))
+Declaration(Class(ast:Pepper))
+Declaration(Class(ast:Plant))
+Declaration(Class(ast:Pot))
+Declaration(Class(ast:Pump))
+Declaration(Class(ast:Shelf))
+Declaration(Class(ast:Underheating))
+Declaration(Class(ast:UnderheatingR365))
+Declaration(Class(ast:UnderheatingR385))
+Declaration(Class(ast:UnderheatingWPS27))
+Declaration(Class(ast:WaterTank))
+Declaration(ObjectProperty(ast:hasHealthState))
+Declaration(ObjectProperty(ast:hasPlant))
+Declaration(ObjectProperty(ast:hasPot))
+Declaration(ObjectProperty(ast:hasShelf))
+Declaration(ObjectProperty(ast:hasWaterTank))
+Declaration(ObjectProperty(ast:wateredBy))
+Declaration(DataProperty(ast:hasGroupPosition))
+Declaration(DataProperty(ast:hasHealthStateName))
+Declaration(DataProperty(ast:hasHumidity))
+Declaration(DataProperty(ast:hasHumidityGpioPin))
+Declaration(DataProperty(ast:hasIdealTemperature))
+Declaration(DataProperty(ast:hasLightStrength))
+Declaration(DataProperty(ast:hasMoisture))
+Declaration(DataProperty(ast:hasMoistureAdcChannel))
+Declaration(DataProperty(ast:hasTemperature))
+Declaration(DataProperty(ast:hasTemperatureGpioPin))
+Declaration(DataProperty(ast:hasWaterFlow))
+Declaration(DataProperty(ast:hasWaterLevel))
+Declaration(DataProperty(ast:idealMoisture))
+Declaration(DataProperty(ast:maxNdvi))
+Declaration(DataProperty(ast:minNdvi))
+Declaration(DataProperty(ast:modelName))
+Declaration(DataProperty(ast:name))
+Declaration(DataProperty(ast:ndvi))
+Declaration(DataProperty(ast:plantId))
+Declaration(DataProperty(ast:potPosition))
+Declaration(DataProperty(ast:powerOutput))
+Declaration(DataProperty(ast:pumpGpioPin))
+Declaration(DataProperty(ast:pumpId))
+Declaration(DataProperty(ast:pumpLifeTime))
+Declaration(DataProperty(ast:shelfFloor))
+Declaration(DataProperty(ast:temperature))
+Declaration(NamedIndividual(ast:badHealthState))
+Declaration(NamedIndividual(ast:basilicum1))
+Declaration(NamedIndividual(ast:basilicum2))
+Declaration(NamedIndividual(ast:deadHealthState))
+Declaration(NamedIndividual(ast:goodHealthState))
+Declaration(NamedIndividual(ast:greenhouse))
+Declaration(NamedIndividual(ast:maintenanceR365))
+Declaration(NamedIndividual(ast:maintenanceR385))
+Declaration(NamedIndividual(ast:maintenanceWPS27))
+Declaration(NamedIndividual(ast:pot1))
+Declaration(NamedIndividual(ast:pot2))
+Declaration(NamedIndividual(ast:pot3))
+Declaration(NamedIndividual(ast:pot4))
+Declaration(NamedIndividual(ast:pump1))
+Declaration(NamedIndividual(ast:pump2))
+Declaration(NamedIndividual(ast:pump3))
+Declaration(NamedIndividual(ast:shelf1))
+Declaration(NamedIndividual(ast:shelf2))
+Declaration(NamedIndividual(ast:stemor1))
+Declaration(NamedIndividual(ast:stemor2))
+Declaration(NamedIndividual(ast:waterTank))
+Declaration(Datatype(ast:percentage))
+############################
+#   Object Properties
+############################
+
+# Object Property: ast:hasHealthState (ast:hasHealthState)
+
+SubObjectPropertyOf(ast:hasHealthState owl:topObjectProperty)
+ObjectPropertyDomain(ast:hasHealthState ast:Plant)
+ObjectPropertyRange(ast:hasHealthState ast:HealthState)
+
+# Object Property: ast:hasPlant (ast:hasPlant)
+
+ObjectPropertyDomain(ast:hasPlant ast:Pot)
+ObjectPropertyRange(ast:hasPlant ast:Plant)
+
+# Object Property: ast:hasPot (ast:hasPot)
+
+SubObjectPropertyOf(ast:hasPot owl:topObjectProperty)
+ObjectPropertyDomain(ast:hasPot ast:Shelf)
+ObjectPropertyRange(ast:hasPot ast:Pot)
+
+# Object Property: ast:hasShelf (ast:hasShelf)
+
+ObjectPropertyDomain(ast:hasShelf ast:Greenhouse)
+ObjectPropertyRange(ast:hasShelf ast:Shelf)
+
+# Object Property: ast:hasWaterTank (ast:hasWaterTank)
+
+ObjectPropertyDomain(ast:hasWaterTank ast:Greenhouse)
+ObjectPropertyRange(ast:hasWaterTank ast:WaterTank)
+
+# Object Property: ast:wateredBy (ast:wateredBy)
+
+SubObjectPropertyOf(ast:wateredBy owl:topObjectProperty)
+ObjectPropertyDomain(ast:wateredBy ast:Pot)
+ObjectPropertyRange(ast:wateredBy ast:Pump)
+
+
+############################
+#   Data Properties
+############################
+
+# Data Property: ast:hasGroupPosition (ast:hasGroupPosition)
+
+DataPropertyDomain(ast:hasGroupPosition ObjectUnionOf(ast:Pot ast:Pump))
+DataPropertyRange(ast:hasGroupPosition DataOneOf("left" "right"))
+
+# Data Property: ast:hasHealthStateName (ast:hasHealthStateName)
+
+DataPropertyDomain(ast:hasHealthStateName ast:HealthState)
+DataPropertyRange(ast:hasHealthStateName xsd:string)
+
+# Data Property: ast:hasHumidity (ast:hasHumidity)
+
+DataPropertyDomain(ast:hasHumidity ast:Shelf)
+DataPropertyRange(ast:hasHumidity ast:percentage)
+
+# Data Property: ast:hasHumidityGpioPin (ast:hasHumidityGpioPin)
+
+DataPropertyDomain(ast:hasHumidityGpioPin ast:Shelf)
+DataPropertyRange(ast:hasHumidityGpioPin xsd:int)
+
+# Data Property: ast:hasIdealTemperature (ast:hasIdealTemperature)
+
+DataPropertyDomain(ast:hasIdealTemperature ast:Plant)
+DataPropertyRange(ast:hasIdealTemperature xsd:double)
+
+# Data Property: ast:hasLightStrength (ast:hasLightStrength)
+
+DataPropertyDomain(ast:hasLightStrength ast:Greenhouse)
+DataPropertyRange(ast:hasLightStrength ast:percentage)
+
+# Data Property: ast:hasMoisture (ast:hasMoisture)
+
+DataPropertyDomain(ast:hasMoisture ast:Pot)
+DataPropertyRange(ast:hasMoisture ast:percentage)
+
+# Data Property: ast:hasMoistureAdcChannel (ast:hasMoistureAdcChannel)
+
+SubDataPropertyOf(ast:hasMoistureAdcChannel owl:topDataProperty)
+DataPropertyDomain(ast:hasMoistureAdcChannel ast:Pot)
+DataPropertyRange(ast:hasMoistureAdcChannel xsd:int)
+
+# Data Property: ast:hasTemperature (ast:hasTemperature)
+
+DataPropertyDomain(ast:hasTemperature ast:Shelf)
+DataPropertyRange(ast:hasTemperature xsd:double)
+
+# Data Property: ast:hasTemperatureGpioPin (ast:hasTemperatureGpioPin)
+
+DataPropertyDomain(ast:hasTemperatureGpioPin ast:Shelf)
+DataPropertyRange(ast:hasTemperatureGpioPin xsd:int)
+
+# Data Property: ast:hasWaterFlow (ast:hasWaterFlow)
+
+DataPropertyDomain(ast:hasWaterFlow ast:Pump)
+
+# Data Property: ast:hasWaterLevel (ast:hasWaterLevel)
+
+DataPropertyDomain(ast:hasWaterLevel ast:WaterTank)
+DataPropertyRange(ast:hasWaterLevel ast:percentage)
+
+# Data Property: ast:idealMoisture (ast:idealMoisture)
+
+DataPropertyDomain(ast:idealMoisture ast:Plant)
+
+# Data Property: ast:maxNdvi (ast:maxNdvi)
+
+DataPropertyDomain(ast:maxNdvi ast:HealthState)
+
+# Data Property: ast:minNdvi (ast:minNdvi)
+
+DataPropertyDomain(ast:minNdvi ast:HealthState)
+
+# Data Property: ast:modelName (ast:modelName)
+
+DataPropertyDomain(ast:modelName ast:Pump)
+DataPropertyRange(ast:modelName xsd:string)
+
+# Data Property: ast:name (ast:name)
+
+DataPropertyDomain(ast:name owl:Thing)
+
+# Data Property: ast:ndvi (ast:ndvi)
+
+DataPropertyDomain(ast:ndvi ast:Plant)
+DataPropertyRange(ast:ndvi xsd:double)
+
+# Data Property: ast:plantId (ast:plantId)
+
+DataPropertyDomain(ast:plantId ast:Plant)
+DataPropertyRange(ast:plantId xsd:string)
+
+# Data Property: ast:potPosition (ast:potPosition)
+
+DataPropertyDomain(ast:potPosition ast:Pot)
+DataPropertyRange(ast:potPosition DataOneOf("left" "right"))
+
+# Data Property: ast:powerOutput (ast:powerOutput)
+
+DataPropertyDomain(ast:powerOutput ast:Pump)
+DataPropertyRange(ast:powerOutput xsd:integer)
+
+# Data Property: ast:pumpGpioPin (ast:pumpGpioPin)
+
+SubDataPropertyOf(ast:pumpGpioPin owl:topDataProperty)
+DataPropertyDomain(ast:pumpGpioPin ast:Pump)
+DataPropertyRange(ast:pumpGpioPin xsd:int)
+
+# Data Property: ast:pumpId (ast:pumpId)
+
+SubDataPropertyOf(ast:pumpId owl:topDataProperty)
+
+# Data Property: ast:pumpLifeTime (ast:pumpLifeTime)
+
+DataPropertyDomain(ast:pumpLifeTime ast:Pump)
+DataPropertyRange(ast:pumpLifeTime xsd:integer)
+
+# Data Property: ast:shelfFloor (ast:shelfFloor)
+
+DataPropertyDomain(ast:shelfFloor ObjectUnionOf(ast:Pot ast:Pump ast:Shelf))
+DataPropertyRange(ast:shelfFloor DataOneOf("1" "2"))
+
+# Data Property: ast:temperature (ast:temperature)
+
+DataPropertyDomain(ast:temperature ast:Pump)
+DataPropertyRange(ast:temperature xsd:double)
+
+
+############################
+#   Datatypes
+############################
+
+# Datatype: ast:percentage (ast:percentage)
+
+DatatypeDefinition(ast:percentage DatatypeRestriction(xsd:double xsd:minInclusive "0.0"^^xsd:double xsd:maxInclusive "100.0"^^xsd:double))
+
+
+############################
+#   Classes
+############################
+
+# Class: ast:BadHealthState (ast:BadHealthState)
+
+EquivalentClasses(ast:BadHealthState ObjectIntersectionOf(DataSomeValuesFrom(ast:ndvi DatatypeRestriction(xsd:double xsd:minInclusive "-0.33"^^xsd:double)) DataSomeValuesFrom(ast:ndvi DatatypeRestriction(xsd:double xsd:maxInclusive "0.32"^^xsd:double))))
+SubClassOf(ast:BadHealthState ast:HealthState)
+SubClassOf(ast:BadHealthState DataHasValue(ast:hasHealthStateName "Unhealthy"))
+DisjointClasses(ast:BadHealthState ast:DeadHealthState)
+DisjointClasses(ast:BadHealthState ast:GoodHealthState)
+
+# Class: ast:Basil (ast:Basil)
+
+SubClassOf(ast:Basil ast:Plant)
+SubClassOf(ast:Basil DataHasValue(ast:idealMoisture "50.0"^^xsd:double))
+
+# Class: ast:DeadHealthState (ast:DeadHealthState)
+
+EquivalentClasses(ast:DeadHealthState ObjectIntersectionOf(DataSomeValuesFrom(ast:ndvi DatatypeRestriction(xsd:double xsd:minInclusive "-1.0"^^xsd:double)) DataSomeValuesFrom(ast:ndvi DatatypeRestriction(xsd:double xsd:maxInclusive "-0.34"^^xsd:double))))
+SubClassOf(ast:DeadHealthState ast:HealthState)
+SubClassOf(ast:DeadHealthState DataHasValue(ast:hasHealthStateName "Dead"))
+DisjointClasses(ast:DeadHealthState ast:GoodHealthState)
+
+# Class: ast:GoodHealthState (ast:GoodHealthState)
+
+EquivalentClasses(ast:GoodHealthState ObjectIntersectionOf(DataSomeValuesFrom(ast:ndvi DatatypeRestriction(xsd:double xsd:minInclusive "0.33"^^xsd:double)) DataSomeValuesFrom(ast:ndvi DatatypeRestriction(xsd:double xsd:maxInclusive "1.0"^^xsd:double))))
+SubClassOf(ast:GoodHealthState ast:HealthState)
+SubClassOf(ast:GoodHealthState DataHasValue(ast:hasHealthStateName "Healthy"))
+
+# Class: ast:Greenhouse (ast:Greenhouse)
+
+SubClassOf(ast:Greenhouse ObjectSomeValuesFrom(ast:hasWaterTank ast:WaterTank))
+SubClassOf(ast:Greenhouse ObjectMinCardinality(1 ast:hasShelf ast:Shelf))
+SubClassOf(ast:Greenhouse DataSomeValuesFrom(ast:hasLightStrength ast:percentage))
+
+# Class: ast:HealthState (ast:HealthState)
+
+DisjointUnion(ast:HealthState ast:BadHealthState ast:DeadHealthState ast:GoodHealthState)
+
+# Class: ast:Maintenance (ast:Maintenance)
+
+SubClassOf(ast:Maintenance ast:Pump)
+
+# Class: ast:MaintenanceR365 (ast:MaintenanceR365)
+
+EquivalentClasses(ast:MaintenanceR365 ObjectIntersectionOf(ObjectUnionOf(DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minExclusive "50.0"^^xsd:double)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxExclusive "5.0"^^xsd:double))) DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:minInclusive "2500"^^xsd:integer)) DataHasValue(ast:modelName "R365")))
+SubClassOf(ast:MaintenanceR365 ast:Maintenance)
+
+# Class: ast:MaintenanceR385 (ast:MaintenanceR385)
+
+EquivalentClasses(ast:MaintenanceR385 ObjectIntersectionOf(ObjectUnionOf(DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minExclusive "40.0"^^xsd:double)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxExclusive "5.0"^^xsd:double))) DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:minInclusive "2500"^^xsd:integer)) DataHasValue(ast:modelName "R385")))
+SubClassOf(ast:MaintenanceR385 ast:Maintenance)
+
+# Class: ast:MaintenanceWPS27 (ast:MaintenanceWPS27)
+
+EquivalentClasses(ast:MaintenanceWPS27 ObjectIntersectionOf(ObjectUnionOf(DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minExclusive "40.0"^^xsd:double)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxExclusive "5.0"^^xsd:double))) DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:minInclusive "400"^^xsd:integer)) DataHasValue(ast:modelName "WPS27")))
+SubClassOf(ast:MaintenanceWPS27 ast:Maintenance)
+
+# Class: ast:Operational (ast:Operational)
+
+SubClassOf(ast:Operational ast:Pump)
+
+# Class: ast:OperationalR365 (ast:OperationalR365)
+
+EquivalentClasses(ast:OperationalR365 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "2500"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minInclusive "5.0"^^xsd:double)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxInclusive "50.0"^^xsd:double)) DataHasValue(ast:modelName "R365")))
+SubClassOf(ast:OperationalR365 ast:Operational)
+
+# Class: ast:OperationalR385 (ast:OperationalR385)
+
+EquivalentClasses(ast:OperationalR385 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "2500"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minInclusive "5.0"^^xsd:double)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxInclusive "40.0"^^xsd:double)) DataHasValue(ast:modelName "R385")))
+SubClassOf(ast:OperationalR385 ast:Operational)
+
+# Class: ast:OperationalWPS27 (ast:OperationalWPS27)
+
+EquivalentClasses(ast:OperationalWPS27 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "400"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minInclusive "5.0"^^xsd:double)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxInclusive "40.0"^^xsd:double)) DataHasValue(ast:modelName "WPS27")))
+SubClassOf(ast:OperationalWPS27 ast:Operational)
+
+# Class: ast:Overheating (ast:Overheating)
+
+SubClassOf(ast:Overheating ast:Pump)
+
+# Class: ast:OverheatingR365 (ast:OverheatingR365)
+
+EquivalentClasses(ast:OverheatingR365 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "2500"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minExclusive "50.0"^^xsd:double)) DataHasValue(ast:modelName "R365")))
+SubClassOf(ast:OverheatingR365 ast:Overheating)
+
+# Class: ast:OverheatingR385 (ast:OverheatingR385)
+
+EquivalentClasses(ast:OverheatingR385 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "2500"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minExclusive "40.0"^^xsd:double)) DataHasValue(ast:modelName "R385")))
+SubClassOf(ast:OverheatingR385 ast:Overheating)
+
+# Class: ast:OverheatingWPS27 (ast:OverheatingWPS27)
+
+EquivalentClasses(ast:OverheatingWPS27 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "400"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:minExclusive "40.0"^^xsd:double)) DataHasValue(ast:modelName "WPS27")))
+SubClassOf(ast:OverheatingWPS27 ast:Overheating)
+
+# Class: ast:Pepper (ast:Pepper)
+
+SubClassOf(ast:Pepper ast:Plant)
+
+# Class: ast:Pot (ast:Pot)
+
+SubClassOf(ast:Pot ObjectExactCardinality(1 ast:wateredBy ast:Pump))
+SubClassOf(ast:Pot ObjectMaxCardinality(1 ast:hasPlant ast:Plant))
+SubClassOf(ast:Pot DataSomeValuesFrom(ast:hasMoisture ast:percentage))
+
+# Class: ast:Pump (ast:Pump)
+
+SubClassOf(ast:Pump DataSomeValuesFrom(ast:hasWaterFlow xsd:int))
+DisjointUnion(ast:Pump ast:Maintenance ast:Operational ast:Overheating ast:Underheating)
+
+# Class: ast:Shelf (ast:Shelf)
+
+SubClassOf(ast:Shelf ObjectMinCardinality(1 ast:hasPot ast:Pot))
+SubClassOf(ast:Shelf DataSomeValuesFrom(ast:hasHumidity ast:percentage))
+SubClassOf(ast:Shelf DataSomeValuesFrom(ast:hasTemperature xsd:double))
+
+# Class: ast:Underheating (ast:Underheating)
+
+SubClassOf(ast:Underheating ast:Pump)
+
+# Class: ast:UnderheatingR365 (ast:UnderheatingR365)
+
+EquivalentClasses(ast:UnderheatingR365 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "2500"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxExclusive "5.0"^^xsd:double)) DataHasValue(ast:modelName "R365")))
+SubClassOf(ast:UnderheatingR365 ast:Underheating)
+
+# Class: ast:UnderheatingR385 (ast:UnderheatingR385)
+
+EquivalentClasses(ast:UnderheatingR385 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "2500"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxExclusive "5.0"^^xsd:double)) DataHasValue(ast:modelName "R385")))
+SubClassOf(ast:UnderheatingR385 ast:Underheating)
+
+# Class: ast:UnderheatingWPS27 (ast:UnderheatingWPS27)
+
+EquivalentClasses(ast:UnderheatingWPS27 ObjectIntersectionOf(DataSomeValuesFrom(ast:pumpLifeTime DatatypeRestriction(xsd:integer xsd:maxExclusive "400"^^xsd:integer)) DataSomeValuesFrom(ast:temperature DatatypeRestriction(xsd:double xsd:maxExclusive "5.0"^^xsd:double)) DataHasValue(ast:modelName "WPS27")))
+SubClassOf(ast:UnderheatingWPS27 ast:Underheating)
+
+# Class: ast:WaterTank (ast:WaterTank)
+
+SubClassOf(ast:WaterTank DataSomeValuesFrom(ast:hasWaterLevel ast:percentage))
+
+
+############################
+#   Named Individuals
+############################
+
+# Individual: ast:badHealthState (ast:badHealthState)
+
+ClassAssertion(ast:HealthState ast:badHealthState)
+DataPropertyAssertion(ast:maxNdvi ast:badHealthState "0.32")
+DataPropertyAssertion(ast:minNdvi ast:badHealthState "-0.33")
+DataPropertyAssertion(ast:name ast:badHealthState "badHealthState")
+
+# Individual: ast:basilicum1 (ast:basilicum1)
+
+ClassAssertion(ast:Plant ast:basilicum1)
+DataPropertyAssertion(ast:idealMoisture ast:basilicum1 "50.0"^^xsd:double)
+DataPropertyAssertion(ast:ndvi ast:basilicum1 "0.0"^^xsd:double)
+DataPropertyAssertion(ast:plantId ast:basilicum1 "1")
+
+# Individual: ast:basilicum2 (ast:basilicum2)
+
+ClassAssertion(ast:Plant ast:basilicum2)
+DataPropertyAssertion(ast:idealMoisture ast:basilicum2 "50.0"^^xsd:double)
+DataPropertyAssertion(ast:ndvi ast:basilicum2 "0.0"^^xsd:double)
+DataPropertyAssertion(ast:plantId ast:basilicum2 "2")
+
+# Individual: ast:deadHealthState (ast:deadHealthState)
+
+ClassAssertion(ast:HealthState ast:deadHealthState)
+DataPropertyAssertion(ast:maxNdvi ast:deadHealthState "-0.34"^^xsd:double)
+DataPropertyAssertion(ast:minNdvi ast:deadHealthState "-1.0"^^xsd:double)
+DataPropertyAssertion(ast:name ast:deadHealthState "deadHealthState")
+
+# Individual: ast:goodHealthState (ast:goodHealthState)
+
+ClassAssertion(ast:HealthState ast:goodHealthState)
+DataPropertyAssertion(ast:maxNdvi ast:goodHealthState "1.0"^^xsd:double)
+DataPropertyAssertion(ast:minNdvi ast:goodHealthState "0.33"^^xsd:double)
+DataPropertyAssertion(ast:name ast:goodHealthState "goodHealthState")
+
+# Individual: ast:greenhouse (ast:greenhouse)
+
+ClassAssertion(ast:Greenhouse ast:greenhouse)
+ObjectPropertyAssertion(ast:hasShelf ast:greenhouse ast:shelf1)
+ObjectPropertyAssertion(ast:hasShelf ast:greenhouse ast:shelf2)
+ObjectPropertyAssertion(ast:hasWaterTank ast:greenhouse ast:waterTank)
+
+# Individual: ast:maintenanceR365 (ast:maintenanceR365)
+
+ClassAssertion(ast:Maintenance ast:maintenanceR365)
+DataPropertyAssertion(ast:modelName ast:maintenanceR365 "R365")
+DataPropertyAssertion(ast:powerOutput ast:maintenanceR365 "3"^^xsd:integer)
+
+# Individual: ast:maintenanceR385 (ast:maintenanceR385)
+
+ClassAssertion(ast:Maintenance ast:maintenanceR385)
+DataPropertyAssertion(ast:modelName ast:maintenanceR385 "R385")
+DataPropertyAssertion(ast:powerOutput ast:maintenanceR385 "4"^^xsd:integer)
+
+# Individual: ast:maintenanceWPS27 (ast:maintenanceWPS27)
+
+ClassAssertion(ast:Maintenance ast:maintenanceWPS27)
+DataPropertyAssertion(ast:modelName ast:maintenanceWPS27 "WPS27")
+DataPropertyAssertion(ast:powerOutput ast:maintenanceWPS27 "5"^^xsd:integer)
+
+# Individual: ast:pot1 (ast:pot1)
+
+ClassAssertion(ast:Pot ast:pot1)
+ObjectPropertyAssertion(ast:hasPlant ast:pot1 ast:basilicum1)
+ObjectPropertyAssertion(ast:wateredBy ast:pot1 ast:pump1)
+DataPropertyAssertion(ast:hasGroupPosition ast:pot1 "left")
+DataPropertyAssertion(ast:hasMoistureAdcChannel ast:pot1 "1"^^xsd:integer)
+DataPropertyAssertion(ast:potPosition ast:pot1 "left")
+DataPropertyAssertion(ast:shelfFloor ast:pot1 "1")
+
+# Individual: ast:pot2 (ast:pot2)
+
+ClassAssertion(ast:Pot ast:pot2)
+ObjectPropertyAssertion(ast:hasPlant ast:pot2 ast:basilicum2)
+ObjectPropertyAssertion(ast:wateredBy ast:pot2 ast:pump2)
+DataPropertyAssertion(ast:hasGroupPosition ast:pot2 "left")
+DataPropertyAssertion(ast:hasMoistureAdcChannel ast:pot2 "2"^^xsd:integer)
+DataPropertyAssertion(ast:potPosition ast:pot2 "right")
+DataPropertyAssertion(ast:shelfFloor ast:pot2 "1")
+
+# Individual: ast:pot3 (ast:pot3)
+
+ClassAssertion(ast:Pot ast:pot3)
+ObjectPropertyAssertion(ast:hasPlant ast:pot3 ast:stemor1)
+ObjectPropertyAssertion(ast:wateredBy ast:pot3 ast:pump3)
+DataPropertyAssertion(ast:hasGroupPosition ast:pot3 "left")
+DataPropertyAssertion(ast:hasMoistureAdcChannel ast:pot3 "1"^^xsd:integer)
+DataPropertyAssertion(ast:potPosition ast:pot3 "left")
+DataPropertyAssertion(ast:shelfFloor ast:pot3 "2")
+
+# Individual: ast:pot4 (ast:pot4)
+
+ClassAssertion(ast:Pot ast:pot4)
+ObjectPropertyAssertion(ast:hasPlant ast:pot4 ast:stemor2)
+DataPropertyAssertion(ast:hasGroupPosition ast:pot4 "left")
+DataPropertyAssertion(ast:hasMoistureAdcChannel ast:pot4 "2"^^xsd:integer)
+DataPropertyAssertion(ast:potPosition ast:pot4 "right")
+DataPropertyAssertion(ast:shelfFloor ast:pot4 "2")
+
+# Individual: ast:pump1 (ast:pump1)
+
+ClassAssertion(ast:Pump ast:pump1)
+DataPropertyAssertion(ast:modelName ast:pump1 "R385")
+DataPropertyAssertion(ast:pumpGpioPin ast:pump1 "18"^^xsd:integer)
+DataPropertyAssertion(ast:pumpId ast:pump1 "1")
+DataPropertyAssertion(ast:pumpLifeTime ast:pump1 "0"^^xsd:integer)
+DataPropertyAssertion(ast:temperature ast:pump1 "5.0"^^xsd:double)
+
+# Individual: ast:pump2 (ast:pump2)
+
+ClassAssertion(ast:Pump ast:pump2)
+DataPropertyAssertion(ast:modelName ast:pump2 "WPS27")
+DataPropertyAssertion(ast:pumpGpioPin ast:pump2 "18"^^xsd:integer)
+DataPropertyAssertion(ast:pumpId ast:pump2 "2")
+DataPropertyAssertion(ast:pumpLifeTime ast:pump2 "30"^^xsd:integer)
+DataPropertyAssertion(ast:temperature ast:pump2 "80.0"^^xsd:double)
+
+# Individual: ast:pump3 (ast:pump3)
+
+ClassAssertion(ast:Pump ast:pump3)
+DataPropertyAssertion(ast:modelName ast:pump3 "R365")
+DataPropertyAssertion(ast:pumpGpioPin ast:pump3 "18"^^xsd:integer)
+DataPropertyAssertion(ast:pumpId ast:pump3 "3")
+DataPropertyAssertion(ast:pumpLifeTime ast:pump3 "3000"^^xsd:integer)
+DataPropertyAssertion(ast:temperature ast:pump3 "94.0"^^xsd:double)
+
+# Individual: ast:shelf1 (ast:shelf1)
+
+ClassAssertion(ast:Shelf ast:shelf1)
+ObjectPropertyAssertion(ast:hasPot ast:shelf1 ast:pot1)
+ObjectPropertyAssertion(ast:hasPot ast:shelf1 ast:pot2)
+DataPropertyAssertion(ast:hasHumidityGpioPin ast:shelf1 "4"^^xsd:integer)
+DataPropertyAssertion(ast:hasTemperatureGpioPin ast:shelf1 "4"^^xsd:integer)
+DataPropertyAssertion(ast:shelfFloor ast:shelf1 "1")
+
+# Individual: ast:shelf2 (ast:shelf2)
+
+ClassAssertion(ast:Shelf ast:shelf2)
+ObjectPropertyAssertion(ast:hasPot ast:shelf2 ast:pot3)
+ObjectPropertyAssertion(ast:hasPot ast:shelf2 ast:pot4)
+DataPropertyAssertion(ast:hasHumidityGpioPin ast:shelf2 "4"^^xsd:integer)
+DataPropertyAssertion(ast:hasTemperatureGpioPin ast:shelf2 "4"^^xsd:integer)
+DataPropertyAssertion(ast:shelfFloor ast:shelf2 "2")
+
+# Individual: ast:stemor1 (ast:stemor1)
+
+ClassAssertion(ast:Plant ast:stemor1)
+DataPropertyAssertion(ast:idealMoisture ast:stemor1 "40.0"^^xsd:double)
+DataPropertyAssertion(ast:ndvi ast:stemor1 "0.0"^^xsd:double)
+DataPropertyAssertion(ast:plantId ast:stemor1 "3")
+
+# Individual: ast:stemor2 (ast:stemor2)
+
+ClassAssertion(ast:Plant ast:stemor2)
+DataPropertyAssertion(ast:idealMoisture ast:stemor2 "40.0"^^xsd:double)
+DataPropertyAssertion(ast:ndvi ast:stemor2 "0.0"^^xsd:double)
+DataPropertyAssertion(ast:plantId ast:stemor2 "4")
+
+# Individual: ast:waterTank (ast:waterTank)
+
+ClassAssertion(ast:WaterTank ast:waterTank)
+
+
+DisjointClasses(ast:Maintenance ast:Operational ast:Overheating ast:Underheating)
+HasKey(ast:Plant () (ast:plantId))
+)

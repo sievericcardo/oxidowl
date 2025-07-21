@@ -1,0 +1,1698 @@
+<?xml version="1.0"?>
+<Ontology xmlns="http://www.w3.org/2002/07/owl#"
+     xml:base="http://www.smolang.org/greenhouseDT"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     ontologyIRI="http://www.smolang.org/greenhouseDT">
+    <Prefix name="" IRI="http://www.smolang.org/greenhouseDT#"/>
+    <Prefix name="ast" IRI="http://www.smolang.org/greenhouseDT#"/>
+    <Prefix name="owl" IRI="http://www.w3.org/2002/07/owl#"/>
+    <Prefix name="rdf" IRI="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>
+    <Prefix name="xml" IRI="http://www.w3.org/XML/1998/namespace"/>
+    <Prefix name="xsd" IRI="http://www.w3.org/2001/XMLSchema#"/>
+    <Prefix name="rdfs" IRI="http://www.w3.org/2000/01/rdf-schema#"/>
+    <Declaration>
+        <Class IRI="#BadHealthState"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Basil"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#DeadHealthState"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#GoodHealthState"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Greenhouse"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#HealthState"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Maintenance"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#MaintenanceR365"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#MaintenanceR385"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#MaintenanceWPS27"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Operational"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#OperationalR365"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#OperationalR385"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#OperationalWPS27"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Overheating"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#OverheatingR365"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#OverheatingR385"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#OverheatingWPS27"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Pepper"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Plant"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Pot"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Pump"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Shelf"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#Underheating"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#UnderheatingR365"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#UnderheatingR385"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#UnderheatingWPS27"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="#WaterTank"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="#hasHealthState"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="#hasPlant"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="#hasPot"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="#hasShelf"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="#hasWaterTank"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="#wateredBy"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasGroupPosition"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasHealthStateName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasHumidity"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasHumidityGpioPin"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasIdealTemperature"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasLightStrength"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasMoisture"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasTemperature"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasTemperatureGpioPin"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasWaterFlow"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#hasWaterLevel"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#idealMoisture"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#maxNdvi"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#minNdvi"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#modelName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#name"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#ndvi"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#plantId"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#potPosition"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#powerOutput"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#pumpGpioPin"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#pumpId"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#pumpLifeTime"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#shelfFloor"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="#temperature"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#badHealthState"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#basilicum1"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#basilicum2"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#deadHealthState"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#goodHealthState"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#greenhouse"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#maintenanceR365"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#maintenanceR385"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#maintenanceWPS27"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pot1"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pot2"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pot3"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pot4"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pump1"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pump2"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#pump3"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#shelf1"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#shelf2"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#stemor1"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#stemor2"/>
+    </Declaration>
+    <Declaration>
+        <NamedIndividual IRI="#waterTank"/>
+    </Declaration>
+    <Declaration>
+        <Datatype IRI="#percentage"/>
+    </Declaration>
+    <EquivalentClasses>
+        <Class IRI="#BadHealthState"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#ndvi"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">-0.33</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#ndvi"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.32</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#DeadHealthState"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#ndvi"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">-1.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#ndvi"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">-0.34</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#GoodHealthState"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#ndvi"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.33</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#ndvi"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">1.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#MaintenanceR365"/>
+        <ObjectIntersectionOf>
+            <ObjectUnionOf>
+                <DataSomeValuesFrom>
+                    <DataProperty IRI="#temperature"/>
+                    <DatatypeRestriction>
+                        <Datatype abbreviatedIRI="xsd:double"/>
+                        <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minExclusive">
+                            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">50.0</Literal>
+                        </FacetRestriction>
+                    </DatatypeRestriction>
+                </DataSomeValuesFrom>
+                <DataSomeValuesFrom>
+                    <DataProperty IRI="#temperature"/>
+                    <DatatypeRestriction>
+                        <Datatype abbreviatedIRI="xsd:double"/>
+                        <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                        </FacetRestriction>
+                    </DatatypeRestriction>
+                </DataSomeValuesFrom>
+            </ObjectUnionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R365</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#MaintenanceR385"/>
+        <ObjectIntersectionOf>
+            <ObjectUnionOf>
+                <DataSomeValuesFrom>
+                    <DataProperty IRI="#temperature"/>
+                    <DatatypeRestriction>
+                        <Datatype abbreviatedIRI="xsd:double"/>
+                        <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minExclusive">
+                            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+                        </FacetRestriction>
+                    </DatatypeRestriction>
+                </DataSomeValuesFrom>
+                <DataSomeValuesFrom>
+                    <DataProperty IRI="#temperature"/>
+                    <DatatypeRestriction>
+                        <Datatype abbreviatedIRI="xsd:double"/>
+                        <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                        </FacetRestriction>
+                    </DatatypeRestriction>
+                </DataSomeValuesFrom>
+            </ObjectUnionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R385</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#MaintenanceWPS27"/>
+        <ObjectIntersectionOf>
+            <ObjectUnionOf>
+                <DataSomeValuesFrom>
+                    <DataProperty IRI="#temperature"/>
+                    <DatatypeRestriction>
+                        <Datatype abbreviatedIRI="xsd:double"/>
+                        <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minExclusive">
+                            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+                        </FacetRestriction>
+                    </DatatypeRestriction>
+                </DataSomeValuesFrom>
+                <DataSomeValuesFrom>
+                    <DataProperty IRI="#temperature"/>
+                    <DatatypeRestriction>
+                        <Datatype abbreviatedIRI="xsd:double"/>
+                        <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                        </FacetRestriction>
+                    </DatatypeRestriction>
+                </DataSomeValuesFrom>
+            </ObjectUnionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">400</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>WPS27</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#OperationalR365"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">50.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R365</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#OperationalR385"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R385</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#OperationalWPS27"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">400</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>WPS27</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#OverheatingR365"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">50.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R365</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#OverheatingR385"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R385</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#OverheatingWPS27"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">400</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>WPS27</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#UnderheatingR365"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R365</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#UnderheatingR385"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2500</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>R385</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <EquivalentClasses>
+        <Class IRI="#UnderheatingWPS27"/>
+        <ObjectIntersectionOf>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#pumpLifeTime"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:integer"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">400</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataSomeValuesFrom>
+                <DataProperty IRI="#temperature"/>
+                <DatatypeRestriction>
+                    <Datatype abbreviatedIRI="xsd:double"/>
+                    <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxExclusive">
+                        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+                    </FacetRestriction>
+                </DatatypeRestriction>
+            </DataSomeValuesFrom>
+            <DataHasValue>
+                <DataProperty IRI="#modelName"/>
+                <Literal>WPS27</Literal>
+            </DataHasValue>
+        </ObjectIntersectionOf>
+    </EquivalentClasses>
+    <SubClassOf>
+        <Class IRI="#BadHealthState"/>
+        <Class IRI="#HealthState"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#BadHealthState"/>
+        <DataHasValue>
+            <DataProperty IRI="#hasHealthStateName"/>
+            <Literal>Unhealthy</Literal>
+        </DataHasValue>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Basil"/>
+        <Class IRI="#Plant"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Basil"/>
+        <DataHasValue>
+            <DataProperty IRI="#idealMoisture"/>
+            <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">50.0</Literal>
+        </DataHasValue>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#DeadHealthState"/>
+        <Class IRI="#HealthState"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#DeadHealthState"/>
+        <DataHasValue>
+            <DataProperty IRI="#hasHealthStateName"/>
+            <Literal>Dead</Literal>
+        </DataHasValue>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#GoodHealthState"/>
+        <Class IRI="#HealthState"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#GoodHealthState"/>
+        <DataHasValue>
+            <DataProperty IRI="#hasHealthStateName"/>
+            <Literal>Healthy</Literal>
+        </DataHasValue>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Greenhouse"/>
+        <ObjectSomeValuesFrom>
+            <ObjectProperty IRI="#hasWaterTank"/>
+            <Class IRI="#WaterTank"/>
+        </ObjectSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Greenhouse"/>
+        <ObjectMinCardinality cardinality="1">
+            <ObjectProperty IRI="#hasShelf"/>
+            <Class IRI="#Shelf"/>
+        </ObjectMinCardinality>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Greenhouse"/>
+        <DataSomeValuesFrom>
+            <DataProperty IRI="#hasLightStrength"/>
+            <Datatype IRI="#percentage"/>
+        </DataSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Maintenance"/>
+        <Class IRI="#Pump"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#MaintenanceR365"/>
+        <Class IRI="#Maintenance"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#MaintenanceR385"/>
+        <Class IRI="#Maintenance"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#MaintenanceWPS27"/>
+        <Class IRI="#Maintenance"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Operational"/>
+        <Class IRI="#Pump"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#OperationalR365"/>
+        <Class IRI="#Operational"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#OperationalR385"/>
+        <Class IRI="#Operational"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#OperationalWPS27"/>
+        <Class IRI="#Operational"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Overheating"/>
+        <Class IRI="#Pump"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#OverheatingR365"/>
+        <Class IRI="#Overheating"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#OverheatingR385"/>
+        <Class IRI="#Overheating"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#OverheatingWPS27"/>
+        <Class IRI="#Overheating"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Pepper"/>
+        <Class IRI="#Plant"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Pot"/>
+        <ObjectExactCardinality cardinality="1">
+            <ObjectProperty IRI="#wateredBy"/>
+            <Class IRI="#Pump"/>
+        </ObjectExactCardinality>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Pot"/>
+        <ObjectMaxCardinality cardinality="1">
+            <ObjectProperty IRI="#hasPlant"/>
+            <Class IRI="#Plant"/>
+        </ObjectMaxCardinality>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Pot"/>
+        <DataSomeValuesFrom>
+            <DataProperty IRI="#hasMoisture"/>
+            <Datatype IRI="#percentage"/>
+        </DataSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Pump"/>
+        <DataSomeValuesFrom>
+            <DataProperty IRI="#hasWaterFlow"/>
+            <Datatype abbreviatedIRI="xsd:int"/>
+        </DataSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Shelf"/>
+        <ObjectMinCardinality cardinality="1">
+            <ObjectProperty IRI="#hasPot"/>
+            <Class IRI="#Pot"/>
+        </ObjectMinCardinality>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Shelf"/>
+        <DataSomeValuesFrom>
+            <DataProperty IRI="#hasHumidity"/>
+            <Datatype IRI="#percentage"/>
+        </DataSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Shelf"/>
+        <DataSomeValuesFrom>
+            <DataProperty IRI="#hasTemperature"/>
+            <Datatype abbreviatedIRI="xsd:double"/>
+        </DataSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Underheating"/>
+        <Class IRI="#Pump"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#UnderheatingR365"/>
+        <Class IRI="#Underheating"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#UnderheatingR385"/>
+        <Class IRI="#Underheating"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#UnderheatingWPS27"/>
+        <Class IRI="#Underheating"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="#WaterTank"/>
+        <DataSomeValuesFrom>
+            <DataProperty IRI="#hasWaterLevel"/>
+            <Datatype IRI="#percentage"/>
+        </DataSomeValuesFrom>
+    </SubClassOf>
+    <DisjointClasses>
+        <Class IRI="#BadHealthState"/>
+        <Class IRI="#DeadHealthState"/>
+    </DisjointClasses>
+    <DisjointClasses>
+        <Class IRI="#BadHealthState"/>
+        <Class IRI="#GoodHealthState"/>
+    </DisjointClasses>
+    <DisjointClasses>
+        <Class IRI="#DeadHealthState"/>
+        <Class IRI="#GoodHealthState"/>
+    </DisjointClasses>
+    <DisjointClasses>
+        <Class IRI="#Maintenance"/>
+        <Class IRI="#Operational"/>
+        <Class IRI="#Overheating"/>
+        <Class IRI="#Underheating"/>
+    </DisjointClasses>
+    <DisjointUnion>
+        <Class IRI="#HealthState"/>
+        <Class IRI="#BadHealthState"/>
+        <Class IRI="#DeadHealthState"/>
+        <Class IRI="#GoodHealthState"/>
+    </DisjointUnion>
+    <DisjointUnion>
+        <Class IRI="#Pump"/>
+        <Class IRI="#Maintenance"/>
+        <Class IRI="#Operational"/>
+        <Class IRI="#Overheating"/>
+        <Class IRI="#Underheating"/>
+    </DisjointUnion>
+    <ClassAssertion>
+        <Class IRI="#HealthState"/>
+        <NamedIndividual IRI="#badHealthState"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Plant"/>
+        <NamedIndividual IRI="#basilicum1"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Plant"/>
+        <NamedIndividual IRI="#basilicum2"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#HealthState"/>
+        <NamedIndividual IRI="#deadHealthState"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#HealthState"/>
+        <NamedIndividual IRI="#goodHealthState"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Greenhouse"/>
+        <NamedIndividual IRI="#greenhouse"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Maintenance"/>
+        <NamedIndividual IRI="#maintenanceR365"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Maintenance"/>
+        <NamedIndividual IRI="#maintenanceR385"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Maintenance"/>
+        <NamedIndividual IRI="#maintenanceWPS27"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pot"/>
+        <NamedIndividual IRI="#pot1"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pot"/>
+        <NamedIndividual IRI="#pot2"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pot"/>
+        <NamedIndividual IRI="#pot3"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pot"/>
+        <NamedIndividual IRI="#pot4"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pump"/>
+        <NamedIndividual IRI="#pump1"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pump"/>
+        <NamedIndividual IRI="#pump2"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Pump"/>
+        <NamedIndividual IRI="#pump3"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Shelf"/>
+        <NamedIndividual IRI="#shelf1"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Shelf"/>
+        <NamedIndividual IRI="#shelf2"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Plant"/>
+        <NamedIndividual IRI="#stemor1"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#Plant"/>
+        <NamedIndividual IRI="#stemor2"/>
+    </ClassAssertion>
+    <ClassAssertion>
+        <Class IRI="#WaterTank"/>
+        <NamedIndividual IRI="#waterTank"/>
+    </ClassAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasShelf"/>
+        <NamedIndividual IRI="#greenhouse"/>
+        <NamedIndividual IRI="#shelf1"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasShelf"/>
+        <NamedIndividual IRI="#greenhouse"/>
+        <NamedIndividual IRI="#shelf2"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasWaterTank"/>
+        <NamedIndividual IRI="#greenhouse"/>
+        <NamedIndividual IRI="#waterTank"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPlant"/>
+        <NamedIndividual IRI="#pot1"/>
+        <NamedIndividual IRI="#basilicum1"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#wateredBy"/>
+        <NamedIndividual IRI="#pot1"/>
+        <NamedIndividual IRI="#pump1"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPlant"/>
+        <NamedIndividual IRI="#pot2"/>
+        <NamedIndividual IRI="#basilicum2"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#wateredBy"/>
+        <NamedIndividual IRI="#pot2"/>
+        <NamedIndividual IRI="#pump2"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPlant"/>
+        <NamedIndividual IRI="#pot3"/>
+        <NamedIndividual IRI="#stemor1"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#wateredBy"/>
+        <NamedIndividual IRI="#pot3"/>
+        <NamedIndividual IRI="#pump3"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPlant"/>
+        <NamedIndividual IRI="#pot4"/>
+        <NamedIndividual IRI="#stemor2"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPot"/>
+        <NamedIndividual IRI="#shelf1"/>
+        <NamedIndividual IRI="#pot1"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPot"/>
+        <NamedIndividual IRI="#shelf1"/>
+        <NamedIndividual IRI="#pot2"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPot"/>
+        <NamedIndividual IRI="#shelf2"/>
+        <NamedIndividual IRI="#pot3"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#hasPot"/>
+        <NamedIndividual IRI="#shelf2"/>
+        <NamedIndividual IRI="#pot4"/>
+    </ObjectPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#maxNdvi"/>
+        <NamedIndividual IRI="#badHealthState"/>
+        <Literal>0.32</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#minNdvi"/>
+        <NamedIndividual IRI="#badHealthState"/>
+        <Literal>-0.33</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#name"/>
+        <NamedIndividual IRI="#badHealthState"/>
+        <Literal>badHealthState</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#idealMoisture"/>
+        <NamedIndividual IRI="#basilicum1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">50.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#ndvi"/>
+        <NamedIndividual IRI="#basilicum1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#plantId"/>
+        <NamedIndividual IRI="#basilicum1"/>
+        <Literal>1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#idealMoisture"/>
+        <NamedIndividual IRI="#basilicum2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">50.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#ndvi"/>
+        <NamedIndividual IRI="#basilicum2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#plantId"/>
+        <NamedIndividual IRI="#basilicum2"/>
+        <Literal>2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#maxNdvi"/>
+        <NamedIndividual IRI="#deadHealthState"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">-0.34</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#minNdvi"/>
+        <NamedIndividual IRI="#deadHealthState"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">-1.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#name"/>
+        <NamedIndividual IRI="#deadHealthState"/>
+        <Literal>deadHealthState</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#maxNdvi"/>
+        <NamedIndividual IRI="#goodHealthState"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">1.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#minNdvi"/>
+        <NamedIndividual IRI="#goodHealthState"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.33</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#name"/>
+        <NamedIndividual IRI="#goodHealthState"/>
+        <Literal>goodHealthState</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#modelName"/>
+        <NamedIndividual IRI="#maintenanceR365"/>
+        <Literal>R365</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#powerOutput"/>
+        <NamedIndividual IRI="#maintenanceR365"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">3</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#modelName"/>
+        <NamedIndividual IRI="#maintenanceR385"/>
+        <Literal>R385</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#powerOutput"/>
+        <NamedIndividual IRI="#maintenanceR385"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">4</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#modelName"/>
+        <NamedIndividual IRI="#maintenanceWPS27"/>
+        <Literal>WPS27</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#powerOutput"/>
+        <NamedIndividual IRI="#maintenanceWPS27"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">5</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasGroupPosition"/>
+        <NamedIndividual IRI="#pot1"/>
+        <Literal>left</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <NamedIndividual IRI="#pot1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#potPosition"/>
+        <NamedIndividual IRI="#pot1"/>
+        <Literal>left</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#shelfFloor"/>
+        <NamedIndividual IRI="#pot1"/>
+        <Literal>1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasGroupPosition"/>
+        <NamedIndividual IRI="#pot2"/>
+        <Literal>left</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <NamedIndividual IRI="#pot2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#potPosition"/>
+        <NamedIndividual IRI="#pot2"/>
+        <Literal>right</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#shelfFloor"/>
+        <NamedIndividual IRI="#pot2"/>
+        <Literal>1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasGroupPosition"/>
+        <NamedIndividual IRI="#pot3"/>
+        <Literal>left</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <NamedIndividual IRI="#pot3"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#potPosition"/>
+        <NamedIndividual IRI="#pot3"/>
+        <Literal>left</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#shelfFloor"/>
+        <NamedIndividual IRI="#pot3"/>
+        <Literal>2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasGroupPosition"/>
+        <NamedIndividual IRI="#pot4"/>
+        <Literal>left</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <NamedIndividual IRI="#pot4"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#potPosition"/>
+        <NamedIndividual IRI="#pot4"/>
+        <Literal>right</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#shelfFloor"/>
+        <NamedIndividual IRI="#pot4"/>
+        <Literal>2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#modelName"/>
+        <NamedIndividual IRI="#pump1"/>
+        <Literal>R385</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpGpioPin"/>
+        <NamedIndividual IRI="#pump1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">18</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpId"/>
+        <NamedIndividual IRI="#pump1"/>
+        <Literal>1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpLifeTime"/>
+        <NamedIndividual IRI="#pump1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#temperature"/>
+        <NamedIndividual IRI="#pump1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">5.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#modelName"/>
+        <NamedIndividual IRI="#pump2"/>
+        <Literal>WPS27</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpGpioPin"/>
+        <NamedIndividual IRI="#pump2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">18</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpId"/>
+        <NamedIndividual IRI="#pump2"/>
+        <Literal>2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpLifeTime"/>
+        <NamedIndividual IRI="#pump2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">30</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#temperature"/>
+        <NamedIndividual IRI="#pump2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">80.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#modelName"/>
+        <NamedIndividual IRI="#pump3"/>
+        <Literal>R365</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpGpioPin"/>
+        <NamedIndividual IRI="#pump3"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">18</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpId"/>
+        <NamedIndividual IRI="#pump3"/>
+        <Literal>3</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#pumpLifeTime"/>
+        <NamedIndividual IRI="#pump3"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">3000</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#temperature"/>
+        <NamedIndividual IRI="#pump3"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">94.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasHumidityGpioPin"/>
+        <NamedIndividual IRI="#shelf1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">4</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasTemperatureGpioPin"/>
+        <NamedIndividual IRI="#shelf1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">4</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#shelfFloor"/>
+        <NamedIndividual IRI="#shelf1"/>
+        <Literal>1</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasHumidityGpioPin"/>
+        <NamedIndividual IRI="#shelf2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">4</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#hasTemperatureGpioPin"/>
+        <NamedIndividual IRI="#shelf2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#integer">4</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#shelfFloor"/>
+        <NamedIndividual IRI="#shelf2"/>
+        <Literal>2</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#idealMoisture"/>
+        <NamedIndividual IRI="#stemor1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#ndvi"/>
+        <NamedIndividual IRI="#stemor1"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#plantId"/>
+        <NamedIndividual IRI="#stemor1"/>
+        <Literal>3</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#idealMoisture"/>
+        <NamedIndividual IRI="#stemor2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">40.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#ndvi"/>
+        <NamedIndividual IRI="#stemor2"/>
+        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.0</Literal>
+    </DataPropertyAssertion>
+    <DataPropertyAssertion>
+        <DataProperty IRI="#plantId"/>
+        <NamedIndividual IRI="#stemor2"/>
+        <Literal>4</Literal>
+    </DataPropertyAssertion>
+    <SubObjectPropertyOf>
+        <ObjectProperty IRI="#hasHealthState"/>
+        <ObjectProperty abbreviatedIRI="owl:topObjectProperty"/>
+    </SubObjectPropertyOf>
+    <SubObjectPropertyOf>
+        <ObjectProperty IRI="#hasPot"/>
+        <ObjectProperty abbreviatedIRI="owl:topObjectProperty"/>
+    </SubObjectPropertyOf>
+    <SubObjectPropertyOf>
+        <ObjectProperty IRI="#wateredBy"/>
+        <ObjectProperty abbreviatedIRI="owl:topObjectProperty"/>
+    </SubObjectPropertyOf>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#hasHealthState"/>
+        <Class IRI="#Plant"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#hasPlant"/>
+        <Class IRI="#Pot"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#hasPot"/>
+        <Class IRI="#Shelf"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#hasShelf"/>
+        <Class IRI="#Greenhouse"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#hasWaterTank"/>
+        <Class IRI="#Greenhouse"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#wateredBy"/>
+        <Class IRI="#Pot"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="#hasHealthState"/>
+        <Class IRI="#HealthState"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="#hasPlant"/>
+        <Class IRI="#Plant"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="#hasPot"/>
+        <Class IRI="#Pot"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="#hasShelf"/>
+        <Class IRI="#Shelf"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="#hasWaterTank"/>
+        <Class IRI="#WaterTank"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="#wateredBy"/>
+        <Class IRI="#Pump"/>
+    </ObjectPropertyRange>
+    <SubDataPropertyOf>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <DataProperty abbreviatedIRI="owl:topDataProperty"/>
+    </SubDataPropertyOf>
+    <SubDataPropertyOf>
+        <DataProperty IRI="#pumpGpioPin"/>
+        <DataProperty abbreviatedIRI="owl:topDataProperty"/>
+    </SubDataPropertyOf>
+    <SubDataPropertyOf>
+        <DataProperty IRI="#pumpId"/>
+        <DataProperty abbreviatedIRI="owl:topDataProperty"/>
+    </SubDataPropertyOf>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasGroupPosition"/>
+        <ObjectUnionOf>
+            <Class IRI="#Pot"/>
+            <Class IRI="#Pump"/>
+        </ObjectUnionOf>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasHealthStateName"/>
+        <Class IRI="#HealthState"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasHumidity"/>
+        <Class IRI="#Shelf"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasHumidityGpioPin"/>
+        <Class IRI="#Shelf"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasIdealTemperature"/>
+        <Class IRI="#Plant"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasLightStrength"/>
+        <Class IRI="#Greenhouse"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasMoisture"/>
+        <Class IRI="#Pot"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <Class IRI="#Pot"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasTemperature"/>
+        <Class IRI="#Shelf"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasTemperatureGpioPin"/>
+        <Class IRI="#Shelf"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasWaterFlow"/>
+        <Class IRI="#Pump"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#hasWaterLevel"/>
+        <Class IRI="#WaterTank"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#idealMoisture"/>
+        <Class IRI="#Plant"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#maxNdvi"/>
+        <Class IRI="#HealthState"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#minNdvi"/>
+        <Class IRI="#HealthState"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#modelName"/>
+        <Class IRI="#Pump"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#name"/>
+        <Class abbreviatedIRI="owl:Thing"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#ndvi"/>
+        <Class IRI="#Plant"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#plantId"/>
+        <Class IRI="#Plant"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#potPosition"/>
+        <Class IRI="#Pot"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#powerOutput"/>
+        <Class IRI="#Pump"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#pumpGpioPin"/>
+        <Class IRI="#Pump"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#pumpLifeTime"/>
+        <Class IRI="#Pump"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#shelfFloor"/>
+        <ObjectUnionOf>
+            <Class IRI="#Pot"/>
+            <Class IRI="#Pump"/>
+            <Class IRI="#Shelf"/>
+        </ObjectUnionOf>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="#temperature"/>
+        <Class IRI="#Pump"/>
+    </DataPropertyDomain>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasGroupPosition"/>
+        <DataOneOf>
+            <Literal>left</Literal>
+            <Literal>right</Literal>
+        </DataOneOf>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasHealthStateName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasHumidity"/>
+        <Datatype IRI="#percentage"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasHumidityGpioPin"/>
+        <Datatype abbreviatedIRI="xsd:int"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasIdealTemperature"/>
+        <Datatype abbreviatedIRI="xsd:double"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasLightStrength"/>
+        <Datatype IRI="#percentage"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasMoisture"/>
+        <Datatype IRI="#percentage"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasMoistureAdcChannel"/>
+        <Datatype abbreviatedIRI="xsd:int"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasTemperature"/>
+        <Datatype abbreviatedIRI="xsd:double"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasTemperatureGpioPin"/>
+        <Datatype abbreviatedIRI="xsd:int"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#hasWaterLevel"/>
+        <Datatype IRI="#percentage"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#modelName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#ndvi"/>
+        <Datatype abbreviatedIRI="xsd:double"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#plantId"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#potPosition"/>
+        <DataOneOf>
+            <Literal>left</Literal>
+            <Literal>right</Literal>
+        </DataOneOf>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#powerOutput"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#pumpGpioPin"/>
+        <Datatype abbreviatedIRI="xsd:int"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#pumpLifeTime"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#shelfFloor"/>
+        <DataOneOf>
+            <Literal>1</Literal>
+            <Literal>2</Literal>
+        </DataOneOf>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="#temperature"/>
+        <Datatype abbreviatedIRI="xsd:double"/>
+    </DataPropertyRange>
+    <HasKey>
+        <Class IRI="#Plant"/>
+        <DataProperty IRI="#plantId"/>
+    </HasKey>
+    <DatatypeDefinition>
+        <Datatype IRI="#percentage"/>
+        <DatatypeRestriction>
+            <Datatype abbreviatedIRI="xsd:double"/>
+            <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#minInclusive">
+                <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">0.0</Literal>
+            </FacetRestriction>
+            <FacetRestriction facet="http://www.w3.org/2001/XMLSchema#maxInclusive">
+                <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#double">100.0</Literal>
+            </FacetRestriction>
+        </DatatypeRestriction>
+    </DatatypeDefinition>
+</Ontology>
+
+
+
+<!-- Generated by the OWL API (version 4.5.26.2023-07-17T20:34:13Z) https://github.com/owlcs/owlapi -->
+

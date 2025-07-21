@@ -116,7 +116,7 @@ pub enum ObjectPropertyExpression {
 /// Data Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataProperty {
-    pub iri: url::Url,
+    pub iri: IRI,
 }
 
 /// Data property expressions (simple or complex)
@@ -137,7 +137,7 @@ impl std::fmt::Display for DataPropertyExpression {
 /// Annotation Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnnotationProperty {
-    pub iri: url::Url,
+    pub iri: IRI,
 }
 
 /// Annotation property expressions
@@ -166,6 +166,35 @@ pub struct Literal {
     pub datatype: Option<url::Url>,
 }
 
+impl Literal {
+    /// Create a new literal with just a value
+    pub fn new(value: String) -> Self {
+        Self {
+            value,
+            language: None,
+            datatype: None,
+        }
+    }
+
+    /// Create a literal with a language tag
+    pub fn with_language(value: String, language: String) -> Self {
+        Self {
+            value,
+            language: Some(language),
+            datatype: None,
+        }
+    }
+
+    /// Create a literal with a datatype
+    pub fn with_datatype(value: String, datatype: IRI) -> Self {
+        Self {
+            value,
+            language: None,
+            datatype: datatype.to_url().ok(),
+        }
+    }
+}
+
 impl std::fmt::Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\"{}\"", self.value)?;
@@ -182,7 +211,7 @@ impl std::fmt::Display for Literal {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DataRange {
     /// Named datatype
-    Datatype(url::Url),
+    Datatype(IRI),
     /// Intersection of data ranges
     DataIntersectionOf(Vec<DataRange>),
     /// Union of data ranges
@@ -193,7 +222,7 @@ pub enum DataRange {
     DataOneOf(Vec<Literal>),
     /// Datatype restriction
     DatatypeRestriction {
-        datatype: url::Url,
+        datatype: IRI,
         restrictions: Vec<FacetRestriction>,
     },
 }
@@ -201,7 +230,7 @@ pub enum DataRange {
 impl std::fmt::Display for DataRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DataRange::Datatype(url) => write!(f, "{}", url),
+            DataRange::Datatype(iri) => write!(f, "{}", iri),
             DataRange::DataIntersectionOf(ranges) => {
                 write!(f, "(")?;
                 for (i, range) in ranges.iter().enumerate() {
@@ -237,7 +266,7 @@ impl std::fmt::Display for DataRange {
 /// Facet restriction for datatype restrictions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FacetRestriction {
-    pub facet: url::Url,
+    pub facet: IRI,
     pub value: Literal,
 }
 
@@ -245,7 +274,7 @@ pub struct FacetRestriction {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AnnotationSubject {
     /// IRI
-    IRI(url::Url),
+    IRI(IRI),
     /// Anonymous individual
     AnonymousIndividual(AnonymousIndividual),
 }
@@ -254,7 +283,7 @@ pub enum AnnotationSubject {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AnnotationValue {
     /// IRI
-    IRI(url::Url),
+    IRI(IRI),
     /// Anonymous individual
     AnonymousIndividual(AnonymousIndividual),
     /// Literal
@@ -330,6 +359,16 @@ impl Ontology {
         self.iri = Some(iri);
     }
     
+    /// Set the ontology IRI (alternative method name used by adapter)
+    pub fn set_ontology_iri(&mut self, iri: Option<IRI>) {
+        self.iri = iri;
+    }
+    
+    /// Set the version IRI  
+    pub fn set_version_iri(&mut self, iri: Option<IRI>) {
+        self.version_iri = iri;
+    }
+    
     /// Get the ontology IRI
     pub fn get_iri(&self) -> Option<&IRI> {
         self.iri.as_ref()
@@ -354,19 +393,54 @@ impl Ontology {
     pub fn signature(&self) -> Result<Signature> {
         let mut signature = Signature::new();
         
+        // Helper function to extract classes from class expressions
+        fn extract_classes_from_expression(expr: &concepts::ClassExpression, classes: &mut Vec<concepts::Class>) {
+            match expr {
+                concepts::ClassExpression::Class(class) => {
+                    if !classes.iter().any(|c| c.iri == class.iri) {
+                        classes.push(class.clone());
+                    }
+                }
+                concepts::ClassExpression::ObjectIntersectionOf(exprs) |
+                concepts::ClassExpression::ObjectUnionOf(exprs) => {
+                    for expr in exprs {
+                        extract_classes_from_expression(expr, classes);
+                    }
+                }
+                concepts::ClassExpression::ObjectComplementOf(expr) => {
+                    extract_classes_from_expression(expr, classes);
+                }
+                concepts::ClassExpression::ObjectSomeValuesFrom { filler, .. } |
+                concepts::ClassExpression::ObjectAllValuesFrom { filler, .. } => {
+                    extract_classes_from_expression(filler, classes);
+                }
+                _ => {
+                    // Handle other expression types as needed
+                }
+            }
+        }
+        
+        println!("Computing signature from {} axioms", self.axioms.len());
+        
         // Extract entities from axioms
         for axiom in &self.axioms {
+            let discriminant = std::mem::discriminant(axiom);
+            println!("Processing axiom discriminant: {:?}", discriminant);
             match axiom {
                 axioms::Axiom::Declaration(decl) => {
                     match &decl.entity {
                         axioms::Entity::Class(iri) => {
                             signature.classes.push(concepts::Class { iri: iri.clone() });
+                            println!("Added class from declaration: {}", iri);
                         }
                         axioms::Entity::ObjectProperty(iri) => {
-                            signature.object_properties.push(ObjectProperty { iri: iri.to_url()? });
+                            // Try to convert to URL, but continue if it fails (for relative IRIs)
+                            if let Ok(url) = iri.to_url() {
+                                signature.object_properties.push(ObjectProperty { iri: url });
+                            }
                         }
                         axioms::Entity::DataProperty(iri) => {
-                            signature.data_properties.push(DataProperty { iri: iri.to_url()? });
+                            signature.data_properties.push(DataProperty { iri: iri.clone() });
                         }
                         axioms::Entity::NamedIndividual(iri) => {
                             signature.individuals.push(individuals::Individual::Named(individuals::NamedIndividual { iri: iri.clone() }));
@@ -379,14 +453,84 @@ impl Ontology {
                         }
                     }
                 }
-                // TODO: Extract entities from other axiom types
-                _ => {}
+                axioms::Axiom::SubClassOf(axiom) => {
+                    println!("Processing SubClassOf axiom");
+                    extract_classes_from_expression(&axiom.subclass, &mut signature.classes);
+                    extract_classes_from_expression(&axiom.superclass, &mut signature.classes);
+                }
+                axioms::Axiom::EquivalentClasses(axiom) => {
+                    println!("Processing EquivalentClasses axiom with {} classes", axiom.classes.len());
+                    for class_expr in &axiom.classes {
+                        extract_classes_from_expression(class_expr, &mut signature.classes);
+                    }
+                }
+                axioms::Axiom::ClassAssertion(axiom) => {
+                    println!("Processing ClassAssertion axiom");
+                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
+                    // Also add the individual
+                    if !signature.individuals.iter().any(|i| match i {
+                        individuals::Individual::Named(named) => named.iri == match &axiom.individual {
+                            individuals::Individual::Named(named) => named.iri.clone(),
+                            _ => return false,
+                        },
+                        _ => false,
+                    }) {
+                        signature.individuals.push(axiom.individual.clone());
+                    }
+                }
+                axioms::Axiom::DisjointUnion(axiom) => {
+                    println!("Processing DisjointUnion axiom");
+                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
+                    for disjoint_class in &axiom.disjoint_classes {
+                        extract_classes_from_expression(disjoint_class, &mut signature.classes);
+                    }
+                }
+                // Handle other axiom types as needed
+                axiom => {
+                    println!("Processing other axiom type: {:?}", std::mem::discriminant(axiom));
+                }
             }
+        }
+        
+        println!("Final signature: {} classes, {} individuals", signature.classes.len(), signature.individuals.len());
+        for class in &signature.classes {
+            println!("  Class: {}", class.iri);
         }
         
         Ok(signature)
     }
     
+    /// Load an ontology from a file using horned-owl for robust parsing
+    pub fn from_file_with_horned_owl<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        use std::fs::File;
+        use std::io::BufReader;
+        use horned_owl::io::{ParserConfiguration, ResourceType};
+        
+        let file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
+        let mut reader = BufReader::new(file);
+        let config = ParserConfiguration::default();
+        
+        // Use horned-owl's RDF parser for all file types (most compatible)
+        let result = horned_owl::io::rdf::reader::read(&mut reader, config)
+            .map_err(|e| Error::ontology_parsing(&format!("Horned-owl parsing error: {}", e)))?;
+        
+        // Convert the horned-owl ontology to oxidowl ontology using simplified approach
+        let mut adapter = crate::adapter::HornedOwlAdapter::new();
+        adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)
+    }
+
+    /// Convert a horned-owl ontology to oxidowl ontology with full SWRL support
+    pub fn from_horned_owl_with_swrl<A>(
+        horned_ontology: horned_owl::ontology::set::SetOntology<A>, 
+        _prefix_mapping: curie::PrefixMapping
+    ) -> Result<Self> 
+    where 
+        A: horned_owl::model::ForIRI + Clone + std::fmt::Display + std::hash::Hash + Eq
+    {
+        let mut adapter = crate::adapter::HornedOwlAdapter::new();
+        adapter.convert_ontology_with_swrl::<std::rc::Rc<str>>(&horned_ontology)
+    }
+
     /// Load an ontology from a file
     pub fn from_file<P: AsRef<std::path::Path>>(path: P, format: Option<String>) -> Result<Self> {
         use std::fs::File;
@@ -422,7 +566,7 @@ impl Ontology {
                 // Use N-Triples parser
                 crate::parsers::ntriples::parse(&contents)
             }
-            "functional" | "func" => {
+            "functional" | "func" | "ofn" => {
                 // Use Functional syntax parser
                 crate::parsers::functional::parse(&contents)
             }
@@ -616,12 +760,25 @@ impl OntologyFormat {
             OntologyFormat::Manchester => "text/owl-manchester",
         }
     }
-    
+
+    /// Get the format string for parsing
+    pub fn format_string(&self) -> &'static str {
+        match self {
+            OntologyFormat::Auto => "auto",
+            OntologyFormat::Functional => "functional",
+            OntologyFormat::OwlXml => "owl",
+            OntologyFormat::RdfXml => "rdf",
+            OntologyFormat::Turtle => "ttl",
+            OntologyFormat::NTriples => "nt",
+            OntologyFormat::Manchester => "omn",
+        }
+    }
+
     /// Try to detect format from file extension
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_lowercase().as_str() {
-            "owx" => Some(OntologyFormat::Functional),
-            "owl" => Some(OntologyFormat::OwlXml),
+            "owx" => Some(OntologyFormat::OwlXml),
+            "owl" | "ofn" => Some(OntologyFormat::Functional),
             "rdf" => Some(OntologyFormat::RdfXml),
             "ttl" => Some(OntologyFormat::Turtle),
             "nt" => Some(OntologyFormat::NTriples),

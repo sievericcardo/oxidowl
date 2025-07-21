@@ -62,8 +62,8 @@ lru = "0.16"     # LRU cache for blocking candidates
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
 
 # OWL integration and reasoning infrastructure
-# owlapi = { version = "0.3", optional = true }  # Not available on crates.io
-# rdf = { version = "0.3", optional = true }      # Not available on crates.io
+horned-owl = "1.1.0"  # Core OWL ontology model and parsing
+curie = "0.1.4"         # Prefix mapping support for horned-owl
 # sophia = { version = "0.8", optional = true }   # May need specific version
 rio_api = "0.8"
 rio_turtle = "0.8"
