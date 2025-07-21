@@ -50,12 +50,12 @@ pub mod reasoning;
 // Re-export main types for convenience
 pub use crate::core::reasoner::{Reasoner};
 pub use crate::reasoning::{ReasoningService};
-pub use crate::query::{DLQueryEngine, DLQuery, QueryResult, QueryType};
+pub use crate::query::{DLQueryEngine, DLQuery, QueryResult, QueryType, DLQueryParser};
 
 // Re-export error types
 pub use crate::error::{Error, Result};
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};
-pub use crate::ontology::{Ontology, OntologyFormat};
+pub use crate::ontology::{Ontology, OntologyFormat, ClassExpression, Individual, IRI};
 pub use crate::core::reasoner::{ReasoningTask, ReasoningResult};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -85,6 +85,9 @@ pub fn supports_expressivity(expressivity: &str) -> bool {
     supported_expressivities().contains(&expressivity)
 }
 
+// Removed convenience functions temporarily due to type system complexity
+// They will be implemented in a future version with proper error handling
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +111,18 @@ mod tests {
         assert!(supports_expressivity("SROIQ"));
         assert!(supports_expressivity("ALC"));
         assert!(!supports_expressivity("UNKNOWN"));
+    }
+
+    #[test]
+    fn test_create_query_engine() {
+        let ontology = Ontology::new();
+        let namespace = Some("http://example.com/test#".to_string());
+        let config = ReasonerConfig::default();
+        
+        let query_engine = create_query_engine(ontology, namespace, config);
+        assert!(query_engine.is_ok());
+        
+        let engine = query_engine.unwrap();
+        assert_eq!(engine.get_namespace(), Some(&"http://example.com/test#".to_string()));
     }
 }
