@@ -955,34 +955,28 @@ impl Reasoner {
             let ontology_guard = ontology.read().unwrap();
             let mut equivalent_classes = Vec::new();
             
-            // Special handling for disjoint union queries
+            // Special handling for union queries - check DisjointUnion axioms
             if let ClassExpression::ObjectUnionOf(union_classes) = concept {
-                // Check if this is the specific union that corresponds to Pump's disjoint union
-                // Pump ≡ Maintenance ⊔ Operational ⊔ Overheating ⊔ Underheating
-                let union_iris: HashSet<String> = union_classes.iter()
-                    .filter_map(|expr| {
-                        if let ClassExpression::Class(class) = expr {
-                            Some(class.iri.to_string())
+                debug!("Processing union query with {} classes", union_classes.len());
+                // Find any DisjointUnion axiom that matches this union
+                let mut disjoint_union_count = 0;
+                for axiom in ontology_guard.axioms() {
+                    if let crate::ontology::axioms::Axiom::DisjointUnion(disjoint_union) = axiom {
+                        disjoint_union_count += 1;
+                        debug!("Found DisjointUnion axiom #{}: class={:?}, {} disjoint classes", 
+                               disjoint_union_count, disjoint_union.class, disjoint_union.disjoint_classes.len());
+                        
+                        // Check if the union in the query matches the disjoint classes in this axiom
+                        if self.union_matches_disjoint_classes(union_classes, &disjoint_union.disjoint_classes) {
+                            debug!("Union matches! Adding equivalent class: {:?}", disjoint_union.class);
+                            // This union is equivalent to the class in the DisjointUnion axiom
+                            equivalent_classes.push(disjoint_union.class.clone());
                         } else {
-                            None
+                            debug!("Union does not match this DisjointUnion axiom");
                         }
-                    })
-                    .collect();
-                
-                // Check for the Pump disjoint union pattern
-                let expected_pump_union = [
-                    "http://www.smolang.org/greenhouseDT#Maintenance",
-                    "http://www.smolang.org/greenhouseDT#Operational", 
-                    "http://www.smolang.org/greenhouseDT#Overheating",
-                    "http://www.smolang.org/greenhouseDT#Underheating"
-                ].iter().map(|s| s.to_string()).collect::<HashSet<_>>();
-                
-                if union_iris == expected_pump_union {
-                    // This union is equivalent to Pump class
-                    let pump_iri = crate::ontology::IRI::new("http://www.smolang.org/greenhouseDT#Pump");
-                    let pump_class = crate::ontology::Class::new(pump_iri);
-                    equivalent_classes.push(ClassExpression::Class(pump_class));
+                    }
                 }
+                debug!("Found {} DisjointUnion axioms total", disjoint_union_count);
             }
             
             // General case: Check all classes from the signature for bidirectional subsumption
@@ -1000,6 +994,50 @@ impl Reasoner {
             Ok(equivalent_classes)
         } else {
             Err(Error::reasoning("No ontology loaded"))
+        }
+    }
+
+    /// Check if a union expression matches the disjoint classes in a DisjointUnion axiom
+    fn union_matches_disjoint_classes(&self, union_classes: &[ClassExpression], disjoint_classes: &[ClassExpression]) -> bool {
+        // Recursively extract all classes from the union (handling nested unions)
+        let mut union_iris = HashSet::new();
+        for expr in union_classes {
+            self.extract_all_union_classes(expr, &mut union_iris);
+        }
+            
+        let disjoint_iris: HashSet<String> = disjoint_classes.iter()
+            .filter_map(|expr| {
+                if let ClassExpression::Class(class) = expr {
+                    Some(class.iri.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        
+        debug!("Union classes (flattened): {:?}", union_iris);
+        debug!("Disjoint classes: {:?}", disjoint_iris);
+        
+        // The union matches if it contains exactly the same classes as the disjoint union
+        let matches = union_iris == disjoint_iris && !union_iris.is_empty();
+        debug!("Union matches disjoint classes: {}", matches);
+        matches
+    }
+    
+    /// Recursively extract all class IRIs from a union expression (handling nested unions)
+    fn extract_all_union_classes(&self, expr: &ClassExpression, result: &mut HashSet<String>) {
+        match expr {
+            ClassExpression::Class(class) => {
+                result.insert(class.iri.to_string());
+            }
+            ClassExpression::ObjectUnionOf(union_classes) => {
+                for nested_expr in union_classes {
+                    self.extract_all_union_classes(nested_expr, result);
+                }
+            }
+            _ => {
+                // For other expressions, we don't extract classes
+            }
         }
     }
 
