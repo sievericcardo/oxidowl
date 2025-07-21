@@ -8,7 +8,7 @@ use crate::{
         Ontology, ClassExpression, Individual, NamedIndividual, IRI, Axiom, ObjectPropertyExpression, Entity, DeclarationAxiom,
         Class, ObjectProperty,
         axioms::{SubClassOfAxiom, EquivalentClassesAxiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, 
-                SubObjectPropertyOfAxiom, FunctionalObjectPropertyAxiom}
+                SubObjectPropertyOfAxiom, FunctionalObjectPropertyAxiom, DisjointUnionAxiom}
     },
 };
 use std::{
@@ -156,6 +156,11 @@ pub fn parse(content: &str) -> Result<Ontology> {
                     ontology.add_axiom(axiom);
                 }
             }
+            "DisjointUnion" => {
+                if let Ok(axiom) = parse_disjoint_union(&child, base_iri.as_ref()) {
+                    ontology.add_axiom(axiom);
+                }
+            }
             "EquivalentClasses" => {
                 if let Ok(axiom) = parse_equivalent_classes(&child, base_iri.as_ref()) {
                     ontology.add_axiom(axiom);
@@ -268,6 +273,32 @@ fn parse_equivalent_classes(element: &roxmltree::Node, base_iri: Option<&url::Ur
     Ok(Axiom::EquivalentClasses(crate::ontology::EquivalentClassesAxiom {
         id: generate_axiom_id(),
         classes: class_expressions,
+        annotations: Vec::new(),
+    }))
+}
+
+/// Parse a DisjointUnion element
+fn parse_disjoint_union(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
+    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    
+    if children.len() < 2 {
+        return Err(Error::io("DisjointUnion must have at least 2 children (union class + disjoint classes)".to_string()));
+    }
+    
+    // First child is the union class
+    let union_class = parse_class_expression(&children[0], base_iri)?;
+    
+    // Remaining children are the disjoint classes
+    let mut disjoint_classes = Vec::new();
+    for child in &children[1..] {
+        let expr = parse_class_expression(child, base_iri)?;
+        disjoint_classes.push(expr);
+    }
+    
+    Ok(Axiom::DisjointUnion(DisjointUnionAxiom {
+        id: generate_axiom_id(),
+        class: union_class,
+        disjoint_classes,
         annotations: Vec::new(),
     }))
 }
@@ -497,6 +528,18 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
                     }
                 }
                 writeln!(file, "  </EquivalentClasses>")?;
+            }
+            Axiom::DisjointUnion(axiom) => {
+                writeln!(file, "  <DisjointUnion>")?;
+                if let Some(union_class_iri) = axiom.class.iri() {
+                    writeln!(file, "    <Class IRI=\"{}\"/>", union_class_iri)?;
+                }
+                for disjoint_class in &axiom.disjoint_classes {
+                    if let Some(class_iri) = disjoint_class.iri() {
+                        writeln!(file, "    <Class IRI=\"{}\"/>", class_iri)?;
+                    }
+                }
+                writeln!(file, "  </DisjointUnion>")?;
             }
             Axiom::ClassAssertion(axiom) => {
                 if let (Some(class_iri), Some(individual_iri)) = (axiom.class.iri(), axiom.individual.iri()) {
