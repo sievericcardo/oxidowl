@@ -274,6 +274,7 @@ impl TurtleParser {
     
     /// Process a parsed triple into the ontology
     fn process_triple(&self, ontology: &mut Ontology, triple: Triple) -> Result<()> {
+        println!("Processing triple with predicate: {}", triple.predicate);
         match triple.predicate.as_str() {
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => {
                 if let TripleObject::Uri(class_uri) = triple.object {
@@ -329,6 +330,7 @@ impl TurtleParser {
                         superclass: ClassExpression::Class(superclass),
                         annotations: vec![],
                     };
+                    println!("Creating SubClassOf axiom: {} rdfs:subClassOf {}", triple.subject, superclass_uri);
                     ontology.add_axiom(crate::ontology::Axiom::SubClassOf(axiom));
                 }
             }
