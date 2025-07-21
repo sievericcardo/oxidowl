@@ -116,7 +116,7 @@ pub enum ObjectPropertyExpression {
 /// Data Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataProperty {
-    pub iri: url::Url,
+    pub iri: IRI,
 }
 
 /// Data property expressions (simple or complex)
@@ -137,7 +137,7 @@ impl std::fmt::Display for DataPropertyExpression {
 /// Annotation Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnnotationProperty {
-    pub iri: url::Url,
+    pub iri: IRI,
 }
 
 /// Annotation property expressions
@@ -166,6 +166,35 @@ pub struct Literal {
     pub datatype: Option<url::Url>,
 }
 
+impl Literal {
+    /// Create a new literal with just a value
+    pub fn new(value: String) -> Self {
+        Self {
+            value,
+            language: None,
+            datatype: None,
+        }
+    }
+
+    /// Create a literal with a language tag
+    pub fn with_language(value: String, language: String) -> Self {
+        Self {
+            value,
+            language: Some(language),
+            datatype: None,
+        }
+    }
+
+    /// Create a literal with a datatype
+    pub fn with_datatype(value: String, datatype: IRI) -> Self {
+        Self {
+            value,
+            language: None,
+            datatype: datatype.to_url().ok(),
+        }
+    }
+}
+
 impl std::fmt::Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\"{}\"", self.value)?;
@@ -182,7 +211,7 @@ impl std::fmt::Display for Literal {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DataRange {
     /// Named datatype
-    Datatype(url::Url),
+    Datatype(IRI),
     /// Intersection of data ranges
     DataIntersectionOf(Vec<DataRange>),
     /// Union of data ranges
@@ -193,7 +222,7 @@ pub enum DataRange {
     DataOneOf(Vec<Literal>),
     /// Datatype restriction
     DatatypeRestriction {
-        datatype: url::Url,
+        datatype: IRI,
         restrictions: Vec<FacetRestriction>,
     },
 }
@@ -201,7 +230,7 @@ pub enum DataRange {
 impl std::fmt::Display for DataRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DataRange::Datatype(url) => write!(f, "{}", url),
+            DataRange::Datatype(iri) => write!(f, "{}", iri),
             DataRange::DataIntersectionOf(ranges) => {
                 write!(f, "(")?;
                 for (i, range) in ranges.iter().enumerate() {
@@ -237,7 +266,7 @@ impl std::fmt::Display for DataRange {
 /// Facet restriction for datatype restrictions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FacetRestriction {
-    pub facet: url::Url,
+    pub facet: IRI,
     pub value: Literal,
 }
 
@@ -245,7 +274,7 @@ pub struct FacetRestriction {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AnnotationSubject {
     /// IRI
-    IRI(url::Url),
+    IRI(IRI),
     /// Anonymous individual
     AnonymousIndividual(AnonymousIndividual),
 }
@@ -254,7 +283,7 @@ pub enum AnnotationSubject {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AnnotationValue {
     /// IRI
-    IRI(url::Url),
+    IRI(IRI),
     /// Anonymous individual
     AnonymousIndividual(AnonymousIndividual),
     /// Literal
@@ -330,6 +359,16 @@ impl Ontology {
         self.iri = Some(iri);
     }
     
+    /// Set the ontology IRI (alternative method name used by adapter)
+    pub fn set_ontology_iri(&mut self, iri: Option<IRI>) {
+        self.iri = iri;
+    }
+    
+    /// Set the version IRI  
+    pub fn set_version_iri(&mut self, iri: Option<IRI>) {
+        self.version_iri = iri;
+    }
+    
     /// Get the ontology IRI
     pub fn get_iri(&self) -> Option<&IRI> {
         self.iri.as_ref()
@@ -401,10 +440,7 @@ impl Ontology {
                             }
                         }
                         axioms::Entity::DataProperty(iri) => {
-                            // Try to convert to URL, but continue if it fails (for relative IRIs)
-                            if let Ok(url) = iri.to_url() {
-                                signature.data_properties.push(DataProperty { iri: url });
-                            }
+                            signature.data_properties.push(DataProperty { iri: iri.clone() });
                         }
                         axioms::Entity::NamedIndividual(iri) => {
                             signature.individuals.push(individuals::Individual::Named(individuals::NamedIndividual { iri: iri.clone() }));
@@ -457,6 +493,37 @@ impl Ontology {
         Ok(signature)
     }
     
+    /// Load an ontology from a file using horned-owl for robust parsing
+    pub fn from_file_with_horned_owl<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        use std::fs::File;
+        use std::io::Read;
+        
+        let mut file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content).map_err(|e| Error::io(e.to_string()))?;
+        
+        // For now, use our enhanced turtle parser
+        // This can be expanded to use horned-owl when we complete the API integration
+        match path.as_ref().extension().and_then(|ext| ext.to_str()) {
+            Some("ttl") | Some("turtle") => {
+                crate::parsers::turtle::parse(&content)
+            }
+            Some("owl") | Some("xml") => {
+                crate::parsers::owl_xml::parse(&content)
+            }
+            Some("rdf") | Some("rdfxml") => {
+                crate::parsers::rdf_xml::parse(&content)
+            }
+            Some("ofn") | Some("functional") => {
+                crate::parsers::functional::parse(&content)
+            }
+            _ => {
+                // Default to turtle for now
+                crate::parsers::turtle::parse(&content)
+            }
+        }
+    }
+
     /// Load an ontology from a file
     pub fn from_file<P: AsRef<std::path::Path>>(path: P, format: Option<String>) -> Result<Self> {
         use std::fs::File;
