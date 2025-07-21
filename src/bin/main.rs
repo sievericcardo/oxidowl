@@ -467,8 +467,38 @@ async fn execute_dl_query(
 
     // Format and output the result
     let output = match format {
-        "json" => format!("{{\"query\": \"{}\", \"result\": \"{:?}\"}}", query, result),
-        "text" => format!("{:?}", result),
+        "json" => {
+            // Extract readable class names for JSON output
+            let classes_vec: Vec<String> = if let Some(ref classes) = result.classes {
+                classes.iter().map(|c| {
+                    match c {
+                        oxidowl::ontology::ClassExpression::Class(class) => {
+                            // Extract just the class name from the IRI
+                            let iri_str = class.iri.to_string();
+                            if let Some(name) = iri_str.split('#').last() {
+                                name.to_string()
+                            } else if let Some(name) = iri_str.split('/').last() {
+                                name.to_string()
+                            } else {
+                                iri_str
+                            }
+                        }
+                        _ => format!("{:?}", c)
+                    }
+                }).collect()
+            } else {
+                Vec::new()
+            };
+            
+            if result.classes.is_some() {
+                format!("{{\"query\": \"{}\", \"classes\": {:?}, \"execution_time\": \"{:?}\"}}", 
+                       query, classes_vec, result.execution_time)
+            } else {
+                format!("{{\"query\": \"{}\", \"result\": \"No results\", \"execution_time\": \"{:?}\"}}", 
+                       query, result.execution_time)
+            }
+        }
+        "text" => format!("{}", result), // Use Display format instead of Debug
         _ => return Err(oxidowl::Error::io("Unsupported format. Use 'json' or 'text'".to_string())),
     };
 
