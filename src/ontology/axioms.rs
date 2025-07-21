@@ -114,6 +114,9 @@ pub enum AxiomType {
     SubAnnotationPropertyOf,
     AnnotationPropertyDomain,
     AnnotationPropertyRange,
+
+    // SWRL Rules
+    Rule,
 }
 
 /// Axiom enum representing all OWL 2 DL axioms.
@@ -165,6 +168,9 @@ pub enum Axiom {
     SubAnnotationPropertyOf(SubAnnotationPropertyOfAxiom),
     AnnotationPropertyDomain(AnnotationPropertyDomainAxiom),
     AnnotationPropertyRange(AnnotationPropertyRangeAxiom),
+
+    // SWRL Rules
+    Rule(SWRLRuleAxiom),
 }
 
 /// Class Axioms
@@ -433,6 +439,32 @@ pub struct AnnotationPropertyRangeAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
+/// SWRL Rule Axiom
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SWRLRuleAxiom {
+    pub id: AxiomId,
+    pub rule: SWRLRule,
+    pub annotations: Vec<crate::ontology::Annotation>,
+}
+
+impl SWRLRuleAxiom {
+    pub fn new(id: AxiomId, rule: SWRLRule) -> Self {
+        Self {
+            id,
+            rule,
+            annotations: Vec::new(),
+        }
+    }
+
+    pub fn with_annotations(id: AxiomId, rule: SWRLRule, annotations: Vec<crate::ontology::Annotation>) -> Self {
+        Self {
+            id,
+            rule,
+            annotations,
+        }
+    }
+}
+
 impl AxiomTrait for Axiom {
     fn axiom_id(&self) -> AxiomId {
         match self {
@@ -471,6 +503,7 @@ impl AxiomTrait for Axiom {
             Axiom::SubAnnotationPropertyOf(axiom) => axiom.id,
             Axiom::AnnotationPropertyDomain(axiom) => axiom.id,
             Axiom::AnnotationPropertyRange(axiom) => axiom.id,
+            Axiom::Rule(axiom) => axiom.id,
         }
     }
 
@@ -511,6 +544,7 @@ impl AxiomTrait for Axiom {
             Axiom::SubAnnotationPropertyOf(_) => AxiomType::SubAnnotationPropertyOf,
             Axiom::AnnotationPropertyDomain(_) => AxiomType::AnnotationPropertyDomain,
             Axiom::AnnotationPropertyRange(_) => AxiomType::AnnotationPropertyRange,
+            Axiom::Rule(_) => AxiomType::Rule,
         }
     }
 
@@ -584,6 +618,7 @@ impl AxiomStore {
             Axiom::SubAnnotationPropertyOf(axiom) => axiom.id = id,
             Axiom::AnnotationPropertyDomain(axiom) => axiom.id = id,
             Axiom::AnnotationPropertyRange(axiom) => axiom.id = id,
+            Axiom::Rule(axiom) => axiom.id = id,
             Axiom::Declaration(_) => {
                 // Declaration axioms don't need ID assignment
             }
@@ -648,5 +683,174 @@ impl AxiomStore {
 impl Default for AxiomStore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// SWRL (Semantic Web Rule Language) Support
+/// 
+/// These structures implement SWRL rules as specified in the W3C User Submission
+/// https://www.w3.org/Submission/SWRL/
+
+/// SWRL Variable
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SWRLVariable {
+    pub iri: crate::ontology::IRI,
+}
+
+impl SWRLVariable {
+    pub fn new(iri: crate::ontology::IRI) -> Self {
+        Self { iri }
+    }
+}
+
+/// SWRL Individual Argument
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SWRLIArgument {
+    Individual(crate::ontology::Individual),
+    Variable(SWRLVariable),
+}
+
+/// SWRL Data Argument
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SWRLDArgument {
+    Literal(crate::ontology::Literal),
+    Variable(SWRLVariable),
+}
+
+/// SWRL Atom
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SWRLAtom {
+    /// Class atom: C(x)
+    ClassAtom {
+        predicate: crate::ontology::ClassExpression,
+        argument: SWRLIArgument,
+    },
+    /// Object property atom: P(x,y)
+    ObjectPropertyAtom {
+        predicate: crate::ontology::ObjectPropertyExpression,
+        first_argument: SWRLIArgument,
+        second_argument: SWRLIArgument,
+    },
+    /// Data property atom: R(x,z)
+    DataPropertyAtom {
+        predicate: crate::ontology::DataPropertyExpression,
+        first_argument: SWRLIArgument,
+        second_argument: SWRLDArgument,
+    },
+    /// Data range atom: D(z)
+    DataRangeAtom {
+        predicate: crate::ontology::DataRange,
+        argument: SWRLDArgument,
+    },
+    /// Same individual atom: sameAs(x,y)
+    SameIndividualAtom {
+        first_argument: SWRLIArgument,
+        second_argument: SWRLIArgument,
+    },
+    /// Different individuals atom: differentFrom(x,y)
+    DifferentIndividualsAtom {
+        first_argument: SWRLIArgument,
+        second_argument: SWRLIArgument,
+    },
+    /// Built-in atom: swrlb:equal(x,y)
+    BuiltInAtom {
+        predicate: crate::ontology::IRI,
+        arguments: Vec<SWRLDArgument>,
+    },
+}
+
+impl SWRLAtom {
+    /// Get all variables used in this atom
+    pub fn variables(&self) -> HashSet<&SWRLVariable> {
+        let mut vars = HashSet::new();
+        match self {
+            SWRLAtom::ClassAtom { argument, .. } => {
+                if let SWRLIArgument::Variable(var) = argument {
+                    vars.insert(var);
+                }
+            }
+            SWRLAtom::ObjectPropertyAtom { first_argument, second_argument, .. } => {
+                if let SWRLIArgument::Variable(var) = first_argument {
+                    vars.insert(var);
+                }
+                if let SWRLIArgument::Variable(var) = second_argument {
+                    vars.insert(var);
+                }
+            }
+            SWRLAtom::DataPropertyAtom { first_argument, second_argument, .. } => {
+                if let SWRLIArgument::Variable(var) = first_argument {
+                    vars.insert(var);
+                }
+                if let SWRLDArgument::Variable(var) = second_argument {
+                    vars.insert(var);
+                }
+            }
+            SWRLAtom::DataRangeAtom { argument, .. } => {
+                if let SWRLDArgument::Variable(var) = argument {
+                    vars.insert(var);
+                }
+            }
+            SWRLAtom::SameIndividualAtom { first_argument, second_argument } => {
+                if let SWRLIArgument::Variable(var) = first_argument {
+                    vars.insert(var);
+                }
+                if let SWRLIArgument::Variable(var) = second_argument {
+                    vars.insert(var);
+                }
+            }
+            SWRLAtom::DifferentIndividualsAtom { first_argument, second_argument } => {
+                if let SWRLIArgument::Variable(var) = first_argument {
+                    vars.insert(var);
+                }
+                if let SWRLIArgument::Variable(var) = second_argument {
+                    vars.insert(var);
+                }
+            }
+            SWRLAtom::BuiltInAtom { arguments, .. } => {
+                for arg in arguments {
+                    if let SWRLDArgument::Variable(var) = arg {
+                        vars.insert(var);
+                    }
+                }
+            }
+        }
+        vars
+    }
+}
+
+/// SWRL Rule
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SWRLRule {
+    pub head: Vec<SWRLAtom>,
+    pub body: Vec<SWRLAtom>,
+}
+
+impl SWRLRule {
+    pub fn new(head: Vec<SWRLAtom>, body: Vec<SWRLAtom>) -> Self {
+        Self { head, body }
+    }
+
+    /// Get all variables used in this rule
+    pub fn variables(&self) -> HashSet<&SWRLVariable> {
+        let mut vars = HashSet::new();
+        for atom in &self.head {
+            vars.extend(atom.variables());
+        }
+        for atom in &self.body {
+            vars.extend(atom.variables());
+        }
+        vars
+    }
+
+    /// Check if the rule is safe (all head variables appear in the body)
+    pub fn is_safe(&self) -> bool {
+        let head_vars: HashSet<&SWRLVariable> = self.head.iter()
+            .flat_map(|atom| atom.variables())
+            .collect();
+        let body_vars: HashSet<&SWRLVariable> = self.body.iter()
+            .flat_map(|atom| atom.variables())
+            .collect();
+        
+        head_vars.is_subset(&body_vars)
     }
 }

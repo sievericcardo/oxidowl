@@ -496,32 +496,32 @@ impl Ontology {
     /// Load an ontology from a file using horned-owl for robust parsing
     pub fn from_file_with_horned_owl<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         use std::fs::File;
-        use std::io::Read;
+        use std::io::BufReader;
+        use horned_owl::io::{ParserConfiguration, ResourceType};
         
-        let mut file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
-        let mut content = String::new();
-        file.read_to_string(&mut content).map_err(|e| Error::io(e.to_string()))?;
+        let file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
+        let mut reader = BufReader::new(file);
+        let config = ParserConfiguration::default();
         
-        // For now, use our enhanced turtle parser
-        // This can be expanded to use horned-owl when we complete the API integration
-        match path.as_ref().extension().and_then(|ext| ext.to_str()) {
-            Some("ttl") | Some("turtle") => {
-                crate::parsers::turtle::parse(&content)
-            }
-            Some("owl") | Some("xml") => {
-                crate::parsers::owl_xml::parse(&content)
-            }
-            Some("rdf") | Some("rdfxml") => {
-                crate::parsers::rdf_xml::parse(&content)
-            }
-            Some("ofn") | Some("functional") => {
-                crate::parsers::functional::parse(&content)
-            }
-            _ => {
-                // Default to turtle for now
-                crate::parsers::turtle::parse(&content)
-            }
-        }
+        // Use horned-owl's RDF parser for all file types (most compatible)
+        let result = horned_owl::io::rdf::reader::read(&mut reader, config)
+            .map_err(|e| Error::ontology_parsing(&format!("Horned-owl parsing error: {}", e)))?;
+        
+        // Convert the horned-owl ontology to oxidowl ontology using simplified approach
+        let mut adapter = crate::adapter::HornedOwlAdapter::new();
+        adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)
+    }
+
+    /// Convert a horned-owl ontology to oxidowl ontology with full SWRL support
+    pub fn from_horned_owl_with_swrl<A>(
+        horned_ontology: horned_owl::ontology::set::SetOntology<A>, 
+        _prefix_mapping: curie::PrefixMapping
+    ) -> Result<Self> 
+    where 
+        A: horned_owl::model::ForIRI + Clone + std::fmt::Display + std::hash::Hash + Eq
+    {
+        let mut adapter = crate::adapter::HornedOwlAdapter::new();
+        adapter.convert_ontology_with_swrl::<std::rc::Rc<str>>(&horned_ontology)
     }
 
     /// Load an ontology from a file
