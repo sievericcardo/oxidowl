@@ -45,6 +45,7 @@ pub mod ontology;
 pub mod parsers;
 pub mod query;
 pub mod reasoning;
+pub mod adapter;  // Horned-OWL adapter for enhanced parsing
 // pub mod utils;
 
 // Re-export main types for convenience
