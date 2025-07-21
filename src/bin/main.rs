@@ -289,6 +289,36 @@ fn load_configuration(config_path: Option<&std::path::Path>) -> Result<ReasonerC
     }
 }
 
+/// Helper function to extract class names from complex class expressions
+fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression) -> String {
+    match expr {
+        oxidowl::ontology::ClassExpression::Class(class) => {
+            // Extract just the class name from the IRI
+            let iri_str = class.iri.to_string();
+            if let Some(name) = iri_str.split('#').last() {
+                name.to_string()
+            } else if let Some(name) = iri_str.split('/').last() {
+                name.to_string()
+            } else {
+                iri_str
+            }
+        }
+        oxidowl::ontology::ClassExpression::ObjectUnionOf(union_classes) => {
+            let class_names: Vec<String> = union_classes.iter()
+                .map(|c| extract_class_names_from_expression(c))
+                .collect();
+            class_names.join(" or ")
+        }
+        oxidowl::ontology::ClassExpression::ObjectIntersectionOf(intersection_classes) => {
+            let class_names: Vec<String> = intersection_classes.iter()
+                .map(|c| extract_class_names_from_expression(c))
+                .collect();
+            class_names.join(" and ")
+        }
+        _ => format!("{:?}", expr)
+    }
+}
+
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
         Commands::Consistency { input, output, format } => {
@@ -471,20 +501,7 @@ async fn execute_dl_query(
             // Extract readable class names for JSON output
             let classes_vec: Vec<String> = if let Some(ref classes) = result.classes {
                 classes.iter().map(|c| {
-                    match c {
-                        oxidowl::ontology::ClassExpression::Class(class) => {
-                            // Extract just the class name from the IRI
-                            let iri_str = class.iri.to_string();
-                            if let Some(name) = iri_str.split('#').last() {
-                                name.to_string()
-                            } else if let Some(name) = iri_str.split('/').last() {
-                                name.to_string()
-                            } else {
-                                iri_str
-                            }
-                        }
-                        _ => format!("{:?}", c)
-                    }
+                    extract_class_names_from_expression(c)
                 }).collect()
             } else {
                 Vec::new()
