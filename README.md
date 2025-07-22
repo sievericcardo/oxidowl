@@ -204,15 +204,6 @@ cargo run --bin run_performance_tests memory
 cargo run --bin run_performance_tests report -i results.json -f html
 ```
 
-### Performance Characteristics
-
-| Operation | Small Ontology | Medium Ontology | Large Ontology |
-|-----------|---------------|-----------------|----------------|
-| Consistency | < 1ms | 10-100ms | 1-10s |
-| Classification | < 10ms | 100ms-1s | 10s-5min |
-| Instance Check | < 1ms | 1-10ms | 10-100ms |
-| DL Query | 1-10ms | 10-100ms | 100ms-1s |
-
 ## Examples
 
 ### Basic Reasoning
