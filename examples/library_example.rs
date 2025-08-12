@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("\n1. Testing subclasses query via CLI interface:");
     let output = Command::new("./target/release/oxidowl")
-        .args(&[
+        .args([
             "query",
             "--input", "greenhouse.owx",
             "--query", "subclasses: Plant",
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("\n2. Testing disjoint union query via CLI interface:");
     let output = Command::new("./target/release/oxidowl")
-        .args(&[
+        .args([
             "query",
             "--input", "greenhouse.owx", 
             "--query", "Operational or Maintenance or Overheating or Underheating",
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n3. Testing equivalent classes query via CLI interface:");
     let output = Command::new("./target/release/oxidowl")
-        .args(&[
+        .args([
             "query",
             "--input", "greenhouse.owx",
             "--query", "equivalent-classes: Plant",

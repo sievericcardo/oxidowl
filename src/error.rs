@@ -6,7 +6,7 @@
 use std::fmt;
 
 /// Main error type for Oxidowl
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     /// Ontology parsing error
     #[error("Ontology parsing error: {message}")]
@@ -25,11 +25,8 @@ pub enum Error {
     Network { message: String },
 
     /// File I/O error
-    #[error("File I/O error: {source}")]
-    Io {
-        #[from]
-        source: std::io::Error,
-    },
+    #[error("File I/O error: {message}")]
+    Io { message: String },
 
     /// XML parsing error
     #[error("XML parsing error: {message}")]
@@ -147,7 +144,7 @@ impl Error {
     /// File I/O error constructor
     pub fn io<S: Into<String>>(message: S) -> Self {
         Self::Io {
-            source: std::io::Error::new(std::io::ErrorKind::Other, message.into()),
+            message: message.into(),
         }
     }
 
@@ -243,6 +240,14 @@ impl Error {
     pub fn resource_exhausted<S: Into<String>>(message: S) -> Self {
         Self::ResourceExhausted {
             message: message.into(),
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io {
+            message: error.to_string(),
         }
     }
 }

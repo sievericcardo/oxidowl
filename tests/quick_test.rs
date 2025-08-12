@@ -39,12 +39,12 @@ async fn test_greenhouse_loading() -> Result<()> {
                     println!("Created reasoning service for greenhouse ontology");
                 }
                 Err(e) => {
-                    println!("Could not parse greenhouse ontology: {:?}", e);
+                    println!("Could not parse greenhouse ontology: {e:?}");
                 }
             }
         }
         Err(e) => {
-            println!("Could not read greenhouse.ttl: {:?}", e);
+            println!("Could not read greenhouse.ttl: {e:?}");
         }
     }
     

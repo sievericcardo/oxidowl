@@ -12,12 +12,14 @@ use crate::performance::{
 };
 use oxidowl::{
     ontology::*,
-    parsers::turtle::TurtleParser,
+    parsers::{turtle::TurtleParser, Parser},
 };
 use std::time::Duration;
 use std::collections::HashMap;
 
-/// Comprehensive test suite runner
+/// Comprehensive test        let consistency_benchmark = ConsistencyBenchmark::new(simple            let consistency_benchmark = ConsistencyBenchmark::new(simple_ontology.clone(), "test_consistency".to_string());
+            let _result = consistency_benchmark.run(&config);ntology.clone(), "quick_consistency".to_string());
+        let _result = consistency_benchmark.run(&config);uite runner
 pub struct IntegratedTestSuite {
     config: BenchmarkConfig,
     test_ontologies: HashMap<String, Ontology>,
@@ -26,7 +28,7 @@ pub struct IntegratedTestSuite {
 impl IntegratedTestSuite {
     pub fn new() -> Self {
         let config = BenchmarkConfig {
-            iterations: 10,
+            test_iterations: 10,
             warmup_iterations: 3,
             timeout: Duration::from_secs(120),
         };
@@ -76,21 +78,21 @@ impl IntegratedTestSuite {
         for (name, ontology) in &self.test_ontologies {
             println!("Running reasoning benchmarks on: {}", name);
             
-            let consistency_benchmark = ConsistencyBenchmark::new(format!("{}_consistency", name), self.config.clone());
-            let satisfiability_benchmark = SatisfiabilityBenchmark::new(format!("{}_satisfiability", name), self.config.clone());
-            let classification_benchmark = ClassificationBenchmark::new(format!("{}_classification", name), self.config.clone());
+            let consistency_benchmark = ConsistencyBenchmark::new(ontology.clone(), format!("{}_consistency", name));
+            let satisfiability_benchmark = SatisfiabilityBenchmark::new(ontology.clone(), ClassExpression::Class(Class::new(IRI::new("TestClass"))), format!("{}_satisfiability", name));
+            let classification_benchmark = ClassificationBenchmark::new(ontology.clone(), format!("{}_classification", name));
             
-            let consistency_result = consistency_benchmark.run_benchmark(ontology);
+            let consistency_result = consistency_benchmark.run(&self.config);
             
             // Create test class for satisfiability
-            let test_class = if let Some(first_class) = ontology.get_classes().first() {
-                ClassExpression::Class(first_class.clone())
+            let test_class = if let Some(first_class) = ontology.classes().first() {
+                ClassExpression::Class(first_class.1.clone())
             } else {
                 ClassExpression::Class(Class::new(IRI::new("TestClass")))
             };
             
-            let satisfiability_result = satisfiability_benchmark.run_benchmark(ontology, &test_class);
-            let classification_result = classification_benchmark.run_benchmark(ontology);
+            let satisfiability_result = satisfiability_benchmark.run(&self.config);
+            let classification_result = classification_benchmark.run(&self.config);
             
             let combined_result = ReasoningBenchmarkResult {
                 consistency: consistency_result,
@@ -137,7 +139,7 @@ impl IntegratedTestSuite {
         println!("Running OWL2 DL conformance tests");
         
         let conformance_suite = ConformanceTestSuite::new();
-        conformance_suite.run_all_tests()
+        conformance_suite.run_all()
     }
     
     /// Run algorithm comparison benchmarks
@@ -160,13 +162,13 @@ impl IntegratedTestSuite {
     fn run_scalability_tests(&self) -> ScalabilityTestResults {
         println!("Running scalability tests");
         
-        let large_test = LargeOntologyTest::new();
-        let deep_test = DeepHierarchyTest::new();
-        let wide_test = WideHierarchyTest::new();
+        let large_test = LargeOntologyTest::new(1000, 500, 10);
+        let deep_test = DeepHierarchyTest::new(15);
+        let wide_test = WideHierarchyTest::new(100);
         
-        let large_result = large_test.run_test();
-        let deep_result = deep_test.run_test();
-        let wide_result = wide_test.run_test();
+        let large_result = large_test.run(&config);
+        let deep_result = deep_test.run(&config);
+        let wide_result = wide_test.run(&config);
         
         ScalabilityTestResults {
             large_ontology: large_result,
@@ -229,11 +231,11 @@ impl IntegratedTestSuite {
         // Add more classes and properties
         let dog = Class::new(IRI::new("Dog"));
         let cat = Class::new(IRI::new("Cat"));
-        let has_pet = ObjectProperty::new(IRI::new("hasPet"));
+        let has_pet = ObjectProperty::new(IRI::new("hasPet")).expect("valid IRI");
         
         ontology.add_class(dog.clone());
         ontology.add_class(cat.clone());
-        ontology.add_object_property(has_pet);
+        ontology.add_object_property(has_pet.clone());
         
         // Add more axioms
         let mammal = Class::new(IRI::new("Mammal"));
@@ -270,13 +272,13 @@ impl IntegratedTestSuite {
         
         // PetOwner ≡ Person ⊓ ∃hasPet.Animal
         let existential = ClassExpression::ObjectSomeValuesFrom {
-            property: ObjectPropertyExpression::ObjectProperty(has_pet),
+            property: ObjectPropertyExpression::ObjectProperty(has_pet.clone()),
             filler: Box::new(ClassExpression::Class(animal)),
         };
         
         ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
             id: 10,
-            class_expressions: vec![
+            classes: vec![
                 ClassExpression::Class(pet_owner),
                 ClassExpression::ObjectIntersectionOf(vec![
                     ClassExpression::Class(person),
@@ -485,7 +487,7 @@ impl QuickTestRunner {
         
         // Quick consistency check
         let config = BenchmarkConfig {
-            iterations: 3,
+            test_iterations: 3,
             warmup_iterations: 1,
             timeout: Duration::from_secs(10),
         };
@@ -500,7 +502,7 @@ impl QuickTestRunner {
         
         // Quick conformance check (subset)
         let conformance_suite = ConformanceTestSuite::new();
-        let basic_result = conformance_suite.test_basic_subclass();
+        let basic_result = conformance_suite.run_all();
         
         if !basic_result.passed {
             println!("FAILURE: Basic conformance test failed");
@@ -528,13 +530,13 @@ mod tests {
     #[test]
     fn test_ontology_creation() {
         let simple = IntegratedTestSuite::create_simple_ontology();
-        assert_eq!(simple.get_classes().len(), 2);
+        assert_eq!(simple.classes().len(), 2);
         
         let medium = IntegratedTestSuite::create_medium_ontology();
-        assert!(medium.get_classes().len() > simple.get_classes().len());
+        assert!(medium.classes().len() > simple.classes().len());
         
         let complex = IntegratedTestSuite::create_complex_ontology();
-        assert!(complex.get_classes().len() >= medium.get_classes().len());
+        assert!(complex.classes().len() >= medium.classes().len());
     }
     
     #[test]
@@ -552,7 +554,7 @@ mod tests {
         // Test just one ontology to keep test time reasonable
         if let Some(simple_ontology) = suite.test_ontologies.get("simple") {
             let config = BenchmarkConfig {
-                iterations: 2,
+                test_iterations: 2,
                 warmup_iterations: 1,
                 timeout: Duration::from_secs(5),
             };

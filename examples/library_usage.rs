@@ -1,5 +1,5 @@
 //! Example demonstrating how to use oxidowl as a library
-//! This example shows the complete workflow including DisjointUnion axiom handling
+//! This example shows the complete workflow including `DisjointUnion` axiom handling
 
 use oxidowl::{
     Reasoner, ReasonerConfig, DLQueryEngine, ReasoningService, 
@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     // 3. Check consistency
     println!("Checking consistency...");
     let is_consistent = reasoner.is_consistent()?;
-    println!("Ontology is consistent: {}\n", is_consistent);
+    println!("Ontology is consistent: {is_consistent}\n");
 
     // 4. Perform classification
     println!("Performing classification...");
@@ -44,19 +44,19 @@ async fn main() -> Result<()> {
     
     // Test the union query that should return "Pump"
     let union_query = "Operational or Maintenance or Overheating or Underheating";
-    println!("Query: {}", union_query);
+    println!("Query: {union_query}");
     
     let result = query_engine.execute_query(union_query).await?;
-    println!("Result: {:?}\n", result);
+    println!("Result: {result:?}\n");
     
     // Verify it returns the expected result
     if let Some(classes) = result.classes {
-        if classes.len() == 1 && classes.iter().any(|c| format!("{:?}", c).contains("Pump")) {
+        if classes.len() == 1 && classes.iter().any(|c| format!("{c:?}").contains("Pump")) {
             println!("DisjointUnion query works correctly - returns 'Pump'");
         } else {
             println!("✗ Unexpected result: expected 'Pump', got {} classes", classes.len());
             for c in &classes {
-                println!("  - {:?}", c);
+                println!("  - {c:?}");
             }
         }
     } else {
@@ -74,9 +74,9 @@ async fn main() -> Result<()> {
     ];
     
     for query in test_queries {
-        println!("Query: {}", query);
+        println!("Query: {query}");
         let result = query_engine.execute_query(query).await?;
-        println!("Result: {:?}\n", result);
+        println!("Result: {result:?}\n");
     }
 
     // 9. Test satisfiability
@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
     });
     
     let is_satisfiable = reasoning_service.clone().is_satisfiable(&test_class).await?;
-    println!("Pump class is satisfiable: {}\n", is_satisfiable);
+    println!("Pump class is satisfiable: {is_satisfiable}\n");
 
     // 10. Get equivalent classes for union
     println!("=== Testing Equivalent Classes ===");

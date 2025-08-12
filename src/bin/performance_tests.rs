@@ -1,14 +1,13 @@
 //! Performance test runner binary
 //! 
 //! Command-line interface for running oxidowl performance tests
-//! Similar to HermiT's test automation
+//! Similar to `HermiT`'s test automation
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::time::Duration;
-use serde_json;
 use oxidowl::{
-    ontology::*,
+    ontology::{Ontology, Class, IRI, Axiom, SubClassOfAxiom, ClassExpression, Individual, NamedIndividual, ClassAssertionAxiom},
     parsers::turtle::TurtleParser,
     reasoning::ReasoningService,
     config::ReasonerConfig,
@@ -97,8 +96,14 @@ pub struct PerformanceMetrics {
     sum_squares: f64,
 }
 
+impl Default for PerformanceMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PerformanceMetrics {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             samples: Vec::new(),
             sum: 0.0,
@@ -112,7 +117,7 @@ impl PerformanceMetrics {
         self.sum_squares += value * value;
     }
     
-    pub fn mean(&self) -> f64 {
+    #[must_use] pub fn mean(&self) -> f64 {
         if self.samples.is_empty() {
             0.0
         } else {
@@ -120,7 +125,7 @@ impl PerformanceMetrics {
         }
     }
     
-    pub fn std_dev(&self) -> f64 {
+    #[must_use] pub fn std_dev(&self) -> f64 {
         if self.samples.len() < 2 {
             0.0
         } else {
@@ -237,7 +242,7 @@ async fn run_memory_tests(config: BenchmarkConfig, include_leak_detection: bool)
     let _result = service.is_consistent().await;
     let final_memory = get_memory_usage();
     
-    println!("Memory usage: {} -> {} bytes", initial_memory, final_memory);
+    println!("Memory usage: {initial_memory} -> {final_memory} bytes");
     
     if include_leak_detection {
         println!("Running leak detection...");
@@ -288,7 +293,7 @@ async fn run_conformance_tests() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     println!("Conformance: {}/{} tests passed ({:.1}%)", 
-            passed, total, (passed as f64 / total as f64) * 100.0);
+            passed, total, (f64::from(passed) / f64::from(total)) * 100.0);
     
     Ok(())
 }
@@ -311,7 +316,7 @@ async fn run_algorithm_tests(config: BenchmarkConfig) -> Result<(), Box<dyn std:
     println!("  Default: {:?}", default_result.avg_time);
     
     let speedup = tableau_result.avg_time.as_nanos() as f64 / default_result.avg_time.as_nanos() as f64;
-    println!("  Speedup: {:.2}x", speedup);
+    println!("  Speedup: {speedup:.2}x");
     
     Ok(())
 }
@@ -331,7 +336,7 @@ async fn run_scalability_tests() -> Result<(), Box<dyn std::error::Error>> {
         let duration = start_time.elapsed();
         let status = if result.is_ok() { "PASS" } else { "FAIL" };
         
-        println!("  Size {}: {} ({:?})", size, status, duration);
+        println!("  Size {size}: {status} ({duration:?})");
     }
     
     Ok(())
@@ -366,10 +371,10 @@ async fn generate_report(input: PathBuf, format: String) -> Result<(), Box<dyn s
         "markdown" => generate_markdown_report(&results, &input)?,
         "json" => {
             let pretty_json = serde_json::to_string_pretty(&results)?;
-            println!("{}", pretty_json);
+            println!("{pretty_json}");
         }
         _ => {
-            eprintln!("Unsupported format: {}. Use html, markdown, or json.", format);
+            eprintln!("Unsupported format: {format}. Use html, markdown, or json.");
             std::process::exit(1);
         }
     }
@@ -427,7 +432,7 @@ fn create_large_test_ontology(size: usize) -> Ontology {
     
     let mut classes = Vec::new();
     for i in 0..size {
-        let class = Class::new(IRI::new(&format!("Class{}", i)));
+        let class = Class::new(IRI::new(&format!("Class{i}")));
         ontology.add_class(class.clone());
         classes.push(class);
     }
@@ -468,13 +473,13 @@ async fn run_consistency_benchmark(ontology: &Ontology, config: &BenchmarkConfig
     }
     
     let avg_time = Duration::from_nanos(
-        (iterations.iter().map(|d| d.as_nanos()).sum::<u128>() / iterations.len() as u128) as u64
+        (iterations.iter().map(std::time::Duration::as_nanos).sum::<u128>() / iterations.len() as u128) as u64
     );
     
     Ok(BenchmarkResult {
         name: "Consistency".to_string(),
         avg_time,
-        success_rate: successes as f64 / config.iterations as f64,
+        success_rate: f64::from(successes) / config.iterations as f64,
         iterations,
         metrics,
     })
@@ -507,13 +512,13 @@ async fn run_satisfiability_benchmark(ontology: &Ontology, config: &BenchmarkCon
     }
     
     let avg_time = Duration::from_nanos(
-        (iterations.iter().map(|d| d.as_nanos()).sum::<u128>() / iterations.len() as u128) as u64
+        (iterations.iter().map(std::time::Duration::as_nanos).sum::<u128>() / iterations.len() as u128) as u64
     );
     
     Ok(BenchmarkResult {
         name: "Satisfiability".to_string(),
         avg_time,
-        success_rate: successes as f64 / config.iterations as f64,
+        success_rate: f64::from(successes) / config.iterations as f64,
         iterations,
         metrics,
     })
@@ -539,13 +544,13 @@ async fn run_algorithm_benchmark(ontology: &Ontology, reasoner_config: &Reasoner
     }
     
     let avg_time = Duration::from_nanos(
-        (iterations.iter().map(|d| d.as_nanos()).sum::<u128>() / iterations.len() as u128) as u64
+        (iterations.iter().map(std::time::Duration::as_nanos).sum::<u128>() / iterations.len() as u128) as u64
     );
     
     Ok(BenchmarkResult {
         name: name.to_string(),
         avg_time,
-        success_rate: successes as f64 / bench_config.iterations as f64,
+        success_rate: f64::from(successes) / bench_config.iterations as f64,
         iterations,
         metrics,
     })
@@ -648,7 +653,7 @@ fn generate_html_report(results: &serde_json::Value, input_path: &PathBuf) -> Re
 fn generate_markdown_report(results: &serde_json::Value, input_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let output_path = input_path.with_extension("md");
     
-    let markdown_content = format!(r#"
+    let markdown_content = format!(r"
 # Oxidowl Performance Report
 
 Generated: {}
@@ -662,7 +667,7 @@ Generated: {}
 ## Notes
 
 This performance report demonstrates oxidowl's capabilities.
-"#, 
+", 
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"),
         serde_json::to_string_pretty(results)?
     );

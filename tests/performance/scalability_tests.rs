@@ -29,7 +29,7 @@ impl LargeOntologyTest {
         // Create classes
         let mut classes = Vec::new();
         for i in 0..self.class_count {
-            let class = Class::new(IRI::new(format!("Class{}", i)));
+            let class = Class::new(IRI::new(&format!("Class{}", i)));
             ontology.add_class(class.clone());
             classes.push(class);
         }

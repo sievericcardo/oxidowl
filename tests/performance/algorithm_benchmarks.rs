@@ -172,7 +172,7 @@ pub struct AlgorithmIteration {
 }
 
 /// Complete result for one algorithm
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AlgorithmResult {
     pub algorithm: String,
     pub iterations: Vec<AlgorithmIteration>,
@@ -403,20 +403,20 @@ impl FeatureBenchmark {
         let happy_person = Class::new(IRI::new("HappyPerson"));
         let person = Class::new(IRI::new("Person"));
         let dog = Class::new(IRI::new("Dog"));
-        let has_pet = ObjectProperty::new(IRI::new("hasPet"));
+        let has_pet = ObjectProperty::new(IRI::new("hasPet")).expect("valid IRI");
         
         ontology.add_class(happy_person.clone());
         ontology.add_object_property(has_pet.clone());
         
         // HappyPerson ≡ Person ⊓ ∃hasPet.Dog
         let existential = ClassExpression::ObjectSomeValuesFrom {
-            property: ObjectPropertyExpression::ObjectProperty(has_pet),
+            property: ObjectPropertyExpression::ObjectProperty(has_pet.clone()),
             filler: Box::new(ClassExpression::Class(dog)),
         };
         
         ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
             id: 30,
-            class_expressions: vec![
+            classes: vec![
                 ClassExpression::Class(happy_person),
                 ClassExpression::ObjectIntersectionOf(vec![
                     ClassExpression::Class(person),
@@ -434,21 +434,21 @@ impl FeatureBenchmark {
         
         // Add nominals (OneOf expressions)
         let color = Class::new(IRI::new("Color"));
-        let red = Individual::new(IRI::new("red"));
-        let green = Individual::new(IRI::new("green"));
-        let blue = Individual::new(IRI::new("blue"));
+        let red = Individual::named(IRI::new("red"));
+        let green = Individual::named(IRI::new("green"));
+        let blue = Individual::named(IRI::new("blue"));
         
         ontology.add_class(color.clone());
-        ontology.add_individual(red.clone());
-        ontology.add_individual(green.clone());
-        ontology.add_individual(blue.clone());
+        ontology.add_individual(red.iri().unwrap().clone(), red.clone());
+        ontology.add_individual(green.iri().unwrap().clone(), green.clone());
+        ontology.add_individual(blue.iri().unwrap().clone(), blue.clone());
         
         // Color ≡ {red, green, blue}
         let nominal = ClassExpression::ObjectOneOf(vec![red, green, blue]);
         
         ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
             id: 40,
-            class_expressions: vec![
+            classes: vec![
                 ClassExpression::Class(color),
                 nominal,
             ],
@@ -466,7 +466,7 @@ fn create_complex_ontology(num_classes: usize, num_properties: usize) -> Ontolog
     // Create classes
     let mut classes = Vec::new();
     for i in 0..num_classes {
-        let class = Class::new(IRI::new(format!("Class{}", i)));
+        let class = Class::new(IRI::new(&format!("Class{}", i)));
         ontology.add_class(class.clone());
         classes.push(class);
     }
@@ -474,7 +474,7 @@ fn create_complex_ontology(num_classes: usize, num_properties: usize) -> Ontolog
     // Create properties
     let mut properties = Vec::new();
     for i in 0..num_properties {
-        let prop = ObjectProperty::new(IRI::new(format!("property{}", i)));
+        let prop = ObjectProperty::new(IRI::new(&format!("property{}", i))).expect("valid IRI");
         ontology.add_object_property(prop.clone());
         properties.push(prop);
     }
@@ -518,7 +518,7 @@ mod tests {
     fn test_algorithm_benchmark() {
         let ontology = create_complex_ontology(10, 3);
         let config = BenchmarkConfig {
-            iterations: 3,
+            test_iterations: 3,
             warmup_iterations: 1,
             timeout: Duration::from_secs(10),
         };
@@ -537,13 +537,13 @@ mod tests {
     #[test]
     fn test_feature_benchmarks() {
         let basic_ontology = FeatureBenchmark::create_basic_class_ontology();
-        assert!(!basic_ontology.get_classes().is_empty());
+        assert!(!basic_ontology.classes().is_empty());
         
         let property_ontology = FeatureBenchmark::create_object_property_ontology();
-        assert!(!property_ontology.get_object_properties().is_empty());
+        assert!(!property_ontology.object_properties().is_empty());
         
         let cardinality_ontology = FeatureBenchmark::create_cardinality_ontology();
-        assert!(!cardinality_ontology.get_axioms().is_empty());
+        assert!(!cardinality_ontology.axioms().is_empty());
     }
     
     #[test]
@@ -551,7 +551,7 @@ mod tests {
         let simple_ontology = create_complex_ontology(5, 2);
         let complex_ontology = create_complex_ontology(20, 8);
         
-        assert!(simple_ontology.get_classes().len() < complex_ontology.get_classes().len());
-        assert!(simple_ontology.get_object_properties().len() < complex_ontology.get_object_properties().len());
+        assert!(simple_ontology.classes().len() < complex_ontology.classes().len());
+        assert!(simple_ontology.object_properties().len() < complex_ontology.object_properties().len());
     }
 }

@@ -7,14 +7,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{
     config::ReasonerConfig,
     core::reasoner::Reasoner,
-    ontology::{Ontology, OntologyFormat},
+    ontology::OntologyFormat,
     Result,
 };
-use serde_json;
 use std::{
     fs,
     path::PathBuf,
-    sync::{Arc, RwLock},
     time::Instant,
 };
 use tracing::{error, info, Level};
@@ -136,13 +134,13 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Process OWLlink request file
+    /// Process `OWLlink` request file
     OwlLinkFile {
-        /// Input OWLlink request file
+        /// Input `OWLlink` request file
         #[arg(short, long, value_name = "FILE")]
         input: PathBuf,
 
-        /// Output OWLlink response file
+        /// Output `OWLlink` response file
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
@@ -244,7 +242,7 @@ async fn main() -> Result<()> {
     let elapsed = start_time.elapsed();
 
     match result {
-        Ok(_) => {
+        Ok(()) => {
             if !cli.quiet {
                 info!("Operation completed successfully in {:?}", elapsed);
                 println!("Stopping Oxidowl ...");
@@ -253,7 +251,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             error!("Operation failed: {}", e);
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
     }
@@ -295,9 +293,9 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
         oxidowl::ontology::ClassExpression::Class(class) => {
             // Extract just the class name from the IRI
             let iri_str = class.iri.to_string();
-            if let Some(name) = iri_str.split('#').last() {
+            if let Some(name) = iri_str.split('#').next_back() {
                 name.to_string()
-            } else if let Some(name) = iri_str.split('/').last() {
+            } else if let Some(name) = iri_str.split('/').next_back() {
                 name.to_string()
             } else {
                 iri_str
@@ -305,17 +303,17 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
         }
         oxidowl::ontology::ClassExpression::ObjectUnionOf(union_classes) => {
             let class_names: Vec<String> = union_classes.iter()
-                .map(|c| extract_class_names_from_expression(c))
+                .map(extract_class_names_from_expression)
                 .collect();
             class_names.join(" or ")
         }
         oxidowl::ontology::ClassExpression::ObjectIntersectionOf(intersection_classes) => {
             let class_names: Vec<String> = intersection_classes.iter()
-                .map(|c| extract_class_names_from_expression(c))
+                .map(extract_class_names_from_expression)
                 .collect();
             class_names.join(" and ")
         }
-        _ => format!("{:?}", expr)
+        _ => format!("{expr:?}")
     }
 }
 
@@ -375,7 +373,7 @@ async fn execute_consistency_check(
     info!("Performing consistency check on: {}", input.display());
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
     
     reasoner.load_ontology_from_file(&input, ontology_format)?;
     
@@ -407,7 +405,7 @@ async fn execute_classification(
     }
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
     
     reasoner.load_ontology_from_file(&input, ontology_format)?;
     
@@ -434,7 +432,7 @@ async fn execute_satisfiability_check(
     info!("Checking satisfiability of class: {}", class_iri);
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
     
     reasoner.load_ontology_from_file(&input, ontology_format)?;
     
@@ -484,7 +482,7 @@ async fn execute_dl_query(
                 } else if iri_str.ends_with('/') {
                     iri_str.to_string()
                 } else {
-                    format!("{}#", iri_str)
+                    format!("{iri_str}#")
                 }
             })
             .unwrap_or_else(|| "http://example.org/ontology#".to_string());
@@ -515,16 +513,16 @@ async fn execute_dl_query(
                        query, result.execution_time)
             }
         }
-        "text" => format!("{}", result), // Use Display format instead of Debug
+        "text" => format!("{result}"), // Use Display format instead of Debug
         _ => return Err(oxidowl::Error::io("Unsupported format. Use 'json' or 'text'".to_string())),
     };
 
     // Write to file or stdout
     if let Some(file_path) = output_file {
         std::fs::write(file_path, output)?;
-        println!("Query result saved to {}", file_path);
+        println!("Query result saved to {file_path}");
     } else {
-        println!("{}", output);
+        println!("{output}");
     }
 
     Ok(())
@@ -539,7 +537,7 @@ async fn execute_realization(
     info!("Performing realization on: {}", input.display());
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
     
     reasoner.load_ontology_from_file(&input, ontology_format)?;
     
@@ -572,7 +570,7 @@ async fn execute_owllink_file(
     if let Some(output_path) = output {
         fs::write(output_path, response)?;
     } else {
-        println!("{}", response);
+        println!("{response}");
     }
     
     Ok(())
@@ -617,7 +615,7 @@ async fn execute_sparql_file(
     if let Some(output_path) = output {
         fs::write(output_path, results)?;
     } else {
-        println!("{}", results);
+        println!("{results}");
     }
     
     Ok(())
