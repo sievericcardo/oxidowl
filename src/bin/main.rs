@@ -332,11 +332,19 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             execute_realization(input, output, format, config).await
         }
         Commands::Query { input, query, namespace, output, format } => {
+            let input_str = input.to_str()
+                .ok_or_else(|| oxidowl::Error::io("Invalid input path encoding".to_string()))?;
+            
+            let output_str = output.as_ref()
+                .map(|p| p.to_str()
+                    .ok_or_else(|| oxidowl::Error::io("Invalid output path encoding".to_string())))
+                .transpose()?;
+            
             execute_dl_query(
-                input.to_str().unwrap(), 
+                input_str,
                 &query, 
                 namespace.as_deref(), 
-                output.as_ref().map(|p| p.to_str().unwrap()), 
+                output_str, 
                 "json", // Always use JSON for now
                 config
             ).await
@@ -466,14 +474,19 @@ async fn execute_dl_query(
     let ontology = reasoner.get_ontology()?;
 
     // Create reasoning service and query engine
-    let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology.read().unwrap().clone(), config);
+    let ontology_clone = ontology.read()
+        .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?
+        .clone();
+    let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology_clone, config);
     
     // Create query engine with optional namespace
     let query_engine = if let Some(ns) = namespace {
         oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, ns.to_string())
     } else {
         // Try to auto-detect namespace from ontology IRI, fallback to default
-        let default_namespace = ontology.read().unwrap()
+        let ontology_guard = ontology.read()
+            .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?;
+        let default_namespace = ontology_guard
             .get_iri()
             .map(|iri| {
                 let iri_str = iri.as_str();
