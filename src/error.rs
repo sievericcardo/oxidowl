@@ -3,7 +3,6 @@
 //! This module defines all error types that can occur during reasoning operations,
 //! parsing, network operations, and configuration.
 
-use std::fmt;
 
 /// Main error type for Oxidowl
 #[derive(Debug, Clone, thiserror::Error)]

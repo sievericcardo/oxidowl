@@ -508,7 +508,7 @@ impl Tableau {
         dependencies: DependencySet,
     ) -> Result<()> {
         if node_id >= self.nodes.len() {
-            return Err(Error::internal(format!("Invalid node ID: {}", node_id)));
+            return Err(Error::internal(format!("Invalid node ID: {node_id}")));
         }
         
         let node = &mut self.nodes[node_id];
@@ -1196,7 +1196,7 @@ impl Tableau {
         // Use the maintained mapping from string IDs to indices
         self.node_id_mapping.get(node_id)
             .copied()
-            .ok_or_else(|| Error::reasoning(format!("Node ID not found: {}", node_id)))
+            .ok_or_else(|| Error::reasoning(format!("Node ID not found: {node_id}")))
     }
     
     /// Add a new node with string ID mapping
@@ -1340,7 +1340,7 @@ impl ConceptLabel {
                 };
                 Ok(ClassExpression::ObjectSomeValuesFrom {
                     property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                        iri: url::Url::parse(&role_iri).map_err(|e| crate::Error::ontology_parsing(format!("Invalid IRI: {}", e)))?,
+                        iri: url::Url::parse(&role_iri).map_err(|e| crate::Error::ontology_parsing(format!("Invalid IRI: {e}")))?,
                     }),
                     filler: Box::new(filler.to_class_expression()?),
                 })
@@ -1365,7 +1365,7 @@ impl ConceptLabel {
                 Ok(ClassExpression::ObjectMinCardinality {
                     cardinality: *cardinality,
                     property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                        iri: IRI::new(&role_iri).to_url()?.into(),
+                        iri: IRI::new(&role_iri).to_url()?,
                     }),
                     filler: match filler.as_ref() {
                         Some(f) => Box::new(f.to_class_expression()?),
@@ -1381,7 +1381,7 @@ impl ConceptLabel {
                 Ok(ClassExpression::ObjectMaxCardinality {
                     cardinality: *cardinality,
                     property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                        iri: IRI::new(&role_iri).to_url()?.into(),
+                        iri: IRI::new(&role_iri).to_url()?,
                     }),
                     filler: match filler.as_ref() {
                         Some(f) => Box::new(f.to_class_expression()?),
@@ -1396,6 +1396,12 @@ impl ConceptLabel {
                 ]))
             }
         }
+    }
+}
+
+impl Default for ClashDetector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

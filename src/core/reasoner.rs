@@ -134,14 +134,14 @@ impl ClassificationResult {
         for (class, superclasses) in &self.hierarchy {
             let class_name = match class {
                 ClassExpression::Class(c) => c.iri.to_string(),
-                _ => format!("{:?}", class),
+                _ => format!("{class:?}"),
             };
             
             let superclass_names: Vec<String> = superclasses
                 .iter()
                 .map(|sc| match sc {
                     ClassExpression::Class(c) => c.iri.to_string(),
-                    _ => format!("{:?}", sc),
+                    _ => format!("{sc:?}"),
                 })
                 .collect();
             
@@ -149,9 +149,9 @@ impl ClassificationResult {
         }
 
         let json_output = serde_json::to_string_pretty(&hierarchy_map)
-            .map_err(|e| crate::Error::io(format!("Failed to serialize hierarchy to JSON: {}", e)))?;
+            .map_err(|e| crate::Error::io(format!("Failed to serialize hierarchy to JSON: {e}")))?;
         
-        write!(file, "{}", json_output)?;
+        write!(file, "{json_output}")?;
         Ok(())
     }
 }
@@ -176,9 +176,9 @@ impl RealizationResult {
         writeln!(file, "# Individual Types")?;
         
         for (individual, types) in &self.types {
-            writeln!(file, "{:?}:", individual)?;
+            writeln!(file, "{individual:?}:")?;
             for class in types {
-                writeln!(file, "  - {:?}", class)?;
+                writeln!(file, "  - {class:?}")?;
             }
         }
 
@@ -226,16 +226,16 @@ impl TableauFactory {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Traditional => {
                 // Convert ClassExpression to string for the current tableau builder interface
-                let subclass_str = &format!("{}", subclass);
-                let superclass_str = &format!("{}", superclass);
+                let subclass_str = &format!("{subclass}");
+                let superclass_str = &format!("{superclass}");
                 let tableau = self.tableau_builder.build_for_subsumption(ontology, subclass_str, superclass_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
             TableauAlgorithm::HyperTableau => {
                 // For now, fall back to traditional for specific reasoning tasks
                 warn!("HyperTableau not yet supported for subsumption checking, using Traditional tableau");
-                let subclass_str = &format!("{}", subclass);
-                let superclass_str = &format!("{}", superclass);
+                let subclass_str = &format!("{subclass}");
+                let superclass_str = &format!("{superclass}");
                 let tableau = self.tableau_builder.build_for_subsumption(ontology, subclass_str, superclass_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
@@ -251,13 +251,13 @@ impl TableauFactory {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Traditional => {
                 // Convert ClassExpression to string for the current tableau builder interface
-                let class_str = &format!("{}", class_expr);
+                let class_str = &format!("{class_expr}");
                 let tableau = self.tableau_builder.build_for_satisfiability(ontology, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
             TableauAlgorithm::HyperTableau => {
                 warn!("HyperTableau not yet supported for satisfiability checking, using Traditional tableau");
-                let class_str = &format!("{}", class_expr);
+                let class_str = &format!("{class_expr}");
                 let tableau = self.tableau_builder.build_for_satisfiability(ontology, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
@@ -275,14 +275,14 @@ impl TableauFactory {
             TableauAlgorithm::Traditional => {
                 // Convert Individual and ClassExpression to string for the current tableau builder interface
                 let individual_str = &individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
-                let class_str = &format!("{}", class_expr);
+                let class_str = &format!("{class_expr}");
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
             TableauAlgorithm::HyperTableau => {
                 warn!("HyperTableau not yet supported for instance checking, using Traditional tableau");
                 let individual_str = &individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
-                let class_str = &format!("{}", class_expr);
+                let class_str = &format!("{class_expr}");
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
@@ -429,7 +429,7 @@ impl Reasoner {
         self.cache_manager.write().unwrap().clear_all();
         
         let load_time = start_time.elapsed();
-        info!("Ontology loaded in {:?}", load_time);
+        info!("Ontology loaded in {load_time:?}");
         
         Ok(())
     }
@@ -468,7 +468,7 @@ impl Reasoner {
         let ontology_guard = ontology.read().unwrap();
         
         // Build tableau for consistency checking
-        let mut tableau = self.create_tableau_algorithm(&ontology_guard)?;
+        let tableau = self.create_tableau_algorithm(&ontology_guard)?;
         
         // Run tableau algorithm
         let result = self.run_tableau_consistency_check(tableau)?;
@@ -481,7 +481,7 @@ impl Reasoner {
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
         
-        info!("Consistency check completed in {:?}: {}", reasoning_time, result);
+        info!("Consistency check completed in {reasoning_time:?}: {result}");
         Ok(result)
     }
 
@@ -490,7 +490,7 @@ impl Reasoner {
         let start_time = Instant::now();
         self.statistics.satisfiability_checks += 1;
         
-        info!("Checking satisfiability of class: {}", class_iri);
+        info!("Checking satisfiability of class: {class_iri}");
         
         // Handle special OWL classes
         if class_iri.contains("owl#Thing") {
@@ -503,7 +503,7 @@ impl Reasoner {
         // Check cache first
         if let Some(class_expr) = self.parse_class_expression(class_iri) {
             if let Some(cached_result) = self.cache_manager.read().unwrap().get_satisfiability_result(&class_expr) {
-                debug!("Satisfiability result found in cache for: {}", class_iri);
+                debug!("Satisfiability result found in cache for: {class_iri}");
                 return Ok(cached_result);
             }
         }
@@ -525,7 +525,7 @@ impl Reasoner {
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
         
-        info!("Satisfiability check for {} completed in {:?}: {}", class_iri, reasoning_time, result);
+        info!("Satisfiability check for {class_iri} completed in {reasoning_time:?}: {result}");
         Ok(result)
     }
 
@@ -534,7 +534,7 @@ impl Reasoner {
         let start_time = Instant::now();
         self.statistics.subsumption_checks += 1;
         
-        info!("Checking subsumption: {} ⊑ {}", subclass, superclass);
+        info!("Checking subsumption: {subclass} ⊑ {superclass}");
         
         // Check cache first
         if let (Some(sub_expr), Some(sup_expr)) = (self.parse_class_expression(subclass), self.parse_class_expression(superclass)) {
@@ -561,7 +561,7 @@ impl Reasoner {
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
         
-        info!("Subsumption check completed in {:?}: {}", reasoning_time, result);
+        info!("Subsumption check completed in {reasoning_time:?}: {result}");
         Ok(result)
     }
 
@@ -572,7 +572,7 @@ impl Reasoner {
         info!("Starting classification");
         
         // Check if we have a cached classification result
-        if let Some(cached_result) = self.cache_manager.read().unwrap().get_classification_result(&self.ontology.as_ref().unwrap()) {
+        if let Some(cached_result) = self.cache_manager.read().unwrap().get_classification_result(self.ontology.as_ref().unwrap()) {
             debug!("Classification result found in cache");
             return Ok(cached_result);
         }
@@ -637,7 +637,7 @@ impl Reasoner {
                 checked_pairs += 1;
 
                 if checked_pairs % 1000 == 0 {
-                    info!("Classification progress: {}/{} checks completed", checked_pairs, total_pairs);
+                    info!("Classification progress: {checked_pairs}/{total_pairs} checks completed");
                 }
             }
 
@@ -647,12 +647,12 @@ impl Reasoner {
         let result = ClassificationResult::new(hierarchy);
         
         // Cache the result
-        self.cache_manager.write().unwrap().store_classification_result(&self.ontology.as_ref().unwrap(), result.clone());
+        self.cache_manager.write().unwrap().store_classification_result(self.ontology.as_ref().unwrap(), result.clone());
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
         
-        info!("Classification completed in {:?}", reasoning_time);
+        info!("Classification completed in {reasoning_time:?}");
         Ok(result)
     }
 
@@ -663,7 +663,7 @@ impl Reasoner {
         info!("Starting realization");
         
         // Check if we have a cached realization result
-        if let Some(cached_result) = self.cache_manager.read().unwrap().get_realization_result(&self.ontology.as_ref().unwrap()) {
+        if let Some(cached_result) = self.cache_manager.read().unwrap().get_realization_result(self.ontology.as_ref().unwrap()) {
             debug!("Realization result found in cache");
             return Ok(cached_result);
         }
@@ -674,10 +674,7 @@ impl Reasoner {
         // Get all named individuals and classes
         let individuals: Vec<Individual> = ontology_guard
             .signature().unwrap()
-            .individuals
-            .iter()
-            .cloned()
-            .collect();
+            .individuals.to_vec();
 
         let classes: Vec<ClassExpression> = ontology_guard
             .signature().unwrap()
@@ -705,18 +702,18 @@ impl Reasoner {
         let result = RealizationResult::new(realization);
         
         // Cache the result
-        self.cache_manager.write().unwrap().store_realization_result(&self.ontology.as_ref().unwrap(), result.clone());
+        self.cache_manager.write().unwrap().store_realization_result(self.ontology.as_ref().unwrap(), result.clone());
         
         let reasoning_time = start_time.elapsed();
         self.statistics.total_reasoning_time += reasoning_time;
         
-        info!("Realization completed in {:?}", reasoning_time);
+        info!("Realization completed in {reasoning_time:?}");
         Ok(result)
     }
 
     /// Check if an individual is an instance of a class
     pub fn is_instance_of(&mut self, individual: &str, class: &str) -> Result<bool> {
-        info!("Checking instance relationship: {} ∈ {}", individual, class);
+        info!("Checking instance relationship: {individual} ∈ {class}");
         
         // Convert string parameters to proper types
         let individual_obj = crate::ontology::Individual::named(crate::ontology::IRI::new(individual));
@@ -753,7 +750,7 @@ impl Reasoner {
                             }
                             
                             // Check if the asserted class is a subclass of our target class
-                            if self.is_subclass_of_target(&asserted_class.iri.as_str(), class, &ontology_guard) {
+                            if self.is_subclass_of_target(asserted_class.iri.as_str(), class, &ontology_guard) {
                                 is_instance = true;
                                 break;
                             }
@@ -796,11 +793,10 @@ impl Reasoner {
                     }
                     
                     // Recursive check for transitive subsumption
-                    if sub_class.iri.as_str() == class_iri {
-                        if self.is_subclass_of_target(&super_class.iri.as_str(), target_class, ontology) {
+                    if sub_class.iri.as_str() == class_iri
+                        && self.is_subclass_of_target(super_class.iri.as_str(), target_class, ontology) {
                             return true;
                         }
-                    }
                 }
             }
         }
@@ -902,7 +898,7 @@ impl Reasoner {
                 
                 debug!("Axiom type breakdown:");
                 for (axiom_type, count) in &axiom_type_counts {
-                    debug!("  {}: {}", axiom_type, count);
+                    debug!("  {axiom_type}: {count}");
                 }
                 
                 // Look for SubClassOf axioms in the ontology
@@ -939,7 +935,7 @@ impl Reasoner {
                         }
                     }
                 }
-                debug!("Found {} SubClassOf axioms total", subclass_axiom_count);
+                debug!("Found {subclass_axiom_count} SubClassOf axioms total");
             }
             
             Ok(subclasses)
@@ -976,7 +972,7 @@ impl Reasoner {
                         }
                     }
                 }
-                debug!("Found {} DisjointUnion axioms total", disjoint_union_count);
+                debug!("Found {disjoint_union_count} DisjointUnion axioms total");
             }
             
             // General case: Check all classes from the signature for bidirectional subsumption
@@ -1015,12 +1011,12 @@ impl Reasoner {
             })
             .collect();
         
-        debug!("Union classes (flattened): {:?}", union_iris);
-        debug!("Disjoint classes: {:?}", disjoint_iris);
+        debug!("Union classes (flattened): {union_iris:?}");
+        debug!("Disjoint classes: {disjoint_iris:?}");
         
         // The union matches if it contains exactly the same classes as the disjoint union
         let matches = union_iris == disjoint_iris && !union_iris.is_empty();
-        debug!("Union matches disjoint classes: {}", matches);
+        debug!("Union matches disjoint classes: {matches}");
         matches
     }
     
@@ -1372,7 +1368,7 @@ impl Reasoner {
                 
                 // Convert individual and class to strings for the tableau builder
                 let individual_str = individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
-                let class_str = format!("{:?}", class); // Simplified class representation
+                let class_str = format!("{class:?}"); // Simplified class representation
                 
                 // Build tableau for instance checking
                 let tableau = self.create_tableau_algorithm_for_instance_check(&ontology_guard, &individual_str, &class_str)?;

@@ -4,13 +4,13 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Write, Read},
+    io::{BufReader, Write, Read},
     path::Path,
 };
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, IRI},
+    ontology::Ontology,
 };
 
 /// Configuration for the RDF/XML parser
@@ -86,7 +86,7 @@ impl RdfXmlParser {
         
         // TODO: Implement comprehensive RDF/XML parsing
         // For now, return a minimal ontology with basic parsing
-        let mut ontology = Ontology::new();
+        let ontology = Ontology::new();
         
         // Basic RDF/XML structure detection
         if content.contains("<rdf:RDF") || content.contains("<RDF") {
@@ -145,13 +145,12 @@ impl RdfXmlParser {
             if let Some(last_tag) = tag_stack.pop() {
                 if last_tag != tag_name {
                     return Err(Error::xml_parsing(format!(
-                        "Mismatched XML tags: expected {}, found {}", 
-                        last_tag, tag_name
+                        "Mismatched XML tags: expected {last_tag}, found {tag_name}"
                     )));
                 }
             } else {
                 return Err(Error::xml_parsing(format!(
-                    "Unexpected closing tag: {}", tag_name
+                    "Unexpected closing tag: {tag_name}"
                 )));
             }
         } else if tag_content.ends_with('/') {
@@ -187,12 +186,12 @@ pub fn parse(content: &str) -> Result<Ontology> {
 /// Parse RDF/XML from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
     
     let mut reader = BufReader::new(file);
     let mut content = String::new();
     reader.read_to_string(&mut content)
-        .map_err(|e| Error::io(format!("Failed to read file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
     
     parse(&content)
 }
@@ -200,7 +199,7 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 /// Save ontology to RDF/XML file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
 
     // TODO: Implement comprehensive serialization to RDF/XML
     writeln!(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")?;
@@ -209,7 +208,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     writeln!(file, "         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">")?;
     writeln!(file, "  <!-- Ontology serialization -->")?;
     let iri_str = ontology.iri.as_ref().map(|iri| iri.as_str()).unwrap_or("http://example.org/ontology");
-    writeln!(file, "  <owl:Ontology rdf:about=\"{}\" />", iri_str)?;
+    writeln!(file, "  <owl:Ontology rdf:about=\"{iri_str}\" />")?;
     writeln!(file, "  <!-- TODO: Implement complete RDF/XML serialization -->")?;
     writeln!(file, "</rdf:RDF>")?;
     Ok(())

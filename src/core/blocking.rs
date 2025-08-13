@@ -44,6 +44,12 @@ pub struct AnywhereBlocking {
     signature_cache: HashMap<NodeId, Vec<ConceptLabel>>,
 }
 
+impl Default for AnywhereBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnywhereBlocking {
     pub fn new() -> Self {
         Self {
@@ -89,7 +95,7 @@ impl BlockingChecker for AnywhereBlocking {
         }
         
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         signature
     }
 }
@@ -99,6 +105,12 @@ impl BlockingChecker for AnywhereBlocking {
 pub struct AncestorBlocking {
     /// Parent relationships between nodes
     parent_map: HashMap<NodeId, NodeId>,
+}
+
+impl Default for AncestorBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AncestorBlocking {
@@ -151,7 +163,7 @@ impl BlockingChecker for AncestorBlocking {
     
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         signature
     }
 }
@@ -161,6 +173,12 @@ impl BlockingChecker for AncestorBlocking {
 pub struct PairwiseBlocking {
     /// Pairs of nodes that have been compared
     compared_pairs: HashSet<(NodeId, NodeId)>,
+}
+
+impl Default for PairwiseBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PairwiseBlocking {
@@ -202,7 +220,7 @@ impl BlockingChecker for PairwiseBlocking {
     
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         signature
     }
 }
@@ -222,6 +240,12 @@ struct BlockingStatistics {
     blocked_nodes: usize,
     total_comparisons: usize,
     false_positives: usize,
+}
+
+impl Default for DynamicBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DynamicBlocking {

@@ -7,17 +7,14 @@ use crate::{
     ontology::{
         Ontology, ClassExpression, Individual, NamedIndividual, IRI, Axiom, ObjectPropertyExpression, Entity, DeclarationAxiom,
         Class, ObjectProperty,
-        axioms::{SubClassOfAxiom, EquivalentClassesAxiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, 
-                SubObjectPropertyOfAxiom, FunctionalObjectPropertyAxiom, DisjointUnionAxiom}
+        axioms::DisjointUnionAxiom
     },
 };
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Write, Read},
-    collections::HashMap,
+    io::{BufReader, Write, Read},
     path::Path,
 };
-use url::Url;
 
 /// Resolve a potentially relative IRI against a base IRI
 fn resolve_iri(iri: &str, base_iri: Option<&url::Url>) -> Result<url::Url> {
@@ -28,11 +25,11 @@ fn resolve_iri(iri: &str, base_iri: Option<&url::Url>) -> Result<url::Url> {
     
     // If we have a base IRI, resolve the relative IRI against it
     if let Some(base) = base_iri {
-        return base.join(iri).map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{}' against base '{}': {}", iri, base, e)));
+        return base.join(iri).map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{iri}' against base '{base}': {e}")));
     }
     
     // No base IRI provided for relative IRI
-    Err(Error::ontology_parsing(format!("Relative IRI '{}' provided without base IRI", iri)))
+    Err(Error::ontology_parsing(format!("Relative IRI '{iri}' provided without base IRI")))
 }
 
 /// Generate a unique axiom ID
@@ -121,7 +118,7 @@ impl Default for OwlXmlParser {
 pub fn parse(content: &str) -> Result<Ontology> {
     // Basic OWL XML parser implementation
     let doc = roxmltree::Document::parse(content)
-        .map_err(|e| Error::io(format!("Failed to parse XML: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to parse XML: {e}")))?;
     
     let mut ontology = Ontology::new();
     
@@ -335,8 +332,8 @@ fn parse_object_property_assertion(element: &roxmltree::Node) -> Result<Axiom> {
     Ok(Axiom::ObjectPropertyAssertion(crate::ontology::ObjectPropertyAssertionAxiom {
         id: generate_axiom_id(),
         property,
-        source: source,
-        target: target,
+        source,
+        target,
         annotations: Vec::new(),
     }))
 }
@@ -493,12 +490,12 @@ fn parse_individual(element: &roxmltree::Node) -> Result<Individual> {
 /// Parse OWL XML from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
     
     let mut reader = BufReader::new(file);
     let mut content = String::new();
     reader.read_to_string(&mut content)
-        .map_err(|e| Error::io(format!("Failed to read file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
     
     parse(&content)
 }
@@ -506,7 +503,7 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 /// Save ontology to OWL XML file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
 
     // TODO: Implement a better serialization to OWL XML
     writeln!(file, "<Ontology ontologyIRI=\"{}\">", ontology.iri.as_ref().map_or("http://example.org/ontology", |iri| iri.as_str()))?;
@@ -517,14 +514,14 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
             }
             Axiom::SubClassOf(axiom) => {
                 if let (Some(subclass_iri), Some(superclass_iri)) = (axiom.subclass.iri(), axiom.superclass.iri()) {
-                    writeln!(file, "  <SubClassOf><Class IRI=\"{}\"/><Class IRI=\"{}\"/></SubClassOf>", subclass_iri, superclass_iri)?;
+                    writeln!(file, "  <SubClassOf><Class IRI=\"{subclass_iri}\"/><Class IRI=\"{superclass_iri}\"/></SubClassOf>")?;
                 }
             }
             Axiom::EquivalentClasses(axiom) => {
                 writeln!(file, "  <EquivalentClasses>",)?;
                 for class in &axiom.classes {
                     if let Some(class_iri) = class.iri() {
-                        writeln!(file, "    <Class IRI=\"{}\"/>", class_iri)?;
+                        writeln!(file, "    <Class IRI=\"{class_iri}\"/>")?;
                     }
                 }
                 writeln!(file, "  </EquivalentClasses>")?;
@@ -532,36 +529,35 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
             Axiom::DisjointUnion(axiom) => {
                 writeln!(file, "  <DisjointUnion>")?;
                 if let Some(union_class_iri) = axiom.class.iri() {
-                    writeln!(file, "    <Class IRI=\"{}\"/>", union_class_iri)?;
+                    writeln!(file, "    <Class IRI=\"{union_class_iri}\"/>")?;
                 }
                 for disjoint_class in &axiom.disjoint_classes {
                     if let Some(class_iri) = disjoint_class.iri() {
-                        writeln!(file, "    <Class IRI=\"{}\"/>", class_iri)?;
+                        writeln!(file, "    <Class IRI=\"{class_iri}\"/>")?;
                     }
                 }
                 writeln!(file, "  </DisjointUnion>")?;
             }
             Axiom::ClassAssertion(axiom) => {
                 if let (Some(class_iri), Some(individual_iri)) = (axiom.class.iri(), axiom.individual.iri()) {
-                    writeln!(file, "  <ClassAssertion><Class IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/></ClassAssertion>", class_iri, individual_iri)?;
+                    writeln!(file, "  <ClassAssertion><Class IRI=\"{class_iri}\"/><NamedIndividual IRI=\"{individual_iri}\"/></ClassAssertion>")?;
                 }
             }
             Axiom::ObjectPropertyAssertion(axiom) => {
                 if let (Some(source_iri), Some(target_iri)) = (axiom.source.iri(), axiom.target.iri()) {
                     if let Some(property_iri) = axiom.property.iri() {
-                        writeln!(file, "  <ObjectPropertyAssertion><ObjectProperty IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/><NamedIndividual IRI=\"{}\"/></ObjectPropertyAssertion>", 
-                            property_iri, source_iri, target_iri)?;
+                        writeln!(file, "  <ObjectPropertyAssertion><ObjectProperty IRI=\"{property_iri}\"/><NamedIndividual IRI=\"{source_iri}\"/><NamedIndividual IRI=\"{target_iri}\"/></ObjectPropertyAssertion>")?;
                     }
                 }
             }
             Axiom::SubObjectPropertyOf(axiom) => {
                 if let (Some(sub_iri), Some(super_iri)) = (axiom.sub_property.iri(), axiom.super_property.iri()) {
-                    writeln!(file, "  <SubObjectPropertyOf><ObjectProperty IRI=\"{}\"/><ObjectProperty IRI=\"{}\"/></SubObjectPropertyOf>", sub_iri, super_iri)?;
+                    writeln!(file, "  <SubObjectPropertyOf><ObjectProperty IRI=\"{sub_iri}\"/><ObjectProperty IRI=\"{super_iri}\"/></SubObjectPropertyOf>")?;
                 }
             }
             Axiom::FunctionalObjectProperty(axiom) => {
                 if let Some(property_iri) = axiom.property.iri() {
-                    writeln!(file, "  <FunctionalObjectProperty><ObjectProperty IRI=\"{}\"/></FunctionalObjectProperty>", property_iri)?;
+                    writeln!(file, "  <FunctionalObjectProperty><ObjectProperty IRI=\"{property_iri}\"/></FunctionalObjectProperty>")?;
                 }
             }
             _ => {

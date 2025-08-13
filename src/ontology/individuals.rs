@@ -54,7 +54,7 @@ impl Individual {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER: AtomicUsize = AtomicUsize::new(1);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        Individual::anonymous(format!("_fresh_{}", id))
+        Individual::anonymous(format!("_fresh_{id}"))
     }
 
     /// Check if the individual is anonymous.

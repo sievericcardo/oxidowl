@@ -5,14 +5,11 @@
 //! and clash detection.
 
 use crate::{
-    core::dependency::{DependencySet, DependencyTracker, DependencyType},
-    ontology::{ClassExpression, Individual, Role, DataProperty, ObjectPropertyExpression},
-    Error, Result,
+    core::dependency::DependencySet,
+    ontology::{ClassExpression, Individual, Role, DataProperty, ObjectPropertyExpression}, Result,
 };
 use std::{
-    collections::{HashMap, HashSet, BinaryHeap},
-    sync::Arc,
-    time::Instant,
+    collections::HashMap,
     fmt,
 };
 
@@ -452,7 +449,7 @@ impl CompletionRuleSet {
                     let individual = string_to_individual(application.node.clone());
                     choices.push(crate::core::hypertableau::branching::BranchingChoice::new(
                         index,
-                        format!("Disjunct {}: {}", index, disjunct),
+                        format!("Disjunct {index}: {disjunct}"),
                         disjunct.clone(),
                         individual,
                     ));

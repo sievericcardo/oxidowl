@@ -206,11 +206,11 @@ impl DependencyTracker {
         
         // Store mappings
         self.fact_dependencies.insert(fact_id, fact_dependency);
-        self.dependencies_to_facts.entry(dep_id).or_insert_with(HashSet::new).insert(fact_id);
+        self.dependencies_to_facts.entry(dep_id).or_default().insert(fact_id);
         
         // Track branch dependencies
         if let DependencyType::BranchingDecision { branch_id, .. } = &dependency_type {
-            self.branch_dependencies.entry(*branch_id).or_insert_with(HashSet::new).insert(fact_id);
+            self.branch_dependencies.entry(*branch_id).or_default().insert(fact_id);
             self.active_branches.insert(*branch_id);
         }
         

@@ -9,13 +9,9 @@ pub use crate::core::reasoner::{ReasoningTask, ReasoningResult, ClassificationRe
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, ObjectPropertyExpression, DataProperty, DataPropertyExpression, Axiom},
-    core::{
-        reasoner::Reasoner,
-        tableau::Tableau,
-        hypertableau::HyperTableau,
-    },
-    config::{ReasonerConfig, ReasoningConfig, CacheConfig},
+    ontology::{Ontology, ClassExpression, Individual, ObjectPropertyExpression, DataPropertyExpression},
+    core::reasoner::Reasoner,
+    config::ReasonerConfig,
     cache::CacheManager,
     query::{DLQueryEngine, DLQuery, QueryResult},
 };
@@ -64,7 +60,7 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let mut cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_consistency_result(&reasoner.get_ontology().unwrap(), result);
         }
 
@@ -108,7 +104,7 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let mut cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_satisfiability_result(expression.clone(), result);
         }
 
@@ -143,7 +139,7 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let mut cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = self.cache_manager.write().unwrap();
             cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
 
@@ -180,7 +176,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let superclasses = reasoner.get_superclasses(&class, direct)?;
+        let superclasses = reasoner.get_superclasses(class, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -201,7 +197,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let subclasses = reasoner.get_subclasses(&class, direct)?;
+        let subclasses = reasoner.get_subclasses(class, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -243,7 +239,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let mut reasoner = self.reasoner.write().unwrap();
-        let instances = reasoner.get_instances(&class, direct)?;
+        let instances = reasoner.get_instances(class, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -264,7 +260,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let mut reasoner = self.reasoner.write().unwrap();
-        let types = reasoner.get_types(&individual, direct)?;
+        let types = reasoner.get_types(individual, direct)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -300,7 +296,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let values = reasoner.get_object_property_values(&individual, &property)?;
+        let values = reasoner.get_object_property_values(individual, property)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -325,7 +321,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
-        let result = reasoner.get_data_property_values(&individual, property)?;
+        let result = reasoner.get_data_property_values(individual, property)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {
@@ -383,7 +379,7 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let mut cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = self.reasoner.read().unwrap();
@@ -441,7 +437,7 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let mut cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = self.cache_manager.write().unwrap();
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = self.reasoner.read().unwrap();
@@ -466,7 +462,7 @@ impl ReasoningService {
         }
 
         let reasoner = self.reasoner.write().unwrap();
-        let explanations = reasoner.explain_entailment(&axiom)?;
+        let explanations = reasoner.explain_entailment(axiom)?;
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout {

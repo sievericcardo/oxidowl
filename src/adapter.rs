@@ -1,5 +1,5 @@
-use crate::{Result, Error};
-use crate::ontology::{axioms::*, concepts::*, individuals::*, IRI, Class, ObjectProperty, DataProperty, AnnotationProperty, Individual};
+use crate::Result;
+use crate::ontology::{axioms::*, IRI, Class};
 use horned_owl::model::*;
 use std::collections::HashMap;
 
@@ -7,6 +7,12 @@ use std::collections::HashMap;
 pub struct HornedOwlAdapter {
     iri_cache: HashMap<String, IRI>,
     axiom_counter: u64,
+}
+
+impl Default for HornedOwlAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HornedOwlAdapter {
@@ -67,7 +73,7 @@ impl HornedOwlAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
 
     // TODO: Fix these tests when horned-owl API is more stable
     

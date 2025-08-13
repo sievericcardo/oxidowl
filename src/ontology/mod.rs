@@ -3,7 +3,6 @@
 //! This module provides the core ontology types and structures for OWL 2 DL reasoning.
 
 use crate::{Error, Result};
-use std::collections::HashMap;
 use url::Url;
 
 pub mod axioms;
@@ -16,8 +15,7 @@ pub use axioms::*;
 pub use concepts::*;
 pub use individuals::*;
 pub use properties::*;
-pub use individuals::*;  
-pub use properties::*;
+  
 
 /// IRI (Internationalized Resource Identifier) wrapper
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -36,7 +34,7 @@ impl IRI {
     /// Convert to URL
     pub fn to_url(&self) -> Result<Url> {
         Url::parse(&self.value)
-            .map_err(|e| crate::Error::ontology_parsing(format!("Invalid IRI: {}", e)))
+            .map_err(|e| crate::Error::ontology_parsing(format!("Invalid IRI: {e}")))
     }
 
     /// Get the string value
@@ -74,7 +72,7 @@ impl std::fmt::Display for ObjectPropertyExpression {
                     if i > 0 {
                         write!(f, " ∘ ")?;
                     }
-                    write!(f, "{}", prop)?;
+                    write!(f, "{prop}")?;
                 }
                 write!(f, ")")
             }
@@ -199,9 +197,9 @@ impl std::fmt::Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\"{}\"", self.value)?;
         if let Some(lang) = &self.language {
-            write!(f, "@{}", lang)?;
+            write!(f, "@{lang}")?;
         } else if let Some(dt) = &self.datatype {
-            write!(f, "^^<{}>", dt)?;
+            write!(f, "^^<{dt}>")?;
         }
         Ok(())
     }
@@ -230,12 +228,12 @@ pub enum DataRange {
 impl std::fmt::Display for DataRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DataRange::Datatype(iri) => write!(f, "{}", iri),
+            DataRange::Datatype(iri) => write!(f, "{iri}"),
             DataRange::DataIntersectionOf(ranges) => {
                 write!(f, "(")?;
                 for (i, range) in ranges.iter().enumerate() {
                     if i > 0 { write!(f, " ⊓ ")?; }
-                    write!(f, "{}", range)?;
+                    write!(f, "{range}")?;
                 }
                 write!(f, ")")
             },
@@ -243,21 +241,21 @@ impl std::fmt::Display for DataRange {
                 write!(f, "(")?;
                 for (i, range) in ranges.iter().enumerate() {
                     if i > 0 { write!(f, " ⊔ ")?; }
-                    write!(f, "{}", range)?;
+                    write!(f, "{range}")?;
                 }
                 write!(f, ")")
             },
-            DataRange::DataComplementOf(range) => write!(f, "¬{}", range),
+            DataRange::DataComplementOf(range) => write!(f, "¬{range}"),
             DataRange::DataOneOf(literals) => {
                 write!(f, "{{")?;
                 for (i, literal) in literals.iter().enumerate() {
                     if i > 0 { write!(f, ", ")?; }
-                    write!(f, "{:?}", literal)?;
+                    write!(f, "{literal:?}")?;
                 }
                 write!(f, "}}")
             },
             DataRange::DatatypeRestriction { datatype, restrictions: _ } => {
-                write!(f, "{}[restrictions]", datatype)
+                write!(f, "{datatype}[restrictions]")
             },
         }
     }
@@ -425,13 +423,13 @@ impl Ontology {
         // Extract entities from axioms
         for axiom in &self.axioms {
             let discriminant = std::mem::discriminant(axiom);
-            println!("Processing axiom discriminant: {:?}", discriminant);
+            println!("Processing axiom discriminant: {discriminant:?}");
             match axiom {
                 axioms::Axiom::Declaration(decl) => {
                     match &decl.entity {
                         axioms::Entity::Class(iri) => {
                             signature.classes.push(concepts::Class { iri: iri.clone() });
-                            println!("Added class from declaration: {}", iri);
+                            println!("Added class from declaration: {iri}");
                         }
                         axioms::Entity::ObjectProperty(iri) => {
                             // Try to convert to URL, but continue if it fails (for relative IRIs)
@@ -504,7 +502,7 @@ impl Ontology {
     pub fn from_file_with_horned_owl<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         use std::fs::File;
         use std::io::BufReader;
-        use horned_owl::io::{ParserConfiguration, ResourceType};
+        use horned_owl::io::ParserConfiguration;
         
         let file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
         let mut reader = BufReader::new(file);
@@ -512,7 +510,7 @@ impl Ontology {
         
         // Use horned-owl's RDF parser for all file types (most compatible)
         let result = horned_owl::io::rdf::reader::read(&mut reader, config)
-            .map_err(|e| Error::ontology_parsing(&format!("Horned-owl parsing error: {}", e)))?;
+            .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
         
         // Convert the horned-owl ontology to oxidowl ontology using simplified approach
         let mut adapter = crate::adapter::HornedOwlAdapter::new();

@@ -295,6 +295,12 @@ pub struct ExtensionStatistics {
     pub memory_usage: usize,
 }
 
+impl Default for ExtensionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExtensionManager {
     /// Create a new extension manager
     pub fn new() -> Self {
@@ -317,9 +323,7 @@ impl ExtensionManager {
             2 => &mut self.binary_extension_table,
             3 => &mut self.ternary_extension_table,
             _ => {
-                if !self.extension_tables.contains_key(&arity) {
-                    self.extension_tables.insert(arity, ExtensionTable::new(arity));
-                }
+                self.extension_tables.entry(arity).or_insert_with(|| ExtensionTable::new(arity));
                 self.extension_tables.get_mut(&arity).unwrap()
             }
         }
@@ -378,9 +382,9 @@ impl ExtensionManager {
             
             // Check for clashes by examining the fact being added
             // Look for contradictory facts (e.g., A(x) and ¬A(x))
-            let clash_detected = self.detect_fact_clash(&predicate, &args);
             
-            clash_detected
+            
+            self.detect_fact_clash(&predicate, &args)
         };
         
         if clash_detected {
@@ -474,7 +478,7 @@ impl ExtensionManager {
     /// Check if retrieval has more tuples
     pub fn has_more_tuples(&self, retrieval_id: usize, arity: usize) -> Result<bool> {
         let table = self.extension_tables.get(&arity)
-            .or_else(|| if arity == 2 { Some(&self.binary_extension_table) } 
+            .or(if arity == 2 { Some(&self.binary_extension_table) } 
                      else if arity == 3 { Some(&self.ternary_extension_table) } 
                      else { None })
             .ok_or_else(|| Error::invalid_input("Invalid arity"))?;
@@ -733,8 +737,8 @@ impl ExtensionManager {
             }
         } else {
             // If we're adding A(x), check if ¬A(x) already exists
-            let neg_pred1 = format!("¬{}", predicate);
-            let neg_pred2 = format!("neg_{}", predicate);
+            let neg_pred1 = format!("¬{predicate}");
+            let neg_pred2 = format!("neg_{predicate}");
             
             if let Some(table) = self.get_table_for_arity(arity) {
                 if table.has_fact(&neg_pred1, args).unwrap_or(false) ||
@@ -854,7 +858,7 @@ impl ExtensionManager {
         let property_name = match property {
             ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.to_string(),
             ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                format!("inverse({})", prop.iri.to_string())
+                format!("inverse({})", prop.iri)
             },
             ObjectPropertyExpression::PropertyChain(_) => {
                 return Err(crate::Error::Reasoning { 
@@ -966,7 +970,7 @@ impl ExtensionTable {
         let predicate = tuple_entry.predicate.clone();
         
         // Add to predicate index
-        self.predicate_index.entry(predicate).or_insert_with(Vec::new).push(index);
+        self.predicate_index.entry(predicate).or_default().push(index);
         
         // Add to delta new
         self.delta_new.insert(index);
@@ -1223,14 +1227,14 @@ impl ClashManager {
     
     fn check_for_clash(&mut self, predicate: &str, args: &[String], table: &ExtensionTable) -> Result<bool> {
         // Simple clash detection - look for complementary concepts
-        if predicate.starts_with("¬") {
-            let positive_predicate = &predicate[2..]; // Remove ¬ prefix
+        if let Some(positive_predicate) = predicate.strip_prefix("¬") {
+            // Remove ¬ prefix
             if table.has_fact(positive_predicate, args)? {
                 self.has_clash = true;
                 return Ok(true);
             }
         } else {
-            let negative_predicate = format!("¬{}", predicate);
+            let negative_predicate = format!("¬{predicate}");
             if table.has_fact(&negative_predicate, args)? {
                 self.has_clash = true;
                 return Ok(true);
@@ -1290,5 +1294,5 @@ pub fn generate_unique_id() -> usize {
 /// Generate a unique string identifier for objects  
 pub fn generate_unique_string_id() -> String {
     let id = generate_unique_id();
-    format!("id_{}", id)
+    format!("id_{id}")
 }

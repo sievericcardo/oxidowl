@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, IRI},
+    ontology::{Ontology, IRI},
 };
 
 /// N-Triples Parser
@@ -77,12 +77,12 @@ pub fn parse(content: &str) -> Result<Ontology> {
 /// Parse N-Triples from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
     
     let mut reader = BufReader::new(file);
     let mut content = String::new();
     reader.read_to_string(&mut content)
-        .map_err(|e| Error::io(format!("Failed to read file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
     
     parse(&content)
 }
@@ -90,7 +90,7 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 /// Save ontology to N-Triples file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
     
     for (subject, class) in ontology.classes() {
         writeln!(file, "{} rdf:type {} .", subject, class.iri)?;
@@ -98,7 +98,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     
     for (subject, individual) in ontology.individuals() {
         if let Some(iri) = individual.iri() {
-            writeln!(file, "{} rdf:type Individual .", iri)?;
+            writeln!(file, "{iri} rdf:type Individual .")?;
         }
     }
     

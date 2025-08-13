@@ -219,7 +219,7 @@ impl HyperTableau {
     pub fn get_reasoning_stats(&mut self) -> ReasoningStats {
         // Update monitor with latest statistics
         self.monitor.update_dependency_stats(
-            &self.dependency_tracker.lock().unwrap().get_stats()
+            self.dependency_tracker.lock().unwrap().get_stats()
         );
         self.monitor.update_branching_stats(self.branching_manager.get_stats());
         self.monitor.update_hyperresolution_stats(&self.hyperresolution_manager.get_statistics());
@@ -298,12 +298,12 @@ impl HyperTableau {
             // Log monitoring event
             // Log disjunction processing
             let individual_str = disjunction.individual();
-            let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
+            let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{individual_str}"));
             let individual = Individual::named(individual_iri);
             
             // Log monitoring event
             self.monitor.log_event(monitor::events::ground_disjunction_processing(
-                format!("{:?}", disjunction),
+                format!("{disjunction:?}"),
                 individual,
                 disjunction.disjuncts().len(),
                 std::time::Duration::default(),
@@ -358,7 +358,7 @@ impl HyperTableau {
                 
                 // Create Individual for monitoring
                 let individual_str = disjunction.individual();
-                let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
+                let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{individual_str}"));
                 let individual = Individual::named(individual_iri);
                 
                 self.monitor.log_event(monitor::events::fact_derived(
@@ -373,7 +373,7 @@ impl HyperTableau {
         
         // Create branching point for multiple disjuncts
         let individual_str = disjunction.individual();
-        let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", individual_str));
+        let individual_iri = crate::ontology::IRI::new(&format!("http://example.org/{individual_str}"));
         let individual = Individual::named(individual_iri);
 
         let choices = branching::utils::create_disjunction_choices(
@@ -396,7 +396,7 @@ impl HyperTableau {
             let fact_id = {
                 let mut tracker = self.dependency_tracker.lock().unwrap();
                 tracker.create_fact(
-                    format!("Branching choice: {}", assertion),
+                    format!("Branching choice: {assertion}"),
                     dependency_tracking::utils::branching_dependency(branch_id, 0),
                 )?
             };
@@ -404,7 +404,7 @@ impl HyperTableau {
             self.extension_manager.add_concept_assertion(&individual.iri().map(|iri| iri.to_string()).unwrap_or("anonymous".to_string()), &assertion)?;
             
             self.monitor.log_event(monitor::events::fact_derived(
-                format!("Branching choice: {}", assertion),
+                format!("Branching choice: {assertion}"),
                 individual,
                 0,
             ));
@@ -435,7 +435,7 @@ impl HyperTableau {
                 let fact_id = {
                     let mut tracker = self.dependency_tracker.lock().unwrap();
                     tracker.create_fact(
-                        format!("Backtrack choice: {}", assertion),
+                        format!("Backtrack choice: {assertion}"),
                         dependency_tracking::utils::branching_dependency(branch_id, 1),
                     )?
                 };
@@ -627,7 +627,7 @@ impl HyperTableau {
         let property_iri = match &axiom.property {
             ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.to_string(),
             ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                format!("inverse({})", prop.iri.to_string())
+                format!("inverse({})", prop.iri)
             }
             ObjectPropertyExpression::PropertyChain(_chain) => {
                 // For now, treat property chains as a single property
@@ -749,7 +749,7 @@ impl HyperTableau {
         }
         
         let initial_facts = self.statistics.facts_derived - start_fact_count;
-        log::info!("Applied {} initial assertions from ABox", initial_facts);
+        log::info!("Applied {initial_facts} initial assertions from ABox");
         
         Ok(())
     }

@@ -2,8 +2,7 @@
 //! 
 //! Implementation of the hyperresolution algorithm for the OWL 2 DL hypertableau reasoner.
 
-use crate::{Result, Error};
-use crate::ontology::{axioms, concepts::ClassExpression, ObjectPropertyExpression, DataPropertyExpression, Individual};
+use crate::Result;
 use crate::core::hypertableau::ExtensionManager;
 use log::debug;
 use std::collections::{HashMap, HashSet};
@@ -170,7 +169,7 @@ impl HyperresolutionManager {
             // Track maximum variables for buffer sizing
             self.max_variables = self.max_variables.max(clause.variables.len());
 
-            clauses_by_body.entry(body_key).or_insert_with(Vec::new).push(clause);
+            clauses_by_body.entry(body_key).or_default().push(clause);
         }
         
         // Initialize values buffer
@@ -214,7 +213,7 @@ impl HyperresolutionManager {
             self.add_compiled_clause_info(predicate.clone(), clause_info.clone())?;
             
             // Add optimizations for atomic roles if enabled
-            if self.optimization_enabled && self.is_atomic_role_predicate(&predicate) {
+            if self.optimization_enabled && self.is_atomic_role_predicate(predicate) {
                 self.add_atomic_role_optimizations(predicate.to_string(), clause_info)?;
             }
         }
@@ -253,7 +252,7 @@ impl HyperresolutionManager {
             for guard_concept in guards {
                 let guard_map = self.atomic_role_consumers_by_guard_concept
                     .entry(predicate.clone())
-                    .or_insert_with(HashMap::new);
+                    .or_default();
                 
                 if let Some(existing) = guard_map.get(&guard_concept) {
                     let mut new_info = info.clone();
@@ -449,7 +448,7 @@ impl HyperresolutionManager {
     /// Check if a predicate represents an atomic concept
     fn is_atomic_concept_predicate(&self, predicate: &str) -> bool {
         // Simple heuristic: concepts typically start with uppercase
-        predicate.chars().next().map_or(false, |c| c.is_uppercase())
+        predicate.chars().next().is_some_and(|c| c.is_uppercase())
     }
     
     /// Clear internal state for new reasoning task

@@ -626,7 +626,7 @@ impl AxiomStore {
 
         let axiom_type = axiom.axiom_type();
         self.axioms.insert(id, axiom.clone());
-        self.axioms_by_type.entry(axiom_type).or_insert_with(HashSet::new).insert(id);
+        self.axioms_by_type.entry(axiom_type).or_default().insert(id);
 
         Ok(id)
     }

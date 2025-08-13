@@ -269,7 +269,7 @@ impl GroundDisjunction {
     /// Get individual (compatibility method) - returns first argument as string
     pub fn individual(&self) -> String {
         // For compatibility, return the first argument as a string representation
-        self.arguments.first().map(|&id| format!("node_{}", id)).unwrap_or_else(|| "unknown".to_string())
+        self.arguments.first().map(|&id| format!("node_{id}")).unwrap_or_else(|| "unknown".to_string())
     }
     
     /// Create a ground disjunction from a class expression
@@ -323,7 +323,7 @@ impl GroundDisjunction {
 impl GroundDisjunctionHeader {
     /// Create a new ground disjunction header
     pub fn new(
-        mut predicates: Vec<DisjunctPredicate>,
+        predicates: Vec<DisjunctPredicate>,
         priority: DisjunctionPriority,
     ) -> Self {
         // Create sorted indices based on predicate type and complexity
@@ -345,7 +345,7 @@ impl GroundDisjunctionHeader {
         priority: DisjunctionPriority,
     ) -> Self {
         // Sort predicates by complexity (simpler first)
-        predicates.sort_by_key(|p| Self::predicate_complexity(p));
+        predicates.sort_by_key(Self::predicate_complexity);
         
         let sorted_disjunct_indices: Vec<usize> = (0..predicates.len()).collect();
         
@@ -397,7 +397,7 @@ impl fmt::Display for GroundDisjunction {
             if i > 0 {
                 write!(f, " ∨ ")?;
             }
-            write!(f, "{}", predicate)?;
+            write!(f, "{predicate}")?;
         }
         write!(f, "]")
     }
@@ -407,16 +407,16 @@ impl fmt::Display for DisjunctPredicate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DisjunctPredicate::Concept { concept, argument } => {
-                write!(f, "{}(x{})", concept, argument)
+                write!(f, "{concept}(x{argument})")
             }
             DisjunctPredicate::Role { property, subject, object } => {
                 write!(f, "{}(x{}, x{})", property.iri, subject, object)
             }
             DisjunctPredicate::Equality { left, right } => {
-                write!(f, "x{} = x{}", left, right)
+                write!(f, "x{left} = x{right}")
             }
             DisjunctPredicate::Inequality { left, right } => {
-                write!(f, "x{} ≠ x{}", left, right)
+                write!(f, "x{left} ≠ x{right}")
             }
         }
     }

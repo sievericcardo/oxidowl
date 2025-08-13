@@ -13,7 +13,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{BufReader, Read},
+    io::Read,
     path::Path,
     collections::HashMap,
 };
@@ -45,7 +45,7 @@ fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
             };
             
             url::Url::parse(&full_uri)
-                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))
+                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))
         }
     }
 }
@@ -399,7 +399,7 @@ impl TurtleParser {
             };
             ontology.add_axiom(Axiom::DisjointUnion(disjoint_union_axiom));
 
-            println!("Created DisjointUnion axiom for class: {}", subject);
+            println!("Created DisjointUnion axiom for class: {subject}");
         }
 
         Ok(())
@@ -566,7 +566,7 @@ impl TurtleParser {
         match token {
             Token::IRI(iri) => Ok(iri.clone()),
             Token::PrefixedName(prefix, local) => {
-                self.expand_prefixed_name(&format!("{}:{}", prefix, local), state)
+                self.expand_prefixed_name(&format!("{prefix}:{local}"), state)
             },
             Token::Keyword(keyword) => {
                 // Try to expand as prefixed name if it contains ':'
@@ -576,7 +576,7 @@ impl TurtleParser {
                     Ok(keyword.clone())
                 }
             },
-            Token::BlankNode(id) => Ok(format!("_:{}", id)),
+            Token::BlankNode(id) => Ok(format!("_:{id}")),
             _ => Err(Error::ontology_parsing("Cannot resolve token to URI")),
         }
     }
@@ -592,17 +592,17 @@ impl TurtleParser {
             let local = &name[colon_pos+1..];
             
             if let Some(base) = state.prefixes.get(prefix) {
-                Ok(format!("{}{}", base, local))
+                Ok(format!("{base}{local}"))
             } else {
                 // Handle unknown prefixes - might be relative URIs
                 if let Some(base) = &state.base_uri {
-                    Ok(format!("{}{}", base, name))
+                    Ok(format!("{base}{name}"))
                 } else {
                     Ok(name.to_string())
                 }
             }
         } else if let Some(base) = &state.base_uri {
-            Ok(format!("{}{}", base, name))
+            Ok(format!("{base}{name}"))
         } else {
             Ok(name.to_string())
         }
@@ -658,7 +658,7 @@ impl TurtleParser {
                     superclass: ClassExpression::Class(superclass),
                     annotations: vec![],
                 };
-                println!("Creating enhanced SubClassOf axiom: {} rdfs:subClassOf {}", subject, object);
+                println!("Creating enhanced SubClassOf axiom: {subject} rdfs:subClassOf {object}");
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
             },
             _ => {
@@ -723,6 +723,72 @@ pub fn parse_file_with_config<P: AsRef<Path>>(path: P, config: TurtleParserConfi
     parser.parse_string(&content)
 }
 
+
+
+/// Save ontology to Turtle file
+pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
+    let mut content = String::new();
+    
+    // Add standard prefixes
+    content.push_str("@prefix : <http://example.org/> .\n");
+    content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
+    content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+    content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
+    content.push('\n');
+    
+    // Write ontology declaration
+    if let Some(iri) = ontology.get_iri() {
+        content.push_str(&format!("<{iri}> rdf:type owl:Ontology .\n\n"));
+    }
+    
+    // Write class declarations
+    for (iri, _class) in ontology.classes() {
+        content.push_str(&format!("<{iri}> rdf:type owl:Class .\n"));
+    }
+    content.push('\n');
+    
+    // Write object property declarations
+    for prop in ontology.object_properties() {
+        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
+    }
+    content.push('\n');
+    
+    // Write axioms (basic serialization)
+    for axiom in ontology.axioms() {
+        match axiom {
+            crate::ontology::Axiom::SubClassOf(sub) => {
+                if let (ClassExpression::Class(subclass), ClassExpression::Class(superclass)) = 
+                    (&sub.subclass, &sub.superclass) {
+                    content.push_str(&format!("<{}> rdfs:subClassOf <{}> .\n", 
+                        subclass.iri, superclass.iri));
+                }
+            }
+            crate::ontology::Axiom::ClassAssertion(assertion) => {
+                if let ClassExpression::Class(class) = &assertion.class {
+                    if let Some(individual_iri) = assertion.individual.iri() {
+                        content.push_str(&format!("<{}> rdf:type <{}> .\n", 
+                            individual_iri, class.iri));
+                    }
+                }
+            }
+            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
+                if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
+                    if let (Some(source_iri), Some(target_iri)) = (assertion.source.iri(), assertion.target.iri()) {
+                        content.push_str(&format!("<{}> <{}> <{}> .\n",
+                            source_iri, prop.iri, target_iri));
+                    }
+                }
+            }
+            _ => {
+                // Skip complex axioms for now
+            }
+        }
+    }
+    
+    std::fs::write(path, content)
+        .map_err(|e| Error::io(format!("Failed to write file: {e}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -780,70 +846,4 @@ ast:Operational rdfs:subClassOf ast:Pump .
         
         assert!(subclass_count >= 2, "Should have created at least 2 SubClassOf axioms");
     }
-}
-
-
-
-/// Save ontology to Turtle file
-pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut content = String::new();
-    
-    // Add standard prefixes
-    content.push_str("@prefix : <http://example.org/> .\n");
-    content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
-    content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
-    content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
-    content.push_str("\n");
-    
-    // Write ontology declaration
-    if let Some(iri) = ontology.get_iri() {
-        content.push_str(&format!("<{}> rdf:type owl:Ontology .\n\n", iri));
-    }
-    
-    // Write class declarations
-    for (iri, _class) in ontology.classes() {
-        content.push_str(&format!("<{}> rdf:type owl:Class .\n", iri));
-    }
-    content.push_str("\n");
-    
-    // Write object property declarations
-    for prop in ontology.object_properties() {
-        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
-    }
-    content.push_str("\n");
-    
-    // Write axioms (basic serialization)
-    for axiom in ontology.axioms() {
-        match axiom {
-            crate::ontology::Axiom::SubClassOf(sub) => {
-                if let (ClassExpression::Class(subclass), ClassExpression::Class(superclass)) = 
-                    (&sub.subclass, &sub.superclass) {
-                    content.push_str(&format!("<{}> rdfs:subClassOf <{}> .\n", 
-                        subclass.iri, superclass.iri));
-                }
-            }
-            crate::ontology::Axiom::ClassAssertion(assertion) => {
-                if let ClassExpression::Class(class) = &assertion.class {
-                    if let Some(individual_iri) = assertion.individual.iri() {
-                        content.push_str(&format!("<{}> rdf:type <{}> .\n", 
-                            individual_iri, class.iri));
-                    }
-                }
-            }
-            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
-                if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
-                    if let (Some(source_iri), Some(target_iri)) = (assertion.source.iri(), assertion.target.iri()) {
-                        content.push_str(&format!("<{}> <{}> <{}> .\n",
-                            source_iri, prop.iri, target_iri));
-                    }
-                }
-            }
-            _ => {
-                // Skip complex axioms for now
-            }
-        }
-    }
-    
-    std::fs::write(path, content)
-        .map_err(|e| Error::io(format!("Failed to write file: {}", e)))
 }

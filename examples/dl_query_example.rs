@@ -1,4 +1,4 @@
-//! Example usage of the OxidOWL reasoning functionality
+//! Example usage of the `OxidOWL` reasoning functionality
 //!
 //! This example demonstrates how to:
 //! 1. Create a reasoner with ontology
@@ -32,9 +32,9 @@ async fn main() -> Result<()> {
     let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
     match reasoning_service.is_satisfiable(&person_class).await {
         Ok(satisfiable) => {
-            println!("   Person is satisfiable: {}", satisfiable);
+            println!("   Person is satisfiable: {satisfiable}");
         }
-        Err(e) => println!("   Error: {}", e),
+        Err(e) => println!("   Error: {e}"),
     }
 
     // Example 2: Check if one class is a subclass of another
@@ -43,18 +43,18 @@ async fn main() -> Result<()> {
     let animal_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Animal")));
     match reasoning_service.is_subsumed_by(&dog_class, &animal_class).await {
         Ok(is_subclass) => {
-            println!("   Dog is subclass of Animal: {}", is_subclass);
+            println!("   Dog is subclass of Animal: {is_subclass}");
         }
-        Err(e) => println!("   Error: {}", e),
+        Err(e) => println!("   Error: {e}"),
     }
 
     // Example 3: Check class equivalence
     println!("\n3. Checking if Person and Animal are equivalent:");
     match reasoning_service.is_equivalent_to(&person_class, &animal_class).await {
         Ok(equivalent) => {
-            println!("   Person and Animal are equivalent: {}", equivalent);
+            println!("   Person and Animal are equivalent: {equivalent}");
         }
-        Err(e) => println!("   Error: {}", e),
+        Err(e) => println!("   Error: {e}"),
     }
 
     println!("\nBasic reasoning examples completed!");

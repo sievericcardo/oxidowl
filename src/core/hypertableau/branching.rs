@@ -568,7 +568,7 @@ pub mod utils {
                     DisjunctPredicate::Concept { concept, .. } => {
                         Some(BranchingChoice::new(
                             index,
-                            format!("Disjunct {}: {}", index, disjunct),
+                            format!("Disjunct {index}: {disjunct}"),
                             concept.clone(),
                             individual.clone(),
                         ))
@@ -598,7 +598,7 @@ pub mod utils {
                         
                         Some(BranchingChoice::new(
                             index,
-                            format!("Equality: x{} = x{}", left, right),
+                            format!("Equality: x{left} = x{right}"),
                             equality_concept,
                             individual.clone(),
                         ))
@@ -611,7 +611,7 @@ pub mod utils {
                         
                         Some(BranchingChoice::new(
                             index,
-                            format!("Inequality: x{} ≠ x{}", left, right),
+                            format!("Inequality: x{left} ≠ x{right}"),
                             inequality_concept,
                             individual.clone(),
                         ))
@@ -631,7 +631,7 @@ pub mod utils {
         // to assert the existence of a witness individual
         vec![BranchingChoice::new(
             0,
-            format!("Create witness for ∃{}.{}", property, filler),
+            format!("Create witness for ∃{property}.{filler}"),
             filler.clone(),
             individual.clone(),
         )]

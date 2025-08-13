@@ -14,8 +14,6 @@ use crate::{
     reasoning::ReasoningService,
 };
 use std::collections::HashSet;
-use std::sync::Arc;
-use std::time::Duration;
 use std::fmt;
 use log::debug;
 
@@ -238,7 +236,7 @@ impl DLQueryEngine {
     /// and find equivalent classes
     pub async fn execute_union_query(&self, union_query: &str) -> Result<QueryResult> {
         // Force this to be treated as an equivalent classes query
-        let modified_query = format!("equivalent-classes: {}", union_query);
+        let modified_query = format!("equivalent-classes: {union_query}");
         self.execute_query(&modified_query).await
     }
 
@@ -261,6 +259,12 @@ pub struct DLQueryParser {
     default_namespace: String,
 }
 
+impl Default for DLQueryParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DLQueryParser {
     pub fn new() -> Self {
         Self {
@@ -279,15 +283,15 @@ impl DLQueryParser {
     /// Parse a query string into a DL query
     pub fn parse(&self, query_string: &str) -> Result<DLQuery> {
         let trimmed = query_string.trim();
-        debug!("Parsing DL query: '{}'", trimmed);
+        debug!("Parsing DL query: '{trimmed}'");
         
         // Determine query type and extract class expression
         let (query_type, class_expr_str, direct) = self.parse_query_structure(trimmed)?;
-        debug!("Query type: {:?}, expression: '{}', direct: {}", query_type, class_expr_str, direct);
+        debug!("Query type: {query_type:?}, expression: '{class_expr_str}', direct: {direct}");
         
         // Parse the class expression
         let class_expression = self.parse_class_expression(class_expr_str)?;
-        debug!("Parsed class expression: {:?}", class_expression);
+        debug!("Parsed class expression: {class_expression:?}");
         
         Ok(DLQuery {
             class_expression,
@@ -340,11 +344,11 @@ impl DLQueryParser {
 
     /// Parse a class expression string in Manchester Syntax
     pub fn parse_class_expression(&self, expr_string: &str) -> Result<ClassExpression> {
-        debug!("Parsing class expression: '{}'", expr_string);
+        debug!("Parsing class expression: '{expr_string}'");
         let tokens = self.tokenize(expr_string)?;
-        debug!("Tokens: {:?}", tokens);
+        debug!("Tokens: {tokens:?}");
         let result = self.parse_expression_tokens(&tokens, 0).map(|(expr, _)| expr);
-        debug!("Parsed expression result: {:?}", result);
+        debug!("Parsed expression result: {result:?}");
         result
     }
 
@@ -442,7 +446,7 @@ impl DLQueryParser {
             return self.parse_binary_operators(class_expr, tokens, start + 1);
         }
 
-        Err(Error::reasoning(&format!("Unexpected token: {}", tokens[start])))
+        Err(Error::reasoning(format!("Unexpected token: {}", tokens[start])))
     }
 
     /// Parse binary operators (and, or, some, etc.)
@@ -522,7 +526,7 @@ impl DLQueryParser {
     fn parse_class_name(&self, name: &str) -> Result<ClassExpression> {
         let iri = if name.contains(':') {
             // Handle prefixed names - for now, just treat as full IRI
-            IRI::new(&format!("{}{}", self.default_namespace, name.split(':').last().unwrap_or(name)))
+            IRI::new(&format!("{}{}", self.default_namespace, name.split(':').next_back().unwrap_or(name)))
         } else if name.starts_with('<') && name.ends_with('>') {
             // Handle full IRIs in angle brackets
             IRI::new(&name[1..name.len()-1])
@@ -537,7 +541,7 @@ impl DLQueryParser {
     /// Parse a property name into an object property expression
     fn parse_property_name(&self, name: &str) -> Result<ObjectPropertyExpression> {
         let iri = if name.contains(':') {
-            IRI::new(&format!("{}{}", self.default_namespace, name.split(':').last().unwrap_or(name)))
+            IRI::new(&format!("{}{}", self.default_namespace, name.split(':').next_back().unwrap_or(name)))
         } else if name.starts_with('<') && name.ends_with('>') {
             IRI::new(&name[1..name.len()-1])
         } else {
@@ -554,9 +558,9 @@ impl fmt::Display for QueryResult {
         let class_name = match &self.query.class_expression {
             ClassExpression::Class(class) => {
                 let iri_str = class.iri.to_string();
-                if let Some(name) = iri_str.split('#').last() {
+                if let Some(name) = iri_str.split('#').next_back() {
                     name.to_string()
-                } else if let Some(name) = iri_str.split('/').last() {
+                } else if let Some(name) = iri_str.split('/').next_back() {
                     name.to_string()
                 } else {
                     iri_str
@@ -571,7 +575,7 @@ impl fmt::Display for QueryResult {
         if let Some(ref instances) = self.instances {
             writeln!(f, "\nInstances ({}):", instances.len())?;
             for instance in instances {
-                writeln!(f, "  - {:?}", instance)?;
+                writeln!(f, "  - {instance:?}")?;
             }
         }
         
@@ -587,24 +591,24 @@ impl fmt::Display for QueryResult {
                 match class {
                     ClassExpression::Class(c) => {
                         let iri_str = c.iri.to_string();
-                        let name = if let Some(name) = iri_str.split('#').last() {
+                        let name = if let Some(name) = iri_str.split('#').next_back() {
                             name
-                        } else if let Some(name) = iri_str.split('/').last() {
+                        } else if let Some(name) = iri_str.split('/').next_back() {
                             name
                         } else {
                             &iri_str
                         };
-                        writeln!(f, "  - {}", name)?;
+                        writeln!(f, "  - {name}")?;
                     }
                     _ => {
-                        writeln!(f, "  - {:?}", class)?;
+                        writeln!(f, "  - {class:?}")?;
                     }
                 }
             }
         }
         
         if let Some(satisfiable) = self.satisfiable {
-            writeln!(f, "\nSatisfiable: {}", satisfiable)?;
+            writeln!(f, "\nSatisfiable: {satisfiable}")?;
         }
         
         Ok(())

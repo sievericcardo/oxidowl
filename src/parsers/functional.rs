@@ -4,13 +4,13 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Write, Read},
+    io::{BufReader, Write, Read},
     path::Path,
 };
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, NamedIndividual, IRI},
+    ontology::{Ontology, ClassExpression},
 };
 
 /// Generate a unique axiom ID
@@ -194,7 +194,7 @@ impl FunctionalParser {
             
             if position < tokens.len() && tokens[position].starts_with('<') {
                 let iri_str = tokens[position].trim_matches(['<', '>'].as_ref());
-                if let Ok(_) = url::Url::parse(iri_str) {
+                if url::Url::parse(iri_str).is_ok() {
                     ontology.set_iri(crate::ontology::IRI::new(iri_str));
                 }
                 position += 1;
@@ -237,7 +237,7 @@ impl FunctionalParser {
                                 let iri = self.expand_iri(&tokens[position], prefixes)?;
                                 let class = crate::ontology::Class {
                                     iri: url::Url::parse(&iri)
-                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                                         .into()
                                 };
                                 ontology.add_class(class);
@@ -256,7 +256,7 @@ impl FunctionalParser {
                                 let iri = self.expand_iri(&tokens[position], prefixes)?;
                                 let property = crate::ontology::ObjectProperty {
                                     iri: url::Url::parse(&iri)
-                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                                 };
                                 ontology.add_object_property(property);
                                 position += 1;
@@ -296,11 +296,11 @@ impl FunctionalParser {
                 
                 let subclass = crate::ontology::Class {
                     iri: url::Url::parse(&sub_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?.into()
                 };
                 let superclass = crate::ontology::Class {
                     iri: url::Url::parse(&super_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?.into()
                 };
                 
                 let axiom = crate::ontology::SubClassOfAxiom {
@@ -340,12 +340,12 @@ impl FunctionalParser {
                 
                 let class = crate::ontology::Class {
                     iri: url::Url::parse(&class_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?.into()
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?.into()
                 };
                 let individual = crate::ontology::Individual::Named(
                     crate::ontology::NamedIndividual {
                         iri: url::Url::parse(&individual_iri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                             .into(), // Convert URL to IRI
                     }
                 );
@@ -388,19 +388,19 @@ impl FunctionalParser {
                 
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&prop_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                 };
                 let subject = crate::ontology::Individual::Named(
                     crate::ontology::NamedIndividual {
                         iri: url::Url::parse(&subj_iri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                             .into(), // Convert URL to IRI
                     }
                 );
                 let object = crate::ontology::Individual::Named(
                     crate::ontology::NamedIndividual {
                         iri: url::Url::parse(&obj_iri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))?
+                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                             .into(), // Convert URL to IRI
                     }
                 );
@@ -438,7 +438,7 @@ impl FunctionalParser {
             let local = &iri[colon_pos+1..];
             
             if let Some(base) = prefixes.get(prefix) {
-                Ok(format!("{}{}", base, local))
+                Ok(format!("{base}{local}"))
             } else {
                 Ok(iri.to_string())
             }
@@ -451,12 +451,12 @@ impl FunctionalParser {
 /// Parse Functional Syntax from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
     
     let mut reader = BufReader::new(file);
     let mut content = String::new();
     reader.read_to_string(&mut content)
-        .map_err(|e| Error::io(format!("Failed to read file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
     
     parse(&content)
 }
@@ -464,7 +464,7 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 /// Save ontology to Functional Syntax file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
     
     // TODO: Implement serialization to Functional Syntax
     writeln!(file, "# Placeholder for Functional Syntax serialization")?;

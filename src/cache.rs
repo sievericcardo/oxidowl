@@ -5,16 +5,12 @@
 //! and inference caches.
 
 use crate::{
-    Result,
-    ontology::{Ontology, ClassExpression, Individual, Class, IRI},
-    core::{
-        tableau::TableauNode,
-    },
+    ontology::{Ontology, ClassExpression, Individual},
     reasoning::{ClassificationResult, RealizationResult},
 };
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
@@ -95,14 +91,14 @@ impl ConceptSatisfiabilityCache {
         if let Some(entry) = cache.get_mut(expression) {
             if !entry.is_expired(self.config.ttl) {
                 entry.hit(); // Increment hit count
-                return Some(entry.value);
+                Some(entry.value)
             } else {
                 cache.remove(expression); // Remove expired entry
-                return None;
+                None
             }
         } else {
             // If not found, we can return None
-            return None;
+            None
         }
     }
 

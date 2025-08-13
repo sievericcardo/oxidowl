@@ -261,7 +261,7 @@ impl ReasonerConfig {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: ReasonerConfig = toml::from_str(&content)
-            .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to parse TOML config: {e}")))?;
 
         config.validate()?;
         Ok(config)
@@ -270,7 +270,7 @@ impl ReasonerConfig {
     /// Save configuration to TOML file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = toml::to_string(self)
-            .map_err(|e| Error::config(format!("Failed to serialize TOML config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to serialize TOML config: {e}")))?;
 
         fs::write(path, content)?;
         Ok(())
@@ -280,7 +280,7 @@ impl ReasonerConfig {
     pub fn load_from_json<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: ReasonerConfig = serde_json::from_str(&content)
-            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to parse JSON config: {e}")))?;
 
         config.validate()?;
         Ok(config)
@@ -289,7 +289,7 @@ impl ReasonerConfig {
     /// Save configuration to JSON file
     pub fn save_to_json<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| Error::config(format!("Failed to serialize JSON config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to serialize JSON config: {e}")))?;
 
         fs::write(path, content)?;
         Ok(())
@@ -330,7 +330,7 @@ impl ReasonerConfig {
 
     /// Get the worker threads to use
     pub fn worker_thread_count(&self) -> usize {
-        self.performance.worker_threads.unwrap_or_else(|| num_cpus::get())
+        self.performance.worker_threads.unwrap_or_else(num_cpus::get)
     }
 
     /// Check if parallel processing is enabled

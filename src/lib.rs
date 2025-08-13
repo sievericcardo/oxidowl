@@ -67,10 +67,7 @@ pub const DESCRIPTION: &str = "Rust OWL 2 DL reasoner";
 /// Build information
 pub fn version_info() -> String {
     format!(
-        "{} - {}, Version {} (Rust port)",
-        NAME,
-        DESCRIPTION,
-        VERSION
+        "{NAME} - {DESCRIPTION}, Version {VERSION} (Rust port)"
     )
 }
 

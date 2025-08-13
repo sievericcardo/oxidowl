@@ -6,15 +6,15 @@
 
 use crate::{
     core::{
-        completion::{CompletionRule, RuleApplication, RuleContext, RulePriority},
-        dependency::{DependencySet, DependencyTracker, DependencyType},
+        completion::{CompletionRule, RuleApplication},
+        dependency::{DependencySet, DependencyTracker},
     },
-    ontology::{ClassExpression, Individual, Role, ObjectPropertyExpression},
+    ontology::{ClassExpression, Role, ObjectPropertyExpression},
     Error, Result,
 };
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque, BinaryHeap},
+    collections::{HashMap, HashSet, BinaryHeap},
     cmp::Ordering,
     fmt,
 };
@@ -721,8 +721,8 @@ impl ExistentialCandidate {
     fn syntactic_complexity(concept: &ClassExpression) -> u32 {
         match concept {
             ClassExpression::Class(_) => 1,
-            ClassExpression::ObjectIntersectionOf(operands) => 1 + operands.iter().map(|c| Self::syntactic_complexity(c)).sum::<u32>(),
-            ClassExpression::ObjectUnionOf(operands) => 2 + operands.iter().map(|c| Self::syntactic_complexity(c)).sum::<u32>(),
+            ClassExpression::ObjectIntersectionOf(operands) => 1 + operands.iter().map(Self::syntactic_complexity).sum::<u32>(),
+            ClassExpression::ObjectUnionOf(operands) => 2 + operands.iter().map(Self::syntactic_complexity).sum::<u32>(),
             ClassExpression::ObjectSomeValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
             ClassExpression::ObjectAllValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
             ClassExpression::ObjectMinCardinality { filler, .. } => {

@@ -598,7 +598,7 @@ impl DLClauseEvaluator {
                 // We'll pass the extension_manager and other parameters directly
                 let mut temp_context = ExecutionContext {
                     program_counter,
-                    bindings: &mut vec![], // Use empty temporary bindings
+                    bindings: &mut [], // Use empty temporary bindings
                     extension_manager,
                     retrievals: &mut vec![], // Use empty temporary retrievals
                     interrupted,
@@ -606,10 +606,7 @@ impl DLClauseEvaluator {
                 };
                 
                 // Execute and get result immediately
-                match self.execute_worker_safe(&worker, &mut temp_context) {
-                    Ok(result) => result,
-                    Err(e) => return Err(e),
-                }
+                self.execute_worker_safe(&worker, &mut temp_context)?
             };
             
             // Process result
@@ -928,7 +925,7 @@ impl DLClauseEvaluator {
     
     /// Helper functions
     fn is_variable(&self, term: &str) -> bool {
-        term.chars().next().map_or(false, |c| c.is_lowercase())
+        term.chars().next().is_some_and(|c| c.is_lowercase())
     }
     
     fn calculate_fail_target(&self, atom_index: usize) -> usize {

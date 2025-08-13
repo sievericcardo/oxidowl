@@ -135,6 +135,7 @@ pub struct ReasoningStats {
 
 /// Memory usage information
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MemoryUsage {
     pub peak_memory_bytes: usize,
     pub current_memory_bytes: usize,
@@ -157,6 +158,7 @@ pub struct PerformanceMetrics {
 
 /// Error and warning counts
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ErrorCounts {
     pub total_errors: usize,
     pub total_warnings: usize,
@@ -166,18 +168,6 @@ pub struct ErrorCounts {
     pub infinite_loop_detected: usize,
 }
 
-impl Default for MemoryUsage {
-    fn default() -> Self {
-        Self {
-            peak_memory_bytes: 0,
-            current_memory_bytes: 0,
-            dependency_sets_memory: 0,
-            extension_tables_memory: 0,
-            branching_points_memory: 0,
-            clause_index_memory: 0,
-        }
-    }
-}
 
 impl Default for PerformanceMetrics {
     fn default() -> Self {
@@ -192,18 +182,6 @@ impl Default for PerformanceMetrics {
     }
 }
 
-impl Default for ErrorCounts {
-    fn default() -> Self {
-        Self {
-            total_errors: 0,
-            total_warnings: 0,
-            clash_count: 0,
-            timeout_count: 0,
-            memory_limit_exceeded: 0,
-            infinite_loop_detected: 0,
-        }
-    }
-}
 
 /// Event listener for monitoring
 pub trait EventListener: Send + Sync {
@@ -245,13 +223,13 @@ impl EventListener for ConsoleEventListener {
                         println!("CLASH DETECTED");
                     }
                     MonitoredEvent::BranchingPointCreated { choice_count, .. } => {
-                        println!("BRANCHING: {} choices", choice_count);
+                        println!("BRANCHING: {choice_count} choices");
                     }
                     _ => {}
                 }
             }
             MonitoringLevel::Detailed | MonitoringLevel::Debug => {
-                println!("EVENT: {:?}", event);
+                println!("EVENT: {event:?}");
             }
             _ => {}
         }
@@ -267,14 +245,14 @@ impl EventListener for ConsoleEventListener {
         if self.level != MonitoringLevel::None {
             println!("REASONING COMPLETED: {:?}", stats.total_duration);
             if self.level == MonitoringLevel::Debug {
-                println!("FULL STATS: {:#?}", stats);
+                println!("FULL STATS: {stats:#?}");
             }
         }
     }
     
     fn on_error(&self, error: &Error) {
         if self.level != MonitoringLevel::None {
-            println!("ERROR: {:?}", error);
+            println!("ERROR: {error:?}");
         }
     }
 }
@@ -687,8 +665,8 @@ pub mod events {
         duration: Duration,
     ) -> MonitoredEvent {
         // Convert strings to Individual objects for the event
-        let blocker_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", blocker));
-        let blocked_iri = crate::ontology::IRI::new(&format!("http://example.org/{}", blocked));
+        let blocker_iri = crate::ontology::IRI::new(&format!("http://example.org/{blocker}"));
+        let blocked_iri = crate::ontology::IRI::new(&format!("http://example.org/{blocked}"));
         
         MonitoredEvent::BlockingOperation {
             blocker: Individual::named(blocker_iri),

@@ -323,6 +323,12 @@ pub struct DataPropertyCharacteristics {
     pub functional: bool,
 }
 
+impl Default for DataPropertyCharacteristics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DataPropertyCharacteristics {
     /// Create a new set of data property characteristics
     pub fn new() -> Self {
@@ -375,7 +381,7 @@ impl ObjectPropertyHierarchy {
 
     /// Add an object property to the hierarchy
     pub fn add_property(&mut self, property: ObjectProperty) -> &ObjectProperty {
-        let iri = crate::ontology::IRI::new(&property.iri.to_string());
+        let iri = crate::ontology::IRI::new(property.iri.as_ref());
         self.properties.entry(iri.clone()).or_insert_with(|| {
             self.characteristics.insert(iri.clone(), ObjectPropertyCharacteristics::new());
             property
@@ -389,11 +395,11 @@ impl ObjectPropertyHierarchy {
     pub fn add_sub_property(&mut self, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI){
         self.sub_properties
             .entry(super_prop.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(sub.clone());
         self.super_properties
             .entry(sub.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(super_prop.clone());
     }
 
@@ -412,11 +418,11 @@ impl ObjectPropertyHierarchy {
     pub fn add_equivalent_property(&mut self, property: &crate::ontology::IRI, equivalent: &crate::ontology::IRI) {
         self.equivalent_properties
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(equivalent.clone());
         self.equivalent_properties
             .entry(equivalent.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(property.clone());
     }
 
@@ -427,11 +433,11 @@ impl ObjectPropertyHierarchy {
     pub fn add_disjoint_property(&mut self, property: &crate::ontology::IRI, disjoint: &crate::ontology::IRI) {
         self.disjoint_properties
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(disjoint.clone());
         self.disjoint_properties
             .entry(disjoint.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(property.clone());
     }
 
@@ -451,7 +457,7 @@ impl ObjectPropertyHierarchy {
     pub fn add_domain(&mut self, property: &crate::ontology::IRI, domain: crate::ontology::ClassExpression) {
         self.domains
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(domain);
     }
 
@@ -462,7 +468,7 @@ impl ObjectPropertyHierarchy {
     pub fn add_range(&mut self, property: &crate::ontology::IRI, range: crate::ontology::ClassExpression) {
         self.ranges
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(range);
     }
 
@@ -580,11 +586,11 @@ impl DataPropertyHierarchy {
     pub fn add_sub_property(&mut self, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI) {
         self.sub_properties
             .entry(super_prop.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(sub.clone());
         self.super_properties
             .entry(sub.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(super_prop.clone());
     }
 
@@ -603,11 +609,11 @@ impl DataPropertyHierarchy {
     pub fn add_equivalent_property(&mut self, property: &crate::ontology::IRI, equivalent: &crate::ontology::IRI) {
         self.equivalent_properties
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(equivalent.clone());
         self.equivalent_properties
             .entry(equivalent.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(property.clone());
     }
 
@@ -618,11 +624,11 @@ impl DataPropertyHierarchy {
     pub fn add_disjoint_property(&mut self, property: &crate::ontology::IRI, disjoint: &crate::ontology::IRI) {
         self.disjoint_properties
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(disjoint.clone());
         self.disjoint_properties
             .entry(disjoint.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(property.clone());
     }
 
@@ -633,7 +639,7 @@ impl DataPropertyHierarchy {
     pub fn add_domain(&mut self, property: &crate::ontology::IRI, domain: crate::ontology::ClassExpression) {
         self.domains
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(domain);
     }
 
@@ -644,7 +650,7 @@ impl DataPropertyHierarchy {
     pub fn add_range(&mut self, property: &crate::ontology::IRI, range: crate::ontology::ClassExpression) {
         self.ranges
             .entry(property.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(range);
     }
 

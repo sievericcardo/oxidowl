@@ -5,7 +5,7 @@
 
 use crate::{Error, Result};
 use std::{
-    collections::{HashMap, HashSet, BTreeSet, BinaryHeap},
+    collections::{HashMap, HashSet, BTreeSet},
     sync::Arc,
     hash::{Hash, Hasher},
     fmt,
@@ -239,6 +239,12 @@ pub struct DependencyTrackPoint {
     timestamp: std::time::Instant,
 }
 
+impl Default for DependencySet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DependencySet {
     /// Create an empty dependency set
     pub fn new() -> Self {
@@ -432,7 +438,7 @@ impl DependencyTracker {
         // Add to current branching point
         self.active_dependencies
             .entry(self.current_branching_level)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(id);
 
         id
@@ -732,23 +738,23 @@ impl fmt::Display for DependencyType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DependencyType::Deterministic { rule, source_concept } => 
-                write!(f, "Det[{}->{}]", rule, source_concept),
+                write!(f, "Det[{rule}->{source_concept}]"),
             DependencyType::NonDeterministic { rule, choices, chosen_index } => 
-                write!(f, "NonDet[{}:{:?}@{:?}]", rule, choices, chosen_index),
+                write!(f, "NonDet[{rule}:{choices:?}@{chosen_index:?}]"),
             DependencyType::Merge { source_node, target_node } => 
-                write!(f, "Merge[{}->{}]", source_node, target_node),
+                write!(f, "Merge[{source_node}->{target_node}]"),
             DependencyType::Implication { antecedent, consequent } => 
-                write!(f, "Impl[{}->{}]", antecedent, consequent),
+                write!(f, "Impl[{antecedent}->{consequent}]"),
             DependencyType::Functional { role, individual } => 
-                write!(f, "Func[{}@{}]", role, individual),
+                write!(f, "Func[{role}@{individual}]"),
             DependencyType::Distinct { individuals } => 
-                write!(f, "Dist[{:?}]", individuals),
+                write!(f, "Dist[{individuals:?}]"),
             DependencyType::Nominal { nominal, individual } => 
-                write!(f, "Nom[{}@{}]", nominal, individual),
+                write!(f, "Nom[{nominal}@{individual}]"),
             DependencyType::Expanded { existential, witness } => 
-                write!(f, "Exp[{}->{}]", existential, witness),
+                write!(f, "Exp[{existential}->{witness}]"),
             DependencyType::Datatype { constraint, value } => 
-                write!(f, "Data[{}@{}]", constraint, value),
+                write!(f, "Data[{constraint}@{value}]"),
         }
     }
 }
