@@ -1,4 +1,4 @@
-//! Unit tests for OxidOWL components
+//! Unit tests for `OxidOWL` components
 //! 
 //! This module organizes all unit tests for individual components.
 
