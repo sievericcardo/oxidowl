@@ -1,7 +1,7 @@
 //! Unit tests for ontology parsers
 
 use oxidowl::{
-    parsers::{TurtleParser, FunctionalParser, OWLXMLParser},
+    parsers::{TurtleParser, FunctionalParser, OwlXmlParser},
     ontology::Ontology,
 };
 
@@ -21,9 +21,9 @@ fn test_functional_parser_creation() {
 
 #[test]
 fn test_owl_xml_parser_creation() {
-    let _parser = OWLXMLParser::new();
+    let _parser = OwlXmlParser::new();
     
-    println!("OWLXMLParser created successfully");
+    println!("OwlXmlParser created successfully");
 }
 
 #[test]

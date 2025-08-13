@@ -2,10 +2,10 @@
 //! 
 //! This module organizes all unit tests for individual components.
 
-mod reasoning_test;
-mod tableau_test;
-mod ontology_test;
-mod query_test;
-mod parsers_test;
-mod config_cache_test;
-mod hypertableau_test;
+mod reasoning_tests;
+mod tableau_tests;
+mod ontology_tests;
+mod query_tests;
+mod parsers_tests;
+mod config_cache_test_fixed;
+mod hypertableau_test_fixed;
