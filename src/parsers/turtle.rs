@@ -128,19 +128,19 @@ struct ParseState {
 
 impl TurtleParser {
     /// Create a new Turtle parser with default configuration
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self { 
             config: TurtleParserConfig::default(),
         }
     }
     
     /// Create a new Turtle parser with custom configuration
-    pub fn with_config(config: TurtleParserConfig) -> Self {
+    #[must_use] pub fn with_config(config: TurtleParserConfig) -> Self {
         Self { config }
     }
     
     /// Get the current configuration
-    pub fn config(&self) -> &TurtleParserConfig {
+    #[must_use] pub fn config(&self) -> &TurtleParserConfig {
         &self.config
     }
     
@@ -795,7 +795,7 @@ mod tests {
 
     #[test]
     fn test_enhanced_disjoint_union_parsing() {
-        let content = r#"
+        let content = r"
 @prefix ast: <http://www.smolang.org/greenhouseDT#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 
@@ -805,7 +805,7 @@ ast:Pump rdf:type owl:Class ;
                                ast:Overheating
                                ast:Underheating
                              ) .
-"#;
+";
         
         let parser = TurtleParser::new();
         let result = parser.parse_string(content);
@@ -824,13 +824,13 @@ ast:Pump rdf:type owl:Class ;
 
     #[test]
     fn test_enhanced_subclass_parsing() {
-        let content = r#"
+        let content = r"
 @prefix ast: <http://www.smolang.org/greenhouseDT#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 ast:Maintenance rdfs:subClassOf ast:Pump .
 ast:Operational rdfs:subClassOf ast:Pump .
-"#;
+";
         
         let parser = TurtleParser::new();
         let result = parser.parse_string(content);

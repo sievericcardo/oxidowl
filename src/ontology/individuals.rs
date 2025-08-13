@@ -35,17 +35,17 @@ pub struct AnonymousIndividual {
 
 impl Individual {
     /// Creates a new named individual from an IRI.
-    pub fn named(iri: crate::ontology::IRI) -> Self {
+    #[must_use] pub fn named(iri: crate::ontology::IRI) -> Self {
         Individual::Named(NamedIndividual { iri })
     }
 
     /// Creates a new anonymous individual with a unique identifier.
-    pub fn anonymous(id: String) -> Self {
+    #[must_use] pub fn anonymous(id: String) -> Self {
         Individual::Anonymous(AnonymousIndividual { id })
     }
 
     /// Check if the individual is named.
-    pub fn is_named(&self) -> bool {
+    #[must_use] pub fn is_named(&self) -> bool {
         matches!(self, Individual::Named(_))
     }
 
@@ -58,12 +58,12 @@ impl Individual {
     }
 
     /// Check if the individual is anonymous.
-    pub fn is_anonymous(&self) -> bool {
+    #[must_use] pub fn is_anonymous(&self) -> bool {
         matches!(self, Individual::Anonymous(_))
     }
 
     /// Get the IRI of a named individual.
-    pub fn named_iri(&self) -> Option<&NamedIndividual> {
+    #[must_use] pub fn named_iri(&self) -> Option<&NamedIndividual> {
         if let Individual::Named(named) = self {
             Some(named)
         } else {
@@ -72,7 +72,7 @@ impl Individual {
     }
 
     /// Get the ID of an anonymous individual.
-    pub fn anonymous_id(&self) -> Option<&AnonymousIndividual> {
+    #[must_use] pub fn anonymous_id(&self) -> Option<&AnonymousIndividual> {
         if let Individual::Anonymous(anon) = self {
             Some(anon)
         } else {
@@ -81,7 +81,7 @@ impl Individual {
     }
 
     /// Get a string representation of the individual.
-    pub fn to_string(&self) -> String {
+    #[must_use] pub fn to_string(&self) -> String {
         match self {
             Individual::Named(named) => named.iri.to_string(),
             Individual::Anonymous(anon) => format!("_:{}", anon.id),
@@ -89,7 +89,7 @@ impl Individual {
     }
 
     /// Get the IRI if this is a named individual
-    pub fn iri(&self) -> Option<&crate::ontology::IRI> {
+    #[must_use] pub fn iri(&self) -> Option<&crate::ontology::IRI> {
         match self {
             Individual::Named(named) => Some(&named.iri),
             Individual::Anonymous(_) => None,
@@ -108,14 +108,14 @@ impl fmt::Display for Individual {
 
 impl NamedIndividual {
     /// Creates a new named individual from an IRI.
-    pub fn new(iri: crate::ontology::IRI) -> Self {
+    #[must_use] pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
 }
 
 impl AnonymousIndividual {
     /// Creates a new anonymous individual with a unique identifier.
-    pub fn new(id: String) -> Self {
+    #[must_use] pub fn new(id: String) -> Self {
         Self { id }
     }
 
@@ -127,12 +127,12 @@ impl AnonymousIndividual {
     }
 
     /// Create a new anonymous individual with a unique identifier.
-    pub fn new_unique() -> Self {
+    #[must_use] pub fn new_unique() -> Self {
         Self::new(Self::generate_unique_id())
     }
 }
 
-/// Individual assertion for ABox reasoning
+/// Individual assertion for `ABox` reasoning
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IndividualAssertion {
     /// Class assertion: the individual is an instance of a class.
@@ -189,7 +189,7 @@ pub enum IndividualAssertion {
 
 impl IndividualAssertion {
     /// Get the individual involved in the assertion.
-    pub fn individuals(&self) -> HashSet<Individual> {
+    #[must_use] pub fn individuals(&self) -> HashSet<Individual> {
         let mut individuals = HashSet::new();
 
         match self {
@@ -218,7 +218,7 @@ impl IndividualAssertion {
     }
 
     /// Check if the assertion is positive (i.e., it asserts a relationship).
-    pub fn is_positive(&self) -> bool {
+    #[must_use] pub fn is_positive(&self) -> bool {
         !matches!(
             self,
             IndividualAssertion::NegativeObjectPropertyAssertion { .. }
@@ -227,12 +227,12 @@ impl IndividualAssertion {
     }
 
     /// Check if the assertion is negative (i.e., it denies a relationship).
-    pub fn is_negative(&self) -> bool {
+    #[must_use] pub fn is_negative(&self) -> bool {
         !self.is_positive()
     }
 
     /// Get the property from an object property assertion
-    pub fn property(&self) -> Option<&crate::ontology::ObjectPropertyExpression> {
+    #[must_use] pub fn property(&self) -> Option<&crate::ontology::ObjectPropertyExpression> {
         match self {
             IndividualAssertion::ObjectPropertyAssertion { property, .. } |
             IndividualAssertion::NegativeObjectPropertyAssertion { property, .. } => Some(property),
@@ -241,7 +241,7 @@ impl IndividualAssertion {
     }
 
     /// Get the object from an object property assertion
-    pub fn object(&self) -> Option<&Individual> {
+    #[must_use] pub fn object(&self) -> Option<&Individual> {
         match self {
             IndividualAssertion::ObjectPropertyAssertion { object, .. } |
             IndividualAssertion::NegativeObjectPropertyAssertion { object, .. } => Some(object),
@@ -250,7 +250,7 @@ impl IndividualAssertion {
     }
 
     /// Get the value from a data property assertion
-    pub fn value(&self) -> Option<&crate::ontology::Literal> {
+    #[must_use] pub fn value(&self) -> Option<&crate::ontology::Literal> {
         match self {
             IndividualAssertion::DataPropertyAssertion { value, .. } |
             IndividualAssertion::NegativeDataPropertyAssertion { value, .. } => Some(value),
@@ -259,7 +259,7 @@ impl IndividualAssertion {
     }
 
     /// Get the data property from a data property assertion
-    pub fn data_property(&self) -> Option<&crate::ontology::DataPropertyExpression> {
+    #[must_use] pub fn data_property(&self) -> Option<&crate::ontology::DataPropertyExpression> {
         match self {
             IndividualAssertion::DataPropertyAssertion { property, .. } |
             IndividualAssertion::NegativeDataPropertyAssertion { property, .. } => Some(property),
@@ -285,7 +285,7 @@ pub struct IndividualStore {
 }
 
 impl IndividualStore {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             named_individuals: HashMap::new(),
             anonymous_individuals: HashMap::new(),
@@ -301,7 +301,7 @@ impl IndividualStore {
     }
 
     /// Get a named individual by its IRI.
-    pub fn get_named_individual(&self, iri: &crate::ontology::IRI) -> Option<&NamedIndividual> {
+    #[must_use] pub fn get_named_individual(&self, iri: &crate::ontology::IRI) -> Option<&NamedIndividual> {
         self.named_individuals.get(iri)
     }
 
@@ -320,7 +320,7 @@ impl IndividualStore {
     }
 
     /// Get an anonymous individual by its unique identifier.
-    pub fn get_anonymous_individual(&self, id: &str) -> Option<&AnonymousIndividual> {
+    #[must_use] pub fn get_anonymous_individual(&self, id: &str) -> Option<&AnonymousIndividual> {
         self.anonymous_individuals.get(id)
     }
 
@@ -384,12 +384,12 @@ impl IndividualStore {
     }
 
     /// Get all assertions
-    pub fn assertions(&self) -> &Vec<IndividualAssertion> {
+    #[must_use] pub fn assertions(&self) -> &Vec<IndividualAssertion> {
         &self.assertions
     }
 
     /// Get assertions by specific individual
-    pub fn assertions_for_individual(&self, individual: &Individual) -> Vec<&IndividualAssertion> {
+    #[must_use] pub fn assertions_for_individual(&self, individual: &Individual) -> Vec<&IndividualAssertion> {
         self.assertions
             .iter()
             .filter(|a| a.individuals()
@@ -398,7 +398,7 @@ impl IndividualStore {
     }
 
     /// Get class assertions for a specific individual
-    pub fn class_assertions_for_individual(&self, individual: &Individual) -> Vec<&IndividualAssertion> {
+    #[must_use] pub fn class_assertions_for_individual(&self, individual: &Individual) -> Vec<&IndividualAssertion> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -416,7 +416,7 @@ impl IndividualStore {
     }
 
     /// Get object property assertions where the individual is the subject
-    pub fn object_property_assertions_for_subject(&self, individual: &Individual) -> Vec<(&crate::ontology::ObjectPropertyExpression, &Individual)> {
+    #[must_use] pub fn object_property_assertions_for_subject(&self, individual: &Individual) -> Vec<(&crate::ontology::ObjectPropertyExpression, &Individual)> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -434,7 +434,7 @@ impl IndividualStore {
     }
 
     /// Get data property assertions where the individual is the object
-    pub fn data_property_assertions_for_subject(&self, individual: &Individual) -> Vec<(&crate::ontology::DataPropertyExpression, &crate::ontology::Literal)> {
+    #[must_use] pub fn data_property_assertions_for_subject(&self, individual: &Individual) -> Vec<(&crate::ontology::DataPropertyExpression, &crate::ontology::Literal)> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -452,7 +452,7 @@ impl IndividualStore {
     }
 
     /// Get data property assertions for a specific individual
-    pub fn data_property_assertions_for_individual(&self, individual: &Individual) -> Vec<(&crate::ontology::DataPropertyExpression, &crate::ontology::Literal)> {
+    #[must_use] pub fn data_property_assertions_for_individual(&self, individual: &Individual) -> Vec<(&crate::ontology::DataPropertyExpression, &crate::ontology::Literal)> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -470,7 +470,7 @@ impl IndividualStore {
     }
 
     /// Get individuals that are explicitly stated to be the same
-    pub fn same_individuals(&self, individual: &Individual) -> Vec<&Individual> {
+    #[must_use] pub fn same_individuals(&self, individual: &Individual) -> Vec<&Individual> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -492,7 +492,7 @@ impl IndividualStore {
     }
 
     /// Get individuals that are stated to be different
-    pub fn different_individuals(&self, individual: &Individual) -> Vec<&Individual> {
+    #[must_use] pub fn different_individuals(&self, individual: &Individual) -> Vec<&Individual> {
         self.assertions
             .iter()
             .filter_map(|assertion| {
@@ -524,7 +524,7 @@ impl IndividualStore {
     }
 
     /// Get all individuals (both named and anonymous)
-    pub fn all_individuals(&self) -> Vec<Individual> {
+    #[must_use] pub fn all_individuals(&self) -> Vec<Individual> {
         let mut individuals = Vec::new();
         for named in self.named_individuals.values() {
             individuals.push(Individual::Named(named.clone()));
@@ -536,7 +536,7 @@ impl IndividualStore {
     }
 
     /// Check if an individual is known
-    pub fn is_known_individual(&self, individual: &Individual) -> bool {
+    #[must_use] pub fn is_known_individual(&self, individual: &Individual) -> bool {
         match individual {
             Individual::Named(named) => self.named_individuals.contains_key(&named.iri),
             Individual::Anonymous(anon) => self.anonymous_individuals.contains_key(&anon.id),
@@ -544,12 +544,12 @@ impl IndividualStore {
     }
 
     /// Get the number of named individuals
-    pub fn named_individual_count(&self) -> usize {
+    #[must_use] pub fn named_individual_count(&self) -> usize {
         self.named_individuals.len()
     }
 
     /// Check if the store contains any named individuals
-    pub fn has_named_individuals(&self) -> bool {
+    #[must_use] pub fn has_named_individuals(&self) -> bool {
         !self.named_individuals.is_empty()
     }
 

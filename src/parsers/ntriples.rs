@@ -21,7 +21,7 @@ pub struct NTriplesParser {
 
 impl NTriplesParser {
     /// Create a new N-Triples parser
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {}
     }
 }
@@ -51,23 +51,20 @@ pub fn parse(content: &str) -> Result<Ontology> {
         let predicate = IRI::from(parts[1].to_string());
         let object = parts[2];
 
-        match predicate.as_str() {
-            "rdf:type" => {
-                if object.starts_with("<") && object.ends_with(">") {
-                    let class = crate::ontology::Class {
-                        iri: IRI::from(object.to_string())
-                    };
-                    ontology.add_class(class);
-                } else if object.starts_with("_:") {
-                    let individual = crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
-                        iri: IRI::from(object.to_string())
-                    });
-                    ontology.add_individual(subject, individual);
-                }
+        if predicate.as_str() == "rdf:type" {
+            if object.starts_with('<') && object.ends_with('>') {
+                let class = crate::ontology::Class {
+                    iri: IRI::from(object.to_string())
+                };
+                ontology.add_class(class);
+            } else if object.starts_with("_:") {
+                let individual = crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
+                    iri: IRI::from(object.to_string())
+                });
+                ontology.add_individual(subject, individual);
             }
-            _ => {
-                // Handle other predicates as needed
-            }
+        } else {
+            // Handle other predicates as needed
         }
     }
 

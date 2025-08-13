@@ -51,7 +51,7 @@ impl Default for AnywhereBlocking {
 }
 
 impl AnywhereBlocking {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             signature_cache: HashMap::new(),
         }
@@ -114,7 +114,7 @@ impl Default for AncestorBlocking {
 }
 
 impl AncestorBlocking {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             parent_map: HashMap::new(),
         }
@@ -182,7 +182,7 @@ impl Default for PairwiseBlocking {
 }
 
 impl PairwiseBlocking {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             compared_pairs: HashSet::new(),
         }
@@ -249,7 +249,7 @@ impl Default for DynamicBlocking {
 }
 
 impl DynamicBlocking {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             current_strategy: Box::new(AnywhereBlocking::new()),
             stats: BlockingStatistics::default(),

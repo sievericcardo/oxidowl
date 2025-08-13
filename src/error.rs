@@ -211,17 +211,17 @@ impl Error {
     }
 
     /// Create an invalid disjunct index error
-    pub fn invalid_disjunct_index(index: usize) -> Self {
+    #[must_use] pub fn invalid_disjunct_index(index: usize) -> Self {
         Self::InvalidDisjunctIndex { index }
     }
 
     /// Create an invalid branching choice error
-    pub fn invalid_branching_choice(index: usize) -> Self {
+    #[must_use] pub fn invalid_branching_choice(index: usize) -> Self {
         Self::InvalidBranchingChoice { index }
     }
 
     /// Create a max depth exceeded error
-    pub fn max_depth_exceeded(depth: usize) -> Self {
+    #[must_use] pub fn max_depth_exceeded(depth: usize) -> Self {
         Self::MaxDepthExceeded { depth }
     }
 
@@ -231,7 +231,7 @@ impl Error {
     }
 
     /// Create a no branching choices available error
-    pub fn no_branching_choices_available() -> Self {
+    #[must_use] pub fn no_branching_choices_available() -> Self {
         Self::NoBranchingChoicesAvailable
     }
 
@@ -270,7 +270,7 @@ pub enum ErrorCategory {
 
 impl Error {
     /// Get the category of the error
-    pub fn category(&self) -> ErrorCategory {
+    #[must_use] pub fn category(&self) -> ErrorCategory {
         match self {
             Error::OntologyParsing { .. } 
                 | Error::XmlParsing { .. } 
@@ -301,7 +301,7 @@ impl Error {
     }
 
     /// Check if the error is recoverable
-    pub fn is_recoverable(&self) -> bool {
+    #[must_use] pub fn is_recoverable(&self) -> bool {
         match self {
             Error::OntologyParsing { .. }
             | Error::XmlParsing { .. }

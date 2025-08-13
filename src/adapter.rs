@@ -1,6 +1,6 @@
 use crate::Result;
-use crate::ontology::{axioms::*, IRI, Class};
-use horned_owl::model::*;
+use crate::ontology::{axioms::AxiomId, IRI, Class};
+use horned_owl::model::MutableOntology;
 use std::collections::HashMap;
 
 /// Adapter for converting between horned-owl and oxidowl representations
@@ -16,7 +16,7 @@ impl Default for HornedOwlAdapter {
 }
 
 impl HornedOwlAdapter {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             iri_cache: HashMap::new(),
             axiom_counter: 0,

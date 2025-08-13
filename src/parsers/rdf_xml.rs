@@ -56,19 +56,19 @@ pub struct RdfXmlParser {
 
 impl RdfXmlParser {
     /// Create a new RDF/XML parser with default configuration
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self { 
             config: RdfXmlParserConfig::default(),
         }
     }
     
     /// Create a new RDF/XML parser with custom configuration
-    pub fn with_config(config: RdfXmlParserConfig) -> Self {
+    #[must_use] pub fn with_config(config: RdfXmlParserConfig) -> Self {
         Self { config }
     }
     
     /// Get the current configuration
-    pub fn config(&self) -> &RdfXmlParserConfig {
+    #[must_use] pub fn config(&self) -> &RdfXmlParserConfig {
         &self.config
     }
     
@@ -207,7 +207,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     writeln!(file, "         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"")?;
     writeln!(file, "         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">")?;
     writeln!(file, "  <!-- Ontology serialization -->")?;
-    let iri_str = ontology.iri.as_ref().map(|iri| iri.as_str()).unwrap_or("http://example.org/ontology");
+    let iri_str = ontology.iri.as_ref().map_or("http://example.org/ontology", super::super::ontology::IRI::as_str);
     writeln!(file, "  <owl:Ontology rdf:about=\"{iri_str}\" />")?;
     writeln!(file, "  <!-- TODO: Implement complete RDF/XML serialization -->")?;
     writeln!(file, "</rdf:RDF>")?;

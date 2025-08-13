@@ -1,4 +1,4 @@
-//! Dependency Tracking for HyperTableau
+//! Dependency Tracking for `HyperTableau`
 //!
 //! This module implements dependency tracking for supporting backtracking and
 //! justification in the hypertableau algorithm. It tracks causal relationships
@@ -81,12 +81,12 @@ pub struct DependencySet {
 
 impl DependencySet {
     /// Create a new dependency set
-    pub fn new(
+    #[must_use] pub fn new(
         id: DependencySetId,
         dependency_type: DependencyType,
         parents: Vec<DependencySetId>,
     ) -> Self {
-        let level = if parents.is_empty() { 0 } else { 1 }; // Will be updated by tracker
+        let level = usize::from(!parents.is_empty()); // Will be updated by tracker
         
         Self {
             id,
@@ -99,12 +99,12 @@ impl DependencySet {
     }
     
     /// Check if this dependency set is independent (no parents)
-    pub fn is_independent(&self) -> bool {
+    #[must_use] pub fn is_independent(&self) -> bool {
         self.parents.is_empty()
     }
     
     /// Check if this dependency set depends on a specific branching point
-    pub fn depends_on_branch(&self, branch_id: BranchingPointId) -> bool {
+    #[must_use] pub fn depends_on_branch(&self, branch_id: BranchingPointId) -> bool {
         matches!(&self.dependency_type, 
             DependencyType::BranchingDecision { branch_id: bid, .. } if *bid == branch_id)
     }
@@ -164,7 +164,7 @@ pub struct DependencyStats {
 
 impl DependencyTracker {
     /// Create a new dependency tracker
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             dependency_sets: HashMap::new(),
             fact_dependencies: HashMap::new(),
@@ -309,15 +309,14 @@ impl DependencyTracker {
     }
     
     /// Check if a fact is currently asserted (not retracted)
-    pub fn is_fact_asserted(&self, fact_id: FactId) -> bool {
+    #[must_use] pub fn is_fact_asserted(&self, fact_id: FactId) -> bool {
         self.fact_dependencies
             .get(&fact_id)
-            .map(|dep| dep.is_asserted)
-            .unwrap_or(false)
+            .is_some_and(|dep| dep.is_asserted)
     }
     
     /// Get all currently asserted facts
-    pub fn get_asserted_facts(&self) -> Vec<FactId> {
+    #[must_use] pub fn get_asserted_facts(&self) -> Vec<FactId> {
         self.fact_dependencies
             .values()
             .filter(|dep| dep.is_asserted)
@@ -326,22 +325,22 @@ impl DependencyTracker {
     }
     
     /// Get dependency information for a fact
-    pub fn get_fact_dependency(&self, fact_id: FactId) -> Option<&FactDependency> {
+    #[must_use] pub fn get_fact_dependency(&self, fact_id: FactId) -> Option<&FactDependency> {
         self.fact_dependencies.get(&fact_id)
     }
     
     /// Get dependency set information
-    pub fn get_dependency_set(&self, dep_id: DependencySetId) -> Option<&DependencySet> {
+    #[must_use] pub fn get_dependency_set(&self, dep_id: DependencySetId) -> Option<&DependencySet> {
         self.dependency_sets.get(&dep_id)
     }
     
     /// Check if there are any active branches
-    pub fn has_active_branches(&self) -> bool {
+    #[must_use] pub fn has_active_branches(&self) -> bool {
         !self.active_branches.is_empty()
     }
     
     /// Get statistics
-    pub fn get_stats(&self) -> &DependencyStats {
+    #[must_use] pub fn get_stats(&self) -> &DependencyStats {
         &self.stats
     }
     
@@ -356,8 +355,7 @@ impl DependencyTracker {
             let all_retracted = fact_ids.iter().all(|fact_id| {
                 self.fact_dependencies
                     .get(fact_id)
-                    .map(|dep| !dep.is_asserted)
-                    .unwrap_or(true)
+                    .is_none_or(|dep| !dep.is_asserted)
             });
             
             if all_retracted {
@@ -400,10 +398,10 @@ impl Default for DependencyTracker {
 
 /// Helper functions for working with dependencies
 pub mod utils {
-    use super::*;
+    use super::{FactId, DependencyType, BranchingPointId};
     
     /// Create a dependency type for clause application
-    pub fn clause_application_dependency(
+    #[must_use] pub fn clause_application_dependency(
         clause_id: usize,
         premise_facts: Vec<FactId>,
     ) -> DependencyType {
@@ -414,7 +412,7 @@ pub mod utils {
     }
     
     /// Create a dependency type for branching decision
-    pub fn branching_dependency(
+    #[must_use] pub fn branching_dependency(
         branch_id: BranchingPointId,
         choice_index: usize,
     ) -> DependencyType {
@@ -425,7 +423,7 @@ pub mod utils {
     }
     
     /// Create a dependency type for initial assertion
-    pub fn initial_assertion_dependency(axiom_id: usize) -> DependencyType {
+    #[must_use] pub fn initial_assertion_dependency(axiom_id: usize) -> DependencyType {
         DependencyType::InitialAssertion { axiom_id }
     }
 }

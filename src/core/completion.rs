@@ -316,7 +316,7 @@ pub enum RuleApplicationStrategy {
 
 impl CompletionRuleSet {
     /// Create a new completion rule set
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let mut rule_set = Self {
             rules: Vec::new(),
             priorities: HashMap::new(),
@@ -359,26 +359,26 @@ impl CompletionRuleSet {
             // Sort the rules by priority
             let priorities = &self.priorities;
             self.rules.sort_by_key(|r| {
-                priorities.get(r).cloned().unwrap_or(RulePriority::Normal)
+                priorities.get(r).copied().unwrap_or(RulePriority::Normal)
             });
         }
     }
 
     /// Get rule priority
-    pub fn get_priority(&self, rule: CompletionRule) -> RulePriority {
-        self.priorities.get(&rule).cloned().unwrap_or(RulePriority::Normal)
+    #[must_use] pub fn get_priority(&self, rule: CompletionRule) -> RulePriority {
+        self.priorities.get(&rule).copied().unwrap_or(RulePriority::Normal)
     }
 
     /// Get all applicable rules
-    pub fn get_applicable_rules(&self, concept: &ClassExpression) -> Vec<CompletionRule> {
+    #[must_use] pub fn get_applicable_rules(&self, concept: &ClassExpression) -> Vec<CompletionRule> {
         self.rules.iter()
             .filter(|&rule| self.is_rule_applicable(*rule, concept))
-            .cloned()
+            .copied()
             .collect()
     }
 
     /// Check if a rule is applicable to a concept
-    pub fn is_rule_applicable(&self, rule: CompletionRule, concept: &ClassExpression) -> bool {
+    #[must_use] pub fn is_rule_applicable(&self, rule: CompletionRule, concept: &ClassExpression) -> bool {
         match rule {
             CompletionRule::And => matches!(concept, ClassExpression::ObjectIntersectionOf(_)),
             CompletionRule::Or => matches!(concept, ClassExpression::ObjectUnionOf(_)),
@@ -593,7 +593,7 @@ impl CompletionRuleSet {
             // Merge current node with the nominal individual
             result.merges.push((
                 current_node.clone(),
-                nominal.iri().map(|iri| iri.to_string()).unwrap_or_else(|| "unknown".to_string()),
+                nominal.iri().map_or_else(|| "unknown".to_string(), std::string::ToString::to_string),
                 application.dependencies.clone(),
             ));
         }
@@ -815,14 +815,14 @@ impl CompletionRuleSet {
     }
     
     /// Get all rules in priority order
-    pub fn rules_by_priority(&self) -> Vec<CompletionRule> {
+    #[must_use] pub fn rules_by_priority(&self) -> Vec<CompletionRule> {
         let mut rules = self.rules.clone();
         rules.sort_by_key(|r| self.get_priority(*r));
         rules
     }
     
     /// Check if any rules are applicable to a set of concepts
-    pub fn has_applicable_rules(&self, concepts: &[ClassExpression]) -> bool {
+    #[must_use] pub fn has_applicable_rules(&self, concepts: &[ClassExpression]) -> bool {
         concepts.iter().any(|concept| {
             self.rules.iter().any(|&rule| self.is_rule_applicable(rule, concept))
         })
@@ -859,7 +859,7 @@ impl CompletionRuleSet {
 
 impl RuleResult {
     /// Create an empty rule result
-    pub fn empty() -> Self {
+    #[must_use] pub fn empty() -> Self {
         Self {
             new_applications: Vec::new(),
             concept_additions: Vec::new(),
@@ -878,7 +878,7 @@ impl RuleResult {
     }
 
     /// Check if the result is empty
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.new_applications.is_empty() &&
         self.concept_additions.is_empty() &&
         self.role_additions.is_empty() &&
@@ -895,12 +895,12 @@ impl RuleResult {
     }
 
     /// Check if any clashes were detected
-    pub fn has_clash(&self) -> bool {
+    #[must_use] pub fn has_clash(&self) -> bool {
         !self.clashes.is_empty()
     }
 
     /// Check if any branches were created
-    pub fn requires_branching(&self) -> bool {
+    #[must_use] pub fn requires_branching(&self) -> bool {
         !self.branches.is_empty()
     }
 
@@ -918,7 +918,7 @@ impl RuleResult {
 
 impl RuleApplication {
     /// Create a new rule application
-    pub fn new(
+    #[must_use] pub fn new(
         rule: CompletionRule,
         node: String,
         context: RuleContext,
@@ -935,7 +935,7 @@ impl RuleApplication {
     }
 
     /// Create a concept-based rule application
-    pub fn concept(
+    #[must_use] pub fn concept(
         rule: CompletionRule,
         node: String,
         concept: ClassExpression,
@@ -966,7 +966,7 @@ impl RuleApplication {
     }
 
     /// Create a role-based rule application
-    pub fn role(
+    #[must_use] pub fn role(
         rule: CompletionRule,
         role: Role,
         source: String,
@@ -984,7 +984,7 @@ impl RuleApplication {
     }
 
     /// Create a property chain rule application
-    pub fn property_chain(
+    #[must_use] pub fn property_chain(
         chain: Vec<ObjectPropertyExpression>,
         target: String,
         source: String,

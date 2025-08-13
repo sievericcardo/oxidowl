@@ -7,7 +7,7 @@ use crate::ontology::{
     Ontology, ClassExpression, ObjectPropertyExpression, DataPropertyExpression, 
     Individual, Literal, DataRange, Annotation
 };
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{Axiom, SWRLRuleAxiom, SWRLRule, SWRLAtom, SWRLIArgument, SWRLDArgument, SWRLVariable, DeclarationAxiom, SubClassOfAxiom, EquivalentClassesAxiom, DisjointClassesAxiom, DisjointUnionAxiom, SubObjectPropertyOfAxiom, EquivalentObjectPropertiesAxiom, DisjointObjectPropertiesAxiom, InverseObjectPropertiesAxiom, ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom, FunctionalObjectPropertyAxiom, InverseFunctionalObjectPropertyAxiom, ReflexiveObjectPropertyAxiom, IrreflexiveObjectPropertyAxiom, SymmetricObjectPropertyAxiom, AsymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom, SubDataPropertyOfAxiom, EquivalentDataPropertiesAxiom, DisjointDataPropertiesAxiom, DataPropertyDomainAxiom, DataPropertyRangeAxiom, FunctionalDataPropertyAxiom, SameIndividualAxiom, DifferentIndividualsAxiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, DataPropertyAssertionAxiom, NegativeObjectPropertyAssertionAxiom, NegativeDataPropertyAssertionAxiom, AnnotationAssertionAxiom, SubAnnotationPropertyOfAxiom, AnnotationPropertyDomainAxiom, AnnotationPropertyRangeAxiom, Entity};
 use crate::Result;
 
 /// Visitor trait for traversing ontology components

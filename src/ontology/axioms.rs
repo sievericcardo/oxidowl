@@ -22,7 +22,7 @@ pub enum Entity {
 
 impl Entity {
     /// Get the entity type as a string
-    pub fn entity_type(&self) -> &'static str {
+    #[must_use] pub fn entity_type(&self) -> &'static str {
         match self {
             Entity::Class(_) => "Class",
             Entity::ObjectProperty(_) => "ObjectProperty",
@@ -34,7 +34,7 @@ impl Entity {
     }
 
     /// Get the IRI of the entity
-    pub fn iri(&self) -> &crate::ontology::IRI {
+    #[must_use] pub fn iri(&self) -> &crate::ontology::IRI {
         match self {
             Entity::Class(iri) => iri,
             Entity::ObjectProperty(iri) => iri,
@@ -448,7 +448,7 @@ pub struct SWRLRuleAxiom {
 }
 
 impl SWRLRuleAxiom {
-    pub fn new(id: AxiomId, rule: SWRLRule) -> Self {
+    #[must_use] pub fn new(id: AxiomId, rule: SWRLRule) -> Self {
         Self {
             id,
             rule,
@@ -456,7 +456,7 @@ impl SWRLRuleAxiom {
         }
     }
 
-    pub fn with_annotations(id: AxiomId, rule: SWRLRule, annotations: Vec<crate::ontology::Annotation>) -> Self {
+    #[must_use] pub fn with_annotations(id: AxiomId, rule: SWRLRule, annotations: Vec<crate::ontology::Annotation>) -> Self {
         Self {
             id,
             rule,
@@ -568,7 +568,7 @@ pub struct AxiomStore {
 }
 
 impl AxiomStore {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         AxiomStore {
             axioms: HashMap::new(),
             axioms_by_type: HashMap::new(),
@@ -631,11 +631,11 @@ impl AxiomStore {
         Ok(id)
     }
 
-    pub fn get_axiom(&self, id: AxiomId) -> Option<&Axiom> {
+    #[must_use] pub fn get_axiom(&self, id: AxiomId) -> Option<&Axiom> {
         self.axioms.get(&id)
     }
 
-    pub fn get_axioms_by_type(&self, axiom_type: AxiomType) -> Vec<&Axiom> {
+    #[must_use] pub fn get_axioms_by_type(&self, axiom_type: AxiomType) -> Vec<&Axiom> {
         self.axioms_by_type.get(&axiom_type)
             .map_or(Vec::new(), |ids| {
                 ids.iter()
@@ -671,11 +671,11 @@ impl AxiomStore {
         self.axioms.values().filter(|axiom| !axiom.is_logical())
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use] pub fn len(&self) -> usize {
         self.axioms.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.axioms.is_empty()
     }
 }
@@ -689,7 +689,7 @@ impl Default for AxiomStore {
 /// SWRL (Semantic Web Rule Language) Support
 /// 
 /// These structures implement SWRL rules as specified in the W3C User Submission
-/// https://www.w3.org/Submission/SWRL/
+/// <https://www.w3.org/Submission/SWRL>/
 
 /// SWRL Variable
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -698,7 +698,7 @@ pub struct SWRLVariable {
 }
 
 impl SWRLVariable {
-    pub fn new(iri: crate::ontology::IRI) -> Self {
+    #[must_use] pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
 }
@@ -761,7 +761,7 @@ pub enum SWRLAtom {
 
 impl SWRLAtom {
     /// Get all variables used in this atom
-    pub fn variables(&self) -> HashSet<&SWRLVariable> {
+    #[must_use] pub fn variables(&self) -> HashSet<&SWRLVariable> {
         let mut vars = HashSet::new();
         match self {
             SWRLAtom::ClassAtom { argument, .. } => {
@@ -826,12 +826,12 @@ pub struct SWRLRule {
 }
 
 impl SWRLRule {
-    pub fn new(head: Vec<SWRLAtom>, body: Vec<SWRLAtom>) -> Self {
+    #[must_use] pub fn new(head: Vec<SWRLAtom>, body: Vec<SWRLAtom>) -> Self {
         Self { head, body }
     }
 
     /// Get all variables used in this rule
-    pub fn variables(&self) -> HashSet<&SWRLVariable> {
+    #[must_use] pub fn variables(&self) -> HashSet<&SWRLVariable> {
         let mut vars = HashSet::new();
         for atom in &self.head {
             vars.extend(atom.variables());
@@ -843,7 +843,7 @@ impl SWRLRule {
     }
 
     /// Check if the rule is safe (all head variables appear in the body)
-    pub fn is_safe(&self) -> bool {
+    #[must_use] pub fn is_safe(&self) -> bool {
         let head_vars: HashSet<&SWRLVariable> = self.head.iter()
             .flat_map(|atom| atom.variables())
             .collect();

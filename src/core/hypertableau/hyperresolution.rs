@@ -439,8 +439,8 @@ impl HyperresolutionManager {
         predicate.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') &&
         !predicate.starts_with("¬") &&
         !predicate.starts_with("neg_") &&
-        !predicate.contains("(") &&
-        !predicate.contains(")") &&
+        !predicate.contains('(') &&
+        !predicate.contains(')') &&
         !predicate.starts_with('_') && 
         !self.is_atomic_concept_predicate(predicate)
     }
@@ -448,7 +448,7 @@ impl HyperresolutionManager {
     /// Check if a predicate represents an atomic concept
     fn is_atomic_concept_predicate(&self, predicate: &str) -> bool {
         // Simple heuristic: concepts typically start with uppercase
-        predicate.chars().next().is_some_and(|c| c.is_uppercase())
+        predicate.chars().next().is_some_and(char::is_uppercase)
     }
     
     /// Clear internal state for new reasoning task
@@ -463,7 +463,7 @@ impl HyperresolutionManager {
     }
     
     /// Get statistics about clause application
-    pub fn get_statistics(&self) -> HyperresolutionStatistics {
+    #[must_use] pub fn get_statistics(&self) -> HyperresolutionStatistics {
         let total_matches: u64 = self.evaluators.iter().map(|e| e.match_count).sum();
         let total_applications: u64 = self.evaluators.iter().map(|e| e.application_count).sum();
         
@@ -675,7 +675,7 @@ impl DLClauseEvaluator {
     }
     
     /// Get predicates consumed by this evaluator
-    pub fn get_consumed_predicates(&self) -> Vec<String> {
+    #[must_use] pub fn get_consumed_predicates(&self) -> Vec<String> {
         let mut predicates = Vec::new();
         
         // Extract predicates from body clause atoms

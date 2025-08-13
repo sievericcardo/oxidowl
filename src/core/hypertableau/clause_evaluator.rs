@@ -2,7 +2,7 @@
 //!
 //! This module implements efficient evaluation of DL clauses in the hypertableau
 //! algorithm. It compiles clauses into executable form and provides optimized
-//! evaluation strategies based on HermiT's approach.
+//! evaluation strategies based on `HermiT`'s approach.
 
 use crate::{
     core::{
@@ -925,7 +925,7 @@ impl DLClauseEvaluator {
     
     /// Helper functions
     fn is_variable(&self, term: &str) -> bool {
-        term.chars().next().is_some_and(|c| c.is_lowercase())
+        term.chars().next().is_some_and(char::is_lowercase)
     }
     
     fn calculate_fail_target(&self, atom_index: usize) -> usize {
@@ -960,7 +960,7 @@ impl DLClauseEvaluator {
     }
     
     /// Get evaluation statistics
-    pub fn get_statistics(&self) -> EvaluationStatistics {
+    #[must_use] pub fn get_statistics(&self) -> EvaluationStatistics {
         EvaluationStatistics {
             evaluations: self.evaluations,
             matches: self.matches,

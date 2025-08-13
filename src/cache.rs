@@ -75,26 +75,26 @@ pub struct ConceptSatisfiabilityCache {
 }
 
 impl ConceptSatisfiabilityCache {
-    pub fn new(config: CacheConfig) -> Self {
+    #[must_use] pub fn new(config: CacheConfig) -> Self {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
             config,
         }
     }
 
-    pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
+    #[must_use] pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
         if !self.config.enable_satisfiability_cache {
             return None; // Cache is disabled
         }
 
         let mut cache = self.cache.write().unwrap();
         if let Some(entry) = cache.get_mut(expression) {
-            if !entry.is_expired(self.config.ttl) {
-                entry.hit(); // Increment hit count
-                Some(entry.value)
-            } else {
+            if entry.is_expired(self.config.ttl) {
                 cache.remove(expression); // Remove expired entry
                 None
+            } else {
+                entry.hit(); // Increment hit count
+                Some(entry.value)
             }
         } else {
             // If not found, we can return None
@@ -127,11 +127,11 @@ impl ConceptSatisfiabilityCache {
         self.cache.write().unwrap().clear();
     }
 
-    pub fn size(&self) -> usize {
+    #[must_use] pub fn size(&self) -> usize {
         self.cache.read().unwrap().len()
     }
 
-    pub fn hit_rate(&self) -> f64 {
+    #[must_use] pub fn hit_rate(&self) -> f64 {
         let cache = self.cache.read().unwrap();
 
         let total_hits: u64 = cache.values().map(|entry| entry.hit_count).sum();
@@ -153,7 +153,7 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
-    pub fn new(config: CacheConfig) -> Self {
+    #[must_use] pub fn new(config: CacheConfig) -> Self {
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             config,
@@ -177,7 +177,7 @@ impl CacheManager {
     }
 
     /// Get satisfiability result from cache
-    pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
+    #[must_use] pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
         self.concept_cache.get(expression)
     }
 
@@ -187,7 +187,7 @@ impl CacheManager {
     }
 
     /// Get subsumption result from cache
-    pub fn get_subsumption_result(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+    #[must_use] pub fn get_subsumption_result(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
@@ -220,7 +220,7 @@ impl CacheManager {
     }
 
     /// Get instance result from cache
-    pub fn get_instance_result(&self, individual: &Individual, class: &ClassExpression) -> Option<bool> {
+    #[must_use] pub fn get_instance_result(&self, individual: &Individual, class: &ClassExpression) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
@@ -231,7 +231,7 @@ impl CacheManager {
     }
 
     /// Get subsumption cache
-    pub fn subsumption(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+    #[must_use] pub fn subsumption(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
         self.get_subsumption_result(sub, sup)
     }
 
@@ -261,7 +261,7 @@ impl CacheManager {
     }
 
     /// Get cache statistics
-    pub fn get_stats(&self) -> CacheStats {
+    #[must_use] pub fn get_stats(&self) -> CacheStats {
         CacheStats {
             concept_cache_size: self.concept_cache.size(),
             concept_cache_hit_rate: self.concept_cache.hit_rate(),
@@ -269,7 +269,7 @@ impl CacheManager {
     }
 
     /// Get the concept satisfiability cache
-    pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
+    #[must_use] pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
         &self.concept_cache
     }
 }

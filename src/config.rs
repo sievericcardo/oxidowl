@@ -33,7 +33,7 @@ pub struct ReasoningConfig {
     pub expansion_strategy: ExpansionStrategy,
     /// Enable or disable optimisation
     pub enable_optimisations: bool,
-    /// EMaximum response time for reasoning tasks
+    /// `EMaximum` response time for reasoning tasks
     pub timeout: Option<Duration>,
     /// Maximum memory usage in MB for the reasoner
     pub max_memory_mb: Option<u64>,
@@ -52,7 +52,7 @@ pub struct ReasoningConfig {
 pub enum TableauAlgorithm {
     /// Traditional tableau algorithm
     Traditional,
-    /// HyperTableau algorithm (HermiT-style)
+    /// `HyperTableau` algorithm (HermiT-style)
     HyperTableau,
 }
 
@@ -334,7 +334,7 @@ impl ReasonerConfig {
     }
 
     /// Check if parallel processing is enabled
-    pub fn is_parallel_processing_enabled(&self) -> bool {
+    #[must_use] pub fn is_parallel_processing_enabled(&self) -> bool {
         self.performance.enable_parallel_expansion && self.worker_thread_count() > 1
     }
 }
@@ -342,7 +342,7 @@ impl ReasonerConfig {
 /// Create a configuration for specific use cases
 impl ReasonerConfig {
     /// Configuration for large ontologies
-    pub fn large_ontology_config() -> Self {
+    #[must_use] pub fn large_ontology_config() -> Self {
         let mut config = Self::default();
         config.reasoning.max_memory_mb = Some(8192); // 8 GB
         config.cache.max_cache_size_mb = 2048; // 2 GB
@@ -354,7 +354,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for web services
-    pub fn web_service_config() -> Self {
+    #[must_use] pub fn web_service_config() -> Self {
         let mut config = Self::default();
         config.server.max_connections = 500; // Increase for web service
         config.server.request_timeout = Duration::from_secs(60); // 1 minute timeout
@@ -364,7 +364,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for debugging and development
-    pub fn debug_config() -> Self {
+    #[must_use] pub fn debug_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Debug; // Set logging to debug level
         config.reasoning.enable_explanations = true; // Enable explanations
@@ -375,7 +375,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for production environments
-    pub fn production_config() -> Self {
+    #[must_use] pub fn production_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Info; // Set logging to info level
         config.reasoning.enable_explanations = false; // Disable explanations in production
@@ -387,7 +387,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for testing purposes
-    pub fn test_config() -> Self {
+    #[must_use] pub fn test_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Debug; // Set logging to debug level for tests
         config.reasoning.enable_explanations = true; // Enable explanations for tests

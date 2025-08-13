@@ -303,7 +303,7 @@ impl Default for ExtensionManager {
 
 impl ExtensionManager {
     /// Create a new extension manager
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         ExtensionManager {
             extension_tables: HashMap::new(),
             binary_extension_table: ExtensionTable::new(2),
@@ -492,12 +492,12 @@ impl ExtensionManager {
     }
     
     /// Check if extension contains a clash
-    pub fn contains_clash(&self) -> bool {
+    #[must_use] pub fn contains_clash(&self) -> bool {
         self.clash_manager.has_clash
     }
     
     /// Get clash dependency set
-    pub fn get_clash_dependencies(&self) -> Option<&DependencySet> {
+    #[must_use] pub fn get_clash_dependencies(&self) -> Option<&DependencySet> {
         self.clash_manager.clash_dependencies.as_ref()
     }
     
@@ -547,7 +547,7 @@ impl ExtensionManager {
     }
     
     /// Get new tuples for a predicate (for hyperresolution)
-    pub fn get_new_tuples(&self, predicate: &str) -> Option<Vec<Vec<String>>> {
+    #[must_use] pub fn get_new_tuples(&self, predicate: &str) -> Option<Vec<Vec<String>>> {
         // For now, return all current facts as "new" tuples
         // In a full implementation, this would track actual delta changes
         self.get_facts(predicate, &RetrievalView::Complete).ok()
@@ -608,12 +608,12 @@ impl ExtensionManager {
     }
     
     /// Get statistics
-    pub fn get_statistics(&self) -> &ExtensionStatistics {
+    #[must_use] pub fn get_statistics(&self) -> &ExtensionStatistics {
         &self.statistics
     }
 
     /// Check if a concept assertion exists
-    pub fn contains_concept_assertion(&self, node_id: &str, concept: &crate::ontology::ClassExpression) -> bool {
+    #[must_use] pub fn contains_concept_assertion(&self, node_id: &str, concept: &crate::ontology::ClassExpression) -> bool {
         // For simple named classes, check if node is in that class's extension
         if let crate::ontology::ClassExpression::Class(class) = concept {
             let class_name = class.iri.as_str();
@@ -626,7 +626,7 @@ impl ExtensionManager {
     }
     
     /// Check if a role assertion exists
-    pub fn contains_role_assertion(&self, subj_id: &str, property: &crate::ontology::ObjectPropertyExpression, obj_id: &str) -> bool {
+    #[must_use] pub fn contains_role_assertion(&self, subj_id: &str, property: &crate::ontology::ObjectPropertyExpression, obj_id: &str) -> bool {
         match property {
             crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
                 let property_name = prop.iri.as_str();
@@ -700,7 +700,7 @@ impl ExtensionManager {
     }
 
     /// Check if two nodes are equal
-    pub fn are_nodes_equal(&self, left_id: &str, right_id: &str) -> bool {
+    #[must_use] pub fn are_nodes_equal(&self, left_id: &str, right_id: &str) -> bool {
         // Check direct equality
         if left_id == right_id {
             return true;
@@ -749,7 +749,7 @@ impl ExtensionManager {
         }
         
         // Check for disjoint class conflicts (basic implementation)
-        if args.len() == 1 && !predicate.contains("_") {
+        if args.len() == 1 && !predicate.contains('_') {
             // This is likely a concept assertion C(a)
             // Check if there are any known disjoint concepts
             let disjoint_concepts = self.get_disjoint_concepts(predicate);
@@ -782,7 +782,7 @@ impl ExtensionManager {
     }
 
     /// Check if two nodes are unequal
-    pub fn are_nodes_unequal(&self, left_id: &str, right_id: &str) -> bool {
+    #[must_use] pub fn are_nodes_unequal(&self, left_id: &str, right_id: &str) -> bool {
         // Check if there's an explicit inequality fact
         let inequality_key = "DifferentFrom";
         if let Some(table) = self.get_table_for_arity(2) {
@@ -945,7 +945,7 @@ impl ExtensionManager {
 
 impl ExtensionTable {
     /// Create a new extension table
-    pub fn new(arity: usize) -> Self {
+    #[must_use] pub fn new(arity: usize) -> Self {
         ExtensionTable {
             arity,
             tuples: Vec::new(),
@@ -1292,7 +1292,7 @@ pub fn generate_unique_id() -> usize {
 }
 
 /// Generate a unique string identifier for objects  
-pub fn generate_unique_string_id() -> String {
+#[must_use] pub fn generate_unique_string_id() -> String {
     let id = generate_unique_id();
     format!("id_{id}")
 }

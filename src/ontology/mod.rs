@@ -25,7 +25,7 @@ pub struct IRI {
 
 impl IRI {
     /// Create a new IRI from a string
-    pub fn new(value: &str) -> Self {
+    #[must_use] pub fn new(value: &str) -> Self {
         Self {
             value: value.to_string(),
         }
@@ -38,7 +38,7 @@ impl IRI {
     }
 
     /// Get the string value
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.value
     }
 }
@@ -83,7 +83,7 @@ impl std::fmt::Display for ObjectPropertyExpression {
 
 impl ObjectPropertyExpression {
     /// Get the IRI if this is a simple object property
-    pub fn iri(&self) -> Option<&url::Url> {
+    #[must_use] pub fn iri(&self) -> Option<&url::Url> {
         match self {
             ObjectPropertyExpression::ObjectProperty(prop) => Some(&prop.iri),
             ObjectPropertyExpression::InverseObjectProperty(prop) => Some(&prop.iri),
@@ -166,7 +166,7 @@ pub struct Literal {
 
 impl Literal {
     /// Create a new literal with just a value
-    pub fn new(value: String) -> Self {
+    #[must_use] pub fn new(value: String) -> Self {
         Self {
             value,
             language: None,
@@ -175,7 +175,7 @@ impl Literal {
     }
 
     /// Create a literal with a language tag
-    pub fn with_language(value: String, language: String) -> Self {
+    #[must_use] pub fn with_language(value: String, language: String) -> Self {
         Self {
             value,
             language: Some(language),
@@ -184,7 +184,7 @@ impl Literal {
     }
 
     /// Create a literal with a datatype
-    pub fn with_datatype(value: String, datatype: IRI) -> Self {
+    #[must_use] pub fn with_datatype(value: String, datatype: IRI) -> Self {
         Self {
             value,
             language: None,
@@ -310,7 +310,7 @@ pub struct Signature {
 
 impl Signature {
     /// Create a new empty signature
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 }
@@ -334,7 +334,7 @@ pub struct Ontology {
 
 impl Ontology {
     /// Create a new empty ontology
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             axioms: Vec::new(),
             annotations: Vec::new(),
@@ -368,7 +368,7 @@ impl Ontology {
     }
     
     /// Get the ontology IRI
-    pub fn get_iri(&self) -> Option<&IRI> {
+    #[must_use] pub fn get_iri(&self) -> Option<&IRI> {
         self.iri.as_ref()
     }
     
@@ -383,7 +383,7 @@ impl Ontology {
     }
     
     /// Get all axioms
-    pub fn axioms(&self) -> &[axioms::Axiom] {
+    #[must_use] pub fn axioms(&self) -> &[axioms::Axiom] {
         &self.axioms
     }
 
@@ -542,9 +542,7 @@ impl Ontology {
         let format = format.unwrap_or_else(|| {
             path.as_ref()
                 .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|s| s.to_lowercase())
-                .unwrap_or_else(|| "owl".to_string())
+                .and_then(|ext| ext.to_str()).map_or_else(|| "owl".to_string(), str::to_lowercase)
         });
         
         match format.as_str() {
@@ -618,7 +616,7 @@ impl Ontology {
     }
     
     /// Get classes by extracting them from declaration axioms
-    pub fn classes(&self) -> Vec<(IRI, concepts::Class)> {
+    #[must_use] pub fn classes(&self) -> Vec<(IRI, concepts::Class)> {
         let mut classes = Vec::new();
         
         for axiom in &self.axioms {
@@ -636,7 +634,7 @@ impl Ontology {
     }
     
     /// Extract individuals from the axioms
-    pub fn individuals(&self) -> Vec<(IRI, individuals::Individual)> {
+    #[must_use] pub fn individuals(&self) -> Vec<(IRI, individuals::Individual)> {
         let mut individuals = Vec::new();
         
         for axiom in &self.axioms {
@@ -686,7 +684,7 @@ impl Ontology {
     }
     
     /// Get object properties by extracting them from declaration axioms
-    pub fn object_properties(&self) -> Vec<ObjectProperty> {
+    #[must_use] pub fn object_properties(&self) -> Vec<ObjectProperty> {
         let mut properties = Vec::new();
         
         for axiom in &self.axioms {
@@ -734,7 +732,7 @@ pub enum OntologyFormat {
 
 impl OntologyFormat {
     /// Get the file extension for this format
-    pub fn extension(&self) -> &'static str {
+    #[must_use] pub fn extension(&self) -> &'static str {
         match self {
             OntologyFormat::Auto => "",
             OntologyFormat::Functional => "owx",
@@ -747,7 +745,7 @@ impl OntologyFormat {
     }
     
     /// Get the media type for this format
-    pub fn media_type(&self) -> &'static str {
+    #[must_use] pub fn media_type(&self) -> &'static str {
         match self {
             OntologyFormat::Auto => "",
             OntologyFormat::Functional => "text/owl-functional",
@@ -760,7 +758,7 @@ impl OntologyFormat {
     }
 
     /// Get the format string for parsing
-    pub fn format_string(&self) -> &'static str {
+    #[must_use] pub fn format_string(&self) -> &'static str {
         match self {
             OntologyFormat::Auto => "auto",
             OntologyFormat::Functional => "functional",
@@ -773,7 +771,7 @@ impl OntologyFormat {
     }
 
     /// Try to detect format from file extension
-    pub fn from_extension(ext: &str) -> Option<Self> {
+    #[must_use] pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_lowercase().as_str() {
             "owx" => Some(OntologyFormat::OwlXml),
             "owl" | "ofn" => Some(OntologyFormat::Functional),

@@ -27,7 +27,7 @@ pub enum TableauAlgorithmInstance {
     HyperTableau(Box<dyn HyperTableauInterface>), // Add when HyperTableau is ready
 }
 
-/// Interface for HyperTableau implementation (placeholder for now)
+/// Interface for `HyperTableau` implementation (placeholder for now)
 pub trait HyperTableauInterface: Send + Sync {
     fn run(&mut self) -> Result<TableauState>;
     fn get_node_count(&self) -> usize;
@@ -45,7 +45,7 @@ impl TableauAlgorithmInstance {
     }
     
     /// Get node count for statistics
-    pub fn get_node_count(&self) -> usize {
+    #[must_use] pub fn get_node_count(&self) -> usize {
         match self {
             TableauAlgorithmInstance::Traditional(tableau) => tableau.get_node_count(),
             TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.get_node_count(),
@@ -53,7 +53,7 @@ impl TableauAlgorithmInstance {
     }
     
     /// Get backtrack count for statistics
-    pub fn get_backtrack_count(&self) -> usize {
+    #[must_use] pub fn get_backtrack_count(&self) -> usize {
         match self {
             TableauAlgorithmInstance::Traditional(tableau) => tableau.get_backtrack_count(),
             TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.get_backtrack_count(),
@@ -61,7 +61,7 @@ impl TableauAlgorithmInstance {
     }
     
     /// Get maximum depth for statistics
-    pub fn get_max_depth(&self) -> usize {
+    #[must_use] pub fn get_max_depth(&self) -> usize {
         match self {
             TableauAlgorithmInstance::Traditional(tableau) => tableau.get_max_depth(),
             TableauAlgorithmInstance::HyperTableau(hypertableau) => hypertableau.get_max_depth(),
@@ -118,7 +118,7 @@ pub struct ClassificationResult {
 }
 
 impl ClassificationResult {
-    pub fn new(hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>) -> Self {
+    #[must_use] pub fn new(hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>) -> Self {
         Self { hierarchy }
     }
 
@@ -163,7 +163,7 @@ pub struct RealizationResult {
 }
 
 impl RealizationResult {
-    pub fn new(types: HashMap<Individual, HashSet<ClassExpression>>) -> Self {
+    #[must_use] pub fn new(types: HashMap<Individual, HashSet<ClassExpression>>) -> Self {
         Self { types }
     }
 
@@ -274,14 +274,14 @@ impl TableauFactory {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Traditional => {
                 // Convert Individual and ClassExpression to string for the current tableau builder interface
-                let individual_str = &individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
+                let individual_str = &individual.iri().map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
                 let class_str = &format!("{class_expr}");
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
             TableauAlgorithm::HyperTableau => {
                 warn!("HyperTableau not yet supported for instance checking, using Traditional tableau");
-                let individual_str = &individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
+                let individual_str = &individual.iri().map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
                 let class_str = &format!("{class_expr}");
                 let tableau = self.tableau_builder.build_for_instance_check(ontology, individual_str, class_str)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
@@ -289,7 +289,7 @@ impl TableauFactory {
         }
     }
     
-    /// Create HyperTableau or fallback to Traditional if compilation errors prevent it
+    /// Create `HyperTableau` or fallback to Traditional if compilation errors prevent it
     fn create_hypertableau_or_fallback(&self, ontology: &Ontology) -> Result<Box<dyn TableauRunner>> {
         warn!("HyperTableau not yet fully integrated, falling back to Traditional tableau");
         let tableau = self.tableau_builder.build_for_consistency(ontology)?;
@@ -303,7 +303,7 @@ pub struct TraditionalTableauRunner {
 }
 
 impl TraditionalTableauRunner {
-    pub fn new(tableau: Tableau) -> Self {
+    #[must_use] pub fn new(tableau: Tableau) -> Self {
         Self { tableau }
     }
 }
@@ -674,7 +674,7 @@ impl Reasoner {
         // Get all named individuals and classes
         let individuals: Vec<Individual> = ontology_guard
             .signature().unwrap()
-            .individuals.to_vec();
+            .individuals.clone();
 
         let classes: Vec<ClassExpression> = ontology_guard
             .signature().unwrap()
@@ -813,7 +813,7 @@ impl Reasoner {
         Ok("SPARQL query results would be here".to_string())
     }
 
-    /// Process an OWLlink request
+    /// Process an `OWLlink` request
     pub fn process_owllink_request(&self, request: &str) -> Result<String> {
         info!("Processing OWLlink request");
         
@@ -823,7 +823,7 @@ impl Reasoner {
     }
 
     /// Get reasoning statistics
-    pub fn get_statistics(&self) -> &ReasoningStatistics {
+    #[must_use] pub fn get_statistics(&self) -> &ReasoningStatistics {
         &self.statistics
     }
 
@@ -904,35 +904,32 @@ impl Reasoner {
                 // Look for SubClassOf axioms in the ontology
                 let mut subclass_axiom_count = 0;
                 for axiom in ontology_guard.axioms() {
-                    match axiom {
-                        crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
-                            subclass_axiom_count += 1;
-                            // Check if the superclass matches our target
-                            if let ClassExpression::Class(super_class) = &subclass_axiom.superclass {
-                                debug!("Checking SubClassOf axiom #{}: {} -> {}", 
-                                       subclass_axiom_count,
+                    if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                        subclass_axiom_count += 1;
+                        // Check if the superclass matches our target
+                        if let ClassExpression::Class(super_class) = &subclass_axiom.superclass {
+                            debug!("Checking SubClassOf axiom #{}: {} -> {}", 
+                                   subclass_axiom_count,
+                                   if let ClassExpression::Class(sub) = &subclass_axiom.subclass { 
+                                       sub.iri.as_str() 
+                                   } else { 
+                                       "complex" 
+                                   },
+                                   super_class.iri.as_str());
+                            
+                            if target_class.iri.as_str() == super_class.iri.as_str() {
+                                // Add the subclass to our results
+                                debug!("Found subclass: {}", 
                                        if let ClassExpression::Class(sub) = &subclass_axiom.subclass { 
                                            sub.iri.as_str() 
                                        } else { 
                                            "complex" 
-                                       },
-                                       super_class.iri.as_str());
-                                
-                                if target_class.iri.as_str() == super_class.iri.as_str() {
-                                    // Add the subclass to our results
-                                    debug!("Found subclass: {}", 
-                                           if let ClassExpression::Class(sub) = &subclass_axiom.subclass { 
-                                               sub.iri.as_str() 
-                                           } else { 
-                                               "complex" 
-                                           });
-                                    subclasses.push(subclass_axiom.subclass.clone());
-                                }
+                                       });
+                                subclasses.push(subclass_axiom.subclass.clone());
                             }
                         }
-                        _ => {
-                            // Count other axiom types for debugging
-                        }
+                    } else {
+                        // Count other axiom types for debugging
                     }
                 }
                 debug!("Found {subclass_axiom_count} SubClassOf axioms total");
@@ -993,7 +990,7 @@ impl Reasoner {
         }
     }
 
-    /// Check if a union expression matches the disjoint classes in a DisjointUnion axiom
+    /// Check if a union expression matches the disjoint classes in a `DisjointUnion` axiom
     fn union_matches_disjoint_classes(&self, union_classes: &[ClassExpression], disjoint_classes: &[ClassExpression]) -> bool {
         // Recursively extract all classes from the union (handling nested unions)
         let mut union_iris = HashSet::new();
@@ -1241,7 +1238,7 @@ impl Reasoner {
     }
 
     /// Get ontology size
-    pub fn get_ontology_size(&self) -> usize {
+    #[must_use] pub fn get_ontology_size(&self) -> usize {
         if let Some(ontology) = &self.ontology {
             let ontology_guard = ontology.read().unwrap();
             ontology_guard.axioms.len()
@@ -1346,7 +1343,7 @@ impl Reasoner {
         }
     }
 
-    /// Parse a class IRI string into a ClassExpression
+    /// Parse a class IRI string into a `ClassExpression`
     fn parse_class_expression(&self, class_iri: &str) -> Option<ClassExpression> {
         // For now, assume it's a named class
         // In a full implementation, this would parse complex class expressions
@@ -1359,7 +1356,7 @@ impl Reasoner {
     fn is_instance_of_expression(&mut self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
         // For now, delegate to existing instance checking for named classes
         if let ClassExpression::Class(cls) = class {
-            self.is_instance_of(&individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string()), &cls.iri.to_string())
+            self.is_instance_of(&individual.iri().map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string), &cls.iri.to_string())
         } else {
             // For complex expressions, we'd need more sophisticated reasoning
             // For now, create a tableau to check instance relationship
@@ -1367,7 +1364,7 @@ impl Reasoner {
                 let ontology_guard = ontology.read().unwrap();
                 
                 // Convert individual and class to strings for the tableau builder
-                let individual_str = individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string());
+                let individual_str = individual.iri().map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
                 let class_str = format!("{class:?}"); // Simplified class representation
                 
                 // Build tableau for instance checking
@@ -1478,7 +1475,7 @@ impl Reasoner {
         }
     }
 
-    /// Create a HyperTableau instance or fall back to Traditional
+    /// Create a `HyperTableau` instance or fall back to Traditional
     fn create_hypertableau_instance(&self, ontology: &Ontology) -> Result<TableauAlgorithmInstance> {
         use crate::core::hypertableau::HyperTableau;
         use crate::core::blocking::AnywhereBlocking;

@@ -11,7 +11,7 @@
 //! - [`ontology`] - Ontology representation and management
 //! - [`parsers`] - Input format parsers (OWL XML, Functional, RDF)
 //! - [`reasoning`] - High-level reasoning tasks and coordination
-//! - [`network`] - HTTP servers for OWLlink and SPARQL
+//! - [`network`] - HTTP servers for `OWLlink` and SPARQL
 //! - [`config`] - Configuration management
 //!
 //! # Example Usage
@@ -65,14 +65,14 @@ pub const NAME: &str = "Oxidowl";
 pub const DESCRIPTION: &str = "Rust OWL 2 DL reasoner";
 
 /// Build information
-pub fn version_info() -> String {
+#[must_use] pub fn version_info() -> String {
     format!(
         "{NAME} - {DESCRIPTION}, Version {VERSION} (Rust port)"
     )
 }
 
 /// Get supported description logic expressivities
-pub fn supported_expressivities() -> Vec<&'static str> {
+#[must_use] pub fn supported_expressivities() -> Vec<&'static str> {
     vec![
         "ALC", "ALCH", "ALCHI", "ALCHIQ", "ALCHIF", "ALCHIQ", 
         "SHIQ", "SHIF", "SHIN", "SHOIN", "SROIQ", "SROIQV"
@@ -80,7 +80,7 @@ pub fn supported_expressivities() -> Vec<&'static str> {
 }
 
 /// Check if a specific expressivity is supported
-pub fn supports_expressivity(expressivity: &str) -> bool {
+#[must_use] pub fn supports_expressivity(expressivity: &str) -> bool {
     supported_expressivities().contains(&expressivity)
 }
 

@@ -1,6 +1,6 @@
-//! HyperTableau Algorithm Implementation
+//! `HyperTableau` Algorithm Implementation
 //!
-//! This module implements HermiT's hypertableau algorithm that uses
+//! This module implements `HermiT`'s hypertableau algorithm that uses
 //! hyperresolution and ground disjunctions for efficient tableau reasoning.
 
 pub mod ground_disjunction;
@@ -34,7 +34,7 @@ use dependency_tracking::DependencyTracker;
 use branching::{BranchingManager, BranchingStrategy, BranchingType};
 use monitor::{TableauMonitor, MonitoringLevel, ReasoningStats};
 
-/// Main HyperTableau structure combining HermiT's algorithm with
+/// Main `HyperTableau` structure combining `HermiT`'s algorithm with
 #[derive(Debug)]
 pub struct HyperTableau {
     /// Tableau nodes from traditional tableau
@@ -249,11 +249,11 @@ impl HyperTableau {
         
         // 4. Check for clashes
         if self.extension_manager.contains_clash() {
-            if !self.handle_clash()? {
+            if self.handle_clash()? {
+                has_change = true;
+            } else {
                 self.is_closed = true;
                 has_change = false;
-            } else {
-                has_change = true;
             }
         }
         
@@ -401,7 +401,7 @@ impl HyperTableau {
                 )?
             };
             
-            self.extension_manager.add_concept_assertion(&individual.iri().map(|iri| iri.to_string()).unwrap_or("anonymous".to_string()), &assertion)?;
+            self.extension_manager.add_concept_assertion(&individual.iri().map_or("anonymous".to_string(), std::string::ToString::to_string), &assertion)?;
             
             self.monitor.log_event(monitor::events::fact_derived(
                 format!("Branching choice: {assertion}"),
@@ -672,7 +672,7 @@ impl HyperTableau {
         }
     }
     
-    /// Create initial nodes from ABox individuals
+    /// Create initial nodes from `ABox` individuals
     fn create_initial_nodes(&mut self, ontology: &Ontology) -> Result<()> {
         // Get all individuals from the ABox
         for axiom in ontology.axioms() {
@@ -710,7 +710,7 @@ impl HyperTableau {
         Ok(())
     }
     
-    /// Apply initial concept assertions from ABox
+    /// Apply initial concept assertions from `ABox`
     fn apply_initial_assertions(&mut self, ontology: &Ontology) -> Result<()> {
         let start_fact_count = self.statistics.facts_derived;
         
@@ -789,17 +789,17 @@ impl HyperTableau {
     }
     
     /// Get current tableau state
-    pub fn get_state(&self) -> TableauState {
+    #[must_use] pub fn get_state(&self) -> TableauState {
         self.state
     }
     
     /// Get current statistics
-    pub fn get_statistics(&self) -> &HyperTableauStatistics {
+    #[must_use] pub fn get_statistics(&self) -> &HyperTableauStatistics {
         &self.statistics
     }
     
     /// Check if reasoning is complete
-    pub fn is_reasoning_complete(&self) -> bool {
+    #[must_use] pub fn is_reasoning_complete(&self) -> bool {
         // Reasoning is complete if:
         // 1. The tableau is closed (unsatisfiable), or
         // 2. The tableau state is unknown (timeout/error), or 
@@ -818,7 +818,7 @@ impl HyperTableau {
 // Import the HyperTableauInterface trait from the reasoner module
 use crate::core::reasoner::HyperTableauInterface;
 
-/// Implementation of HyperTableauInterface for integration with the main reasoner
+/// Implementation of `HyperTableauInterface` for integration with the main reasoner
 impl HyperTableauInterface for HyperTableau {
     fn run(&mut self) -> Result<TableauState> {
         self.run()

@@ -28,7 +28,7 @@ pub struct FunctionalParser {
 
 impl FunctionalParser {
     /// Create a new functional syntax parser
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {}
     }
 }
@@ -278,7 +278,7 @@ impl FunctionalParser {
         Ok(position)
     }
     
-    /// Parse SubClassOf axiom: SubClassOf(<subclass> <superclass>)
+    /// Parse `SubClassOf` axiom: `SubClassOf`(<subclass> <superclass>)
     fn parse_subclass_of(
         &self,
         tokens: &[String],
@@ -322,7 +322,7 @@ impl FunctionalParser {
         Ok(position)
     }
     
-    /// Parse ClassAssertion axiom: ClassAssertion(<class> <individual>)
+    /// Parse `ClassAssertion` axiom: `ClassAssertion`(<class> <individual>)
     fn parse_class_assertion(
         &self,
         tokens: &[String],
@@ -369,7 +369,7 @@ impl FunctionalParser {
         Ok(position)
     }
     
-    /// Parse ObjectPropertyAssertion: ObjectPropertyAssertion(<prop> <subj> <obj>)
+    /// Parse `ObjectPropertyAssertion`: `ObjectPropertyAssertion`(<prop> <subj> <obj>)
     fn parse_object_property_assertion(
         &self,
         tokens: &[String],

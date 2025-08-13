@@ -2,9 +2,9 @@
 //!
 //! This module provides a Description Logic query engine that can parse and execute
 //! DL queries against the ontology. It supports queries like:
-//! - "ClassA some PropertyR" 
-//! - "PropertyR some ClassB"
-//! - "ClassA and (PropertyR some ClassB)"
+//! - "`ClassA` some `PropertyR`" 
+//! - "`PropertyR` some `ClassB`"
+//! - "`ClassA` and (`PropertyR` some `ClassB`)"
 //!
 //! The query language follows Manchester Syntax for class expressions.
 
@@ -83,7 +83,7 @@ pub struct QueryResult {
 
 impl DLQueryEngine {
     /// Create a new DL query engine
-    pub fn new(reasoning_service: ReasoningService) -> Self {
+    #[must_use] pub fn new(reasoning_service: ReasoningService) -> Self {
         Self {
             reasoning_service,
             default_namespace: None,
@@ -91,7 +91,7 @@ impl DLQueryEngine {
     }
 
     /// Create a new DL query engine with a specific default namespace
-    pub fn new_with_namespace(reasoning_service: ReasoningService, namespace: String) -> Self {
+    #[must_use] pub fn new_with_namespace(reasoning_service: ReasoningService, namespace: String) -> Self {
         Self {
             reasoning_service,
             default_namespace: Some(namespace),
@@ -99,7 +99,7 @@ impl DLQueryEngine {
     }
 
     /// Create a new DL query engine with reasoning service and optional namespace
-    pub fn with_config(reasoning_service: ReasoningService, namespace: Option<String>) -> Self {
+    #[must_use] pub fn with_config(reasoning_service: ReasoningService, namespace: Option<String>) -> Self {
         Self {
             reasoning_service,
             default_namespace: namespace,
@@ -232,7 +232,7 @@ impl DLQueryEngine {
         self.get_equivalent_classes(&union_expr).await
     }
 
-    /// Parse and execute a union query (e.g., "ClassA or ClassB or ClassC")
+    /// Parse and execute a union query (e.g., "`ClassA` or `ClassB` or `ClassC`")
     /// and find equivalent classes
     pub async fn execute_union_query(&self, union_query: &str) -> Result<QueryResult> {
         // Force this to be treated as an equivalent classes query
@@ -246,7 +246,7 @@ impl DLQueryEngine {
     }
 
     /// Get the current default namespace
-    pub fn get_namespace(&self) -> Option<&String> {
+    #[must_use] pub fn get_namespace(&self) -> Option<&String> {
         self.default_namespace.as_ref()
     }
 
@@ -266,7 +266,7 @@ impl Default for DLQueryParser {
 }
 
 impl DLQueryParser {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             // Use a generic default namespace that will be overridden
             default_namespace: "http://example.org/ontology#".to_string(),
@@ -274,7 +274,7 @@ impl DLQueryParser {
     }
 
     /// Create parser with custom default namespace
-    pub fn with_namespace(namespace: String) -> Self {
+    #[must_use] pub fn with_namespace(namespace: String) -> Self {
         Self {
             default_namespace: namespace,
         }
@@ -333,7 +333,7 @@ impl DLQueryParser {
         
         // Check for disjoint union queries - if query contains only "or" operators, 
         // treat as a special union query that returns the classes that make up the union
-        if query.contains(" or ") && !query.contains(" and ") && !query.contains(":")
+        if query.contains(" or ") && !query.contains(" and ") && !query.contains(':')
             && !query.contains("some") && !query.contains("only") && !query.contains("not") {
             return Ok((QueryType::Subclasses, query, false));
         }
@@ -517,7 +517,7 @@ impl DLQueryParser {
     /// Check if a token represents a class name
     fn is_class_name(&self, token: &str) -> bool {
         // Simple heuristic: starts with uppercase or contains ':'
-        token.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) || 
+        token.chars().next().is_some_and(char::is_uppercase) || 
         token.contains(':') ||
         token.starts_with('<')
     }

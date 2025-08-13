@@ -67,7 +67,7 @@ pub struct Tableau {
     /// Current state
     state: TableauState,
     
-    /// Property inclusions (SubObjectPropertyOf)
+    /// Property inclusions (`SubObjectPropertyOf`)
     property_inclusions: Vec<PropertyInclusion>,
     
     /// Inverse property relationships
@@ -82,7 +82,7 @@ pub struct Tableau {
     /// Transitive properties
     transitive_properties: HashSet<String>,
     
-    /// Symmetric properties (handled via inverse_properties)
+    /// Symmetric properties (handled via `inverse_properties`)
     /// Asymmetric properties
     asymmetric_properties: HashSet<String>,
     
@@ -193,7 +193,7 @@ pub enum RoleLabel {
 }
 
 impl RoleLabel {
-    /// Convert a Role from the ontology to a RoleLabel
+    /// Convert a Role from the ontology to a `RoleLabel`
     pub fn from_role(role: &Role) -> Result<Self> {
         match role {
             Role::ObjectProperty(prop_expr) => {
@@ -216,7 +216,7 @@ impl RoleLabel {
     }
 
     /// Get the role name as a string
-    pub fn name(&self) -> &str {
+    #[must_use] pub fn name(&self) -> &str {
         match self {
             RoleLabel::Atomic(name) => name,
             RoleLabel::Inverse(name) => name,
@@ -698,7 +698,7 @@ impl Tableau {
                 let node_id: NodeId = rule_app.node.parse().map_err(|_| Error::Internal { message: format!("Invalid node ID: {}", rule_app.node) })?;
                 
                 for individual in individuals {
-                    let individual_label = ConceptLabel::Nominal(individual.iri().map(|i| i.to_string()).unwrap_or_else(|| "anonymous".to_string()));
+                    let individual_label = ConceptLabel::Nominal(individual.iri().map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string));
                     self.add_concept(node_id, individual_label, dependencies.clone())?;
                 }
             }
@@ -876,12 +876,12 @@ impl Tableau {
     }
 
     /// Get all edges in the tableau
-    pub fn edges(&self) -> &Vec<TableauEdge> {
+    #[must_use] pub fn edges(&self) -> &Vec<TableauEdge> {
         &self.edges
     }
 
     /// Get a node by node ID
-    pub fn get_node(&self, node_id: NodeId) -> Option<&TableauNode> {
+    #[must_use] pub fn get_node(&self, node_id: NodeId) -> Option<&TableauNode> {
         self.nodes.get(node_id)
     }
 
@@ -1269,7 +1269,7 @@ impl Tableau {
     }
 
     /// Get the number of nodes in the tableau
-    pub fn get_node_count(&self) -> usize {
+    #[must_use] pub fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
     
@@ -1285,17 +1285,17 @@ impl Tableau {
     }
 
     /// Get the number of backtracking operations
-    pub fn get_backtrack_count(&self) -> usize {
+    #[must_use] pub fn get_backtrack_count(&self) -> usize {
         self.statistics.backtracking_operations
     }
 
     /// Get the maximum depth reached
-    pub fn get_max_depth(&self) -> usize {
+    #[must_use] pub fn get_max_depth(&self) -> usize {
         self.statistics.max_depth
     }
 
     /// Get the current state of the tableau
-    pub fn get_state(&self) -> TableauState {
+    #[must_use] pub fn get_state(&self) -> TableauState {
         self.state
     }
 }
@@ -1407,14 +1407,14 @@ impl Default for ClashDetector {
 
 impl ClashDetector {
     /// Create a new clash detector
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             clashes: Vec::new(),
         }
     }
 
     /// Check if there are any clashes
-    pub fn has_clashes(&self) -> bool {
+    #[must_use] pub fn has_clashes(&self) -> bool {
         !self.clashes.is_empty()
     }
 
@@ -1472,7 +1472,7 @@ impl ClashDetector {
     }
 }
 
-/// Property inclusion relationship (SubObjectPropertyOf)
+/// Property inclusion relationship (`SubObjectPropertyOf`)
 #[derive(Debug, Clone)]
 pub struct PropertyInclusion {
     pub sub_property: String,

@@ -31,7 +31,7 @@ pub struct ReasoningService {
 
 impl ReasoningService {
     /// Creates a new reasoning service with the given ontology and configuration
-    pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
+    #[must_use] pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
         let reasoner = Reasoner::new(config.clone()).expect("Failed to create reasoner");
         let mut reasoner_with_ontology = reasoner;
         reasoner_with_ontology.load_ontology(ontology).expect("Failed to load ontology");
@@ -590,7 +590,7 @@ impl ReasoningService {
     }
 
     /// Get reasoning statistics
-    pub fn get_statistics(&self) -> ReasoningStatistics {
+    #[must_use] pub fn get_statistics(&self) -> ReasoningStatistics {
         let reasoner = self.reasoner.read().unwrap();
         let cache_stats = self.cache_manager.read().unwrap().get_stats();
 
@@ -702,22 +702,22 @@ pub struct ExplanationSet {
 
 impl ExplanationSet {
     // Create a new explanation set
-    pub fn new(axioms: HashSet<crate::ontology::Axiom>) -> Self {
+    #[must_use] pub fn new(axioms: HashSet<crate::ontology::Axiom>) -> Self {
         Self {
             axioms,
             minimal: true, // Default to minimal explanations
         }
     }
 
-    pub fn size(&self) -> usize {
+    #[must_use] pub fn size(&self) -> usize {
         self.axioms.len()
     }
 
-    pub fn is_minimal(&self) -> bool {
+    #[must_use] pub fn is_minimal(&self) -> bool {
         self.minimal
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.axioms.is_empty()
     }
 }
@@ -736,7 +736,7 @@ pub struct QueryInterface {
 }
 
 impl QueryInterface {
-    pub fn new(reasoning_service: ReasoningService) -> Self {
+    #[must_use] pub fn new(reasoning_service: ReasoningService) -> Self {
         Self {
             reasoning_service,
         }

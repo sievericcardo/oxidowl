@@ -86,19 +86,19 @@ pub struct OwlXmlParser {
 
 impl OwlXmlParser {
     /// Create a new OWL/XML parser with default configuration
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self { 
             config: OwlXmlParserConfig::default(),
         }
     }
     
     /// Create a new OWL/XML parser with custom configuration
-    pub fn with_config(config: OwlXmlParserConfig) -> Self {
+    #[must_use] pub fn with_config(config: OwlXmlParserConfig) -> Self {
         Self { config }
     }
     
     /// Get the current configuration
-    pub fn config(&self) -> &OwlXmlParserConfig {
+    #[must_use] pub fn config(&self) -> &OwlXmlParserConfig {
         &self.config
     }
     
@@ -141,7 +141,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
     };
     
     // Parse declarations and axioms
-    for child in root.children().filter(|n| n.is_element()) {
+    for child in root.children().filter(roxmltree::Node::is_element) {
         match child.tag_name().name() {
             "Declaration" => {
                 if let Ok(axiom) = parse_declaration(&child) {
@@ -195,7 +195,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
 /// Parse a Declaration element
 fn parse_declaration(element: &roxmltree::Node) -> Result<Axiom> {
     // Find the entity being declared
-    for child in element.children().filter(|n| n.is_element()) {
+    for child in element.children().filter(roxmltree::Node::is_element) {
         match child.tag_name().name() {
             "Class" => {
                 if let Some(iri) = child.attribute("IRI") {
@@ -236,9 +236,9 @@ fn parse_declaration(element: &roxmltree::Node) -> Result<Axiom> {
     Err(Error::io("Invalid Declaration element".to_string()))
 }
 
-/// Parse a SubClassOf element
+/// Parse a `SubClassOf` element
 fn parse_subclass_of(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
     if children.len() != 2 {
         return Err(Error::io("SubClassOf must have exactly 2 children".to_string()));
     }
@@ -254,11 +254,11 @@ fn parse_subclass_of(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> 
     }))
 }
 
-/// Parse an EquivalentClasses element
+/// Parse an `EquivalentClasses` element
 fn parse_equivalent_classes(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let mut class_expressions = Vec::new();
     
-    for child in element.children().filter(|n| n.is_element()) {
+    for child in element.children().filter(roxmltree::Node::is_element) {
         let expr = parse_class_expression(&child, base_iri)?;
         class_expressions.push(expr);
     }
@@ -274,9 +274,9 @@ fn parse_equivalent_classes(element: &roxmltree::Node, base_iri: Option<&url::Ur
     }))
 }
 
-/// Parse a DisjointUnion element
+/// Parse a `DisjointUnion` element
 fn parse_disjoint_union(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
     
     if children.len() < 2 {
         return Err(Error::io("DisjointUnion must have at least 2 children (union class + disjoint classes)".to_string()));
@@ -300,9 +300,9 @@ fn parse_disjoint_union(element: &roxmltree::Node, base_iri: Option<&url::Url>) 
     }))
 }
 
-/// Parse a ClassAssertion element
+/// Parse a `ClassAssertion` element
 fn parse_class_assertion(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
     if children.len() != 2 {
         return Err(Error::io("ClassAssertion must have exactly 2 children".to_string()));
     }
@@ -318,9 +318,9 @@ fn parse_class_assertion(element: &roxmltree::Node, base_iri: Option<&url::Url>)
     }))
 }
 
-/// Parse an ObjectPropertyAssertion element
+/// Parse an `ObjectPropertyAssertion` element
 fn parse_object_property_assertion(element: &roxmltree::Node) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
     if children.len() != 3 {
         return Err(Error::io("ObjectPropertyAssertion must have exactly 3 children".to_string()));
     }
@@ -338,9 +338,9 @@ fn parse_object_property_assertion(element: &roxmltree::Node) -> Result<Axiom> {
     }))
 }
 
-/// Parse a SubObjectPropertyOf element
+/// Parse a `SubObjectPropertyOf` element
 fn parse_sub_object_property_of(element: &roxmltree::Node) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
     if children.len() != 2 {
         return Err(Error::io("SubObjectPropertyOf must have exactly 2 children".to_string()));
     }
@@ -356,9 +356,9 @@ fn parse_sub_object_property_of(element: &roxmltree::Node) -> Result<Axiom> {
     }))
 }
 
-/// Parse a FunctionalObjectProperty element
+/// Parse a `FunctionalObjectProperty` element
 fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
     if children.len() != 1 {
         return Err(Error::io("FunctionalObjectProperty must have exactly 1 child".to_string()));
     }
@@ -387,20 +387,20 @@ fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>
         }
         "ObjectIntersectionOf" => {
             let mut operands = Vec::new();
-            for child in element.children().filter(|n| n.is_element()) {
+            for child in element.children().filter(roxmltree::Node::is_element) {
                 operands.push(parse_class_expression(&child, base_iri)?);
             }
             Ok(ClassExpression::ObjectIntersectionOf(operands))
         }
         "ObjectUnionOf" => {
             let mut operands = Vec::new();
-            for child in element.children().filter(|n| n.is_element()) {
+            for child in element.children().filter(roxmltree::Node::is_element) {
                 operands.push(parse_class_expression(&child, base_iri)?);
             }
             Ok(ClassExpression::ObjectUnionOf(operands))
         }
         "ObjectComplementOf" => {
-            let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
             if children.len() != 1 {
                 return Err(Error::io("ObjectComplementOf must have exactly 1 child".to_string()));
             }
@@ -408,7 +408,7 @@ fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>
             Ok(ClassExpression::ObjectComplementOf(operand))
         }
         "ObjectSomeValuesFrom" => {
-            let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
             if children.len() != 2 {
                 return Err(Error::io("ObjectSomeValuesFrom must have exactly 2 children".to_string()));
             }
@@ -417,7 +417,7 @@ fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>
             Ok(ClassExpression::ObjectSomeValuesFrom { property, filler })
         }
         "ObjectAllValuesFrom" => {
-            let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
             if children.len() != 2 {
                 return Err(Error::io("ObjectAllValuesFrom must have exactly 2 children".to_string()));
             }
@@ -427,7 +427,7 @@ fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>
         }
         "ObjectOneOf" => {
             let mut individuals = Vec::new();
-            for child in element.children().filter(|n| n.is_element()) {
+            for child in element.children().filter(roxmltree::Node::is_element) {
                 individuals.push(parse_individual(&child)?);
             }
             Ok(ClassExpression::ObjectOneOf(individuals))
@@ -451,7 +451,7 @@ fn parse_object_property_expression(element: &roxmltree::Node) -> Result<ObjectP
             }
         }
         "ObjectInverseOf" => {
-            let children: Vec<_> = element.children().filter(|n| n.is_element()).collect();
+            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
             if children.len() != 1 {
                 return Err(Error::io("ObjectInverseOf must have exactly 1 child".to_string()));
             }

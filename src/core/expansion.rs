@@ -2,7 +2,7 @@
 //!
 //! This module implements expansion strategies for managing how existential
 //! concepts are expanded in the tableau, based on the sophisticated expansion
-//! management systems from Konclude, HermiT, and Pellet.
+//! management systems from Konclude, `HermiT`, and Pellet.
 
 use crate::{
     core::{
@@ -332,7 +332,7 @@ pub struct StrategySelectionCriteria {
 
 impl ExpansionManager {
     /// Create a new expansion manager with the given strategy
-    pub fn new(strategy: Box<dyn ExpansionStrategy>) -> Self {
+    #[must_use] pub fn new(strategy: Box<dyn ExpansionStrategy>) -> Self {
         Self {
             strategy,
             pending_queue: BinaryHeap::new(),
@@ -493,12 +493,12 @@ impl ExpansionManager {
     }
 
     /// Check if there are pending expansions
-    pub fn has_pending_expansions(&self) -> bool {
+    #[must_use] pub fn has_pending_expansions(&self) -> bool {
         !self.pending_queue.is_empty() || !self.expanding.is_empty()
     }
 
     /// Get pending expansion count
-    pub fn pending_count(&self) -> usize {
+    #[must_use] pub fn pending_count(&self) -> usize {
         self.pending_queue.len()
     }
 
@@ -511,7 +511,7 @@ impl ExpansionManager {
     }
 
     /// Get expansion statistics
-    pub fn statistics(&self) -> &ExpansionStatistics {
+    #[must_use] pub fn statistics(&self) -> &ExpansionStatistics {
         &self.statistics
     }
 
@@ -536,7 +536,7 @@ impl ExpansionManager {
 
 impl CreationOrderStrategy {
     /// Create a new creation order strategy
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             insertion_order: 0,
         }
@@ -593,7 +593,7 @@ impl ExpansionStrategy for CreationOrderStrategy {
 
 impl ComplexityStrategy {
     /// Create a new complexity-based strategy
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             weights: ComplexityWeights::default(),
         }
@@ -606,9 +606,9 @@ impl ComplexityStrategy {
     ) -> f64 {
         let complexity = &candidate.complexity;
         
-        self.weights.syntactic * complexity.syntactic_complexity as f64
-            + self.weights.role_successors * complexity.role_successors as f64
-            + self.weights.branching_factor * complexity.branching_factor as f64
+        self.weights.syntactic * f64::from(complexity.syntactic_complexity)
+            + self.weights.role_successors * f64::from(complexity.role_successors)
+            + self.weights.branching_factor * f64::from(complexity.branching_factor)
             + self.weights.memory_estimate * complexity.memory_estimate as f64
     }
 }

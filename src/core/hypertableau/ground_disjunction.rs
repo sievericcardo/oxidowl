@@ -1,6 +1,6 @@
 //! Ground Disjunction Implementation
 //!
-//! This module implements ground disjunctions as used in HermiT's hypertableau algorithm.
+//! This module implements ground disjunctions as used in `HermiT`'s hypertableau algorithm.
 //! Ground disjunctions represent disjunctive facts that must hold in the tableau.
 
 use crate::{
@@ -93,7 +93,7 @@ pub enum DisjunctionPriority {
 
 impl GroundDisjunction {
     /// Create a new ground disjunction
-    pub fn new(
+    #[must_use] pub fn new(
         header: GroundDisjunctionHeader,
         arguments: Vec<usize>,
         is_core: Vec<bool>,
@@ -112,27 +112,27 @@ impl GroundDisjunction {
     }
     
     /// Get the number of disjuncts
-    pub fn num_disjuncts(&self) -> usize {
+    #[must_use] pub fn num_disjuncts(&self) -> usize {
         self.header.predicates.len()
     }
     
     /// Get the sorted disjunct indices for processing
-    pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
+    #[must_use] pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
         &self.header.sorted_disjunct_indices
     }
     
     /// Get the header
-    pub fn get_header(&self) -> &GroundDisjunctionHeader {
+    #[must_use] pub fn get_header(&self) -> &GroundDisjunctionHeader {
         &self.header
     }
     
     /// Get the dependency set
-    pub fn get_dependency_set(&self) -> &DependencySet {
+    #[must_use] pub fn get_dependency_set(&self) -> &DependencySet {
         &self.dependency_set
     }
     
     /// Get the unique ID
-    pub fn get_id(&self) -> usize {
+    #[must_use] pub fn get_id(&self) -> usize {
         self.id
     }
     
@@ -242,34 +242,34 @@ impl GroundDisjunction {
     }
     
     /// Get the arguments for this disjunction
-    pub fn get_arguments(&self) -> &[usize] {
+    #[must_use] pub fn get_arguments(&self) -> &[usize] {
         &self.arguments
     }
     
     /// Get the core flags
-    pub fn get_core_flags(&self) -> &[bool] {
+    #[must_use] pub fn get_core_flags(&self) -> &[bool] {
         &self.is_core
     }
     
     /// Get a specific predicate
-    pub fn get_predicate(&self, index: usize) -> Option<&DisjunctPredicate> {
+    #[must_use] pub fn get_predicate(&self, index: usize) -> Option<&DisjunctPredicate> {
         self.header.predicates.get(index)
     }
     
     /// Get the priority
-    pub fn get_priority(&self) -> DisjunctionPriority {
+    #[must_use] pub fn get_priority(&self) -> DisjunctionPriority {
         self.header.priority
     }
 
     /// Get disjuncts (compatibility method)
-    pub fn disjuncts(&self) -> &Vec<DisjunctPredicate> {
+    #[must_use] pub fn disjuncts(&self) -> &Vec<DisjunctPredicate> {
         &self.header.predicates
     }
     
     /// Get individual (compatibility method) - returns first argument as string
-    pub fn individual(&self) -> String {
+    #[must_use] pub fn individual(&self) -> String {
         // For compatibility, return the first argument as a string representation
-        self.arguments.first().map(|&id| format!("node_{id}")).unwrap_or_else(|| "unknown".to_string())
+        self.arguments.first().map_or_else(|| "unknown".to_string(), |&id| format!("node_{id}"))
     }
     
     /// Create a ground disjunction from a class expression
@@ -322,7 +322,7 @@ impl GroundDisjunction {
 
 impl GroundDisjunctionHeader {
     /// Create a new ground disjunction header
-    pub fn new(
+    #[must_use] pub fn new(
         predicates: Vec<DisjunctPredicate>,
         priority: DisjunctionPriority,
     ) -> Self {
@@ -375,17 +375,17 @@ impl GroundDisjunctionHeader {
     }
     
     /// Get the predicates
-    pub fn get_predicates(&self) -> &[DisjunctPredicate] {
+    #[must_use] pub fn get_predicates(&self) -> &[DisjunctPredicate] {
         &self.predicates
     }
     
     /// Get the sorted disjunct indices
-    pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
+    #[must_use] pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
         &self.sorted_disjunct_indices
     }
     
     /// Get the priority
-    pub fn get_priority(&self) -> DisjunctionPriority {
+    #[must_use] pub fn get_priority(&self) -> DisjunctionPriority {
         self.priority
     }
 }

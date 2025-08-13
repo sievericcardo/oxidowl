@@ -1,4 +1,4 @@
-//! Monitoring and Statistics for HyperTableau
+//! Monitoring and Statistics for `HyperTableau`
 //!
 //! This module provides comprehensive monitoring, statistics collection,
 //! and debugging support for the hypertableau algorithm implementation.
@@ -205,7 +205,7 @@ pub struct ConsoleEventListener {
 }
 
 impl ConsoleEventListener {
-    pub fn new(level: MonitoringLevel) -> Self {
+    #[must_use] pub fn new(level: MonitoringLevel) -> Self {
         Self { level }
     }
 }
@@ -324,7 +324,7 @@ impl std::fmt::Debug for TableauMonitor {
 
 impl TableauMonitor {
     /// Create a new tableau monitor
-    pub fn new(monitoring_level: MonitoringLevel) -> Self {
+    #[must_use] pub fn new(monitoring_level: MonitoringLevel) -> Self {
         let mut monitor = Self {
             monitoring_level,
             listeners: Vec::new(),
@@ -511,12 +511,12 @@ impl TableauMonitor {
     }
     
     /// Get event history (for debugging)
-    pub fn get_event_history(&self) -> &VecDeque<MonitoredEvent> {
+    #[must_use] pub fn get_event_history(&self) -> &VecDeque<MonitoredEvent> {
         &self.event_history
     }
     
     /// Get event counters
-    pub fn get_event_counters(&self) -> &HashMap<String, usize> {
+    #[must_use] pub fn get_event_counters(&self) -> &HashMap<String, usize> {
         &self.event_counters
     }
     
@@ -526,7 +526,7 @@ impl TableauMonitor {
     }
     
     /// Get monitoring level
-    pub fn get_monitoring_level(&self) -> MonitoringLevel {
+    #[must_use] pub fn get_monitoring_level(&self) -> MonitoringLevel {
         self.monitoring_level
     }
     
@@ -553,7 +553,7 @@ impl TableauMonitor {
             self.memory_samples.push_back((now, memory));
             
             // Keep only recent samples
-            let cutoff = now - Duration::from_secs(60);
+            let cutoff = now.checked_sub(Duration::from_secs(60)).unwrap();
             while let Some(&(sample_time, _)) = self.memory_samples.front() {
                 if sample_time < cutoff {
                     self.memory_samples.pop_front();
@@ -578,7 +578,7 @@ impl TableauMonitor {
     /// Calculate performance metrics
     fn calculate_performance_metrics(&mut self) {
         let duration = self.reasoning_start_time
-            .map(|start| Instant::now() - start)
+            .map(|start| start.elapsed())
             .unwrap_or_default();
         
         let duration_secs = duration.as_secs_f64();
@@ -616,9 +616,9 @@ impl Default for TableauMonitor {
 
 /// Helper functions for creating monitoring events
 pub mod events {
-    use super::*;
+    use super::{Duration, MonitoredEvent, Individual};
     
-    pub fn clause_application(
+    #[must_use] pub fn clause_application(
         clause_id: usize,
         premises: Vec<String>,
         conclusion: String,
@@ -632,7 +632,7 @@ pub mod events {
         }
     }
     
-    pub fn ground_disjunction_processing(
+    #[must_use] pub fn ground_disjunction_processing(
         disjunction: String,
         individual: Individual,
         choice_count: usize,
@@ -646,7 +646,7 @@ pub mod events {
         }
     }
     
-    pub fn clash_detected(
+    #[must_use] pub fn clash_detected(
         individual: Individual,
         conflicting_concepts: Vec<String>,
         duration: Duration,
@@ -658,7 +658,7 @@ pub mod events {
         }
     }
     
-    pub fn blocking_operation(
+    #[must_use] pub fn blocking_operation(
         blocker: String,
         blocked: String,
         blocking_type: String,
@@ -676,7 +676,7 @@ pub mod events {
         }
     }
 
-    pub fn fact_derived(
+    #[must_use] pub fn fact_derived(
         fact_description: String,
         individual: Individual,
         dependency_level: usize,

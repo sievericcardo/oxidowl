@@ -1,4 +1,4 @@
-//! Branching and Backtracking for HyperTableau
+//! Branching and Backtracking for `HyperTableau`
 //!
 //! This module implements branching points and backtracking mechanisms for
 //! handling non-deterministic disjunctions in the hypertableau algorithm.
@@ -76,7 +76,7 @@ pub struct BranchingChoice {
 
 impl BranchingChoice {
     /// Create a new branching choice
-    pub fn new(
+    #[must_use] pub fn new(
         choice_index: usize,
         description: String,
         assertion: ClassExpression,
@@ -109,7 +109,7 @@ impl BranchingChoice {
     }
     
     /// Check if this choice is viable (not explored or caused clash)
-    pub fn is_viable(&self) -> bool {
+    #[must_use] pub fn is_viable(&self) -> bool {
         !self.explored || !self.caused_clash
     }
 }
@@ -150,7 +150,7 @@ pub struct BranchingPoint {
 
 impl BranchingPoint {
     /// Create a new branching point
-    pub fn new(
+    #[must_use] pub fn new(
         id: BranchingPointId,
         branching_type: BranchingType,
         choices: Vec<BranchingChoice>,
@@ -170,7 +170,7 @@ impl BranchingPoint {
     }
     
     /// Get the next unexplored choice
-    pub fn get_next_choice(&self) -> Option<usize> {
+    #[must_use] pub fn get_next_choice(&self) -> Option<usize> {
         self.choices
             .iter()
             .enumerate()
@@ -179,7 +179,7 @@ impl BranchingPoint {
     }
     
     /// Get all viable (unexplored and non-clashing) choices
-    pub fn get_viable_choices(&self) -> Vec<usize> {
+    #[must_use] pub fn get_viable_choices(&self) -> Vec<usize> {
         self.choices
             .iter()
             .enumerate()
@@ -194,7 +194,7 @@ impl BranchingPoint {
     }
     
     /// Check if all choices have been explored
-    pub fn is_exhausted(&self) -> bool {
+    #[must_use] pub fn is_exhausted(&self) -> bool {
         self.choices.iter().all(|choice| choice.explored)
     }
     
@@ -210,7 +210,7 @@ impl BranchingPoint {
     }
     
     /// Get the currently selected choice
-    pub fn get_current_choice(&self) -> Option<&BranchingChoice> {
+    #[must_use] pub fn get_current_choice(&self) -> Option<&BranchingChoice> {
         self.current_choice
             .and_then(|index| self.choices.get(index))
     }
@@ -347,8 +347,7 @@ impl BranchingManager {
         if let Some(&parent_id) = self.current_path.last() {
             let parent_level = self.branching_points
                 .get(&parent_id)
-                .map(|p| p.level)
-                .unwrap_or(0);
+                .map_or(0, |p| p.level);
             
             branching_point.set_parent(parent_id, parent_level + 1);
             
@@ -496,17 +495,17 @@ impl BranchingManager {
     }
     
     /// Get information about a branching point
-    pub fn get_branching_point(&self, id: BranchingPointId) -> Option<&BranchingPoint> {
+    #[must_use] pub fn get_branching_point(&self, id: BranchingPointId) -> Option<&BranchingPoint> {
         self.branching_points.get(&id)
     }
     
     /// Get current path in the search tree
-    pub fn get_current_path(&self) -> &[BranchingPointId] {
+    #[must_use] pub fn get_current_path(&self) -> &[BranchingPointId] {
         &self.current_path
     }
     
     /// Check if there are any more branching points to explore
-    pub fn has_more_choices(&self) -> bool {
+    #[must_use] pub fn has_more_choices(&self) -> bool {
         match self.strategy {
             BranchingStrategy::DepthFirst => !self.branching_stack.is_empty(),
             _ => !self.choice_queue.is_empty(),
@@ -514,7 +513,7 @@ impl BranchingManager {
     }
     
     /// Get statistics
-    pub fn get_stats(&self) -> &BranchingStats {
+    #[must_use] pub fn get_stats(&self) -> &BranchingStats {
         &self.stats
     }
     
@@ -552,10 +551,10 @@ impl BranchingManager {
 
 /// Helper functions for creating branching points
 pub mod utils {
-    use super::*;
+    use super::{GroundDisjunction, Individual, BranchingChoice, DisjunctPredicate, ClassExpression};
     
     /// Create choices for a ground disjunction
-    pub fn create_disjunction_choices(
+    #[must_use] pub fn create_disjunction_choices(
         disjunction: &GroundDisjunction,
         individual: &Individual,
     ) -> Vec<BranchingChoice> {
@@ -622,7 +621,7 @@ pub mod utils {
     }
     
     /// Create choices for an existential restriction
-    pub fn create_existential_choices(
+    #[must_use] pub fn create_existential_choices(
         property: &str,
         filler: &ClassExpression,
         individual: &Individual,
