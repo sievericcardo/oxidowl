@@ -1,7 +1,11 @@
 //! Example usage of the OxidOWL DL Query functionality
 //!
-//! This example demonstrates how to:
-//! 1. Create a reasoner with ontology
+//! This example demonstrates how to    ontology.add_object_property(oxidowl::ontology::ObjectProperty::new(
+        oxidowl::ontology::IRI::new("http://example.org#hasOwner")
+    ));
+    ontology.add_object_property(oxidowl::ontology::ObjectProperty::new(
+        oxidowl::ontology::IRI::new("http://example.org#ownsPet")
+    ));1. Create a reasoner with ontology
 //! 2. Execute DL queries using Manchester Syntax
 //! 3. Process query results
 
@@ -106,12 +110,12 @@ fn create_example_ontology() -> Result<Ontology> {
     let mary = Individual::named(IRI::new("http://example.org/Mary"));
     let fido = Individual::named(IRI::new("http://example.org/Fido"));
     
-    ontology.add_individual(john.clone());
-    ontology.add_individual(mary.clone());
-    ontology.add_individual(fido.clone());
+    ontology.add_individual(oxidowl::ontology::IRI::new("http://example.org#john"), john.clone());
+    ontology.add_individual(oxidowl::ontology::IRI::new("http://example.org#mary"), mary.clone());
+    ontology.add_individual(oxidowl::ontology::IRI::new("http://example.org#fido"), fido.clone());
     
     // Add some axioms
-    use crate::ontology::{Axiom, ClassAssertionAxiom, SubClassOfAxiom};
+    use crate::ontology::axioms::{Axiom, ClassAssertionAxiom, SubClassOfAxiom};
     
     // John is a Person
     ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
