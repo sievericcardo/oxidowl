@@ -8,9 +8,9 @@ repository = "https://github.com/sievericcardo/oxidowl"
 keywords = ["description-logic", "reasoner", "tableau", "parallel", "ontology"]
 categories = ["algorithms", "concurrency", "science"]
 
-#[lib]
-#name = "oxidowl"
-#path = "src/lib.rs"
+[lib]
+name = "oxidowl"
+path = "src/lib.rs"
 
 [[bin]]
 name = "oxidowl"
