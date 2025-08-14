@@ -1,11 +1,11 @@
 //! Cache System for Oxidowl
-//! 
+//!
 //! This module implements efficient caching strategies for ontology reasoning,
 //! including concept and role satisfiability caches, subsumption caches,
 //! and inference caches.
 
 use crate::{
-    ontology::{Ontology, OntologyRef, ClassExpression, Individual},
+    ontology::{ClassExpression, Individual, Ontology, OntologyRef},
     reasoning::{ClassificationResult, RealizationResult},
 };
 
@@ -45,7 +45,7 @@ impl<T> CacheEntry<T> {
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
     pub max_size: usize, // Maximum number of entries in the cache
-    pub ttl: Duration, // Time to live for cache entries
+    pub ttl: Duration,   // Time to live for cache entries
     pub enable_concept_cache: bool,
     pub enable_subsumption_cache: bool,
     pub enable_satisfiability_cache: bool,
@@ -56,7 +56,7 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            max_size: 10000, // Default maximum size
+            max_size: 10000,                // Default maximum size
             ttl: Duration::from_secs(3600), // Default TTL of 1 hour
             enable_concept_cache: true,
             enable_subsumption_cache: true,
@@ -75,14 +75,16 @@ pub struct ConceptSatisfiabilityCache {
 }
 
 impl ConceptSatisfiabilityCache {
-    #[must_use] pub fn new(config: CacheConfig) -> Self {
+    #[must_use]
+    pub fn new(config: CacheConfig) -> Self {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
             config,
         }
     }
 
-    #[must_use] pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
         if !self.config.enable_satisfiability_cache {
             return None; // Cache is disabled
         }
@@ -127,11 +129,13 @@ impl ConceptSatisfiabilityCache {
         self.cache.write().unwrap().clear();
     }
 
-    #[must_use] pub fn size(&self) -> usize {
+    #[must_use]
+    pub fn size(&self) -> usize {
         self.cache.read().unwrap().len()
     }
 
-    #[must_use] pub fn hit_rate(&self) -> f64 {
+    #[must_use]
+    pub fn hit_rate(&self) -> f64 {
         let cache = self.cache.read().unwrap();
 
         let total_hits: u64 = cache.values().map(|entry| entry.hit_count).sum();
@@ -153,7 +157,8 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
-    #[must_use] pub fn new(config: CacheConfig) -> Self {
+    #[must_use]
+    pub fn new(config: CacheConfig) -> Self {
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             config,
@@ -177,7 +182,8 @@ impl CacheManager {
     }
 
     /// Get satisfiability result from cache
-    #[must_use] pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
         self.concept_cache.get(expression)
     }
 
@@ -187,24 +193,41 @@ impl CacheManager {
     }
 
     /// Get subsumption result from cache
-    #[must_use] pub fn get_subsumption_result(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn get_subsumption_result(
+        &self,
+        sub: &ClassExpression,
+        sup: &ClassExpression,
+    ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store subsumption result in cache
-    pub fn cache_subsumption_result(&self, sub: ClassExpression, sup: ClassExpression, result: bool) {
+    pub fn cache_subsumption_result(
+        &self,
+        sub: ClassExpression,
+        sup: ClassExpression,
+        result: bool,
+    ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get classification result from cache
-    pub fn get_classification_result(&self, ontology: &OntologyRef) -> Option<ClassificationResult> {
+    pub fn get_classification_result(
+        &self,
+        ontology: &OntologyRef,
+    ) -> Option<ClassificationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store classification result in cache
-    pub fn store_classification_result(&self, ontology: &OntologyRef, result: ClassificationResult) {
+    pub fn store_classification_result(
+        &self,
+        ontology: &OntologyRef,
+        result: ClassificationResult,
+    ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -220,18 +243,29 @@ impl CacheManager {
     }
 
     /// Get instance result from cache
-    #[must_use] pub fn get_instance_result(&self, individual: &Individual, class: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn get_instance_result(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store instance result in cache
-    pub fn store_instance_result(&self, individual: Individual, class: ClassExpression, result: bool) {
+    pub fn store_instance_result(
+        &self,
+        individual: Individual,
+        class: ClassExpression,
+        result: bool,
+    ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get subsumption cache
-    #[must_use] pub fn subsumption(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn subsumption(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
         self.get_subsumption_result(sub, sup)
     }
 
@@ -261,7 +295,8 @@ impl CacheManager {
     }
 
     /// Get cache statistics
-    #[must_use] pub fn get_stats(&self) -> CacheStats {
+    #[must_use]
+    pub fn get_stats(&self) -> CacheStats {
         CacheStats {
             concept_cache_size: self.concept_cache.size(),
             concept_cache_hit_rate: self.concept_cache.hit_rate(),
@@ -269,7 +304,8 @@ impl CacheManager {
     }
 
     /// Get the concept satisfiability cache
-    #[must_use] pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
+    #[must_use]
+    pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
         &self.concept_cache
     }
 }

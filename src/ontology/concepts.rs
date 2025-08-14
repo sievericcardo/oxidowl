@@ -1,5 +1,5 @@
 //! OWL 2 DL Concepts and Class Expressions
-//! 
+//!
 //! This module implements OWL 2 DL class expressions and concept representation
 //! following the OWL 2 specification structure.
 
@@ -15,23 +15,32 @@ pub struct Class {
 }
 
 impl Class {
-    #[must_use] pub fn new(iri: crate::ontology::IRI) -> Self {
+    #[must_use]
+    pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
 
-    #[must_use] pub fn thing() -> Self {
-        Self::new(crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"))
+    #[must_use]
+    pub fn thing() -> Self {
+        Self::new(crate::ontology::IRI::new(
+            "http://www.w3.org/2002/07/owl#Thing",
+        ))
     }
 
-    #[must_use] pub fn nothing() -> Self {
-        Self::new(crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"))
+    #[must_use]
+    pub fn nothing() -> Self {
+        Self::new(crate::ontology::IRI::new(
+            "http://www.w3.org/2002/07/owl#Nothing",
+        ))
     }
 
-    #[must_use] pub fn is_thing(&self) -> bool {
+    #[must_use]
+    pub fn is_thing(&self) -> bool {
         self.iri == crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing")
     }
 
-    #[must_use] pub fn is_nothing(&self) -> bool {
+    #[must_use]
+    pub fn is_nothing(&self) -> bool {
         self.iri == crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
     }
 }
@@ -165,22 +174,26 @@ pub enum ClassExpression {
 
 impl ClassExpression {
     /// Create a class expression from a named class
-    #[must_use] pub fn class(iri: crate::ontology::IRI) -> Self {
+    #[must_use]
+    pub fn class(iri: crate::ontology::IRI) -> Self {
         ClassExpression::Class(Class::new(iri))
     }
 
     /// Create the OWL Thing class expression
-    #[must_use] pub fn thing() -> Self {
+    #[must_use]
+    pub fn thing() -> Self {
         ClassExpression::Class(Class::thing())
     }
 
     /// Create the OWL Nothing class expression
-    #[must_use] pub fn nothing() -> Self {
+    #[must_use]
+    pub fn nothing() -> Self {
         ClassExpression::Class(Class::nothing())
     }
 
     /// Create an intersection of class expressions
-    #[must_use] pub fn intersection_of(expressions: Vec<ClassExpression>) -> Self {
+    #[must_use]
+    pub fn intersection_of(expressions: Vec<ClassExpression>) -> Self {
         if expressions.is_empty() {
             Self::thing() // Intersection of nothing is Thing
         } else if expressions.len() == 1 {
@@ -191,7 +204,8 @@ impl ClassExpression {
     }
 
     /// Create a union of class expressions
-    #[must_use] pub fn union_of(expressions: Vec<ClassExpression>) -> Self {
+    #[must_use]
+    pub fn union_of(expressions: Vec<ClassExpression>) -> Self {
         if expressions.is_empty() {
             Self::nothing() // Union of nothing is Nothing
         } else if expressions.len() == 1 {
@@ -202,12 +216,14 @@ impl ClassExpression {
     }
 
     /// Create a complement of a class expression
-    #[must_use] pub fn complement_of(expression: ClassExpression) -> Self {
+    #[must_use]
+    pub fn complement_of(expression: ClassExpression) -> Self {
         ClassExpression::ObjectComplementOf(Box::new(expression))
     }
 
     /// Create an existential restriction (some values from)
-    #[must_use] pub fn some_values_from(
+    #[must_use]
+    pub fn some_values_from(
         property: crate::ontology::ObjectPropertyExpression,
         filler: ClassExpression,
     ) -> Self {
@@ -218,7 +234,8 @@ impl ClassExpression {
     }
 
     /// Create a universal restriction (all values from)
-    #[must_use] pub fn all_values_from(
+    #[must_use]
+    pub fn all_values_from(
         property: crate::ontology::ObjectPropertyExpression,
         filler: ClassExpression,
     ) -> Self {
@@ -229,17 +246,20 @@ impl ClassExpression {
     }
 
     /// Check if this class is a named class
-    #[must_use] pub fn is_named_class(&self) -> bool {
+    #[must_use]
+    pub fn is_named_class(&self) -> bool {
         matches!(self, ClassExpression::Class(_))
     }
 
     /// Check if this class ia a complex class expression
-    #[must_use] pub fn is_complex_class_expression(&self) -> bool {
+    #[must_use]
+    pub fn is_complex_class_expression(&self) -> bool {
         !self.is_named_class()
     }
 
     /// Get the named class IRI if this is a named class
-    #[must_use] pub fn as_class(&self) -> Option<&Class> {
+    #[must_use]
+    pub fn as_class(&self) -> Option<&Class> {
         if let ClassExpression::Class(class) = self {
             Some(class)
         } else {
@@ -248,7 +268,8 @@ impl ClassExpression {
     }
 
     /// Get the IRI if this is a named class
-    #[must_use] pub fn iri(&self) -> Option<&crate::ontology::IRI> {
+    #[must_use]
+    pub fn iri(&self) -> Option<&crate::ontology::IRI> {
         match self {
             ClassExpression::Class(class) => Some(&class.iri),
             _ => None,
@@ -256,7 +277,8 @@ impl ClassExpression {
     }
 
     /// Get all named classes referenced in this class expression
-    #[must_use] pub fn signature(&self) -> HashSet<Class> {
+    #[must_use]
+    pub fn signature(&self) -> HashSet<Class> {
         let mut signature = HashSet::new();
         self.collect_classes(&mut signature);
         signature
@@ -267,28 +289,28 @@ impl ClassExpression {
             ClassExpression::Class(class) => {
                 signature.insert(class.clone());
             }
-            ClassExpression::ObjectIntersectionOf(expressions) |
-            ClassExpression::ObjectUnionOf(expressions) => {
+            ClassExpression::ObjectIntersectionOf(expressions)
+            | ClassExpression::ObjectUnionOf(expressions) => {
                 for expr in expressions {
                     expr.collect_classes(signature);
                 }
             }
-            ClassExpression::ObjectSomeValuesFrom { filler, .. } |
-            ClassExpression::ObjectAllValuesFrom { filler, .. } |
-            ClassExpression::ObjectMinCardinality { filler, .. } |
-            ClassExpression::ObjectMaxCardinality { filler, .. } |
-            ClassExpression::ObjectExactCardinality { filler, .. } => {
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. }
+            | ClassExpression::ObjectMinCardinality { filler, .. }
+            | ClassExpression::ObjectMaxCardinality { filler, .. }
+            | ClassExpression::ObjectExactCardinality { filler, .. } => {
                 filler.collect_classes(signature);
             }
-            ClassExpression::ObjectHasValue {  .. } => {
+            ClassExpression::ObjectHasValue { .. } => {
                 // ObjectHasValue has an individual value, not a class expression
                 // No classes to collect from individuals
             }
-            ClassExpression::DataSomeValuesFrom { filler, .. } |
-            ClassExpression::DataAllValuesFrom { filler, .. } |
-            ClassExpression::DataMinCardinality { filler, .. } |
-            ClassExpression::DataMaxCardinality { filler, .. } |
-            ClassExpression::DataExactCardinality { filler, .. } => {
+            ClassExpression::DataSomeValuesFrom { filler, .. }
+            | ClassExpression::DataAllValuesFrom { filler, .. }
+            | ClassExpression::DataMinCardinality { filler, .. }
+            | ClassExpression::DataMaxCardinality { filler, .. }
+            | ClassExpression::DataExactCardinality { filler, .. } => {
                 // Data ranges do not contain named classes
             }
             ClassExpression::ObjectComplementOf(expr) => {
@@ -299,7 +321,8 @@ impl ClassExpression {
     }
 
     /// Compute the negation normal form (NNF) of this class expression
-    #[must_use] pub fn to_nnf(&self) -> ClassExpression {
+    #[must_use]
+    pub fn to_nnf(&self) -> ClassExpression {
         self.to_nnf_helper(false)
     }
 
@@ -376,31 +399,31 @@ impl ClassExpression {
     }
 
     /// Check if this class expression is in negation normal form (NNF)
-    #[must_use] pub fn is_nnf(&self) -> bool {
+    #[must_use]
+    pub fn is_nnf(&self) -> bool {
         match self {
             ClassExpression::Class(_) => true,
-            ClassExpression::ObjectIntersectionOf(expressions) | ClassExpression::ObjectUnionOf(expressions) => {
+            ClassExpression::ObjectIntersectionOf(expressions)
+            | ClassExpression::ObjectUnionOf(expressions) => {
                 expressions.iter().all(ClassExpression::is_nnf)
             }
             ClassExpression::ObjectComplementOf(expr) => {
                 // NNF does not allow negation of complex expressions
                 expr.is_named_class()
             }
-            ClassExpression::ObjectSomeValuesFrom { filler, .. } |
-            ClassExpression::ObjectAllValuesFrom { filler, .. } => {
-                filler.is_nnf()
-            }
-            ClassExpression::ObjectMinCardinality { filler, .. } |
-            ClassExpression::ObjectMaxCardinality { filler, .. } |
-            ClassExpression::ObjectExactCardinality { filler, .. } => {
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. } => filler.is_nnf(),
+            ClassExpression::ObjectMinCardinality { filler, .. }
+            | ClassExpression::ObjectMaxCardinality { filler, .. }
+            | ClassExpression::ObjectExactCardinality { filler, .. } => {
                 // Cardinality restrictions are in NNF if filler is in NNF
                 filler.is_nnf()
             }
-            ClassExpression::DataSomeValuesFrom { filler, .. } |
-            ClassExpression::DataAllValuesFrom { filler, .. } |
-            ClassExpression::DataMinCardinality { filler, .. } |
-            ClassExpression::DataMaxCardinality { filler, .. } |
-            ClassExpression::DataExactCardinality { filler, .. } => {
+            ClassExpression::DataSomeValuesFrom { filler, .. }
+            | ClassExpression::DataAllValuesFrom { filler, .. }
+            | ClassExpression::DataMinCardinality { filler, .. }
+            | ClassExpression::DataMaxCardinality { filler, .. }
+            | ClassExpression::DataExactCardinality { filler, .. } => {
                 // Data ranges do not contain negations
                 true
             }
@@ -419,7 +442,7 @@ impl ClassExpression {
                     .iter()
                     .map(ClassExpression::simplify)
                     .collect::<crate::Result<Vec<_>>>()?;
-                    
+
                 // Remove duplicates and empty expressions
                 let mut unique_exprs = Vec::new();
                 let mut has_nothing = false;
@@ -451,7 +474,7 @@ impl ClassExpression {
             }
 
             ClassExpression::ObjectUnionOf(expressions) => {
-                let simplified : Vec<_> = expressions
+                let simplified: Vec<_> = expressions
                     .iter()
                     .map(ClassExpression::simplify)
                     .collect::<Result<Vec<_>, _>>()?;
@@ -533,29 +556,35 @@ impl ClassExpression {
                 })
             }
 
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
-                Ok(ClassExpression::ObjectMinCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: Box::new(filler.simplify()?),
-                })
-            }
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => Ok(ClassExpression::ObjectMinCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: Box::new(filler.simplify()?),
+            }),
 
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
-                Ok(ClassExpression::ObjectMaxCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: Box::new(filler.simplify()?),
-                })
-            }
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => Ok(ClassExpression::ObjectMaxCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: Box::new(filler.simplify()?),
+            }),
 
-            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
-                Ok(ClassExpression::ObjectExactCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: Box::new(filler.simplify()?),
-                })
-            }
+            ClassExpression::ObjectExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => Ok(ClassExpression::ObjectExactCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: Box::new(filler.simplify()?),
+            }),
 
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 // Data ranges do not simplify further
@@ -581,31 +610,41 @@ impl ClassExpression {
                 })
             }
 
-            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
-                Ok(ClassExpression::DataMinCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: filler.clone(),
-                })
-            }
+            ClassExpression::DataMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => Ok(ClassExpression::DataMinCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: filler.clone(),
+            }),
 
-            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
-                Ok(ClassExpression::DataMaxCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: filler.clone(),
-                })
-            }
+            ClassExpression::DataMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => Ok(ClassExpression::DataMaxCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: filler.clone(),
+            }),
 
-            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
-                Ok(ClassExpression::DataExactCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: filler.clone(),
-                })
-            }
+            ClassExpression::DataExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => Ok(ClassExpression::DataExactCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: filler.clone(),
+            }),
 
-            ClassExpression::AnnotationAssertion { property, subject, value } => {
+            ClassExpression::AnnotationAssertion {
+                property,
+                subject,
+                value,
+            } => {
                 // Annotation assertions do not simplify further
                 Ok(ClassExpression::AnnotationAssertion {
                     property: property.clone(),
@@ -614,7 +653,10 @@ impl ClassExpression {
                 })
             }
 
-            ClassExpression::SubAnnotationPropertyOf { sub_property, super_property } => {
+            ClassExpression::SubAnnotationPropertyOf {
+                sub_property,
+                super_property,
+            } => {
                 // Sub-annotation property assertions do not simplify further
                 Ok(ClassExpression::SubAnnotationPropertyOf {
                     sub_property: sub_property.clone(),
@@ -655,7 +697,8 @@ pub struct ConceptStore {
 }
 
 impl ConceptStore {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let mut store = Self {
             classes: HashMap::new(),
             expressions: HashMap::new(),
@@ -674,7 +717,8 @@ impl ConceptStore {
         self.classes.entry(iri).or_insert(class)
     }
 
-    #[must_use] pub fn get_class(&self, iri: &crate::ontology::IRI) -> Option<&Class> {
+    #[must_use]
+    pub fn get_class(&self, iri: &crate::ontology::IRI) -> Option<&Class> {
         self.classes.get(iri)
     }
 
@@ -693,7 +737,8 @@ impl ConceptStore {
         id
     }
 
-    #[must_use] pub fn get_expression(&self, id: ConceptId) -> Option<&ClassExpression> {
+    #[must_use]
+    pub fn get_expression(&self, id: ConceptId) -> Option<&ClassExpression> {
         self.expressions.get(&id)
     }
 
@@ -705,11 +750,13 @@ impl ConceptStore {
         self.expressions.values()
     }
 
-    #[must_use] pub fn len(&self) -> usize {
+    #[must_use]
+    pub fn len(&self) -> usize {
         self.classes.len() + self.expressions.len()
     }
 
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.classes.is_empty() && self.expressions.is_empty()
     }
 }
@@ -729,7 +776,9 @@ impl fmt::Display for ClassExpression {
             ClassExpression::ObjectIntersectionOf(classes) => {
                 write!(f, "(")?;
                 for (i, class) in classes.iter().enumerate() {
-                    if i > 0 { write!(f, " ⊓ ")?; }
+                    if i > 0 {
+                        write!(f, " ⊓ ")?;
+                    }
                     write!(f, "{class}")?;
                 }
                 write!(f, ")")
@@ -737,7 +786,9 @@ impl fmt::Display for ClassExpression {
             ClassExpression::ObjectUnionOf(classes) => {
                 write!(f, "(")?;
                 for (i, class) in classes.iter().enumerate() {
-                    if i > 0 { write!(f, " ⊔ ")?; }
+                    if i > 0 {
+                        write!(f, " ⊔ ")?;
+                    }
                     write!(f, "{class}")?;
                 }
                 write!(f, ")")
@@ -748,7 +799,9 @@ impl fmt::Display for ClassExpression {
             ClassExpression::ObjectOneOf(individuals) => {
                 write!(f, "{{")?;
                 for (i, individual) in individuals.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{individual}")?;
                 }
                 write!(f, "}}")
@@ -765,13 +818,25 @@ impl fmt::Display for ClassExpression {
             ClassExpression::ObjectHasSelf { property } => {
                 write!(f, "∃{property}.Self")
             }
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 write!(f, "≥{cardinality} {property}.{filler}")
             }
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 write!(f, "≤{cardinality} {property}.{filler}")
             }
-            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 write!(f, "={cardinality} {property}.{filler}")
             }
             // Data property restrictions
@@ -784,20 +849,42 @@ impl fmt::Display for ClassExpression {
             ClassExpression::DataHasValue { property, value } => {
                 write!(f, "∃{property}.{{{value}}}")
             }
-            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
+            ClassExpression::DataMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 write!(f, "≥{cardinality} {property}.{filler}")
             }
-            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
+            ClassExpression::DataMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 write!(f, "≤{cardinality} {property}.{filler}")
             }
-            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
+            ClassExpression::DataExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 write!(f, "={cardinality} {property}.{filler}")
             }
-            ClassExpression::AnnotationAssertion { property, subject, value } => {
+            ClassExpression::AnnotationAssertion {
+                property,
+                subject,
+                value,
+            } => {
                 write!(f, "AnnotationAssertion({property}, {subject}, {value})")
             }
-            ClassExpression::SubAnnotationPropertyOf { sub_property, super_property } => {
-                write!(f, "SubAnnotationPropertyOf({sub_property}, {super_property})")
+            ClassExpression::SubAnnotationPropertyOf {
+                sub_property,
+                super_property,
+            } => {
+                write!(
+                    f,
+                    "SubAnnotationPropertyOf({sub_property}, {super_property})"
+                )
             }
             ClassExpression::AnnotationPropertyDomain { property, domain } => {
                 write!(f, "AnnotationPropertyDomain({property}, {domain})")

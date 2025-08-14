@@ -5,10 +5,10 @@
 
 use crate::{Error, Result};
 use std::{
-    collections::{HashMap, HashSet, BTreeSet},
-    sync::Arc,
-    hash::{Hash, Hasher},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt,
+    hash::{Hash, Hasher},
+    sync::Arc,
 };
 
 /// Unique identifier for a dependency
@@ -22,13 +22,13 @@ pub type BranchingPoint = u32;
 pub struct Dependency {
     /// Unique identifier for this dependency
     pub id: DependencyId,
-    
+
     /// Type of dependency
     pub dependency_type: DependencyType,
-    
+
     /// Source of the dependency
     pub source: String,
-    
+
     /// Branching point where this dependency was created
     pub branching_point: BranchingPoint,
 }
@@ -38,10 +38,10 @@ pub struct Dependency {
 pub struct DependencySet {
     /// Branching points the dependency set is associated with
     pub branching_points: BTreeSet<BranchingPoint>,
-    
+
     /// Deterministic dependencies (must be satisfied)
     pub deterministic_deps: HashSet<DependencyId>,
-    
+
     /// Non-deterministic dependencies (choices made)
     pub nondeterministic_deps: HashSet<DependencyId>,
 }
@@ -118,33 +118,22 @@ pub enum DependencyType {
     },
 
     /// Functionality restriction
-    Functional {
-        role: String,
-        individual: String,
-    },
+    Functional { role: String, individual: String },
 
     /// Distinctness constraint
-    Distinct {
-        individuals: Vec<String>,
-    },
+    Distinct { individuals: Vec<String> },
 
     /// Nominal handling
-    Nominal {
-        nominal: String,
-        individual: String,
-    },
+    Nominal { nominal: String, individual: String },
 
     /// Expanded existential
     Expanded {
         existential: String,
         witness: String,
     },
-    
+
     /// Datatype constraint
-    Datatype {
-        constraint: String,
-        value: String,
-    },
+    Datatype { constraint: String, value: String },
 }
 
 /// Status of the dependency node
@@ -209,14 +198,14 @@ struct DependencySetKey {
 impl std::hash::Hash for DependencySetKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.branching_points.hash(state);
-        
+
         // Hash deterministic dependencies (sort for consistency)
         let mut det_deps: Vec<_> = self.deterministic_deps.iter().collect();
         det_deps.sort();
         for dep in det_deps {
             dep.hash(state);
         }
-        
+
         // Hash non-deterministic dependencies (sort for consistency)
         let mut nondet_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
         nondet_deps.sort();
@@ -247,7 +236,8 @@ impl Default for DependencySet {
 
 impl DependencySet {
     /// Create an empty dependency set
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             branching_points: BTreeSet::new(),
             deterministic_deps: HashSet::new(),
@@ -256,19 +246,22 @@ impl DependencySet {
     }
 
     /// Create an empty dependency set (alias for new)
-    #[must_use] pub fn empty() -> Self {
+    #[must_use]
+    pub fn empty() -> Self {
         Self::new()
     }
 
     /// Create a dependency set with a single branching point
-    #[must_use] pub fn with_branching_point(branching_point: BranchingPoint) -> Self {
+    #[must_use]
+    pub fn with_branching_point(branching_point: BranchingPoint) -> Self {
         let mut set = Self::new();
         set.branching_points.insert(branching_point);
         set
     }
 
     /// Create a dependency set with a single dependency
-    #[must_use] pub fn with_dependency(dep_id: DependencyId, is_deterministic: bool) -> Self {
+    #[must_use]
+    pub fn with_dependency(dep_id: DependencyId, is_deterministic: bool) -> Self {
         let mut set = Self::new();
         if is_deterministic {
             set.deterministic_deps.insert(dep_id);
@@ -279,15 +272,16 @@ impl DependencySet {
     }
 
     /// Create a singleton dependency set (alias for `with_dependency`)
-    #[must_use] pub fn singleton(source: String) -> Self {
+    #[must_use]
+    pub fn singleton(source: String) -> Self {
         // Create a dependency ID from the source string hash
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         source.hash(&mut hasher);
         let dep_id = hasher.finish();
-        
+
         // Create a new set with this single dependency
         let mut set = Self::empty();
         set.deterministic_deps.insert(dep_id);
@@ -295,11 +289,24 @@ impl DependencySet {
     }
 
     /// Union of two dependency sets
-    #[must_use] pub fn union(&self, other: &DependencySet) -> Self {
+    #[must_use]
+    pub fn union(&self, other: &DependencySet) -> Self {
         Self {
-            branching_points: self.branching_points.union(&other.branching_points).copied().collect(),
-            deterministic_deps: self.deterministic_deps.union(&other.deterministic_deps).copied().collect(),
-            nondeterministic_deps: self.nondeterministic_deps.union(&other.nondeterministic_deps).copied().collect(),
+            branching_points: self
+                .branching_points
+                .union(&other.branching_points)
+                .copied()
+                .collect(),
+            deterministic_deps: self
+                .deterministic_deps
+                .union(&other.deterministic_deps)
+                .copied()
+                .collect(),
+            nondeterministic_deps: self
+                .nondeterministic_deps
+                .union(&other.nondeterministic_deps)
+                .copied()
+                .collect(),
         }
     }
 
@@ -318,36 +325,45 @@ impl DependencySet {
     }
 
     /// Check if the set is empty
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.branching_points.is_empty()
             && self.deterministic_deps.is_empty()
             && self.nondeterministic_deps.is_empty()
     }
 
     /// Get all branching points
-    #[must_use] pub fn branching_points(&self) -> &BTreeSet<BranchingPoint> {
+    #[must_use]
+    pub fn branching_points(&self) -> &BTreeSet<BranchingPoint> {
         &self.branching_points
     }
 
     /// Get maximum branching point
-    #[must_use] pub fn max_branching_point(&self) -> Option<BranchingPoint> {
+    #[must_use]
+    pub fn max_branching_point(&self) -> Option<BranchingPoint> {
         self.branching_points.iter().max().copied()
     }
 
     /// Check if the set is valid at a given branching point
-    #[must_use] pub fn is_valid_at(&self, branching_point: BranchingPoint) -> bool {
-        self.branching_points.iter().all(|&bp| bp <= branching_point)
+    #[must_use]
+    pub fn is_valid_at(&self, branching_point: BranchingPoint) -> bool {
+        self.branching_points
+            .iter()
+            .all(|&bp| bp <= branching_point)
     }
 
     /// Check if the set conflicts with another set at a given branching point
-    #[must_use] pub fn conflicts_with(&self, other: &DependencySet, branching_point: BranchingPoint) -> bool {
-        self.branching_points.contains(&branching_point) && other.branching_points.contains(&branching_point)
+    #[must_use]
+    pub fn conflicts_with(&self, other: &DependencySet, branching_point: BranchingPoint) -> bool {
+        self.branching_points.contains(&branching_point)
+            && other.branching_points.contains(&branching_point)
     }
 }
 
 impl DependencyNode {
     /// Create a new dependency node
-    #[must_use] pub fn new(id: DependencyId, node_type: DependencyType) -> Self {
+    #[must_use]
+    pub fn new(id: DependencyId, node_type: DependencyType) -> Self {
         Self {
             id,
             node_type,
@@ -359,17 +375,20 @@ impl DependencyNode {
     }
 
     /// Get the ID of the dependency node
-    #[must_use] pub fn id(&self) -> DependencyId {
+    #[must_use]
+    pub fn id(&self) -> DependencyId {
         self.id
     }
 
     /// Get the type of the dependency node
-    #[must_use] pub fn node_type(&self) -> &DependencyType {
+    #[must_use]
+    pub fn node_type(&self) -> &DependencyType {
         &self.node_type
     }
 
     /// Get the dependencies of this node
-    #[must_use] pub fn dependencies(&self) -> &DependencySet {
+    #[must_use]
+    pub fn dependencies(&self) -> &DependencySet {
         &self.dependencies
     }
 
@@ -379,7 +398,8 @@ impl DependencyNode {
     }
 
     /// Get the dependents of this node
-    #[must_use] pub fn dependents(&self) -> &HashSet<DependencyId> {
+    #[must_use]
+    pub fn dependents(&self) -> &HashSet<DependencyId> {
         &self.dependents
     }
 
@@ -394,7 +414,8 @@ impl DependencyNode {
     }
 
     /// Get the status of the dependency node
-    #[must_use] pub fn status(&self) -> &DependencyStatus {
+    #[must_use]
+    pub fn status(&self) -> &DependencyStatus {
         &self.status
     }
 
@@ -409,14 +430,16 @@ impl DependencyNode {
     }
 
     /// Check if the node is active
-    #[must_use] pub fn is_active(&self) -> bool {
+    #[must_use]
+    pub fn is_active(&self) -> bool {
         matches!(self.status, DependencyStatus::Active)
     }
 }
 
 impl DependencyTracker {
     /// Create a new dependency tracker
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             nodes: HashMap::new(),
             next_id: 0,
@@ -445,7 +468,8 @@ impl DependencyTracker {
     }
 
     /// Get a dependency node by ID
-    #[must_use] pub fn get_dependency(&self, id: DependencyId) -> Option<&DependencyNode> {
+    #[must_use]
+    pub fn get_dependency(&self, id: DependencyId) -> Option<&DependencyNode> {
         self.nodes.get(&id)
     }
 
@@ -455,7 +479,11 @@ impl DependencyTracker {
     }
 
     /// Add a dependency to a node
-    pub fn add_dependency(&mut self, dependent: DependencyId, dependency: DependencyId) -> Result<()> {
+    pub fn add_dependency(
+        &mut self,
+        dependent: DependencyId,
+        dependency: DependencyId,
+    ) -> Result<()> {
         if self.would_create_cycle(dependent, dependency)? {
             return Err(Error::internal("Dependency would create cycle"));
         }
@@ -476,7 +504,8 @@ impl DependencyTracker {
     pub fn create_branching_point(&mut self) -> BranchingPoint {
         self.current_branching_level += 1;
         self.branching_stack.push(self.current_branching_level);
-        self.active_dependencies.insert(self.current_branching_level, HashSet::new());
+        self.active_dependencies
+            .insert(self.current_branching_level, HashSet::new());
         self.current_branching_level
     }
 
@@ -486,7 +515,9 @@ impl DependencyTracker {
             return Err(Error::internal("Invalid branching point for backtrack"));
         }
         if branching_point > self.current_branching_level {
-            return Err(Error::internal("Cannot backtrack to a future branching point"));
+            return Err(Error::internal(
+                "Cannot backtrack to a future branching point",
+            ));
         }
 
         // Make all dependencies at levels greater than the target inactive
@@ -503,15 +534,18 @@ impl DependencyTracker {
 
         // Update current branching level
         self.current_branching_level = branching_point;
-        while self.branching_stack.len() > 1 && self.branching_stack.last().unwrap() > &branching_point {
+        while self.branching_stack.len() > 1
+            && self.branching_stack.last().unwrap() > &branching_point
+        {
             self.branching_stack.pop();
         }
-        
+
         Ok(())
     }
 
     /// Get current branching level
-    #[must_use] pub fn current_branching_level(&self) -> BranchingPoint {
+    #[must_use]
+    pub fn current_branching_level(&self) -> BranchingPoint {
         self.current_branching_level
     }
 
@@ -520,13 +554,13 @@ impl DependencyTracker {
         &mut self,
         branching_points: Vec<BranchingPoint>,
         dependencies: Vec<(DependencyId, bool)>,
-    ) -> Arc<DependencySet>
-    {
+    ) -> Arc<DependencySet> {
         self.set_factory.create_set(branching_points, dependencies)
     }
 
     /// Get empty dependency set
-    #[must_use] pub fn empty_set(&self) -> Arc<DependencySet> {
+    #[must_use]
+    pub fn empty_set(&self) -> Arc<DependencySet> {
         self.set_factory.empty_set()
     }
 
@@ -567,8 +601,10 @@ impl DependencyTracker {
     }
 
     /// Get all active dependencies
-    #[must_use] pub fn active_dependencies(&self) -> Vec<DependencyId> {
-        self.nodes.iter()
+    #[must_use]
+    pub fn active_dependencies(&self) -> Vec<DependencyId> {
+        self.nodes
+            .iter()
             .filter(|(_, node)| node.is_active())
             .map(|(&id, _)| id)
             .collect()
@@ -582,34 +618,45 @@ impl DependencyTracker {
     }
 
     /// Create a track point for the current state
-    #[must_use] pub fn create_track_point(&self) -> DependencyTrackPoint {
+    #[must_use]
+    pub fn create_track_point(&self) -> DependencyTrackPoint {
         DependencyTrackPoint {
             branching_point: self.current_branching_level,
-            active_dependencies: self.active_dependencies.get(&self.current_branching_level).cloned().unwrap_or_default(),
+            active_dependencies: self
+                .active_dependencies
+                .get(&self.current_branching_level)
+                .cloned()
+                .unwrap_or_default(),
             timestamp: std::time::Instant::now(),
         }
     }
 
     /// Check if a dependency set is consistent at a branching point
-    #[must_use] pub fn is_consistent_at(&self, dep_set: &DependencySet, branching_point: BranchingPoint) -> bool {
-        dep_set.is_valid_at(branching_point) && !dep_set.conflicts_with(&self.empty_set(), branching_point)
+    #[must_use]
+    pub fn is_consistent_at(
+        &self,
+        dep_set: &DependencySet,
+        branching_point: BranchingPoint,
+    ) -> bool {
+        dep_set.is_valid_at(branching_point)
+            && !dep_set.conflicts_with(&self.empty_set(), branching_point)
     }
 
     /// Clean up unused dependency sets
     pub fn garbage_collect(&mut self) {
         let active_deps: HashSet<_> = self.active_dependencies().into_iter().collect();
-        
-        self.nodes.retain(|&id, node| {
-            active_deps.contains(&id) || !node.dependents.is_empty()
-        });
-        
+
+        self.nodes
+            .retain(|&id, node| active_deps.contains(&id) || !node.dependents.is_empty());
+
         self.set_factory.garbage_collect();
     }
 }
 
 impl DependencySetFactory {
     /// Create a new factory
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let empty_set = Arc::new(DependencySet::new());
         let mut set_cache = HashMap::new();
         let empty_key = DependencySetKey {
@@ -626,9 +673,9 @@ impl DependencySetFactory {
         }
     }
 
-
     /// Get the empty dependency set
-    #[must_use] pub fn empty_set(&self) -> Arc<DependencySet> {
+    #[must_use]
+    pub fn empty_set(&self) -> Arc<DependencySet> {
         self.empty_set.clone()
     }
 
@@ -659,10 +706,8 @@ impl DependencySetFactory {
 
         let new_set = DependencySet {
             branching_points: key.branching_points.clone(),
-            deterministic_deps: key.deterministic_deps
-                .iter().copied().collect(),
-            nondeterministic_deps: key.nondeterministic_deps
-                .iter().copied().collect(),
+            deterministic_deps: key.deterministic_deps.iter().copied().collect(),
+            nondeterministic_deps: key.nondeterministic_deps.iter().copied().collect(),
         };
 
         let arc_set = Arc::new(new_set);
@@ -673,12 +718,18 @@ impl DependencySetFactory {
     }
 
     /// Union two dependency sets
-    pub fn union_set(&mut self, set1: &Arc<DependencySet>, set2: &Arc<DependencySet>) -> Arc<DependencySet> {
-        let branching_points: Vec<_> = set1.branching_points
+    pub fn union_set(
+        &mut self,
+        set1: &Arc<DependencySet>,
+        set2: &Arc<DependencySet>,
+    ) -> Arc<DependencySet> {
+        let branching_points: Vec<_> = set1
+            .branching_points
             .union(set2.branching_points())
             .copied()
             .collect();
-        let deps: Vec<_> = set1.deterministic_deps
+        let deps: Vec<_> = set1
+            .deterministic_deps
             .union(&set2.deterministic_deps)
             .map(|&id| (id, true))
             .chain(
@@ -698,7 +749,8 @@ impl DependencySetFactory {
         }
 
         // Remove sets with low usage
-        let to_remove: Vec<DependencySetKey> = self.usage_counters
+        let to_remove: Vec<DependencySetKey> = self
+            .usage_counters
             .iter()
             .filter(|&(_, count)| *count < 2) // Keep sets used at least twice
             .map(|(key, _)| key.clone())
@@ -713,17 +765,20 @@ impl DependencySetFactory {
 
 impl DependencyTrackPoint {
     /// Get the branching level
-    #[must_use] pub fn branching_level(&self) -> BranchingPoint {
+    #[must_use]
+    pub fn branching_level(&self) -> BranchingPoint {
         self.branching_point
     }
-    
+
     /// Get active dependencies
-    #[must_use] pub fn active_dependencies(&self) -> &HashSet<DependencyId> {
+    #[must_use]
+    pub fn active_dependencies(&self) -> &HashSet<DependencyId> {
         &self.active_dependencies
     }
-    
+
     /// Get timestamp
-    #[must_use] pub fn timestamp(&self) -> std::time::Instant {
+    #[must_use]
+    pub fn timestamp(&self) -> std::time::Instant {
         self.timestamp
     }
 }
@@ -737,24 +792,38 @@ impl Default for DependencyTracker {
 impl fmt::Display for DependencyType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DependencyType::Deterministic { rule, source_concept } => 
-                write!(f, "Det[{rule}->{source_concept}]"),
-            DependencyType::NonDeterministic { rule, choices, chosen_index } => 
-                write!(f, "NonDet[{rule}:{choices:?}@{chosen_index:?}]"),
-            DependencyType::Merge { source_node, target_node } => 
-                write!(f, "Merge[{source_node}->{target_node}]"),
-            DependencyType::Implication { antecedent, consequent } => 
-                write!(f, "Impl[{antecedent}->{consequent}]"),
-            DependencyType::Functional { role, individual } => 
-                write!(f, "Func[{role}@{individual}]"),
-            DependencyType::Distinct { individuals } => 
-                write!(f, "Dist[{individuals:?}]"),
-            DependencyType::Nominal { nominal, individual } => 
-                write!(f, "Nom[{nominal}@{individual}]"),
-            DependencyType::Expanded { existential, witness } => 
-                write!(f, "Exp[{existential}->{witness}]"),
-            DependencyType::Datatype { constraint, value } => 
-                write!(f, "Data[{constraint}@{value}]"),
+            DependencyType::Deterministic {
+                rule,
+                source_concept,
+            } => write!(f, "Det[{rule}->{source_concept}]"),
+            DependencyType::NonDeterministic {
+                rule,
+                choices,
+                chosen_index,
+            } => write!(f, "NonDet[{rule}:{choices:?}@{chosen_index:?}]"),
+            DependencyType::Merge {
+                source_node,
+                target_node,
+            } => write!(f, "Merge[{source_node}->{target_node}]"),
+            DependencyType::Implication {
+                antecedent,
+                consequent,
+            } => write!(f, "Impl[{antecedent}->{consequent}]"),
+            DependencyType::Functional { role, individual } => {
+                write!(f, "Func[{role}@{individual}]")
+            }
+            DependencyType::Distinct { individuals } => write!(f, "Dist[{individuals:?}]"),
+            DependencyType::Nominal {
+                nominal,
+                individual,
+            } => write!(f, "Nom[{nominal}@{individual}]"),
+            DependencyType::Expanded {
+                existential,
+                witness,
+            } => write!(f, "Exp[{existential}->{witness}]"),
+            DependencyType::Datatype { constraint, value } => {
+                write!(f, "Data[{constraint}@{value}]")
+            }
         }
     }
 }

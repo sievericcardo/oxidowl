@@ -3,7 +3,6 @@
 //! This module defines all error types that can occur during reasoning operations,
 //! parsing, network operations, and configuration.
 
-
 /// Main error type for Oxidowl
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
@@ -98,11 +97,11 @@ pub enum Error {
     /// DL Query parsing error
     #[error("DL Query error: {message}")]
     DLQuery { message: String },
-    
+
     /// Axiom already exists error
     #[error("Axiom already exists")]
     AxiomAlreadyExists,
-    
+
     /// Axiom not found error
     #[error("Axiom not found")]
     AxiomNotFound,
@@ -211,17 +210,20 @@ impl Error {
     }
 
     /// Create an invalid disjunct index error
-    #[must_use] pub fn invalid_disjunct_index(index: usize) -> Self {
+    #[must_use]
+    pub fn invalid_disjunct_index(index: usize) -> Self {
         Self::InvalidDisjunctIndex { index }
     }
 
     /// Create an invalid branching choice error
-    #[must_use] pub fn invalid_branching_choice(index: usize) -> Self {
+    #[must_use]
+    pub fn invalid_branching_choice(index: usize) -> Self {
         Self::InvalidBranchingChoice { index }
     }
 
     /// Create a max depth exceeded error
-    #[must_use] pub fn max_depth_exceeded(depth: usize) -> Self {
+    #[must_use]
+    pub fn max_depth_exceeded(depth: usize) -> Self {
         Self::MaxDepthExceeded { depth }
     }
 
@@ -231,7 +233,8 @@ impl Error {
     }
 
     /// Create a no branching choices available error
-    #[must_use] pub fn no_branching_choices_available() -> Self {
+    #[must_use]
+    pub fn no_branching_choices_available() -> Self {
         Self::NoBranchingChoicesAvailable
     }
 
@@ -270,38 +273,38 @@ pub enum ErrorCategory {
 
 impl Error {
     /// Get the category of the error
-    #[must_use] pub fn category(&self) -> ErrorCategory {
+    #[must_use]
+    pub fn category(&self) -> ErrorCategory {
         match self {
-            Error::OntologyParsing { .. } 
-                | Error::XmlParsing { .. } 
-                | Error::Io { .. } => ErrorCategory::Input,
-            Error::Reasoning { .. }
-                | Error::Sparql { .. } => ErrorCategory::Reasoning,
+            Error::OntologyParsing { .. } | Error::XmlParsing { .. } | Error::Io { .. } => {
+                ErrorCategory::Input
+            }
+            Error::Reasoning { .. } | Error::Sparql { .. } => ErrorCategory::Reasoning,
             Error::Config { .. } => ErrorCategory::Config,
             Error::Network { .. } => ErrorCategory::Network,
             Error::Cache { .. }
-                | Error::ResourceExhaustion { .. }
-                | Error::ResourceExhausted { .. }
-                | Error::Timeout { .. } => ErrorCategory::Resource,
-            Error::Unsupported { .. }
-                | Error::Internal { .. } => ErrorCategory::Internal,
+            | Error::ResourceExhaustion { .. }
+            | Error::ResourceExhausted { .. }
+            | Error::Timeout { .. } => ErrorCategory::Resource,
+            Error::Unsupported { .. } | Error::Internal { .. } => ErrorCategory::Internal,
             Error::InvalidInput { .. }
-                | Error::InvalidDisjunctIndex { .. }
-                | Error::InvalidBranchingChoice { .. }
-                | Error::MaxDepthExceeded { .. }
-                | Error::BranchingPointNotFound { .. }
-                | Error::NoBranchingChoicesAvailable 
-                | Error::InvalidPropertyChain { .. }
-                | Error::InvalidAssertion { .. }
-                | Error::QueueFull 
-                | Error::AxiomAlreadyExists
-                | Error::AxiomNotFound => ErrorCategory::Internal,
+            | Error::InvalidDisjunctIndex { .. }
+            | Error::InvalidBranchingChoice { .. }
+            | Error::MaxDepthExceeded { .. }
+            | Error::BranchingPointNotFound { .. }
+            | Error::NoBranchingChoicesAvailable
+            | Error::InvalidPropertyChain { .. }
+            | Error::InvalidAssertion { .. }
+            | Error::QueueFull
+            | Error::AxiomAlreadyExists
+            | Error::AxiomNotFound => ErrorCategory::Internal,
             Error::DLQuery { .. } => ErrorCategory::Input,
         }
     }
 
     /// Check if the error is recoverable
-    #[must_use] pub fn is_recoverable(&self) -> bool {
+    #[must_use]
+    pub fn is_recoverable(&self) -> bool {
         match self {
             Error::OntologyParsing { .. }
             | Error::XmlParsing { .. }
@@ -314,17 +317,16 @@ impl Error {
             | Error::ResourceExhausted { .. }
             | Error::Timeout { .. }
             | Error::Network { .. } => true,
-            Error::Io { .. } 
-            | Error::Internal { .. } => false,
+            Error::Io { .. } | Error::Internal { .. } => false,
             Error::InvalidInput { .. }
             | Error::InvalidDisjunctIndex { .. }
             | Error::InvalidBranchingChoice { .. }
             | Error::MaxDepthExceeded { .. }
             | Error::BranchingPointNotFound { .. }
-            | Error::NoBranchingChoicesAvailable 
+            | Error::NoBranchingChoicesAvailable
             | Error::InvalidPropertyChain { .. }
             | Error::InvalidAssertion { .. }
-            | Error::QueueFull 
+            | Error::QueueFull
             | Error::AxiomAlreadyExists
             | Error::AxiomNotFound => false,
             Error::DLQuery { .. } => false,

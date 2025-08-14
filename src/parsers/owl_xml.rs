@@ -5,14 +5,13 @@
 use crate::{
     Error, Result,
     ontology::{
-        Ontology, ClassExpression, Individual, NamedIndividual, IRI, Axiom, ObjectPropertyExpression, Entity, DeclarationAxiom,
-        Class, ObjectProperty,
-        axioms::DisjointUnionAxiom
+        Axiom, Class, ClassExpression, DeclarationAxiom, Entity, IRI, Individual, NamedIndividual,
+        ObjectProperty, ObjectPropertyExpression, Ontology, axioms::DisjointUnionAxiom,
     },
 };
 use std::{
     fs::File,
-    io::{BufReader, Write, Read},
+    io::{BufReader, Read, Write},
     path::Path,
 };
 
@@ -22,14 +21,20 @@ fn resolve_iri(iri: &str, base_iri: Option<&url::Url>) -> Result<url::Url> {
     if let Ok(absolute_url) = url::Url::parse(iri) {
         return Ok(absolute_url);
     }
-    
+
     // If we have a base IRI, resolve the relative IRI against it
     if let Some(base) = base_iri {
-        return base.join(iri).map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{iri}' against base '{base}': {e}")));
+        return base.join(iri).map_err(|e| {
+            Error::ontology_parsing(format!(
+                "Failed to resolve relative IRI '{iri}' against base '{base}': {e}"
+            ))
+        });
     }
-    
+
     // No base IRI provided for relative IRI
-    Err(Error::ontology_parsing(format!("Relative IRI '{iri}' provided without base IRI")))
+    Err(Error::ontology_parsing(format!(
+        "Relative IRI '{iri}' provided without base IRI"
+    )))
 }
 
 /// Generate a unique axiom ID
@@ -44,22 +49,22 @@ fn generate_axiom_id() -> u64 {
 pub struct OwlXmlParserConfig {
     /// Whether to validate XML schema (default: true)
     pub validate_schema: bool,
-    
+
     /// Whether to validate OWL 2 semantics (default: true)
     pub validate_owl_semantics: bool,
-    
+
     /// Whether to allow OWL 1 constructs (default: true)
     pub allow_owl1_constructs: bool,
-    
+
     /// Whether to preserve annotations (default: true)
     pub preserve_annotations: bool,
-    
+
     /// Maximum nesting depth for class expressions (default: 50)
     pub max_nesting_depth: usize,
-    
+
     /// Whether to use strict OWL/XML compliance (default: false)
     pub strict_mode: bool,
-    
+
     /// Whether to ignore unknown elements (default: false)
     pub ignore_unknown_elements: bool,
 }
@@ -86,22 +91,25 @@ pub struct OwlXmlParser {
 
 impl OwlXmlParser {
     /// Create a new OWL/XML parser with default configuration
-    #[must_use] pub fn new() -> Self {
-        Self { 
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
             config: OwlXmlParserConfig::default(),
         }
     }
-    
+
     /// Create a new OWL/XML parser with custom configuration
-    #[must_use] pub fn with_config(config: OwlXmlParserConfig) -> Self {
+    #[must_use]
+    pub fn with_config(config: OwlXmlParserConfig) -> Self {
         Self { config }
     }
-    
+
     /// Get the current configuration
-    #[must_use] pub fn config(&self) -> &OwlXmlParserConfig {
+    #[must_use]
+    pub fn config(&self) -> &OwlXmlParserConfig {
         &self.config
     }
-    
+
     /// Set a new configuration
     pub fn set_config(&mut self, config: OwlXmlParserConfig) {
         self.config = config;
@@ -119,15 +127,15 @@ pub fn parse(content: &str) -> Result<Ontology> {
     // Basic OWL XML parser implementation
     let doc = roxmltree::Document::parse(content)
         .map_err(|e| Error::io(format!("Failed to parse XML: {e}")))?;
-    
+
     let mut ontology = Ontology::new();
-    
+
     // Find the root Ontology element
     let root = doc.root_element();
     if root.tag_name().name() != "Ontology" {
         return Err(Error::io("Root element must be Ontology".to_string()));
     }
-    
+
     // Extract ontology IRI if present and use as base for resolving relative IRIs
     let base_iri = if let Some(iri) = root.attribute("ontologyIRI") {
         if let Ok(url) = url::Url::parse(iri) {
@@ -139,7 +147,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
     } else {
         None
     };
-    
+
     // Parse declarations and axioms
     for child in root.children().filter(roxmltree::Node::is_element) {
         match child.tag_name().name() {
@@ -188,7 +196,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
             }
         }
     }
-    
+
     Ok(ontology)
 }
 
@@ -232,20 +240,25 @@ fn parse_declaration(element: &roxmltree::Node) -> Result<Axiom> {
             _ => {}
         }
     }
-    
+
     Err(Error::io("Invalid Declaration element".to_string()))
 }
 
 /// Parse a `SubClassOf` element
 fn parse_subclass_of(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
     if children.len() != 2 {
-        return Err(Error::io("SubClassOf must have exactly 2 children".to_string()));
+        return Err(Error::io(
+            "SubClassOf must have exactly 2 children".to_string(),
+        ));
     }
-    
+
     let subclass = parse_class_expression(&children[0], base_iri)?;
     let superclass = parse_class_expression(&children[1], base_iri)?;
-    
+
     Ok(Axiom::SubClassOf(crate::ontology::SubClassOfAxiom {
         id: generate_axiom_id(),
         subclass,
@@ -255,43 +268,56 @@ fn parse_subclass_of(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> 
 }
 
 /// Parse an `EquivalentClasses` element
-fn parse_equivalent_classes(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
+fn parse_equivalent_classes(
+    element: &roxmltree::Node,
+    base_iri: Option<&url::Url>,
+) -> Result<Axiom> {
     let mut class_expressions = Vec::new();
-    
+
     for child in element.children().filter(roxmltree::Node::is_element) {
         let expr = parse_class_expression(&child, base_iri)?;
         class_expressions.push(expr);
     }
-    
+
     if class_expressions.len() < 2 {
-        return Err(Error::io("EquivalentClasses must have at least 2 classes".to_string()));
+        return Err(Error::io(
+            "EquivalentClasses must have at least 2 classes".to_string(),
+        ));
     }
-    
-    Ok(Axiom::EquivalentClasses(crate::ontology::EquivalentClassesAxiom {
-        id: generate_axiom_id(),
-        classes: class_expressions,
-        annotations: Vec::new(),
-    }))
+
+    Ok(Axiom::EquivalentClasses(
+        crate::ontology::EquivalentClassesAxiom {
+            id: generate_axiom_id(),
+            classes: class_expressions,
+            annotations: Vec::new(),
+        },
+    ))
 }
 
 /// Parse a `DisjointUnion` element
 fn parse_disjoint_union(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
-    
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+
     if children.len() < 2 {
-        return Err(Error::io("DisjointUnion must have at least 2 children (union class + disjoint classes)".to_string()));
+        return Err(Error::io(
+            "DisjointUnion must have at least 2 children (union class + disjoint classes)"
+                .to_string(),
+        ));
     }
-    
+
     // First child is the union class
     let union_class = parse_class_expression(&children[0], base_iri)?;
-    
+
     // Remaining children are the disjoint classes
     let mut disjoint_classes = Vec::new();
     for child in &children[1..] {
         let expr = parse_class_expression(child, base_iri)?;
         disjoint_classes.push(expr);
     }
-    
+
     Ok(Axiom::DisjointUnion(DisjointUnionAxiom {
         id: generate_axiom_id(),
         class: union_class,
@@ -302,78 +328,109 @@ fn parse_disjoint_union(element: &roxmltree::Node, base_iri: Option<&url::Url>) 
 
 /// Parse a `ClassAssertion` element
 fn parse_class_assertion(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
     if children.len() != 2 {
-        return Err(Error::io("ClassAssertion must have exactly 2 children".to_string()));
+        return Err(Error::io(
+            "ClassAssertion must have exactly 2 children".to_string(),
+        ));
     }
-    
+
     let class_expression = parse_class_expression(&children[0], base_iri)?;
     let individual = parse_individual(&children[1])?;
-    
-    Ok(Axiom::ClassAssertion(crate::ontology::ClassAssertionAxiom {
-        id: generate_axiom_id(),
-        class: class_expression,
-        individual,
-        annotations: Vec::new(),
-    }))
+
+    Ok(Axiom::ClassAssertion(
+        crate::ontology::ClassAssertionAxiom {
+            id: generate_axiom_id(),
+            class: class_expression,
+            individual,
+            annotations: Vec::new(),
+        },
+    ))
 }
 
 /// Parse an `ObjectPropertyAssertion` element
 fn parse_object_property_assertion(element: &roxmltree::Node) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
     if children.len() != 3 {
-        return Err(Error::io("ObjectPropertyAssertion must have exactly 3 children".to_string()));
+        return Err(Error::io(
+            "ObjectPropertyAssertion must have exactly 3 children".to_string(),
+        ));
     }
-    
+
     let property = parse_object_property_expression(&children[0])?;
     let source = parse_individual(&children[1])?;
     let target = parse_individual(&children[2])?;
-    
-    Ok(Axiom::ObjectPropertyAssertion(crate::ontology::ObjectPropertyAssertionAxiom {
-        id: generate_axiom_id(),
-        property,
-        source,
-        target,
-        annotations: Vec::new(),
-    }))
+
+    Ok(Axiom::ObjectPropertyAssertion(
+        crate::ontology::ObjectPropertyAssertionAxiom {
+            id: generate_axiom_id(),
+            property,
+            source,
+            target,
+            annotations: Vec::new(),
+        },
+    ))
 }
 
 /// Parse a `SubObjectPropertyOf` element
 fn parse_sub_object_property_of(element: &roxmltree::Node) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
     if children.len() != 2 {
-        return Err(Error::io("SubObjectPropertyOf must have exactly 2 children".to_string()));
+        return Err(Error::io(
+            "SubObjectPropertyOf must have exactly 2 children".to_string(),
+        ));
     }
-    
+
     let sub_property = parse_object_property_expression(&children[0])?;
     let super_property = parse_object_property_expression(&children[1])?;
-    
-    Ok(Axiom::SubObjectPropertyOf(crate::ontology::SubObjectPropertyOfAxiom {
-        id: generate_axiom_id(),
-        sub_property,
-        super_property,
-        annotations: Vec::new(),
-    }))
+
+    Ok(Axiom::SubObjectPropertyOf(
+        crate::ontology::SubObjectPropertyOfAxiom {
+            id: generate_axiom_id(),
+            sub_property,
+            super_property,
+            annotations: Vec::new(),
+        },
+    ))
 }
 
 /// Parse a `FunctionalObjectProperty` element
 fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> {
-    let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
     if children.len() != 1 {
-        return Err(Error::io("FunctionalObjectProperty must have exactly 1 child".to_string()));
+        return Err(Error::io(
+            "FunctionalObjectProperty must have exactly 1 child".to_string(),
+        ));
     }
-    
+
     let property = parse_object_property_expression(&children[0])?;
-    
-    Ok(Axiom::FunctionalObjectProperty(crate::ontology::FunctionalObjectPropertyAxiom {
-        id: generate_axiom_id(),
-        property,
-        annotations: Vec::new(),
-    }))
+
+    Ok(Axiom::FunctionalObjectProperty(
+        crate::ontology::FunctionalObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
 }
 
 /// Parse a class expression
-fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<ClassExpression> {
+fn parse_class_expression(
+    element: &roxmltree::Node,
+    base_iri: Option<&url::Url>,
+) -> Result<ClassExpression> {
     match element.tag_name().name() {
         "Class" => {
             if let Some(iri) = element.attribute("IRI") {
@@ -400,26 +457,41 @@ fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>
             Ok(ClassExpression::ObjectUnionOf(operands))
         }
         "ObjectComplementOf" => {
-            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+            let children: Vec<_> = element
+                .children()
+                .filter(roxmltree::Node::is_element)
+                .collect();
             if children.len() != 1 {
-                return Err(Error::io("ObjectComplementOf must have exactly 1 child".to_string()));
+                return Err(Error::io(
+                    "ObjectComplementOf must have exactly 1 child".to_string(),
+                ));
             }
             let operand = Box::new(parse_class_expression(&children[0], base_iri)?);
             Ok(ClassExpression::ObjectComplementOf(operand))
         }
         "ObjectSomeValuesFrom" => {
-            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+            let children: Vec<_> = element
+                .children()
+                .filter(roxmltree::Node::is_element)
+                .collect();
             if children.len() != 2 {
-                return Err(Error::io("ObjectSomeValuesFrom must have exactly 2 children".to_string()));
+                return Err(Error::io(
+                    "ObjectSomeValuesFrom must have exactly 2 children".to_string(),
+                ));
             }
             let property = parse_object_property_expression(&children[0])?;
             let filler = Box::new(parse_class_expression(&children[1], base_iri)?);
             Ok(ClassExpression::ObjectSomeValuesFrom { property, filler })
         }
         "ObjectAllValuesFrom" => {
-            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+            let children: Vec<_> = element
+                .children()
+                .filter(roxmltree::Node::is_element)
+                .collect();
             if children.len() != 2 {
-                return Err(Error::io("ObjectAllValuesFrom must have exactly 2 children".to_string()));
+                return Err(Error::io(
+                    "ObjectAllValuesFrom must have exactly 2 children".to_string(),
+                ));
             }
             let property = parse_object_property_expression(&children[0])?;
             let filler = Box::new(parse_class_expression(&children[1], base_iri)?);
@@ -432,9 +504,10 @@ fn parse_class_expression(element: &roxmltree::Node, base_iri: Option<&url::Url>
             }
             Ok(ClassExpression::ObjectOneOf(individuals))
         }
-        _ => {
-            Err(Error::io(format!("Unsupported class expression: {}", element.tag_name().name())))
-        }
+        _ => Err(Error::io(format!(
+            "Unsupported class expression: {}",
+            element.tag_name().name()
+        ))),
     }
 }
 
@@ -447,13 +520,20 @@ fn parse_object_property_expression(element: &roxmltree::Node) -> Result<ObjectP
                     iri: IRI::new(iri).to_url()?,
                 }))
             } else {
-                Err(Error::io("ObjectProperty element missing IRI attribute".to_string()))
+                Err(Error::io(
+                    "ObjectProperty element missing IRI attribute".to_string(),
+                ))
             }
         }
         "ObjectInverseOf" => {
-            let children: Vec<_> = element.children().filter(roxmltree::Node::is_element).collect();
+            let children: Vec<_> = element
+                .children()
+                .filter(roxmltree::Node::is_element)
+                .collect();
             if children.len() != 1 {
-                return Err(Error::io("ObjectInverseOf must have exactly 1 child".to_string()));
+                return Err(Error::io(
+                    "ObjectInverseOf must have exactly 1 child".to_string(),
+                ));
             }
             // Parse the child as ObjectProperty, not ObjectPropertyExpression
             if let Some(iri) = children[0].attribute("IRI") {
@@ -462,12 +542,15 @@ fn parse_object_property_expression(element: &roxmltree::Node) -> Result<ObjectP
                 };
                 Ok(ObjectPropertyExpression::InverseObjectProperty(property))
             } else {
-                Err(Error::io("ObjectProperty element missing IRI attribute".to_string()))
+                Err(Error::io(
+                    "ObjectProperty element missing IRI attribute".to_string(),
+                ))
             }
         }
-        _ => {
-            Err(Error::io(format!("Unsupported object property expression: {}", element.tag_name().name())))
-        }
+        _ => Err(Error::io(format!(
+            "Unsupported object property expression: {}",
+            element.tag_name().name()
+        ))),
     }
 }
 
@@ -476,45 +559,67 @@ fn parse_individual(element: &roxmltree::Node) -> Result<Individual> {
     match element.tag_name().name() {
         "NamedIndividual" => {
             if let Some(iri) = element.attribute("IRI") {
-                Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri).to_url()?.into() }))
+                Ok(Individual::Named(NamedIndividual {
+                    iri: IRI::new(iri).to_url()?.into(),
+                }))
             } else {
-                Err(Error::io("NamedIndividual element missing IRI attribute".to_string()))
+                Err(Error::io(
+                    "NamedIndividual element missing IRI attribute".to_string(),
+                ))
             }
         }
-        _ => {
-            Err(Error::io(format!("Unsupported individual type: {}", element.tag_name().name())))
-        }
+        _ => Err(Error::io(format!(
+            "Unsupported individual type: {}",
+            element.tag_name().name()
+        ))),
     }
 }
 
 /// Parse OWL XML from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
-    let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
-    
+    let file = File::open(path).map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
+
     let mut reader = BufReader::new(file);
     let mut content = String::new();
-    reader.read_to_string(&mut content)
+    reader
+        .read_to_string(&mut content)
         .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
-    
+
     parse(&content)
 }
 
 /// Save ontology to OWL XML file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
+    let mut file =
+        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
 
     // TODO: Implement a better serialization to OWL XML
-    writeln!(file, "<Ontology ontologyIRI=\"{}\">", ontology.iri.as_ref().map_or("http://example.org/ontology", |iri| iri.as_str()))?;
+    writeln!(
+        file,
+        "<Ontology ontologyIRI=\"{}\">",
+        ontology
+            .iri
+            .as_ref()
+            .map_or("http://example.org/ontology", |iri| iri.as_str())
+    )?;
     for axiom in ontology.axioms() {
         match axiom {
             Axiom::Declaration(decl) => {
-                writeln!(file, "  <Declaration><{} IRI=\"{}\"/></Declaration>", decl.entity.entity_type(), decl.entity.iri())?;
+                writeln!(
+                    file,
+                    "  <Declaration><{} IRI=\"{}\"/></Declaration>",
+                    decl.entity.entity_type(),
+                    decl.entity.iri()
+                )?;
             }
             Axiom::SubClassOf(axiom) => {
-                if let (Some(subclass_iri), Some(superclass_iri)) = (axiom.subclass.iri(), axiom.superclass.iri()) {
-                    writeln!(file, "  <SubClassOf><Class IRI=\"{subclass_iri}\"/><Class IRI=\"{superclass_iri}\"/></SubClassOf>")?;
+                if let (Some(subclass_iri), Some(superclass_iri)) =
+                    (axiom.subclass.iri(), axiom.superclass.iri())
+                {
+                    writeln!(
+                        file,
+                        "  <SubClassOf><Class IRI=\"{subclass_iri}\"/><Class IRI=\"{superclass_iri}\"/></SubClassOf>"
+                    )?;
                 }
             }
             Axiom::EquivalentClasses(axiom) => {
@@ -539,25 +644,43 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
                 writeln!(file, "  </DisjointUnion>")?;
             }
             Axiom::ClassAssertion(axiom) => {
-                if let (Some(class_iri), Some(individual_iri)) = (axiom.class.iri(), axiom.individual.iri()) {
-                    writeln!(file, "  <ClassAssertion><Class IRI=\"{class_iri}\"/><NamedIndividual IRI=\"{individual_iri}\"/></ClassAssertion>")?;
+                if let (Some(class_iri), Some(individual_iri)) =
+                    (axiom.class.iri(), axiom.individual.iri())
+                {
+                    writeln!(
+                        file,
+                        "  <ClassAssertion><Class IRI=\"{class_iri}\"/><NamedIndividual IRI=\"{individual_iri}\"/></ClassAssertion>"
+                    )?;
                 }
             }
             Axiom::ObjectPropertyAssertion(axiom) => {
-                if let (Some(source_iri), Some(target_iri)) = (axiom.source.iri(), axiom.target.iri()) {
+                if let (Some(source_iri), Some(target_iri)) =
+                    (axiom.source.iri(), axiom.target.iri())
+                {
                     if let Some(property_iri) = axiom.property.iri() {
-                        writeln!(file, "  <ObjectPropertyAssertion><ObjectProperty IRI=\"{property_iri}\"/><NamedIndividual IRI=\"{source_iri}\"/><NamedIndividual IRI=\"{target_iri}\"/></ObjectPropertyAssertion>")?;
+                        writeln!(
+                            file,
+                            "  <ObjectPropertyAssertion><ObjectProperty IRI=\"{property_iri}\"/><NamedIndividual IRI=\"{source_iri}\"/><NamedIndividual IRI=\"{target_iri}\"/></ObjectPropertyAssertion>"
+                        )?;
                     }
                 }
             }
             Axiom::SubObjectPropertyOf(axiom) => {
-                if let (Some(sub_iri), Some(super_iri)) = (axiom.sub_property.iri(), axiom.super_property.iri()) {
-                    writeln!(file, "  <SubObjectPropertyOf><ObjectProperty IRI=\"{sub_iri}\"/><ObjectProperty IRI=\"{super_iri}\"/></SubObjectPropertyOf>")?;
+                if let (Some(sub_iri), Some(super_iri)) =
+                    (axiom.sub_property.iri(), axiom.super_property.iri())
+                {
+                    writeln!(
+                        file,
+                        "  <SubObjectPropertyOf><ObjectProperty IRI=\"{sub_iri}\"/><ObjectProperty IRI=\"{super_iri}\"/></SubObjectPropertyOf>"
+                    )?;
                 }
             }
             Axiom::FunctionalObjectProperty(axiom) => {
                 if let Some(property_iri) = axiom.property.iri() {
-                    writeln!(file, "  <FunctionalObjectProperty><ObjectProperty IRI=\"{property_iri}\"/></FunctionalObjectProperty>")?;
+                    writeln!(
+                        file,
+                        "  <FunctionalObjectProperty><ObjectProperty IRI=\"{property_iri}\"/></FunctionalObjectProperty>"
+                    )?;
                 }
             }
             _ => {

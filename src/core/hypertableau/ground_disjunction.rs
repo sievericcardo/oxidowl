@@ -4,12 +4,9 @@
 //! Ground disjunctions represent disjunctive facts that must hold in the tableau.
 
 use crate::{
-    core::{
-        dependency::DependencySet,
-        hypertableau::extension_table::ExtensionManager,
-    },
-    ontology::{ClassExpression, ObjectProperty, ObjectPropertyExpression},
     Error, Result,
+    core::{dependency::DependencySet, hypertableau::extension_table::ExtensionManager},
+    ontology::{ClassExpression, ObjectProperty, ObjectPropertyExpression},
 };
 
 use std::{
@@ -22,16 +19,16 @@ use std::{
 pub struct GroundDisjunction {
     /// Header containing the disjunctive structure
     header: GroundDisjunctionHeader,
-    
+
     /// Arguments (nodes/individuals) for this ground disjunction
     arguments: Vec<usize>, // Node IDs
-    
+
     /// Core flags for each argument (used for blocking)
     is_core: Vec<bool>,
-    
+
     /// Dependency set for backtracking
     dependency_set: DependencySet,
-    
+
     /// Unique identifier
     id: usize,
 }
@@ -41,10 +38,10 @@ pub struct GroundDisjunction {
 pub struct GroundDisjunctionHeader {
     /// The predicates in this disjunction
     predicates: Vec<DisjunctPredicate>,
-    
+
     /// Sorted indices for disjunct processing order
     sorted_disjunct_indices: Vec<usize>,
-    
+
     /// Priority for processing
     priority: DisjunctionPriority,
 }
@@ -57,25 +54,19 @@ pub enum DisjunctPredicate {
         concept: ClassExpression,
         argument: usize, // position in arguments array
     },
-    
+
     /// Role assertion: R(x, y)
     Role {
         property: ObjectProperty,
-        subject: usize,  // position in arguments array
-        object: usize,   // position in arguments array
+        subject: usize, // position in arguments array
+        object: usize,  // position in arguments array
     },
-    
+
     /// Equality: x = y
-    Equality {
-        left: usize,
-        right: usize,
-    },
-    
+    Equality { left: usize, right: usize },
+
     /// Inequality: x ≠ y
-    Inequality {
-        left: usize,
-        right: usize,
-    },
+    Inequality { left: usize, right: usize },
 }
 
 /// Priority levels for ground disjunction processing
@@ -93,7 +84,8 @@ pub enum DisjunctionPriority {
 
 impl GroundDisjunction {
     /// Create a new ground disjunction
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         header: GroundDisjunctionHeader,
         arguments: Vec<usize>,
         is_core: Vec<bool>,
@@ -101,7 +93,7 @@ impl GroundDisjunction {
         id: usize,
     ) -> Self {
         assert_eq!(arguments.len(), is_core.len());
-        
+
         Self {
             header,
             arguments,
@@ -110,32 +102,37 @@ impl GroundDisjunction {
             id,
         }
     }
-    
+
     /// Get the number of disjuncts
-    #[must_use] pub fn num_disjuncts(&self) -> usize {
+    #[must_use]
+    pub fn num_disjuncts(&self) -> usize {
         self.header.predicates.len()
     }
-    
+
     /// Get the sorted disjunct indices for processing
-    #[must_use] pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
+    #[must_use]
+    pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
         &self.header.sorted_disjunct_indices
     }
-    
+
     /// Get the header
-    #[must_use] pub fn get_header(&self) -> &GroundDisjunctionHeader {
+    #[must_use]
+    pub fn get_header(&self) -> &GroundDisjunctionHeader {
         &self.header
     }
-    
+
     /// Get the dependency set
-    #[must_use] pub fn get_dependency_set(&self) -> &DependencySet {
+    #[must_use]
+    pub fn get_dependency_set(&self) -> &DependencySet {
         &self.dependency_set
     }
-    
+
     /// Get the unique ID
-    #[must_use] pub fn get_id(&self) -> usize {
+    #[must_use]
+    pub fn get_id(&self) -> usize {
         self.id
     }
-    
+
     /// Check if this disjunction is already satisfied
     pub fn is_satisfied(&self, extension_manager: &ExtensionManager) -> Result<bool> {
         // Check if any disjunct is already satisfied
@@ -146,7 +143,7 @@ impl GroundDisjunction {
         }
         Ok(false)
     }
-    
+
     /// Check if a specific disjunct is satisfied
     fn is_disjunct_satisfied(
         &self,
@@ -159,7 +156,11 @@ impl GroundDisjunction {
                 let node_id = format!("node_{}", self.arguments[*argument]);
                 Ok(extension_manager.contains_concept_assertion(&node_id, concept))
             }
-            DisjunctPredicate::Role { property, subject, object } => {
+            DisjunctPredicate::Role {
+                property,
+                subject,
+                object,
+            } => {
                 let subj_id = format!("node_{}", self.arguments[*subject]);
                 let obj_id = format!("node_{}", self.arguments[*object]);
                 let property_expr = ObjectPropertyExpression::ObjectProperty(property.clone());
@@ -177,7 +178,7 @@ impl GroundDisjunction {
             }
         }
     }
-    
+
     /// Add a specific disjunct to the tableau
     pub fn add_disjunct_to_tableau(
         &self,
@@ -186,13 +187,15 @@ impl GroundDisjunction {
         dependency_tracker: &DependencySet,
     ) -> Result<bool> {
         if disjunct_index >= self.header.predicates.len() {
-            return Err(Error::InvalidDisjunctIndex { index: disjunct_index });
+            return Err(Error::InvalidDisjunctIndex {
+                index: disjunct_index,
+            });
         }
-        
+
         let predicate = &self.header.predicates[disjunct_index];
         self.add_predicate_to_tableau(predicate, extension_manager, dependency_tracker)
     }
-    
+
     /// Add a specific predicate to the tableau
     fn add_predicate_to_tableau(
         &self,
@@ -209,7 +212,11 @@ impl GroundDisjunction {
                     dependency_tracker.clone(),
                 )
             }
-            DisjunctPredicate::Role { property, subject, object } => {
+            DisjunctPredicate::Role {
+                property,
+                subject,
+                object,
+            } => {
                 let subj_id = format!("node_{}", self.arguments[*subject]);
                 let obj_id = format!("node_{}", self.arguments[*object]);
                 let prop_expr = ObjectPropertyExpression::ObjectProperty(property.clone());
@@ -240,38 +247,46 @@ impl GroundDisjunction {
             }
         }
     }
-    
+
     /// Get the arguments for this disjunction
-    #[must_use] pub fn get_arguments(&self) -> &[usize] {
+    #[must_use]
+    pub fn get_arguments(&self) -> &[usize] {
         &self.arguments
     }
-    
+
     /// Get the core flags
-    #[must_use] pub fn get_core_flags(&self) -> &[bool] {
+    #[must_use]
+    pub fn get_core_flags(&self) -> &[bool] {
         &self.is_core
     }
-    
+
     /// Get a specific predicate
-    #[must_use] pub fn get_predicate(&self, index: usize) -> Option<&DisjunctPredicate> {
+    #[must_use]
+    pub fn get_predicate(&self, index: usize) -> Option<&DisjunctPredicate> {
         self.header.predicates.get(index)
     }
-    
+
     /// Get the priority
-    #[must_use] pub fn get_priority(&self) -> DisjunctionPriority {
+    #[must_use]
+    pub fn get_priority(&self) -> DisjunctionPriority {
         self.header.priority
     }
 
     /// Get disjuncts (compatibility method)
-    #[must_use] pub fn disjuncts(&self) -> &Vec<DisjunctPredicate> {
+    #[must_use]
+    pub fn disjuncts(&self) -> &Vec<DisjunctPredicate> {
         &self.header.predicates
     }
-    
+
     /// Get individual (compatibility method) - returns first argument as string
-    #[must_use] pub fn individual(&self) -> String {
+    #[must_use]
+    pub fn individual(&self) -> String {
         // For compatibility, return the first argument as a string representation
-        self.arguments.first().map_or_else(|| "unknown".to_string(), |&id| format!("node_{id}"))
+        self.arguments
+            .first()
+            .map_or_else(|| "unknown".to_string(), |&id| format!("node_{id}"))
     }
-    
+
     /// Create a ground disjunction from a class expression
     pub fn from_class_expression(
         class_expr: ClassExpression,
@@ -279,11 +294,11 @@ impl GroundDisjunction {
         dependencies: DependencySet,
     ) -> Result<Self> {
         use crate::ontology::ClassExpression;
-        
+
         let mut predicates = Vec::new();
         let arguments = vec![0]; // Single argument for the individual
         let is_core = vec![true]; // Mark as core
-        
+
         match class_expr {
             ClassExpression::ObjectUnionOf(disjuncts) => {
                 for (i, disjunct) in disjuncts.into_iter().enumerate() {
@@ -301,15 +316,15 @@ impl GroundDisjunction {
                 });
             }
         }
-        
+
         let priority = if predicates.len() <= 2 {
             DisjunctionPriority::High
         } else {
             DisjunctionPriority::Normal
         };
-        
+
         let header = GroundDisjunctionHeader::new(predicates, priority);
-        
+
         Ok(GroundDisjunction::new(
             header,
             arguments,
@@ -322,16 +337,14 @@ impl GroundDisjunction {
 
 impl GroundDisjunctionHeader {
     /// Create a new ground disjunction header
-    #[must_use] pub fn new(
-        predicates: Vec<DisjunctPredicate>,
-        priority: DisjunctionPriority,
-    ) -> Self {
+    #[must_use]
+    pub fn new(predicates: Vec<DisjunctPredicate>, priority: DisjunctionPriority) -> Self {
         // Create sorted indices based on predicate type and complexity
         let mut sorted_indices: Vec<usize> = (0..predicates.len()).collect();
-        
+
         // Sort by predicate complexity (simpler predicates first)
         sorted_indices.sort_by_key(|&i| Self::predicate_complexity(&predicates[i]));
-        
+
         Self {
             predicates,
             sorted_disjunct_indices: sorted_indices,
@@ -346,20 +359,20 @@ impl GroundDisjunctionHeader {
     ) -> Self {
         // Sort predicates by complexity (simpler first)
         predicates.sort_by_key(Self::predicate_complexity);
-        
+
         let sorted_disjunct_indices: Vec<usize> = (0..predicates.len()).collect();
-        
+
         Self {
             predicates,
             sorted_disjunct_indices,
             priority,
         }
     }
-    
+
     /// Calculate the complexity of a predicate for sorting
     fn predicate_complexity(predicate: &DisjunctPredicate) -> u32 {
         match predicate {
-            DisjunctPredicate::Equality { .. } => 1,  // Simplest
+            DisjunctPredicate::Equality { .. } => 1, // Simplest
             DisjunctPredicate::Inequality { .. } => 2,
             DisjunctPredicate::Concept { concept, .. } => {
                 // More complex concepts get higher scores
@@ -373,19 +386,22 @@ impl GroundDisjunctionHeader {
             DisjunctPredicate::Role { .. } => 4,
         }
     }
-    
+
     /// Get the predicates
-    #[must_use] pub fn get_predicates(&self) -> &[DisjunctPredicate] {
+    #[must_use]
+    pub fn get_predicates(&self) -> &[DisjunctPredicate] {
         &self.predicates
     }
-    
+
     /// Get the sorted disjunct indices
-    #[must_use] pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
+    #[must_use]
+    pub fn get_sorted_disjunct_indices(&self) -> &[usize] {
         &self.sorted_disjunct_indices
     }
-    
+
     /// Get the priority
-    #[must_use] pub fn get_priority(&self) -> DisjunctionPriority {
+    #[must_use]
+    pub fn get_priority(&self) -> DisjunctionPriority {
         self.priority
     }
 }
@@ -409,7 +425,11 @@ impl fmt::Display for DisjunctPredicate {
             DisjunctPredicate::Concept { concept, argument } => {
                 write!(f, "{concept}(x{argument})")
             }
-            DisjunctPredicate::Role { property, subject, object } => {
+            DisjunctPredicate::Role {
+                property,
+                subject,
+                object,
+            } => {
                 write!(f, "{}(x{}, x{})", property.iri, subject, object)
             }
             DisjunctPredicate::Equality { left, right } => {

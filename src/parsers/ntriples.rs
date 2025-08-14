@@ -4,13 +4,13 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Write, Read},
+    io::{BufRead, BufReader, Read, Write},
     path::Path,
 };
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, IRI},
+    ontology::{IRI, Ontology},
 };
 
 /// N-Triples Parser
@@ -21,7 +21,8 @@ pub struct NTriplesParser {
 
 impl NTriplesParser {
     /// Create a new N-Triples parser
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {}
     }
 }
@@ -35,7 +36,7 @@ impl Default for NTriplesParser {
 /// Parse N-Triples from string content
 pub fn parse(content: &str) -> Result<Ontology> {
     let mut ontology = Ontology::new();
-    
+
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -44,7 +45,9 @@ pub fn parse(content: &str) -> Result<Ontology> {
 
         let parts: Vec<&str> = trimmed.split_whitespace().collect();
         if parts.len() < 3 {
-            return Err(Error::ontology_parsing("Invalid N-Triples format".to_string()));
+            return Err(Error::ontology_parsing(
+                "Invalid N-Triples format".to_string(),
+            ));
         }
 
         let subject = IRI::from(parts[0].to_string());
@@ -54,13 +57,14 @@ pub fn parse(content: &str) -> Result<Ontology> {
         if predicate.as_str() == "rdf:type" {
             if object.starts_with('<') && object.ends_with('>') {
                 let class = crate::ontology::Class {
-                    iri: IRI::from(object.to_string())
+                    iri: IRI::from(object.to_string()),
                 };
                 ontology.add_class(class);
             } else if object.starts_with("_:") {
-                let individual = crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
-                    iri: IRI::from(object.to_string())
-                });
+                let individual =
+                    crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
+                        iri: IRI::from(object.to_string()),
+                    });
                 ontology.add_individual(subject, individual);
             }
         } else {
@@ -73,31 +77,31 @@ pub fn parse(content: &str) -> Result<Ontology> {
 
 /// Parse N-Triples from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
-    let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
-    
+    let file = File::open(path).map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
+
     let mut reader = BufReader::new(file);
     let mut content = String::new();
-    reader.read_to_string(&mut content)
+    reader
+        .read_to_string(&mut content)
         .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
-    
+
     parse(&content)
 }
 
 /// Save ontology to N-Triples file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
-    
+    let mut file =
+        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
+
     for (subject, class) in ontology.classes() {
         writeln!(file, "{} rdf:type {} .", subject, class.iri)?;
     }
-    
+
     for (subject, individual) in ontology.individuals() {
         if let Some(iri) = individual.iri() {
             writeln!(file, "{iri} rdf:type Individual .")?;
         }
     }
-    
+
     Ok(())
 }

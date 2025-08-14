@@ -5,17 +5,17 @@
 //! management systems from Konclude, `HermiT`, and Pellet.
 
 use crate::{
+    Error, Result,
     core::{
         completion::{CompletionRule, RuleApplication},
         dependency::{DependencySet, DependencyTracker},
     },
-    ontology::{ClassExpression, Role, ObjectPropertyExpression},
-    Error, Result,
+    ontology::{ClassExpression, ObjectPropertyExpression, Role},
 };
 
 use std::{
-    collections::{HashMap, HashSet, BinaryHeap},
     cmp::Ordering,
+    collections::{BinaryHeap, HashMap, HashSet},
     fmt,
 };
 
@@ -31,10 +31,7 @@ pub trait ExpansionStrategy: fmt::Debug + Send + Sync {
     ) -> Option<ExistentialCandidate>;
 
     /// Determine expansion order for multiple existentials
-    fn order_expansions(
-        &mut self,
-        existentials: &mut [ExistentialCandidate],
-    );
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]);
 
     /// Check if expansion should be delayed
     fn should_delay_expansion(
@@ -44,17 +41,10 @@ pub trait ExpansionStrategy: fmt::Debug + Send + Sync {
     ) -> bool;
 
     /// Get expansion priority for an existential candidate
-    fn get_expansion_priority(
-        &self,
-        candidate: &ExistentialCandidate,
-    ) -> ExpansionPriority;
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority;
 
     /// Notify about completed expansion
-    fn expansion_completed(
-        &mut self,
-        candidate: &ExistentialCandidate,
-        result: &ExpansionResult,
-    );
+    fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult);
 
     /// Clear the strategy state
     fn clear(&mut self);
@@ -122,7 +112,7 @@ pub struct ExistentialCandidate {
     /// Associated role for the existential
     pub role: ObjectPropertyExpression,
 
-    /// The filler concept 
+    /// The filler concept
     pub filler: ClassExpression,
 
     /// Dependencies for this candidate
@@ -156,7 +146,7 @@ pub struct ExpansionComplexity {
 
 /// Priority for expansion ordering
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ExpansionPriority{
+pub enum ExpansionPriority {
     /// Immediate expansion required
     Immediate = 0,
 
@@ -282,11 +272,10 @@ pub struct ComplexityStrategy {
 pub struct RoleDepthStrategy {
     /// Role depth cache
     role_depths: HashMap<Role, u32>,
-    
+
     /// Prefer shallow or deep roles
     prefer_shallow: bool,
 }
-
 
 /// Hybrid strategy combining multiple approaches
 #[derive(Debug)]
@@ -322,17 +311,18 @@ pub struct ComplexityWeights {
 pub struct StrategySelectionCriteria {
     /// Tableau size thresholds
     pub size_thresholds: Vec<usize>,
-    
+
     /// Complexity thresholds
     pub complexity_thresholds: Vec<u32>,
-    
+
     /// Time-based switching
     pub time_based_switching: bool,
 }
 
 impl ExpansionManager {
     /// Create a new expansion manager with the given strategy
-    #[must_use] pub fn new(strategy: Box<dyn ExpansionStrategy>) -> Self {
+    #[must_use]
+    pub fn new(strategy: Box<dyn ExpansionStrategy>) -> Self {
         Self {
             strategy,
             pending_queue: BinaryHeap::new(),
@@ -369,7 +359,10 @@ impl ExpansionManager {
                 continue; // Already expanding this candidate
             }
 
-            if self.strategy.should_delay_expansion(&prioritised.candidate, context) {
+            if self
+                .strategy
+                .should_delay_expansion(&prioritised.candidate, context)
+            {
                 // Re-queue with lower priority
                 let delayed = PrioritisedCandidate {
                     candidate: prioritised.candidate,
@@ -406,15 +399,15 @@ impl ExpansionManager {
         let expansion_time = start_time.elapsed();
         self.statistics.total_expansions += 1;
         self.statistics.total_expansion_time += expansion_time;
-        self.statistics.average_expansion_time = 
+        self.statistics.average_expansion_time =
             self.statistics.total_expansion_time / self.statistics.total_expansions as u32;
-        
+
         if result.new_individuals.is_empty() {
             self.statistics.witness_expansions += 1;
         } else {
             self.statistics.new_individuals_creations += 1;
         }
-        
+
         // Record expansion
         let record = ExpansionRecord {
             candidate: candidate.clone(),
@@ -422,14 +415,15 @@ impl ExpansionManager {
             timestamp: start_time,
             strategy_used: self.strategy_name(),
         };
-        self.expansion_history.insert(candidate.node.clone(), record);
-        
+        self.expansion_history
+            .insert(candidate.node.clone(), record);
+
         // Notify strategy
         self.strategy.expansion_completed(&candidate, &result);
-        
+
         // Remove from expanding set
         self.expanding.remove(&candidate.node);
-        
+
         Ok(result)
     }
 
@@ -440,16 +434,20 @@ impl ExpansionManager {
         context: &ExpansionContext,
     ) -> Result<ExpansionResult> {
         let witness = candidate.potential_witnesses[0].clone(); // Use first witness
-        
+
         let mut result = ExpansionResult {
             new_individuals: Vec::new(),
-            new_edges: vec![(candidate.node.clone(), witness.clone(), Role::ObjectProperty(candidate.role.clone()))],
+            new_edges: vec![(
+                candidate.node.clone(),
+                witness.clone(),
+                Role::ObjectProperty(candidate.role.clone()),
+            )],
             new_concepts: vec![(witness, candidate.filler.clone())],
             rule_applications: Vec::new(),
             success: true,
             dependencies: candidate.dependencies.clone(),
         };
-        
+
         // Create rule application for adding filler concept
         let rule_app = RuleApplication::concept(
             CompletionRule::Some,
@@ -458,7 +456,7 @@ impl ExpansionManager {
             candidate.dependencies.clone(),
         );
         result.rule_applications.push(rule_app);
-        
+
         Ok(result)
     }
 
@@ -470,16 +468,20 @@ impl ExpansionManager {
     ) -> Result<ExpansionResult> {
         let uuid_str = uuid::Uuid::new_v4().to_string();
         let new_individual = format!("_exist_{}_{}", candidate.node, &uuid_str[..8]);
-        
+
         let mut result = ExpansionResult {
             new_individuals: vec![new_individual.clone()],
-            new_edges: vec![(candidate.node.clone(), new_individual.clone(), Role::ObjectProperty(candidate.role.clone()))],
+            new_edges: vec![(
+                candidate.node.clone(),
+                new_individual.clone(),
+                Role::ObjectProperty(candidate.role.clone()),
+            )],
             new_concepts: vec![(new_individual, candidate.filler.clone())],
             rule_applications: Vec::new(),
             success: true,
             dependencies: candidate.dependencies.clone(),
         };
-        
+
         // Create rule application
         let rule_app = RuleApplication::concept(
             CompletionRule::Some,
@@ -488,17 +490,19 @@ impl ExpansionManager {
             candidate.dependencies.clone(),
         );
         result.rule_applications.push(rule_app);
-        
+
         Ok(result)
     }
 
     /// Check if there are pending expansions
-    #[must_use] pub fn has_pending_expansions(&self) -> bool {
+    #[must_use]
+    pub fn has_pending_expansions(&self) -> bool {
         !self.pending_queue.is_empty() || !self.expanding.is_empty()
     }
 
     /// Get pending expansion count
-    #[must_use] pub fn pending_count(&self) -> usize {
+    #[must_use]
+    pub fn pending_count(&self) -> usize {
         self.pending_queue.len()
     }
 
@@ -511,7 +515,8 @@ impl ExpansionManager {
     }
 
     /// Get expansion statistics
-    #[must_use] pub fn statistics(&self) -> &ExpansionStatistics {
+    #[must_use]
+    pub fn statistics(&self) -> &ExpansionStatistics {
         &self.statistics
     }
 
@@ -536,10 +541,9 @@ impl ExpansionManager {
 
 impl CreationOrderStrategy {
     /// Create a new creation order strategy
-    #[must_use] pub fn new() -> Self {
-        Self {
-            insertion_order: 0,
-        }
+    #[must_use]
+    pub fn new() -> Self {
+        Self { insertion_order: 0 }
     }
 }
 
@@ -556,10 +560,7 @@ impl ExpansionStrategy for CreationOrderStrategy {
         candidates.first().cloned()
     }
 
-    fn order_expansions(
-        &mut self,
-        existentials: &mut [ExistentialCandidate],
-    ) {
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
         existentials.sort_by_key(|e| e.created_at);
     }
 
@@ -571,10 +572,7 @@ impl ExpansionStrategy for CreationOrderStrategy {
         false // Never delay in creation order strategy
     }
 
-    fn get_expansion_priority(
-        &self,
-        _candidate: &ExistentialCandidate,
-    ) -> ExpansionPriority {
+    fn get_expansion_priority(&self, _candidate: &ExistentialCandidate) -> ExpansionPriority {
         ExpansionPriority::Normal // Default priority
     }
 
@@ -593,19 +591,17 @@ impl ExpansionStrategy for CreationOrderStrategy {
 
 impl ComplexityStrategy {
     /// Create a new complexity-based strategy
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             weights: ComplexityWeights::default(),
         }
     }
-    
+
     /// Calculate complexity score
-    fn calculate_complexity_score(
-        &self,
-        candidate: &ExistentialCandidate
-    ) -> f64 {
+    fn calculate_complexity_score(&self, candidate: &ExistentialCandidate) -> f64 {
         let complexity = &candidate.complexity;
-        
+
         self.weights.syntactic * f64::from(complexity.syntactic_complexity)
             + self.weights.role_successors * f64::from(complexity.role_successors)
             + self.weights.branching_factor * f64::from(complexity.branching_factor)
@@ -622,7 +618,8 @@ impl ExpansionStrategy for ComplexityStrategy {
         &mut self,
         candidates: &[ExistentialCandidate],
     ) -> Option<ExistentialCandidate> {
-        candidates.iter()
+        candidates
+            .iter()
             .min_by(|a, b| {
                 self.calculate_complexity_score(a)
                     .partial_cmp(&self.calculate_complexity_score(b))
@@ -631,10 +628,7 @@ impl ExpansionStrategy for ComplexityStrategy {
             .cloned()
     }
 
-    fn order_expansions(
-        &mut self,
-        existentials: &mut [ExistentialCandidate],
-    ) {
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
         existentials.sort_by(|a, b| {
             self.calculate_complexity_score(b)
                 .partial_cmp(&self.calculate_complexity_score(a))
@@ -651,12 +645,9 @@ impl ExpansionStrategy for ComplexityStrategy {
             && context.branching_depth > 100 // reasonable default max depth
     }
 
-    fn get_expansion_priority(
-        &self,
-        candidate: &ExistentialCandidate,
-    ) -> ExpansionPriority {
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
         let score = self.calculate_complexity_score(candidate);
-        
+
         if score < 5.0 {
             ExpansionPriority::High
         } else if score < 15.0 {
@@ -687,12 +678,15 @@ impl ExistentialCandidate {
         dependencies: DependencySet,
     ) -> Result<Self> {
         let (role, filler) = match &existential {
-            ClassExpression::ObjectSomeValuesFrom { property, filler: f } => (property.clone(), (**f).clone()),
+            ClassExpression::ObjectSomeValuesFrom {
+                property,
+                filler: f,
+            } => (property.clone(), (**f).clone()),
             _ => return Err(Error::internal("Not an existential concept")),
         };
-        
+
         let complexity = Self::calculate_complexity(&existential);
-        
+
         Ok(Self {
             node,
             existential,
@@ -721,10 +715,18 @@ impl ExistentialCandidate {
     fn syntactic_complexity(concept: &ClassExpression) -> u32 {
         match concept {
             ClassExpression::Class(_) => 1,
-            ClassExpression::ObjectIntersectionOf(operands) => 1 + operands.iter().map(Self::syntactic_complexity).sum::<u32>(),
-            ClassExpression::ObjectUnionOf(operands) => 2 + operands.iter().map(Self::syntactic_complexity).sum::<u32>(),
-            ClassExpression::ObjectSomeValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
-            ClassExpression::ObjectAllValuesFrom { filler, .. } => 2 + Self::syntactic_complexity(filler),
+            ClassExpression::ObjectIntersectionOf(operands) => {
+                1 + operands.iter().map(Self::syntactic_complexity).sum::<u32>()
+            }
+            ClassExpression::ObjectUnionOf(operands) => {
+                2 + operands.iter().map(Self::syntactic_complexity).sum::<u32>()
+            }
+            ClassExpression::ObjectSomeValuesFrom { filler, .. } => {
+                2 + Self::syntactic_complexity(filler)
+            }
+            ClassExpression::ObjectAllValuesFrom { filler, .. } => {
+                2 + Self::syntactic_complexity(filler)
+            }
             ClassExpression::ObjectMinCardinality { filler, .. } => {
                 3 + Self::syntactic_complexity(filler)
             }
@@ -747,7 +749,9 @@ impl ExistentialCandidate {
 impl Ord for PrioritisedCandidate {
     fn cmp(&self, other: &Self) -> Ordering {
         // Lower priority values are higher priority (reverse order)
-        other.priority.cmp(&self.priority)
+        other
+            .priority
+            .cmp(&self.priority)
             .then_with(|| self.insertion_order.cmp(&other.insertion_order))
     }
 }
@@ -807,13 +811,19 @@ mod uuid {
     pub struct Uuid;
 
     impl Uuid {
-        pub fn new_v4() -> Self { Self }
-        
+        pub fn new_v4() -> Self {
+            Self
+        }
+
         pub fn to_string(&self) -> String {
-            format!("{:016x}", std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() % (1u128 << 64))
+            format!(
+                "{:016x}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+                    % (1u128 << 64)
+            )
         }
     }
 }

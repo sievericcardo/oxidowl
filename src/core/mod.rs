@@ -3,17 +3,17 @@
 //! This module contains the main reasoning engine, including the tableau algorithm
 //! implementation, reasoning tasks, and result management.
 
-pub mod reasoner;
-pub mod tableau;
-pub mod hypertableau;
 pub mod blocking;
-pub mod expansion;
 pub mod completion;
 pub mod dependency;
+pub mod expansion;
+pub mod hypertableau;
+pub mod reasoner;
+pub mod tableau;
 
-pub use reasoner::{Reasoner};
-pub use tableau::{Tableau, TableauState};
-pub use blocking::{BlockingStrategy, BlockingChecker};
+pub use blocking::{BlockingChecker, BlockingStrategy};
 pub use completion::{CompletionRule, RuleApplication};
-pub use dependency::{DependencyTracker, DependencySet};
-pub use expansion::{ExpansionStrategy, ExpansionManager};
+pub use dependency::{DependencySet, DependencyTracker};
+pub use expansion::{ExpansionManager, ExpansionStrategy};
+pub use reasoner::Reasoner;
+pub use tableau::{Tableau, TableauState};

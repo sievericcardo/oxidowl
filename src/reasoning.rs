@@ -1,19 +1,23 @@
 //! High-level Reasoning Interface for Oxidowl
-//! 
+//!
 //! This module provides high-level reasoning services and query interfaces
 //! that wrap the core tableau algorithm and provide convenient APIs for
 //! common reasoning tasks.
 
 // Re-export core reasoner types for public API
-pub use crate::core::reasoner::{ReasoningTask, ReasoningResult, ClassificationResult, RealizationResult};
+pub use crate::core::reasoner::{
+    ClassificationResult, RealizationResult, ReasoningResult, ReasoningTask,
+};
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression, Individual, ObjectPropertyExpression, DataPropertyExpression},
-    core::reasoner::Reasoner,
-    config::ReasonerConfig,
     cache::CacheManager,
-    query::{DLQueryEngine, DLQuery, QueryResult},
+    config::ReasonerConfig,
+    core::reasoner::Reasoner,
+    ontology::{
+        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
+    },
+    query::{DLQuery, DLQueryEngine, QueryResult},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -31,10 +35,13 @@ pub struct ReasoningService {
 
 impl ReasoningService {
     /// Creates a new reasoning service with the given ontology and configuration
-    #[must_use] pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
+    #[must_use]
+    pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
         let reasoner = Reasoner::new(config.clone()).expect("Failed to create reasoner");
         let mut reasoner_with_ontology = reasoner;
-        reasoner_with_ontology.load_ontology(ontology).expect("Failed to load ontology");
+        reasoner_with_ontology
+            .load_ontology(ontology)
+            .expect("Failed to load ontology");
 
         Self {
             reasoner: Arc::new(RwLock::new(reasoner_with_ontology)),
@@ -50,7 +57,9 @@ impl ReasoningService {
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = self.cache_manager.read().unwrap();
-            if let Some(result) = cache_manager.get_consistency_result(&self.reasoner.read().unwrap().get_ontology().unwrap()) {
+            if let Some(result) = cache_manager
+                .get_consistency_result(&self.reasoner.read().unwrap().get_ontology().unwrap())
+            {
                 return Ok(result);
             }
         }
@@ -91,13 +100,15 @@ impl ReasoningService {
         }
 
         let mut reasoner = self.reasoner.write().unwrap();
-        
+
         // Convert ClassExpression to IRI
         let class_iri = match expression {
             ClassExpression::Class(class) => class.iri.to_string(),
-                _ => return Err(Error::Reasoning {
+            _ => {
+                return Err(Error::Reasoning {
                     message: "Invalid class expression for satisfiability check".to_string(),
-                }),
+                });
+            }
         };
 
         let result = reasoner.is_class_satisfiable(&class_iri)?;
@@ -123,7 +134,11 @@ impl ReasoningService {
     }
 
     /// Check subsumption of two class expressions
-    pub async fn is_subsumed_by (&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
+    pub async fn is_subsumed_by(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+    ) -> Result<bool> {
         let start = Instant::now();
 
         // Check cache
@@ -158,21 +173,34 @@ impl ReasoningService {
     }
 
     // Check equivalence of two class expressions
-    pub async fn is_equivalent_to(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
+    pub async fn is_equivalent_to(
+        &self,
+        class1: &ClassExpression,
+        class2: &ClassExpression,
+    ) -> Result<bool> {
         let subsumes_1_2 = self.is_subsumed_by(class1, class2).await?;
         let subsumes_2_1 = self.is_subsumed_by(class2, class1).await?;
         Ok(subsumes_1_2 && subsumes_2_1)
     }
 
     // Check disjointness of two class expressions
-    pub async fn is_disjoint_with(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
-        let intersection = ClassExpression::ObjectIntersectionOf(vec![class1.clone(), class2.clone()]);
+    pub async fn is_disjoint_with(
+        &self,
+        class1: &ClassExpression,
+        class2: &ClassExpression,
+    ) -> Result<bool> {
+        let intersection =
+            ClassExpression::ObjectIntersectionOf(vec![class1.clone(), class2.clone()]);
         let satisfiable = self.is_satisfiable(&intersection).await?;
         Ok(!satisfiable)
     }
 
     // Get all direct superclasses of a class expression
-    pub async fn get_superclasses(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<ClassExpression>> {
+    pub async fn get_superclasses(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
@@ -188,12 +216,19 @@ impl ReasoningService {
         }
 
         // Log the time taken for the retrieval
-        log::info!("Direct superclass retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Direct superclass retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(superclasses.into_iter().collect())
     }
 
     /// Get all direct subclasses of a class expression
-    pub async fn get_subclasses(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<ClassExpression>> {
+    pub async fn get_subclasses(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
@@ -209,12 +244,18 @@ impl ReasoningService {
         }
 
         // Log the time taken for the retrieval
-        log::info!("Direct subclass retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Direct subclass retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(subclasses.into_iter().collect())
     }
 
     /// Get all equivalent classes of a class expression
-    pub async fn get_equivalent_classes(&self, class: &ClassExpression) -> Result<HashSet<ClassExpression>> {
+    pub async fn get_equivalent_classes(
+        &self,
+        class: &ClassExpression,
+    ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
         let reasoner = self.reasoner.write().unwrap();
@@ -230,12 +271,19 @@ impl ReasoningService {
         }
 
         // Log the time taken for the retrieval
-        log::info!("Equivalent class retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Equivalent class retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(equivalent_classes.into_iter().collect())
     }
 
     /// Get all instances of a class expression
-    pub async fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<HashSet<Individual>> {
+    pub async fn get_instances(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<HashSet<Individual>> {
         let start = Instant::now();
 
         let mut reasoner = self.reasoner.write().unwrap();
@@ -256,7 +304,11 @@ impl ReasoningService {
     }
 
     /// Get all types of an individual
-    pub async fn get_types(&self, individual: &Individual, direct: bool) -> Result<HashSet<ClassExpression>> {
+    pub async fn get_types(
+        &self,
+        individual: &Individual,
+        direct: bool,
+    ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
         let mut reasoner = self.reasoner.write().unwrap();
@@ -277,7 +329,11 @@ impl ReasoningService {
     }
 
     /// Check if an individual is an instance of a class expression
-    pub async fn is_instance_of(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
+    pub async fn is_instance_of(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> Result<bool> {
         let types = self.get_types(individual, false).await?;
         for class_type in &types {
             if self.is_subsumed_by(class_type, class).await? {
@@ -308,7 +364,10 @@ impl ReasoningService {
         }
 
         // Log the time taken for the retrieval
-        log::info!("Object property value retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Object property value retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(values.into_iter().collect())
     }
 
@@ -343,7 +402,10 @@ impl ReasoningService {
             .collect();
 
         // Log the time taken for the retrieval
-        log::info!("Data property value retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Data property value retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(literals)
     }
 
@@ -452,7 +514,10 @@ impl ReasoningService {
     }
 
     /// Get explanation for an entailment
-    pub async fn explain_entailment(&self, axiom: &crate::ontology::Axiom) -> Result<Vec<ExplanationSet>> {
+    pub async fn explain_entailment(
+        &self,
+        axiom: &crate::ontology::Axiom,
+    ) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
         if !self.config.reasoning.enable_explanations {
@@ -473,7 +538,8 @@ impl ReasoningService {
             }
         }
 
-        let explanation_sets: Vec<ExplanationSet> = explanations.into_iter()
+        let explanation_sets: Vec<ExplanationSet> = explanations
+            .into_iter()
             .map(|axiom| {
                 let mut axioms = HashSet::new();
                 axioms.insert(axiom);
@@ -508,7 +574,8 @@ impl ReasoningService {
             }
         }
 
-        let explanation_sets: Vec<ExplanationSet> = explanations.into_iter()
+        let explanation_sets: Vec<ExplanationSet> = explanations
+            .into_iter()
             .map(|axiom| {
                 let mut axioms = HashSet::new();
                 axioms.insert(axiom);
@@ -517,7 +584,10 @@ impl ReasoningService {
             .collect();
 
         // Log the time taken for explanation retrieval
-        log::info!("Inconsistency explanation retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Inconsistency explanation retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(explanation_sets)
     }
 
@@ -590,7 +660,8 @@ impl ReasoningService {
     }
 
     /// Get reasoning statistics
-    #[must_use] pub fn get_statistics(&self) -> ReasoningStatistics {
+    #[must_use]
+    pub fn get_statistics(&self) -> ReasoningStatistics {
         let reasoner = self.reasoner.read().unwrap();
         let cache_stats = self.cache_manager.read().unwrap().get_stats();
 
@@ -617,29 +688,29 @@ impl ReasoningService {
     fn compute_ontology_hash(&self) -> Result<u64> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let reasoner = self.reasoner.read().unwrap();
         if let Ok(ontology) = reasoner.get_ontology() {
             let ontology_guard = ontology.read().unwrap();
-            
+
             let mut hasher = DefaultHasher::new();
-            
+
             // Hash axiom count and basic signature information
             if let Ok(signature) = ontology_guard.signature() {
                 signature.classes.len().hash(&mut hasher);
                 signature.object_properties.len().hash(&mut hasher);
                 signature.data_properties.len().hash(&mut hasher);
                 signature.individuals.len().hash(&mut hasher);
-                
+
                 // Hash some class names for uniqueness
                 for class in signature.classes.iter().take(10) {
                     class.iri.to_string().hash(&mut hasher);
                 }
             }
-            
+
             // Hash TBox and ABox axiom counts
             ontology_guard.axioms().len().hash(&mut hasher);
-            
+
             Ok(hasher.finish())
         } else {
             Ok(0)
@@ -647,12 +718,12 @@ impl ReasoningService {
     }
 
     /// Query property chain reasoning
-    /// Implements role chain propagation: if R1 * R2 * ... * Rn c S, 
+    /// Implements role chain propagation: if R1 * R2 * ... * Rn c S,
     /// and we have a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
     pub async fn query_property_chain(
-        &self, 
-        individual: &Individual, 
-        property_chain: &[ObjectPropertyExpression]
+        &self,
+        individual: &Individual,
+        property_chain: &[ObjectPropertyExpression],
     ) -> Result<HashSet<Individual>> {
         let start = Instant::now();
 
@@ -662,25 +733,27 @@ impl ReasoningService {
 
         if property_chain.len() == 1 {
             // Single property - delegate to existing method
-            return self.get_object_property_values(individual, &property_chain[0]).await;
+            return self
+                .get_object_property_values(individual, &property_chain[0])
+                .await;
         }
 
         // Multi-step property chain reasoning
         let mut current_individuals = HashSet::new();
         current_individuals.insert(individual.clone());
-        
+
         // Step through each property in the chain
         for property in property_chain {
             let mut next_individuals = HashSet::new();
-            
+
             // For each current individual, follow the property
             for curr_ind in &current_individuals {
                 let targets = self.get_object_property_values(curr_ind, property).await?;
                 next_individuals.extend(targets);
             }
-            
+
             current_individuals = next_individuals;
-            
+
             // If no individuals remain, the chain is broken
             if current_individuals.is_empty() {
                 break;
@@ -702,22 +775,26 @@ pub struct ExplanationSet {
 
 impl ExplanationSet {
     // Create a new explanation set
-    #[must_use] pub fn new(axioms: HashSet<crate::ontology::Axiom>) -> Self {
+    #[must_use]
+    pub fn new(axioms: HashSet<crate::ontology::Axiom>) -> Self {
         Self {
             axioms,
             minimal: true, // Default to minimal explanations
         }
     }
 
-    #[must_use] pub fn size(&self) -> usize {
+    #[must_use]
+    pub fn size(&self) -> usize {
         self.axioms.len()
     }
 
-    #[must_use] pub fn is_minimal(&self) -> bool {
+    #[must_use]
+    pub fn is_minimal(&self) -> bool {
         self.minimal
     }
 
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.axioms.is_empty()
     }
 }
@@ -736,57 +813,64 @@ pub struct QueryInterface {
 }
 
 impl QueryInterface {
-    #[must_use] pub fn new(reasoning_service: ReasoningService) -> Self {
-        Self {
-            reasoning_service,
-        }
+    #[must_use]
+    pub fn new(reasoning_service: ReasoningService) -> Self {
+        Self { reasoning_service }
     }
 
     /// Execute a subsumption query
     pub async fn execute_subsumption_query(
-        &self, 
-        subclass: ClassExpression, 
-        superclass: ClassExpression
+        &self,
+        subclass: ClassExpression,
+        superclass: ClassExpression,
     ) -> Result<bool> {
-        self.reasoning_service.is_subsumed_by(&subclass, &superclass).await
+        self.reasoning_service
+            .is_subsumed_by(&subclass, &superclass)
+            .await
     }
 
     /// Execute an instance query
     pub async fn execute_instance_query(
-        &self, 
-        individual: Individual, 
-        class: ClassExpression
+        &self,
+        individual: Individual,
+        class: ClassExpression,
     ) -> Result<bool> {
-        self.reasoning_service.is_instance_of(&individual, &class).await
+        self.reasoning_service
+            .is_instance_of(&individual, &class)
+            .await
     }
 
     pub async fn query_instances(
-        &self, 
-        class: ClassExpression, 
-        direct: bool
+        &self,
+        class: ClassExpression,
+        direct: bool,
     ) -> Result<HashSet<Individual>> {
         self.reasoning_service.get_instances(&class, direct).await
     }
 
     /// Execute a property value query
     pub async fn execute_property_value_query(
-        &self, 
-        individual: Individual, 
-        property_chain: Vec<ObjectPropertyExpression>
+        &self,
+        individual: Individual,
+        property_chain: Vec<ObjectPropertyExpression>,
     ) -> Result<HashSet<Individual>> {
         if property_chain.len() == 1 {
             // Single property query
-            self.reasoning_service.get_object_property_values(&individual, &property_chain[0]).await
+            self.reasoning_service
+                .get_object_property_values(&individual, &property_chain[0])
+                .await
         } else {
             // Multi-step property chain query
-            self.reasoning_service.query_property_chain(&individual, &property_chain).await
+            self.reasoning_service
+                .query_property_chain(&individual, &property_chain)
+                .await
         }
     }
 
     /// Execute batch queries
-    pub async fn batch_satisfiability_check (
+    pub async fn batch_satisfiability_check(
         &self,
-        concepts: Vec<ClassExpression>
+        concepts: Vec<ClassExpression>,
     ) -> Result<HashMap<ClassExpression, bool>> {
         let mut results = HashMap::new();
 
@@ -801,12 +885,15 @@ impl QueryInterface {
     /// Execute batch subsumption check
     pub async fn batch_subsumption_check(
         &self,
-        queries: Vec<(ClassExpression, ClassExpression)>
+        queries: Vec<(ClassExpression, ClassExpression)>,
     ) -> Result<HashMap<(ClassExpression, ClassExpression), bool>> {
         let mut results = HashMap::new();
 
         for (subclass, superclass) in queries {
-            let result = self.reasoning_service.is_subsumed_by(&subclass, &superclass).await?;
+            let result = self
+                .reasoning_service
+                .is_subsumed_by(&subclass, &superclass)
+                .await?;
             results.insert((subclass, superclass), result);
         }
 
@@ -819,7 +906,7 @@ impl ReasoningService {
     fn calculate_ontology_hash(&self) -> u64 {
         let reasoner = self.reasoner.read().unwrap();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        
+
         // Hash based on reasoner state as a simple fingerprint
         let axiom_count = if let Ok(ontology) = reasoner.get_ontology() {
             ontology.read().unwrap().axioms().len()
@@ -827,7 +914,7 @@ impl ReasoningService {
             0
         };
         std::hash::Hash::hash(&axiom_count, &mut hasher);
-        
+
         std::hash::Hasher::finish(&hasher)
     }
 }

@@ -4,13 +4,13 @@
 
 use std::{
     fs::File,
-    io::{BufReader, Write, Read},
+    io::{BufReader, Read, Write},
     path::Path,
 };
 
 use crate::{
     Error, Result,
-    ontology::{Ontology, ClassExpression},
+    ontology::{ClassExpression, Ontology},
 };
 
 /// Generate a unique axiom ID
@@ -28,7 +28,8 @@ pub struct FunctionalParser {
 
 impl FunctionalParser {
     /// Create a new functional syntax parser
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {}
     }
 }
@@ -50,25 +51,25 @@ impl FunctionalParser {
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
         let mut ontology = Ontology::new();
         let mut prefixes = std::collections::HashMap::<String, String>::new();
-        
+
         // Tokenize the content
         let tokens = self.tokenize(content)?;
         let mut position = 0;
-        
+
         while position < tokens.len() {
             position = self.parse_statement(&tokens, position, &mut ontology, &mut prefixes)?;
         }
-        
+
         Ok(ontology)
     }
-    
+
     /// Tokenize the functional syntax content
     fn tokenize(&self, content: &str) -> Result<Vec<String>> {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
         let mut in_iri = false;
         let mut paren_depth = 0;
-        
+
         for ch in content.chars() {
             match ch {
                 '<' if !in_iri => {
@@ -91,7 +92,11 @@ impl FunctionalParser {
                         current_token.clear();
                     }
                     tokens.push(ch.to_string());
-                    if ch == '(' { paren_depth += 1; } else { paren_depth -= 1; }
+                    if ch == '(' {
+                        paren_depth += 1;
+                    } else {
+                        paren_depth -= 1;
+                    }
                 }
                 ' ' | '\t' | '\n' | '\r' if !in_iri => {
                     if !current_token.is_empty() {
@@ -104,14 +109,14 @@ impl FunctionalParser {
                 }
             }
         }
-        
+
         if !current_token.is_empty() {
             tokens.push(current_token.trim().to_string());
         }
-        
+
         Ok(tokens)
     }
-    
+
     /// Parse a single statement from tokens
     fn parse_statement(
         &self,
@@ -123,7 +128,7 @@ impl FunctionalParser {
         if position >= tokens.len() {
             return Ok(position);
         }
-        
+
         match tokens[position].as_str() {
             "Prefix" => {
                 position = self.parse_prefix(tokens, position, prefixes)?;
@@ -141,17 +146,18 @@ impl FunctionalParser {
                 position = self.parse_class_assertion(tokens, position, ontology, prefixes)?;
             }
             "ObjectPropertyAssertion" => {
-                position = self.parse_object_property_assertion(tokens, position, ontology, prefixes)?;
+                position =
+                    self.parse_object_property_assertion(tokens, position, ontology, prefixes)?;
             }
             _ => {
                 // Skip unknown constructs
                 position += 1;
             }
         }
-        
+
         Ok(position)
     }
-    
+
     /// Parse prefix declaration: Prefix(prefix:=<IRI>)
     fn parse_prefix(
         &self,
@@ -162,25 +168,27 @@ impl FunctionalParser {
         position += 1; // Skip "Prefix"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 let prefix_def = &tokens[position];
                 if let Some(eq_pos) = prefix_def.find(":=") {
                     let prefix_name = prefix_def[..eq_pos].to_string();
-                    let iri = prefix_def[eq_pos+2..].trim_matches(['<', '>'].as_ref()).to_string();
+                    let iri = prefix_def[eq_pos + 2..]
+                        .trim_matches(['<', '>'].as_ref())
+                        .to_string();
                     prefixes.insert(prefix_name, iri);
                 }
                 position += 1;
             }
-            
+
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1; // Skip ")"
             }
         }
-        
+
         Ok(position)
     }
-    
+
     /// Parse ontology declaration: Ontology(<IRI> ...)
     fn parse_ontology_declaration(
         &self,
@@ -191,7 +199,7 @@ impl FunctionalParser {
         position += 1; // Skip "Ontology"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() && tokens[position].starts_with('<') {
                 let iri_str = tokens[position].trim_matches(['<', '>'].as_ref());
                 if url::Url::parse(iri_str).is_ok() {
@@ -200,7 +208,7 @@ impl FunctionalParser {
                 position += 1;
             }
         }
-        
+
         // Skip to matching closing parenthesis
         let mut paren_count = 1;
         while position < tokens.len() && paren_count > 0 {
@@ -211,10 +219,10 @@ impl FunctionalParser {
             }
             position += 1;
         }
-        
+
         Ok(position)
     }
-    
+
     /// Parse declaration: Declaration(Class(<IRI>))
     fn parse_declaration(
         &self,
@@ -226,7 +234,7 @@ impl FunctionalParser {
         position += 1; // Skip "Declaration"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 match tokens[position].as_str() {
                     "Class" => {
@@ -237,8 +245,10 @@ impl FunctionalParser {
                                 let iri = self.expand_iri(&tokens[position], prefixes)?;
                                 let class = crate::ontology::Class {
                                     iri: url::Url::parse(&iri)
-                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
-                                        .into()
+                                        .map_err(|e| {
+                                            Error::ontology_parsing(format!("Invalid IRI: {e}"))
+                                        })?
+                                        .into(),
                                 };
                                 ontology.add_class(class);
                                 position += 1;
@@ -255,8 +265,9 @@ impl FunctionalParser {
                             if position < tokens.len() {
                                 let iri = self.expand_iri(&tokens[position], prefixes)?;
                                 let property = crate::ontology::ObjectProperty {
-                                    iri: url::Url::parse(&iri)
-                                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                                    iri: url::Url::parse(&iri).map_err(|e| {
+                                        Error::ontology_parsing(format!("Invalid IRI: {e}"))
+                                    })?,
                                 };
                                 ontology.add_object_property(property);
                                 position += 1;
@@ -269,15 +280,15 @@ impl FunctionalParser {
                     _ => position += 1,
                 }
             }
-            
+
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1; // Skip ")"
             }
         }
-        
+
         Ok(position)
     }
-    
+
     /// Parse `SubClassOf` axiom: `SubClassOf`(<subclass> <superclass>)
     fn parse_subclass_of(
         &self,
@@ -289,20 +300,22 @@ impl FunctionalParser {
         position += 1; // Skip "SubClassOf"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position + 1 < tokens.len() {
                 let sub_iri = self.expand_iri(&tokens[position], prefixes)?;
                 let super_iri = self.expand_iri(&tokens[position + 1], prefixes)?;
-                
+
                 let subclass = crate::ontology::Class {
                     iri: url::Url::parse(&sub_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?.into()
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                        .into(),
                 };
                 let superclass = crate::ontology::Class {
                     iri: url::Url::parse(&super_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?.into()
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                        .into(),
                 };
-                
+
                 let axiom = crate::ontology::SubClassOfAxiom {
                     id: generate_axiom_id(),
                     subclass: ClassExpression::Class(subclass),
@@ -310,18 +323,18 @@ impl FunctionalParser {
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::SubClassOf(axiom));
-                
+
                 position += 2;
             }
-            
+
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1; // Skip ")"
             }
         }
-        
+
         Ok(position)
     }
-    
+
     /// Parse `ClassAssertion` axiom: `ClassAssertion`(<class> <individual>)
     fn parse_class_assertion(
         &self,
@@ -333,23 +346,23 @@ impl FunctionalParser {
         position += 1; // Skip "ClassAssertion"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position + 1 < tokens.len() {
                 let class_iri = self.expand_iri(&tokens[position], prefixes)?;
                 let individual_iri = self.expand_iri(&tokens[position + 1], prefixes)?;
-                
+
                 let class = crate::ontology::Class {
                     iri: url::Url::parse(&class_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?.into()
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                        .into(),
                 };
-                let individual = crate::ontology::Individual::Named(
-                    crate::ontology::NamedIndividual {
+                let individual =
+                    crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
                         iri: url::Url::parse(&individual_iri)
                             .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                             .into(), // Convert URL to IRI
-                    }
-                );
-                
+                    });
+
                 let axiom = crate::ontology::ClassAssertionAxiom {
                     id: generate_axiom_id(),
                     class: ClassExpression::Class(class),
@@ -357,18 +370,18 @@ impl FunctionalParser {
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::ClassAssertion(axiom));
-                
+
                 position += 2;
             }
-            
+
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1; // Skip ")"
             }
         }
-        
+
         Ok(position)
     }
-    
+
     /// Parse `ObjectPropertyAssertion`: `ObjectPropertyAssertion`(<prop> <subj> <obj>)
     fn parse_object_property_assertion(
         &self,
@@ -380,31 +393,28 @@ impl FunctionalParser {
         position += 1; // Skip "ObjectPropertyAssertion"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position + 2 < tokens.len() {
                 let prop_iri = self.expand_iri(&tokens[position], prefixes)?;
                 let subj_iri = self.expand_iri(&tokens[position + 1], prefixes)?;
                 let obj_iri = self.expand_iri(&tokens[position + 2], prefixes)?;
-                
+
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&prop_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?,
                 };
-                let subject = crate::ontology::Individual::Named(
-                    crate::ontology::NamedIndividual {
+                let subject =
+                    crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
                         iri: url::Url::parse(&subj_iri)
                             .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                             .into(), // Convert URL to IRI
-                    }
-                );
-                let object = crate::ontology::Individual::Named(
-                    crate::ontology::NamedIndividual {
-                        iri: url::Url::parse(&obj_iri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
-                            .into(), // Convert URL to IRI
-                    }
-                );
-                
+                    });
+                let object = crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
+                    iri: url::Url::parse(&obj_iri)
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                        .into(), // Convert URL to IRI
+                });
+
                 let axiom = crate::ontology::ObjectPropertyAssertionAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
@@ -413,18 +423,18 @@ impl FunctionalParser {
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::ObjectPropertyAssertion(axiom));
-                
+
                 position += 3;
             }
-            
+
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1; // Skip ")"
             }
         }
-        
+
         Ok(position)
     }
-    
+
     /// Expand a prefixed IRI
     fn expand_iri(
         &self,
@@ -432,11 +442,11 @@ impl FunctionalParser {
         prefixes: &std::collections::HashMap<String, String>,
     ) -> Result<String> {
         if iri.starts_with('<') && iri.ends_with('>') {
-            Ok(iri[1..iri.len()-1].to_string())
+            Ok(iri[1..iri.len() - 1].to_string())
         } else if let Some(colon_pos) = iri.find(':') {
             let prefix = &iri[..colon_pos];
-            let local = &iri[colon_pos+1..];
-            
+            let local = &iri[colon_pos + 1..];
+
             if let Some(base) = prefixes.get(prefix) {
                 Ok(format!("{base}{local}"))
             } else {
@@ -450,24 +460,24 @@ impl FunctionalParser {
 
 /// Parse Functional Syntax from file
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
-    let file = File::open(path)
-        .map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
-    
+    let file = File::open(path).map_err(|e| Error::io(format!("Failed to open file: {e}")))?;
+
     let mut reader = BufReader::new(file);
     let mut content = String::new();
-    reader.read_to_string(&mut content)
+    reader
+        .read_to_string(&mut content)
         .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
-    
+
     parse(&content)
 }
 
 /// Save ontology to Functional Syntax file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file = File::create(path)
-        .map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
-    
+    let mut file =
+        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
+
     // TODO: Implement serialization to Functional Syntax
     writeln!(file, "# Placeholder for Functional Syntax serialization")?;
-    
+
     Ok(())
 }

@@ -1,10 +1,10 @@
 //! OWL 2 DL Properties
-//! 
+//!
 //! This module implements OWL 2 DL object properties, data properties, and annotation properties
 //! following the OWL 2 specification structure.
 
-use crate::{Result, Error};
-use crate::ontology::{ObjectPropertyExpression, ObjectProperty};
+use crate::ontology::{ObjectProperty, ObjectPropertyExpression};
+use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
 /// Data Property
@@ -33,94 +33,132 @@ impl ObjectProperty {
     }
 
     /// Create the top object property (owl:topObjectProperty)
-    #[must_use] pub fn top() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topObjectProperty".to_string())).unwrap()
+    #[must_use]
+    pub fn top() -> Self {
+        Self::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#topObjectProperty".to_string(),
+        ))
+        .unwrap()
     }
 
     /// Create the bottom object property (owl:bottomObjectProperty)
-    #[must_use] pub fn bottom() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomObjectProperty".to_string())).unwrap()
+    #[must_use]
+    pub fn bottom() -> Self {
+        Self::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#bottomObjectProperty".to_string(),
+        ))
+        .unwrap()
     }
 }
 
 impl DataProperty {
     /// Create a new Data Property
-    #[must_use] pub fn new(iri: crate::ontology::IRI) -> Self {
+    #[must_use]
+    pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
 
     /// Create the top data property (owl:topDataProperty)
-    #[must_use] pub fn top() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topDataProperty".to_string()))
+    #[must_use]
+    pub fn top() -> Self {
+        Self::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#topDataProperty".to_string(),
+        ))
     }
 
     /// Create the bottom data property (owl:bottomDataProperty)
-    #[must_use] pub fn bottom() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomDataProperty".to_string()))
+    #[must_use]
+    pub fn bottom() -> Self {
+        Self::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#bottomDataProperty".to_string(),
+        ))
     }
 }
 
 impl AnnotationProperty {
     /// Create a new Annotation Property
-    #[must_use] pub fn new(iri: crate::ontology::IRI) -> Self {
+    #[must_use]
+    pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
 
     /// Create the top annotation property (owl:topAnnotationProperty)
-    #[must_use] pub fn top() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#topAnnotationProperty".to_string()))
+    #[must_use]
+    pub fn top() -> Self {
+        Self::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#topAnnotationProperty".to_string(),
+        ))
     }
 
     /// Create the bottom annotation property (owl:bottomAnnotationProperty)
-    #[must_use] pub fn bottom() -> Self {
-        Self::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#bottomAnnotationProperty".to_string()))
+    #[must_use]
+    pub fn bottom() -> Self {
+        Self::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#bottomAnnotationProperty".to_string(),
+        ))
     }
 }
 
 impl ObjectPropertyExpression {
     /// Create an object property expression
-    #[must_use] pub fn property(property: ObjectProperty) -> Self {
+    #[must_use]
+    pub fn property(property: ObjectProperty) -> Self {
         ObjectPropertyExpression::ObjectProperty(property)
     }
 
     /// Create an inverse object property expression
-    #[must_use] pub fn inverse(property: ObjectProperty) -> Self {
+    #[must_use]
+    pub fn inverse(property: ObjectProperty) -> Self {
         ObjectPropertyExpression::InverseObjectProperty(property)
     }
 
     /// Create a property chain expression
     pub fn property_chain(properties: Vec<ObjectProperty>) -> Result<Self> {
         if properties.is_empty() {
-            return Err(Error::InvalidPropertyChain { message: "Property chain cannot be empty".to_string() });
+            return Err(Error::InvalidPropertyChain {
+                message: "Property chain cannot be empty".to_string(),
+            });
         } else if properties.len() == 1 {
-            return Err(crate::Error::ontology_parsing("Property chain must contain at least 2 properties"));
+            return Err(crate::Error::ontology_parsing(
+                "Property chain must contain at least 2 properties",
+            ));
         }
-        let property_expressions: Vec<ObjectPropertyExpression> = properties.into_iter().map(ObjectPropertyExpression::ObjectProperty).collect();
-        Ok(ObjectPropertyExpression::PropertyChain(property_expressions))
+        let property_expressions: Vec<ObjectPropertyExpression> = properties
+            .into_iter()
+            .map(ObjectPropertyExpression::ObjectProperty)
+            .collect();
+        Ok(ObjectPropertyExpression::PropertyChain(
+            property_expressions,
+        ))
     }
 
     /// Check if the expression is a simple property expression
-    #[must_use] pub fn is_simple(&self) -> bool {
+    #[must_use]
+    pub fn is_simple(&self) -> bool {
         matches!(self, ObjectPropertyExpression::ObjectProperty(_))
     }
 
     /// Check if the expression is an inverse property expression
-    #[must_use] pub fn is_inverse(&self) -> bool {
+    #[must_use]
+    pub fn is_inverse(&self) -> bool {
         matches!(self, ObjectPropertyExpression::InverseObjectProperty(_))
     }
 
     /// Check if the expression is a property chain
-    #[must_use] pub fn is_property_chain(&self) -> bool {
+    #[must_use]
+    pub fn is_property_chain(&self) -> bool {
         matches!(self, ObjectPropertyExpression::PropertyChain(_))
     }
 
     /// Check if the expression is a simple property
-    #[must_use] pub fn is_simple_property(&self) -> bool {
+    #[must_use]
+    pub fn is_simple_property(&self) -> bool {
         !self.is_property_chain()
     }
 
     /// Get the length of the property chain if it is a property chain expression
-    #[must_use] pub fn chain_length(&self) -> usize {
+    #[must_use]
+    pub fn chain_length(&self) -> usize {
         match self {
             ObjectPropertyExpression::PropertyChain(chain) => chain.len(),
             _ => 1,
@@ -128,7 +166,8 @@ impl ObjectPropertyExpression {
     }
 
     /// Get the object property if the expression is a simple property
-    #[must_use] pub fn as_object_property(&self) -> Option<&ObjectProperty> {
+    #[must_use]
+    pub fn as_object_property(&self) -> Option<&ObjectProperty> {
         if let ObjectPropertyExpression::ObjectProperty(property) = self {
             Some(property)
         } else {
@@ -137,7 +176,8 @@ impl ObjectPropertyExpression {
     }
 
     /// Get the inverse object property if the expression is an inverse property
-    #[must_use] pub fn get_inverse(&self) -> ObjectPropertyExpression {
+    #[must_use]
+    pub fn get_inverse(&self) -> ObjectPropertyExpression {
         match self {
             ObjectPropertyExpression::ObjectProperty(property) => {
                 ObjectPropertyExpression::InverseObjectProperty(property.clone())
@@ -159,7 +199,8 @@ impl ObjectPropertyExpression {
 
     /// Get the simple object property at the core of this expression
     /// For property chains, this returns the first property in the chain
-    #[must_use] pub fn get_named_property(&self) -> &ObjectProperty {
+    #[must_use]
+    pub fn get_named_property(&self) -> &ObjectProperty {
         match self {
             ObjectPropertyExpression::ObjectProperty(property) => property,
             ObjectPropertyExpression::InverseObjectProperty(property) => property,
@@ -176,10 +217,15 @@ impl ObjectPropertyExpression {
     }
 
     /// Simplify the property expression
-    #[must_use] pub fn simplify(&self) -> ObjectPropertyExpression {
+    #[must_use]
+    pub fn simplify(&self) -> ObjectPropertyExpression {
         match self {
-            ObjectPropertyExpression::ObjectProperty(property) => ObjectPropertyExpression::ObjectProperty(property.clone()),
-            ObjectPropertyExpression::InverseObjectProperty(property) => ObjectPropertyExpression::InverseObjectProperty(property.clone()),
+            ObjectPropertyExpression::ObjectProperty(property) => {
+                ObjectPropertyExpression::ObjectProperty(property.clone())
+            }
+            ObjectPropertyExpression::InverseObjectProperty(property) => {
+                ObjectPropertyExpression::InverseObjectProperty(property.clone())
+            }
             ObjectPropertyExpression::PropertyChain(chain) => {
                 // Simplify each property in the chain
                 let simplified_chain: Vec<ObjectPropertyExpression> = chain
@@ -194,28 +240,32 @@ impl ObjectPropertyExpression {
 
 impl Role {
     /// Create a new role for an object property expression
-    #[must_use] pub fn new_object_property(property: ObjectPropertyExpression) -> Self {
+    #[must_use]
+    pub fn new_object_property(property: ObjectPropertyExpression) -> Self {
         Role::ObjectProperty(property)
     }
 
     /// Create a new role for a data property
-    #[must_use] pub fn new_data_property(property: DataProperty) -> Self {
+    #[must_use]
+    pub fn new_data_property(property: DataProperty) -> Self {
         Role::DataProperty(property)
     }
 
-
     /// Check if the role is an object property
-    #[must_use] pub fn is_object_property(&self) -> bool {
+    #[must_use]
+    pub fn is_object_property(&self) -> bool {
         matches!(self, Role::ObjectProperty(_))
     }
 
     /// Check if the role is a data property
-    #[must_use] pub fn is_data_property(&self) -> bool {
+    #[must_use]
+    pub fn is_data_property(&self) -> bool {
         matches!(self, Role::DataProperty(_))
     }
 
     /// Get the object property expression if the role is an object property
-    #[must_use] pub fn as_object_property(&self) -> Option<&ObjectPropertyExpression> {
+    #[must_use]
+    pub fn as_object_property(&self) -> Option<&ObjectPropertyExpression> {
         if let Role::ObjectProperty(property) = self {
             Some(property)
         } else {
@@ -224,7 +274,8 @@ impl Role {
     }
 
     /// Get the data property if the role is a data property
-    #[must_use] pub fn as_data_property(&self) -> Option<&DataProperty> {
+    #[must_use]
+    pub fn as_data_property(&self) -> Option<&DataProperty> {
         if let Role::DataProperty(property) = self {
             Some(property)
         } else {
@@ -247,7 +298,8 @@ pub struct ObjectPropertyCharacteristics {
 
 impl ObjectPropertyCharacteristics {
     /// Create a new set of object property characteristics
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             functional: false,
             inverse_functional: false,
@@ -295,7 +347,8 @@ impl ObjectPropertyCharacteristics {
     }
 
     /// Check if the characteristics are consistent
-    #[must_use] pub fn is_consistent(&self) -> bool {
+    #[must_use]
+    pub fn is_consistent(&self) -> bool {
         // Check for contradictions
         if self.functional && self.inverse_functional {
             return false; // Cannot be both functional and inverse functional
@@ -316,7 +369,6 @@ impl Default for ObjectPropertyCharacteristics {
     }
 }
 
-
 /// Data property characteristics
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataPropertyCharacteristics {
@@ -331,10 +383,9 @@ impl Default for DataPropertyCharacteristics {
 
 impl DataPropertyCharacteristics {
     /// Create a new set of data property characteristics
-    #[must_use] pub fn new() -> Self {
-        Self {
-            functional: false,
-        }
+    #[must_use]
+    pub fn new() -> Self {
+        Self { functional: false }
     }
 
     /// Set the functional characteristic
@@ -359,7 +410,8 @@ pub struct ObjectPropertyHierarchy {
 
 impl ObjectPropertyHierarchy {
     /// Create a new empty object property hierarchy
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let mut hierarchy = Self {
             properties: HashMap::new(),
             sub_properties: HashMap::new(),
@@ -375,7 +427,7 @@ impl ObjectPropertyHierarchy {
         // Add built-in properties
         hierarchy.add_property(ObjectProperty::top());
         hierarchy.add_property(ObjectProperty::bottom());
-        
+
         hierarchy
     }
 
@@ -383,16 +435,22 @@ impl ObjectPropertyHierarchy {
     pub fn add_property(&mut self, property: ObjectProperty) -> &ObjectProperty {
         let iri = crate::ontology::IRI::new(property.iri.as_ref());
         self.properties.entry(iri.clone()).or_insert_with(|| {
-            self.characteristics.insert(iri.clone(), ObjectPropertyCharacteristics::new());
+            self.characteristics
+                .insert(iri.clone(), ObjectPropertyCharacteristics::new());
             property
         })
     }
 
-    #[must_use] pub fn get_property(&self, iri: &crate::ontology::IRI) -> Option<&ObjectProperty> {
+    #[must_use]
+    pub fn get_property(&self, iri: &crate::ontology::IRI) -> Option<&ObjectProperty> {
         self.properties.get(iri)
     }
 
-    pub fn add_sub_property(&mut self, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI){
+    pub fn add_sub_property(
+        &mut self,
+        sub: &crate::ontology::IRI,
+        super_prop: &crate::ontology::IRI,
+    ) {
         self.sub_properties
             .entry(super_prop.clone())
             .or_default()
@@ -403,19 +461,35 @@ impl ObjectPropertyHierarchy {
             .insert(super_prop.clone());
     }
 
-    #[must_use] pub fn get_sub_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_sub_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.sub_properties.get(iri)
     }
 
-    #[must_use] pub fn get_super_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_super_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.super_properties.get(iri)
     }
 
-    #[must_use] pub fn get_characteristics(&self, iri: &crate::ontology::IRI) -> Option<&ObjectPropertyCharacteristics> {
+    #[must_use]
+    pub fn get_characteristics(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&ObjectPropertyCharacteristics> {
         self.characteristics.get(iri)
     }
 
-    pub fn add_equivalent_property(&mut self, property: &crate::ontology::IRI, equivalent: &crate::ontology::IRI) {
+    pub fn add_equivalent_property(
+        &mut self,
+        property: &crate::ontology::IRI,
+        equivalent: &crate::ontology::IRI,
+    ) {
         self.equivalent_properties
             .entry(property.clone())
             .or_default()
@@ -426,11 +500,19 @@ impl ObjectPropertyHierarchy {
             .insert(property.clone());
     }
 
-    #[must_use] pub fn get_equivalent_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_equivalent_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.equivalent_properties.get(iri)
     }
 
-    pub fn add_disjoint_property(&mut self, property: &crate::ontology::IRI, disjoint: &crate::ontology::IRI) {
+    pub fn add_disjoint_property(
+        &mut self,
+        property: &crate::ontology::IRI,
+        disjoint: &crate::ontology::IRI,
+    ) {
         self.disjoint_properties
             .entry(property.clone())
             .or_default()
@@ -441,38 +523,68 @@ impl ObjectPropertyHierarchy {
             .insert(property.clone());
     }
 
-    #[must_use] pub fn get_disjoint_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_disjoint_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.disjoint_properties.get(iri)
     }
 
-    pub fn set_inverse_functional(&mut self, property: &crate::ontology::IRI, inverse: &crate::ontology::IRI) {
-        self.inverse_properties.insert(property.clone(), inverse.clone());
-        self.inverse_properties.insert(inverse.clone(), property.clone());
+    pub fn set_inverse_functional(
+        &mut self,
+        property: &crate::ontology::IRI,
+        inverse: &crate::ontology::IRI,
+    ) {
+        self.inverse_properties
+            .insert(property.clone(), inverse.clone());
+        self.inverse_properties
+            .insert(inverse.clone(), property.clone());
     }
 
-    #[must_use] pub fn get_inverse_property(&self, iri: &crate::ontology::IRI) -> Option<&crate::ontology::IRI> {
+    #[must_use]
+    pub fn get_inverse_property(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&crate::ontology::IRI> {
         self.inverse_properties.get(iri)
     }
 
-    pub fn add_domain(&mut self, property: &crate::ontology::IRI, domain: crate::ontology::ClassExpression) {
+    pub fn add_domain(
+        &mut self,
+        property: &crate::ontology::IRI,
+        domain: crate::ontology::ClassExpression,
+    ) {
         self.domains
             .entry(property.clone())
             .or_default()
             .insert(domain);
     }
 
-    #[must_use] pub fn get_domains(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::ClassExpression>> {
+    #[must_use]
+    pub fn get_domains(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::ClassExpression>> {
         self.domains.get(iri)
     }
 
-    pub fn add_range(&mut self, property: &crate::ontology::IRI, range: crate::ontology::ClassExpression) {
+    pub fn add_range(
+        &mut self,
+        property: &crate::ontology::IRI,
+        range: crate::ontology::ClassExpression,
+    ) {
         self.ranges
             .entry(property.clone())
             .or_default()
             .insert(range);
     }
 
-    #[must_use] pub fn get_ranges(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::ClassExpression>> {
+    #[must_use]
+    pub fn get_ranges(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::ClassExpression>> {
         self.ranges.get(iri)
     }
 
@@ -480,43 +592,50 @@ impl ObjectPropertyHierarchy {
         self.properties.values()
     }
 
-    #[must_use] pub fn is_functional(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_functional(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_inverse_functional(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_inverse_functional(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.inverse_functional)
     }
 
-    #[must_use] pub fn is_symmetric(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_symmetric(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.symmetric)
     }
 
-    #[must_use] pub fn is_asymmetric(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_asymmetric(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.asymmetric)
     }
 
-    #[must_use] pub fn is_reflexive(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_reflexive(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.reflexive)
     }
 
-    #[must_use] pub fn is_irreflexive(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_irreflexive(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.irreflexive)
     }
 
-    #[must_use] pub fn is_transitive(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_transitive(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.transitive)
@@ -544,7 +663,8 @@ pub struct DataPropertyHierarchy {
 
 impl DataPropertyHierarchy {
     /// Create a new empty data property hierarchy
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let mut hierarchy = Self {
             properties: HashMap::new(),
             sub_properties: HashMap::new(),
@@ -567,16 +687,22 @@ impl DataPropertyHierarchy {
     pub fn add_property(&mut self, property: DataProperty) -> &DataProperty {
         let iri = crate::ontology::IRI::new(&property.iri.to_string());
         self.properties.entry(iri.clone()).or_insert_with(|| {
-            self.characteristics.insert(iri.clone(), DataPropertyCharacteristics::new());
+            self.characteristics
+                .insert(iri.clone(), DataPropertyCharacteristics::new());
             property
         })
     }
 
-    #[must_use] pub fn get_property(&self, iri: &crate::ontology::IRI) -> Option<&DataProperty> {
+    #[must_use]
+    pub fn get_property(&self, iri: &crate::ontology::IRI) -> Option<&DataProperty> {
         self.properties.get(iri)
     }
 
-    pub fn add_sub_property(&mut self, sub: &crate::ontology::IRI, super_prop: &crate::ontology::IRI) {
+    pub fn add_sub_property(
+        &mut self,
+        sub: &crate::ontology::IRI,
+        super_prop: &crate::ontology::IRI,
+    ) {
         self.sub_properties
             .entry(super_prop.clone())
             .or_default()
@@ -587,19 +713,35 @@ impl DataPropertyHierarchy {
             .insert(super_prop.clone());
     }
 
-    #[must_use] pub fn get_sub_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_sub_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.sub_properties.get(iri)
     }
 
-    #[must_use] pub fn get_super_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_super_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.super_properties.get(iri)
     }
 
-    #[must_use] pub fn get_characteristics(&self, iri: &crate::ontology::IRI) -> Option<&DataPropertyCharacteristics> {
+    #[must_use]
+    pub fn get_characteristics(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&DataPropertyCharacteristics> {
         self.characteristics.get(iri)
     }
 
-    pub fn add_equivalent_property(&mut self, property: &crate::ontology::IRI, equivalent: &crate::ontology::IRI) {
+    pub fn add_equivalent_property(
+        &mut self,
+        property: &crate::ontology::IRI,
+        equivalent: &crate::ontology::IRI,
+    ) {
         self.equivalent_properties
             .entry(property.clone())
             .or_default()
@@ -610,11 +752,19 @@ impl DataPropertyHierarchy {
             .insert(property.clone());
     }
 
-    #[must_use] pub fn get_equivalent_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_equivalent_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.equivalent_properties.get(iri)
     }
 
-    pub fn add_disjoint_property(&mut self, property: &crate::ontology::IRI, disjoint: &crate::ontology::IRI) {
+    pub fn add_disjoint_property(
+        &mut self,
+        property: &crate::ontology::IRI,
+        disjoint: &crate::ontology::IRI,
+    ) {
         self.disjoint_properties
             .entry(property.clone())
             .or_default()
@@ -625,29 +775,49 @@ impl DataPropertyHierarchy {
             .insert(property.clone());
     }
 
-    #[must_use] pub fn get_disjoint_properties(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::IRI>> {
+    #[must_use]
+    pub fn get_disjoint_properties(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::IRI>> {
         self.disjoint_properties.get(iri)
     }
 
-    pub fn add_domain(&mut self, property: &crate::ontology::IRI, domain: crate::ontology::ClassExpression) {
+    pub fn add_domain(
+        &mut self,
+        property: &crate::ontology::IRI,
+        domain: crate::ontology::ClassExpression,
+    ) {
         self.domains
             .entry(property.clone())
             .or_default()
             .insert(domain);
     }
 
-    #[must_use] pub fn get_domains(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::ClassExpression>> {
+    #[must_use]
+    pub fn get_domains(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::ClassExpression>> {
         self.domains.get(iri)
     }
 
-    pub fn add_range(&mut self, property: &crate::ontology::IRI, range: crate::ontology::ClassExpression) {
+    pub fn add_range(
+        &mut self,
+        property: &crate::ontology::IRI,
+        range: crate::ontology::ClassExpression,
+    ) {
         self.ranges
             .entry(property.clone())
             .or_default()
             .insert(range);
     }
 
-    #[must_use] pub fn get_ranges(&self, iri: &crate::ontology::IRI) -> Option<&HashSet<crate::ontology::ClassExpression>> {
+    #[must_use]
+    pub fn get_ranges(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&HashSet<crate::ontology::ClassExpression>> {
         self.ranges.get(iri)
     }
 
@@ -655,43 +825,50 @@ impl DataPropertyHierarchy {
         self.properties.values()
     }
 
-    #[must_use] pub fn is_functional(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_functional(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_inverse_functional(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_inverse_functional(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_symmetric(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_symmetric(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_asymmetric(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_asymmetric(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_reflexive(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_reflexive(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_irreflexive(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_irreflexive(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
     }
 
-    #[must_use] pub fn is_transitive(&self, property: &crate::ontology::IRI) -> bool {
+    #[must_use]
+    pub fn is_transitive(&self, property: &crate::ontology::IRI) -> bool {
         self.characteristics
             .get(property)
             .is_some_and(|c| c.functional)
@@ -714,7 +891,8 @@ pub struct PropertyStore {
 
 impl PropertyStore {
     /// Create a new property store
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let mut store = Self {
             object_properties: ObjectPropertyHierarchy::new(),
             data_properties: DataPropertyHierarchy::new(),
@@ -722,15 +900,33 @@ impl PropertyStore {
         };
 
         // Add built-in properties
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedProperty".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedSource".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#annotatedTarget".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#versionInfo".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2002/07/owl#deprecated".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#label".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#comment".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#seeAlso".to_string())));
-        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from("http://www.w3.org/2000/01/rdf-schema#isDefinedBy".to_string())));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#annotatedProperty".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#annotatedSource".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#annotatedTarget".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#versionInfo".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2002/07/owl#deprecated".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2000/01/rdf-schema#label".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2000/01/rdf-schema#comment".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2000/01/rdf-schema#seeAlso".to_string(),
+        )));
+        store.add_annotation_property(AnnotationProperty::new(crate::ontology::IRI::from(
+            "http://www.w3.org/2000/01/rdf-schema#isDefinedBy".to_string(),
+        )));
 
         store
     }
@@ -747,21 +943,28 @@ impl PropertyStore {
 
     /// Add an annotation property to the store
     pub fn add_annotation_property(&mut self, property: AnnotationProperty) {
-        self.annotation_properties.insert(property.iri.clone(), property);
+        self.annotation_properties
+            .insert(property.iri.clone(), property);
     }
 
     /// Get an object property by IRI
-    #[must_use] pub fn get_object_property(&self, iri: &crate::ontology::IRI) -> Option<&ObjectProperty> {
+    #[must_use]
+    pub fn get_object_property(&self, iri: &crate::ontology::IRI) -> Option<&ObjectProperty> {
         self.object_properties.get_property(iri)
     }
 
     /// Get a data property by IRI
-    #[must_use] pub fn get_data_property(&self, iri: &crate::ontology::IRI) -> Option<&DataProperty> {
+    #[must_use]
+    pub fn get_data_property(&self, iri: &crate::ontology::IRI) -> Option<&DataProperty> {
         self.data_properties.get_property(iri)
     }
 
     /// Get an annotation property by IRI
-    #[must_use] pub fn get_annotation_property(&self, iri: &crate::ontology::IRI) -> Option<&AnnotationProperty> {
+    #[must_use]
+    pub fn get_annotation_property(
+        &self,
+        iri: &crate::ontology::IRI,
+    ) -> Option<&AnnotationProperty> {
         self.annotation_properties.get(iri)
     }
 
@@ -780,7 +983,8 @@ impl PropertyStore {
         self.annotation_properties.values()
     }
 
-    #[must_use] pub fn object_properties(&self) -> &ObjectPropertyHierarchy {
+    #[must_use]
+    pub fn object_properties(&self) -> &ObjectPropertyHierarchy {
         &self.object_properties
     }
 
@@ -788,7 +992,8 @@ impl PropertyStore {
         &mut self.object_properties
     }
 
-    #[must_use] pub fn data_properties(&self) -> &DataPropertyHierarchy {
+    #[must_use]
+    pub fn data_properties(&self) -> &DataPropertyHierarchy {
         &self.data_properties
     }
 

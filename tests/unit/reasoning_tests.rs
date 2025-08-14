@@ -1,10 +1,6 @@
 //! Unit tests for the reasoning service
 
-use oxidowl::{
-    reasoning::ReasoningService,
-    ontology::Ontology,
-    config::ReasonerConfig,
-};
+use oxidowl::{config::ReasonerConfig, ontology::Ontology, reasoning::ReasoningService};
 
 /// Helper function to create a simple test ontology
 fn create_test_ontology() -> Ontology {
@@ -16,9 +12,9 @@ fn create_test_ontology() -> Ontology {
 async fn test_reasoning_service_creation() {
     let ontology = create_test_ontology();
     let config = ReasonerConfig::test_config();
-    
+
     let _reasoning_service = ReasoningService::new(ontology, config);
-    
+
     // Basic creation should work
     println!("ReasoningService created successfully");
 }
@@ -28,7 +24,7 @@ async fn test_basic_functionality() {
     let ontology = create_test_ontology();
     let config = ReasonerConfig::test_config();
     let _reasoning_service = ReasoningService::new(ontology, config);
-    
+
     // For now, just test that we can create the service
     println!("Basic functionality test passed");
 }
