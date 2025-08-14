@@ -15,6 +15,14 @@ pub use axioms::*;
 pub use concepts::*;
 pub use individuals::*;
 pub use properties::*;
+
+use std::sync::{Arc, RwLock};
+
+/// Type alias for a thread-safe, shared ontology reference
+/// 
+/// This type represents an ontology that can be safely shared across threads
+/// and allows for both read and write access through the RwLock.
+pub type OntologyRef = Arc<RwLock<Ontology>>;
   
 
 /// IRI (Internationalized Resource Identifier) wrapper

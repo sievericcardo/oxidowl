@@ -5,7 +5,7 @@
 //! and inference caches.
 
 use crate::{
-    ontology::{Ontology, ClassExpression, Individual},
+    ontology::{Ontology, OntologyRef, ClassExpression, Individual},
     reasoning::{ClassificationResult, RealizationResult},
 };
 
@@ -166,13 +166,13 @@ impl CacheManager {
     }
 
     /// Get consistency result from cache
-    pub fn get_consistency_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<bool> {
+    pub fn get_consistency_result(&self, ontology: &OntologyRef) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store consistency result in cache
-    pub fn cache_consistency_result(&self, ontology: &Arc<RwLock<Ontology>>, result: bool) {
+    pub fn cache_consistency_result(&self, ontology: &OntologyRef, result: bool) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -198,24 +198,24 @@ impl CacheManager {
     }
 
     /// Get classification result from cache
-    pub fn get_classification_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<ClassificationResult> {
+    pub fn get_classification_result(&self, ontology: &OntologyRef) -> Option<ClassificationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store classification result in cache
-    pub fn store_classification_result(&self, ontology: &Arc<RwLock<Ontology>>, result: ClassificationResult) {
+    pub fn store_classification_result(&self, ontology: &OntologyRef, result: ClassificationResult) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get realization result from cache
-    pub fn get_realization_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<RealizationResult> {
+    pub fn get_realization_result(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store realization result in cache
-    pub fn store_realization_result(&self, ontology: &Arc<RwLock<Ontology>>, result: RealizationResult) {
+    pub fn store_realization_result(&self, ontology: &OntologyRef, result: RealizationResult) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -241,22 +241,22 @@ impl CacheManager {
     }
 
     /// Get classification cache
-    pub fn classification(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<ClassificationResult> {
+    pub fn classification(&self, ontology: &OntologyRef) -> Option<ClassificationResult> {
         self.get_classification_result(ontology)
     }
 
     /// Store classification cache
-    pub fn store_classification(&self, ontology: &Arc<RwLock<Ontology>>, result: ClassificationResult) {
+    pub fn store_classification(&self, ontology: &OntologyRef, result: ClassificationResult) {
         self.store_classification_result(ontology, result);
     }
 
     /// Get realization cache
-    pub fn realization(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<RealizationResult> {
+    pub fn realization(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
         self.get_realization_result(ontology)
     }
 
     /// Store realization cache
-    pub fn store_realization(&self, ontology: &Arc<RwLock<Ontology>>, result: RealizationResult) {
+    pub fn store_realization(&self, ontology: &OntologyRef, result: RealizationResult) {
         self.store_realization_result(ontology, result);
     }
 

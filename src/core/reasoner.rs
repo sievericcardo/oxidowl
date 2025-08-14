@@ -10,7 +10,7 @@ use crate::{
         tableau::{Tableau, TableauBuilder, TableauState, RoleLabel},
         dependency::DependencySet,
     },
-    ontology::{Ontology, OntologyFormat, ClassExpression, Individual, Axiom, ObjectPropertyExpression, DataPropertyExpression, IRI},
+    ontology::{Ontology, OntologyFormat, OntologyRef, ClassExpression, Individual, Axiom, ObjectPropertyExpression, DataPropertyExpression, IRI},
     Error, Result,
 };
 use std::{
@@ -343,7 +343,7 @@ pub struct Reasoner {
     config: ReasonerConfig,
     
     /// Current ontology being reasoned over
-    ontology: Option<Arc<RwLock<Ontology>>>,
+    ontology: Option<OntologyRef>,
     
     /// Cache manager for reasoning results
     cache_manager: Arc<RwLock<CacheManager>>,
@@ -443,7 +443,7 @@ impl Reasoner {
     }
 
     /// Get the current ontology
-    pub fn get_ontology(&self) -> Result<Arc<RwLock<Ontology>>> {
+    pub fn get_ontology(&self) -> Result<OntologyRef> {
         self.ontology
             .clone()
             .ok_or_else(|| Error::reasoning("No ontology loaded"))
@@ -1519,7 +1519,7 @@ impl Reasoner {
     }
     
     /// Load ontology axioms into a tableau
-    fn load_ontology_into_tableau(&self, tableau: &mut Tableau, ontology: &Arc<RwLock<Ontology>>) -> Result<()> {
+    fn load_ontology_into_tableau(&self, tableau: &mut Tableau, ontology: &OntologyRef) -> Result<()> {
         let ontology_guard = ontology.read().unwrap();
         
         // Process class assertion axioms to create nodes
