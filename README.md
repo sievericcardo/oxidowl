@@ -18,7 +18,6 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
 - 🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
 - ⚡ **Optimized Algorithms**: Hyperresolution, ground disjunctions, and advanced blocking strategies
-- 🔍 **Performance Analysis**: Comprehensive benchmarking and algorithm comparison tools
 - 🦀 **Horned-OWL Integration**: Built on proven OWL parsing and modeling foundation
 
 ## Installation
@@ -45,7 +44,6 @@ cargo test
 # Run specific test categories
 cargo test unit::reasoning
 cargo test integration::greenhouse
-cargo test performance
 
 # Run with performance benchmarks
 cargo test --release -- --ignored
@@ -184,26 +182,6 @@ Oxidowl implements HermiT's hypertableau algorithm, which combines:
 - **Memory Management**: Optimized data structures and memory pools
 - **Incremental Reasoning**: Support for ontology updates
 
-## Performance
-
-### Benchmarking
-
-Oxidowl includes comprehensive performance testing:
-
-```bash
-# Run algorithm comparison benchmarks
-cargo run --bin run_performance_tests algorithm
-
-# Run scalability tests
-cargo run --bin run_performance_tests scalability
-
-# Run memory benchmarks
-cargo run --bin run_performance_tests memory
-
-# Generate performance reports
-cargo run --bin run_performance_tests report -i results.json -f html
-```
-
 ## Examples
 
 ### Basic Reasoning
@@ -285,13 +263,7 @@ server.start().await?;
 
 - **Integration Tests**: End-to-end testing
   - Real ontology processing
-  - Performance benchmarking
   - Algorithm comparison
-
-- **Performance Tests**: Scalability and efficiency
-  - Memory usage analysis
-  - Concurrent processing
-  - Large ontology handling
 
 ### Test Execution
 
@@ -308,7 +280,6 @@ cargo test --release performance
 # Specific test categories
 cargo test unit::reasoning
 cargo test integration::greenhouse
-cargo test performance::scalability
 ```
 
 ## Contributing
