@@ -33,7 +33,7 @@ pub struct ReasoningConfig {
     pub expansion_strategy: ExpansionStrategy,
     /// Enable or disable optimisation
     pub enable_optimisations: bool,
-    /// EMaximum response time for reasoning tasks
+    /// `EMaximum` response time for reasoning tasks
     pub timeout: Option<Duration>,
     /// Maximum memory usage in MB for the reasoner
     pub max_memory_mb: Option<u64>,
@@ -52,10 +52,9 @@ pub struct ReasoningConfig {
 pub enum TableauAlgorithm {
     /// Traditional tableau algorithm
     Traditional,
-    /// HyperTableau algorithm (HermiT-style)
+    /// `HyperTableau` algorithm (HermiT-style)
     HyperTableau,
 }
-
 
 /// Blocking strategy for the tableau algorithm
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,7 +196,7 @@ impl Default for ReasoningConfig {
             expansion_strategy: ExpansionStrategy::CreationOrder,
             enable_optimisations: true,
             timeout: Some(Duration::from_secs(300)), // 5 minutes
-            max_memory_mb: Some(4096), // 4 GB
+            max_memory_mb: Some(4096),               // 4 GB
             incremental_reasoning: false,
             enable_explanations: false,
             max_expansion_depth: 100,
@@ -215,7 +214,7 @@ impl Default for ReasonerConfig {
                 expansion_strategy: ExpansionStrategy::CreationOrder,
                 enable_optimisations: true,
                 timeout: Some(Duration::from_secs(300)), // 5 minutes
-                max_memory_mb: Some(4096), // 4 GB
+                max_memory_mb: Some(4096),               // 4 GB
                 incremental_reasoning: false,
                 enable_explanations: false,
                 max_expansion_depth: 100,
@@ -250,7 +249,7 @@ impl Default for ReasonerConfig {
                 enable_parallel_expansion: true,
                 enable_simd: true,
                 memory_pool_size_mb: 512, // 512 MB
-                gc_threshold: 0.75, // 75% threshold for GC
+                gc_threshold: 0.75,       // 75% threshold for GC
             },
         }
     }
@@ -261,7 +260,7 @@ impl ReasonerConfig {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: ReasonerConfig = toml::from_str(&content)
-            .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to parse TOML config: {e}")))?;
 
         config.validate()?;
         Ok(config)
@@ -270,7 +269,7 @@ impl ReasonerConfig {
     /// Save configuration to TOML file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = toml::to_string(self)
-            .map_err(|e| Error::config(format!("Failed to serialize TOML config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to serialize TOML config: {e}")))?;
 
         fs::write(path, content)?;
         Ok(())
@@ -280,7 +279,7 @@ impl ReasonerConfig {
     pub fn load_from_json<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: ReasonerConfig = serde_json::from_str(&content)
-            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to parse JSON config: {e}")))?;
 
         config.validate()?;
         Ok(config)
@@ -289,7 +288,7 @@ impl ReasonerConfig {
     /// Save configuration to JSON file
     pub fn save_to_json<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| Error::config(format!("Failed to serialize JSON config: {}", e)))?;
+            .map_err(|e| Error::config(format!("Failed to serialize JSON config: {e}")))?;
 
         fs::write(path, content)?;
         Ok(())
@@ -313,12 +312,16 @@ impl ReasonerConfig {
 
         // Validate cache settings
         if self.cache.max_cache_size_mb == 0 {
-            return Err(Error::config("Maximum cache size cannot be zero".to_string()));
+            return Err(Error::config(
+                "Maximum cache size cannot be zero".to_string(),
+            ));
         }
 
         // Validate server settings
         if self.server.max_connections == 0 {
-            return Err(Error::config("Maximum connections cannot be zero".to_string()));
+            return Err(Error::config(
+                "Maximum connections cannot be zero".to_string(),
+            ));
         }
 
         if self.server.request_timeout.as_secs() == 0 {
@@ -330,10 +333,13 @@ impl ReasonerConfig {
 
     /// Get the worker threads to use
     pub fn worker_thread_count(&self) -> usize {
-        self.performance.worker_threads.unwrap_or_else(|| num_cpus::get())
+        self.performance
+            .worker_threads
+            .unwrap_or_else(num_cpus::get)
     }
 
     /// Check if parallel processing is enabled
+    #[must_use]
     pub fn is_parallel_processing_enabled(&self) -> bool {
         self.performance.enable_parallel_expansion && self.worker_thread_count() > 1
     }
@@ -342,6 +348,7 @@ impl ReasonerConfig {
 /// Create a configuration for specific use cases
 impl ReasonerConfig {
     /// Configuration for large ontologies
+    #[must_use]
     pub fn large_ontology_config() -> Self {
         let mut config = Self::default();
         config.reasoning.max_memory_mb = Some(8192); // 8 GB
@@ -354,6 +361,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for web services
+    #[must_use]
     pub fn web_service_config() -> Self {
         let mut config = Self::default();
         config.server.max_connections = 500; // Increase for web service
@@ -364,6 +372,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for debugging and development
+    #[must_use]
     pub fn debug_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Debug; // Set logging to debug level
@@ -375,6 +384,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for production environments
+    #[must_use]
     pub fn production_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Info; // Set logging to info level
@@ -387,6 +397,7 @@ impl ReasonerConfig {
     }
 
     /// Configuration for testing purposes
+    #[must_use]
     pub fn test_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Debug; // Set logging to debug level for tests

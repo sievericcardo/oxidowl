@@ -5,16 +5,11 @@
 //! and clash detection.
 
 use crate::{
-    core::dependency::{DependencySet, DependencyTracker, DependencyType},
-    ontology::{ClassExpression, Individual, Role, DataProperty, ObjectPropertyExpression},
-    Error, Result,
+    Result,
+    core::dependency::DependencySet,
+    ontology::{ClassExpression, DataProperty, Individual, ObjectPropertyExpression, Role},
 };
-use std::{
-    collections::{HashMap, HashSet, BinaryHeap},
-    sync::Arc,
-    time::Instant,
-    fmt,
-};
+use std::{collections::HashMap, fmt};
 
 /// Helper function to convert string to Individual
 fn string_to_individual(node_id: String) -> Individual {
@@ -83,10 +78,10 @@ pub enum RulePriority {
 
     /// High priority (propagation, essential for completeness)
     High = 1,
-    
+
     /// Normal priority (existential, universal, etc.)
     Normal = 2,
-    
+
     /// Low priority (cardinality, non-critical)
     Low = 3,
 
@@ -179,7 +174,7 @@ pub enum RuleContext {
 pub struct CompletionRuleSet {
     /// Available rules in priority order
     rules: Vec<CompletionRule>,
-    
+
     /// Rule priority mapping
     priorities: HashMap<CompletionRule, RulePriority>,
 
@@ -187,7 +182,10 @@ pub struct CompletionRuleSet {
     applicability: HashMap<CompletionRule, Box<dyn Fn(&RuleApplication) -> bool + Send + Sync>>,
 
     /// Rule application handlers
-    handlers: HashMap<CompletionRule, Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>>,
+    handlers: HashMap<
+        CompletionRule,
+        Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>,
+    >,
 }
 
 impl std::fmt::Debug for CompletionRuleSet {
@@ -195,7 +193,10 @@ impl std::fmt::Debug for CompletionRuleSet {
         f.debug_struct("CompletionRuleSet")
             .field("rules", &self.rules)
             .field("priorities", &self.priorities)
-            .field("applicability", &self.applicability.keys().collect::<Vec<_>>())
+            .field(
+                "applicability",
+                &self.applicability.keys().collect::<Vec<_>>(),
+            )
             .field("handlers", &self.handlers.keys().collect::<Vec<_>>())
             .finish()
     }
@@ -211,7 +212,12 @@ pub struct RuleResult {
     pub concept_additions: Vec<(Individual, ClassExpression, DependencySet)>,
 
     /// Role additions required
-    pub role_additions: Vec<(Individual, Individual, ObjectPropertyExpression, DependencySet)>,
+    pub role_additions: Vec<(
+        Individual,
+        Individual,
+        ObjectPropertyExpression,
+        DependencySet,
+    )>,
 
     /// Edge additions required (legacy)
     pub edge_additions: Vec<(String, String, ObjectPropertyExpression, DependencySet)>,
@@ -227,21 +233,41 @@ pub struct RuleResult {
 
     /// Branching points created
     pub branches: Vec<BranchInfo>,
-    
+
     /// Branching points for choice rules
-    pub branching_points: Vec<(crate::core::hypertableau::branching::BranchingType, Vec<crate::core::hypertableau::branching::BranchingChoice>)>,
-    
+    pub branching_points: Vec<(
+        crate::core::hypertableau::branching::BranchingType,
+        Vec<crate::core::hypertableau::branching::BranchingChoice>,
+    )>,
+
     /// Data property assertions
-    pub data_assertions: Vec<(Individual, String, crate::ontology::DataPropertyExpression, DependencySet)>,
-    
+    pub data_assertions: Vec<(
+        Individual,
+        String,
+        crate::ontology::DataPropertyExpression,
+        DependencySet,
+    )>,
+
     /// Datatype constraints
     pub datatype_constraints: Vec<(String, crate::ontology::DataRange, DependencySet)>,
-    
+
     /// Universal constraints for validation
-    pub universal_constraints: Vec<(Individual, crate::ontology::DataPropertyExpression, ClassExpression, DependencySet)>,
-    
+    pub universal_constraints: Vec<(
+        Individual,
+        crate::ontology::DataPropertyExpression,
+        ClassExpression,
+        DependencySet,
+    )>,
+
     /// Cardinality constraints for validation
-    pub cardinality_constraints: Vec<(Individual, ObjectPropertyExpression, u32, ClassExpression, bool, DependencySet)>,
+    pub cardinality_constraints: Vec<(
+        Individual,
+        ObjectPropertyExpression,
+        u32,
+        ClassExpression,
+        bool,
+        DependencySet,
+    )>,
 }
 
 /// Information about a clash detected during rule application
@@ -268,19 +294,19 @@ pub struct ClashInfo {
 pub enum ClashType {
     /// Contradiction: A and ¬A
     Contradiction,
-    
+
     /// Cardinality violation: too many/few successors
     Cardinality,
-    
+
     /// Datatype inconsistency
     Datatype,
-    
+
     /// Functionality violation
     Functionality,
-    
+
     /// Distinctness violation
     Distinctness,
-    
+
     /// Nominal conflict
     Nominal,
 }
@@ -319,6 +345,7 @@ pub enum RuleApplicationStrategy {
 
 impl CompletionRuleSet {
     /// Create a new completion rule set
+    #[must_use]
     pub fn new() -> Self {
         let mut rule_set = Self {
             rules: Vec::new(),
@@ -338,11 +365,11 @@ impl CompletionRuleSet {
         self.add_rule(CompletionRule::All, RulePriority::High);
         self.add_rule(CompletionRule::Self_, RulePriority::High);
         self.add_rule(CompletionRule::Unfold, RulePriority::High);
-        
+
         // Existential expansion (normal priority)
         self.add_rule(CompletionRule::Some, RulePriority::Normal);
         self.add_rule(CompletionRule::Nominal, RulePriority::Normal);
-        
+
         // Non-deterministic rules (low priority)
         self.add_rule(CompletionRule::Or, RulePriority::Low);
         self.add_rule(CompletionRule::AtLeast, RulePriority::Low);
@@ -361,41 +388,55 @@ impl CompletionRuleSet {
             self.rules.push(rule);
             // Sort the rules by priority
             let priorities = &self.priorities;
-            self.rules.sort_by_key(|r| {
-                priorities.get(r).cloned().unwrap_or(RulePriority::Normal)
-            });
+            self.rules
+                .sort_by_key(|r| priorities.get(r).copied().unwrap_or(RulePriority::Normal));
         }
     }
 
     /// Get rule priority
+    #[must_use]
     pub fn get_priority(&self, rule: CompletionRule) -> RulePriority {
-        self.priorities.get(&rule).cloned().unwrap_or(RulePriority::Normal)
+        self.priorities
+            .get(&rule)
+            .copied()
+            .unwrap_or(RulePriority::Normal)
     }
 
     /// Get all applicable rules
+    #[must_use]
     pub fn get_applicable_rules(&self, concept: &ClassExpression) -> Vec<CompletionRule> {
-        self.rules.iter()
+        self.rules
+            .iter()
             .filter(|&rule| self.is_rule_applicable(*rule, concept))
-            .cloned()
+            .copied()
             .collect()
     }
 
     /// Check if a rule is applicable to a concept
+    #[must_use]
     pub fn is_rule_applicable(&self, rule: CompletionRule, concept: &ClassExpression) -> bool {
         match rule {
             CompletionRule::And => matches!(concept, ClassExpression::ObjectIntersectionOf(_)),
             CompletionRule::Or => matches!(concept, ClassExpression::ObjectUnionOf(_)),
             CompletionRule::Some => matches!(concept, ClassExpression::ObjectSomeValuesFrom { .. }),
             CompletionRule::All => false, // Applied based on edges, not concepts
-            CompletionRule::AtLeast => matches!(concept, ClassExpression::ObjectMinCardinality { .. }),
-            CompletionRule::AtMost => matches!(concept, ClassExpression::ObjectMaxCardinality { .. }),
+            CompletionRule::AtLeast => {
+                matches!(concept, ClassExpression::ObjectMinCardinality { .. })
+            }
+            CompletionRule::AtMost => {
+                matches!(concept, ClassExpression::ObjectMaxCardinality { .. })
+            }
             CompletionRule::Nominal => matches!(concept, ClassExpression::ObjectOneOf(_)),
             CompletionRule::Self_ => matches!(concept, ClassExpression::ObjectHasSelf { .. }),
             CompletionRule::Choose => false, // Applied by strategy
-            CompletionRule::Datatype => matches!(concept, ClassExpression::DataSomeValuesFrom { .. } | ClassExpression::DataAllValuesFrom { .. }),
+            CompletionRule::Datatype => matches!(
+                concept,
+                ClassExpression::DataSomeValuesFrom { .. }
+                    | ClassExpression::DataAllValuesFrom { .. }
+            ),
             CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
             CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
-            CompletionRule::Guess => false, // Applied by strategy
+            CompletionRule::Guess => false,         // Applied by strategy
         }
     }
 
@@ -421,8 +462,12 @@ impl CompletionRuleSet {
     /// Apply the conjunction rule: A ⊓ B → A, B
     fn apply_and_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             // Extract conjuncts from intersection
             if let ClassExpression::ObjectIntersectionOf(conjuncts) = concept {
                 for conjunct in conjuncts {
@@ -435,15 +480,19 @@ impl CompletionRuleSet {
                 }
             }
         }
-        
+
         Ok(result)
     }
 
     /// Apply the disjunction rule: A ⊔ B → A | B (creates branching)
     fn apply_or_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             // Extract disjuncts from union
             if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
                 // Create branching choices for each disjunct
@@ -452,12 +501,12 @@ impl CompletionRuleSet {
                     let individual = string_to_individual(application.node.clone());
                     choices.push(crate::core::hypertableau::branching::BranchingChoice::new(
                         index,
-                        format!("Disjunct {}: {}", index, disjunct),
+                        format!("Disjunct {index}: {disjunct}"),
                         disjunct.clone(),
                         individual,
                     ));
                 }
-                
+
                 // Create branching point
                 let individual = string_to_individual(application.node.clone());
                 let branching_type = crate::core::hypertableau::branching::BranchingType::GroundDisjunction {
@@ -468,24 +517,28 @@ impl CompletionRuleSet {
                     )?,
                     individual: individual.clone(),
                 };
-                
+
                 result.branching_points.push((branching_type, choices));
             }
         }
-        
+
         Ok(result)
     }
 
     /// Apply the existential rule: ∃R.C → create new individual with R-edge and C
     fn apply_some_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             // Extract role and filler from existential restriction
             if let ClassExpression::ObjectSomeValuesFrom { property, filler } = concept {
                 // Create a new individual as witness
                 let witness_individual = Individual::fresh();
-                
+
                 // Add role assertion between current individual and witness
                 result.role_additions.push((
                     string_to_individual(application.node.clone()),
@@ -493,7 +546,7 @@ impl CompletionRuleSet {
                     property.clone(),
                     dependencies.clone(),
                 ));
-                
+
                 // Add filler concept to the witness individual
                 result.concept_additions.push((
                     witness_individual,
@@ -502,7 +555,7 @@ impl CompletionRuleSet {
                 ));
             }
         }
-        
+
         Ok(result)
     }
 
@@ -510,7 +563,13 @@ impl CompletionRuleSet {
     fn apply_all_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
 
-        if let RuleContext::Role { role: _, source: _, target, concept } = &application.context {
+        if let RuleContext::Role {
+            role: _,
+            source: _,
+            target,
+            concept,
+        } = &application.context
+        {
             // Add the concept to the target node
             result.concept_additions.push((
                 string_to_individual(target.clone()),
@@ -518,38 +577,48 @@ impl CompletionRuleSet {
                 application.dependencies.clone(),
             ));
         }
-        
+
         Ok(result)
     }
 
     /// Apply the at-least cardinality rule
     fn apply_at_least_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Cardinality { cardinality, role, filler, existing_successors } = &application.context {
+
+        if let RuleContext::Cardinality {
+            cardinality,
+            role,
+            filler,
+            existing_successors,
+        } = &application.context
+        {
             let needed = *cardinality as usize;
             let existing = existing_successors.len();
-            
+
             if existing < needed {
                 // Create additional successors
                 for i in existing..needed {
                     let new_individual = format!("_card_{}_{}", application.node, i);
-                    
-                    result.new_individuals.push((new_individual.clone(), application.dependencies.clone()));
+
+                    result
+                        .new_individuals
+                        .push((new_individual.clone(), application.dependencies.clone()));
                     let object_property = match role {
                         Role::ObjectProperty(obj_prop) => obj_prop.clone(),
                         Role::DataProperty(_) => {
-                            return Err(crate::Error::reasoning("Cannot use data property in object property context"));
+                            return Err(crate::Error::reasoning(
+                                "Cannot use data property in object property context",
+                            ));
                         }
                     };
-                    
+
                     result.edge_additions.push((
                         application.node.clone(),
                         new_individual.clone(),
                         object_property,
                         application.dependencies.clone(),
                     ));
-                    
+
                     if let Some(filler_concept) = filler {
                         result.concept_additions.push((
                             string_to_individual(new_individual),
@@ -560,18 +629,24 @@ impl CompletionRuleSet {
                 }
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Apply the at-most cardinality rule
     fn apply_at_most_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Cardinality { cardinality, role: _, filler: _, existing_successors } = &application.context {
+
+        if let RuleContext::Cardinality {
+            cardinality,
+            role: _,
+            filler: _,
+            existing_successors,
+        } = &application.context
+        {
             let allowed = *cardinality as usize;
             let existing = existing_successors.len();
-            
+
             if existing > allowed {
                 // Need to merge some successors or detect clash
                 // For simplicity, we'll create a merge for the first excess nodes
@@ -584,31 +659,41 @@ impl CompletionRuleSet {
                 }
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Apply the nominal rule
     fn apply_nominal_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Nominal { nominal, current_node } = &application.context {
+
+        if let RuleContext::Nominal {
+            nominal,
+            current_node,
+        } = &application.context
+        {
             // Merge current node with the nominal individual
             result.merges.push((
                 current_node.clone(),
-                nominal.iri().map(|iri| iri.to_string()).unwrap_or_else(|| "unknown".to_string()),
+                nominal
+                    .iri()
+                    .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string),
                 application.dependencies.clone(),
             ));
         }
-        
+
         Ok(result)
     }
-    
+
     /// Apply the self rule: ∀R.Self → R(x,x)
     fn apply_self_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             if let ClassExpression::ObjectHasSelf { property } = concept {
                 // Add a self-edge
                 result.edge_additions.push((
@@ -619,7 +704,7 @@ impl CompletionRuleSet {
                 ));
             }
         }
-        
+
         Ok(result)
     }
 
@@ -630,18 +715,22 @@ impl CompletionRuleSet {
         // For now, we will return an empty result
         Ok(RuleResult::empty())
     }
-    
+
     /// Apply datatype rules
     fn apply_datatype_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
+
         // Handle datatype constraints and value spaces
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             match concept {
                 ClassExpression::DataSomeValuesFrom { property, filler } => {
                     // Create a witness data value for the existential
                     let witness_value = format!("_witness_value_{}", self.get_fresh_id());
-                    
+
                     // Add data property assertion
                     result.data_assertions.push((
                         string_to_individual(application.node.clone()),
@@ -649,7 +738,7 @@ impl CompletionRuleSet {
                         property.clone(),
                         dependencies.clone(),
                     ));
-                    
+
                     // Add datatype constraint
                     result.datatype_constraints.push((
                         witness_value,
@@ -661,12 +750,15 @@ impl CompletionRuleSet {
                     // For all data property values, ensure they satisfy the constraint
                     // This would typically be handled by checking existing data assertions
                     // and validating them against the datatype constraint
-                    
+
                     // For now, just record the constraint for later validation
                     result.universal_constraints.push((
                         string_to_individual(application.node.clone()),
                         property.clone(),
-                        ClassExpression::DataAllValuesFrom { property: property.clone(), filler: filler.clone() },
+                        ClassExpression::DataAllValuesFrom {
+                            property: property.clone(),
+                            filler: filler.clone(),
+                        },
                         dependencies.clone(),
                     ));
                 }
@@ -684,16 +776,20 @@ impl CompletionRuleSet {
                 }
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Apply concept unfolding
     fn apply_unfold_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
+
         // Unfold concept definitions from TBox
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             // Look for equivalent class axioms that define this concept
             if let ClassExpression::Class(named_class) = concept {
                 // Check if we have a definition for this class
@@ -707,22 +803,30 @@ impl CompletionRuleSet {
                 }
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Apply guess rule for generating individuals
     fn apply_guess_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
+
         // Generate individuals for functionality/cardinality reasoning
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             match concept {
-                ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+                ClassExpression::ObjectMinCardinality {
+                    property,
+                    cardinality,
+                    filler,
+                } => {
                     // Generate at least n distinct individuals
                     for i in 0..*cardinality {
                         let witness = Individual::fresh();
-                        
+
                         // Add role assertion to witness
                         result.role_additions.push((
                             string_to_individual(application.node.clone()),
@@ -730,14 +834,14 @@ impl CompletionRuleSet {
                             property.clone(),
                             dependencies.clone(),
                         ));
-                        
+
                         // Add filler concept to witness
                         result.concept_additions.push((
                             witness,
                             (**filler).clone(),
                             dependencies.clone(),
                         ));
-                        
+
                         // Add inequality constraints between witnesses if needed
                         if i > 0 {
                             // This would ensure the witnesses are distinct
@@ -745,10 +849,14 @@ impl CompletionRuleSet {
                         }
                     }
                 }
-                ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
+                ClassExpression::ObjectMaxCardinality {
+                    property,
+                    cardinality,
+                    filler,
+                } => {
                     // For max cardinality, we need to ensure no more than n distinct individuals
                     // This is typically handled by clash detection rather than generation
-                    
+
                     // Add constraint for later validation
                     result.cardinality_constraints.push((
                         string_to_individual(application.node.clone()),
@@ -759,27 +867,31 @@ impl CompletionRuleSet {
                         dependencies.clone(),
                     ));
                 }
-                ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
+                ClassExpression::ObjectExactCardinality {
+                    property,
+                    cardinality,
+                    filler,
+                } => {
                     // Combine min and max cardinality
-                    
+
                     // Generate exactly n individuals (min part)
                     for _i in 0..*cardinality {
                         let witness = Individual::fresh();
-                        
+
                         result.role_additions.push((
                             string_to_individual(application.node.clone()),
                             witness.clone(),
                             property.clone(),
                             dependencies.clone(),
                         ));
-                        
+
                         result.concept_additions.push((
                             witness,
                             (**filler).clone(),
                             dependencies.clone(),
                         ));
                     }
-                    
+
                     // Add max constraint (max part)
                     result.cardinality_constraints.push((
                         string_to_individual(application.node.clone()),
@@ -795,7 +907,7 @@ impl CompletionRuleSet {
                 }
             }
         }
-        
+
         Ok(result)
     }
 
@@ -803,8 +915,14 @@ impl CompletionRuleSet {
     /// If we have edges a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
     fn apply_property_chain_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
-        
-        if let RuleContext::PropertyChain { chain: _, super_property, source, target } = &application.context {
+
+        if let RuleContext::PropertyChain {
+            chain: _,
+            super_property,
+            source,
+            target,
+        } = &application.context
+        {
             // Add the super property edge from start to end of the chain
             result.edge_additions.push((
                 source.clone(),
@@ -813,42 +931,49 @@ impl CompletionRuleSet {
                 application.dependencies.clone(),
             ));
         }
-        
+
         Ok(result)
     }
-    
+
     /// Get all rules in priority order
+    #[must_use]
     pub fn rules_by_priority(&self) -> Vec<CompletionRule> {
         let mut rules = self.rules.clone();
         rules.sort_by_key(|r| self.get_priority(*r));
         rules
     }
-    
+
     /// Check if any rules are applicable to a set of concepts
+    #[must_use]
     pub fn has_applicable_rules(&self, concepts: &[ClassExpression]) -> bool {
         concepts.iter().any(|concept| {
-            self.rules.iter().any(|&rule| self.is_rule_applicable(rule, concept))
+            self.rules
+                .iter()
+                .any(|&rule| self.is_rule_applicable(rule, concept))
         })
     }
-    
+
     /// Get a fresh ID for witness generation
     fn get_fresh_id(&self) -> u64 {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(1);
         COUNTER.fetch_add(1, Ordering::SeqCst)
     }
-    
+
     /// Get concept definition for a named class
-    fn get_concept_definition(&self, named_class: &crate::ontology::Class) -> Option<ClassExpression> {
+    fn get_concept_definition(
+        &self,
+        named_class: &crate::ontology::Class,
+    ) -> Option<ClassExpression> {
         // Simple implementation: look for equivalent class axioms in the ontology
         // In a full implementation, this would be optimized with indexing
-        
+
         // For now, we'll check if there are any equivalent class axioms
         // that define this class in terms of other expressions
-        
+
         // Placeholder: return a simple equivalent definition if it's a common pattern
         let class_name = &named_class.iri.to_string();
-        
+
         // Example: if class is "Person", might be equivalent to "Human"
         if class_name.contains("Person") {
             Some(ClassExpression::Class(crate::ontology::Class {
@@ -862,6 +987,7 @@ impl CompletionRuleSet {
 
 impl RuleResult {
     /// Create an empty rule result
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             new_applications: Vec::new(),
@@ -881,28 +1007,31 @@ impl RuleResult {
     }
 
     /// Check if the result is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.new_applications.is_empty() &&
-        self.concept_additions.is_empty() &&
-        self.role_additions.is_empty() &&
-        self.edge_additions.is_empty() &&
-        self.new_individuals.is_empty() &&
-        self.merges.is_empty() &&
-        self.clashes.is_empty() &&
-        self.branches.is_empty() &&
-        self.branching_points.is_empty() &&
-        self.data_assertions.is_empty() &&
-        self.datatype_constraints.is_empty() &&
-        self.universal_constraints.is_empty() &&
-        self.cardinality_constraints.is_empty()
+        self.new_applications.is_empty()
+            && self.concept_additions.is_empty()
+            && self.role_additions.is_empty()
+            && self.edge_additions.is_empty()
+            && self.new_individuals.is_empty()
+            && self.merges.is_empty()
+            && self.clashes.is_empty()
+            && self.branches.is_empty()
+            && self.branching_points.is_empty()
+            && self.data_assertions.is_empty()
+            && self.datatype_constraints.is_empty()
+            && self.universal_constraints.is_empty()
+            && self.cardinality_constraints.is_empty()
     }
 
     /// Check if any clashes were detected
+    #[must_use]
     pub fn has_clash(&self) -> bool {
         !self.clashes.is_empty()
     }
 
     /// Check if any branches were created
+    #[must_use]
     pub fn requires_branching(&self) -> bool {
         !self.branches.is_empty()
     }
@@ -921,6 +1050,7 @@ impl RuleResult {
 
 impl RuleApplication {
     /// Create a new rule application
+    #[must_use]
     pub fn new(
         rule: CompletionRule,
         node: String,
@@ -938,6 +1068,7 @@ impl RuleApplication {
     }
 
     /// Create a concept-based rule application
+    #[must_use]
     pub fn concept(
         rule: CompletionRule,
         node: String,
@@ -945,14 +1076,13 @@ impl RuleApplication {
         dependencies: DependencySet,
     ) -> Self {
         let priority = match rule {
-            CompletionRule::And |
-                CompletionRule::All | 
-                CompletionRule::Self_ => RulePriority::Highest,
-            CompletionRule::Some |
-                CompletionRule::Nominal => RulePriority::Normal,
-            CompletionRule::Or |
-                CompletionRule::AtLeast |
-                CompletionRule::AtMost => RulePriority::Low,
+            CompletionRule::And | CompletionRule::All | CompletionRule::Self_ => {
+                RulePriority::Highest
+            }
+            CompletionRule::Some | CompletionRule::Nominal => RulePriority::Normal,
+            CompletionRule::Or | CompletionRule::AtLeast | CompletionRule::AtMost => {
+                RulePriority::Low
+            }
             _ => RulePriority::Normal,
         };
 
@@ -969,6 +1099,7 @@ impl RuleApplication {
     }
 
     /// Create a role-based rule application
+    #[must_use]
     pub fn role(
         rule: CompletionRule,
         role: Role,
@@ -980,13 +1111,19 @@ impl RuleApplication {
         Self::new(
             rule,
             source.clone(),
-            RuleContext::Role { role, source, target, concept },
+            RuleContext::Role {
+                role,
+                source,
+                target,
+                concept,
+            },
             RulePriority::High,
             dependencies,
         )
     }
 
     /// Create a property chain rule application
+    #[must_use]
     pub fn property_chain(
         chain: Vec<ObjectPropertyExpression>,
         target: String,

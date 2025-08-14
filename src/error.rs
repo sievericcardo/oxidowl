@@ -3,10 +3,8 @@
 //! This module defines all error types that can occur during reasoning operations,
 //! parsing, network operations, and configuration.
 
-use std::fmt;
-
 /// Main error type for Oxidowl
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     /// Ontology parsing error
     #[error("Ontology parsing error: {message}")]
@@ -25,11 +23,8 @@ pub enum Error {
     Network { message: String },
 
     /// File I/O error
-    #[error("File I/O error: {source}")]
-    Io {
-        #[from]
-        source: std::io::Error,
-    },
+    #[error("File I/O error: {message}")]
+    Io { message: String },
 
     /// XML parsing error
     #[error("XML parsing error: {message}")]
@@ -102,11 +97,11 @@ pub enum Error {
     /// DL Query parsing error
     #[error("DL Query error: {message}")]
     DLQuery { message: String },
-    
+
     /// Axiom already exists error
     #[error("Axiom already exists")]
     AxiomAlreadyExists,
-    
+
     /// Axiom not found error
     #[error("Axiom not found")]
     AxiomNotFound,
@@ -147,7 +142,7 @@ impl Error {
     /// File I/O error constructor
     pub fn io<S: Into<String>>(message: S) -> Self {
         Self::Io {
-            source: std::io::Error::new(std::io::ErrorKind::Other, message.into()),
+            message: message.into(),
         }
     }
 
@@ -215,16 +210,19 @@ impl Error {
     }
 
     /// Create an invalid disjunct index error
+    #[must_use]
     pub fn invalid_disjunct_index(index: usize) -> Self {
         Self::InvalidDisjunctIndex { index }
     }
 
     /// Create an invalid branching choice error
+    #[must_use]
     pub fn invalid_branching_choice(index: usize) -> Self {
         Self::InvalidBranchingChoice { index }
     }
 
     /// Create a max depth exceeded error
+    #[must_use]
     pub fn max_depth_exceeded(depth: usize) -> Self {
         Self::MaxDepthExceeded { depth }
     }
@@ -235,6 +233,7 @@ impl Error {
     }
 
     /// Create a no branching choices available error
+    #[must_use]
     pub fn no_branching_choices_available() -> Self {
         Self::NoBranchingChoicesAvailable
     }
@@ -243,6 +242,14 @@ impl Error {
     pub fn resource_exhausted<S: Into<String>>(message: S) -> Self {
         Self::ResourceExhausted {
             message: message.into(),
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io {
+            message: error.to_string(),
         }
     }
 }
@@ -266,37 +273,37 @@ pub enum ErrorCategory {
 
 impl Error {
     /// Get the category of the error
+    #[must_use]
     pub fn category(&self) -> ErrorCategory {
         match self {
-            Error::OntologyParsing { .. } 
-                | Error::XmlParsing { .. } 
-                | Error::Io { .. } => ErrorCategory::Input,
-            Error::Reasoning { .. }
-                | Error::Sparql { .. } => ErrorCategory::Reasoning,
+            Error::OntologyParsing { .. } | Error::XmlParsing { .. } | Error::Io { .. } => {
+                ErrorCategory::Input
+            }
+            Error::Reasoning { .. } | Error::Sparql { .. } => ErrorCategory::Reasoning,
             Error::Config { .. } => ErrorCategory::Config,
             Error::Network { .. } => ErrorCategory::Network,
             Error::Cache { .. }
-                | Error::ResourceExhaustion { .. }
-                | Error::ResourceExhausted { .. }
-                | Error::Timeout { .. } => ErrorCategory::Resource,
-            Error::Unsupported { .. }
-                | Error::Internal { .. } => ErrorCategory::Internal,
+            | Error::ResourceExhaustion { .. }
+            | Error::ResourceExhausted { .. }
+            | Error::Timeout { .. } => ErrorCategory::Resource,
+            Error::Unsupported { .. } | Error::Internal { .. } => ErrorCategory::Internal,
             Error::InvalidInput { .. }
-                | Error::InvalidDisjunctIndex { .. }
-                | Error::InvalidBranchingChoice { .. }
-                | Error::MaxDepthExceeded { .. }
-                | Error::BranchingPointNotFound { .. }
-                | Error::NoBranchingChoicesAvailable 
-                | Error::InvalidPropertyChain { .. }
-                | Error::InvalidAssertion { .. }
-                | Error::QueueFull 
-                | Error::AxiomAlreadyExists
-                | Error::AxiomNotFound => ErrorCategory::Internal,
+            | Error::InvalidDisjunctIndex { .. }
+            | Error::InvalidBranchingChoice { .. }
+            | Error::MaxDepthExceeded { .. }
+            | Error::BranchingPointNotFound { .. }
+            | Error::NoBranchingChoicesAvailable
+            | Error::InvalidPropertyChain { .. }
+            | Error::InvalidAssertion { .. }
+            | Error::QueueFull
+            | Error::AxiomAlreadyExists
+            | Error::AxiomNotFound => ErrorCategory::Internal,
             Error::DLQuery { .. } => ErrorCategory::Input,
         }
     }
 
     /// Check if the error is recoverable
+    #[must_use]
     pub fn is_recoverable(&self) -> bool {
         match self {
             Error::OntologyParsing { .. }
@@ -310,17 +317,16 @@ impl Error {
             | Error::ResourceExhausted { .. }
             | Error::Timeout { .. }
             | Error::Network { .. } => true,
-            Error::Io { .. } 
-            | Error::Internal { .. } => false,
+            Error::Io { .. } | Error::Internal { .. } => false,
             Error::InvalidInput { .. }
             | Error::InvalidDisjunctIndex { .. }
             | Error::InvalidBranchingChoice { .. }
             | Error::MaxDepthExceeded { .. }
             | Error::BranchingPointNotFound { .. }
-            | Error::NoBranchingChoicesAvailable 
+            | Error::NoBranchingChoicesAvailable
             | Error::InvalidPropertyChain { .. }
             | Error::InvalidAssertion { .. }
-            | Error::QueueFull 
+            | Error::QueueFull
             | Error::AxiomAlreadyExists
             | Error::AxiomNotFound => false,
             Error::DLQuery { .. } => false,

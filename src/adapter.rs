@@ -1,6 +1,6 @@
-use crate::{Result, Error};
-use crate::ontology::{axioms::*, concepts::*, individuals::*, IRI, Class, ObjectProperty, DataProperty, AnnotationProperty, Individual};
-use horned_owl::model::*;
+use crate::Result;
+use crate::ontology::{Class, IRI, axioms::AxiomId};
+use horned_owl::model::MutableOntology;
 use std::collections::HashMap;
 
 /// Adapter for converting between horned-owl and oxidowl representations
@@ -9,7 +9,14 @@ pub struct HornedOwlAdapter {
     axiom_counter: u64,
 }
 
+impl Default for HornedOwlAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HornedOwlAdapter {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             iri_cache: HashMap::new(),
@@ -25,39 +32,48 @@ impl HornedOwlAdapter {
     /// Convert horned-owl IRI to oxidowl IRI
     pub fn convert_iri(&mut self, horned_iri: &horned_owl::model::IRI<String>) -> Result<IRI> {
         let iri_string = horned_iri.to_string();
-        
+
         // Check cache first
         if let Some(cached_iri) = self.iri_cache.get(&iri_string) {
             return Ok(cached_iri.clone());
         }
-        
+
         let oxidowl_iri = IRI::new(&iri_string);
         self.iri_cache.insert(iri_string, oxidowl_iri.clone());
         Ok(oxidowl_iri)
     }
 
     /// Convert horned-owl Class to oxidowl Class
-    pub fn convert_class(&mut self, horned_class: &horned_owl::model::Class<String>) -> Result<Class> {
+    pub fn convert_class(
+        &mut self,
+        horned_class: &horned_owl::model::Class<String>,
+    ) -> Result<Class> {
         let iri = self.convert_iri(&horned_class.0)?;
         Ok(Class::new(iri))
     }
 
     /// Convert horned-owl ontology to oxidowl ontology (basic conversion)
-    pub fn convert_basic_ontology<A>(&mut self, horned_ontology: &dyn std::fmt::Debug) -> Result<crate::ontology::Ontology>
+    pub fn convert_basic_ontology<A>(
+        &mut self,
+        horned_ontology: &dyn std::fmt::Debug,
+    ) -> Result<crate::ontology::Ontology>
     where
-        A: Clone + std::fmt::Display + std::hash::Hash + Eq
+        A: Clone + std::fmt::Display + std::hash::Hash + Eq,
     {
         // Create a basic oxidowl ontology for now
         let oxidowl_ontology = crate::ontology::Ontology::new();
-        
+
         // TODO: Implement actual conversion when horned-owl API is stable
         Ok(oxidowl_ontology)
     }
 
     /// Convert horned-owl ontology with SWRL rules support
-    pub fn convert_ontology_with_swrl<A>(&mut self, horned_ontology: &dyn std::fmt::Debug) -> Result<crate::ontology::Ontology>
+    pub fn convert_ontology_with_swrl<A>(
+        &mut self,
+        horned_ontology: &dyn std::fmt::Debug,
+    ) -> Result<crate::ontology::Ontology>
     where
-        A: Clone + std::fmt::Display + std::hash::Hash + Eq
+        A: Clone + std::fmt::Display + std::hash::Hash + Eq,
     {
         // For now, delegate to basic conversion
         // TODO: Add SWRL rule conversion when API is stable
@@ -67,10 +83,9 @@ impl HornedOwlAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     // TODO: Fix these tests when horned-owl API is more stable
-    
+
     /*
     #[test]
     fn test_iri_conversion() {

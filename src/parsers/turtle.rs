@@ -6,17 +6,14 @@
 use crate::{
     Error, Result,
     ontology::{
-        Ontology, ClassExpression, Individual, NamedIndividual, IRI,
-        axioms::{Axiom, SubClassOfAxiom, EquivalentClassesAxiom, DisjointUnionAxiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, DeclarationAxiom, Entity},
-        Class, ObjectProperty,
+        Class, ClassExpression, IRI, Individual, NamedIndividual, ObjectProperty, Ontology,
+        axioms::{
+            Axiom, ClassAssertionAxiom, DeclarationAxiom, DisjointUnionAxiom, Entity,
+            EquivalentClassesAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+        },
     },
 };
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    path::Path,
-    collections::HashMap,
-};
+use std::{collections::HashMap, fs::File, io::Read, path::Path};
 
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {
@@ -43,9 +40,9 @@ fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
             } else {
                 format!("http://example.org/{}", uri_str.trim_start_matches('#'))
             };
-            
+
             url::Url::parse(&full_uri)
-                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {}", e)))
+                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))
         }
     }
 }
@@ -55,19 +52,19 @@ fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
 pub struct TurtleParserConfig {
     /// Whether to allow relative IRIs (default: true)
     pub allow_relative_iris: bool,
-    
+
     /// Whether to validate IRIs during parsing (default: true)
     pub validate_iris: bool,
-    
+
     /// Whether to ignore comments (default: true)
     pub ignore_comments: bool,
-    
+
     /// Whether to allow blank node labels (default: true)
     pub allow_blank_nodes: bool,
-    
+
     /// Maximum prefix resolution depth (default: 10)
     pub max_prefix_depth: usize,
-    
+
     /// Whether to perform strict Turtle compliance checking (default: false)
     pub strict_mode: bool,
 
@@ -128,22 +125,25 @@ struct ParseState {
 
 impl TurtleParser {
     /// Create a new Turtle parser with default configuration
+    #[must_use]
     pub fn new() -> Self {
-        Self { 
+        Self {
             config: TurtleParserConfig::default(),
         }
     }
-    
+
     /// Create a new Turtle parser with custom configuration
+    #[must_use]
     pub fn with_config(config: TurtleParserConfig) -> Self {
         Self { config }
     }
-    
+
     /// Get the current configuration
+    #[must_use]
     pub fn config(&self) -> &TurtleParserConfig {
         &self.config
     }
-    
+
     /// Set a new configuration
     pub fn set_config(&mut self, config: TurtleParserConfig) {
         self.config = config;
@@ -175,10 +175,22 @@ impl TurtleParser {
         };
 
         // Add default prefixes
-        state.prefixes.insert("rdf".to_string(), "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string());
-        state.prefixes.insert("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string());
-        state.prefixes.insert("owl".to_string(), "http://www.w3.org/2002/07/owl#".to_string());
-        state.prefixes.insert("xsd".to_string(), "http://www.w3.org/2001/XMLSchema#".to_string());
+        state.prefixes.insert(
+            "rdf".to_string(),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+        );
+        state.prefixes.insert(
+            "rdfs".to_string(),
+            "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+        );
+        state.prefixes.insert(
+            "owl".to_string(),
+            "http://www.w3.org/2002/07/owl#".to_string(),
+        );
+        state.prefixes.insert(
+            "xsd".to_string(),
+            "http://www.w3.org/2001/XMLSchema#".to_string(),
+        );
 
         // Enhanced parsing with proper multi-line handling
         let normalized_content = self.normalize_content(content);
@@ -206,14 +218,14 @@ impl TurtleParser {
 
             while i < chars.len() {
                 let ch = chars[i];
-                
+
                 match ch {
                     '#' if !in_string => {
                         in_comment = true;
                         if self.config.ignore_comments {
                             break;
                         }
-                    },
+                    }
                     '"' => in_string = !in_string,
                     '[' if !in_string && !in_comment => bracket_depth += 1,
                     ']' if !in_string && !in_comment => bracket_depth -= 1,
@@ -230,11 +242,13 @@ impl TurtleParser {
 
             if !line_content.trim().is_empty() {
                 // Check if statement continues on next line
-                if bracket_depth > 0 || paren_depth > 0 || 
-                   (!line_content.trim_end().ends_with('.') && 
-                    !line_content.trim_end().ends_with(';') &&
-                    !line_content.contains("@prefix") && 
-                    !line_content.contains("@base")) {
+                if bracket_depth > 0
+                    || paren_depth > 0
+                    || (!line_content.trim_end().ends_with('.')
+                        && !line_content.trim_end().ends_with(';')
+                        && !line_content.contains("@prefix")
+                        && !line_content.contains("@base"))
+                {
                     normalized.push_str(&line_content);
                     normalized.push(' ');
                 } else {
@@ -271,7 +285,7 @@ impl TurtleParser {
                     }
                     current_statement.clear();
                     continue;
-                },
+                }
                 _ => {}
             }
             current_statement.push(ch);
@@ -285,9 +299,14 @@ impl TurtleParser {
     }
 
     /// Parse an individual statement
-    fn parse_statement(&self, statement: &str, ontology: &mut Ontology, state: &mut ParseState) -> Result<()> {
+    fn parse_statement(
+        &self,
+        statement: &str,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
         let trimmed = statement.trim();
-        
+
         if trimmed.is_empty() {
             return Ok(());
         }
@@ -313,7 +332,9 @@ impl TurtleParser {
         if parts.len() >= 3 {
             let prefix_name = parts[1].trim_end_matches(':');
             let uri = parts[2].trim_matches(['<', '>', '.'].as_ref());
-            state.prefixes.insert(prefix_name.to_string(), uri.to_string());
+            state
+                .prefixes
+                .insert(prefix_name.to_string(), uri.to_string());
         }
         Ok(())
     }
@@ -322,19 +343,24 @@ impl TurtleParser {
     fn parse_base_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
         if let Some(start) = statement.find('<') {
             if let Some(end) = statement.find('>') {
-                state.base_uri = Some(statement[start+1..end].to_string());
+                state.base_uri = Some(statement[start + 1..end].to_string());
             }
         }
         Ok(())
     }
 
     /// Parse triple statement with enhanced OWL construct support
-    fn parse_triple_statement(&self, statement: &str, ontology: &mut Ontology, state: &mut ParseState) -> Result<()> {
+    fn parse_triple_statement(
+        &self,
+        statement: &str,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
         // Handle complex statements with blank nodes and lists
         if statement.contains("owl:disjointUnionOf") {
             return self.parse_disjoint_union(statement, ontology, state);
         }
-        
+
         if statement.contains("owl:equivalentClass") {
             return self.parse_equivalent_class(statement, ontology, state);
         }
@@ -353,21 +379,32 @@ impl TurtleParser {
     }
 
     /// Parse OWL disjoint union constructs
-    fn parse_disjoint_union(&self, statement: &str, ontology: &mut Ontology, state: &mut ParseState) -> Result<()> {
+    fn parse_disjoint_union(
+        &self,
+        statement: &str,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
         // Extract the class that has the disjoint union
         let tokens = self.tokenize_statement(statement)?;
-        
+
         // Find the subject (the class being defined)
         let subject = if let Some(first_token) = tokens.first() {
             self.resolve_token(first_token, state)?
         } else {
-            return Err(Error::ontology_parsing("No subject found in disjoint union statement"));
+            return Err(Error::ontology_parsing(
+                "No subject found in disjoint union statement",
+            ));
         };
 
         // Extract the list of disjoint classes
-        let list_start = statement.find('(').ok_or_else(|| Error::ontology_parsing("No list found in disjoint union"))?;
-        let list_end = statement.rfind(')').ok_or_else(|| Error::ontology_parsing("Unclosed list in disjoint union"))?;
-        let list_content = &statement[list_start+1..list_end];
+        let list_start = statement
+            .find('(')
+            .ok_or_else(|| Error::ontology_parsing("No list found in disjoint union"))?;
+        let list_end = statement
+            .rfind(')')
+            .ok_or_else(|| Error::ontology_parsing("Unclosed list in disjoint union"))?;
+        let list_content = &statement[list_start + 1..list_end];
 
         let mut disjoint_classes = Vec::new();
         for class_name in list_content.split_whitespace() {
@@ -382,7 +419,7 @@ impl TurtleParser {
         if !disjoint_classes.is_empty() {
             // Create the class being defined
             let main_class = Class::new(IRI::new(&subject));
-            
+
             // Add declaration for the main class
             let decl_axiom = DeclarationAxiom {
                 id: generate_axiom_id(),
@@ -399,18 +436,23 @@ impl TurtleParser {
             };
             ontology.add_axiom(Axiom::DisjointUnion(disjoint_union_axiom));
 
-            println!("Created DisjointUnion axiom for class: {}", subject);
+            println!("Created DisjointUnion axiom for class: {subject}");
         }
 
         Ok(())
     }
 
     /// Parse OWL equivalent class constructs
-    fn parse_equivalent_class(&self, statement: &str, ontology: &mut Ontology, state: &mut ParseState) -> Result<()> {
+    fn parse_equivalent_class(
+        &self,
+        statement: &str,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
         // This would handle owl:equivalentClass statements
         // For now, we'll implement basic support
         let tokens = self.tokenize_statement(statement)?;
-        
+
         if tokens.len() >= 3 {
             let subject = self.resolve_token(&tokens[0], state)?;
             let object = self.resolve_token(&tokens[2], state)?;
@@ -453,17 +495,21 @@ impl TurtleParser {
                     }
                     in_iri = true;
                     current_token.push(ch);
-                },
+                }
                 '>' if in_iri => {
                     current_token.push(ch);
-                    tokens.push(Token::IRI(current_token[1..current_token.len()-1].to_string()));
+                    tokens.push(Token::IRI(
+                        current_token[1..current_token.len() - 1].to_string(),
+                    ));
                     current_token.clear();
                     in_iri = false;
-                },
+                }
                 '"' => {
                     if in_literal {
                         current_token.push(ch);
-                        tokens.push(Token::Literal(current_token[1..current_token.len()-1].to_string()));
+                        tokens.push(Token::Literal(
+                            current_token[1..current_token.len() - 1].to_string(),
+                        ));
                         current_token.clear();
                         in_literal = false;
                     } else {
@@ -474,62 +520,62 @@ impl TurtleParser {
                         in_literal = true;
                         current_token.push(ch);
                     }
-                },
+                }
                 '(' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::LeftParen);
-                },
+                }
                 ')' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::RightParen);
-                },
+                }
                 '[' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::LeftBracket);
-                },
+                }
                 ']' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::RightBracket);
-                },
+                }
                 ',' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::Comma);
-                },
+                }
                 ';' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::Semicolon);
-                },
+                }
                 '.' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
                     tokens.push(Token::Period);
-                },
+                }
                 ' ' | '\t' | '\n' | '\r' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
                         current_token.clear();
                     }
-                },
+                }
                 _ => {
                     current_token.push(ch);
                 }
@@ -549,7 +595,7 @@ impl TurtleParser {
         if token_str.contains(':') && !token_str.starts_with("http") {
             if let Some(colon_pos) = token_str.find(':') {
                 let prefix = token_str[..colon_pos].to_string();
-                let local = token_str[colon_pos+1..].to_string();
+                let local = token_str[colon_pos + 1..].to_string();
                 tokens.push(Token::PrefixedName(prefix, local));
             } else {
                 tokens.push(Token::Keyword(token_str.to_string()));
@@ -566,8 +612,8 @@ impl TurtleParser {
         match token {
             Token::IRI(iri) => Ok(iri.clone()),
             Token::PrefixedName(prefix, local) => {
-                self.expand_prefixed_name(&format!("{}:{}", prefix, local), state)
-            },
+                self.expand_prefixed_name(&format!("{prefix}:{local}"), state)
+            }
             Token::Keyword(keyword) => {
                 // Try to expand as prefixed name if it contains ':'
                 if keyword.contains(':') {
@@ -575,8 +621,8 @@ impl TurtleParser {
                 } else {
                     Ok(keyword.clone())
                 }
-            },
-            Token::BlankNode(id) => Ok(format!("_:{}", id)),
+            }
+            Token::BlankNode(id) => Ok(format!("_:{id}")),
             _ => Err(Error::ontology_parsing("Cannot resolve token to URI")),
         }
     }
@@ -584,32 +630,38 @@ impl TurtleParser {
     /// Enhanced URI expansion with proper prefix handling
     fn expand_prefixed_name(&self, name: &str, state: &ParseState) -> Result<String> {
         if name.starts_with('<') && name.ends_with('>') {
-            return Ok(name[1..name.len()-1].to_string());
+            return Ok(name[1..name.len() - 1].to_string());
         }
 
         if let Some(colon_pos) = name.find(':') {
             let prefix = &name[..colon_pos];
-            let local = &name[colon_pos+1..];
-            
+            let local = &name[colon_pos + 1..];
+
             if let Some(base) = state.prefixes.get(prefix) {
-                Ok(format!("{}{}", base, local))
+                Ok(format!("{base}{local}"))
             } else {
                 // Handle unknown prefixes - might be relative URIs
                 if let Some(base) = &state.base_uri {
-                    Ok(format!("{}{}", base, name))
+                    Ok(format!("{base}{name}"))
                 } else {
                     Ok(name.to_string())
                 }
             }
         } else if let Some(base) = &state.base_uri {
-            Ok(format!("{}{}", base, name))
+            Ok(format!("{base}{name}"))
         } else {
             Ok(name.to_string())
         }
     }
 
     /// Enhanced triple processing with better OWL support
-    fn process_enhanced_triple(&self, ontology: &mut Ontology, subject: String, predicate: String, object: String) -> Result<()> {
+    fn process_enhanced_triple(
+        &self,
+        ontology: &mut Ontology,
+        subject: String,
+        predicate: String,
+        object: String,
+    ) -> Result<()> {
         match predicate.as_str() {
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => {
                 match object.as_str() {
@@ -621,7 +673,7 @@ impl TurtleParser {
                             entity: Entity::Class(IRI::new(&subject)),
                         };
                         ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    },
+                    }
                     "http://www.w3.org/2002/07/owl#ObjectProperty" => {
                         // Object property declaration
                         let property = ObjectProperty::new(IRI::new(&subject));
@@ -630,14 +682,14 @@ impl TurtleParser {
                             entity: Entity::ObjectProperty(IRI::new(&subject)),
                         };
                         ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    },
+                    }
                     _ => {
                         // Class assertion
                         let individual = Individual::Named(NamedIndividual {
                             iri: IRI::new(&subject),
                         });
                         let class = Class::new(IRI::new(&object));
-                        
+
                         let axiom = ClassAssertionAxiom {
                             id: generate_axiom_id(),
                             individual,
@@ -647,20 +699,20 @@ impl TurtleParser {
                         ontology.add_axiom(Axiom::ClassAssertion(axiom));
                     }
                 }
-            },
+            }
             "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
                 let subclass = Class::new(IRI::new(&subject));
                 let superclass = Class::new(IRI::new(&object));
-                
+
                 let axiom = SubClassOfAxiom {
                     id: generate_axiom_id(),
                     subclass: ClassExpression::Class(subclass),
                     superclass: ClassExpression::Class(superclass),
                     annotations: vec![],
                 };
-                println!("Creating enhanced SubClassOf axiom: {} rdfs:subClassOf {}", subject, object);
+                println!("Creating enhanced SubClassOf axiom: {subject} rdfs:subClassOf {object}");
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
-            },
+            }
             _ => {
                 // Handle other property assertions
                 let subject_ind = Individual::Named(NamedIndividual {
@@ -670,7 +722,7 @@ impl TurtleParser {
                     iri: IRI::new(&object),
                 });
                 let property = ObjectProperty::new(IRI::new(&predicate))?;
-                
+
                 let axiom = ObjectPropertyAssertionAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
@@ -681,7 +733,7 @@ impl TurtleParser {
                 ontology.add_axiom(Axiom::ObjectPropertyAssertion(axiom));
             }
         }
-        
+
         Ok(())
     }
 }
@@ -708,19 +760,96 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let mut file = File::open(path)?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
-    
+
     let parser = TurtleParser::new();
     parser.parse_string(&content)
 }
 
 /// Parse from file with custom configuration
-pub fn parse_file_with_config<P: AsRef<Path>>(path: P, config: TurtleParserConfig) -> Result<Ontology> {
+pub fn parse_file_with_config<P: AsRef<Path>>(
+    path: P,
+    config: TurtleParserConfig,
+) -> Result<Ontology> {
     let mut file = File::open(path)?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
-    
+
     let parser = TurtleParser::with_config(config);
     parser.parse_string(&content)
+}
+
+/// Save ontology to Turtle file
+pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
+    let mut content = String::new();
+
+    // Add standard prefixes
+    content.push_str("@prefix : <http://example.org/> .\n");
+    content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
+    content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+    content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
+    content.push('\n');
+
+    // Write ontology declaration
+    if let Some(iri) = ontology.get_iri() {
+        content.push_str(&format!("<{iri}> rdf:type owl:Ontology .\n\n"));
+    }
+
+    // Write class declarations
+    for (iri, _class) in ontology.classes() {
+        content.push_str(&format!("<{iri}> rdf:type owl:Class .\n"));
+    }
+    content.push('\n');
+
+    // Write object property declarations
+    for prop in ontology.object_properties() {
+        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
+    }
+    content.push('\n');
+
+    // Write axioms (basic serialization)
+    for axiom in ontology.axioms() {
+        match axiom {
+            crate::ontology::Axiom::SubClassOf(sub) => {
+                if let (ClassExpression::Class(subclass), ClassExpression::Class(superclass)) =
+                    (&sub.subclass, &sub.superclass)
+                {
+                    content.push_str(&format!(
+                        "<{}> rdfs:subClassOf <{}> .\n",
+                        subclass.iri, superclass.iri
+                    ));
+                }
+            }
+            crate::ontology::Axiom::ClassAssertion(assertion) => {
+                if let ClassExpression::Class(class) = &assertion.class {
+                    if let Some(individual_iri) = assertion.individual.iri() {
+                        content.push_str(&format!(
+                            "<{}> rdf:type <{}> .\n",
+                            individual_iri, class.iri
+                        ));
+                    }
+                }
+            }
+            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
+                if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
+                    &assertion.property
+                {
+                    if let (Some(source_iri), Some(target_iri)) =
+                        (assertion.source.iri(), assertion.target.iri())
+                    {
+                        content.push_str(&format!(
+                            "<{}> <{}> <{}> .\n",
+                            source_iri, prop.iri, target_iri
+                        ));
+                    }
+                }
+            }
+            _ => {
+                // Skip complex axioms for now
+            }
+        }
+    }
+
+    std::fs::write(path, content).map_err(|e| Error::io(format!("Failed to write file: {e}")))
 }
 
 #[cfg(test)]
@@ -729,7 +858,7 @@ mod tests {
 
     #[test]
     fn test_enhanced_disjoint_union_parsing() {
-        let content = r#"
+        let content = r"
 @prefix ast: <http://www.smolang.org/greenhouseDT#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 
@@ -739,111 +868,54 @@ ast:Pump rdf:type owl:Class ;
                                ast:Overheating
                                ast:Underheating
                              ) .
-"#;
-        
+";
+
         let parser = TurtleParser::new();
         let result = parser.parse_string(content);
-        
+
         assert!(result.is_ok(), "Enhanced parsing should succeed");
-        
+
         let ontology = result.unwrap();
-        
+
         // Check that disjoint union axiom was created
-        let has_disjoint_union = ontology.axioms().iter().any(|axiom| {
-            matches!(axiom, crate::ontology::axioms::Axiom::DisjointUnion(_))
-        });
-        
-        assert!(has_disjoint_union, "Should have created disjoint union axiom");
+        let has_disjoint_union = ontology
+            .axioms()
+            .iter()
+            .any(|axiom| matches!(axiom, crate::ontology::axioms::Axiom::DisjointUnion(_)));
+
+        assert!(
+            has_disjoint_union,
+            "Should have created disjoint union axiom"
+        );
     }
 
     #[test]
     fn test_enhanced_subclass_parsing() {
-        let content = r#"
+        let content = r"
 @prefix ast: <http://www.smolang.org/greenhouseDT#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 ast:Maintenance rdfs:subClassOf ast:Pump .
 ast:Operational rdfs:subClassOf ast:Pump .
-"#;
-        
+";
+
         let parser = TurtleParser::new();
         let result = parser.parse_string(content);
-        
+
         assert!(result.is_ok(), "Enhanced parsing should succeed");
-        
+
         let ontology = result.unwrap();
-        
+
         // Check that SubClassOf axioms were created
-        let subclass_count = ontology.axioms().iter().filter(|axiom| {
-            matches!(axiom, crate::ontology::axioms::Axiom::SubClassOf(_))
-        }).count();
-        
-        assert!(subclass_count >= 2, "Should have created at least 2 SubClassOf axioms");
-    }
-}
+        let subclass_count = ontology
+            .axioms()
+            .iter()
+            .filter(|axiom| matches!(axiom, crate::ontology::axioms::Axiom::SubClassOf(_)))
+            .count();
 
-
-
-/// Save ontology to Turtle file
-pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut content = String::new();
-    
-    // Add standard prefixes
-    content.push_str("@prefix : <http://example.org/> .\n");
-    content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
-    content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
-    content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
-    content.push_str("\n");
-    
-    // Write ontology declaration
-    if let Some(iri) = ontology.get_iri() {
-        content.push_str(&format!("<{}> rdf:type owl:Ontology .\n\n", iri));
+        assert!(
+            subclass_count >= 2,
+            "Should have created at least 2 SubClassOf axioms"
+        );
     }
-    
-    // Write class declarations
-    for (iri, _class) in ontology.classes() {
-        content.push_str(&format!("<{}> rdf:type owl:Class .\n", iri));
-    }
-    content.push_str("\n");
-    
-    // Write object property declarations
-    for prop in ontology.object_properties() {
-        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
-    }
-    content.push_str("\n");
-    
-    // Write axioms (basic serialization)
-    for axiom in ontology.axioms() {
-        match axiom {
-            crate::ontology::Axiom::SubClassOf(sub) => {
-                if let (ClassExpression::Class(subclass), ClassExpression::Class(superclass)) = 
-                    (&sub.subclass, &sub.superclass) {
-                    content.push_str(&format!("<{}> rdfs:subClassOf <{}> .\n", 
-                        subclass.iri, superclass.iri));
-                }
-            }
-            crate::ontology::Axiom::ClassAssertion(assertion) => {
-                if let ClassExpression::Class(class) = &assertion.class {
-                    if let Some(individual_iri) = assertion.individual.iri() {
-                        content.push_str(&format!("<{}> rdf:type <{}> .\n", 
-                            individual_iri, class.iri));
-                    }
-                }
-            }
-            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
-                if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
-                    if let (Some(source_iri), Some(target_iri)) = (assertion.source.iri(), assertion.target.iri()) {
-                        content.push_str(&format!("<{}> <{}> <{}> .\n",
-                            source_iri, prop.iri, target_iri));
-                    }
-                }
-            }
-            _ => {
-                // Skip complex axioms for now
-            }
-        }
-    }
-    
-    std::fs::write(path, content)
-        .map_err(|e| Error::io(format!("Failed to write file: {}", e)))
 }

@@ -4,20 +4,9 @@
 // supporting all major reasoning tasks and server modes.
 
 use clap::{Parser, Subcommand, ValueEnum};
-use oxidowl::{
-    config::ReasonerConfig,
-    core::reasoner::Reasoner,
-    ontology::{Ontology, OntologyFormat},
-    Result,
-};
-use serde_json;
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{Arc, RwLock},
-    time::Instant,
-};
-use tracing::{error, info, Level};
+use oxidowl::{Result, config::ReasonerConfig, core::reasoner::Reasoner, ontology::OntologyFormat};
+use std::{fs, path::PathBuf, time::Instant};
+use tracing::{Level, error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
@@ -136,13 +125,13 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Process OWLlink request file
+    /// Process `OWLlink` request file
     OwlLinkFile {
-        /// Input OWLlink request file
+        /// Input `OWLlink` request file
         #[arg(short, long, value_name = "FILE")]
         input: PathBuf,
 
-        /// Output OWLlink response file
+        /// Output `OWLlink` response file
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
@@ -161,7 +150,6 @@ enum Commands {
     },
     */
     */
-
     /// Process SPARQL file
     SparqlFile {
         /// Input SPARQL file
@@ -176,7 +164,6 @@ enum Commands {
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
-
     /*
     /*
     /// Start SPARQL HTTP server
@@ -244,7 +231,7 @@ async fn main() -> Result<()> {
     let elapsed = start_time.elapsed();
 
     match result {
-        Ok(_) => {
+        Ok(()) => {
             if !cli.quiet {
                 info!("Operation completed successfully in {:?}", elapsed);
                 println!("Stopping Oxidowl ...");
@@ -253,7 +240,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             error!("Operation failed: {}", e);
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
     }
@@ -295,53 +282,85 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
         oxidowl::ontology::ClassExpression::Class(class) => {
             // Extract just the class name from the IRI
             let iri_str = class.iri.to_string();
-            if let Some(name) = iri_str.split('#').last() {
+            if let Some(name) = iri_str.split('#').next_back() {
                 name.to_string()
-            } else if let Some(name) = iri_str.split('/').last() {
+            } else if let Some(name) = iri_str.split('/').next_back() {
                 name.to_string()
             } else {
                 iri_str
             }
         }
         oxidowl::ontology::ClassExpression::ObjectUnionOf(union_classes) => {
-            let class_names: Vec<String> = union_classes.iter()
-                .map(|c| extract_class_names_from_expression(c))
+            let class_names: Vec<String> = union_classes
+                .iter()
+                .map(extract_class_names_from_expression)
                 .collect();
             class_names.join(" or ")
         }
         oxidowl::ontology::ClassExpression::ObjectIntersectionOf(intersection_classes) => {
-            let class_names: Vec<String> = intersection_classes.iter()
-                .map(|c| extract_class_names_from_expression(c))
+            let class_names: Vec<String> = intersection_classes
+                .iter()
+                .map(extract_class_names_from_expression)
                 .collect();
             class_names.join(" and ")
         }
-        _ => format!("{:?}", expr)
+        _ => format!("{expr:?}"),
     }
 }
 
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
-        Commands::Consistency { input, output, format } => {
-            execute_consistency_check(input, output, format, config).await
-        }
-        Commands::Classification { input, namespace, output, format } => {
-            execute_classification(input, namespace, output, format, config).await
-        }
-        Commands::Satisfiability { input, class_iri, output, format } => {
-            execute_satisfiability_check(input, class_iri, output, format, config).await
-        }
-        Commands::Realization { input, output, format } => {
-            execute_realization(input, output, format, config).await
-        }
-        Commands::Query { input, query, namespace, output, format } => {
+        Commands::Consistency {
+            input,
+            output,
+            format,
+        } => execute_consistency_check(input, output, format, config).await,
+        Commands::Classification {
+            input,
+            namespace,
+            output,
+            format,
+        } => execute_classification(input, namespace, output, format, config).await,
+        Commands::Satisfiability {
+            input,
+            class_iri,
+            output,
+            format,
+        } => execute_satisfiability_check(input, class_iri, output, format, config).await,
+        Commands::Realization {
+            input,
+            output,
+            format,
+        } => execute_realization(input, output, format, config).await,
+        Commands::Query {
+            input,
+            query,
+            namespace,
+            output,
+            format,
+        } => {
+            let input_str = input
+                .to_str()
+                .ok_or_else(|| oxidowl::Error::io("Invalid input path encoding".to_string()))?;
+
+            let output_str = output
+                .as_ref()
+                .map(|p| {
+                    p.to_str().ok_or_else(|| {
+                        oxidowl::Error::io("Invalid output path encoding".to_string())
+                    })
+                })
+                .transpose()?;
+
             execute_dl_query(
-                input.to_str().unwrap(), 
-                &query, 
-                namespace.as_deref(), 
-                output.as_ref().map(|p| p.to_str().unwrap()), 
+                input_str,
+                &query,
+                namespace.as_deref(),
+                output_str,
                 "json", // Always use JSON for now
-                config
-            ).await
+                config,
+            )
+            .await
         }
         Commands::OwlLinkFile { input, output } => {
             execute_owllink_file(input, output, config).await
@@ -353,16 +372,17 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
         }
         */
         */
-        Commands::SparqlFile { sparql, input, output } => {
-            execute_sparql_file(sparql, input, output, config).await
-        }
-        /*
-        /*
-        Commands::SparqlServer { port, bind } => {
-            execute_sparql_server(port, bind, config).await
-        }
-        */
-        */
+        Commands::SparqlFile {
+            sparql,
+            input,
+            output,
+        } => execute_sparql_file(sparql, input, output, config).await, /*
+                                                                       /*
+                                                                       Commands::SparqlServer { port, bind } => {
+                                                                           execute_sparql_server(port, bind, config).await
+                                                                       }
+                                                                       */
+                                                                       */
     }
 }
 
@@ -375,21 +395,32 @@ async fn execute_consistency_check(
     info!("Performing consistency check on: {}", input.display());
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
-    
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
     reasoner.load_ontology_from_file(&input, ontology_format)?;
-    
+
     let is_consistent = reasoner.is_consistent()?;
-    
+
     info!("Consistency check result: {}", is_consistent);
-    
+
     if let Some(output_path) = output {
-        let result = if is_consistent { "consistent" } else { "inconsistent" };
+        let result = if is_consistent {
+            "consistent"
+        } else {
+            "inconsistent"
+        };
         fs::write(output_path, result)?;
     } else {
-        println!("Result: {}", if is_consistent { "consistent" } else { "inconsistent" });
+        println!(
+            "Result: {}",
+            if is_consistent {
+                "consistent"
+            } else {
+                "inconsistent"
+            }
+        );
     }
-    
+
     Ok(())
 }
 
@@ -401,26 +432,26 @@ async fn execute_classification(
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Performing classification on: {}", input.display());
-    
+
     if let Some(ref ns) = namespace {
         info!("Using default namespace: {}", ns);
     }
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
-    
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
     reasoner.load_ontology_from_file(&input, ontology_format)?;
-    
+
     let hierarchy = reasoner.classify()?;
-    
+
     info!("Classification completed");
-    
+
     if let Some(output_path) = output {
         hierarchy.save_to_file(output_path)?;
     } else {
         println!("Classification completed. Use -o to save results.");
     }
-    
+
     Ok(())
 }
 
@@ -434,21 +465,32 @@ async fn execute_satisfiability_check(
     info!("Checking satisfiability of class: {}", class_iri);
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
-    
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
     reasoner.load_ontology_from_file(&input, ontology_format)?;
-    
+
     let is_satisfiable = reasoner.is_class_satisfiable(&class_iri)?;
-    
+
     info!("Satisfiability result: {}", is_satisfiable);
-    
+
     if let Some(output_path) = output {
-        let result = if is_satisfiable { "satisfiable" } else { "unsatisfiable" };
+        let result = if is_satisfiable {
+            "satisfiable"
+        } else {
+            "unsatisfiable"
+        };
         fs::write(output_path, result)?;
     } else {
-        println!("Result: {}", if is_satisfiable { "satisfiable" } else { "unsatisfiable" });
+        println!(
+            "Result: {}",
+            if is_satisfiable {
+                "satisfiable"
+            } else {
+                "unsatisfiable"
+            }
+        );
     }
-    
+
     Ok(())
 }
 
@@ -468,14 +510,21 @@ async fn execute_dl_query(
     let ontology = reasoner.get_ontology()?;
 
     // Create reasoning service and query engine
-    let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology.read().unwrap().clone(), config);
-    
+    let ontology_clone = ontology
+        .read()
+        .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?
+        .clone();
+    let reasoning_service = oxidowl::reasoning::ReasoningService::new(ontology_clone, config);
+
     // Create query engine with optional namespace
     let query_engine = if let Some(ns) = namespace {
         oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, ns.to_string())
     } else {
         // Try to auto-detect namespace from ontology IRI, fallback to default
-        let default_namespace = ontology.read().unwrap()
+        let ontology_guard = ontology
+            .read()
+            .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?;
+        let default_namespace = ontology_guard
             .get_iri()
             .map(|iri| {
                 let iri_str = iri.as_str();
@@ -484,11 +533,11 @@ async fn execute_dl_query(
                 } else if iri_str.ends_with('/') {
                     iri_str.to_string()
                 } else {
-                    format!("{}#", iri_str)
+                    format!("{iri_str}#")
                 }
             })
             .unwrap_or_else(|| "http://example.org/ontology#".to_string());
-        
+
         oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, default_namespace)
     };
 
@@ -500,31 +549,40 @@ async fn execute_dl_query(
         "json" => {
             // Extract readable class names for JSON output
             let classes_vec: Vec<String> = if let Some(ref classes) = result.classes {
-                classes.iter().map(|c| {
-                    extract_class_names_from_expression(c)
-                }).collect()
+                classes
+                    .iter()
+                    .map(|c| extract_class_names_from_expression(c))
+                    .collect()
             } else {
                 Vec::new()
             };
-            
+
             if result.classes.is_some() {
-                format!("{{\"query\": \"{}\", \"classes\": {:?}, \"execution_time\": \"{:?}\"}}", 
-                       query, classes_vec, result.execution_time)
+                format!(
+                    "{{\"query\": \"{}\", \"classes\": {:?}, \"execution_time\": \"{:?}\"}}",
+                    query, classes_vec, result.execution_time
+                )
             } else {
-                format!("{{\"query\": \"{}\", \"result\": \"No results\", \"execution_time\": \"{:?}\"}}", 
-                       query, result.execution_time)
+                format!(
+                    "{{\"query\": \"{}\", \"result\": \"No results\", \"execution_time\": \"{:?}\"}}",
+                    query, result.execution_time
+                )
             }
         }
-        "text" => format!("{}", result), // Use Display format instead of Debug
-        _ => return Err(oxidowl::Error::io("Unsupported format. Use 'json' or 'text'".to_string())),
+        "text" => format!("{result}"), // Use Display format instead of Debug
+        _ => {
+            return Err(oxidowl::Error::io(
+                "Unsupported format. Use 'json' or 'text'".to_string(),
+            ));
+        }
     };
 
     // Write to file or stdout
     if let Some(file_path) = output_file {
         std::fs::write(file_path, output)?;
-        println!("Query result saved to {}", file_path);
+        println!("Query result saved to {file_path}");
     } else {
-        println!("{}", output);
+        println!("{output}");
     }
 
     Ok(())
@@ -539,20 +597,20 @@ async fn execute_realization(
     info!("Performing realization on: {}", input.display());
 
     let mut reasoner = Reasoner::new(config)?;
-    let ontology_format = format.map(Into::into).unwrap_or(OntologyFormat::Auto);
-    
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
     reasoner.load_ontology_from_file(&input, ontology_format)?;
-    
+
     let realization = reasoner.realize()?;
-    
+
     info!("Realization completed");
-    
+
     if let Some(output_path) = output {
         realization.save_to_file(output_path)?;
     } else {
         println!("Realization completed. Use -o to save results.");
     }
-    
+
     Ok(())
 }
 
@@ -562,19 +620,19 @@ async fn execute_owllink_file(
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Processing OWLlink file: {}", input.display());
-    
+
     let owllink_content = fs::read_to_string(&input)?;
     let reasoner = Reasoner::new(config)?;
-    
+
     // Process OWLlink request
     let response = reasoner.process_owllink_request(&owllink_content)?;
-    
+
     if let Some(output_path) = output {
         fs::write(output_path, response)?;
     } else {
-        println!("{}", response);
+        println!("{response}");
     }
-    
+
     Ok(())
 }
 
@@ -586,10 +644,10 @@ async fn execute_owllink_server(
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Starting OWLlink server on {}:{}", bind, port);
-    
+
     let server = OwlLinkServer::new(config)?;
     server.start(&bind, port).await?;
-    
+
     Ok(())
 }
 */
@@ -602,24 +660,24 @@ async fn execute_sparql_file(
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Processing SPARQL file: {}", sparql.display());
-    
+
     let sparql_content = fs::read_to_string(&sparql)?;
     let mut reasoner = Reasoner::new(config)?;
-    
+
     // Load ontology if provided
     if let Some(ontology_file) = input {
         reasoner.load_ontology_from_file(&ontology_file, OntologyFormat::Auto)?;
     }
-    
+
     // Execute SPARQL query
     let results = reasoner.execute_sparql_query(&sparql_content)?;
-    
+
     if let Some(output_path) = output {
         fs::write(output_path, results)?;
     } else {
-        println!("{}", results);
+        println!("{results}");
     }
-    
+
     Ok(())
 }
 
@@ -631,10 +689,10 @@ async fn execute_sparql_server(
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Starting SPARQL server on {}:{}", bind, port);
-    
+
     let server = SparqlServer::new(config)?;
     server.start(&bind, port).await?;
-    
+
     Ok(())
 }
 */

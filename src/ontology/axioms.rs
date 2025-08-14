@@ -1,5 +1,5 @@
 //! OWL 2 DL Axioms
-//! 
+//!
 //! This module implements the various types of axioms in OWL 2 DL ontologies,
 //! following the OWL 2 specification structure.
 
@@ -22,6 +22,7 @@ pub enum Entity {
 
 impl Entity {
     /// Get the entity type as a string
+    #[must_use]
     pub fn entity_type(&self) -> &'static str {
         match self {
             Entity::Class(_) => "Class",
@@ -34,6 +35,7 @@ impl Entity {
     }
 
     /// Get the IRI of the entity
+    #[must_use]
     pub fn iri(&self) -> &crate::ontology::IRI {
         match self {
             Entity::Class(iri) => iri,
@@ -60,7 +62,7 @@ pub trait AxiomTrait {
 
     /// Returns the type of the axiom.
     fn axiom_type(&self) -> AxiomType;
-    
+
     /// Returns whether the axiom is logical.
     fn is_logical(&self) -> bool;
 }
@@ -70,7 +72,7 @@ pub trait AxiomTrait {
 pub enum AxiomType {
     // Declaration Axioms
     Declaration,
-    
+
     // Class Axioms
     SubClassOf,
     EquivalentClasses,
@@ -124,7 +126,7 @@ pub enum AxiomType {
 pub enum Axiom {
     // Declaration Axioms
     Declaration(DeclarationAxiom),
-    
+
     // Class Axioms
     SubClassOf(SubClassOfAxiom),
     EquivalentClasses(EquivalentClassesAxiom),
@@ -448,6 +450,7 @@ pub struct SWRLRuleAxiom {
 }
 
 impl SWRLRuleAxiom {
+    #[must_use]
     pub fn new(id: AxiomId, rule: SWRLRule) -> Self {
         Self {
             id,
@@ -456,7 +459,12 @@ impl SWRLRuleAxiom {
         }
     }
 
-    pub fn with_annotations(id: AxiomId, rule: SWRLRule, annotations: Vec<crate::ontology::Annotation>) -> Self {
+    #[must_use]
+    pub fn with_annotations(
+        id: AxiomId,
+        rule: SWRLRule,
+        annotations: Vec<crate::ontology::Annotation>,
+    ) -> Self {
         Self {
             id,
             rule,
@@ -549,12 +557,13 @@ impl AxiomTrait for Axiom {
     }
 
     fn is_logical(&self) -> bool {
-        !matches!(self,
-            Axiom::Declaration(_) |
-            Axiom::AnnotationAssertion(_) |
-            Axiom::SubAnnotationPropertyOf(_) |
-            Axiom::AnnotationPropertyDomain(_) |
-            Axiom::AnnotationPropertyRange(_)
+        !matches!(
+            self,
+            Axiom::Declaration(_)
+                | Axiom::AnnotationAssertion(_)
+                | Axiom::SubAnnotationPropertyOf(_)
+                | Axiom::AnnotationPropertyDomain(_)
+                | Axiom::AnnotationPropertyRange(_)
         )
     }
 }
@@ -568,6 +577,7 @@ pub struct AxiomStore {
 }
 
 impl AxiomStore {
+    #[must_use]
     pub fn new() -> Self {
         AxiomStore {
             axioms: HashMap::new(),
@@ -579,7 +589,7 @@ impl AxiomStore {
     pub fn add_axiom(&mut self, mut axiom: Axiom) -> crate::Result<AxiomId> {
         let id = axiom.axiom_id();
         if self.axioms.contains_key(&id) {
-                            return Err(crate::Error::AxiomAlreadyExists);
+            return Err(crate::Error::AxiomAlreadyExists);
         }
 
         // Set the ID
@@ -626,21 +636,25 @@ impl AxiomStore {
 
         let axiom_type = axiom.axiom_type();
         self.axioms.insert(id, axiom.clone());
-        self.axioms_by_type.entry(axiom_type).or_insert_with(HashSet::new).insert(id);
+        self.axioms_by_type
+            .entry(axiom_type)
+            .or_default()
+            .insert(id);
 
         Ok(id)
     }
 
+    #[must_use]
     pub fn get_axiom(&self, id: AxiomId) -> Option<&Axiom> {
         self.axioms.get(&id)
     }
 
+    #[must_use]
     pub fn get_axioms_by_type(&self, axiom_type: AxiomType) -> Vec<&Axiom> {
-        self.axioms_by_type.get(&axiom_type)
+        self.axioms_by_type
+            .get(&axiom_type)
             .map_or(Vec::new(), |ids| {
-                ids.iter()
-                    .filter_map(|id| self.axioms.get(id))
-                    .collect()
+                ids.iter().filter_map(|id| self.axioms.get(id)).collect()
             })
     }
 
@@ -671,10 +685,12 @@ impl AxiomStore {
         self.axioms.values().filter(|axiom| !axiom.is_logical())
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.axioms.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.axioms.is_empty()
     }
@@ -687,9 +703,9 @@ impl Default for AxiomStore {
 }
 
 /// SWRL (Semantic Web Rule Language) Support
-/// 
+///
 /// These structures implement SWRL rules as specified in the W3C User Submission
-/// https://www.w3.org/Submission/SWRL/
+/// <https://www.w3.org/Submission/SWRL>/
 
 /// SWRL Variable
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -698,6 +714,7 @@ pub struct SWRLVariable {
 }
 
 impl SWRLVariable {
+    #[must_use]
     pub fn new(iri: crate::ontology::IRI) -> Self {
         Self { iri }
     }
@@ -761,6 +778,7 @@ pub enum SWRLAtom {
 
 impl SWRLAtom {
     /// Get all variables used in this atom
+    #[must_use]
     pub fn variables(&self) -> HashSet<&SWRLVariable> {
         let mut vars = HashSet::new();
         match self {
@@ -769,7 +787,11 @@ impl SWRLAtom {
                     vars.insert(var);
                 }
             }
-            SWRLAtom::ObjectPropertyAtom { first_argument, second_argument, .. } => {
+            SWRLAtom::ObjectPropertyAtom {
+                first_argument,
+                second_argument,
+                ..
+            } => {
                 if let SWRLIArgument::Variable(var) = first_argument {
                     vars.insert(var);
                 }
@@ -777,7 +799,11 @@ impl SWRLAtom {
                     vars.insert(var);
                 }
             }
-            SWRLAtom::DataPropertyAtom { first_argument, second_argument, .. } => {
+            SWRLAtom::DataPropertyAtom {
+                first_argument,
+                second_argument,
+                ..
+            } => {
                 if let SWRLIArgument::Variable(var) = first_argument {
                     vars.insert(var);
                 }
@@ -790,7 +816,10 @@ impl SWRLAtom {
                     vars.insert(var);
                 }
             }
-            SWRLAtom::SameIndividualAtom { first_argument, second_argument } => {
+            SWRLAtom::SameIndividualAtom {
+                first_argument,
+                second_argument,
+            } => {
                 if let SWRLIArgument::Variable(var) = first_argument {
                     vars.insert(var);
                 }
@@ -798,7 +827,10 @@ impl SWRLAtom {
                     vars.insert(var);
                 }
             }
-            SWRLAtom::DifferentIndividualsAtom { first_argument, second_argument } => {
+            SWRLAtom::DifferentIndividualsAtom {
+                first_argument,
+                second_argument,
+            } => {
                 if let SWRLIArgument::Variable(var) = first_argument {
                     vars.insert(var);
                 }
@@ -826,11 +858,13 @@ pub struct SWRLRule {
 }
 
 impl SWRLRule {
+    #[must_use]
     pub fn new(head: Vec<SWRLAtom>, body: Vec<SWRLAtom>) -> Self {
         Self { head, body }
     }
 
     /// Get all variables used in this rule
+    #[must_use]
     pub fn variables(&self) -> HashSet<&SWRLVariable> {
         let mut vars = HashSet::new();
         for atom in &self.head {
@@ -843,14 +877,13 @@ impl SWRLRule {
     }
 
     /// Check if the rule is safe (all head variables appear in the body)
+    #[must_use]
     pub fn is_safe(&self) -> bool {
-        let head_vars: HashSet<&SWRLVariable> = self.head.iter()
-            .flat_map(|atom| atom.variables())
-            .collect();
-        let body_vars: HashSet<&SWRLVariable> = self.body.iter()
-            .flat_map(|atom| atom.variables())
-            .collect();
-        
+        let head_vars: HashSet<&SWRLVariable> =
+            self.head.iter().flat_map(|atom| atom.variables()).collect();
+        let body_vars: HashSet<&SWRLVariable> =
+            self.body.iter().flat_map(|atom| atom.variables()).collect();
+
         head_vars.is_subset(&body_vars)
     }
 }

@@ -1,20 +1,16 @@
 //! Cache System for Oxidowl
-//! 
+//!
 //! This module implements efficient caching strategies for ontology reasoning,
 //! including concept and role satisfiability caches, subsumption caches,
 //! and inference caches.
 
 use crate::{
-    Result,
-    ontology::{Ontology, ClassExpression, Individual, Class, IRI},
-    core::{
-        tableau::TableauNode,
-    },
+    ontology::{ClassExpression, Individual, Ontology, OntologyRef},
     reasoning::{ClassificationResult, RealizationResult},
 };
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
@@ -49,7 +45,7 @@ impl<T> CacheEntry<T> {
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
     pub max_size: usize, // Maximum number of entries in the cache
-    pub ttl: Duration, // Time to live for cache entries
+    pub ttl: Duration,   // Time to live for cache entries
     pub enable_concept_cache: bool,
     pub enable_subsumption_cache: bool,
     pub enable_satisfiability_cache: bool,
@@ -60,7 +56,7 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            max_size: 10000, // Default maximum size
+            max_size: 10000,                // Default maximum size
             ttl: Duration::from_secs(3600), // Default TTL of 1 hour
             enable_concept_cache: true,
             enable_subsumption_cache: true,
@@ -79,6 +75,7 @@ pub struct ConceptSatisfiabilityCache {
 }
 
 impl ConceptSatisfiabilityCache {
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
@@ -86,6 +83,7 @@ impl ConceptSatisfiabilityCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
         if !self.config.enable_satisfiability_cache {
             return None; // Cache is disabled
@@ -93,16 +91,16 @@ impl ConceptSatisfiabilityCache {
 
         let mut cache = self.cache.write().unwrap();
         if let Some(entry) = cache.get_mut(expression) {
-            if !entry.is_expired(self.config.ttl) {
-                entry.hit(); // Increment hit count
-                return Some(entry.value);
-            } else {
+            if entry.is_expired(self.config.ttl) {
                 cache.remove(expression); // Remove expired entry
-                return None;
+                None
+            } else {
+                entry.hit(); // Increment hit count
+                Some(entry.value)
             }
         } else {
             // If not found, we can return None
-            return None;
+            None
         }
     }
 
@@ -131,10 +129,12 @@ impl ConceptSatisfiabilityCache {
         self.cache.write().unwrap().clear();
     }
 
+    #[must_use]
     pub fn size(&self) -> usize {
         self.cache.read().unwrap().len()
     }
 
+    #[must_use]
     pub fn hit_rate(&self) -> f64 {
         let cache = self.cache.read().unwrap();
 
@@ -157,6 +157,7 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
@@ -170,17 +171,18 @@ impl CacheManager {
     }
 
     /// Get consistency result from cache
-    pub fn get_consistency_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<bool> {
+    pub fn get_consistency_result(&self, ontology: &OntologyRef) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store consistency result in cache
-    pub fn cache_consistency_result(&self, ontology: &Arc<RwLock<Ontology>>, result: bool) {
+    pub fn cache_consistency_result(&self, ontology: &OntologyRef, result: bool) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get satisfiability result from cache
+    #[must_use]
     pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
         self.concept_cache.get(expression)
     }
@@ -191,50 +193,78 @@ impl CacheManager {
     }
 
     /// Get subsumption result from cache
-    pub fn get_subsumption_result(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn get_subsumption_result(
+        &self,
+        sub: &ClassExpression,
+        sup: &ClassExpression,
+    ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store subsumption result in cache
-    pub fn cache_subsumption_result(&self, sub: ClassExpression, sup: ClassExpression, result: bool) {
+    pub fn cache_subsumption_result(
+        &self,
+        sub: ClassExpression,
+        sup: ClassExpression,
+        result: bool,
+    ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get classification result from cache
-    pub fn get_classification_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<ClassificationResult> {
+    pub fn get_classification_result(
+        &self,
+        ontology: &OntologyRef,
+    ) -> Option<ClassificationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store classification result in cache
-    pub fn store_classification_result(&self, ontology: &Arc<RwLock<Ontology>>, result: ClassificationResult) {
+    pub fn store_classification_result(
+        &self,
+        ontology: &OntologyRef,
+        result: ClassificationResult,
+    ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get realization result from cache
-    pub fn get_realization_result(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<RealizationResult> {
+    pub fn get_realization_result(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store realization result in cache
-    pub fn store_realization_result(&self, ontology: &Arc<RwLock<Ontology>>, result: RealizationResult) {
+    pub fn store_realization_result(&self, ontology: &OntologyRef, result: RealizationResult) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get instance result from cache
-    pub fn get_instance_result(&self, individual: &Individual, class: &ClassExpression) -> Option<bool> {
+    #[must_use]
+    pub fn get_instance_result(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store instance result in cache
-    pub fn store_instance_result(&self, individual: Individual, class: ClassExpression, result: bool) {
+    pub fn store_instance_result(
+        &self,
+        individual: Individual,
+        class: ClassExpression,
+        result: bool,
+    ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get subsumption cache
+    #[must_use]
     pub fn subsumption(&self, sub: &ClassExpression, sup: &ClassExpression) -> Option<bool> {
         self.get_subsumption_result(sub, sup)
     }
@@ -245,26 +275,27 @@ impl CacheManager {
     }
 
     /// Get classification cache
-    pub fn classification(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<ClassificationResult> {
+    pub fn classification(&self, ontology: &OntologyRef) -> Option<ClassificationResult> {
         self.get_classification_result(ontology)
     }
 
     /// Store classification cache
-    pub fn store_classification(&self, ontology: &Arc<RwLock<Ontology>>, result: ClassificationResult) {
+    pub fn store_classification(&self, ontology: &OntologyRef, result: ClassificationResult) {
         self.store_classification_result(ontology, result);
     }
 
     /// Get realization cache
-    pub fn realization(&self, ontology: &Arc<RwLock<Ontology>>) -> Option<RealizationResult> {
+    pub fn realization(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
         self.get_realization_result(ontology)
     }
 
     /// Store realization cache
-    pub fn store_realization(&self, ontology: &Arc<RwLock<Ontology>>, result: RealizationResult) {
+    pub fn store_realization(&self, ontology: &OntologyRef, result: RealizationResult) {
         self.store_realization_result(ontology, result);
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn get_stats(&self) -> CacheStats {
         CacheStats {
             concept_cache_size: self.concept_cache.size(),
@@ -273,6 +304,7 @@ impl CacheManager {
     }
 
     /// Get the concept satisfiability cache
+    #[must_use]
     pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
         &self.concept_cache
     }

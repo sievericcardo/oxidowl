@@ -1,16 +1,15 @@
-//! Example usage of the OxidOWL DL Query functionality
+//! Example usage of the `OxidOWL` reasoning functionality
 //!
 //! This example demonstrates how to:
 //! 1. Create a reasoner with ontology
-//! 2. Execute DL queries using Manchester Syntax
-//! 3. Process query results
+//! 2. Execute basic reasoning tasks
+//! 3. Process reasoning results
 
 use oxidowl::{
-    Error, Result, DLQueryEngine, DLQuery, QueryResult, QueryType,
-    reasoning::ReasoningService, 
-    core::reasoner::Reasoner,
-    ontology::{Ontology, ClassExpression, Individual, Class, IRI},
+    Result,
     config::ReasonerConfig,
+    ontology::{Class, ClassExpression, IRI, Individual, ObjectProperty, Ontology},
+    reasoning::ReasoningService,
 };
 
 #[tokio::main]
@@ -23,127 +22,112 @@ async fn main() -> Result<()> {
 
     // Create a simple ontology for demonstration
     let ontology = create_example_ontology()?;
-    
+
     // Create reasoner and reasoning service
     let config = ReasonerConfig::default();
     let reasoning_service = ReasoningService::new(ontology, config);
-    
-    // Create DL Query Engine
-    let query_engine = DLQueryEngine::new(reasoning_service.clone());
 
-    // Example 1: Query for instances of a class
-    println!("\n1. Querying instances of 'Person':");
-    match query_engine.execute_query("instances: Person").await {
-        Ok(result) => {
-            println!("   {}", result);
-        }
-        Err(e) => println!("   Error: {}", e),
-    }
-
-    // Example 2: Query for subclasses
-    println!("\n2. Querying subclasses of 'Animal':");
-    match query_engine.execute_query("subclasses: Animal").await {
-        Ok(result) => {
-            println!("   {}", result);
-        }
-        Err(e) => println!("   Error: {}", e),
-    }
-
-    // Example 3: Query with property restriction
-    println!("\n3. Querying instances with property restriction:");
-    match query_engine.execute_query("instances: hasChild some Person").await {
-        Ok(result) => {
-            println!("   {}", result);
-        }
-        Err(e) => println!("   Error: {}", e),
-    }
-
-    // Example 4: Satisfiability check
-    println!("\n4. Checking satisfiability:");
-    match query_engine.execute_query("satisfiable: Person and Animal").await {
-        Ok(result) => {
-            println!("   {}", result);
-        }
-        Err(e) => println!("   Error: {}", e),
-    }
-
-    // Example 5: Direct DL query methods
-    println!("\n5. Using direct query methods:");
-    
+    // Example 1: Check satisfiability of a class
+    println!("\n1. Checking satisfiability of 'Person':");
     let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
-    
     match reasoning_service.is_satisfiable(&person_class).await {
         Ok(satisfiable) => {
-            println!("   Person is satisfiable: {}", satisfiable);
+            println!("   Person is satisfiable: {satisfiable}");
         }
-        Err(e) => println!("   Error checking satisfiability: {}", e),
+        Err(e) => println!("   Error: {e}"),
     }
 
-    println!("\nDL Query examples completed!");
+    // Example 2: Check if one class is a subclass of another
+    println!("\n2. Checking if Dog is a subclass of Animal:");
+    let dog_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Dog")));
+    let animal_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Animal")));
+    match reasoning_service
+        .is_subsumed_by(&dog_class, &animal_class)
+        .await
+    {
+        Ok(is_subclass) => {
+            println!("   Dog is subclass of Animal: {is_subclass}");
+        }
+        Err(e) => println!("   Error: {e}"),
+    }
+
+    // Example 3: Check class equivalence
+    println!("\n3. Checking if Person and Animal are equivalent:");
+    match reasoning_service
+        .is_equivalent_to(&person_class, &animal_class)
+        .await
+    {
+        Ok(equivalent) => {
+            println!("   Person and Animal are equivalent: {equivalent}");
+        }
+        Err(e) => println!("   Error: {e}"),
+    }
+
+    println!("\nBasic reasoning examples completed!");
     Ok(())
 }
 
 /// Create a simple example ontology for demonstration
 fn create_example_ontology() -> Result<Ontology> {
     let mut ontology = Ontology::new();
-    
+
     // Add some classes
     ontology.add_class(Class::new(IRI::new("http://example.org/Person")));
     ontology.add_class(Class::new(IRI::new("http://example.org/Animal")));
     ontology.add_class(Class::new(IRI::new("http://example.org/Dog")));
     ontology.add_class(Class::new(IRI::new("http://example.org/Cat")));
-    
+
     // Add some object properties
-    ontology.add_object_property(crate::ontology::ObjectProperty::new(
-        IRI::new("http://example.org/hasChild")
-    ));
-    ontology.add_object_property(crate::ontology::ObjectProperty::new(
-        IRI::new("http://example.org/hasParent")
-    ));
-    
+    ontology.add_object_property(ObjectProperty::new(IRI::new(
+        "http://example.org/hasChild",
+    ))?);
+    ontology.add_object_property(ObjectProperty::new(IRI::new(
+        "http://example.org/hasParent",
+    ))?);
+
     // Add some individuals
     let john = Individual::named(IRI::new("http://example.org/John"));
     let mary = Individual::named(IRI::new("http://example.org/Mary"));
     let fido = Individual::named(IRI::new("http://example.org/Fido"));
-    
-    ontology.add_individual(john.clone());
-    ontology.add_individual(mary.clone());
-    ontology.add_individual(fido.clone());
-    
+
+    ontology.add_individual(IRI::new("http://example.org#john"), john.clone());
+    ontology.add_individual(IRI::new("http://example.org#mary"), mary.clone());
+    ontology.add_individual(IRI::new("http://example.org#fido"), fido.clone());
+
     // Add some axioms
-    use crate::ontology::{Axiom, ClassAssertionAxiom, SubClassOfAxiom};
-    
+    use oxidowl::ontology::axioms::{Axiom, ClassAssertionAxiom, SubClassOfAxiom};
+
     // John is a Person
     ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-        id: "john_person".to_string(),
+        id: 1,
         class: ClassExpression::Class(Class::new(IRI::new("http://example.org/Person"))),
         individual: john,
         annotations: Vec::new(),
     }));
-    
+
     // Mary is a Person
     ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-        id: "mary_person".to_string(),
+        id: 2,
         class: ClassExpression::Class(Class::new(IRI::new("http://example.org/Person"))),
         individual: mary,
         annotations: Vec::new(),
     }));
-    
+
     // Fido is a Dog
     ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-        id: "fido_dog".to_string(),
+        id: 3,
         class: ClassExpression::Class(Class::new(IRI::new("http://example.org/Dog"))),
         individual: fido,
         annotations: Vec::new(),
     }));
-    
+
     // Dog is subclass of Animal
     ontology.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-        id: "dog_animal".to_string(),
+        id: 4,
         subclass: ClassExpression::Class(Class::new(IRI::new("http://example.org/Dog"))),
         superclass: ClassExpression::Class(Class::new(IRI::new("http://example.org/Animal"))),
         annotations: Vec::new(),
     }));
-    
+
     Ok(ontology)
 }
