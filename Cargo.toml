@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using hypertableau algorithms with parallel computation"
 license = "BSD-3-Clause"
