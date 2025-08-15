@@ -3,8 +3,8 @@
 //! This module provides implementation of standard SWRL built-in predicates
 //! and a registry system for managing and executing them.
 
+use crate::ontology::{IRI, Individual, Literal};
 use crate::{Error, Result};
-use crate::ontology::{Individual, Literal, IRI};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -123,7 +123,7 @@ impl SWRLBuiltInRegistry {
         let mut registry = Self {
             builtins: HashMap::new(),
         };
-        
+
         // Register standard built-ins
         registry.register_standard_builtins();
         registry
@@ -293,7 +293,7 @@ impl SWRLBuiltIn for LessThanBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("LessThan expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => a < b,
             (SWRLValue::Float(a), SWRLValue::Float(b)) => a < b,
@@ -301,7 +301,7 @@ impl SWRLBuiltIn for LessThanBuiltIn {
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => *a < (*b as f64),
             _ => return Err(Error::reasoning("LessThan requires numeric arguments")),
         };
-        
+
         Ok(SWRLValue::Boolean(result))
     }
 
@@ -320,17 +320,23 @@ struct LessThanOrEqualBuiltIn;
 impl SWRLBuiltIn for LessThanOrEqualBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("LessThanOrEqual expects exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "LessThanOrEqual expects exactly 2 arguments",
+            ));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => a <= b,
             (SWRLValue::Float(a), SWRLValue::Float(b)) => a <= b,
             (SWRLValue::Integer(a), SWRLValue::Float(b)) => (*a as f64) <= *b,
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => *a <= (*b as f64),
-            _ => return Err(Error::reasoning("LessThanOrEqual requires numeric arguments")),
+            _ => {
+                return Err(Error::reasoning(
+                    "LessThanOrEqual requires numeric arguments",
+                ));
+            }
         };
-        
+
         Ok(SWRLValue::Boolean(result))
     }
 
@@ -351,7 +357,7 @@ impl SWRLBuiltIn for GreaterThanBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("GreaterThan expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => a > b,
             (SWRLValue::Float(a), SWRLValue::Float(b)) => a > b,
@@ -359,7 +365,7 @@ impl SWRLBuiltIn for GreaterThanBuiltIn {
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => *a > (*b as f64),
             _ => return Err(Error::reasoning("GreaterThan requires numeric arguments")),
         };
-        
+
         Ok(SWRLValue::Boolean(result))
     }
 
@@ -378,17 +384,23 @@ struct GreaterThanOrEqualBuiltIn;
 impl SWRLBuiltIn for GreaterThanOrEqualBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("GreaterThanOrEqual expects exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "GreaterThanOrEqual expects exactly 2 arguments",
+            ));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => a >= b,
             (SWRLValue::Float(a), SWRLValue::Float(b)) => a >= b,
             (SWRLValue::Integer(a), SWRLValue::Float(b)) => (*a as f64) >= *b,
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => *a >= (*b as f64),
-            _ => return Err(Error::reasoning("GreaterThanOrEqual requires numeric arguments")),
+            _ => {
+                return Err(Error::reasoning(
+                    "GreaterThanOrEqual requires numeric arguments",
+                ));
+            }
         };
-        
+
         Ok(SWRLValue::Boolean(result))
     }
 
@@ -409,7 +421,7 @@ impl SWRLBuiltIn for AddBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Add expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => SWRLValue::Integer(a + b),
             (SWRLValue::Float(a), SWRLValue::Float(b)) => SWRLValue::Float(a + b),
@@ -417,7 +429,7 @@ impl SWRLBuiltIn for AddBuiltIn {
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => SWRLValue::Float(a + *b as f64),
             _ => return Err(Error::reasoning("Add requires numeric arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -438,7 +450,7 @@ impl SWRLBuiltIn for SubtractBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Subtract expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => SWRLValue::Integer(a - b),
             (SWRLValue::Float(a), SWRLValue::Float(b)) => SWRLValue::Float(a - b),
@@ -446,7 +458,7 @@ impl SWRLBuiltIn for SubtractBuiltIn {
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => SWRLValue::Float(a - *b as f64),
             _ => return Err(Error::reasoning("Subtract requires numeric arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -467,7 +479,7 @@ impl SWRLBuiltIn for MultiplyBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Multiply expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => SWRLValue::Integer(a * b),
             (SWRLValue::Float(a), SWRLValue::Float(b)) => SWRLValue::Float(a * b),
@@ -475,7 +487,7 @@ impl SWRLBuiltIn for MultiplyBuiltIn {
             (SWRLValue::Float(a), SWRLValue::Integer(b)) => SWRLValue::Float(a * *b as f64),
             _ => return Err(Error::reasoning("Multiply requires numeric arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -496,7 +508,7 @@ impl SWRLBuiltIn for DivideBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Divide expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => {
                 if *b == 0 {
@@ -524,7 +536,7 @@ impl SWRLBuiltIn for DivideBuiltIn {
             }
             _ => return Err(Error::reasoning("Divide requires numeric arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -545,7 +557,7 @@ impl SWRLBuiltIn for ModBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Mod expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => {
                 if *b == 0 {
@@ -573,7 +585,7 @@ impl SWRLBuiltIn for ModBuiltIn {
             }
             _ => return Err(Error::reasoning("Mod requires numeric arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -594,21 +606,17 @@ impl SWRLBuiltIn for PowBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Pow expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::Integer(a), SWRLValue::Integer(b)) => {
                 SWRLValue::Float((*a as f64).powf(*b as f64))
             }
             (SWRLValue::Float(a), SWRLValue::Float(b)) => SWRLValue::Float(a.powf(*b)),
-            (SWRLValue::Integer(a), SWRLValue::Float(b)) => {
-                SWRLValue::Float((*a as f64).powf(*b))
-            }
-            (SWRLValue::Float(a), SWRLValue::Integer(b)) => {
-                SWRLValue::Float(a.powf(*b as f64))
-            }
+            (SWRLValue::Integer(a), SWRLValue::Float(b)) => SWRLValue::Float((*a as f64).powf(*b)),
+            (SWRLValue::Float(a), SWRLValue::Integer(b)) => SWRLValue::Float(a.powf(*b as f64)),
             _ => return Err(Error::reasoning("Pow requires numeric arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -629,13 +637,13 @@ impl SWRLBuiltIn for AbsBuiltIn {
         if args.len() != 1 {
             return Err(Error::reasoning("Abs expects exactly 1 argument"));
         }
-        
+
         let result = match &args[0] {
             SWRLValue::Integer(a) => SWRLValue::Integer(a.abs()),
             SWRLValue::Float(a) => SWRLValue::Float(a.abs()),
             _ => return Err(Error::reasoning("Abs requires numeric argument")),
         };
-        
+
         Ok(result)
     }
 
@@ -656,12 +664,12 @@ impl SWRLBuiltIn for StringLengthBuiltIn {
         if args.len() != 1 {
             return Err(Error::reasoning("StringLength expects exactly 1 argument"));
         }
-        
+
         let result = match &args[0] {
             SWRLValue::String(s) => SWRLValue::Integer(s.len() as i64),
             _ => return Err(Error::reasoning("StringLength requires string argument")),
         };
-        
+
         Ok(result)
     }
 
@@ -682,14 +690,12 @@ impl SWRLBuiltIn for StringConcatBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("StringConcat expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
-            (SWRLValue::String(a), SWRLValue::String(b)) => {
-                SWRLValue::String(format!("{a}{b}"))
-            }
+            (SWRLValue::String(a), SWRLValue::String(b)) => SWRLValue::String(format!("{a}{b}")),
             _ => return Err(Error::reasoning("StringConcat requires string arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -710,14 +716,14 @@ impl SWRLBuiltIn for ContainsBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("Contains expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::String(haystack), SWRLValue::String(needle)) => {
                 SWRLValue::Boolean(haystack.contains(needle))
             }
             _ => return Err(Error::reasoning("Contains requires string arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -738,14 +744,14 @@ impl SWRLBuiltIn for StartsWithBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("StartsWith expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::String(string), SWRLValue::String(prefix)) => {
                 SWRLValue::Boolean(string.starts_with(prefix))
             }
             _ => return Err(Error::reasoning("StartsWith requires string arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -766,14 +772,14 @@ impl SWRLBuiltIn for EndsWithBuiltIn {
         if args.len() != 2 {
             return Err(Error::reasoning("EndsWith expects exactly 2 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1]) {
             (SWRLValue::String(string), SWRLValue::String(suffix)) => {
                 SWRLValue::Boolean(string.ends_with(suffix))
             }
             _ => return Err(Error::reasoning("EndsWith requires string arguments")),
         };
-        
+
         Ok(result)
     }
 
@@ -794,21 +800,25 @@ impl SWRLBuiltIn for SubstringBuiltIn {
         if args.len() != 3 {
             return Err(Error::reasoning("Substring expects exactly 3 arguments"));
         }
-        
+
         let result = match (&args[0], &args[1], &args[2]) {
             (SWRLValue::String(string), SWRLValue::Integer(start), SWRLValue::Integer(end)) => {
                 let start_idx = *start as usize;
                 let end_idx = *end as usize;
-                
+
                 if start_idx <= end_idx && end_idx <= string.len() {
                     SWRLValue::String(string[start_idx..end_idx].to_string())
                 } else {
                     return Err(Error::reasoning("Invalid substring indices"));
                 }
             }
-            _ => return Err(Error::reasoning("Substring requires string and integer arguments")),
+            _ => {
+                return Err(Error::reasoning(
+                    "Substring requires string and integer arguments",
+                ));
+            }
         };
-        
+
         Ok(result)
     }
 
@@ -829,12 +839,12 @@ impl SWRLBuiltIn for UpperCaseBuiltIn {
         if args.len() != 1 {
             return Err(Error::reasoning("UpperCase expects exactly 1 argument"));
         }
-        
+
         let result = match &args[0] {
             SWRLValue::String(s) => SWRLValue::String(s.to_uppercase()),
             _ => return Err(Error::reasoning("UpperCase requires string argument")),
         };
-        
+
         Ok(result)
     }
 
@@ -855,12 +865,12 @@ impl SWRLBuiltIn for LowerCaseBuiltIn {
         if args.len() != 1 {
             return Err(Error::reasoning("LowerCase expects exactly 1 argument"));
         }
-        
+
         let result = match &args[0] {
             SWRLValue::String(s) => SWRLValue::String(s.to_lowercase()),
             _ => return Err(Error::reasoning("LowerCase requires string argument")),
         };
-        
+
         Ok(result)
     }
 

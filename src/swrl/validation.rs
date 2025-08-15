@@ -3,11 +3,11 @@
 //! This module provides validation functionality for SWRL rules,
 //! ensuring they are well-formed, safe, and semantically correct.
 
-use crate::{Error, Result};
 use crate::ontology::{axioms::*, *};
 use crate::swrl::builtins::{SWRLBuiltInRegistry, SWRLValue};
-use std::collections::{HashMap, HashSet};
+use crate::{Error, Result};
 use log::debug;
+use std::collections::{HashMap, HashSet};
 
 /// SWRL Rule Validator
 ///
@@ -28,17 +28,13 @@ impl SWRLValidator {
     /// Create a new validator
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            strict_mode: false,
-        }
+        Self { strict_mode: false }
     }
 
     /// Create a validator with strict mode enabled
     #[must_use]
     pub fn new_strict() -> Self {
-        Self {
-            strict_mode: true,
-        }
+        Self { strict_mode: true }
     }
 
     /// Validate a SWRL rule
@@ -63,7 +59,9 @@ impl SWRLValidator {
                 Error::Reasoning { message } => {
                     issues.push(ValidationIssue::SafetyViolation(message));
                 }
-                _ => issues.push(ValidationIssue::SafetyViolation("Unknown safety violation".to_string())),
+                _ => issues.push(ValidationIssue::SafetyViolation(
+                    "Unknown safety violation".to_string(),
+                )),
             }
         }
 
@@ -85,7 +83,8 @@ impl SWRLValidator {
         issues.extend(builtin_issues);
 
         // Determine overall validity
-        let is_valid = issues.is_empty() || (!self.strict_mode && issues.iter().all(|i| i.is_warning_level()));
+        let is_valid =
+            issues.is_empty() || (!self.strict_mode && issues.iter().all(|i| i.is_warning_level()));
 
         Ok(ValidationResult {
             is_valid,
@@ -97,13 +96,11 @@ impl SWRLValidator {
     /// Check if the rule satisfies safety constraints
     fn check_safety(&self, rule: &SWRLRule) -> Result<()> {
         // A rule is safe if every variable in the head appears in the body
-        let head_vars: HashSet<&SWRLVariable> = rule.head.iter()
-            .flat_map(|atom| atom.variables())
-            .collect();
+        let head_vars: HashSet<&SWRLVariable> =
+            rule.head.iter().flat_map(|atom| atom.variables()).collect();
 
-        let body_vars: HashSet<&SWRLVariable> = rule.body.iter()
-            .flat_map(|atom| atom.variables())
-            .collect();
+        let body_vars: HashSet<&SWRLVariable> =
+            rule.body.iter().flat_map(|atom| atom.variables()).collect();
 
         // Check if all head variables appear in body
         for head_var in &head_vars {
@@ -133,7 +130,8 @@ impl SWRLValidator {
     ) -> Result<()> {
         // For built-ins, typically all variables should be bound
         // (i.e., appear in non-built-in atoms in the body)
-        let builtin_vars: HashSet<&SWRLVariable> = arguments.iter()
+        let builtin_vars: HashSet<&SWRLVariable> = arguments
+            .iter()
             .filter_map(|arg| match arg {
                 SWRLDArgument::Variable(var) => Some(var),
                 SWRLDArgument::Literal(_) => None,
@@ -202,7 +200,10 @@ impl SWRLValidator {
         let mut issues = Vec::new();
 
         match atom {
-            SWRLAtom::ClassAtom { predicate, argument } => {
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => {
                 if let ClassExpression::Class(_) = predicate {
                     // Valid simple class atom
                 } else if self.strict_mode {
@@ -251,7 +252,10 @@ impl SWRLValidator {
                 }
             }
 
-            SWRLAtom::BuiltInAtom { predicate, arguments } => {
+            SWRLAtom::BuiltInAtom {
+                predicate,
+                arguments,
+            } => {
                 // Built-ins should typically not appear in the head
                 if is_head && self.strict_mode {
                     issues.push(ValidationIssue::BuiltInInHead);
@@ -284,7 +288,9 @@ impl SWRLValidator {
         let head_predicates = self.extract_predicates_from_head(rule);
         let body_predicates = self.extract_predicates_from_body(rule);
 
-        head_predicates.iter().any(|pred| body_predicates.contains(pred))
+        head_predicates
+            .iter()
+            .any(|pred| body_predicates.contains(pred))
     }
 
     /// Check built-in usage
@@ -292,7 +298,11 @@ impl SWRLValidator {
         let mut issues = Vec::new();
 
         for atom in &rule.body {
-            if let SWRLAtom::BuiltInAtom { predicate, arguments } = atom {
+            if let SWRLAtom::BuiltInAtom {
+                predicate,
+                arguments,
+            } = atom
+            {
                 // Check if built-in is known/standard
                 if !self.is_standard_builtin(predicate) {
                     issues.push(ValidationIssue::UnknownBuiltIn(predicate.to_string()));
@@ -319,7 +329,9 @@ impl SWRLValidator {
         if self.strict_mode {
             // Check if variable follows naming conventions
             if !var_name.starts_with('?') && !var_name.contains("#var") {
-                issues.push(ValidationIssue::NonStandardVariableName(var_name.to_string()));
+                issues.push(ValidationIssue::NonStandardVariableName(
+                    var_name.to_string(),
+                ));
             }
 
             // Check for reserved names
@@ -332,9 +344,9 @@ impl SWRLValidator {
     /// Check if an IRI is a valid built-in IRI
     fn is_valid_builtin_iri(&self, iri: &IRI) -> bool {
         let iri_str = iri.as_str();
-        iri_str.starts_with("http://www.w3.org/2003/11/swrlb#") ||
-        iri_str.starts_with("http://www.w3.org/2003/11/swrlx#") ||
-        iri_str.starts_with("urn:swrl#")
+        iri_str.starts_with("http://www.w3.org/2003/11/swrlb#")
+            || iri_str.starts_with("http://www.w3.org/2003/11/swrlx#")
+            || iri_str.starts_with("urn:swrl#")
     }
 
     /// Check if a built-in is standard
@@ -487,13 +499,19 @@ impl ValidationResult {
     /// Get all error-level issues
     #[must_use]
     pub fn get_errors(&self) -> Vec<&ValidationIssue> {
-        self.issues.iter().filter(|issue| !issue.is_warning_level()).collect()
+        self.issues
+            .iter()
+            .filter(|issue| !issue.is_warning_level())
+            .collect()
     }
 
     /// Get all warning-level issues
     #[must_use]
     pub fn get_warnings(&self) -> Vec<&ValidationIssue> {
-        self.issues.iter().filter(|issue| issue.is_warning_level()).collect()
+        self.issues
+            .iter()
+            .filter(|issue| issue.is_warning_level())
+            .collect()
     }
 }
 
@@ -536,10 +554,10 @@ impl ValidationIssue {
     pub fn is_warning_level(&self) -> bool {
         matches!(
             self,
-            ValidationIssue::SingleUseVariable(_) |
-            ValidationIssue::NonStandardVariableName(_) |
-            ValidationIssue::ComplexClassExpression |
-            ValidationIssue::ComplexPropertyExpression
+            ValidationIssue::SingleUseVariable(_)
+                | ValidationIssue::NonStandardVariableName(_)
+                | ValidationIssue::ComplexClassExpression
+                | ValidationIssue::ComplexPropertyExpression
         )
     }
 
@@ -551,17 +569,28 @@ impl ValidationIssue {
             ValidationIssue::EmptyBody => "Rule has no body atoms".to_string(),
             ValidationIssue::SafetyViolation(msg) => format!("Safety violation: {msg}"),
             ValidationIssue::SingleUseVariable(var) => format!("Variable {var} used only once"),
-            ValidationIssue::ComplexClassExpression => "Complex class expression in atom".to_string(),
-            ValidationIssue::ComplexPropertyExpression => "Complex property expression in atom".to_string(),
-            ValidationIssue::BuiltInInHead => "Built-in predicate should not appear in rule head".to_string(),
+            ValidationIssue::ComplexClassExpression => {
+                "Complex class expression in atom".to_string()
+            }
+            ValidationIssue::ComplexPropertyExpression => {
+                "Complex property expression in atom".to_string()
+            }
+            ValidationIssue::BuiltInInHead => {
+                "Built-in predicate should not appear in rule head".to_string()
+            }
             ValidationIssue::InvalidBuiltInIRI(iri) => format!("Invalid built-in IRI: {iri}"),
             ValidationIssue::UnknownBuiltIn(iri) => format!("Unknown built-in predicate: {iri}"),
-            ValidationIssue::IncorrectBuiltInArity { builtin, expected, actual } => 
-                format!("Built-in {builtin} expects {expected} arguments, got {actual}"),
-            ValidationIssue::NonStandardVariableName(var) => 
-                format!("Variable {var} doesn't follow naming conventions"),
-            ValidationIssue::ReservedVariableName(var) => 
-                format!("Variable {var} uses reserved namespace"),
+            ValidationIssue::IncorrectBuiltInArity {
+                builtin,
+                expected,
+                actual,
+            } => format!("Built-in {builtin} expects {expected} arguments, got {actual}"),
+            ValidationIssue::NonStandardVariableName(var) => {
+                format!("Variable {var} doesn't follow naming conventions")
+            }
+            ValidationIssue::ReservedVariableName(var) => {
+                format!("Variable {var} uses reserved namespace")
+            }
         }
     }
 }
@@ -580,10 +609,8 @@ impl ValidationWarning {
     #[must_use]
     pub fn description(&self) -> String {
         match self {
-            ValidationWarning::RecursionRisk => 
-                "Rule may cause infinite recursion".to_string(),
-            ValidationWarning::PerformanceWarning(msg) => 
-                format!("Performance warning: {msg}"),
+            ValidationWarning::RecursionRisk => "Rule may cause infinite recursion".to_string(),
+            ValidationWarning::PerformanceWarning(msg) => format!("Performance warning: {msg}"),
         }
     }
 }
@@ -615,47 +642,47 @@ mod tests {
     #[test]
     fn test_safety_validation() {
         let validator = SWRLValidator::new();
-        
+
         // Create a safe rule: Person(?x) -> Student(?x)
         let var_x = SWRLVariable::new(IRI::new("http://example.org/var#x"));
-        
+
         let body_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Person"))),
             argument: SWRLIArgument::Variable(var_x.clone()),
         };
-        
+
         let head_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Student"))),
             argument: SWRLIArgument::Variable(var_x),
         };
-        
+
         let safe_rule = SWRLRule::new(vec![head_atom], vec![body_atom]);
         let result = validator.validate_rule(&safe_rule).unwrap();
-        
+
         assert!(result.is_valid);
     }
 
     #[test]
     fn test_unsafe_rule_validation() {
         let validator = SWRLValidator::new();
-        
+
         // Create an unsafe rule: Person(?x) -> Student(?y)
         let var_x = SWRLVariable::new(IRI::new("http://example.org/var#x"));
         let var_y = SWRLVariable::new(IRI::new("http://example.org/var#y"));
-        
+
         let body_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Person"))),
             argument: SWRLIArgument::Variable(var_x),
         };
-        
+
         let head_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Student"))),
             argument: SWRLIArgument::Variable(var_y),
         };
-        
+
         let unsafe_rule = SWRLRule::new(vec![head_atom], vec![body_atom]);
         let result = validator.validate_rule(&unsafe_rule).unwrap();
-        
+
         assert!(!result.is_valid);
         assert!(result.has_errors());
     }
@@ -663,10 +690,10 @@ mod tests {
     #[test]
     fn test_builtin_validation() {
         let validator = SWRLValidator::new();
-        
+
         let var_x = SWRLVariable::new(IRI::new("http://example.org/var#x"));
         let var_y = SWRLVariable::new(IRI::new("http://example.org/var#y"));
-        
+
         // Valid built-in usage
         let builtin_atom = SWRLAtom::BuiltInAtom {
             predicate: IRI::new("http://www.w3.org/2003/11/swrlb#equal"),
@@ -675,20 +702,20 @@ mod tests {
                 SWRLDArgument::Variable(var_y.clone()),
             ],
         };
-        
+
         let class_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Person"))),
             argument: SWRLIArgument::Variable(var_x),
         };
-        
+
         let head_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Student"))),
             argument: SWRLIArgument::Variable(var_y),
         };
-        
+
         let rule = SWRLRule::new(vec![head_atom], vec![class_atom, builtin_atom]);
         let result = validator.validate_rule(&rule).unwrap();
-        
+
         // Should be valid (both variables are used in class atom)
         assert!(result.is_valid);
     }
@@ -696,31 +723,34 @@ mod tests {
     #[test]
     fn test_unknown_builtin_validation() {
         let validator = SWRLValidator::new();
-        
+
         let var_x = SWRLVariable::new(IRI::new("http://example.org/var#x"));
-        
+
         // Unknown built-in
         let builtin_atom = SWRLAtom::BuiltInAtom {
             predicate: IRI::new("http://example.org/unknown#builtin"),
             arguments: vec![SWRLDArgument::Variable(var_x.clone())],
         };
-        
+
         let class_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Person"))),
             argument: SWRLIArgument::Variable(var_x.clone()),
         };
-        
+
         let head_atom = SWRLAtom::ClassAtom {
             predicate: ClassExpression::Class(Class::new(IRI::new("http://example.org/Student"))),
             argument: SWRLIArgument::Variable(var_x),
         };
-        
+
         let rule = SWRLRule::new(vec![head_atom], vec![class_atom, builtin_atom]);
         let result = validator.validate_rule(&rule).unwrap();
-        
+
         // Should have an unknown built-in issue
-        assert!(result.issues.iter().any(|issue| 
-            matches!(issue, ValidationIssue::UnknownBuiltIn(_))
-        ));
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|issue| matches!(issue, ValidationIssue::UnknownBuiltIn(_)))
+        );
     }
 }

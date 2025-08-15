@@ -18,7 +18,7 @@ use crate::{
         ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
     },
     query::{DLQuery, DLQueryEngine, QueryResult},
-    swrl::{SWRLRuleEngine, SWRLConfig, SWRLExecutionResult},
+    swrl::{SWRLConfig, SWRLExecutionResult, SWRLRuleEngine},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -478,32 +478,42 @@ impl ReasoningService {
 
         // Execute SWRL rules
         let mut swrl_engine = self.swrl_engine.write().unwrap();
-        let result = swrl_engine.execute_rules().map_err(|e| {
-            Error::reasoning(format!("SWRL rule execution failed: {}", e))
-        })?;
+        let result = swrl_engine
+            .execute_rules()
+            .map_err(|e| Error::reasoning(format!("SWRL rule execution failed: {}", e)))?;
 
         // Apply the inferences to the ontology
         if !result.inferences.is_empty() {
-            log::info!("Applying {} SWRL inferences to ontology", result.inferences.len());
-            
+            log::info!(
+                "Applying {} SWRL inferences to ontology",
+                result.inferences.len()
+            );
+
             // Get the reasoner and update the ontology with inferences
             let mut reasoner = self.reasoner.write().unwrap();
             if let Ok(ontology_ref) = reasoner.get_ontology() {
                 let mut ontology = ontology_ref.write().unwrap();
-                
+
                 // Apply each inference to the ontology
                 for inference in &result.inferences {
                     ontology.add_axiom(inference.clone());
                 }
-                
+
                 // Clear caches since the ontology has been modified
                 self.cache_manager.write().unwrap().clear_all();
-                log::info!("Added {} new axioms from SWRL inferences", result.inferences.len());
+                log::info!(
+                    "Added {} new axioms from SWRL inferences",
+                    result.inferences.len()
+                );
             }
         }
 
-        log::info!("SWRL rule execution completed in {:?}: {} applications, {} inferences", 
-                  start.elapsed(), result.applications, result.inferences.len());
+        log::info!(
+            "SWRL rule execution completed in {:?}: {} applications, {} inferences",
+            start.elapsed(),
+            result.applications,
+            result.inferences.len()
+        );
         Ok(result)
     }
 
@@ -849,7 +859,10 @@ impl ReasoningService {
     pub async fn set_swrl_rule_active(&self, rule_id: u64, active: bool) -> Result<()> {
         let mut swrl_engine = self.swrl_engine.write().unwrap();
         swrl_engine.set_rule_active(rule_id, active).map_err(|e| {
-            Error::reasoning(format!("Failed to set SWRL rule {} active state: {}", rule_id, e))
+            Error::reasoning(format!(
+                "Failed to set SWRL rule {} active state: {}",
+                rule_id, e
+            ))
         })
     }
 }

@@ -1,7 +1,7 @@
 //! SWRL (Semantic Web Rule Language) Support
 //!
 //! This module provides comprehensive support for SWRL rules in oxidowl,
-//! including rule parsing, validation, execution, and integration with 
+//! including rule parsing, validation, execution, and integration with
 //! the tableau reasoner.
 
 pub mod builtins;
@@ -13,18 +13,20 @@ pub mod validation;
 //pub mod tests;
 
 // Re-export main types
+pub use builtins::{
+    SWRLBuiltIn, SWRLBuiltInRegistry as BuiltInRegistry, SWRLValue as BuiltInValue, SWRLValue,
+};
 pub use engine::SWRLRuleEngine;
 pub use interpreter::SWRLInterpreter;
-pub use validation::{SWRLValidator, ValidationResult, ValidationIssue, ValidationWarning};
-pub use builtins::{SWRLBuiltInRegistry as BuiltInRegistry, SWRLValue as BuiltInValue, SWRLBuiltIn, SWRLValue};
+pub use validation::{SWRLValidator, ValidationIssue, ValidationResult, ValidationWarning};
 
 // Re-export core SWRL types from ontology module
 pub use crate::ontology::axioms::{
     SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLRuleAxiom, SWRLVariable,
 };
 
-use crate::{Error, Result};
 use crate::ontology::{axioms::*, *};
+use crate::{Error, Result};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -79,7 +81,7 @@ impl SWRLExecutionContext {
         if let Some(existing) = self.bindings.get(&variable) {
             if existing != &value {
                 return Err(Error::reasoning(format!(
-                    "Variable {} already bound to different value", 
+                    "Variable {} already bound to different value",
                     variable.iri
                 )));
             }
@@ -227,9 +229,9 @@ impl SWRLStatistics {
         }
         self.inferences_generated += result.inferences.len();
         self.total_reasoning_time_us += result.execution_time_us;
-        
+
         if self.total_rule_applications > 0 {
-            self.avg_time_per_application_us = 
+            self.avg_time_per_application_us =
                 self.total_reasoning_time_us as f64 / self.total_rule_applications as f64;
         }
     }

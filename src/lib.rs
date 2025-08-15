@@ -54,7 +54,7 @@ pub mod visitor; // Visitor pattern for ontology traversal
 pub use crate::core::reasoner::Reasoner;
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
-pub use crate::swrl::{SWRLRuleEngine, SWRLValidator, SWRLInterpreter, BuiltInRegistry};
+pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
 
 // Re-export error types
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};

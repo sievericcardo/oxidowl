@@ -3,15 +3,15 @@
 //! This module implements the core logic for interpreting and executing
 //! individual SWRL rules, including atom evaluation and variable binding.
 
-use crate::{Result};
+use crate::Result;
 use crate::ontology::{axioms::*, *};
 use crate::swrl::{
     SWRLExecutionContext, SWRLExecutionResult,
     builtins::{SWRLBuiltInRegistry, SWRLValue},
 };
+use log::trace;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use log::trace;
 
 /// SWRL Rule Interpreter
 ///
@@ -27,9 +27,7 @@ impl SWRLInterpreter {
     /// Create a new rule interpreter
     #[must_use]
     pub fn new(builtin_registry: Arc<SWRLBuiltInRegistry>) -> Self {
-        Self {
-            builtin_registry,
-        }
+        Self { builtin_registry }
     }
 
     /// Execute a SWRL rule against the given ontology
@@ -43,7 +41,7 @@ impl SWRLInterpreter {
 
         // Find all possible variable bindings that satisfy the rule body
         let bindings = self.find_satisfying_bindings(rule, context, ontology)?;
-        
+
         if bindings.is_empty() {
             return Ok(SWRLExecutionResult::empty());
         }
@@ -73,21 +71,21 @@ impl SWRLInterpreter {
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut satisfying_bindings = Vec::new();
-        
+
         // Start with empty binding and try to satisfy all body atoms
         let initial_binding = HashMap::new();
         let mut candidate_bindings = vec![initial_binding];
 
         for atom in &rule.body {
             let mut new_candidates = Vec::new();
-            
+
             for binding in candidate_bindings {
                 let atom_bindings = self.find_atom_bindings(atom, &binding, ontology)?;
                 new_candidates.extend(atom_bindings);
             }
-            
+
             candidate_bindings = new_candidates;
-            
+
             // Early termination if no bindings satisfy current atom
             if candidate_bindings.is_empty() {
                 break;
@@ -95,7 +93,7 @@ impl SWRLInterpreter {
         }
 
         satisfying_bindings.extend(candidate_bindings);
-        
+
         trace!("Found {} satisfying bindings", satisfying_bindings.len());
         Ok(satisfying_bindings)
     }
@@ -110,9 +108,10 @@ impl SWRLInterpreter {
         trace!("Finding bindings for atom: {:?}", atom);
 
         match atom {
-            SWRLAtom::ClassAtom { predicate, argument } => {
-                self.find_class_atom_bindings(predicate, argument, current_binding, ontology)
-            }
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => self.find_class_atom_bindings(predicate, argument, current_binding, ontology),
             SWRLAtom::ObjectPropertyAtom {
                 predicate,
                 first_argument,
@@ -135,9 +134,10 @@ impl SWRLInterpreter {
                 current_binding,
                 ontology,
             ),
-            SWRLAtom::DataRangeAtom { predicate, argument } => {
-                self.find_data_range_atom_bindings(predicate, argument, current_binding, ontology)
-            }
+            SWRLAtom::DataRangeAtom {
+                predicate,
+                argument,
+            } => self.find_data_range_atom_bindings(predicate, argument, current_binding, ontology),
             SWRLAtom::SameIndividualAtom {
                 first_argument,
                 second_argument,
@@ -159,12 +159,7 @@ impl SWRLInterpreter {
             SWRLAtom::BuiltInAtom {
                 predicate,
                 arguments,
-            } => self.find_builtin_atom_bindings(
-                predicate,
-                arguments,
-                current_binding,
-                ontology,
-            ),
+            } => self.find_builtin_atom_bindings(predicate, arguments, current_binding, ontology),
         }
     }
 
@@ -190,7 +185,11 @@ impl SWRLInterpreter {
                 // Check if variable is already bound
                 if let Some(value) = current_binding.get(variable) {
                     if let Some(individual) = value.as_individual() {
-                        if self.is_individual_instance_of_class(individual, predicate, &ontology_guard)? {
+                        if self.is_individual_instance_of_class(
+                            individual,
+                            predicate,
+                            &ontology_guard,
+                        )? {
                             bindings.push(current_binding.clone());
                         }
                     }
@@ -222,7 +221,8 @@ impl SWRLInterpreter {
         let ontology_guard = ontology.read().unwrap();
 
         // Get all object property assertions for this property
-        let property_assertions = self.find_object_property_assertions(predicate, &ontology_guard)?;
+        let property_assertions =
+            self.find_object_property_assertions(predicate, &ontology_guard)?;
 
         for (subject, object) in property_assertions {
             let mut new_binding = current_binding.clone();
@@ -243,7 +243,8 @@ impl SWRLInterpreter {
                             }
                         }
                     } else {
-                        new_binding.insert(variable.clone(), SWRLValue::Individual(subject.clone()));
+                        new_binding
+                            .insert(variable.clone(), SWRLValue::Individual(subject.clone()));
                     }
                 }
             }
@@ -312,7 +313,8 @@ impl SWRLInterpreter {
                             }
                         }
                     } else {
-                        new_binding.insert(variable.clone(), SWRLValue::Individual(subject.clone()));
+                        new_binding
+                            .insert(variable.clone(), SWRLValue::Individual(subject.clone()));
                     }
                 }
             }
@@ -372,14 +374,16 @@ impl SWRLInterpreter {
         let ontology_guard = ontology.read().unwrap();
 
         // Get the individuals from arguments or variables
-        let first_individuals = self.get_individuals_from_argument(first_argument, current_binding, &ontology_guard)?;
-        let second_individuals = self.get_individuals_from_argument(second_argument, current_binding, &ontology_guard)?;
+        let first_individuals =
+            self.get_individuals_from_argument(first_argument, current_binding, &ontology_guard)?;
+        let second_individuals =
+            self.get_individuals_from_argument(second_argument, current_binding, &ontology_guard)?;
 
         for first_ind in &first_individuals {
             for second_ind in &second_individuals {
                 if self.are_same_individuals(first_ind, second_ind, &ontology_guard)? {
                     let mut new_binding = current_binding.clone();
-                    
+
                     // Bind variables if needed
                     if let SWRLIArgument::Variable(var) = first_argument {
                         new_binding.insert(var.clone(), SWRLValue::Individual(first_ind.clone()));
@@ -387,7 +391,7 @@ impl SWRLInterpreter {
                     if let SWRLIArgument::Variable(var) = second_argument {
                         new_binding.insert(var.clone(), SWRLValue::Individual(second_ind.clone()));
                     }
-                    
+
                     bindings.push(new_binding);
                 }
             }
@@ -408,14 +412,16 @@ impl SWRLInterpreter {
         let ontology_guard = ontology.read().unwrap();
 
         // Get the individuals from arguments or variables
-        let first_individuals = self.get_individuals_from_argument(first_argument, current_binding, &ontology_guard)?;
-        let second_individuals = self.get_individuals_from_argument(second_argument, current_binding, &ontology_guard)?;
+        let first_individuals =
+            self.get_individuals_from_argument(first_argument, current_binding, &ontology_guard)?;
+        let second_individuals =
+            self.get_individuals_from_argument(second_argument, current_binding, &ontology_guard)?;
 
         for first_ind in &first_individuals {
             for second_ind in &second_individuals {
                 if self.are_different_individuals(first_ind, second_ind, &ontology_guard)? {
                     let mut new_binding = current_binding.clone();
-                    
+
                     // Bind variables if needed
                     if let SWRLIArgument::Variable(var) = first_argument {
                         new_binding.insert(var.clone(), SWRLValue::Individual(first_ind.clone()));
@@ -423,7 +429,7 @@ impl SWRLInterpreter {
                     if let SWRLIArgument::Variable(var) = second_argument {
                         new_binding.insert(var.clone(), SWRLValue::Individual(second_ind.clone()));
                     }
-                    
+
                     bindings.push(new_binding);
                 }
             }
@@ -440,12 +446,11 @@ impl SWRLInterpreter {
         current_binding: &HashMap<SWRLVariable, SWRLValue>,
         _ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
-        
         if self.builtin_registry.is_registered(predicate) {
             // Convert arguments to values using current bindings
             let mut arg_values = Vec::new();
             let mut all_bound = true;
-            
+
             for arg in arguments {
                 match arg {
                     SWRLDArgument::Literal(lit) => {
@@ -461,7 +466,7 @@ impl SWRLInterpreter {
                     }
                 }
             }
-            
+
             if all_bound {
                 // Execute the built-in
                 match self.builtin_registry.execute(predicate, &arg_values) {
@@ -483,7 +488,7 @@ impl SWRLInterpreter {
                 }
             }
         }
-        
+
         Ok(Vec::new())
     }
 
@@ -494,14 +499,14 @@ impl SWRLInterpreter {
         context: &SWRLExecutionContext,
     ) -> Result<Vec<Axiom>> {
         let mut inferences = Vec::new();
-        
+
         for atom in &rule.head {
             let inference = self.generate_atom_inference(atom, context)?;
             if let Some(axiom) = inference {
                 inferences.push(axiom);
             }
         }
-        
+
         Ok(inferences)
     }
 
@@ -512,7 +517,10 @@ impl SWRLInterpreter {
         context: &SWRLExecutionContext,
     ) -> Result<Option<Axiom>> {
         match atom {
-            SWRLAtom::ClassAtom { predicate, argument } => {
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => {
                 if let Some(individual) = self.resolve_individual_argument(argument, context) {
                     let axiom = ClassAssertionAxiom {
                         id: 0, // Will be assigned by the axiom store
@@ -664,7 +672,7 @@ impl SWRLInterpreter {
         ontology: &Ontology,
     ) -> Result<Vec<Individual>> {
         let mut instances = Vec::new();
-        
+
         for axiom in ontology.axioms() {
             if let Axiom::ClassAssertion(assertion) = axiom {
                 if assertion.class == *class_expr {
@@ -672,7 +680,7 @@ impl SWRLInterpreter {
                 }
             }
         }
-        
+
         Ok(instances)
     }
 
@@ -683,7 +691,7 @@ impl SWRLInterpreter {
         ontology: &Ontology,
     ) -> Result<Vec<(Individual, Individual)>> {
         let mut assertions = Vec::new();
-        
+
         for axiom in ontology.axioms() {
             if let Axiom::ObjectPropertyAssertion(assertion) = axiom {
                 if assertion.property == *property {
@@ -691,7 +699,7 @@ impl SWRLInterpreter {
                 }
             }
         }
-        
+
         Ok(assertions)
     }
 
@@ -702,7 +710,7 @@ impl SWRLInterpreter {
         ontology: &Ontology,
     ) -> Result<Vec<(Individual, Literal)>> {
         let mut assertions = Vec::new();
-        
+
         for axiom in ontology.axioms() {
             if let Axiom::DataPropertyAssertion(assertion) = axiom {
                 if assertion.property == *property {
@@ -710,7 +718,7 @@ impl SWRLInterpreter {
                 }
             }
         }
-        
+
         Ok(assertions)
     }
 
@@ -754,7 +762,7 @@ impl SWRLInterpreter {
                 }
             }
         }
-        
+
         // Also check structural equality
         Ok(first == second)
     }
@@ -774,7 +782,7 @@ impl SWRLInterpreter {
                 }
             }
         }
-        
+
         // If no explicit assertion, assume different if not the same
         Ok(first != second)
     }
@@ -792,31 +800,32 @@ mod tests {
 
     fn create_test_ontology_with_data() -> Arc<RwLock<Ontology>> {
         let mut ontology = Ontology::new();
-        
+
         // Add individuals
         let john = Individual::named(IRI::new("http://example.org/john"));
         let mary = Individual::named(IRI::new("http://example.org/mary"));
-        
+
         // Add class assertions
-        let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
-        
+        let person_class =
+            ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
+
         let john_assertion = ClassAssertionAxiom {
             id: 1,
             individual: john.clone(),
             class: person_class.clone(),
             annotations: Vec::new(),
         };
-        
+
         let mary_assertion = ClassAssertionAxiom {
             id: 2,
             individual: mary,
             class: person_class,
             annotations: Vec::new(),
         };
-        
+
         ontology.add_axiom(Axiom::ClassAssertion(john_assertion));
         ontology.add_axiom(Axiom::ClassAssertion(mary_assertion));
-        
+
         Arc::new(RwLock::new(ontology))
     }
 
@@ -831,20 +840,18 @@ mod tests {
     fn test_class_atom_bindings() {
         let interpreter = create_test_interpreter();
         let ontology = create_test_ontology_with_data();
-        
-        let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
+
+        let person_class =
+            ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
         let var_x = SWRLVariable::new(IRI::new("http://example.org/var#x"));
         let argument = SWRLIArgument::Variable(var_x);
-        
+
         let current_binding = HashMap::new();
-        
-        let bindings = interpreter.find_class_atom_bindings(
-            &person_class,
-            &argument,
-            &current_binding,
-            &ontology,
-        ).unwrap();
-        
+
+        let bindings = interpreter
+            .find_class_atom_bindings(&person_class, &argument, &current_binding, &ontology)
+            .unwrap();
+
         // Should find bindings for both john and mary
         assert_eq!(bindings.len(), 2);
     }
@@ -853,21 +860,23 @@ mod tests {
     fn test_resolve_individual_argument() {
         let interpreter = create_test_interpreter();
         let john = Individual::named(IRI::new("http://example.org/john"));
-        
+
         // Test with concrete individual
         let concrete_arg = SWRLIArgument::Individual(john.clone());
         let context = SWRLExecutionContext::new();
-        
+
         let resolved = interpreter.resolve_individual_argument(&concrete_arg, &context);
         assert_eq!(resolved, Some(john.clone()));
-        
+
         // Test with variable
         let var = SWRLVariable::new(IRI::new("http://example.org/var#x"));
         let var_arg = SWRLIArgument::Variable(var.clone());
-        
+
         let mut context_with_binding = SWRLExecutionContext::new();
-        context_with_binding.bind(var, SWRLValue::Individual(john.clone())).unwrap();
-        
+        context_with_binding
+            .bind(var, SWRLValue::Individual(john.clone()))
+            .unwrap();
+
         let resolved = interpreter.resolve_individual_argument(&var_arg, &context_with_binding);
         assert_eq!(resolved, Some(john));
     }
