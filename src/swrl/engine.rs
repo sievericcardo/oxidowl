@@ -21,6 +21,7 @@ use log::{debug, info, warn};
 ///
 /// The main engine for executing SWRL rules and generating inferences.
 /// Supports both forward and backward chaining strategies.
+#[derive(Debug)]
 pub struct SWRLRuleEngine {
     /// Rule execution states
     rule_states: HashMap<u64, SWRLRuleState>,

@@ -18,6 +18,7 @@ use crate::{
         ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
     },
     query::{DLQuery, DLQueryEngine, QueryResult},
+    swrl::{SWRLRuleEngine, SWRLConfig, SWRLExecutionResult},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -30,6 +31,7 @@ use std::{
 pub struct ReasoningService {
     reasoner: Arc<RwLock<Reasoner>>,
     cache_manager: Arc<RwLock<CacheManager>>,
+    swrl_engine: Arc<RwLock<SWRLRuleEngine>>,
     config: ReasonerConfig,
 }
 
@@ -40,12 +42,18 @@ impl ReasoningService {
         let reasoner = Reasoner::new(config.clone()).expect("Failed to create reasoner");
         let mut reasoner_with_ontology = reasoner;
         reasoner_with_ontology
-            .load_ontology(ontology)
+            .load_ontology(ontology.clone())
             .expect("Failed to load ontology");
+
+        // Initialize SWRL engine with the ontology
+        let swrl_config = SWRLConfig::default();
+        let mut swrl_engine = SWRLRuleEngine::new(swrl_config);
+        swrl_engine.set_ontology(Arc::new(RwLock::new(ontology)));
 
         Self {
             reasoner: Arc::new(RwLock::new(reasoner_with_ontology)),
             cache_manager: Arc::new(RwLock::new(CacheManager::default())),
+            swrl_engine: Arc::new(RwLock::new(swrl_engine)),
             config,
         }
     }
@@ -63,6 +71,10 @@ impl ReasoningService {
                 return Ok(result);
             }
         }
+
+        // Execute SWRL rules first to ensure all inferences are considered for consistency
+        log::info!("Executing SWRL rules before consistency check");
+        self.execute_swrl_rules().await?;
 
         let mut reasoner = self.reasoner.write().unwrap();
         let result = reasoner.is_consistent()?;
@@ -427,6 +439,10 @@ impl ReasoningService {
             }
         }
 
+        // Execute SWRL rules first to ensure all inferences are available for classification
+        log::info!("Executing SWRL rules before classification");
+        self.execute_swrl_rules().await?;
+
         let mut reasoner = self.reasoner.write().unwrap();
         let result = reasoner.classify()?;
 
@@ -452,6 +468,42 @@ impl ReasoningService {
 
         // Log the time taken for classification
         log::info!("Classification completed in {:?}", start.elapsed());
+        Ok(result)
+    }
+
+    /// Execute SWRL rules and apply inferences to the ontology
+    pub async fn execute_swrl_rules(&self) -> Result<SWRLExecutionResult> {
+        let start = Instant::now();
+        log::info!("Executing SWRL rules");
+
+        // Execute SWRL rules
+        let mut swrl_engine = self.swrl_engine.write().unwrap();
+        let result = swrl_engine.execute_rules().map_err(|e| {
+            Error::reasoning(format!("SWRL rule execution failed: {}", e))
+        })?;
+
+        // Apply the inferences to the ontology
+        if !result.inferences.is_empty() {
+            log::info!("Applying {} SWRL inferences to ontology", result.inferences.len());
+            
+            // Get the reasoner and update the ontology with inferences
+            let mut reasoner = self.reasoner.write().unwrap();
+            if let Ok(ontology_ref) = reasoner.get_ontology() {
+                let mut ontology = ontology_ref.write().unwrap();
+                
+                // Apply each inference to the ontology
+                for inference in &result.inferences {
+                    ontology.add_axiom(inference.clone());
+                }
+                
+                // Clear caches since the ontology has been modified
+                self.cache_manager.write().unwrap().clear_all();
+                log::info!("Added {} new axioms from SWRL inferences", result.inferences.len());
+            }
+        }
+
+        log::info!("SWRL rule execution completed in {:?}: {} applications, {} inferences", 
+                  start.elapsed(), result.applications, result.inferences.len());
         Ok(result)
     }
 
@@ -484,6 +536,10 @@ impl ReasoningService {
                 }
             }
         }
+
+        // Execute SWRL rules first to ensure all inferences are available for realization
+        log::info!("Executing SWRL rules before realization");
+        self.execute_swrl_rules().await?;
 
         let mut reasoner = self.reasoner.write().unwrap();
         let result = reasoner.realize()?;
@@ -763,6 +819,38 @@ impl ReasoningService {
         // Log the time taken for the property chain query
         log::info!("Property chain query completed in {:?}", start.elapsed());
         Ok(current_individuals)
+    }
+
+    /// Get access to the SWRL rule engine
+    pub fn get_swrl_engine(&self) -> Arc<RwLock<SWRLRuleEngine>> {
+        Arc::clone(&self.swrl_engine)
+    }
+
+    /// Get SWRL execution statistics
+    pub async fn get_swrl_statistics(&self) -> Result<crate::swrl::SWRLStatistics> {
+        let swrl_engine = self.swrl_engine.read().unwrap();
+        Ok(swrl_engine.get_statistics().clone())
+    }
+
+    /// Set SWRL rule priority
+    pub async fn set_swrl_rule_priority(&self, rule_id: u64, priority: u32) -> Result<()> {
+        let mut swrl_engine = self.swrl_engine.write().unwrap();
+        swrl_engine.set_rule_priority(rule_id, priority);
+        Ok(())
+    }
+
+    /// Get ordered SWRL rules by priority
+    pub async fn get_swrl_rule_order(&self) -> Result<Vec<u64>> {
+        let swrl_engine = self.swrl_engine.read().unwrap();
+        Ok(swrl_engine.get_rule_ids())
+    }
+
+    /// Enable or disable a specific SWRL rule
+    pub async fn set_swrl_rule_active(&self, rule_id: u64, active: bool) -> Result<()> {
+        let mut swrl_engine = self.swrl_engine.write().unwrap();
+        swrl_engine.set_rule_active(rule_id, active).map_err(|e| {
+            Error::reasoning(format!("Failed to set SWRL rule {} active state: {}", rule_id, e))
+        })
     }
 }
 

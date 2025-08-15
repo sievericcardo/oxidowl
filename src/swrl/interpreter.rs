@@ -17,6 +17,7 @@ use log::trace;
 ///
 /// Responsible for executing individual SWRL rules by evaluating atoms,
 /// managing variable bindings, and generating inferences.
+#[derive(Debug)]
 pub struct SWRLInterpreter {
     /// Registry of built-in predicates
     builtin_registry: Arc<SWRLBuiltInRegistry>,

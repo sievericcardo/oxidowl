@@ -12,6 +12,7 @@ use log::debug;
 /// SWRL Rule Validator
 ///
 /// Validates SWRL rules for correctness, safety, and semantic constraints.
+#[derive(Debug)]
 pub struct SWRLValidator {
     /// Enable strict validation (more restrictive)
     strict_mode: bool,
