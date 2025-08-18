@@ -215,12 +215,15 @@ impl TurtleParser {
             let mut line_content = String::new();
             let chars: Vec<char> = line.chars().collect();
             let mut i = 0;
+            let mut angle_depth = 0; // Track angle brackets for IRIs
 
             while i < chars.len() {
                 let ch = chars[i];
 
                 match ch {
-                    '#' if !in_string => {
+                    '<' if !in_string && !in_comment => angle_depth += 1,
+                    '>' if !in_string && !in_comment => angle_depth -= 1,
+                    '#' if !in_string && angle_depth == 0 => {
                         in_comment = true;
                         if self.config.ignore_comments {
                             break;
@@ -269,6 +272,7 @@ impl TurtleParser {
         let mut in_string = false;
         let mut bracket_depth = 0;
         let mut paren_depth = 0;
+        let mut angle_depth = 0; // Track < > brackets for IRIs
 
         for ch in content.chars() {
             match ch {
@@ -277,7 +281,13 @@ impl TurtleParser {
                 ']' if !in_string => bracket_depth -= 1,
                 '(' if !in_string => paren_depth += 1,
                 ')' if !in_string => paren_depth -= 1,
-                '.' if !in_string && bracket_depth == 0 && paren_depth == 0 => {
+                '<' if !in_string => {
+                    angle_depth += 1;
+                }
+                '>' if !in_string => {
+                    angle_depth -= 1;
+                }
+                '.' if !in_string && bracket_depth == 0 && paren_depth == 0 && angle_depth == 0 => {
                     current_statement.push(ch);
                     let stmt = current_statement.trim().to_string();
                     if !stmt.is_empty() {
@@ -328,13 +338,20 @@ impl TurtleParser {
     /// Enhanced prefix declaration parsing
     fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
         // @prefix prefix: <uri> .
-        let parts: Vec<&str> = statement.split_whitespace().collect();
-        if parts.len() >= 3 {
-            let prefix_name = parts[1].trim_end_matches(':');
-            let uri = parts[2].trim_matches(['<', '>', '.'].as_ref());
-            state
-                .prefixes
-                .insert(prefix_name.to_string(), uri.to_string());
+        // Find the IRI within angle brackets
+        if let Some(start) = statement.find('<') {
+            if let Some(end) = statement.find('>') {
+                let uri = &statement[start + 1..end];
+                
+                // Extract prefix name (between @prefix and :)
+                let prefix_part = &statement[7..start].trim(); // Skip "@prefix"
+                if let Some(colon_pos) = prefix_part.find(':') {
+                    let prefix_name = prefix_part[..colon_pos].trim();
+                    state
+                        .prefixes
+                        .insert(prefix_name.to_string(), uri.to_string());
+                }
+            }
         }
         Ok(())
     }
@@ -630,7 +647,8 @@ impl TurtleParser {
     /// Enhanced URI expansion with proper prefix handling
     fn expand_prefixed_name(&self, name: &str, state: &ParseState) -> Result<String> {
         if name.starts_with('<') && name.ends_with('>') {
-            return Ok(name[1..name.len() - 1].to_string());
+            let result = name[1..name.len() - 1].to_string();
+            return Ok(result);
         }
 
         if let Some(colon_pos) = name.find(':') {
@@ -638,19 +656,22 @@ impl TurtleParser {
             let local = &name[colon_pos + 1..];
 
             if let Some(base) = state.prefixes.get(prefix) {
-                Ok(format!("{base}{local}"))
+                let result = format!("{base}{local}");
+                Ok(result)
             } else {
-                // Handle unknown prefixes - might be relative URIs
-                if let Some(base) = &state.base_uri {
-                    Ok(format!("{base}{name}"))
-                } else {
-                    Ok(name.to_string())
-                }
+                // Handle unknown prefixes - this should be an error for proper Turtle parsing
+                return Err(crate::error::Error::OntologyParsing {
+                    message: format!("Undefined prefix: {}", prefix),
+                });
             }
         } else if let Some(base) = &state.base_uri {
-            Ok(format!("{base}{name}"))
+            let result = format!("{base}{name}");
+            Ok(result)
         } else {
-            Ok(name.to_string())
+            // Relative URI without base - this should be an error
+            Err(crate::error::Error::OntologyParsing {
+                message: format!("Relative URI without base: {}", name),
+            })
         }
     }
 
@@ -873,6 +894,9 @@ ast:Pump rdf:type owl:Class ;
         let parser = TurtleParser::new();
         let result = parser.parse_string(content);
 
+        if let Err(err) = &result {
+            println!("Parse error: {:?}", err);
+        }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
         let ontology = result.unwrap();
@@ -902,6 +926,9 @@ ast:Operational rdfs:subClassOf ast:Pump .
         let parser = TurtleParser::new();
         let result = parser.parse_string(content);
 
+        if let Err(err) = &result {
+            println!("Parse error: {:?}", err);
+        }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
         let ontology = result.unwrap();
@@ -915,7 +942,8 @@ ast:Operational rdfs:subClassOf ast:Pump .
 
         assert!(
             subclass_count >= 2,
-            "Should have created at least 2 SubClassOf axioms"
+            "Should have created at least 2 SubClassOf axioms, found: {}",
+            subclass_count
         );
     }
 }
