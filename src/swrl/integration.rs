@@ -194,7 +194,13 @@ impl SWRLFeatureRegistry {
         // Based on W3C SWRL built-ins specification
         // Estimated total: ~50-60 built-ins across all categories
         let estimated_total = 55.0;
-        let implemented = self.get_statistics().total_builtins as f64;
+        
+        // Calculate total directly instead of calling get_statistics() to avoid infinite recursion
+        let datetime_count = self.datetime_registry.get_builtin_iris().len();
+        let regex_count = self.regex_registry.count();
+        let main_count = self.main_registry.get_builtin_iris().len();
+        let implemented = (datetime_count + regex_count + main_count) as f64;
+        
         (implemented / estimated_total * 100.0).min(100.0)
     }
     

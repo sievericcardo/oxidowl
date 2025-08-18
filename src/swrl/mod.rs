@@ -4,9 +4,11 @@
 //! including rule parsing, validation, execution, and integration with
 //! the tableau reasoner.
 
+pub mod additional_builtins;
 pub mod backward_chaining;
 pub mod boolean_builtins;
 pub mod builtins;
+pub mod collection_builtins;
 pub mod datetime_builtins;
 pub mod datetime_constructor_builtins;
 pub mod engine;

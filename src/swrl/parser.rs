@@ -196,13 +196,28 @@ impl SWRLParser {
         
         let mut atoms = Vec::new();
         let mut current_atom_tokens = Vec::new();
+        let mut paren_depth = 0;
         
         for token in tokens {
             match token {
+                Token::LeftParen => {
+                    paren_depth += 1;
+                    current_atom_tokens.push(token.clone());
+                }
+                Token::RightParen => {
+                    paren_depth -= 1;
+                    current_atom_tokens.push(token.clone());
+                }
                 Token::Comma | Token::Conjunction => {
-                    if !current_atom_tokens.is_empty() {
-                        atoms.push(self.parse_atom(&current_atom_tokens)?);
-                        current_atom_tokens.clear();
+                    if paren_depth == 0 {
+                        // This comma/conjunction is between atoms, not inside an atom
+                        if !current_atom_tokens.is_empty() {
+                            atoms.push(self.parse_atom(&current_atom_tokens)?);
+                            current_atom_tokens.clear();
+                        }
+                    } else {
+                        // This comma is inside parentheses, part of the current atom
+                        current_atom_tokens.push(token.clone());
                     }
                 }
                 _ => {
@@ -779,6 +794,9 @@ mod tests {
         let rule_text = r#"Person(?p), hasAge(?p, ?age), swrlb:greaterThan(?age, 18) -> Adult(?p)"#;
         let result = parser.parse_rule(rule_text);
         
+        if let Err(ref e) = result {
+            println!("Parse error: {:?}", e);
+        }
         assert!(result.is_ok());
         let rule = result.unwrap();
         assert_eq!(rule.body.len(), 3);

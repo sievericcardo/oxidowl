@@ -806,14 +806,24 @@ impl SWRLBuiltIn for TimezoneBuiltIn {
                 
                 // Extract timezone portion from ISO 8601 datetime string
                 // Examples: "2023-01-01T10:00:00Z", "2023-01-01T10:00:00+05:00", "2023-01-01T10:00:00-08:00"
-                let timezone = if let Some(tz_pos) = datetime_str.rfind(|c| c == 'Z' || c == '+' || c == '-') {
-                    if datetime_str.chars().nth(tz_pos).unwrap() == 'Z' {
-                        "Z".to_string()
+                let timezone = if datetime_str.ends_with('Z') {
+                    "Z".to_string()
+                } else if let Some(t_pos) = datetime_str.find('T') {
+                    // Look for timezone markers only after the 'T' (time part)
+                    let time_part = &datetime_str[t_pos..];
+                    if let Some(tz_pos) = time_part.rfind(|c| c == '+' || c == '-') {
+                        // Make sure it's actually a timezone offset (not part of seconds)
+                        let tz_candidate = &time_part[tz_pos..];
+                        if tz_candidate.len() >= 3 && (tz_candidate.contains(':') || tz_candidate.len() == 3) {
+                            tz_candidate.to_string()
+                        } else {
+                            "".to_string()
+                        }
                     } else {
-                        datetime_str[tz_pos..].to_string()
+                        "".to_string()
                     }
                 } else {
-                    // No timezone specified, return empty string or local timezone
+                    // No 'T' found, probably not a valid datetime
                     "".to_string()
                 };
                 

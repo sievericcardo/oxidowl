@@ -3,32 +3,25 @@
 //! This module provides consolidated registration of all extended SWRL built-ins.
 
 use crate::swrl::{
-    boolean_builtins,
-    list_builtins,
-    math_builtins,
-    string_builtins,
-    uri_builtins,
+    builtins::SWRLBuiltInRegistry,
+    math_builtins::register_math_builtins,
+    string_builtins::register_string_builtins,
+    uri_builtins::register_uri_builtins,
+    boolean_builtins::register_boolean_builtins,
+    list_builtins::register_list_builtins,
+    additional_builtins::register_additional_comparison_builtins,
+    collection_builtins::register_collection_builtins,
 };
 
-/// Register all extended SWRL built-ins to a registry
-///
-/// This function consolidates the registration of all built-ins that extend
-/// the core SWRL specification, organized by category for better maintainability.
-pub fn register_extended_builtins(registry: &mut crate::swrl::builtins::SWRLBuiltInRegistry) {
-    // Register boolean built-ins
-    boolean_builtins::register_boolean_builtins(registry);
-    
-    // Register mathematical built-ins
-    math_builtins::register_math_builtins(registry);
-    
-    // Register string manipulation built-ins
-    string_builtins::register_string_builtins(registry);
-    
-    // Register URI handling built-ins
-    uri_builtins::register_uri_builtins(registry);
-    
-    // Register list manipulation built-ins
-    list_builtins::register_list_builtins(registry);
+/// Register all extended built-ins with the registry
+pub fn register_extended_builtins(registry: &mut SWRLBuiltInRegistry) {
+    register_math_builtins(registry);
+    register_string_builtins(registry);
+    register_uri_builtins(registry);
+    register_boolean_builtins(registry);
+    register_list_builtins(registry);
+    register_additional_comparison_builtins(registry);
+    register_collection_builtins(registry);
 }
 
 #[cfg(test)]
