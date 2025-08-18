@@ -528,6 +528,10 @@ impl HyperTableau {
                     let equiv_clauses = self.compile_equivalent_classes_axiom(equiv_axiom)?;
                     clauses.extend(equiv_clauses);
                 }
+                Axiom::HasKey(haskey_axiom) => {
+                    let haskey_clauses = self.compile_has_key_axiom(haskey_axiom)?;
+                    clauses.extend(haskey_clauses);
+                }
                 _ => {
                     // Handle other axiom types as needed
                 }
@@ -613,6 +617,107 @@ impl HyperTableau {
                 });
             }
         }
+
+        Ok(clauses)
+    }
+
+    /// Compile a HasKey axiom to DL clauses
+    fn compile_has_key_axiom(
+        &self,
+        axiom: &crate::ontology::HasKeyAxiom,
+    ) -> Result<Vec<hyperresolution::DLClause>> {
+        let mut clauses = Vec::new();
+
+        // HasKey(C, p1, ..., pn) generates functional dependency constraints
+        // For any two individuals x, y in class C that have the same values for all key properties,
+        // x and y must be the same individual.
+        // This is encoded as: C(x) ∧ C(y) ∧ p1(x,v1) ∧ p1(y,v1) ∧ ... ∧ pn(x,vn) ∧ pn(y,vn) → x = y
+        // In DL clause form with variables x, y, v1, ..., vn:
+        // ¬C(x) ∨ ¬C(y) ∨ ¬p1(x,v1) ∨ ¬p1(y,v1) ∨ ... ∨ ¬pn(x,vn) ∨ ¬pn(y,vn) ∨ same(x,y)
+
+        let var_x = "x".to_string();
+        let var_y = "y".to_string();
+        let mut variables = HashSet::from([var_x.clone(), var_y.clone()]);
+        let mut body_atoms = Vec::new();
+
+        // Add class membership constraints
+        let class_atom_x = self.compile_class_expression_to_atom(&axiom.class, &var_x, true)?; // negated
+        let class_atom_y = self.compile_class_expression_to_atom(&axiom.class, &var_y, true)?; // negated
+        body_atoms.push(class_atom_x);
+        body_atoms.push(class_atom_y);
+
+        // Add object property constraints
+        for (i, obj_prop) in axiom.object_properties.iter().enumerate() {
+            let var_v = format!("v{}", i);
+            variables.insert(var_v.clone());
+
+            let prop_name = match obj_prop {
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                    prop.iri.to_string()
+                }
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                    format!("inv_{}", prop.iri.to_string())
+                }
+                crate::ontology::ObjectPropertyExpression::PropertyChain(_chain) => {
+                    // Property chains not supported in HasKey axioms according to OWL 2 spec
+                    return Err(crate::Error::reasoning("Property chains not supported in HasKey axioms".to_string()));
+                }
+            };
+
+            let prop_atom_x = hyperresolution::Atom {
+                predicate: prop_name.clone(),
+                arguments: vec![var_x.clone(), var_v.clone()],
+                is_positive: false,
+            };
+            let prop_atom_y = hyperresolution::Atom {
+                predicate: prop_name,
+                arguments: vec![var_y.clone(), var_v.clone()],
+                is_positive: false,
+            };
+
+            body_atoms.push(prop_atom_x);
+            body_atoms.push(prop_atom_y);
+        }
+
+        // Add data property constraints
+        for (i, data_prop) in axiom.data_properties.iter().enumerate() {
+            let var_d = format!("d{}", i);
+            variables.insert(var_d.clone());
+
+            let prop_name = match data_prop {
+                crate::ontology::DataPropertyExpression::DataProperty(prop) => {
+                    prop.iri.to_string()
+                }
+            };
+
+            let data_atom_x = hyperresolution::Atom {
+                predicate: prop_name.clone(),
+                arguments: vec![var_x.clone(), var_d.clone()],
+                is_positive: false,
+            };
+            let data_atom_y = hyperresolution::Atom {
+                predicate: prop_name,
+                arguments: vec![var_y.clone(), var_d.clone()],
+                is_positive: false,
+            };
+
+            body_atoms.push(data_atom_x);
+            body_atoms.push(data_atom_y);
+        }
+
+        // Head atom: same(x, y) - assert that x and y are the same individual
+        let same_atom = hyperresolution::Atom {
+            predicate: "same".to_string(),
+            arguments: vec![var_x.clone(), var_y.clone()],
+            is_positive: true,
+        };
+
+        clauses.push(hyperresolution::DLClause {
+            head: vec![same_atom],
+            body: body_atoms,
+            variables,
+            id: axiom.id.to_string(),
+        });
 
         Ok(clauses)
     }
@@ -855,6 +960,34 @@ impl HyperTableau {
                 // and the tableau has been properly initialized (has some ground disjunctions or has been run)
                 self.first_unprocessed_disjunction.is_none() && !self.ground_disjunctions.is_empty()
             }
+        }
+    }
+    
+    /// Get the predicate name for a class expression
+    fn get_concept_predicate(&self, class: &crate::ontology::ClassExpression) -> String {
+        match class {
+            crate::ontology::ClassExpression::Class(c) => c.iri.as_str().to_string(),
+            _ => "complex_concept".to_string(), // Simplified for complex expressions
+        }
+    }
+    
+    /// Get the predicate name for an object property expression
+    fn get_object_property_predicate(&self, prop: &crate::ontology::ObjectPropertyExpression) -> String {
+        match prop {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+            crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p) => {
+                format!("inv_{}", p.iri.to_string())
+            }
+            crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
+                "property_chain".to_string()
+            }
+        }
+    }
+    
+    /// Get the predicate name for a data property expression
+    fn get_data_property_predicate(&self, prop: &crate::ontology::DataPropertyExpression) -> String {
+        match prop {
+            crate::ontology::DataPropertyExpression::DataProperty(p) => p.iri.as_str().to_string(),
         }
     }
 }
