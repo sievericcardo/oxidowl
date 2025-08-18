@@ -1,7 +1,6 @@
 //! SWRL Concrete Syntax Parser
 //!
-//! This module implements parsing of SWRL rules from human-readable concrete syntax
-//! as outlined in the CONCRETE_SYNTAX_PLAN.md document.
+//! This module implements parsing of SWRL rules from human-readable concrete syntax.
 
 use crate::swrl::{SWRLRule, SWRLAtom, SWRLVariable, SWRLIArgument, SWRLDArgument, SWRLValue};
 use crate::ontology::{IRI, Individual, ClassExpression, Class, ObjectPropertyExpression, 

@@ -1,7 +1,6 @@
 //! Date/Time Constructor Built-in Predicates
 //!
-//! This module implements constructor built-ins for creating date, time, and duration
-//! values as outlined in the DATE_TIME_BUILTINS_PLAN.md document.
+//! This module implements constructor built-ins for creating date, time, and duration values.
 
 use crate::swrl::{SWRLBuiltIn, SWRLValue};
 use crate::swrl::temporal::{TemporalValue, TemporalError};

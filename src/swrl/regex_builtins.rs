@@ -1,7 +1,6 @@
 //! Regex Built-in Predicates for SWRL
 //!
-//! This module implements regex-based string processing built-ins for SWRL
-//! as outlined in the REGEX_SUPPORT_PLAN.md document.
+//! This module implements regex-based string processing built-ins for SWRL.
 
 use crate::swrl::builtins::{SWRLBuiltIn, SWRLValue};
 use crate::{Error, Result};

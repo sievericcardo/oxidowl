@@ -1,7 +1,4 @@
 //! Backward Chaining Implementation for SWRL
-//!
-//! This module implements goal-driven backward chaining inference as outlined
-//! in the BACKWARD_CHAINING_PLAN.md document.
 
 use crate::swrl::{SWRLRule, SWRLAtom, SWRLVariable, SWRLIArgument, SWRLDArgument, SWRLValue, SWRLBuiltIn};
 use crate::ontology::{Individual, ClassExpression, ObjectPropertyExpression, DataPropertyExpression, IRI};

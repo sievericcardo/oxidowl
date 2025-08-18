@@ -1,7 +1,6 @@
 //! SWRL Extended Built-ins Registration
 //!
-//! This module provides consolidated registration of all extended SWRL built-ins
-//! that were previously scattered in the missing_builtins.rs file.
+//! This module provides consolidated registration of all extended SWRL built-ins.
 
 use crate::swrl::{
     boolean_builtins,

@@ -1,10 +1,4 @@
 //! Comprehensive tests for all implemented SWRL features
-//!
-//! This module provides tests for the complete SWRL implementation including:
-//! - Phase 2 date/time built-ins
-//! - Regex built-ins  
-//! - Missing built-ins
-//! - Feature integration
 
 use oxidowl::swrl::{
     SWRLValue,
