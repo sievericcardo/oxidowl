@@ -149,6 +149,16 @@ impl SWRLBuiltInRegistry {
         }
     }
 
+    /// Get a built-in by IRI
+    pub fn get_builtin(&self, iri: &IRI) -> Option<&dyn SWRLBuiltIn> {
+        self.builtins.get(&iri.to_string()).map(|b| b.as_ref())
+    }
+
+    /// Get all registered built-in IRIs
+    pub fn get_builtin_iris(&self) -> Vec<IRI> {
+        self.builtins.keys().map(|s| IRI::new(s)).collect()
+    }
+
     /// Register all standard SWRL built-ins
     fn register_standard_builtins(&mut self) {
         // Comparison built-ins
@@ -240,6 +250,9 @@ impl SWRLBuiltInRegistry {
             IRI::new("http://www.w3.org/2003/11/swrlb#lowerCase"),
             Box::new(LowerCaseBuiltIn),
         );
+
+        // Register additional built-ins from missing_builtins module
+        crate::swrl::missing_builtins::register_missing_builtins(self);
     }
 }
 

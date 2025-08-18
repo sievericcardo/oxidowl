@@ -5,8 +5,15 @@
 //! the tableau reasoner.
 
 pub mod builtins;
+pub mod comprehensive_tests;
+pub mod datetime_builtins;
+pub mod datetime_tests;
 pub mod engine;
+pub mod integration;
 pub mod interpreter;
+pub mod missing_builtins;
+pub mod regex_builtins;
+pub mod temporal;
 pub mod validation;
 
 //#[cfg(test)]
@@ -17,8 +24,9 @@ pub use builtins::{
     SWRLBuiltIn, SWRLBuiltInRegistry as BuiltInRegistry, SWRLValue as BuiltInValue, SWRLValue,
 };
 pub use engine::SWRLRuleEngine;
+pub use integration::{SWRLFeatureRegistry, SWRLFeatureStatistics, ValidationResult};
 pub use interpreter::SWRLInterpreter;
-pub use validation::{SWRLValidator, ValidationIssue, ValidationResult, ValidationWarning};
+pub use validation::{SWRLValidator, ValidationIssue, ValidationResult as ValidationResultBase, ValidationWarning};
 
 // Re-export core SWRL types from ontology module
 pub use crate::ontology::axioms::{

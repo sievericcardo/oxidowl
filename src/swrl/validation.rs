@@ -352,27 +352,70 @@ impl SWRLValidator {
     /// Check if a built-in is standard
     fn is_standard_builtin(&self, iri: &IRI) -> bool {
         let standard_builtins = [
+            // Comparison built-ins
             "http://www.w3.org/2003/11/swrlb#equal",
             "http://www.w3.org/2003/11/swrlb#notEqual",
             "http://www.w3.org/2003/11/swrlb#lessThan",
             "http://www.w3.org/2003/11/swrlb#lessThanOrEqual",
             "http://www.w3.org/2003/11/swrlb#greaterThan",
             "http://www.w3.org/2003/11/swrlb#greaterThanOrEqual",
+            // Math built-ins
             "http://www.w3.org/2003/11/swrlb#add",
             "http://www.w3.org/2003/11/swrlb#subtract",
             "http://www.w3.org/2003/11/swrlb#multiply",
             "http://www.w3.org/2003/11/swrlb#divide",
+            "http://www.w3.org/2003/11/swrlb#integerDivide",
             "http://www.w3.org/2003/11/swrlb#mod",
             "http://www.w3.org/2003/11/swrlb#pow",
+            "http://www.w3.org/2003/11/swrlb#unaryPlus",
+            "http://www.w3.org/2003/11/swrlb#unaryMinus",
             "http://www.w3.org/2003/11/swrlb#abs",
+            "http://www.w3.org/2003/11/swrlb#ceiling",
+            "http://www.w3.org/2003/11/swrlb#floor",
+            "http://www.w3.org/2003/11/swrlb#round",
+            "http://www.w3.org/2003/11/swrlb#roundHalfToEven",
+            "http://www.w3.org/2003/11/swrlb#sin",
+            "http://www.w3.org/2003/11/swrlb#cos",
+            "http://www.w3.org/2003/11/swrlb#tan",
+            // Boolean built-ins
+            "http://www.w3.org/2003/11/swrlb#booleanNot",
+            // String built-ins
             "http://www.w3.org/2003/11/swrlb#stringLength",
             "http://www.w3.org/2003/11/swrlb#stringConcat",
-            "http://www.w3.org/2003/11/swrlb#contains",
-            "http://www.w3.org/2003/11/swrlb#startsWith",
-            "http://www.w3.org/2003/11/swrlb#endsWith",
+            "http://www.w3.org/2003/11/swrlb#stringEqualIgnoreCase",
             "http://www.w3.org/2003/11/swrlb#substring",
+            "http://www.w3.org/2003/11/swrlb#normalizeSpace",
             "http://www.w3.org/2003/11/swrlb#upperCase",
             "http://www.w3.org/2003/11/swrlb#lowerCase",
+            "http://www.w3.org/2003/11/swrlb#translate",
+            "http://www.w3.org/2003/11/swrlb#contains",
+            "http://www.w3.org/2003/11/swrlb#containsIgnoreCase",
+            "http://www.w3.org/2003/11/swrlb#startsWith",
+            "http://www.w3.org/2003/11/swrlb#endsWith",
+            "http://www.w3.org/2003/11/swrlb#substringBefore",
+            "http://www.w3.org/2003/11/swrlb#substringAfter",
+            "http://www.w3.org/2003/11/swrlb#matches",
+            "http://www.w3.org/2003/11/swrlb#replace",
+            "http://www.w3.org/2003/11/swrlb#tokenize",
+            // Date/Time/Duration built-ins
+            "http://www.w3.org/2003/11/swrlb#yearMonthDuration",
+            "http://www.w3.org/2003/11/swrlb#dayTimeDuration",
+            "http://www.w3.org/2003/11/swrlb#dateTime",
+            "http://www.w3.org/2003/11/swrlb#date",
+            "http://www.w3.org/2003/11/swrlb#time",
+            // URI built-ins
+            "http://www.w3.org/2003/11/swrlb#resolveURI",
+            "http://www.w3.org/2003/11/swrlb#anyURI",
+            // List built-ins
+            "http://www.w3.org/2003/11/swrlb#listConcat",
+            "http://www.w3.org/2003/11/swrlb#listIntersection",
+            "http://www.w3.org/2003/11/swrlb#listSubtraction",
+            "http://www.w3.org/2003/11/swrlb#member",
+            "http://www.w3.org/2003/11/swrlb#length",
+            "http://www.w3.org/2003/11/swrlb#first",
+            "http://www.w3.org/2003/11/swrlb#rest",
+            "http://www.w3.org/2003/11/swrlb#sublist",
+            "http://www.w3.org/2003/11/swrlb#empty",
         ];
 
         standard_builtins.contains(&iri.as_str())
