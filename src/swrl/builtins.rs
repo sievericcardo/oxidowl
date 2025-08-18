@@ -29,6 +29,48 @@ pub enum SWRLValue {
     Literal(Literal),
 }
 
+impl Eq for SWRLValue {}
+
+impl std::hash::Hash for SWRLValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            SWRLValue::String(s) => {
+                0u8.hash(state);
+                s.hash(state);
+            }
+            SWRLValue::Integer(i) => {
+                1u8.hash(state);
+                i.hash(state);
+            }
+            SWRLValue::Float(f) => {
+                2u8.hash(state);
+                // Hash float as bits to handle NaN/infinity properly
+                f.to_bits().hash(state);
+            }
+            SWRLValue::Boolean(b) => {
+                3u8.hash(state);
+                b.hash(state);
+            }
+            SWRLValue::DateTime(dt) => {
+                4u8.hash(state);
+                dt.hash(state);
+            }
+            SWRLValue::Uri(uri) => {
+                5u8.hash(state);
+                uri.hash(state);
+            }
+            SWRLValue::Individual(ind) => {
+                6u8.hash(state);
+                ind.hash(state);
+            }
+            SWRLValue::Literal(lit) => {
+                7u8.hash(state);
+                lit.hash(state);
+            }
+        }
+    }
+}
+
 impl SWRLValue {
     /// Check if this value represents a variable (not applicable for built-ins)
     #[must_use]
@@ -251,8 +293,8 @@ impl SWRLBuiltInRegistry {
             Box::new(LowerCaseBuiltIn),
         );
 
-        // Register additional built-ins from missing_builtins module
-        crate::swrl::missing_builtins::register_missing_builtins(self);
+        // Register additional built-ins from extended_builtins module
+        crate::swrl::extended_builtins::register_extended_builtins(self);
     }
 }
 

@@ -3,7 +3,7 @@ use crate::swrl::temporal::{TemporalValue, TemporalError, utils};
 use crate::ontology::Literal;
 use crate::error::{Result, Error};
 use std::collections::HashMap;
-use chrono::{NaiveDate, NaiveTime, NaiveDateTime, Datelike, Timelike};
+use chrono::{NaiveDate, NaiveTime, NaiveDateTime, Datelike, Timelike, Months};
 
 /// Registry for date/time built-ins
 pub struct DateTimeBuiltInRegistry {
@@ -47,6 +47,11 @@ impl DateTimeBuiltInRegistry {
         registry.register_builtin("http://www.w3.org/2003/11/swrlb#subtractDayTimeDurations", Box::new(SubtractDayTimeDurationsBuiltIn));
         registry.register_builtin("http://www.w3.org/2003/11/swrlb#multiplyDayTimeDuration", Box::new(MultiplyDayTimeDurationBuiltIn));
         registry.register_builtin("http://www.w3.org/2003/11/swrlb#divideDayTimeDuration", Box::new(DivideDayTimeDurationBuiltIn));
+        
+        // Missing built-ins from the plan
+        registry.register_builtin("http://www.w3.org/2003/11/swrlb#timezone", Box::new(TimezoneBuiltIn));
+        registry.register_builtin("http://www.w3.org/2003/11/swrlb#addYearMonthDuration", Box::new(AddYearMonthDurationBuiltIn));
+        registry.register_builtin("http://www.w3.org/2003/11/swrlb#addYearMonthDurations", Box::new(AddYearMonthDurationsBuiltIn));
         
         registry
     }
@@ -782,4 +787,187 @@ impl SWRLBuiltIn for DivideDayTimeDurationBuiltIn {
     fn arity(&self) -> Option<usize> {
         Some(2)
     }
+}
+
+/// timezone built-in: Extract timezone from dateTime value
+/// swrlb:timezone(result, dateTime)
+#[derive(Debug, Clone)]
+pub struct TimezoneBuiltIn;
+
+impl SWRLBuiltIn for TimezoneBuiltIn {
+    fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
+        if args.len() != 2 {
+            return Err(Error::reasoning("timezone expects exactly 2 arguments (result, dateTime)"));
+        }
+        
+        match &args[1] {
+            SWRLValue::Literal(literal) => {
+                let datetime_str = &literal.value;
+                
+                // Extract timezone portion from ISO 8601 datetime string
+                // Examples: "2023-01-01T10:00:00Z", "2023-01-01T10:00:00+05:00", "2023-01-01T10:00:00-08:00"
+                let timezone = if let Some(tz_pos) = datetime_str.rfind(|c| c == 'Z' || c == '+' || c == '-') {
+                    if datetime_str.chars().nth(tz_pos).unwrap() == 'Z' {
+                        "Z".to_string()
+                    } else {
+                        datetime_str[tz_pos..].to_string()
+                    }
+                } else {
+                    // No timezone specified, return empty string or local timezone
+                    "".to_string()
+                };
+                
+                Ok(SWRLValue::Literal(Literal {
+                    value: timezone,
+                    datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
+                        .map_err(|e| Error::reasoning(format!("Invalid URL: {}", e)))?),
+                    language: None,
+                }))
+            }
+            _ => Err(Error::reasoning("timezone requires a dateTime literal"))
+        }
+    }
+    
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#timezone"
+    }
+    
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
+}
+
+/// addYearMonthDuration built-in: Add year-month duration to date
+/// swrlb:addYearMonthDuration(result, date, yearMonthDuration)
+#[derive(Debug, Clone)]
+pub struct AddYearMonthDurationBuiltIn;
+
+impl SWRLBuiltIn for AddYearMonthDurationBuiltIn {
+    fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
+        if args.len() != 3 {
+            return Err(Error::reasoning("addYearMonthDuration expects exactly 3 arguments (result, date, yearMonthDuration)"));
+        }
+        
+        match (&args[1], &args[2]) {
+            (SWRLValue::Literal(date_lit), SWRLValue::Literal(duration_lit)) => {
+                let date_str = &date_lit.value;
+                let duration_str = &duration_lit.value;
+                
+                // Parse date (YYYY-MM-DD format)
+                let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+                    .map_err(|e| Error::reasoning(format!("Invalid date format: {}", e)))?;
+                
+                // Parse yearMonth duration (P1Y2M format)
+                let (years, months) = parse_year_month_duration(duration_str)?;
+                
+                // Add years and months
+                let new_date = date
+                    .checked_add_months(chrono::Months::new((years * 12 + months) as u32))
+                    .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))?;
+                
+                Ok(SWRLValue::Literal(Literal {
+                    value: new_date.format("%Y-%m-%d").to_string(),
+                    datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
+                        .map_err(|e| Error::reasoning(format!("Invalid URL: {}", e)))?),
+                    language: None,
+                }))
+            }
+            _ => Err(Error::reasoning("addYearMonthDuration requires date and yearMonthDuration literals"))
+        }
+    }
+    
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#addYearMonthDuration"
+    }
+    
+    fn arity(&self) -> Option<usize> {
+        Some(3)
+    }
+}
+
+/// addYearMonthDurations built-in: Add two year-month durations
+/// swrlb:addYearMonthDurations(result, duration1, duration2)
+#[derive(Debug, Clone)]
+pub struct AddYearMonthDurationsBuiltIn;
+
+impl SWRLBuiltIn for AddYearMonthDurationsBuiltIn {
+    fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
+        if args.len() != 3 {
+            return Err(Error::reasoning("addYearMonthDurations expects exactly 3 arguments (result, duration1, duration2)"));
+        }
+        
+        match (&args[1], &args[2]) {
+            (SWRLValue::Literal(dur1_lit), SWRLValue::Literal(dur2_lit)) => {
+                let dur1_str = &dur1_lit.value;
+                let dur2_str = &dur2_lit.value;
+                
+                // Parse both yearMonth durations
+                let (years1, months1) = parse_year_month_duration(dur1_str)?;
+                let (years2, months2) = parse_year_month_duration(dur2_str)?;
+                
+                // Add durations
+                let total_months = years1 * 12 + months1 + years2 * 12 + months2;
+                let result_years = total_months / 12;
+                let result_months = total_months % 12;
+                
+                // Format result as P{years}Y{months}M
+                let result = if result_years > 0 && result_months > 0 {
+                    format!("P{}Y{}M", result_years, result_months)
+                } else if result_years > 0 {
+                    format!("P{}Y", result_years)
+                } else if result_months > 0 {
+                    format!("P{}M", result_months)
+                } else {
+                    "P0M".to_string()
+                };
+                
+                Ok(SWRLValue::Literal(Literal {
+                    value: result,
+                    datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration")
+                        .map_err(|e| Error::reasoning(format!("Invalid URL: {}", e)))?),
+                    language: None,
+                }))
+            }
+            _ => Err(Error::reasoning("addYearMonthDurations requires two yearMonthDuration literals"))
+        }
+    }
+    
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#addYearMonthDurations"
+    }
+    
+    fn arity(&self) -> Option<usize> {
+        Some(3)
+    }
+}
+
+/// Helper function to parse year-month duration string
+pub fn parse_year_month_duration(duration_str: &str) -> Result<(i32, i32)> {
+    if !duration_str.starts_with('P') {
+        return Err(Error::reasoning("Invalid yearMonthDuration format: must start with 'P'"));
+    }
+    
+    let duration_part = &duration_str[1..]; // Remove 'P'
+    let mut years = 0;
+    let mut months = 0;
+    
+    let mut current_num = String::new();
+    
+    for ch in duration_part.chars() {
+        if ch.is_ascii_digit() {
+            current_num.push(ch);
+        } else if ch == 'Y' {
+            years = current_num.parse::<i32>()
+                .map_err(|_| Error::reasoning("Invalid year value in yearMonthDuration"))?;
+            current_num.clear();
+        } else if ch == 'M' {
+            months = current_num.parse::<i32>()
+                .map_err(|_| Error::reasoning("Invalid month value in yearMonthDuration"))?;
+            current_num.clear();
+        } else {
+            return Err(Error::reasoning("Invalid character in yearMonthDuration"));
+        }
+    }
+    
+    Ok((years, months))
 }

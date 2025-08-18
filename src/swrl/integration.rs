@@ -8,7 +8,7 @@ use crate::swrl::{
     builtins::{SWRLBuiltIn, SWRLBuiltInRegistry, SWRLValue},
     datetime_builtins::DateTimeBuiltInRegistry,
     regex_builtins::RegexBuiltInRegistry,
-    missing_builtins::register_missing_builtins,
+    extended_builtins::register_extended_builtins,
 };
 use crate::ontology::IRI;
 use crate::{Error, Result};
@@ -34,14 +34,14 @@ impl SWRLFeatureRegistry {
         let datetime_registry = DateTimeBuiltInRegistry::new();
         let regex_registry = RegexBuiltInRegistry::new();
         
-        // Register missing built-ins to main registry
-        register_missing_builtins(&mut main_registry);
+        // Register extended built-ins to main registry
+        register_extended_builtins(&mut main_registry);
         
         let mut feature_status = HashMap::new();
         feature_status.insert("core_builtins".to_string(), true);
         feature_status.insert("datetime_builtins".to_string(), true);
         feature_status.insert("regex_builtins".to_string(), true);
-        feature_status.insert("missing_builtins".to_string(), true);
+        feature_status.insert("extended_builtins".to_string(), true);
         
         Self {
             main_registry,
@@ -399,7 +399,7 @@ mod tests {
     }
     
     #[test]
-    fn test_missing_builtins_execution() {
+    fn test_extended_builtins_execution() {
         let registry = SWRLFeatureRegistry::new();
         
         // Test boolean not
