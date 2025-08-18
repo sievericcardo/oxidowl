@@ -11,7 +11,7 @@ use crate::ontology::axioms::{
     DisjointClassesAxiom, DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom,
     DisjointUnionAxiom, Entity, EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
     EquivalentObjectPropertiesAxiom, FunctionalDataPropertyAxiom, FunctionalObjectPropertyAxiom,
-    InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
+    HasKeyAxiom, InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
     IrreflexiveObjectPropertyAxiom, NegativeDataPropertyAssertionAxiom,
     NegativeObjectPropertyAssertionAxiom, ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom,
     ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom, SWRLAtom, SWRLDArgument, SWRLIArgument,
@@ -125,6 +125,7 @@ pub trait OntologyVisitor<R = ()> {
                 self.visit_annotation_property_range_axiom(ann_range)
             }
             Axiom::Rule(rule) => self.visit_swrl_rule_axiom(rule),
+            Axiom::HasKey(haskey) => self.visit_haskey_axiom(haskey),
         }
     }
 
@@ -512,6 +513,17 @@ pub trait OntologyVisitor<R = ()> {
         &mut self,
         _axiom: &AnnotationPropertyRangeAxiom,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_haskey_axiom(&mut self, axiom: &HasKeyAxiom) -> Result<()> {
+        self.visit_class_expression(&axiom.class)?;
+        for obj_prop in &axiom.object_properties {
+            self.visit_object_property_expression(obj_prop)?;
+        }
+        for data_prop in &axiom.data_properties {
+            self.visit_data_property_expression(data_prop)?;
+        }
         Ok(())
     }
 
