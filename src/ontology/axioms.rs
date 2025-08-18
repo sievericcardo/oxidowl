@@ -119,6 +119,9 @@ pub enum AxiomType {
 
     // SWRL Rules
     Rule,
+
+    // OWL 2 Key Axioms
+    HasKey,
 }
 
 /// Axiom enum representing all OWL 2 DL axioms.
@@ -173,6 +176,9 @@ pub enum Axiom {
 
     // SWRL Rules
     Rule(SWRLRuleAxiom),
+
+    // OWL 2 Key Axioms
+    HasKey(HasKeyAxiom),
 }
 
 /// Class Axioms
@@ -449,6 +455,16 @@ pub struct SWRLRuleAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
+/// OWL 2 HasKey Axiom
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HasKeyAxiom {
+    pub id: AxiomId,
+    pub class: crate::ontology::ClassExpression,
+    pub object_properties: Vec<crate::ontology::ObjectPropertyExpression>,
+    pub data_properties: Vec<crate::ontology::DataPropertyExpression>,
+    pub annotations: Vec<crate::ontology::Annotation>,
+}
+
 impl SWRLRuleAxiom {
     #[must_use]
     pub fn new(id: AxiomId, rule: SWRLRule) -> Self {
@@ -468,6 +484,41 @@ impl SWRLRuleAxiom {
         Self {
             id,
             rule,
+            annotations,
+        }
+    }
+}
+
+impl HasKeyAxiom {
+    #[must_use]
+    pub fn new(
+        id: AxiomId,
+        class: crate::ontology::ClassExpression,
+        object_properties: Vec<crate::ontology::ObjectPropertyExpression>,
+        data_properties: Vec<crate::ontology::DataPropertyExpression>,
+    ) -> Self {
+        Self {
+            id,
+            class,
+            object_properties,
+            data_properties,
+            annotations: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_annotations(
+        id: AxiomId,
+        class: crate::ontology::ClassExpression,
+        object_properties: Vec<crate::ontology::ObjectPropertyExpression>,
+        data_properties: Vec<crate::ontology::DataPropertyExpression>,
+        annotations: Vec<crate::ontology::Annotation>,
+    ) -> Self {
+        Self {
+            id,
+            class,
+            object_properties,
+            data_properties,
             annotations,
         }
     }
@@ -512,6 +563,7 @@ impl AxiomTrait for Axiom {
             Axiom::AnnotationPropertyDomain(axiom) => axiom.id,
             Axiom::AnnotationPropertyRange(axiom) => axiom.id,
             Axiom::Rule(axiom) => axiom.id,
+            Axiom::HasKey(axiom) => axiom.id,
         }
     }
 
@@ -553,6 +605,7 @@ impl AxiomTrait for Axiom {
             Axiom::AnnotationPropertyDomain(_) => AxiomType::AnnotationPropertyDomain,
             Axiom::AnnotationPropertyRange(_) => AxiomType::AnnotationPropertyRange,
             Axiom::Rule(_) => AxiomType::Rule,
+            Axiom::HasKey(_) => AxiomType::HasKey,
         }
     }
 
@@ -629,6 +682,7 @@ impl AxiomStore {
             Axiom::AnnotationPropertyDomain(axiom) => axiom.id = id,
             Axiom::AnnotationPropertyRange(axiom) => axiom.id = id,
             Axiom::Rule(axiom) => axiom.id = id,
+            Axiom::HasKey(axiom) => axiom.id = id,
             Axiom::Declaration(_) => {
                 // Declaration axioms don't need ID assignment
             }
