@@ -20,18 +20,12 @@ impl SWRLBuiltIn for NotEqualToBuiltIn {
         }
 
         match (&args[0], &args[1]) {
-            (SWRLValue::String(s1), SWRLValue::String(s2)) => {
-                Ok(SWRLValue::Boolean(s1 != s2))
-            }
-            (SWRLValue::Integer(i1), SWRLValue::Integer(i2)) => {
-                Ok(SWRLValue::Boolean(i1 != i2))
-            }
+            (SWRLValue::String(s1), SWRLValue::String(s2)) => Ok(SWRLValue::Boolean(s1 != s2)),
+            (SWRLValue::Integer(i1), SWRLValue::Integer(i2)) => Ok(SWRLValue::Boolean(i1 != i2)),
             (SWRLValue::Float(f1), SWRLValue::Float(f2)) => {
                 Ok(SWRLValue::Boolean((f1 - f2).abs() > f64::EPSILON))
             }
-            (SWRLValue::Boolean(b1), SWRLValue::Boolean(b2)) => {
-                Ok(SWRLValue::Boolean(b1 != b2))
-            }
+            (SWRLValue::Boolean(b1), SWRLValue::Boolean(b2)) => Ok(SWRLValue::Boolean(b1 != b2)),
             (SWRLValue::Integer(i), SWRLValue::Float(f)) => {
                 Ok(SWRLValue::Boolean((*i as f64 - f).abs() > f64::EPSILON))
             }
@@ -89,9 +83,7 @@ impl SWRLBuiltIn for BooleanAndBuiltIn {
         }
 
         match (&args[0], &args[1]) {
-            (SWRLValue::Boolean(b1), SWRLValue::Boolean(b2)) => {
-                Ok(SWRLValue::Boolean(*b1 && *b2))
-            }
+            (SWRLValue::Boolean(b1), SWRLValue::Boolean(b2)) => Ok(SWRLValue::Boolean(*b1 && *b2)),
             _ => Err(Error::reasoning("BooleanAnd requires boolean arguments")),
         }
     }
@@ -115,9 +107,7 @@ impl SWRLBuiltIn for BooleanOrBuiltIn {
         }
 
         match (&args[0], &args[1]) {
-            (SWRLValue::Boolean(b1), SWRLValue::Boolean(b2)) => {
-                Ok(SWRLValue::Boolean(*b1 || *b2))
-            }
+            (SWRLValue::Boolean(b1), SWRLValue::Boolean(b2)) => Ok(SWRLValue::Boolean(*b1 || *b2)),
             _ => Err(Error::reasoning("BooleanOr requires boolean arguments")),
         }
     }
@@ -137,7 +127,9 @@ pub struct MinBuiltIn;
 impl SWRLBuiltIn for MinBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 3 {
-            return Err(Error::reasoning("Min expects exactly 3 arguments (result, value1, value2)"));
+            return Err(Error::reasoning(
+                "Min expects exactly 3 arguments (result, value1, value2)",
+            ));
         }
 
         match (&args[0], &args[1], &args[2]) {
@@ -176,7 +168,9 @@ pub struct MaxBuiltIn;
 impl SWRLBuiltIn for MaxBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 3 {
-            return Err(Error::reasoning("Max expects exactly 3 arguments (result, value1, value2)"));
+            return Err(Error::reasoning(
+                "Max expects exactly 3 arguments (result, value1, value2)",
+            ));
         }
 
         match (&args[0], &args[1], &args[2]) {
@@ -213,7 +207,7 @@ impl SWRLBuiltIn for MaxBuiltIn {
 fn simple_pattern_match(text: &str, pattern: &str) -> bool {
     let text_chars: Vec<char> = text.chars().collect();
     let pattern_chars: Vec<char> = pattern.chars().collect();
-    
+
     fn match_recursive(text: &[char], pattern: &[char]) -> bool {
         match (text.first(), pattern.first()) {
             (None, None) => true,
@@ -234,34 +228,36 @@ fn simple_pattern_match(text: &str, pattern: &str) -> bool {
             }
         }
     }
-    
+
     match_recursive(&text_chars, &pattern_chars)
 }
 
 /// Function to register all additional comparison built-ins to a registry
-pub fn register_additional_comparison_builtins(registry: &mut crate::swrl::builtins::SWRLBuiltInRegistry) {
+pub fn register_additional_comparison_builtins(
+    registry: &mut crate::swrl::builtins::SWRLBuiltInRegistry,
+) {
     use crate::ontology::IRI;
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#notEqualTo"),
         Box::new(NotEqualToBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#booleanAnd"),
         Box::new(BooleanAndBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#booleanOr"),
         Box::new(BooleanOrBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#min"),
         Box::new(MinBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#max"),
         Box::new(MaxBuiltIn),
@@ -275,11 +271,14 @@ mod tests {
     #[test]
     fn test_not_equal_to_builtin() {
         let builtin = NotEqualToBuiltIn;
-        
-        let args = vec![SWRLValue::String("hello".to_string()), SWRLValue::String("world".to_string())];
+
+        let args = vec![
+            SWRLValue::String("hello".to_string()),
+            SWRLValue::String("world".to_string()),
+        ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         let args = vec![SWRLValue::Integer(5), SWRLValue::Integer(5)];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));
@@ -298,11 +297,11 @@ mod tests {
     fn test_boolean_operations() {
         let and_builtin = BooleanAndBuiltIn;
         let or_builtin = BooleanOrBuiltIn;
-        
+
         let args = vec![SWRLValue::Boolean(true), SWRLValue::Boolean(false)];
         let result = and_builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));
-        
+
         let result = or_builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
     }
@@ -311,12 +310,20 @@ mod tests {
     fn test_min_max_builtins() {
         let min_builtin = MinBuiltIn;
         let max_builtin = MaxBuiltIn;
-        
-        let args = vec![SWRLValue::Integer(5), SWRLValue::Integer(10), SWRLValue::Integer(7)];
+
+        let args = vec![
+            SWRLValue::Integer(5),
+            SWRLValue::Integer(10),
+            SWRLValue::Integer(7),
+        ];
         let result = min_builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false)); // 5 != min(10, 7)
-        
-        let args = vec![SWRLValue::Integer(10), SWRLValue::Integer(10), SWRLValue::Integer(7)];
+
+        let args = vec![
+            SWRLValue::Integer(10),
+            SWRLValue::Integer(10),
+            SWRLValue::Integer(7),
+        ];
         let result = max_builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true)); // 10 == max(10, 7)
     }

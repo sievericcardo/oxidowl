@@ -1,13 +1,13 @@
 //! Tests for HasKey axiom implementation
 
 use oxidowl::{
-    ontology::{
-        Ontology, axioms::{HasKeyAxiom, Axiom}, 
-        concepts::{ClassExpression, Class}, 
-        ObjectProperty, ObjectPropertyExpression, DataPropertyExpression, IRI
-    },
-    core::reasoner::Reasoner,
     config::ReasonerConfig,
+    core::reasoner::Reasoner,
+    ontology::{
+        DataPropertyExpression, IRI, ObjectProperty, ObjectPropertyExpression, Ontology,
+        axioms::{Axiom, HasKeyAxiom},
+        concepts::{Class, ClassExpression},
+    },
 };
 
 #[cfg(test)]
@@ -17,14 +17,17 @@ mod tests {
     #[test]
     fn test_has_key_axiom_creation() {
         let mut ontology = Ontology::new();
-        
+
         // Create a class
-        let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
-        
+        let person_class =
+            ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
+
         // Create properties
-        let ssn_prop = oxidowl::ontology::DataProperty { iri: IRI::new("http://example.org/ssn") };
+        let ssn_prop = oxidowl::ontology::DataProperty {
+            iri: IRI::new("http://example.org/ssn"),
+        };
         let spouse_prop = ObjectProperty::new(IRI::new("http://example.org/spouse")).unwrap();
-        
+
         // Create HasKey axiom: Person has key properties ssn and spouse
         let has_key_axiom = HasKeyAxiom {
             id: 1,
@@ -33,10 +36,10 @@ mod tests {
             data_properties: vec![DataPropertyExpression::DataProperty(ssn_prop)],
             annotations: vec![],
         };
-        
+
         // Add axiom to ontology
         ontology.add_axiom(Axiom::HasKey(has_key_axiom));
-        
+
         // Verify axiom was added
         assert_eq!(ontology.axioms().len(), 1);
     }
@@ -44,11 +47,14 @@ mod tests {
     #[test]
     fn test_has_key_axiom_reasoning() {
         let mut ontology = Ontology::new();
-        
+
         // Create classes and properties
-        let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
-        let ssn_prop = oxidowl::ontology::DataProperty { iri: IRI::new("http://example.org/ssn") };
-        
+        let person_class =
+            ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
+        let ssn_prop = oxidowl::ontology::DataProperty {
+            iri: IRI::new("http://example.org/ssn"),
+        };
+
         // Create HasKey axiom
         let has_key_axiom = HasKeyAxiom {
             id: 2,
@@ -57,16 +63,16 @@ mod tests {
             data_properties: vec![DataPropertyExpression::DataProperty(ssn_prop)],
             annotations: vec![],
         };
-        
+
         ontology.add_axiom(Axiom::HasKey(has_key_axiom));
-        
+
         // Create reasoner
         let config = ReasonerConfig::default();
         let mut reasoner = Reasoner::new(config).unwrap();
-        
+
         // Load the ontology
         let _ = reasoner.load_ontology(ontology);
-        
+
         // Test that reasoner accepts the ontology with HasKey axioms
         assert!(reasoner.is_consistent().unwrap());
     }
@@ -74,8 +80,11 @@ mod tests {
     #[test]
     fn test_has_key_axiom_access() {
         let mut ontology = Ontology::new();
-        let person_class = ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
-        let ssn_prop = oxidowl::ontology::DataProperty { iri: IRI::new("http://example.org/ssn") };
+        let person_class =
+            ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")));
+        let ssn_prop = oxidowl::ontology::DataProperty {
+            iri: IRI::new("http://example.org/ssn"),
+        };
 
         let has_key_axiom = HasKeyAxiom {
             id: 3,
@@ -91,9 +100,10 @@ mod tests {
         let axiom_count = ontology.axioms().len();
         assert_eq!(axiom_count, 1);
 
-        let has_haskey = ontology.axioms().iter().any(|axiom| {
-            matches!(axiom, Axiom::HasKey(_))
-        });
+        let has_haskey = ontology
+            .axioms()
+            .iter()
+            .any(|axiom| matches!(axiom, Axiom::HasKey(_)));
         assert!(has_haskey);
     }
 }

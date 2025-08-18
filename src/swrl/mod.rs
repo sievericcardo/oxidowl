@@ -28,7 +28,9 @@ pub mod validation;
 //pub mod tests;
 
 // Re-export main types
-pub use backward_chaining::{BackwardChainingEngine, QueryResult, FactBase, VariableBindings as BCVariableBindings};
+pub use backward_chaining::{
+    BackwardChainingEngine, FactBase, QueryResult, VariableBindings as BCVariableBindings,
+};
 pub use builtins::{
     SWRLBuiltIn, SWRLBuiltInRegistry as BuiltInRegistry, SWRLValue as BuiltInValue, SWRLValue,
 };
@@ -36,8 +38,10 @@ pub use datetime_constructor_builtins::DateTimeConstructorRegistry;
 pub use engine::SWRLRuleEngine;
 pub use integration::{SWRLFeatureRegistry, SWRLFeatureStatistics, ValidationResult};
 pub use interpreter::SWRLInterpreter;
-pub use parser::{SWRLParser, NamespaceManager, ParseError};
-pub use validation::{SWRLValidator, ValidationIssue, ValidationResult as ValidationResultBase, ValidationWarning};
+pub use parser::{NamespaceManager, ParseError, SWRLParser};
+pub use validation::{
+    SWRLValidator, ValidationIssue, ValidationResult as ValidationResultBase, ValidationWarning,
+};
 
 // Re-export core SWRL types from ontology module
 pub use crate::ontology::axioms::{

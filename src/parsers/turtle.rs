@@ -342,7 +342,7 @@ impl TurtleParser {
         if let Some(start) = statement.find('<') {
             if let Some(end) = statement.find('>') {
                 let uri = &statement[start + 1..end];
-                
+
                 // Extract prefix name (between @prefix and :)
                 let prefix_part = &statement[7..start].trim(); // Skip "@prefix"
                 if let Some(colon_pos) = prefix_part.find(':') {

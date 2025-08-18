@@ -17,7 +17,9 @@ pub struct CountBuiltIn;
 impl SWRLBuiltIn for CountBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("Count expects exactly 2 arguments (result, collection)"));
+            return Err(Error::reasoning(
+                "Count expects exactly 2 arguments (result, collection)",
+            ));
         }
 
         match (&args[0], &args[1]) {
@@ -27,11 +29,13 @@ impl SWRLBuiltIn for CountBuiltIn {
                 } else {
                     collection_str.split(',').map(|s| s.trim()).collect()
                 };
-                
+
                 let actual_count = items.len() as i64;
                 Ok(SWRLValue::Boolean(*expected_count == actual_count))
             }
-            _ => Err(Error::reasoning("Count requires integer and collection arguments")),
+            _ => Err(Error::reasoning(
+                "Count requires integer and collection arguments",
+            )),
         }
     }
 
@@ -76,7 +80,9 @@ pub struct UnionBuiltIn;
 impl SWRLBuiltIn for UnionBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 3 {
-            return Err(Error::reasoning("Union expects exactly 3 arguments (result, collection1, collection2)"));
+            return Err(Error::reasoning(
+                "Union expects exactly 3 arguments (result, collection1, collection2)",
+            ));
         }
 
         match (&args[0], &args[1], &args[2]) {
@@ -86,17 +92,17 @@ impl SWRLBuiltIn for UnionBuiltIn {
                 } else {
                     coll1.split(',').map(|s| s.trim()).collect()
                 };
-                
+
                 let items2: HashSet<&str> = if coll2.is_empty() {
                     HashSet::new()
                 } else {
                     coll2.split(',').map(|s| s.trim()).collect()
                 };
-                
+
                 let union: HashSet<&str> = items1.union(&items2).cloned().collect();
                 let mut union_vec: Vec<&str> = union.into_iter().collect();
                 union_vec.sort();
-                
+
                 let union_str = union_vec.join(",");
                 Ok(SWRLValue::Boolean(*result == union_str))
             }
@@ -119,7 +125,9 @@ pub struct SubsetBuiltIn;
 impl SWRLBuiltIn for SubsetBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("Subset expects exactly 2 arguments (subset, superset)"));
+            return Err(Error::reasoning(
+                "Subset expects exactly 2 arguments (subset, superset)",
+            ));
         }
 
         match (&args[0], &args[1]) {
@@ -129,13 +137,13 @@ impl SWRLBuiltIn for SubsetBuiltIn {
                 } else {
                     subset_str.split(',').map(|s| s.trim()).collect()
                 };
-                
+
                 let superset_items: HashSet<&str> = if superset_str.is_empty() {
                     HashSet::new()
                 } else {
                     superset_str.split(',').map(|s| s.trim()).collect()
                 };
-                
+
                 let is_subset = subset_items.is_subset(&superset_items);
                 Ok(SWRLValue::Boolean(is_subset))
             }
@@ -155,22 +163,22 @@ impl SWRLBuiltIn for SubsetBuiltIn {
 /// Function to register all collection built-ins to a registry
 pub fn register_collection_builtins(registry: &mut crate::swrl::builtins::SWRLBuiltInRegistry) {
     use crate::ontology::IRI;
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#count"),
         Box::new(CountBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#isEmpty"),
         Box::new(IsEmptyBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#union"),
         Box::new(UnionBuiltIn),
     );
-    
+
     registry.register_builtin(
         IRI::new("http://www.w3.org/2003/11/swrlb#subset"),
         Box::new(SubsetBuiltIn),
@@ -184,11 +192,14 @@ mod tests {
     #[test]
     fn test_count_builtin() {
         let builtin = CountBuiltIn;
-        
-        let args = vec![SWRLValue::Integer(3), SWRLValue::String("apple,banana,cherry".to_string())];
+
+        let args = vec![
+            SWRLValue::Integer(3),
+            SWRLValue::String("apple,banana,cherry".to_string()),
+        ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         let args = vec![SWRLValue::Integer(0), SWRLValue::String("".to_string())];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
@@ -197,11 +208,11 @@ mod tests {
     #[test]
     fn test_is_empty_builtin() {
         let builtin = IsEmptyBuiltIn;
-        
+
         let args = vec![SWRLValue::String("".to_string())];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         let args = vec![SWRLValue::String("apple".to_string())];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));
@@ -210,11 +221,11 @@ mod tests {
     #[test]
     fn test_union_builtin() {
         let builtin = UnionBuiltIn;
-        
+
         let args = vec![
             SWRLValue::String("apple,banana,cherry".to_string()),
             SWRLValue::String("apple,banana".to_string()),
-            SWRLValue::String("cherry".to_string())
+            SWRLValue::String("cherry".to_string()),
         ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
@@ -223,17 +234,17 @@ mod tests {
     #[test]
     fn test_subset_builtin() {
         let builtin = SubsetBuiltIn;
-        
+
         let args = vec![
             SWRLValue::String("apple,banana".to_string()),
-            SWRLValue::String("apple,banana,cherry".to_string())
+            SWRLValue::String("apple,banana,cherry".to_string()),
         ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         let args = vec![
             SWRLValue::String("apple,grape".to_string()),
-            SWRLValue::String("apple,banana,cherry".to_string())
+            SWRLValue::String("apple,banana,cherry".to_string()),
         ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));

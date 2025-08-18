@@ -1,9 +1,11 @@
-use chrono::{DateTime, NaiveDate, NaiveTime, NaiveDateTime, Duration, FixedOffset, Datelike, Timelike};
+use crate::error::Error;
+use crate::ontology::Literal;
+use crate::swrl::SWRLValue;
+use chrono::{
+    DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Timelike,
+};
 use iso8601_duration::Duration as IsoDuration;
 use std::str::FromStr;
-use crate::ontology::Literal;
-use crate::error::Error;
-use crate::swrl::SWRLValue;
 use thiserror::Error as ThisError;
 
 /// Represents temporal values used in SWRL date/time built-ins
@@ -61,36 +63,36 @@ impl PartialOrd for TemporalValue {
         match (self, other) {
             // DateTime comparisons
             (TemporalValue::DateTime(dt1), TemporalValue::DateTime(dt2)) => dt1.partial_cmp(dt2),
-            
+
             // Date comparisons
             (TemporalValue::Date(d1), TemporalValue::Date(d2)) => d1.partial_cmp(d2),
-            
+
             // Time comparisons
             (TemporalValue::Time(t1), TemporalValue::Time(t2)) => t1.partial_cmp(t2),
-            
+
             // For durations, we'll convert to total seconds for comparison
             (TemporalValue::DayTimeDuration(_), TemporalValue::DayTimeDuration(_)) => {
                 let seconds1 = self.to_total_seconds();
                 let seconds2 = other.to_total_seconds();
                 seconds1.partial_cmp(&seconds2)
-            },
-            
+            }
+
             (TemporalValue::YearMonthDuration(_), TemporalValue::YearMonthDuration(_)) => {
                 let months1 = self.to_total_months();
                 let months2 = other.to_total_months();
                 months1.partial_cmp(&months2)
-            },
-            
+            }
+
             // Cross-type comparisons
             (TemporalValue::DateTime(dt), TemporalValue::Date(d)) => {
                 let dt_date = dt.date();
                 dt_date.partial_cmp(d)
-            },
+            }
             (TemporalValue::Date(d), TemporalValue::DateTime(dt)) => {
                 let dt_date = dt.date();
                 d.partial_cmp(&dt_date)
-            },
-            
+            }
+
             // For other cross-type comparisons, return None (incomparable)
             _ => None,
         }
@@ -101,31 +103,29 @@ impl TemporalValue {
     /// Convert duration to total seconds (for comparison purposes)
     fn to_total_seconds(&self) -> f64 {
         match self {
-            TemporalValue::DayTimeDuration(duration) => {
-                duration.num_seconds() as f64
-            },
+            TemporalValue::DayTimeDuration(duration) => duration.num_seconds() as f64,
             _ => 0.0,
         }
     }
-    
+
     /// Convert duration to total months (for comparison purposes)
     fn to_total_months(&self) -> i32 {
         match self {
             TemporalValue::YearMonthDuration(duration) => {
                 let mut total_months = 0;
-                
+
                 // Years (convert f32 to i32)
                 if duration.year > 0.0 {
                     total_months += (duration.year * 12.0) as i32;
                 }
-                
+
                 // Months (convert f32 to i32)
                 if duration.month > 0.0 {
                     total_months += duration.month as i32;
                 }
-                
+
                 total_months
-            },
+            }
             _ => 0,
         }
     }
@@ -133,46 +133,31 @@ impl TemporalValue {
     /// Parse a temporal value from a literal
     pub fn from_literal(literal: &Literal) -> Result<Self, TemporalError> {
         let value = &literal.value;
-        let datatype = literal.datatype.as_ref()
+        let datatype = literal
+            .datatype
+            .as_ref()
             .ok_or_else(|| TemporalError::InvalidDateFormat("No datatype specified".to_string()))?;
 
         match datatype.as_str() {
-            "http://www.w3.org/2001/XMLSchema#date" => {
-                Self::parse_date(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#time" => {
-                Self::parse_time(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#dateTime" => {
-                Self::parse_datetime(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#duration" => {
-                Self::parse_duration(value)
-            },
+            "http://www.w3.org/2001/XMLSchema#date" => Self::parse_date(value),
+            "http://www.w3.org/2001/XMLSchema#time" => Self::parse_time(value),
+            "http://www.w3.org/2001/XMLSchema#dateTime" => Self::parse_datetime(value),
+            "http://www.w3.org/2001/XMLSchema#duration" => Self::parse_duration(value),
             "http://www.w3.org/2001/XMLSchema#dayTimeDuration" => {
                 Self::parse_day_time_duration(value)
-            },
+            }
             "http://www.w3.org/2001/XMLSchema#yearMonthDuration" => {
                 Self::parse_year_month_duration(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#gYear" => {
-                Self::parse_gyear(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#gYearMonth" => {
-                Self::parse_gyear_month(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#gMonthDay" => {
-                Self::parse_gmonth_day(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#gMonth" => {
-                Self::parse_gmonth(value)
-            },
-            "http://www.w3.org/2001/XMLSchema#gDay" => {
-                Self::parse_gday(value)
-            },
-            _ => Err(TemporalError::UnsupportedOperation(
-                format!("Unsupported temporal datatype: {}", datatype)
-            )),
+            }
+            "http://www.w3.org/2001/XMLSchema#gYear" => Self::parse_gyear(value),
+            "http://www.w3.org/2001/XMLSchema#gYearMonth" => Self::parse_gyear_month(value),
+            "http://www.w3.org/2001/XMLSchema#gMonthDay" => Self::parse_gmonth_day(value),
+            "http://www.w3.org/2001/XMLSchema#gMonth" => Self::parse_gmonth(value),
+            "http://www.w3.org/2001/XMLSchema#gDay" => Self::parse_gday(value),
+            _ => Err(TemporalError::UnsupportedOperation(format!(
+                "Unsupported temporal datatype: {}",
+                datatype
+            ))),
         }
     }
 
@@ -196,7 +181,11 @@ impl TemporalValue {
         if Self::has_timezone(value) {
             // Parse with timezone
             DateTime::parse_from_rfc3339(value)
-                .map(|dt| TemporalValue::DateTimeWithTz(dt.with_timezone(&FixedOffset::east_opt(0).unwrap())))
+                .map(|dt| {
+                    TemporalValue::DateTimeWithTz(
+                        dt.with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    )
+                })
                 .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))
         } else {
             // Parse without timezone
@@ -211,7 +200,7 @@ impl TemporalValue {
         if value.len() < 20 {
             return false;
         }
-        
+
         let suffix = &value[19..];
         suffix.starts_with('Z') || suffix.starts_with('+') || suffix.starts_with('-')
     }
@@ -226,7 +215,7 @@ impl TemporalValue {
             } else {
                 // Convert to chrono Duration
                 let mut total_seconds = 0i64;
-                
+
                 if iso_duration.day > 0.0 {
                     total_seconds += (iso_duration.day * 24.0 * 3600.0) as i64;
                 }
@@ -239,7 +228,7 @@ impl TemporalValue {
                 if iso_duration.second > 0.0 {
                     total_seconds += iso_duration.second as i64;
                 }
-                
+
                 Duration::try_seconds(total_seconds)
                     .map(TemporalValue::DayTimeDuration)
                     .ok_or_else(|| TemporalError::ArithmeticOverflow)
@@ -253,10 +242,10 @@ impl TemporalValue {
     fn parse_day_time_duration(value: &str) -> Result<Self, TemporalError> {
         let iso_duration = IsoDuration::from_str(value)
             .map_err(|e| TemporalError::InvalidDurationFormat(format!("{}: {:?}", value, e)))?;
-        
+
         // Convert to chrono Duration
         let mut total_seconds = 0i64;
-        
+
         if iso_duration.day > 0.0 {
             total_seconds += (iso_duration.day * 24.0 * 3600.0) as i64;
         }
@@ -269,7 +258,7 @@ impl TemporalValue {
         if iso_duration.second > 0.0 {
             total_seconds += iso_duration.second as i64;
         }
-        
+
         Duration::try_seconds(total_seconds)
             .map(TemporalValue::DayTimeDuration)
             .ok_or_else(|| TemporalError::ArithmeticOverflow)
@@ -284,7 +273,8 @@ impl TemporalValue {
 
     /// Parse gYear from string
     fn parse_gyear(value: &str) -> Result<Self, TemporalError> {
-        value.parse::<i32>()
+        value
+            .parse::<i32>()
             .map(TemporalValue::GYear)
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))
     }
@@ -295,12 +285,14 @@ impl TemporalValue {
         if parts.len() != 2 {
             return Err(TemporalError::InvalidDateFormat(value.to_string()));
         }
-        
-        let year = parts[0].parse::<i32>()
+
+        let year = parts[0]
+            .parse::<i32>()
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
-        let month = parts[1].parse::<u32>()
+        let month = parts[1]
+            .parse::<u32>()
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
-        
+
         Ok(TemporalValue::GYearMonth(year, month))
     }
 
@@ -309,18 +301,20 @@ impl TemporalValue {
         if !value.starts_with("--") {
             return Err(TemporalError::InvalidDateFormat(value.to_string()));
         }
-        
+
         let value = &value[2..]; // Remove --
         let parts: Vec<&str> = value.split('-').collect();
         if parts.len() != 2 {
             return Err(TemporalError::InvalidDateFormat(value.to_string()));
         }
-        
-        let month = parts[0].parse::<u32>()
+
+        let month = parts[0]
+            .parse::<u32>()
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
-        let day = parts[1].parse::<u32>()
+        let day = parts[1]
+            .parse::<u32>()
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
-        
+
         Ok(TemporalValue::GMonthDay(month, day))
     }
 
@@ -329,11 +323,12 @@ impl TemporalValue {
         if !value.starts_with("--") {
             return Err(TemporalError::InvalidDateFormat(value.to_string()));
         }
-        
+
         let month_str = &value[2..];
-        let month = month_str.parse::<u32>()
+        let month = month_str
+            .parse::<u32>()
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
-        
+
         Ok(TemporalValue::GMonth(month))
     }
 
@@ -342,11 +337,12 @@ impl TemporalValue {
         if !value.starts_with("---") {
             return Err(TemporalError::InvalidDateFormat(value.to_string()));
         }
-        
+
         let day_str = &value[3..];
-        let day = day_str.parse::<u32>()
+        let day = day_str
+            .parse::<u32>()
             .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
-        
+
         Ok(TemporalValue::GDay(day))
     }
 
@@ -357,11 +353,17 @@ impl TemporalValue {
             TemporalValue::Time(time) => SWRLValue::String(time.to_string()),
             TemporalValue::DateTime(dt) => SWRLValue::String(dt.to_string()),
             TemporalValue::DateTimeWithTz(dt) => SWRLValue::String(dt.to_rfc3339()),
-            TemporalValue::DayTimeDuration(duration) => SWRLValue::String(format!("PT{}S", duration.num_seconds())),
+            TemporalValue::DayTimeDuration(duration) => {
+                SWRLValue::String(format!("PT{}S", duration.num_seconds()))
+            }
             TemporalValue::YearMonthDuration(duration) => SWRLValue::String(duration.to_string()),
             TemporalValue::GYear(year) => SWRLValue::String(year.to_string()),
-            TemporalValue::GYearMonth(year, month) => SWRLValue::String(format!("{:04}-{:02}", year, month)),
-            TemporalValue::GMonthDay(month, day) => SWRLValue::String(format!("--{:02}-{:02}", month, day)),
+            TemporalValue::GYearMonth(year, month) => {
+                SWRLValue::String(format!("{:04}-{:02}", year, month))
+            }
+            TemporalValue::GMonthDay(month, day) => {
+                SWRLValue::String(format!("--{:02}-{:02}", month, day))
+            }
             TemporalValue::GMonth(month) => SWRLValue::String(format!("--{:02}", month)),
             TemporalValue::GDay(day) => SWRLValue::String(format!("---{:02}", day)),
         }
@@ -376,11 +378,11 @@ impl TemporalValue {
                     .or_else(|_| Self::parse_date(s))
                     .or_else(|_| Self::parse_time(s))
                     .or_else(|_| Self::parse_duration(s))
-            },
-            SWRLValue::Literal(literal) => {
-                Self::from_literal(literal)
-            },
-            _ => Err(TemporalError::UnsupportedOperation("Cannot convert to temporal value".to_string())),
+            }
+            SWRLValue::Literal(literal) => Self::from_literal(literal),
+            _ => Err(TemporalError::UnsupportedOperation(
+                "Cannot convert to temporal value".to_string(),
+            )),
         }
     }
 
@@ -456,28 +458,35 @@ impl TemporalValue {
         match (self, duration) {
             (TemporalValue::DateTime(dt), TemporalValue::DayTimeDuration(dur)) => {
                 Ok(TemporalValue::DateTime(*dt + *dur))
-            },
+            }
             (TemporalValue::Date(date), TemporalValue::DayTimeDuration(dur)) => {
                 let dt = date.and_hms_opt(0, 0, 0).unwrap();
                 let result_dt = dt + *dur;
                 Ok(TemporalValue::Date(result_dt.date()))
-            },
-            _ => Err(TemporalError::UnsupportedOperation("Unsupported duration addition".to_string())),
+            }
+            _ => Err(TemporalError::UnsupportedOperation(
+                "Unsupported duration addition".to_string(),
+            )),
         }
     }
 
     /// Subtract a duration from this temporal value
-    pub fn subtract_duration(&self, duration: &TemporalValue) -> Result<TemporalValue, TemporalError> {
+    pub fn subtract_duration(
+        &self,
+        duration: &TemporalValue,
+    ) -> Result<TemporalValue, TemporalError> {
         match (self, duration) {
             (TemporalValue::DateTime(dt), TemporalValue::DayTimeDuration(dur)) => {
                 Ok(TemporalValue::DateTime(*dt - *dur))
-            },
+            }
             (TemporalValue::Date(date), TemporalValue::DayTimeDuration(dur)) => {
                 let dt = date.and_hms_opt(0, 0, 0).unwrap();
                 let result_dt = dt - *dur;
                 Ok(TemporalValue::Date(result_dt.date()))
-            },
-            _ => Err(TemporalError::UnsupportedOperation("Unsupported duration subtraction".to_string())),
+            }
+            _ => Err(TemporalError::UnsupportedOperation(
+                "Unsupported duration subtraction".to_string(),
+            )),
         }
     }
 }

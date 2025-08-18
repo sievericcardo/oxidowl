@@ -21,13 +21,14 @@ impl SWRLBuiltIn for ResolveUriBuiltIn {
         match (&args[0], &args[1], &args[2]) {
             (SWRLValue::Uri(result), SWRLValue::Uri(relative), SWRLValue::Uri(base)) => {
                 // Simplified URI resolution - for full implementation would need URI parsing
-                let resolved = if relative.starts_with("http://") || relative.starts_with("https://") {
-                    relative.clone()
-                } else if base.ends_with('/') {
-                    format!("{}{}", base, relative)
-                } else {
-                    format!("{}/{}", base, relative)
-                };
+                let resolved =
+                    if relative.starts_with("http://") || relative.starts_with("https://") {
+                        relative.clone()
+                    } else if base.ends_with('/') {
+                        format!("{}{}", base, relative)
+                    } else {
+                        format!("{}/{}", base, relative)
+                    };
                 Ok(SWRLValue::Boolean(*result == resolved))
             }
             _ => Err(Error::reasoning("ResolveURI requires URI arguments")),
@@ -49,20 +50,27 @@ pub struct AnyUriBuiltIn;
 impl SWRLBuiltIn for AnyUriBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("AnyURI expects exactly 2 arguments (result, string)"));
+            return Err(Error::reasoning(
+                "AnyURI expects exactly 2 arguments (result, string)",
+            ));
         }
 
         match (&args[0], &args[1]) {
             (SWRLValue::Uri(result), SWRLValue::String(input)) => {
                 // Basic URI validation and construction
-                let uri = if input.starts_with("http://") || input.starts_with("https://") || input.starts_with("urn:") {
+                let uri = if input.starts_with("http://")
+                    || input.starts_with("https://")
+                    || input.starts_with("urn:")
+                {
                     input.clone()
                 } else {
                     format!("urn:{}", input)
                 };
                 Ok(SWRLValue::Boolean(*result == uri))
             }
-            _ => Err(Error::reasoning("AnyURI requires URI result and string input")),
+            _ => Err(Error::reasoning(
+                "AnyURI requires URI result and string input",
+            )),
         }
     }
 
@@ -97,7 +105,7 @@ mod tests {
     #[test]
     fn test_resolve_uri() {
         let builtin = ResolveUriBuiltIn;
-        
+
         let args = vec![
             SWRLValue::Uri("http://example.org/resource".to_string()),
             SWRLValue::Uri("resource".to_string()),
@@ -110,14 +118,14 @@ mod tests {
     #[test]
     fn test_any_uri() {
         let builtin = AnyUriBuiltIn;
-        
+
         let args = vec![
             SWRLValue::Uri("http://example.org/test".to_string()),
             SWRLValue::String("http://example.org/test".to_string()),
         ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         // Test URN construction
         let args = vec![
             SWRLValue::Uri("urn:test".to_string()),

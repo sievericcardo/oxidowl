@@ -16,11 +16,17 @@ pub struct IntegerDivideBuiltIn;
 impl SWRLBuiltIn for IntegerDivideBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 3 {
-            return Err(Error::reasoning("IntegerDivide expects exactly 3 arguments"));
+            return Err(Error::reasoning(
+                "IntegerDivide expects exactly 3 arguments",
+            ));
         }
 
         match (&args[0], &args[1], &args[2]) {
-            (SWRLValue::Integer(result), SWRLValue::Integer(dividend), SWRLValue::Integer(divisor)) => {
+            (
+                SWRLValue::Integer(result),
+                SWRLValue::Integer(dividend),
+                SWRLValue::Integer(divisor),
+            ) => {
                 if *divisor == 0 {
                     return Err(Error::reasoning("Division by zero"));
                 }
@@ -191,7 +197,9 @@ pub struct RoundHalfToEvenBuiltIn;
 impl SWRLBuiltIn for RoundHalfToEvenBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("RoundHalfToEven expects exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "RoundHalfToEven expects exactly 2 arguments",
+            ));
         }
 
         match (&args[0], &args[1]) {
@@ -202,7 +210,11 @@ impl SWRLBuiltIn for RoundHalfToEvenBuiltIn {
                     if (truncated as i64) % 2 == 0 {
                         truncated
                     } else {
-                        if *input > 0.0 { truncated + 1.0 } else { truncated - 1.0 }
+                        if *input > 0.0 {
+                            truncated + 1.0
+                        } else {
+                            truncated - 1.0
+                        }
                     }
                 } else {
                     input.round()
@@ -215,14 +227,20 @@ impl SWRLBuiltIn for RoundHalfToEvenBuiltIn {
                     if (truncated as i64) % 2 == 0 {
                         truncated
                     } else {
-                        if *input > 0.0 { truncated + 1.0 } else { truncated - 1.0 }
+                        if *input > 0.0 {
+                            truncated + 1.0
+                        } else {
+                            truncated - 1.0
+                        }
                     }
                 } else {
                     input.round()
                 };
                 Ok(SWRLValue::Boolean((result - rounded).abs() < f64::EPSILON))
             }
-            _ => Err(Error::reasoning("RoundHalfToEven requires numeric arguments")),
+            _ => Err(Error::reasoning(
+                "RoundHalfToEven requires numeric arguments",
+            )),
         }
     }
 
@@ -371,11 +389,11 @@ mod tests {
     #[test]
     fn test_ceiling() {
         let builtin = CeilingBuiltIn;
-        
+
         let args = vec![SWRLValue::Integer(4), SWRLValue::Float(3.2)];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         let args = vec![SWRLValue::Integer(3), SWRLValue::Float(3.2)];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));
@@ -384,12 +402,20 @@ mod tests {
     #[test]
     fn test_integer_divide() {
         let builtin = IntegerDivideBuiltIn;
-        
-        let args = vec![SWRLValue::Integer(2), SWRLValue::Integer(7), SWRLValue::Integer(3)];
+
+        let args = vec![
+            SWRLValue::Integer(2),
+            SWRLValue::Integer(7),
+            SWRLValue::Integer(3),
+        ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true)); // 7 / 3 = 2 (integer division)
-        
-        let args = vec![SWRLValue::Integer(3), SWRLValue::Integer(7), SWRLValue::Integer(3)];
+
+        let args = vec![
+            SWRLValue::Integer(3),
+            SWRLValue::Integer(7),
+            SWRLValue::Integer(3),
+        ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));
     }

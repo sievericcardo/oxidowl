@@ -660,7 +660,9 @@ impl HyperTableau {
                 }
                 crate::ontology::ObjectPropertyExpression::PropertyChain(_chain) => {
                     // Property chains not supported in HasKey axioms according to OWL 2 spec
-                    return Err(crate::Error::reasoning("Property chains not supported in HasKey axioms".to_string()));
+                    return Err(crate::Error::reasoning(
+                        "Property chains not supported in HasKey axioms".to_string(),
+                    ));
                 }
             };
 
@@ -685,9 +687,7 @@ impl HyperTableau {
             variables.insert(var_d.clone());
 
             let prop_name = match data_prop {
-                crate::ontology::DataPropertyExpression::DataProperty(prop) => {
-                    prop.iri.to_string()
-                }
+                crate::ontology::DataPropertyExpression::DataProperty(prop) => prop.iri.to_string(),
             };
 
             let data_atom_x = hyperresolution::Atom {
@@ -962,7 +962,7 @@ impl HyperTableau {
             }
         }
     }
-    
+
     /// Get the predicate name for a class expression
     fn get_concept_predicate(&self, class: &crate::ontology::ClassExpression) -> String {
         match class {
@@ -970,9 +970,12 @@ impl HyperTableau {
             _ => "complex_concept".to_string(), // Simplified for complex expressions
         }
     }
-    
+
     /// Get the predicate name for an object property expression
-    fn get_object_property_predicate(&self, prop: &crate::ontology::ObjectPropertyExpression) -> String {
+    fn get_object_property_predicate(
+        &self,
+        prop: &crate::ontology::ObjectPropertyExpression,
+    ) -> String {
         match prop {
             crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
             crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p) => {
@@ -983,9 +986,12 @@ impl HyperTableau {
             }
         }
     }
-    
+
     /// Get the predicate name for a data property expression
-    fn get_data_property_predicate(&self, prop: &crate::ontology::DataPropertyExpression) -> String {
+    fn get_data_property_predicate(
+        &self,
+        prop: &crate::ontology::DataPropertyExpression,
+    ) -> String {
         match prop {
             crate::ontology::DataPropertyExpression::DataProperty(p) => p.iri.as_str().to_string(),
         }

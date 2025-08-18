@@ -437,17 +437,17 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
         .children()
         .filter(roxmltree::Node::is_element)
         .collect();
-    
+
     if children.is_empty() {
         return Err(Error::io("HasKey must have at least a class".to_string()));
     }
 
     // First child should be the class
     let class = parse_class_expression(&children[0], _base_iri)?;
-    
+
     let mut object_properties = Vec::new();
     let mut data_properties = Vec::new();
-    
+
     // Remaining children are properties
     for child in &children[1..] {
         match child.tag_name().name() {
@@ -456,9 +456,7 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
                     if let Ok(url) = url::Url::parse(iri) {
                         object_properties.push(
                             crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                                crate::ontology::ObjectProperty {
-                                    iri: url,
-                                },
+                                crate::ontology::ObjectProperty { iri: url },
                             ),
                         );
                     }
@@ -466,13 +464,9 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
             }
             "DataProperty" => {
                 if let Some(iri) = child.attribute("IRI") {
-                    data_properties.push(
-                        crate::ontology::DataPropertyExpression::DataProperty(
-                            crate::ontology::DataProperty {
-                                iri: IRI::new(iri),
-                            },
-                        ),
-                    );
+                    data_properties.push(crate::ontology::DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty { iri: IRI::new(iri) },
+                    ));
                 }
             }
             _ => {

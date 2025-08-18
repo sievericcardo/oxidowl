@@ -11,10 +11,10 @@ mod simple_tests {
         assert_eq!(parse_year_month_duration("P6M").unwrap(), (0, 6));
         assert_eq!(parse_year_month_duration("P2Y5M").unwrap(), (2, 5));
         assert_eq!(parse_year_month_duration("P0Y0M").unwrap(), (0, 0));
-        
+
         // Test invalid formats
-        assert!(parse_year_month_duration("1Y").is_err());  // Missing P
-        assert!(parse_year_month_duration("PY").is_err());  // Missing number
+        assert!(parse_year_month_duration("1Y").is_err()); // Missing P
+        assert!(parse_year_month_duration("PY").is_err()); // Missing number
         assert!(parse_year_month_duration("P1D").is_err()); // Invalid unit
     }
 }

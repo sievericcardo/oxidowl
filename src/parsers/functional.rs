@@ -493,7 +493,9 @@ impl FunctionalParser {
                                 .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                                 .into(),
                         };
-                        object_properties.push(crate::ontology::ObjectPropertyExpression::ObjectProperty(object_prop));
+                        object_properties.push(
+                            crate::ontology::ObjectPropertyExpression::ObjectProperty(object_prop),
+                        );
                         position += 1;
                     }
                     if position < tokens.len() && tokens[position] == ")" {
@@ -512,7 +514,9 @@ impl FunctionalParser {
                                 .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
                                 .into(),
                         };
-                        data_properties.push(crate::ontology::DataPropertyExpression::DataProperty(data_prop));
+                        data_properties.push(
+                            crate::ontology::DataPropertyExpression::DataProperty(data_prop),
+                        );
                         position += 1;
                     }
                     if position < tokens.len() && tokens[position] == ")" {

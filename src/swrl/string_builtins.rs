@@ -15,14 +15,18 @@ pub struct StringEqualIgnoreCaseBuiltIn;
 impl SWRLBuiltIn for StringEqualIgnoreCaseBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("StringEqualIgnoreCase expects exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "StringEqualIgnoreCase expects exactly 2 arguments",
+            ));
         }
 
         match (&args[0], &args[1]) {
             (SWRLValue::String(a), SWRLValue::String(b)) => {
                 Ok(SWRLValue::Boolean(a.to_lowercase() == b.to_lowercase()))
             }
-            _ => Err(Error::reasoning("StringEqualIgnoreCase requires string arguments")),
+            _ => Err(Error::reasoning(
+                "StringEqualIgnoreCase requires string arguments",
+            )),
         }
     }
 
@@ -41,15 +45,14 @@ pub struct NormalizeSpaceBuiltIn;
 impl SWRLBuiltIn for NormalizeSpaceBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("NormalizeSpace expects exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "NormalizeSpace expects exactly 2 arguments",
+            ));
         }
 
         match (&args[0], &args[1]) {
             (SWRLValue::String(result), SWRLValue::String(input)) => {
-                let normalized = input
-                    .split_whitespace()
-                    .collect::<Vec<&str>>()
-                    .join(" ");
+                let normalized = input.split_whitespace().collect::<Vec<&str>>().join(" ");
                 Ok(SWRLValue::Boolean(*result == normalized))
             }
             _ => Err(Error::reasoning("NormalizeSpace requires string arguments")),
@@ -71,16 +74,18 @@ pub struct ContainsIgnoreCaseBuiltIn;
 impl SWRLBuiltIn for ContainsIgnoreCaseBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("ContainsIgnoreCase expects exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "ContainsIgnoreCase expects exactly 2 arguments",
+            ));
         }
 
         match (&args[0], &args[1]) {
-            (SWRLValue::String(haystack), SWRLValue::String(needle)) => {
-                Ok(SWRLValue::Boolean(
-                    haystack.to_lowercase().contains(&needle.to_lowercase())
-                ))
-            }
-            _ => Err(Error::reasoning("ContainsIgnoreCase requires string arguments")),
+            (SWRLValue::String(haystack), SWRLValue::String(needle)) => Ok(SWRLValue::Boolean(
+                haystack.to_lowercase().contains(&needle.to_lowercase()),
+            )),
+            _ => Err(Error::reasoning(
+                "ContainsIgnoreCase requires string arguments",
+            )),
         }
     }
 
@@ -99,11 +104,17 @@ pub struct SubstringBeforeBuiltIn;
 impl SWRLBuiltIn for SubstringBeforeBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 3 {
-            return Err(Error::reasoning("SubstringBefore expects exactly 3 arguments"));
+            return Err(Error::reasoning(
+                "SubstringBefore expects exactly 3 arguments",
+            ));
         }
 
         match (&args[0], &args[1], &args[2]) {
-            (SWRLValue::String(result), SWRLValue::String(string), SWRLValue::String(delimiter)) => {
+            (
+                SWRLValue::String(result),
+                SWRLValue::String(string),
+                SWRLValue::String(delimiter),
+            ) => {
                 let substring = if let Some(pos) = string.find(delimiter) {
                     &string[..pos]
                 } else {
@@ -111,7 +122,9 @@ impl SWRLBuiltIn for SubstringBeforeBuiltIn {
                 };
                 Ok(SWRLValue::Boolean(*result == substring))
             }
-            _ => Err(Error::reasoning("SubstringBefore requires string arguments")),
+            _ => Err(Error::reasoning(
+                "SubstringBefore requires string arguments",
+            )),
         }
     }
 
@@ -130,11 +143,17 @@ pub struct SubstringAfterBuiltIn;
 impl SWRLBuiltIn for SubstringAfterBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 3 {
-            return Err(Error::reasoning("SubstringAfter expects exactly 3 arguments"));
+            return Err(Error::reasoning(
+                "SubstringAfter expects exactly 3 arguments",
+            ));
         }
 
         match (&args[0], &args[1], &args[2]) {
-            (SWRLValue::String(result), SWRLValue::String(string), SWRLValue::String(delimiter)) => {
+            (
+                SWRLValue::String(result),
+                SWRLValue::String(string),
+                SWRLValue::String(delimiter),
+            ) => {
                 let substring = if let Some(pos) = string.find(delimiter) {
                     &string[pos + delimiter.len()..]
                 } else {
@@ -161,14 +180,21 @@ pub struct TranslateBuiltIn;
 impl SWRLBuiltIn for TranslateBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 4 {
-            return Err(Error::reasoning("Translate expects exactly 4 arguments (result, string, from_chars, to_chars)"));
+            return Err(Error::reasoning(
+                "Translate expects exactly 4 arguments (result, string, from_chars, to_chars)",
+            ));
         }
 
         match (&args[0], &args[1], &args[2], &args[3]) {
-            (SWRLValue::String(result), SWRLValue::String(input), SWRLValue::String(from_chars), SWRLValue::String(to_chars)) => {
+            (
+                SWRLValue::String(result),
+                SWRLValue::String(input),
+                SWRLValue::String(from_chars),
+                SWRLValue::String(to_chars),
+            ) => {
                 let from_vec: Vec<char> = from_chars.chars().collect();
                 let to_vec: Vec<char> = to_chars.chars().collect();
-                
+
                 let mut translated = String::new();
                 for ch in input.chars() {
                     if let Some(pos) = from_vec.iter().position(|&c| c == ch) {
@@ -180,7 +206,7 @@ impl SWRLBuiltIn for TranslateBuiltIn {
                         translated.push(ch);
                     }
                 }
-                
+
                 Ok(SWRLValue::Boolean(*result == translated))
             }
             _ => Err(Error::reasoning("Translate requires string arguments")),
@@ -234,12 +260,18 @@ mod tests {
     #[test]
     fn test_string_equal_ignore_case() {
         let builtin = StringEqualIgnoreCaseBuiltIn;
-        
-        let args = vec![SWRLValue::String("Hello".to_string()), SWRLValue::String("HELLO".to_string())];
+
+        let args = vec![
+            SWRLValue::String("Hello".to_string()),
+            SWRLValue::String("HELLO".to_string()),
+        ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
-        let args = vec![SWRLValue::String("Hello".to_string()), SWRLValue::String("World".to_string())];
+
+        let args = vec![
+            SWRLValue::String("Hello".to_string()),
+            SWRLValue::String("World".to_string()),
+        ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(false));
     }
@@ -247,10 +279,10 @@ mod tests {
     #[test]
     fn test_normalize_space() {
         let builtin = NormalizeSpaceBuiltIn;
-        
+
         let args = vec![
-            SWRLValue::String("hello world test".to_string()), 
-            SWRLValue::String("  hello   world    test  ".to_string())
+            SWRLValue::String("hello world test".to_string()),
+            SWRLValue::String("  hello   world    test  ".to_string()),
         ];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
@@ -259,7 +291,7 @@ mod tests {
     #[test]
     fn test_substring_before() {
         let builtin = SubstringBeforeBuiltIn;
-        
+
         let args = vec![
             SWRLValue::String("hello".to_string()),
             SWRLValue::String("hello world".to_string()),

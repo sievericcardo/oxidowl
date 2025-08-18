@@ -57,17 +57,17 @@ mod tests {
     #[test]
     fn test_boolean_not() {
         let builtin = BooleanNotBuiltIn;
-        
+
         // Test true -> false
         let args = vec![SWRLValue::Boolean(false), SWRLValue::Boolean(true)];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         // Test false -> true
         let args = vec![SWRLValue::Boolean(true), SWRLValue::Boolean(false)];
         let result = builtin.execute(&args).unwrap();
         assert_eq!(result, SWRLValue::Boolean(true));
-        
+
         // Test mismatch
         let args = vec![SWRLValue::Boolean(true), SWRLValue::Boolean(true)];
         let result = builtin.execute(&args).unwrap();
