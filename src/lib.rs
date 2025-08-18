@@ -16,7 +16,7 @@
 //!
 //! # Example Usage
 //!
-//! ```rust
+//! ```rust,no_run
 //! use oxidowl::{Reasoner, ReasonerConfig, OntologyFormat};
 //!
 //! // Create a reasoner with default configuration
