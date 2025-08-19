@@ -95,6 +95,15 @@ oxidowl/
 │   │   ├── functional.rs     # Functional syntax parser
 │   │   ├── rdf_xml.rs        # RDF/XML parser
 │   │   └── turtle.rs         # Turtle format parser
+│   ├── swrl/                  # SWRL (Semantic Web Rule Language) support
+│   │   ├── engine.rs         # Rule execution engine
+│   │   ├── interpreter.rs    # Rule interpretation
+│   │   ├── parser.rs         # SWRL syntax parsing
+│   │   ├── builtins.rs       # Core built-in predicates
+│   │   ├── datetime_builtins.rs # Date/time built-ins
+│   │   ├── regex_builtins.rs # Regular expression built-ins
+│   │   ├── validation.rs     # Rule validation
+│   │   └── integration.rs    # Feature integration
 │   ├── reasoning.rs           # High-level reasoning coordination
 │   ├── query.rs              # DL query engine with Manchester Syntax
 │   ├── config.rs             # Configuration management
@@ -104,7 +113,7 @@ oxidowl/
 ├── tests/
 │   ├── unit/                  # Unit tests
 │   ├── integration/           # Integration tests
-│   └── performance/           # Performance benchmarks
+│   ├── swrl/                  # SWRL-specific tests
 ├── examples/                  # Usage examples
 └── benches/                   # Criterion benchmarks
 ```
@@ -479,6 +488,8 @@ git commit -m "update code"
 - Performance optimizations
 - Additional reasoning tasks
 - Caching improvements
+- **SWRL Built-in Development**: Implement new built-in predicates
+- **DL Query Extensions**: Advanced Manchester Syntax features
 
 #### Advanced
 
@@ -486,23 +497,125 @@ git commit -m "update code"
 - Parallel reasoning strategies
 - New Description Logic features
 - Novel optimization techniques
+- **SWRL Extensions**: Advanced rule strategies, new built-in predicates, temporal reasoning
+- **Integration Improvements**: Enhanced horned-owl integration, performance optimizations
 
 ### Roadmap Areas
 
 Current priority areas for contributions:
 
 1. **OWL 2 RL Profile Support**: Implement rule-based reasoning
-2. **SWRL Rule Support**: Extend reasoning with semantic rules
-3. **Incremental Classification**: Optimize for dynamic ontologies
-4. **Distributed Reasoning**: Scale across multiple nodes
-5. **WebAssembly Compilation**: Enable web deployment
-6. **Python Bindings**: Expand language support
+2. **Incremental Classification**: Optimize for dynamic ontologies
+3. **Distributed Reasoning**: Scale across multiple nodes
+4. **WebAssembly Compilation**: Enable web deployment
+5. **Python Bindings**: Expand language support
+6. **SWRL Enhancements**:
+   - Backward chaining improvements
+   - Additional built-in predicates
+   - Temporal reasoning extensions
+   - Performance optimizations for large rule sets
+7. **Integration Improvements**:
+   - Enhanced horned-owl integration
+   - Additional ontology format support
+   - Streaming processing capabilities
+
+## SWRL Development Guidelines
+
+### SWRL Module Structure
+
+The SWRL implementation is modular and extensible:
+
+- **Engine** (`engine.rs`): Core rule execution with forward/backward/hybrid chaining
+- **Interpreter** (`interpreter.rs`): Individual rule interpretation and variable binding
+- **Parser** (`parser.rs`): SWRL syntax parsing with namespace support
+- **Built-ins**: Organized by category with consistent interfaces
+- **Validation** (`validation.rs`): Rule validation and error reporting
+- **Integration** (`integration.rs`): Unified interface for all SWRL features
+
+### Adding New Built-in Predicates
+
+1. **Choose the appropriate module**:
+   - `builtins.rs` - Core mathematical and logical built-ins
+   - `string_builtins.rs` - String manipulation predicates
+   - `datetime_builtins.rs` - Date/time operations
+   - `regex_builtins.rs` - Regular expression operations
+   - `additional_builtins.rs` - Missing standard built-ins
+
+1. **Implement the `SWRLBuiltIn` trait**:
+
+```rust
+pub struct MyBuiltIn;
+
+impl SWRLBuiltIn for MyBuiltIn {
+    fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
+        // Validate arguments
+        if args.len() != 2 {
+            return Err(Error::reasoning("Expected 2 arguments"));
+        }
+        
+        // Implement logic
+        // ...
+        
+        Ok(result)
+    }
+    
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#myBuiltIn"
+    }
+    
+    fn arity(&self) -> Option<usize> {
+        Some(2) // Fixed arity, or None for variable arity
+    }
+}
+```
+
+1. **Register the built-in**:
+
+```rust
+registry.register_builtin(
+    IRI::new("http://www.w3.org/2003/11/swrlb#myBuiltIn"),
+    Box::new(MyBuiltIn),
+);
+```
+
+1. **Add comprehensive tests**:
+
+```rust
+#[test]
+fn test_my_builtin() {
+    let builtin = MyBuiltIn;
+    let args = vec![
+        SWRLValue::String("test".to_string()),
+        SWRLValue::Integer(42),
+    ];
+    let result = builtin.execute(&args).unwrap();
+    assert_eq!(result, SWRLValue::Boolean(true));
+}
+```
+
+### SWRL Testing Guidelines
+
+1. **Unit Tests**: Test individual built-ins and components
+2. **Integration Tests**: Test rule execution and reasoning integration
+3. **Performance Tests**: Test with large rule sets and complex ontologies
+4. **Error Handling**: Test invalid rules, argument types, and edge cases
+
+### SWRL Performance Considerations
+
+- **Built-in Caching**: Cache expensive operations (regex compilation, etc.)
+- **Variable Binding Optimization**: Minimize binding combinations
+- **Rule Ordering**: Implement priority-based rule execution
+- **Inference Deduplication**: Avoid generating duplicate inferences
+- **Memory Management**: Use efficient data structures for large rule sets
 
 ## Resources
+
 
 ### Learning Resources
 
 - [OWL 2 DL Specification](https://www.w3.org/TR/owl2-syntax/)
+- [SWRL: A Semantic Web Rule Language](https://www.w3.org/Submission/SWRL/)
+- [SWRL Built-ins](https://www.w3.org/Submission/SWRL/#8) - Official built-in predicates
 - [Description Logic Handbook](
     https://doi.org/10.1017/CBO9780511711787)
 - [HermiT Reasoner](https://www.hermit-reasoner.com/)
