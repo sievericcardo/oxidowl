@@ -33,7 +33,7 @@ pub struct ReasoningConfig {
     pub expansion_strategy: ExpansionStrategy,
     /// Enable or disable optimisation
     pub enable_optimisations: bool,
-    /// `EMaximum` response time for reasoning tasks
+    /// Maximum response time for reasoning tasks
     pub timeout: Option<Duration>,
     /// Maximum memory usage in MB for the reasoner
     pub max_memory_mb: Option<u64>,
@@ -45,6 +45,14 @@ pub struct ReasoningConfig {
     pub max_expansion_depth: u32,
     /// Enable clash detection
     pub enable_clash_detection: bool,
+    /// Cache blocking nodes for reuse (HermiT-style)
+    pub enable_blockers_cache: bool,
+    /// Ignore unsupported datatypes
+    pub ignore_unsupported_datatypes: bool,
+    /// Dump DL clauses for debugging
+    pub dump_clauses: bool,
+    /// Clause dump file path
+    pub clause_dump_file: Option<String>,
 }
 
 /// Tableau algorithm types
@@ -67,6 +75,12 @@ pub enum BlockingStrategy {
     Pairwise,
     /// Dynamic blocking (adaptive)
     Dynamic,
+    /// Single blocking (HermiT-style)
+    Single,
+    /// Core blocking (HermiT-style)
+    Core,
+    /// Optimal blocking (HermiT-style)
+    Optimal,
 }
 
 /// Existential expansion strategy for the tableau
@@ -78,6 +92,10 @@ pub enum ExpansionStrategy {
     IndividualReuse,
     /// Priority-based expansion
     Priority,
+    /// EL expansion strategy (HermiT-style)
+    EL,
+    /// Optimal expansion strategy (HermiT-style)
+    Optimal,
 }
 
 /// Configuration for caching mechanisms
@@ -201,6 +219,10 @@ impl Default for ReasoningConfig {
             enable_explanations: false,
             max_expansion_depth: 100,
             enable_clash_detection: true,
+            enable_blockers_cache: false,
+            ignore_unsupported_datatypes: false,
+            dump_clauses: false,
+            clause_dump_file: None,
         }
     }
 }
@@ -219,6 +241,10 @@ impl Default for ReasonerConfig {
                 enable_explanations: false,
                 max_expansion_depth: 100,
                 enable_clash_detection: true,
+                enable_blockers_cache: false,
+                ignore_unsupported_datatypes: false,
+                dump_clauses: false,
+                clause_dump_file: None,
             },
             cache: CacheConfig {
                 enable_satisfiability_cache: true,
