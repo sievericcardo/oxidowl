@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using hypertableau algorithms with parallel computation"
 license = "BSD-3-Clause"
@@ -47,6 +47,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # CLI (for binary)
 clap = { version = "4.5", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
+iso8601-duration = "0.2"
 plotters = { version = "0.3", optional = true }
 
 # Synchronization primitives

@@ -11,12 +11,12 @@
 //! - [`ontology`] - Ontology representation and management
 //! - [`parsers`] - Input format parsers (OWL XML, Functional, RDF)
 //! - [`reasoning`] - High-level reasoning tasks and coordination
-//! - [`network`] - HTTP servers for `OWLlink` and SPARQL
+//! - [`network`] - HTTP servers for `OWLlink` and SPARQL (to be implemented)
 //! - [`config`] - Configuration management
 //!
 //! # Example Usage
 //!
-//! ```rust
+//! ```rust,no_run
 //! use oxidowl::{Reasoner, ReasonerConfig, OntologyFormat};
 //!
 //! // Create a reasoner with default configuration
@@ -46,6 +46,7 @@ pub mod ontology;
 pub mod parsers;
 pub mod query;
 pub mod reasoning;
+pub mod swrl; // SWRL (Semantic Web Rule Language) support
 pub mod visitor; // Visitor pattern for ontology traversal
 // pub mod utils;
 
@@ -53,6 +54,7 @@ pub mod visitor; // Visitor pattern for ontology traversal
 pub use crate::core::reasoner::Reasoner;
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
+pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
 
 // Re-export error types
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};

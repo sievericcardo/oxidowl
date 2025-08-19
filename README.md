@@ -6,6 +6,8 @@ A high-performance Description Logic reasoner for OWL 2 DL ontologies, implement
 [![Rust](https://img.shields.io/badge/rust-1.88+-orange.svg)](https://www.rust-lang.org)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#installation)
 
+![Oxidowl logo - generated with Google Gemini](oxidowl.webp)
+
 ## Overview
 
 Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements HermiT's hypertableau algorithm with hyperresolution and ground disjunctions for efficient reasoning, while leveraging Rust's memory safety and performance characteristics.
@@ -16,7 +18,8 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 🔧 **Complete OWL 2 DL Support**: Handles SROIQV(D) description logic with DisjointUnion axioms
 - 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, classification, and instance checking
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
-- 🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
+- � **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
+- �🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
 - ⚡ **Optimized Algorithms**: Hyperresolution, ground disjunctions, and advanced blocking strategies
 - 🦀 **Horned-OWL Integration**: Built on proven OWL parsing and modeling foundation
 
@@ -64,6 +67,9 @@ oxidowl classify -i ontology.owl -o hierarchy.json
 oxidowl query -i ontology.owl -q "Person and (hasChild some Thing)"
 oxidowl query -i greenhouse.owx -q "Operational or Maintenance or Overheating or Underheating" --namespace "http://www.smolang.org/greenhouseDT#"
 
+# Execute SWRL rules
+oxidowl swrl -i ontology-with-rules.owl --strategy forward
+
 # Run performance benchmarks
 oxidowl benchmark -i ontology.owl --algorithm all
 ```
@@ -73,7 +79,7 @@ oxidowl benchmark -i ontology.owl --algorithm all
 ```rust
 use oxidowl::{
     Reasoner, ReasonerConfig, DLQueryEngine, ReasoningService,
-    OntologyFormat, Result
+    OntologyFormat, Result, SWRLRuleEngine, SWRLConfig
 };
 
 #[tokio::main]
@@ -110,6 +116,11 @@ async fn main() -> Result<()> {
     let union_result = query_engine.execute_query("ClassA or ClassB or ClassC").await?;
     println!("Union query result: {:?}", union_result);
 
+    // Execute SWRL rules
+    let swrl_result = reasoning_service.execute_swrl_rules().await?;
+    println!("SWRL execution result: {} rules fired, {} inferences", 
+             swrl_result.applications, swrl_result.inferences.len());
+
     Ok(())
 }
 ```
@@ -120,6 +131,7 @@ Oxidowl supports extensive configuration options:
 
 ```rust
 use oxidowl::config::{ReasonerConfig, TableauAlgorithm};
+use oxidowl::swrl::{SWRLConfig, SWRLReasoningStrategy};
 
 let config = ReasonerConfig {
     algorithm: TableauAlgorithm::HyperTableau,
@@ -131,6 +143,16 @@ let config = ReasonerConfig {
     max_cache_size: 10_000,
     monitoring_level: MonitoringLevel::Basic,
     // ... additional options
+};
+
+// Configure SWRL rule execution
+let swrl_config = SWRLConfig {
+    strategy: SWRLReasoningStrategy::ForwardChaining,
+    max_rule_applications: 1000,
+    max_execution_depth: 100,
+    enable_builtins: true,
+    debug: false,
+    timeout_ms: Some(30000),
 };
 ```
 
@@ -160,6 +182,14 @@ let config = ReasonerConfig {
 
 - **`reasoning`** - High-level reasoning coordination
 - **`query`** - DL query engine with Manchester Syntax and union query support
+- **`swrl`** - SWRL (Semantic Web Rule Language) implementation
+  - `engine.rs` - SWRL rule execution engine with multiple strategies
+  - `interpreter.rs` - Individual rule interpretation and execution
+  - `parser.rs` - SWRL syntax parsing
+  - `builtins.rs` - Core built-in predicates (math, string, boolean)
+  - `datetime_builtins.rs` - Date/time built-in predicates
+  - `regex_builtins.rs` - Regular expression built-in predicates
+  - `validation.rs` - SWRL rule validation
 - **`adapter`** - Horned-OWL integration layer for enhanced parsing and modeling
 - **`config`** - Configuration management and optimization
 
@@ -238,6 +268,105 @@ println!("Vegetarian pizzas: {:?}", vegetarian_pizzas);
 println!("Union query result: {:?}", pump_query);
 ```
 
+### SWRL Rule Execution
+
+```rust
+use oxidowl::{ReasoningService, SWRLRuleEngine, SWRLConfig, SWRLReasoningStrategy};
+
+// Create SWRL configuration
+let swrl_config = SWRLConfig {
+    strategy: SWRLReasoningStrategy::ForwardChaining,
+    max_rule_applications: 1000,
+    enable_builtins: true,
+    debug: true,
+    ..Default::default()
+};
+
+// Create reasoning service with SWRL support
+let reasoning_service = ReasoningService::new(ontology, reasoner_config);
+
+// Execute SWRL rules
+let swrl_result = reasoning_service.execute_swrl_rules().await?;
+println!("SWRL execution: {} rules fired, {} new inferences", 
+         swrl_result.applications, swrl_result.inferences.len());
+
+// Get SWRL statistics
+let stats = reasoning_service.get_swrl_statistics().await?;
+println!("Total rule applications: {}", stats.total_rule_applications);
+println!("Rules fired: {}", stats.rules_fired);
+println!("Inferences generated: {}", stats.inferences_generated);
+
+// Control individual rules
+reasoning_service.set_swrl_rule_active(rule_id, false).await?; // Disable rule
+reasoning_service.set_swrl_rule_priority(rule_id, 10).await?;  // Set priority
+```
+
+### SWRL Built-in Predicates
+
+Oxidowl supports 30+ SWRL built-in predicates across multiple categories:
+
+```rust
+// Mathematical built-ins
+// swrlb:add(?x, ?y, ?z) - z = x + y
+// swrlb:subtract(?x, ?y, ?z) - z = x - y
+// swrlb:multiply(?x, ?y, ?z) - z = x * y
+// swrlb:divide(?x, ?y, ?z) - z = x / y
+// swrlb:mod(?x, ?y, ?z) - z = x % y
+// swrlb:pow(?x, ?y, ?z) - z = x^y
+
+// String built-ins
+// swrlb:stringLength(?s, ?len) - length of string s
+// swrlb:stringConcat(?s1, ?s2, ?result) - concatenate strings
+// swrlb:contains(?s, ?sub) - true if s contains sub
+// swrlb:startsWith(?s, ?prefix) - true if s starts with prefix
+// swrlb:endsWith(?s, ?suffix) - true if s ends with suffix
+
+// Date/time built-ins (15+ predicates)
+// swrlb:dateTimeEqual(?dt1, ?dt2) - compare date/times
+// swrlb:dateTimeLessThan(?dt1, ?dt2) - dt1 < dt2
+// swrlb:yearFromDateTime(?dt, ?year) - extract year
+// swrlb:monthFromDateTime(?dt, ?month) - extract month
+// swrlb:dayFromDateTime(?dt, ?day) - extract day
+
+// Regular expression built-ins
+// swrlb:matches(?text, ?pattern) - pattern matching
+// swrlb:replace(?text, ?pattern, ?replacement, ?result) - text replacement
+// swrlb:tokenize(?text, ?pattern, ?tokens) - tokenization
+// swrlb:extract(?text, ?pattern, ?result) - extract first match
+
+// Boolean built-ins
+// swrlb:booleanNot(?x, ?result) - logical NOT
+```
+
+### Custom SWRL Built-ins
+
+You can also register custom built-in predicates:
+
+```rust
+use oxidowl::swrl::{SWRLBuiltIn, SWRLValue};
+
+struct CustomBuiltIn;
+
+impl SWRLBuiltIn for CustomBuiltIn {
+    fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
+        // Custom logic here
+        Ok(SWRLValue::Boolean(true))
+    }
+    
+    fn name(&self) -> &str {
+        "http://example.org/customBuiltIn"
+    }
+    
+    fn arity(&self) -> Option<usize> {
+        Some(2) // Fixed arity of 2 arguments
+    }
+}
+
+// Register the custom built-in
+let mut swrl_engine = SWRLRuleEngine::new(swrl_config);
+swrl_engine.add_builtin(Box::new(CustomBuiltIn));
+```
+
 ### Server Mode
 
 ```rust
@@ -306,12 +435,17 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 ### Nice features to add in the future
 
 - [ ] OWL 2 RL profile support
-- [ ] SWRL rule support
 - [ ] Incremental classification
 - [ ] Distributed reasoning
 - [ ] WebAssembly compilation
 - [ ] Python bindings
 - [ ] Docker containerization
+
+### Recently Implemented
+
+- [x] **SWRL rule support** - Complete implementation with 30+ built-in predicates
+- [x] **DisjointUnion axiom support** - Full support in DL queries and reasoning
+- [x] **Advanced DL Query Engine** - Manchester Syntax with union query optimization
 
 ### Performance Improvements
 

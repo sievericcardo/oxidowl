@@ -191,6 +191,11 @@ pub fn parse(content: &str) -> Result<Ontology> {
                     ontology.add_axiom(axiom);
                 }
             }
+            "HasKey" => {
+                if let Ok(axiom) = parse_has_key(&child, base_iri.as_ref()) {
+                    ontology.add_axiom(axiom);
+                }
+            }
             _ => {
                 // Skip unknown elements or log warning
             }
@@ -424,6 +429,59 @@ fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> 
             annotations: Vec::new(),
         },
     ))
+}
+
+/// Parse a `HasKey` element
+fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+
+    if children.is_empty() {
+        return Err(Error::io("HasKey must have at least a class".to_string()));
+    }
+
+    // First child should be the class
+    let class = parse_class_expression(&children[0], _base_iri)?;
+
+    let mut object_properties = Vec::new();
+    let mut data_properties = Vec::new();
+
+    // Remaining children are properties
+    for child in &children[1..] {
+        match child.tag_name().name() {
+            "ObjectProperty" => {
+                if let Some(iri) = child.attribute("IRI") {
+                    if let Ok(url) = url::Url::parse(iri) {
+                        object_properties.push(
+                            crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                                crate::ontology::ObjectProperty { iri: url },
+                            ),
+                        );
+                    }
+                }
+            }
+            "DataProperty" => {
+                if let Some(iri) = child.attribute("IRI") {
+                    data_properties.push(crate::ontology::DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty { iri: IRI::new(iri) },
+                    ));
+                }
+            }
+            _ => {
+                // Skip unknown elements
+            }
+        }
+    }
+
+    Ok(Axiom::HasKey(crate::ontology::HasKeyAxiom {
+        id: generate_axiom_id(),
+        class,
+        object_properties,
+        data_properties,
+        annotations: Vec::new(),
+    }))
 }
 
 /// Parse a class expression

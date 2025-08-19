@@ -551,7 +551,7 @@ async fn execute_dl_query(
             let classes_vec: Vec<String> = if let Some(ref classes) = result.classes {
                 classes
                     .iter()
-                    .map(|c| extract_class_names_from_expression(c))
+                    .map(extract_class_names_from_expression)
                     .collect()
             } else {
                 Vec::new()

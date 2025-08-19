@@ -149,6 +149,9 @@ impl FunctionalParser {
                 position =
                     self.parse_object_property_assertion(tokens, position, ontology, prefixes)?;
             }
+            "HasKey" => {
+                position = self.parse_has_key(tokens, position, ontology, prefixes)?;
+            }
             _ => {
                 // Skip unknown constructs
                 position += 1;
@@ -455,6 +458,88 @@ impl FunctionalParser {
         } else {
             Ok(iri.to_string())
         }
+    }
+
+    /// Parse `HasKey` axiom: `HasKey`(<class> (<object_properties>) (<data_properties>))
+    fn parse_has_key(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        ontology: &mut Ontology,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<usize> {
+        position += 1; // Skip "HasKey"
+        if position < tokens.len() && tokens[position] == "(" {
+            position += 1; // Skip "("
+
+            if position < tokens.len() {
+                // Parse class
+                let class_iri = self.expand_iri(&tokens[position], prefixes)?;
+                let class = crate::ontology::Class {
+                    iri: url::Url::parse(&class_iri)
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                        .into(),
+                };
+                position += 1;
+
+                // Parse object properties list
+                let mut object_properties = Vec::new();
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+                    while position < tokens.len() && tokens[position] != ")" {
+                        let prop_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        let object_prop = crate::ontology::ObjectProperty {
+                            iri: url::Url::parse(&prop_iri)
+                                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                                .into(),
+                        };
+                        object_properties.push(
+                            crate::ontology::ObjectPropertyExpression::ObjectProperty(object_prop),
+                        );
+                        position += 1;
+                    }
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+                }
+
+                // Parse data properties list
+                let mut data_properties = Vec::new();
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+                    while position < tokens.len() && tokens[position] != ")" {
+                        let prop_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        let data_prop = crate::ontology::DataProperty {
+                            iri: url::Url::parse(&prop_iri)
+                                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
+                                .into(),
+                        };
+                        data_properties.push(
+                            crate::ontology::DataPropertyExpression::DataProperty(data_prop),
+                        );
+                        position += 1;
+                    }
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+                }
+
+                let axiom = crate::ontology::HasKeyAxiom {
+                    id: generate_axiom_id(),
+                    class: ClassExpression::Class(class),
+                    object_properties,
+                    data_properties,
+                    annotations: vec![],
+                };
+                ontology.add_axiom(crate::ontology::Axiom::HasKey(axiom));
+
+                if position < tokens.len() && tokens[position] == ")" {
+                    position += 1; // Skip ")"
+                }
+            }
+        }
+
+        Ok(position)
     }
 }
 
