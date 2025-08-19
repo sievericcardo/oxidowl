@@ -5,7 +5,7 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{Result, config::ReasonerConfig, core::reasoner::Reasoner, ontology::OntologyFormat};
-use std::{fs, path::PathBuf, time::Instant, collections::HashMap};
+use std::{fs, path::PathBuf, time::Instant};
 use tracing::{Level, error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -1040,7 +1040,7 @@ async fn execute_subclasses_query(
     if let Some(output_path) = output {
         fs::write(output_path, result)?;
     } else {
-        println!("Subclasses of {}:", class_iri);
+        println!("Subclasses of {class_iri}:");
         for class in &subclasses {
             println!("  {}", format_class_expression(class));
         }
@@ -1085,7 +1085,7 @@ async fn execute_superclasses_query(
     if let Some(output_path) = output {
         fs::write(output_path, result)?;
     } else {
-        println!("Superclasses of {}:", class_iri);
+        println!("Superclasses of {class_iri}:");
         for class in &superclasses {
             println!("  {}", format_class_expression(class));
         }
@@ -1129,7 +1129,7 @@ async fn execute_equivalent_classes_query(
     if let Some(output_path) = output {
         fs::write(output_path, result)?;
     } else {
-        println!("Equivalent classes of {}:", class_iri);
+        println!("Equivalent classes of {class_iri}:");
         for class in &equivalent_classes {
             println!("  {}", format_class_expression(class));
         }
@@ -1231,7 +1231,7 @@ async fn execute_print_prefixes(
 
     println!("Available prefixes:");
     for (prefix, iri) in &prefixes {
-        println!("  {} = {}", prefix, iri);
+        println!("  {prefix} = {iri}");
     }
 
     Ok(())
@@ -1266,7 +1266,7 @@ fn format_class_expression(expr: &oxidowl::ontology::ClassExpression) -> String 
                 iri_str
             }
         }
-        _ => format!("{:?}", expr),
+        _ => format!("{expr:?}"),
     }
 }
 
