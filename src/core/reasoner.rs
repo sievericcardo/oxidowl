@@ -221,13 +221,17 @@ impl ClassificationResult {
 /// Property classification result containing property hierarchies
 #[derive(Debug, Clone)]
 pub struct PropertyClassificationResult {
-    pub object_property_hierarchy: Option<HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>>,
-    pub data_property_hierarchy: Option<HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>>,
+    pub object_property_hierarchy:
+        Option<HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>>,
+    pub data_property_hierarchy:
+        Option<HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>>,
 }
 
 impl PropertyClassificationResult {
     #[must_use]
-    pub fn new_object_properties(hierarchy: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>) -> Self {
+    pub fn new_object_properties(
+        hierarchy: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
+    ) -> Self {
         Self {
             object_property_hierarchy: Some(hierarchy),
             data_property_hierarchy: None,
@@ -235,7 +239,9 @@ impl PropertyClassificationResult {
     }
 
     #[must_use]
-    pub fn new_data_properties(hierarchy: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>) -> Self {
+    pub fn new_data_properties(
+        hierarchy: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
+    ) -> Self {
         Self {
             object_property_hierarchy: None,
             data_property_hierarchy: Some(hierarchy),
@@ -1030,10 +1036,22 @@ impl Reasoner {
         let mut prefixes = HashMap::new();
 
         // Add default OWL prefixes
-        prefixes.insert("owl".to_string(), "http://www.w3.org/2002/07/owl#".to_string());
-        prefixes.insert("rdf".to_string(), "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string());
-        prefixes.insert("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string());
-        prefixes.insert("xsd".to_string(), "http://www.w3.org/2001/XMLSchema#".to_string());
+        prefixes.insert(
+            "owl".to_string(),
+            "http://www.w3.org/2002/07/owl#".to_string(),
+        );
+        prefixes.insert(
+            "rdf".to_string(),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+        );
+        prefixes.insert(
+            "rdfs".to_string(),
+            "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+        );
+        prefixes.insert(
+            "xsd".to_string(),
+            "http://www.w3.org/2001/XMLSchema#".to_string(),
+        );
 
         // Add ontology-specific prefixes based on IRIs found
         if let Some(ontology_iri) = ontology_guard.get_iri() {
@@ -2176,7 +2194,9 @@ impl Reasoner {
             // Check for direct SubObjectPropertyOf axioms
             for axiom in ontology_guard.axioms() {
                 if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
-                    if &sub_axiom.sub_property == subproperty && &sub_axiom.super_property == superproperty {
+                    if &sub_axiom.sub_property == subproperty
+                        && &sub_axiom.super_property == superproperty
+                    {
                         return Ok(true);
                     }
                 }
@@ -2202,7 +2222,9 @@ impl Reasoner {
             // Check for direct SubDataPropertyOf axioms
             for axiom in ontology_guard.axioms() {
                 if let crate::ontology::axioms::Axiom::SubDataPropertyOf(sub_axiom) = axiom {
-                    if &sub_axiom.sub_property == subproperty && &sub_axiom.super_property == superproperty {
+                    if &sub_axiom.sub_property == subproperty
+                        && &sub_axiom.super_property == superproperty
+                    {
                         return Ok(true);
                     }
                 }
@@ -2241,7 +2263,10 @@ impl Reasoner {
             crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) => {
                 // Check if individual ∈ class is entailed
                 if let Individual::Named(named) = &class_assertion.individual {
-                    self.is_instance_of_expression(&class_assertion.individual, &class_assertion.class)
+                    self.is_instance_of_expression(
+                        &class_assertion.individual,
+                        &class_assertion.class,
+                    )
                 } else {
                     // For anonymous individuals, this is more complex
                     Ok(false)

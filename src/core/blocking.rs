@@ -425,7 +425,7 @@ impl CoreBlocking {
             .filter(|concept| match concept {
                 ConceptLabel::Atomic(_) => true,
                 // For now, treat all concepts as core since ConceptLabel structure may vary
-                _ => true, 
+                _ => true,
             })
             .cloned()
             .collect()
@@ -502,8 +502,9 @@ impl OptimalBlocking {
     /// Adapt the blocking strategy based on performance
     fn adapt_strategy(&mut self) {
         // Simple adaptation: if too many checks with few blocks, switch to more restrictive
-        if self.statistics.blocking_checks > 1000 
-            && self.statistics.nodes_blocked < self.statistics.blocking_checks / 10 {
+        if self.statistics.blocking_checks > 1000
+            && self.statistics.nodes_blocked < self.statistics.blocking_checks / 10
+        {
             // Switch to single blocking for better precision
             if !self.is_single_blocking() {
                 self.current_strategy = Box::new(SingleBlocking::new());

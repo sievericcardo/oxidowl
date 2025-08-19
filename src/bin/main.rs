@@ -484,13 +484,18 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             output,
             format,
             pretty_print,
-        } => execute_object_property_classification(input, output, format, pretty_print, config).await,
+        } => {
+            execute_object_property_classification(input, output, format, pretty_print, config)
+                .await
+        }
         Commands::ClassifyDataProperties {
             input,
             output,
             format,
             pretty_print,
-        } => execute_data_property_classification(input, output, format, pretty_print, config).await,
+        } => {
+            execute_data_property_classification(input, output, format, pretty_print, config).await
+        }
         Commands::Satisfiability {
             input,
             class_iri,
@@ -528,10 +533,9 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             output,
             format,
         } => execute_entailment_check(premise, conclusion, output, format, config).await,
-        Commands::PrintPrefixes {
-            input,
-            format,
-        } => execute_print_prefixes(input, format, config).await,
+        Commands::PrintPrefixes { input, format } => {
+            execute_print_prefixes(input, format, config).await
+        }
         Commands::Realization {
             input,
             output,
@@ -929,7 +933,10 @@ async fn execute_object_property_classification(
         return Err(oxidowl::Error::io("No input files provided".to_string()));
     }
 
-    info!("Performing object property classification on {} file(s)", input.len());
+    info!(
+        "Performing object property classification on {} file(s)",
+        input.len()
+    );
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
@@ -972,7 +979,10 @@ async fn execute_data_property_classification(
         return Err(oxidowl::Error::io("No input files provided".to_string()));
     }
 
-    info!("Performing data property classification on {} file(s)", input.len());
+    info!(
+        "Performing data property classification on {} file(s)",
+        input.len()
+    );
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
@@ -1016,7 +1026,11 @@ async fn execute_subclasses_query(
         return Err(oxidowl::Error::io("No input files provided".to_string()));
     }
 
-    info!("Getting {}subclasses of: {}", if direct { "direct " } else { "" }, class_iri);
+    info!(
+        "Getting {}subclasses of: {}",
+        if direct { "direct " } else { "" },
+        class_iri
+    );
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
@@ -1061,7 +1075,11 @@ async fn execute_superclasses_query(
         return Err(oxidowl::Error::io("No input files provided".to_string()));
     }
 
-    info!("Getting {}superclasses of: {}", if direct { "direct " } else { "" }, class_iri);
+    info!(
+        "Getting {}superclasses of: {}",
+        if direct { "direct " } else { "" },
+        class_iri
+    );
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
@@ -1161,7 +1179,10 @@ async fn execute_unsatisfiable_classes_query(
 
     let unsatisfiable_classes = reasoner.get_unsatisfiable_classes()?;
 
-    info!("Found {} unsatisfiable classes", unsatisfiable_classes.len());
+    info!(
+        "Found {} unsatisfiable classes",
+        unsatisfiable_classes.len()
+    );
 
     let result = format_class_list(&unsatisfiable_classes);
 
@@ -1184,7 +1205,11 @@ async fn execute_entailment_check(
     format: Option<InputFormat>,
     config: ReasonerConfig,
 ) -> Result<()> {
-    info!("Checking entailment: {} |= {}", premise.display(), conclusion.display());
+    info!(
+        "Checking entailment: {} |= {}",
+        premise.display(),
+        conclusion.display()
+    );
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
@@ -1193,15 +1218,21 @@ async fn execute_entailment_check(
 
     info!("Entailment result: {}", entails);
 
-    let result = if entails { "entails" } else { "does not entail" };
+    let result = if entails {
+        "entails"
+    } else {
+        "does not entail"
+    };
 
     if let Some(output_path) = output {
         fs::write(output_path, result)?;
     } else {
-        println!("Result: {} {} {}", 
-                 premise.display(), 
-                 result, 
-                 conclusion.display());
+        println!(
+            "Result: {} {} {}",
+            premise.display(),
+            result,
+            conclusion.display()
+        );
     }
 
     Ok(())
@@ -1249,7 +1280,9 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
     }
 }
 
-fn print_property_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::PropertyClassificationResult) {
+fn print_property_hierarchy_pretty(
+    hierarchy: &oxidowl::core::reasoner::PropertyClassificationResult,
+) {
     // Placeholder for property hierarchy printing
     println!("Property hierarchy (detailed implementation needed)");
 }
@@ -1271,7 +1304,8 @@ fn format_class_expression(expr: &oxidowl::ontology::ClassExpression) -> String 
 }
 
 fn format_class_list(classes: &[oxidowl::ontology::ClassExpression]) -> String {
-    classes.iter()
+    classes
+        .iter()
         .map(format_class_expression)
         .collect::<Vec<_>>()
         .join("\n")
