@@ -243,6 +243,25 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
+    /// Dump DL clauses (similar to HermiT)
+    DumpClauses {
+        /// Input ontology files
+        #[arg(short, long, value_name = "FILE")]
+        input: Vec<PathBuf>,
+
+        /// Output file for DL clauses
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+
+        /// Input format
+        #[arg(short, long, value_enum)]
+        format: Option<InputFormat>,
+
+        /// Pretty print the clauses
+        #[arg(short = 'P', long)]
+        pretty_print: bool,
+    },
+
     /// Perform individual realization
     Realization {
         /// Input ontology file
@@ -536,6 +555,12 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
         Commands::PrintPrefixes { input, format } => {
             execute_print_prefixes(input, format, config).await
         }
+        Commands::DumpClauses {
+            input,
+            output,
+            format,
+            pretty_print,
+        } => execute_dump_clauses(input, output, format, pretty_print, config).await,
         Commands::Realization {
             input,
             output,
@@ -1264,6 +1289,53 @@ async fn execute_print_prefixes(
     for (prefix, iri) in &prefixes {
         println!("  {prefix} = {iri}");
     }
+
+    Ok(())
+}
+
+async fn execute_dump_clauses(
+    input: Vec<PathBuf>,
+    output: Option<PathBuf>,
+    format: Option<InputFormat>,
+    pretty_print: bool,
+    config: ReasonerConfig,
+) -> Result<()> {
+    if input.is_empty() {
+        return Err(oxidowl::Error::io("No input files provided".to_string()));
+    }
+
+    info!("Dumping DL clauses");
+
+    let mut reasoner = Reasoner::new(config)?;
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
+    // Load multiple ontologies if provided
+    for file in &input {
+        info!("Loading ontology: {}", file.display());
+        reasoner.load_ontology_from_file(file, ontology_format)?;
+    }
+
+    // Generate DL clauses
+    let clause_set = reasoner.dump_dl_clauses()?;
+
+    // Output clauses
+    if let Some(output_file) = output {
+        clause_set.save_to_file(&output_file)?;
+        info!("DL clauses saved to: {}", output_file.display());
+    } else {
+        // Print to stdout
+        let output_str = if pretty_print {
+            clause_set.to_hermit_format()
+        } else {
+            clause_set.to_hermit_format()
+        };
+        println!("{output_str}");
+    }
+
+    println!("DL clause generation completed:");
+    println!("  Deterministic clauses: {}", clause_set.statistics.deterministic_clause_count);
+    println!("  Disjunctive clauses: {}", clause_set.statistics.disjunctive_clause_count);
+    println!("  ABox facts: {}", clause_set.statistics.positive_fact_count + clause_set.statistics.negative_fact_count);
 
     Ok(())
 }

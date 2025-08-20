@@ -11,6 +11,7 @@ use crate::{
         dependency::DependencySet,
         tableau::{RoleLabel, Tableau, TableauBuilder, TableauState},
     },
+    dl_clauses::{DLClauseGenerator, DLClauseSet},
     ontology::{
         Axiom, ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
         Ontology, OntologyFormat, OntologyRef,
@@ -1781,6 +1782,43 @@ impl Reasoner {
     pub fn explain_inconsistency(&self) -> Result<Vec<Axiom>> {
         // TODO:  use explanation support
         Ok(Vec::new())
+    }
+
+    /// Generate DL clauses from the current ontology
+    pub fn dump_dl_clauses(&self) -> Result<DLClauseSet> {
+        let start_time = Instant::now();
+        
+        info!("Generating DL clauses from ontology");
+        
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+        
+        let mut generator = DLClauseGenerator::new();
+        let clause_set = generator.generate_clauses(&ontology_guard)?;
+        
+        let generation_time = start_time.elapsed();
+        info!(
+            "DL clause generation completed in {generation_time:?}: {} deterministic, {} disjunctive, {} facts",
+            clause_set.statistics.deterministic_clause_count,
+            clause_set.statistics.disjunctive_clause_count,
+            clause_set.statistics.positive_fact_count + clause_set.statistics.negative_fact_count
+        );
+        
+        Ok(clause_set)
+    }
+
+    /// Save DL clauses to a file
+    pub fn save_dl_clauses<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let clause_set = self.dump_dl_clauses()?;
+        clause_set.save_to_file(&path)?;
+        info!("DL clauses saved to: {}", path.as_ref().display());
+        Ok(())
+    }
+
+    /// Get DL clauses as HermiT-formatted string
+    pub fn get_dl_clauses_string(&self) -> Result<String> {
+        let clause_set = self.dump_dl_clauses()?;
+        Ok(clause_set.to_hermit_format())
     }
 
     // Private methods for running tableau algorithms

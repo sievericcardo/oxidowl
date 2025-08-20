@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://example.org/test#"
+     xml:base="http://example.org/test"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Ontology rdf:about="http://example.org/test"/>
+    
+    <!-- Class declarations -->
+    <owl:Class rdf:about="http://example.org/test#Animal"/>
+    <owl:Class rdf:about="http://example.org/test#Dog"/>
+    <owl:Class rdf:about="http://example.org/test#Cat"/>
+    <owl:Class rdf:about="http://example.org/test#Mammal"/>
+    
+    <!-- SubClass relationships -->
+    <owl:Class rdf:about="http://example.org/test#Dog">
+        <rdfs:subClassOf rdf:resource="http://example.org/test#Animal"/>
+    </owl:Class>
+    
+    <owl:Class rdf:about="http://example.org/test#Cat">
+        <rdfs:subClassOf rdf:resource="http://example.org/test#Animal"/>
+    </owl:Class>
+    
+    <owl:Class rdf:about="http://example.org/test#Animal">
+        <rdfs:subClassOf rdf:resource="http://example.org/test#Mammal"/>
+    </owl:Class>
+    
+    <!-- Disjoint classes -->
+    <owl:Class rdf:about="http://example.org/test#Dog">
+        <owl:disjointWith rdf:resource="http://example.org/test#Cat"/>
+    </owl:Class>
+    
+    <!-- Individual -->
+    <owl:NamedIndividual rdf:about="http://example.org/test#fido">
+        <rdf:type rdf:resource="http://example.org/test#Dog"/>
+    </owl:NamedIndividual>
+    
+</rdf:RDF>

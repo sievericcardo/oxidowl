@@ -39,6 +39,7 @@
 pub mod cache;
 pub mod config;
 pub mod core;
+pub mod dl_clauses; // DL clause generation and dumping
 pub mod error;
 // pub mod network;
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
@@ -52,6 +53,7 @@ pub mod visitor; // Visitor pattern for ontology traversal
 
 // Re-export main types for convenience
 pub use crate::core::reasoner::Reasoner;
+pub use crate::dl_clauses::{DLClause, DLClauseGenerator, DLClauseSet, DLAtom};
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
