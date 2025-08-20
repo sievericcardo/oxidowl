@@ -380,6 +380,38 @@ impl DLClauseGenerator {
     fn compile_equivalent_classes_axiom(&mut self, axiom: &crate::ontology::EquivalentClassesAxiom) -> Result<Vec<DLClause>> {
         let mut clauses = Vec::new();
         
+        // Check for special case: NamedClass ≡ ComplexExpression
+        // This should generate disjunctive clauses
+        if axiom.classes.len() == 2 {
+            // Try to identify named class vs complex expression
+            let (named_class, complex_expr) = if self.is_named_class(&axiom.classes[0]) && !self.is_named_class(&axiom.classes[1]) {
+                (&axiom.classes[0], &axiom.classes[1])
+            } else if self.is_named_class(&axiom.classes[1]) && !self.is_named_class(&axiom.classes[0]) {
+                (&axiom.classes[1], &axiom.classes[0])
+            } else {
+                // Fall back to standard bidirectional implications
+                return self.compile_equivalent_classes_standard(axiom);
+            };
+            
+            // Generate disjunctive clause for complex definition
+            if let Some(disjunctive_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                clauses.push(disjunctive_clause);
+            }
+            
+            // Also generate standard implications
+            clauses.extend(self.compile_equivalent_classes_standard(axiom)?);
+        } else {
+            // Generate bidirectional implications for each pair (standard case)
+            clauses.extend(self.compile_equivalent_classes_standard(axiom)?);
+        }
+        
+        Ok(clauses)
+    }
+    
+    /// Standard EquivalentClasses compilation (bidirectional implications)
+    fn compile_equivalent_classes_standard(&mut self, axiom: &crate::ontology::EquivalentClassesAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
         // Generate bidirectional implications for each pair
         for i in 0..axiom.classes.len() {
             for j in (i + 1)..axiom.classes.len() {
@@ -408,6 +440,104 @@ impl DLClauseGenerator {
         }
         
         Ok(clauses)
+    }
+    
+    /// Check if a class expression is a simple named class
+    fn is_named_class(&self, expr: &ClassExpression) -> bool {
+        matches!(expr, ClassExpression::Class(_))
+    }
+    
+    /// Compile complex definition into disjunctive clause
+    /// For A ≡ B ⊓ C ⊓ ..., generate: A(x) ∨ ¬B(x) ∨ ¬C(x) ∨ ... :- [body conditions]
+    fn compile_complex_definition(&mut self, named_class: &ClassExpression, complex_expr: &ClassExpression) -> Result<Option<DLClause>> {
+        match complex_expr {
+            ClassExpression::ObjectIntersectionOf(conjuncts) => {
+                let var_x = self.fresh_variable();
+                
+                // Create head: NamedClass(x) ∨ ¬Conjunct1(x) ∨ ¬Conjunct2(x) ∨ ...
+                let mut head_atoms = Vec::new();
+                let mut body_atoms = Vec::new();
+                
+                // Add positive named class atom to head
+                let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, false)?;
+                head_atoms.push(named_atom);
+                
+                // Process each conjunct
+                for conjunct in conjuncts {
+                    match conjunct {
+                        ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                            // Handle ∃property.range
+                            let property_name = self.object_property_expression_to_string(property);
+                            let filler_name = self.extract_simple_class_name(filler);
+                            
+                            // Add negative restriction to head: ¬(∃property.range)(x)
+                            let neg_restriction_atom = DLAtom::new_negative(
+                                format!("some({},{})", property_name, filler_name),
+                                vec![var_x.clone()]
+                            );
+                            head_atoms.push(neg_restriction_atom);
+                            
+                            // Add positive property assertions to body
+                            let var_y = self.fresh_variable();
+                            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+                            let filler_atom = DLAtom::concept_assertion(&filler_name, &var_y);
+                            body_atoms.push(property_atom);
+                            body_atoms.push(filler_atom);
+                        }
+                        ClassExpression::DataSomeValuesFrom { property, filler } => {
+                            // Handle ∃dataProperty.dataRange
+                            let property_name = self.data_property_expression_to_string(property);
+                            let range_name = self.data_range_to_string(filler);
+                            
+                            let neg_restriction_atom = DLAtom::new_negative(
+                                format!("dataSome({},{})", property_name, range_name),
+                                vec![var_x.clone()]
+                            );
+                            head_atoms.push(neg_restriction_atom);
+                            
+                            let var_y = self.fresh_variable();
+                            let property_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y);
+                            let range_atom = DLAtom::concept_assertion(&range_name, &var_y);
+                            body_atoms.push(property_atom);
+                            body_atoms.push(range_atom);
+                        }
+                        ClassExpression::ObjectHasValue { property, value } => {
+                            // Handle ∃property.{individual}
+                            let property_name = self.object_property_expression_to_string(property);
+                            let individual_name = self.individual_to_string(value);
+                            
+                            let neg_restriction_atom = DLAtom::new_negative(
+                                format!("hasValue({},{})", property_name, individual_name),
+                                vec![var_x.clone()]
+                            );
+                            head_atoms.push(neg_restriction_atom);
+                            
+                            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &individual_name);
+                            body_atoms.push(property_atom);
+                        }
+                        _ => {
+                            // For other types, add negative atom to head
+                            let neg_conjunct_atom = self.compile_class_expression_to_atom(conjunct, &var_x, true)?;
+                            head_atoms.push(neg_conjunct_atom);
+                        }
+                    }
+                }
+                
+                if head_atoms.len() > 1 || !body_atoms.is_empty() {
+                    Ok(Some(DLClause::new(
+                        head_atoms,
+                        body_atoms,
+                        self.next_clause_id(),
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => {
+                // For non-intersection complex expressions, don't generate disjunctive clauses yet
+                Ok(None)
+            }
+        }
     }
 
     /// Compile DisjointClasses axiom
@@ -676,31 +806,47 @@ impl DLClauseGenerator {
         // Create disjoint union clauses
         let var_x = self.fresh_variable();
         
-        // Union clause: A(x) :- B1(x) v B2(x) v ... v Bn(x)
+        // 1. Coverage axiom: B1(x) v B2(x) v ... v Bn(x) :- A(x)
+        // This ensures that every A is one of the disjuncts
         let union_class_atom = self.compile_class_expression_to_atom(&axiom.class, &var_x, false)?;
-        let mut disjunct_atoms = Vec::new();
+        let mut disjunct_head_atoms = Vec::new();
         
         for disjunct in &axiom.disjoint_classes {
-            let disjunct_atom = self.compile_class_expression_to_atom(disjunct, &var_x, true)?;
-            disjunct_atoms.push(disjunct_atom);
+            let disjunct_atom = self.compile_class_expression_to_atom(disjunct, &var_x, false)?;
+            disjunct_head_atoms.push(disjunct_atom);
         }
         
-        // Create disjunctive clause for union
-        let union_clause = DLClause::new(
+        // Create disjunctive clause: B1(x) v B2(x) v ... v Bn(x) :- A(x)
+        let coverage_clause = DLClause::new(
+            disjunct_head_atoms, // Multiple heads (disjunctive)
             vec![union_class_atom],
-            disjunct_atoms,
             self.next_clause_id(),
         );
-        clauses.push(union_clause);
+        clauses.push(coverage_clause);
         
-        // Add disjointness constraints
+        // 2. Union axioms: A(x) :- B1(x), A(x) :- B2(x), ..., A(x) :- Bn(x)
+        // These are deterministic clauses showing each disjunct implies the union
+        for disjunct in &axiom.disjoint_classes {
+            let var_y = self.fresh_variable();
+            let union_atom = self.compile_class_expression_to_atom(&axiom.class, &var_y, false)?;
+            let disjunct_atom = self.compile_class_expression_to_atom(disjunct, &var_y, true)?;
+            
+            let union_clause = DLClause::new(
+                vec![union_atom],
+                vec![disjunct_atom],
+                self.next_clause_id(),
+            );
+            clauses.push(union_clause);
+        }
+        
+        // 3. Add disjointness constraints: ¬(Bi(x) ∧ Bj(x)) for all i ≠ j
         for i in 0..axiom.disjoint_classes.len() {
             for j in (i + 1)..axiom.disjoint_classes.len() {
-                let var_y = self.fresh_variable();
-                let a_atom = self.compile_class_expression_to_atom(&axiom.disjoint_classes[i], &var_y, true)?;
-                let b_atom = self.compile_class_expression_to_atom(&axiom.disjoint_classes[j], &var_y, true)?;
+                let var_z = self.fresh_variable();
+                let a_atom = self.compile_class_expression_to_atom(&axiom.disjoint_classes[i], &var_z, true)?;
+                let b_atom = self.compile_class_expression_to_atom(&axiom.disjoint_classes[j], &var_z, true)?;
                 
-                // Constraint: ¬(A(y) ∧ B(y))
+                // Constraint: ¬(A(z) ∧ B(z))
                 let constraint_clause = DLClause::new(
                     vec![], // Empty head (constraint)
                     vec![a_atom, b_atom],
@@ -970,6 +1116,27 @@ impl DLClauseGenerator {
         }
         
         Ok(clauses)
+    }
+    
+    /// Extract debug info from class expression
+    fn extract_debug_info(&self, expr: &ClassExpression) -> String {
+        match expr {
+            ClassExpression::Class(class) => format!("NamedClass({})", self.shorten_iri(&class.iri.to_string())),
+            ClassExpression::ObjectIntersectionOf(conjuncts) => format!("Intersection({} conjuncts)", conjuncts.len()),
+            ClassExpression::ObjectUnionOf(disjuncts) => format!("Union({} disjuncts)", disjuncts.len()),
+            ClassExpression::ObjectSomeValuesFrom { .. } => "SomeValuesFrom".to_string(),
+            ClassExpression::DataSomeValuesFrom { .. } => "DataSomeValuesFrom".to_string(),
+            ClassExpression::ObjectHasValue { .. } => "HasValue".to_string(),
+            _ => "OtherComplexExpression".to_string(),
+        }
+    }
+    
+    /// Extract simple class name from class expression (fallback for complex cases)
+    fn extract_simple_class_name(&self, expr: &ClassExpression) -> String {
+        match expr {
+            ClassExpression::Class(class) => self.shorten_iri(&class.iri.to_string()),
+            _ => "ComplexClass".to_string(),
+        }
     }
 
 }
