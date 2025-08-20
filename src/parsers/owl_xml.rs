@@ -191,6 +191,63 @@ pub fn parse(content: &str) -> Result<Ontology> {
                     ontology.add_axiom(axiom);
                 }
             }
+            "TransitiveObjectProperty" => {
+                println!("DEBUG: Found TransitiveObjectProperty in XML");
+                match parse_transitive_object_property(&child) {
+                    Ok(axiom) => {
+                        println!("DEBUG: Successfully parsed TransitiveObjectProperty axiom");
+                        ontology.add_axiom(axiom);
+                        println!("DEBUG: Added TransitiveObjectProperty axiom to ontology");
+                    }
+                    Err(e) => {
+                        println!("DEBUG: Failed to parse TransitiveObjectProperty: {:?}", e);
+                    }
+                }
+            }
+            "SymmetricObjectProperty" => {
+                println!("DEBUG: Found SymmetricObjectProperty in XML");
+                if let Ok(axiom) = parse_symmetric_object_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "ReflexiveObjectProperty" => {
+                println!("DEBUG: Found ReflexiveObjectProperty in XML");
+                if let Ok(axiom) = parse_reflexive_object_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "IrreflexiveObjectProperty" => {
+                println!("DEBUG: Found IrreflexiveObjectProperty in XML");
+                if let Ok(axiom) = parse_irreflexive_object_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "AsymmetricObjectProperty" => {
+                println!("DEBUG: Found AsymmetricObjectProperty in XML");
+                if let Ok(axiom) = parse_asymmetric_object_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "InverseObjectProperties" => {
+                println!("DEBUG: Found InverseObjectProperties in XML");
+                if let Ok(axiom) = parse_inverse_object_properties(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "SameIndividual" => {
+                println!("DEBUG: Found SameIndividual in XML");
+                if let Ok(axiom) = parse_same_individual(&child) {
+                    println!("DEBUG: Successfully parsed SameIndividual axiom");
+                    ontology.add_axiom(axiom);
+                    println!("DEBUG: Added SameIndividual axiom to ontology");
+                }
+            }
+            "DifferentIndividuals" => {
+                println!("DEBUG: Found DifferentIndividuals in XML");
+                if let Ok(axiom) = parse_different_individuals(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
             "HasKey" => {
                 if let Ok(axiom) = parse_has_key(&child, base_iri.as_ref()) {
                     ontology.add_axiom(axiom);
@@ -482,6 +539,200 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
         data_properties,
         annotations: Vec::new(),
     }))
+}
+
+/// Parse a `TransitiveObjectProperty` element
+fn parse_transitive_object_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "TransitiveObjectProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+
+    Ok(Axiom::TransitiveObjectProperty(
+        crate::ontology::TransitiveObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `SymmetricObjectProperty` element
+fn parse_symmetric_object_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "SymmetricObjectProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+
+    Ok(Axiom::SymmetricObjectProperty(
+        crate::ontology::SymmetricObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `ReflexiveObjectProperty` element
+fn parse_reflexive_object_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "ReflexiveObjectProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+
+    Ok(Axiom::ReflexiveObjectProperty(
+        crate::ontology::ReflexiveObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `IrreflexiveObjectProperty` element
+fn parse_irreflexive_object_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "IrreflexiveObjectProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+
+    Ok(Axiom::IrreflexiveObjectProperty(
+        crate::ontology::IrreflexiveObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `AsymmetricObjectProperty` element
+fn parse_asymmetric_object_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "AsymmetricObjectProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+
+    Ok(Axiom::AsymmetricObjectProperty(
+        crate::ontology::AsymmetricObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `InverseObjectProperties` element
+fn parse_inverse_object_properties(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 2 {
+        return Err(Error::io(
+            "InverseObjectProperties must have exactly 2 children".to_string(),
+        ));
+    }
+
+    let property1 = parse_object_property_expression(&children[0])?;
+    let property2 = parse_object_property_expression(&children[1])?;
+
+    Ok(Axiom::InverseObjectProperties(
+        crate::ontology::InverseObjectPropertiesAxiom {
+            id: generate_axiom_id(),
+            property1,
+            property2,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `SameIndividual` element
+fn parse_same_individual(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() < 2 {
+        return Err(Error::io(
+            "SameIndividual must have at least 2 children".to_string(),
+        ));
+    }
+
+    let mut individuals = Vec::new();
+    for child in children {
+        let individual = parse_individual(&child)?;
+        individuals.push(individual);
+    }
+
+    Ok(Axiom::SameIndividual(
+        crate::ontology::SameIndividualAxiom {
+            id: generate_axiom_id(),
+            individuals,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `DifferentIndividuals` element
+fn parse_different_individuals(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() < 2 {
+        return Err(Error::io(
+            "DifferentIndividuals must have at least 2 children".to_string(),
+        ));
+    }
+
+    let mut individuals = Vec::new();
+    for child in children {
+        let individual = parse_individual(&child)?;
+        individuals.push(individual);
+    }
+
+    Ok(Axiom::DifferentIndividuals(
+        crate::ontology::DifferentIndividualsAxiom {
+            id: generate_axiom_id(),
+            individuals,
+            annotations: Vec::new(),
+        },
+    ))
 }
 
 /// Parse a class expression

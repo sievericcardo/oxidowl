@@ -4,12 +4,13 @@
 //! similar to HermiT's clause dumping functionality.
 
 use crate::{
-    Error, Result,
+    Result,
     ontology::{
         Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression,
-        Ontology, OntologyRef,
+        Ontology,
     },
 };
+use log::{info, debug, warn};
 use std::{
     collections::{HashMap, HashSet},
     fmt,
@@ -226,6 +227,49 @@ impl DLClauseGenerator {
         }
     }
 
+    /// Get human-readable axiom type name
+    fn axiom_type_name(&self, axiom: &Axiom) -> &'static str {
+        match axiom {
+            Axiom::ClassAssertion(_) => "ClassAssertion",
+            Axiom::SubClassOf(_) => "SubClassOf", 
+            Axiom::EquivalentClasses(_) => "EquivalentClasses",
+            Axiom::DisjointClasses(_) => "DisjointClasses",
+            Axiom::DisjointUnion(_) => "DisjointUnion",
+            Axiom::Declaration(_) => "Declaration",
+            Axiom::ObjectPropertyAssertion(_) => "ObjectPropertyAssertion",
+            Axiom::NegativeObjectPropertyAssertion(_) => "NegativeObjectPropertyAssertion",
+            Axiom::DataPropertyAssertion(_) => "DataPropertyAssertion", 
+            Axiom::NegativeDataPropertyAssertion(_) => "NegativeDataPropertyAssertion",
+            Axiom::SubObjectPropertyOf(_) => "SubObjectPropertyOf",
+            Axiom::EquivalentObjectProperties(_) => "EquivalentObjectProperties",
+            Axiom::DisjointObjectProperties(_) => "DisjointObjectProperties",
+            Axiom::InverseObjectProperties(_) => "InverseObjectProperties",
+            Axiom::ObjectPropertyDomain(_) => "ObjectPropertyDomain",
+            Axiom::ObjectPropertyRange(_) => "ObjectPropertyRange",
+            Axiom::FunctionalObjectProperty(_) => "FunctionalObjectProperty",
+            Axiom::InverseFunctionalObjectProperty(_) => "InverseFunctionalObjectProperty",
+            Axiom::ReflexiveObjectProperty(_) => "ReflexiveObjectProperty",
+            Axiom::IrreflexiveObjectProperty(_) => "IrreflexiveObjectProperty",
+            Axiom::SymmetricObjectProperty(_) => "SymmetricObjectProperty",
+            Axiom::AsymmetricObjectProperty(_) => "AsymmetricObjectProperty",
+            Axiom::TransitiveObjectProperty(_) => "TransitiveObjectProperty",
+            Axiom::SubDataPropertyOf(_) => "SubDataPropertyOf",
+            Axiom::EquivalentDataProperties(_) => "EquivalentDataProperties",
+            Axiom::DisjointDataProperties(_) => "DisjointDataProperties",
+            Axiom::DataPropertyDomain(_) => "DataPropertyDomain",
+            Axiom::DataPropertyRange(_) => "DataPropertyRange",
+            Axiom::FunctionalDataProperty(_) => "FunctionalDataProperty",
+            Axiom::HasKey(_) => "HasKey",
+            Axiom::SameIndividual(_) => "SameIndividual",
+            Axiom::DifferentIndividuals(_) => "DifferentIndividuals",
+            Axiom::AnnotationAssertion(_) => "AnnotationAssertion",
+            Axiom::SubAnnotationPropertyOf(_) => "SubAnnotationPropertyOf",
+            Axiom::AnnotationPropertyDomain(_) => "AnnotationPropertyDomain",
+            Axiom::AnnotationPropertyRange(_) => "AnnotationPropertyRange",
+            Axiom::Rule(_) => "Rule",
+        }
+    }
+
     /// Generate DL clauses from an ontology
     pub fn generate_clauses(&mut self, ontology: &Ontology) -> Result<DLClauseSet> {
         let mut deterministic_clauses = Vec::new();
@@ -237,7 +281,12 @@ impl DLClauseGenerator {
 
         // Process each axiom
         for axiom in ontology.axioms() {
+            debug!("Processing axiom type: {}", self.axiom_type_name(axiom));
             let clauses = self.compile_axiom(axiom)?;
+            
+            if !clauses.is_empty() {
+                debug!("Generated {} clauses from axiom", clauses.len());
+            }
             
             for clause in clauses {
                 if clause.is_fact() {
@@ -349,12 +398,61 @@ impl DLClauseGenerator {
             Axiom::FunctionalObjectProperty(axiom) => self.compile_functional_object_property_axiom(axiom),
             Axiom::FunctionalDataProperty(axiom) => self.compile_functional_data_property_axiom(axiom),
             Axiom::InverseFunctionalObjectProperty(axiom) => self.compile_inverse_functional_object_property_axiom(axiom),
+            Axiom::ReflexiveObjectProperty(axiom) => {
+                debug!("Found ReflexiveObjectProperty axiom");
+                self.compile_reflexive_object_property_axiom(axiom)
+            },
+            Axiom::IrreflexiveObjectProperty(axiom) => {
+                debug!("Found IrreflexiveObjectProperty axiom");
+                self.compile_irreflexive_object_property_axiom(axiom)
+            },
+            Axiom::SymmetricObjectProperty(axiom) => {
+                debug!("Found SymmetricObjectProperty axiom");
+                self.compile_symmetric_object_property_axiom(axiom)
+            },
+            Axiom::AsymmetricObjectProperty(axiom) => {
+                debug!("Found AsymmetricObjectProperty axiom");
+                self.compile_asymmetric_object_property_axiom(axiom)
+            },
+            Axiom::TransitiveObjectProperty(axiom) => {
+                debug!("Found TransitiveObjectProperty axiom");
+                self.compile_transitive_object_property_axiom(axiom)
+            },
+            Axiom::InverseObjectProperties(axiom) => {
+                debug!("Found InverseObjectProperties axiom");
+                self.compile_inverse_object_properties_axiom(axiom)
+            },
             Axiom::EquivalentObjectProperties(axiom) => self.compile_equivalent_object_properties_axiom(axiom),
             Axiom::EquivalentDataProperties(axiom) => self.compile_equivalent_data_properties_axiom(axiom),
             Axiom::DisjointObjectProperties(axiom) => self.compile_disjoint_object_properties_axiom(axiom),
             Axiom::DisjointDataProperties(axiom) => self.compile_disjoint_data_properties_axiom(axiom),
+            Axiom::SameIndividual(axiom) => {
+                debug!("Found SameIndividual axiom");
+                self.compile_same_individual_axiom(axiom)
+            },
+            Axiom::DifferentIndividuals(axiom) => {
+                debug!("Found DifferentIndividuals axiom");
+                self.compile_different_individuals_axiom(axiom)
+            },
+            Axiom::NegativeObjectPropertyAssertion(axiom) => {
+                debug!("Found NegativeObjectPropertyAssertion axiom");
+                self.compile_negative_object_property_assertion_axiom(axiom)
+            },
+            Axiom::NegativeDataPropertyAssertion(axiom) => {
+                debug!("Found NegativeDataPropertyAssertion axiom");
+                self.compile_negative_data_property_assertion_axiom(axiom)
+            },
+            Axiom::HasKey(axiom) => {
+                debug!("Found HasKey axiom");
+                self.compile_has_key_axiom(axiom)
+            },
+            Axiom::Rule(axiom) => {
+                debug!("Found SWRL Rule axiom");
+                self.compile_swrl_rule_axiom(axiom)
+            },
             _ => {
-                // For unsupported axiom types, return empty clause set for now
+                // For remaining unsupported axiom types, return empty clause set for now
+                debug!("Unsupported axiom type: {:?}", std::mem::discriminant(axiom));
                 Ok(Vec::new())
             }
         }
@@ -447,91 +545,108 @@ impl DLClauseGenerator {
         matches!(expr, ClassExpression::Class(_))
     }
     
-    /// Compile complex definition into disjunctive clause
-    /// For A ≡ B ⊓ C ⊓ ..., generate: A(x) ∨ ¬B(x) ∨ ¬C(x) ∨ ... :- [body conditions]
+    /// Compile complex definition into disjunctive clause  
+    /// For A ≡ B ⊓ C ⊓ ..., generate clauses similar to HermiT's output
     fn compile_complex_definition(&mut self, named_class: &ClassExpression, complex_expr: &ClassExpression) -> Result<Option<DLClause>> {
         match complex_expr {
             ClassExpression::ObjectIntersectionOf(conjuncts) => {
                 let var_x = self.fresh_variable();
                 
-                // Create head: NamedClass(x) ∨ ¬Conjunct1(x) ∨ ¬Conjunct2(x) ∨ ...
-                let mut head_atoms = Vec::new();
-                let mut body_atoms = Vec::new();
+                // For each conjunct, generate implication clauses
+                // A ≡ B ⊓ C becomes: A(x) → B(x), A(x) → C(x), and B(x) ∧ C(x) → A(x)
+                let _clauses: Vec<DLClause> = Vec::new();
                 
-                // Add positive named class atom to head
-                let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, false)?;
-                head_atoms.push(named_atom);
-                
-                // Process each conjunct
+                // Generate A(x) → B(x) for each conjunct B
                 for conjunct in conjuncts {
                     match conjunct {
                         ClassExpression::ObjectSomeValuesFrom { property, filler } => {
-                            // Handle ∃property.range
+                            // Handle ∃property.filler restrictions
                             let property_name = self.object_property_expression_to_string(property);
-                            let filler_name = self.extract_simple_class_name(filler);
                             
-                            // Add negative restriction to head: ¬(∃property.range)(x)
-                            let neg_restriction_atom = DLAtom::new_negative(
-                                format!("some({},{})", property_name, filler_name),
-                                vec![var_x.clone()]
-                            );
-                            head_atoms.push(neg_restriction_atom);
-                            
-                            // Add positive property assertions to body
+                            // Generate: A(x) → ∃property.filler(x)
+                            // In DL clause form: property(x,y) ∧ filler(y) :- A(x)
                             let var_y = self.fresh_variable();
+                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
                             let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
-                            let filler_atom = DLAtom::concept_assertion(&filler_name, &var_y);
-                            body_atoms.push(property_atom);
-                            body_atoms.push(filler_atom);
+                            let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+                            
+                            return Ok(Some(DLClause::new(
+                                vec![property_atom, filler_atom],
+                                vec![a_atom],
+                                self.next_clause_id(),
+                            )));
                         }
                         ClassExpression::DataSomeValuesFrom { property, filler } => {
-                            // Handle ∃dataProperty.dataRange
+                            // Handle data property restrictions with ranges
                             let property_name = self.data_property_expression_to_string(property);
-                            let range_name = self.data_range_to_string(filler);
+                            let range_restriction = self.data_range_to_string(filler);
                             
-                            let neg_restriction_atom = DLAtom::new_negative(
-                                format!("dataSome({},{})", property_name, range_name),
+                            // Generate: A(x) → ∃property.range(x)
+                            // As atLeast(1 property range)(x) :- A(x)
+                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                            let restriction_atom = DLAtom::new(
+                                format!("atLeast(1 {} {})", property_name, range_restriction),
                                 vec![var_x.clone()]
                             );
-                            head_atoms.push(neg_restriction_atom);
                             
-                            let var_y = self.fresh_variable();
-                            let property_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y);
-                            let range_atom = DLAtom::concept_assertion(&range_name, &var_y);
-                            body_atoms.push(property_atom);
-                            body_atoms.push(range_atom);
+                            return Ok(Some(DLClause::new(
+                                vec![restriction_atom],
+                                vec![a_atom],
+                                self.next_clause_id(),
+                            )));
                         }
                         ClassExpression::ObjectHasValue { property, value } => {
-                            // Handle ∃property.{individual}
+                            // Handle ∃property.{individual} 
                             let property_name = self.object_property_expression_to_string(property);
                             let individual_name = self.individual_to_string(value);
                             
-                            let neg_restriction_atom = DLAtom::new_negative(
-                                format!("hasValue({},{})", property_name, individual_name),
+                            // Generate: A(x) → property(x, individual)
+                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                            let has_value_atom = DLAtom::new(
+                                format!("atLeast(1 {} {{ \"{}\" }})", property_name, individual_name),
                                 vec![var_x.clone()]
                             );
-                            head_atoms.push(neg_restriction_atom);
                             
-                            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &individual_name);
-                            body_atoms.push(property_atom);
+                            return Ok(Some(DLClause::new(
+                                vec![has_value_atom],
+                                vec![a_atom],
+                                self.next_clause_id(),
+                            )));
+                        }
+                        ClassExpression::DataHasValue { property, value } => {
+                            // Handle data property has value
+                            let property_name = self.data_property_expression_to_string(property);
+                            let value_str = &value.value;
+                            
+                            // Generate: A(x) → property(x, "value")
+                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                            let has_value_atom = DLAtom::new(
+                                format!("atLeast(1 {} {{ \"{}\" }})", property_name, value_str),
+                                vec![var_x.clone()]
+                            );
+                            
+                            return Ok(Some(DLClause::new(
+                                vec![has_value_atom],
+                                vec![a_atom],
+                                self.next_clause_id(),
+                            )));
                         }
                         _ => {
-                            // For other types, add negative atom to head
-                            let neg_conjunct_atom = self.compile_class_expression_to_atom(conjunct, &var_x, true)?;
-                            head_atoms.push(neg_conjunct_atom);
+                            // For other types, create basic implication
+                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                            let b_atom = self.compile_class_expression_to_atom(conjunct, &var_x, false)?;
+                            
+                            return Ok(Some(DLClause::new(
+                                vec![b_atom],
+                                vec![a_atom],
+                                self.next_clause_id(),
+                            )));
                         }
                     }
                 }
                 
-                if head_atoms.len() > 1 || !body_atoms.is_empty() {
-                    Ok(Some(DLClause::new(
-                        head_atoms,
-                        body_atoms,
-                        self.next_clause_id(),
-                    )))
-                } else {
-                    Ok(None)
-                }
+                // No specific conjuncts handled, return None
+                Ok(None)
             }
             _ => {
                 // For non-intersection complex expressions, don't generate disjunctive clauses yet
@@ -539,6 +654,7 @@ impl DLClauseGenerator {
             }
         }
     }
+
 
     /// Compile DisjointClasses axiom
     fn compile_disjoint_classes_axiom(&mut self, axiom: &crate::ontology::DisjointClassesAxiom) -> Result<Vec<DLClause>> {
@@ -665,10 +781,156 @@ impl DLClauseGenerator {
                 }
                 Ok(atom)
             }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                // ∃property.filler becomes exists(property,filler)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let filler_name = self.extract_simple_class_name(filler);
+                let predicate = format!("exists({},{})", property_name, filler_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                // ∀property.filler becomes forall(property,filler)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let filler_name = self.extract_simple_class_name(filler);
+                let predicate = format!("forall({},{})", property_name, filler_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectHasValue { property, value } => {
+                // ∃property.{individual} becomes hasValue(property,individual)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let individual_name = self.individual_to_string(value);
+                let predicate = format!("hasValue({},{})", property_name, individual_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                // ≥n property.filler becomes atLeast(n,property,filler)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let filler_name = self.extract_simple_class_name(filler);
+                let predicate = format!("atLeast({},{},{})", cardinality, property_name, filler_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
+                // ≤n property.filler becomes atMost(n,property,filler)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let filler_name = self.extract_simple_class_name(filler);
+                let predicate = format!("atMost({},{},{})", cardinality, property_name, filler_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectExactCardinality { cardinality, property, filler } => {
+                // =n property.filler becomes exactly(n,property,filler)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let filler_name = self.extract_simple_class_name(filler);
+                let predicate = format!("exactly({},{},{})", cardinality, property_name, filler_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                // ∃dataProp.datatype becomes dataExists(property,datatype)(variable)
+                let property_name = self.data_property_expression_to_string(property);
+                let range_name = self.data_range_to_string(filler);
+                let predicate = format!("dataExists({},{})", property_name, range_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::DataAllValuesFrom { property, filler } => {
+                // ∀dataProp.datatype becomes dataForall(property,datatype)(variable)
+                let property_name = self.data_property_expression_to_string(property);
+                let range_name = self.data_range_to_string(filler);
+                let predicate = format!("dataForall({},{})", property_name, range_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::DataHasValue { property, value } => {
+                // dataProp hasValue "literal" becomes dataHasValue(property,literal)(variable)
+                let property_name = self.data_property_expression_to_string(property);
+                let literal_value = &value.value;
+                let predicate = format!("dataHasValue({},\"{}\")", property_name, literal_value);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::DataMinCardinality { cardinality, property, filler } => {
+                // ≥n dataProp.datatype becomes dataAtLeast(n,property,datatype)(variable)
+                let property_name = self.data_property_expression_to_string(property);
+                let range_name = self.data_range_to_string(filler);
+                let predicate = format!("dataAtLeast({},{},{})", cardinality, property_name, range_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::DataMaxCardinality { cardinality, property, filler } => {
+                // ≤n dataProp.datatype becomes dataAtMost(n,property,datatype)(variable)
+                let property_name = self.data_property_expression_to_string(property);
+                let range_name = self.data_range_to_string(filler);
+                let predicate = format!("dataAtMost({},{},{})", cardinality, property_name, range_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::DataExactCardinality { cardinality, property, filler } => {
+                // =n dataProp.datatype becomes dataExactly(n,property,datatype)(variable)
+                let property_name = self.data_property_expression_to_string(property);
+                let range_name = self.data_range_to_string(filler);
+                let predicate = format!("dataExactly({},{},{})", cardinality, property_name, range_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectOneOf(individuals) => {
+                // {ind1, ind2, ...} becomes oneOf(ind1,ind2,...)(variable)
+                let individual_names: Vec<String> = individuals.iter()
+                    .map(|ind| self.individual_to_string(ind))
+                    .collect();
+                let predicate = format!("oneOf({})", individual_names.join(","));
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
             ClassExpression::ObjectUnionOf(disjuncts) => {
-                // For union classes, we need to create a complex representation
-                // For now, create a placeholder representation
-                let predicate = format!("Union_{}", disjuncts.len());
+                // A ⊔ B ⊔ ... becomes union(A,B,...)(variable)
+                let disjunct_names: Vec<String> = disjuncts.iter()
+                    .map(|expr| self.extract_simple_class_name(expr))
+                    .collect();
+                let predicate = format!("union({})", disjunct_names.join(","));
                 let mut atom = DLAtom::concept_assertion(&predicate, variable);
                 if negate {
                     atom.is_positive = false;
@@ -676,17 +938,44 @@ impl DLClauseGenerator {
                 Ok(atom)
             }
             ClassExpression::ObjectIntersectionOf(conjuncts) => {
-                // For intersection classes, we need to create a complex representation
-                let predicate = format!("Intersection_{}", conjuncts.len());
+                // A ⊓ B ⊓ ... becomes intersection(A,B,...)(variable)
+                let conjunct_names: Vec<String> = conjuncts.iter()
+                    .map(|expr| self.extract_simple_class_name(expr))
+                    .collect();
+                let predicate = format!("intersection({})", conjunct_names.join(","));
                 let mut atom = DLAtom::concept_assertion(&predicate, variable);
                 if negate {
                     atom.is_positive = false;
                 }
                 Ok(atom)
             }
-            _ => {
-                // For other complex expressions, create a placeholder
-                let predicate = "ComplexExpression".to_string();
+            ClassExpression::ObjectComplementOf(complement) => {
+                // ¬A becomes complement(A)(variable)
+                let complement_name = self.extract_simple_class_name(complement);
+                let predicate = format!("complement({})", complement_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            ClassExpression::ObjectHasSelf { property } => {
+                // ∃property.Self becomes hasSelf(property)(variable)
+                let property_name = self.object_property_expression_to_string(property);
+                let predicate = format!("hasSelf({})", property_name);
+                let mut atom = DLAtom::concept_assertion(&predicate, variable);
+                if negate {
+                    atom.is_positive = false;
+                }
+                Ok(atom)
+            }
+            // Annotation-related class expressions (these are not typical DL class expressions)
+            ClassExpression::AnnotationAssertion { .. } |
+            ClassExpression::SubAnnotationPropertyOf { .. } |
+            ClassExpression::AnnotationPropertyDomain { .. } |
+            ClassExpression::AnnotationPropertyRange { .. } => {
+                // For annotation expressions, create a placeholder
+                let predicate = "AnnotationExpression".to_string();
                 let mut atom = DLAtom::concept_assertion(&predicate, variable);
                 if negate {
                     atom.is_positive = false;
@@ -1136,6 +1425,367 @@ impl DLClauseGenerator {
         match expr {
             ClassExpression::Class(class) => self.shorten_iri(&class.iri.to_string()),
             _ => "ComplexClass".to_string(),
+        }
+    }
+    
+    /// Compile ReflexiveObjectProperty axiom
+    fn compile_reflexive_object_property_axiom(&mut self, axiom: &crate::ontology::ReflexiveObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let reflexive_atom = DLAtom::role_assertion(&property_name, &var_x, &var_x);
+        
+        // For reflexive properties, we need an axiom that says for all x: P(x,x)
+        // This is often encoded as a fact template or constraint
+        let clause = DLClause::new(
+            vec![reflexive_atom],
+            vec![], // No conditions - always true for any individual
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile IrreflexiveObjectProperty axiom
+    fn compile_irreflexive_object_property_axiom(&mut self, axiom: &crate::ontology::IrreflexiveObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let irreflexive_atom = DLAtom::role_assertion(&property_name, &var_x, &var_x);
+        
+        // For irreflexive properties: ¬P(x,x) - constraint that forbids reflexive usage
+        let clause = DLClause::new(
+            vec![], // Empty head (constraint)
+            vec![irreflexive_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile SymmetricObjectProperty axiom
+    fn compile_symmetric_object_property_axiom(&mut self, axiom: &crate::ontology::SymmetricObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let forward_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        let backward_atom = DLAtom::role_assertion(&property_name, &var_y, &var_x);
+        
+        // Symmetric property: P(x,y) → P(y,x)
+        let clause = DLClause::new(
+            vec![backward_atom],
+            vec![forward_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile AsymmetricObjectProperty axiom
+    fn compile_asymmetric_object_property_axiom(&mut self, axiom: &crate::ontology::AsymmetricObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let forward_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        let backward_atom = DLAtom::role_assertion(&property_name, &var_y, &var_x);
+        
+        // Asymmetric property: ¬(P(x,y) ∧ P(y,x)) - constraint
+        let clause = DLClause::new(
+            vec![], // Empty head (constraint)
+            vec![forward_atom, backward_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile TransitiveObjectProperty axiom
+    fn compile_transitive_object_property_axiom(&mut self, axiom: &crate::ontology::TransitiveObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        let var_z = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let first_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        let second_atom = DLAtom::role_assertion(&property_name, &var_y, &var_z);
+        let transitive_atom = DLAtom::role_assertion(&property_name, &var_x, &var_z);
+        
+        // Transitive property: P(x,y) ∧ P(y,z) → P(x,z)
+        let clause = DLClause::new(
+            vec![transitive_atom],
+            vec![first_atom, second_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile InverseObjectProperties axiom
+    fn compile_inverse_object_properties_axiom(&mut self, axiom: &crate::ontology::InverseObjectPropertiesAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property1_name = self.object_property_expression_to_string(&axiom.property1);
+        let property2_name = self.object_property_expression_to_string(&axiom.property2);
+        
+        // P1(x,y) → P2(y,x)
+        let p1_atom = DLAtom::role_assertion(&property1_name, &var_x, &var_y);
+        let p2_inverse_atom = DLAtom::role_assertion(&property2_name, &var_y, &var_x);
+        
+        clauses.push(DLClause::new(
+            vec![p2_inverse_atom],
+            vec![p1_atom],
+            self.next_clause_id(),
+        ));
+        
+        // P2(x,y) → P1(y,x)
+        let var_a = self.fresh_variable();
+        let var_b = self.fresh_variable();
+        let p2_atom = DLAtom::role_assertion(&property2_name, &var_a, &var_b);
+        let p1_inverse_atom = DLAtom::role_assertion(&property1_name, &var_b, &var_a);
+        
+        clauses.push(DLClause::new(
+            vec![p1_inverse_atom],
+            vec![p2_atom],
+            self.next_clause_id(),
+        ));
+        
+        Ok(clauses)
+    }
+
+    /// Compile SameIndividual axiom
+    fn compile_same_individual_axiom(&mut self, axiom: &crate::ontology::SameIndividualAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Generate equality assertions for each pair
+        for i in 0..axiom.individuals.len() {
+            for j in (i + 1)..axiom.individuals.len() {
+                let ind1 = self.individual_to_string(&axiom.individuals[i]);
+                let ind2 = self.individual_to_string(&axiom.individuals[j]);
+                
+                // Assert equality: ind1 = ind2
+                let equality_atom = DLAtom::new(format!("[{} == {}]", ind1, ind2), vec![]);
+                
+                let clause = DLClause::new(
+                    vec![equality_atom],
+                    vec![], // No body (fact)
+                    self.next_clause_id(),
+                );
+                clauses.push(clause);
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile DifferentIndividuals axiom
+    fn compile_different_individuals_axiom(&mut self, axiom: &crate::ontology::DifferentIndividualsAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Generate inequality constraints for each pair
+        for i in 0..axiom.individuals.len() {
+            for j in (i + 1)..axiom.individuals.len() {
+                let ind1 = self.individual_to_string(&axiom.individuals[i]);
+                let ind2 = self.individual_to_string(&axiom.individuals[j]);
+                
+                // Assert inequality: ind1 ≠ ind2
+                let inequality_atom = DLAtom::new(format!("[{} != {}]", ind1, ind2), vec![]);
+                
+                let clause = DLClause::new(
+                    vec![inequality_atom],
+                    vec![], // No body (fact)
+                    self.next_clause_id(),
+                );
+                clauses.push(clause);
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile NegativeObjectPropertyAssertion axiom
+    fn compile_negative_object_property_assertion_axiom(&mut self, axiom: &crate::ontology::NegativeObjectPropertyAssertionAxiom) -> Result<Vec<DLClause>> {
+        let subject = self.individual_to_string(&axiom.source);
+        let object = self.individual_to_string(&axiom.target);
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        
+        let negative_role_atom = DLAtom::new_negative(property_name, vec![subject, object]);
+        
+        let clause = DLClause::new(
+            vec![negative_role_atom],
+            vec![], // No body (negative fact)
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile NegativeDataPropertyAssertion axiom
+    fn compile_negative_data_property_assertion_axiom(&mut self, axiom: &crate::ontology::NegativeDataPropertyAssertionAxiom) -> Result<Vec<DLClause>> {
+        let subject = self.individual_to_string(&axiom.individual);
+        let value = axiom.value.to_string();
+        let property_name = self.data_property_expression_to_string(&axiom.property);
+        
+        let negative_datatype_atom = DLAtom::new_negative(property_name, vec![subject, value]);
+        
+        let clause = DLClause::new(
+            vec![negative_datatype_atom],
+            vec![], // No body (negative fact)
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile HasKey axiom
+    fn compile_has_key_axiom(&mut self, axiom: &crate::ontology::HasKeyAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        // For HasKey(C OP1 ... OPm DP1 ... DPn), we generate:
+        // C(x) ∧ C(y) ∧ OP1(x,z1) ∧ OP1(y,z1) ∧ ... ∧ DPm(x,v1) ∧ DPm(y,v1) ∧ ... → x = y
+        
+        let mut body_atoms = Vec::new();
+        
+        // Class assertions for both individuals
+        let class_atom_x = self.compile_class_expression_to_atom(&axiom.class, &var_x, true)?;
+        let class_atom_y = self.compile_class_expression_to_atom(&axiom.class, &var_y, true)?;
+        body_atoms.push(class_atom_x);
+        body_atoms.push(class_atom_y);
+        
+        // Object property key conditions
+        for obj_prop in &axiom.object_properties {
+            let prop_name = self.object_property_expression_to_string(obj_prop);
+            let var_z = self.fresh_variable();
+            
+            let prop_atom_x = DLAtom::role_assertion(&prop_name, &var_x, &var_z);
+            let prop_atom_y = DLAtom::role_assertion(&prop_name, &var_y, &var_z);
+            body_atoms.push(prop_atom_x);
+            body_atoms.push(prop_atom_y);
+        }
+        
+        // Data property key conditions
+        for data_prop in &axiom.data_properties {
+            let prop_name = self.data_property_expression_to_string(data_prop);
+            let var_v = self.fresh_variable();
+            
+            let prop_atom_x = DLAtom::datatype_assertion(&prop_name, &var_x, &var_v);
+            let prop_atom_y = DLAtom::datatype_assertion(&prop_name, &var_y, &var_v);
+            body_atoms.push(prop_atom_x);
+            body_atoms.push(prop_atom_y);
+        }
+        
+        // Conclusion: x = y
+        let equality_atom = DLAtom::new(format!("[{} == {}]", var_x, var_y), vec![]);
+        
+        let clause = DLClause::new(
+            vec![equality_atom],
+            body_atoms,
+            self.next_clause_id(),
+        );
+        clauses.push(clause);
+        
+        Ok(clauses)
+    }
+
+    /// Compile SWRL Rule axiom
+    fn compile_swrl_rule_axiom(&mut self, axiom: &crate::ontology::SWRLRuleAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Convert SWRL rule to DL clause format
+        let mut head_atoms = Vec::new();
+        let mut body_atoms = Vec::new();
+        
+        // Convert SWRL head atoms to DL atoms
+        for swrl_atom in &axiom.rule.head {
+            if let Some(dl_atom) = self.convert_swrl_atom_to_dl(swrl_atom)? {
+                head_atoms.push(dl_atom);
+            }
+        }
+        
+        // Convert SWRL body atoms to DL atoms
+        for swrl_atom in &axiom.rule.body {
+            if let Some(dl_atom) = self.convert_swrl_atom_to_dl(swrl_atom)? {
+                body_atoms.push(dl_atom);
+            }
+        }
+        
+        if !head_atoms.is_empty() || !body_atoms.is_empty() {
+            let clause = DLClause::new(
+                head_atoms,
+                body_atoms,
+                self.next_clause_id(),
+            );
+            clauses.push(clause);
+        }
+        
+        Ok(clauses)
+    }
+    
+    /// Convert SWRL atom to DL atom
+    fn convert_swrl_atom_to_dl(&self, swrl_atom: &crate::ontology::SWRLAtom) -> Result<Option<DLAtom>> {
+        use crate::ontology::SWRLAtom;
+        
+        match swrl_atom {
+            SWRLAtom::ClassAtom { predicate, argument } => {
+                let var_name = self.swrl_argument_to_string_i(argument)?;
+                let atom = self.compile_class_expression_to_atom(predicate, &var_name, false)?;
+                Ok(Some(atom))
+            }
+            SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
+                let subj = self.swrl_argument_to_string_i(first_argument)?;
+                let obj = self.swrl_argument_to_string_i(second_argument)?;
+                let prop_name = self.object_property_expression_to_string(predicate);
+                Ok(Some(DLAtom::role_assertion(&prop_name, &subj, &obj)))
+            }
+            SWRLAtom::DataPropertyAtom { predicate, first_argument, second_argument } => {
+                let subj = self.swrl_argument_to_string_i(first_argument)?;
+                let val = self.swrl_argument_to_string_d(second_argument)?;
+                let prop_name = self.data_property_expression_to_string(predicate);
+                Ok(Some(DLAtom::datatype_assertion(&prop_name, &subj, &val)))
+            }
+            SWRLAtom::SameIndividualAtom { first_argument, second_argument } => {
+                let ind1 = self.swrl_argument_to_string_i(first_argument)?;
+                let ind2 = self.swrl_argument_to_string_i(second_argument)?;
+                Ok(Some(DLAtom::new(format!("[{} == {}]", ind1, ind2), vec![])))
+            }
+            SWRLAtom::DifferentIndividualsAtom { first_argument, second_argument } => {
+                let ind1 = self.swrl_argument_to_string_i(first_argument)?;
+                let ind2 = self.swrl_argument_to_string_i(second_argument)?;
+                Ok(Some(DLAtom::new(format!("[{} != {}]", ind1, ind2), vec![])))
+            }
+            SWRLAtom::BuiltInAtom { predicate, arguments } => {
+                let builtin_name = self.shorten_iri(&predicate.to_string());
+                let arg_strings: Result<Vec<String>> = arguments.iter()
+                    .map(|arg| self.swrl_argument_to_string_d(arg))
+                    .collect();
+                let args = arg_strings?;
+                Ok(Some(DLAtom::new(format!("{}({})", builtin_name, args.join(",")), vec![])))
+            }
+            _ => Ok(None), // Some SWRL atoms might not have direct DL equivalents
+        }
+    }
+    
+    /// Convert SWRL individual argument to string
+    fn swrl_argument_to_string_i(&self, arg: &crate::ontology::SWRLIArgument) -> Result<String> {
+        use crate::ontology::SWRLIArgument;
+        match arg {
+            SWRLIArgument::Individual(ind) => Ok(self.individual_to_string(ind)),
+            SWRLIArgument::Variable(var) => Ok(self.shorten_iri(&var.iri.to_string())),
+        }
+    }
+    
+    /// Convert SWRL data argument to string
+    fn swrl_argument_to_string_d(&self, arg: &crate::ontology::SWRLDArgument) -> Result<String> {
+        use crate::ontology::SWRLDArgument;
+        match arg {
+            SWRLDArgument::Literal(lit) => Ok(format!("\"{}\"", lit.value)),
+            SWRLDArgument::Variable(var) => Ok(self.shorten_iri(&var.iri.to_string())),
         }
     }
 
