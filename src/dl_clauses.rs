@@ -336,11 +336,23 @@ impl DLClauseGenerator {
             Axiom::SubClassOf(axiom) => self.compile_subclass_axiom(axiom),
             Axiom::EquivalentClasses(axiom) => self.compile_equivalent_classes_axiom(axiom),
             Axiom::DisjointClasses(axiom) => self.compile_disjoint_classes_axiom(axiom),
+            Axiom::DisjointUnion(axiom) => self.compile_disjoint_union_axiom(axiom),
             Axiom::ClassAssertion(axiom) => self.compile_class_assertion_axiom(axiom),
             Axiom::ObjectPropertyAssertion(axiom) => self.compile_object_property_assertion_axiom(axiom),
             Axiom::DataPropertyAssertion(axiom) => self.compile_data_property_assertion_axiom(axiom),
             Axiom::SubObjectPropertyOf(axiom) => self.compile_sub_object_property_axiom(axiom),
             Axiom::SubDataPropertyOf(axiom) => self.compile_sub_data_property_axiom(axiom),
+            Axiom::ObjectPropertyDomain(axiom) => self.compile_object_property_domain_axiom(axiom),
+            Axiom::ObjectPropertyRange(axiom) => self.compile_object_property_range_axiom(axiom),
+            Axiom::DataPropertyDomain(axiom) => self.compile_data_property_domain_axiom(axiom),
+            Axiom::DataPropertyRange(axiom) => self.compile_data_property_range_axiom(axiom),
+            Axiom::FunctionalObjectProperty(axiom) => self.compile_functional_object_property_axiom(axiom),
+            Axiom::FunctionalDataProperty(axiom) => self.compile_functional_data_property_axiom(axiom),
+            Axiom::InverseFunctionalObjectProperty(axiom) => self.compile_inverse_functional_object_property_axiom(axiom),
+            Axiom::EquivalentObjectProperties(axiom) => self.compile_equivalent_object_properties_axiom(axiom),
+            Axiom::EquivalentDataProperties(axiom) => self.compile_equivalent_data_properties_axiom(axiom),
+            Axiom::DisjointObjectProperties(axiom) => self.compile_disjoint_object_properties_axiom(axiom),
+            Axiom::DisjointDataProperties(axiom) => self.compile_disjoint_data_properties_axiom(axiom),
             _ => {
                 // For unsupported axiom types, return empty clause set for now
                 Ok(Vec::new())
@@ -585,6 +597,49 @@ impl DLClauseGenerator {
         }
     }
 
+    /// Convert data range to string representation
+    fn data_range_to_string(&self, range: &crate::ontology::DataRange) -> String {
+        match range {
+            crate::ontology::DataRange::Datatype(iri) => {
+                self.shorten_iri(&iri.to_string())
+            }
+            crate::ontology::DataRange::DataIntersectionOf(ranges) => {
+                let operands: Vec<String> = ranges.iter()
+                    .map(|r| self.data_range_to_string(r))
+                    .collect();
+                format!("intersection({})", operands.join(" "))
+            }
+            crate::ontology::DataRange::DataUnionOf(ranges) => {
+                let operands: Vec<String> = ranges.iter()
+                    .map(|r| self.data_range_to_string(r))
+                    .collect();
+                format!("union({})", operands.join(" "))
+            }
+            crate::ontology::DataRange::DataComplementOf(range) => {
+                format!("not({})", self.data_range_to_string(range))
+            }
+            crate::ontology::DataRange::DataOneOf(literals) => {
+                let values: Vec<String> = literals.iter()
+                    .map(|lit| format!("\"{}\"", lit.value))
+                    .collect();
+                format!("oneOf({})", values.join(" "))
+            }
+            crate::ontology::DataRange::DatatypeRestriction { datatype, restrictions } => {
+                let base_type = self.shorten_iri(&datatype.to_string());
+                if restrictions.is_empty() {
+                    base_type
+                } else {
+                    let restriction_strs: Vec<String> = restrictions.iter()
+                        .map(|r| format!("{}=\"{}\"", 
+                            self.shorten_iri(&r.facet.to_string()),
+                            r.value.value))
+                        .collect();
+                    format!("{}[{}]", base_type, restriction_strs.join(","))
+                }
+            }
+        }
+    }
+
     /// Shorten IRI using prefixes
     fn shorten_iri(&self, iri: &str) -> String {
         for (prefix, namespace) in &self.prefixes {
@@ -600,7 +655,7 @@ impl DLClauseGenerator {
         iri.to_string() // Return full IRI if no prefix matches
     }
 
-    /// Generate a fresh variable
+    /// Generate a fresh variable name
     fn fresh_variable(&mut self) -> String {
         let var = format!("X{}", self.variable_counter);
         self.variable_counter += 1;
@@ -613,6 +668,310 @@ impl DLClauseGenerator {
         self.clause_counter += 1;
         id
     }
+
+    /// Compile DisjointUnion axiom 
+    fn compile_disjoint_union_axiom(&mut self, axiom: &crate::ontology::DisjointUnionAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Create disjoint union clauses
+        let var_x = self.fresh_variable();
+        
+        // Union clause: A(x) :- B1(x) v B2(x) v ... v Bn(x)
+        let union_class_atom = self.compile_class_expression_to_atom(&axiom.class, &var_x, false)?;
+        let mut disjunct_atoms = Vec::new();
+        
+        for disjunct in &axiom.disjoint_classes {
+            let disjunct_atom = self.compile_class_expression_to_atom(disjunct, &var_x, true)?;
+            disjunct_atoms.push(disjunct_atom);
+        }
+        
+        // Create disjunctive clause for union
+        let union_clause = DLClause::new(
+            vec![union_class_atom],
+            disjunct_atoms,
+            self.next_clause_id(),
+        );
+        clauses.push(union_clause);
+        
+        // Add disjointness constraints
+        for i in 0..axiom.disjoint_classes.len() {
+            for j in (i + 1)..axiom.disjoint_classes.len() {
+                let var_y = self.fresh_variable();
+                let a_atom = self.compile_class_expression_to_atom(&axiom.disjoint_classes[i], &var_y, true)?;
+                let b_atom = self.compile_class_expression_to_atom(&axiom.disjoint_classes[j], &var_y, true)?;
+                
+                // Constraint: ¬(A(y) ∧ B(y))
+                let constraint_clause = DLClause::new(
+                    vec![], // Empty head (constraint)
+                    vec![a_atom, b_atom],
+                    self.next_clause_id(),
+                );
+                clauses.push(constraint_clause);
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile ObjectPropertyDomain axiom
+    fn compile_object_property_domain_axiom(&mut self, axiom: &crate::ontology::ObjectPropertyDomainAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let domain_atom = self.compile_class_expression_to_atom(&axiom.domain, &var_x, false)?;
+        let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        
+        let clause = DLClause::new(
+            vec![domain_atom],
+            vec![property_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile ObjectPropertyRange axiom
+    fn compile_object_property_range_axiom(&mut self, axiom: &crate::ontology::ObjectPropertyRangeAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let range_atom = self.compile_class_expression_to_atom(&axiom.range, &var_y, false)?;
+        let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        
+        let clause = DLClause::new(
+            vec![range_atom],
+            vec![property_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile DataPropertyDomain axiom
+    fn compile_data_property_domain_axiom(&mut self, axiom: &crate::ontology::DataPropertyDomainAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.data_property_expression_to_string(&axiom.property);
+        let domain_atom = self.compile_class_expression_to_atom(&axiom.domain, &var_x, false)?;
+        let property_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y);
+        
+        let clause = DLClause::new(
+            vec![domain_atom],
+            vec![property_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile DataPropertyRange axiom
+    fn compile_data_property_range_axiom(&mut self, axiom: &crate::ontology::DataPropertyRangeAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.data_property_expression_to_string(&axiom.property);
+        let property_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y);
+        
+        // Create a datatype constraint atom
+        let range_name = self.data_range_to_string(&axiom.range);
+        let range_atom = DLAtom::new(range_name, vec![var_y]);
+        
+        let clause = DLClause::new(
+            vec![range_atom],
+            vec![property_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile FunctionalObjectProperty axiom
+    fn compile_functional_object_property_axiom(&mut self, axiom: &crate::ontology::FunctionalObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y1 = self.fresh_variable();
+        let var_y2 = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let prop1_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y1);
+        let prop2_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y2);
+        
+        // Functional constraint: P(x,y1) ∧ P(x,y2) → y1 = y2
+        let equality_atom = DLAtom::new(format!("[{} == {}]", var_y1, var_y2), vec![]);
+        
+        let clause = DLClause::new(
+            vec![equality_atom],
+            vec![prop1_atom, prop2_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile FunctionalDataProperty axiom  
+    fn compile_functional_data_property_axiom(&mut self, axiom: &crate::ontology::FunctionalDataPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y1 = self.fresh_variable();
+        let var_y2 = self.fresh_variable();
+        
+        let property_name = self.data_property_expression_to_string(&axiom.property);
+        let prop1_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y1);
+        let prop2_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y2);
+        
+        // Functional constraint: P(x,y1) ∧ P(x,y2) → y1 = y2
+        let equality_atom = DLAtom::new(format!("[{} == {}]", var_y1, var_y2), vec![]);
+        
+        let clause = DLClause::new(
+            vec![equality_atom],
+            vec![prop1_atom, prop2_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile InverseFunctionalObjectProperty axiom
+    fn compile_inverse_functional_object_property_axiom(&mut self, axiom: &crate::ontology::InverseFunctionalObjectPropertyAxiom) -> Result<Vec<DLClause>> {
+        let var_x1 = self.fresh_variable();
+        let var_x2 = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(&axiom.property);
+        let prop1_atom = DLAtom::role_assertion(&property_name, &var_x1, &var_y);
+        let prop2_atom = DLAtom::role_assertion(&property_name, &var_x2, &var_y);
+        
+        // Inverse functional constraint: P(x1,y) ∧ P(x2,y) → x1 = x2
+        let equality_atom = DLAtom::new(format!("[{} == {}]", var_x1, var_x2), vec![]);
+        
+        let clause = DLClause::new(
+            vec![equality_atom],
+            vec![prop1_atom, prop2_atom],
+            self.next_clause_id(),
+        );
+        
+        Ok(vec![clause])
+    }
+
+    /// Compile EquivalentObjectProperties axiom
+    fn compile_equivalent_object_properties_axiom(&mut self, axiom: &crate::ontology::EquivalentObjectPropertiesAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Create bidirectional implications for each pair
+        for i in 0..axiom.properties.len() {
+            for j in 0..axiom.properties.len() {
+                if i != j {
+                    let var_x = self.fresh_variable();
+                    let var_y = self.fresh_variable();
+                    
+                    let prop1_name = self.object_property_expression_to_string(&axiom.properties[i]);
+                    let prop2_name = self.object_property_expression_to_string(&axiom.properties[j]);
+                    
+                    let prop1_atom = DLAtom::role_assertion(&prop1_name, &var_x, &var_y);
+                    let prop2_atom = DLAtom::role_assertion(&prop2_name, &var_x, &var_y);
+                    
+                    let clause = DLClause::new(
+                        vec![prop2_atom],
+                        vec![prop1_atom],
+                        self.next_clause_id(),
+                    );
+                    clauses.push(clause);
+                }
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile EquivalentDataProperties axiom
+    fn compile_equivalent_data_properties_axiom(&mut self, axiom: &crate::ontology::EquivalentDataPropertiesAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Create bidirectional implications for each pair
+        for i in 0..axiom.properties.len() {
+            for j in 0..axiom.properties.len() {
+                if i != j {
+                    let var_x = self.fresh_variable();
+                    let var_y = self.fresh_variable();
+                    
+                    let prop1_name = self.data_property_expression_to_string(&axiom.properties[i]);
+                    let prop2_name = self.data_property_expression_to_string(&axiom.properties[j]);
+                    
+                    let prop1_atom = DLAtom::datatype_assertion(&prop1_name, &var_x, &var_y);
+                    let prop2_atom = DLAtom::datatype_assertion(&prop2_name, &var_x, &var_y);
+                    
+                    let clause = DLClause::new(
+                        vec![prop2_atom],
+                        vec![prop1_atom],
+                        self.next_clause_id(),
+                    );
+                    clauses.push(clause);
+                }
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile DisjointObjectProperties axiom
+    fn compile_disjoint_object_properties_axiom(&mut self, axiom: &crate::ontology::DisjointObjectPropertiesAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Generate disjointness constraints for each pair
+        for i in 0..axiom.properties.len() {
+            for j in (i + 1)..axiom.properties.len() {
+                let var_x = self.fresh_variable();
+                let var_y = self.fresh_variable();
+                
+                let prop1_name = self.object_property_expression_to_string(&axiom.properties[i]);
+                let prop2_name = self.object_property_expression_to_string(&axiom.properties[j]);
+                
+                let prop1_atom = DLAtom::role_assertion(&prop1_name, &var_x, &var_y);
+                let prop2_atom = DLAtom::role_assertion(&prop2_name, &var_x, &var_y);
+                
+                // Constraint: ¬(P1(x,y) ∧ P2(x,y))
+                let clause = DLClause::new(
+                    vec![], // Empty head (constraint)
+                    vec![prop1_atom, prop2_atom],
+                    self.next_clause_id(),
+                );
+                clauses.push(clause);
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile DisjointDataProperties axiom
+    fn compile_disjoint_data_properties_axiom(&mut self, axiom: &crate::ontology::DisjointDataPropertiesAxiom) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        // Generate disjointness constraints for each pair
+        for i in 0..axiom.properties.len() {
+            for j in (i + 1)..axiom.properties.len() {
+                let var_x = self.fresh_variable();
+                let var_y = self.fresh_variable();
+                
+                let prop1_name = self.data_property_expression_to_string(&axiom.properties[i]);
+                let prop2_name = self.data_property_expression_to_string(&axiom.properties[j]);
+                
+                let prop1_atom = DLAtom::datatype_assertion(&prop1_name, &var_x, &var_y);
+                let prop2_atom = DLAtom::datatype_assertion(&prop2_name, &var_x, &var_y);
+                
+                // Constraint: ¬(P1(x,y) ∧ P2(x,y))
+                let clause = DLClause::new(
+                    vec![], // Empty head (constraint)
+                    vec![prop1_atom, prop2_atom],
+                    self.next_clause_id(),
+                );
+                clauses.push(clause);
+            }
+        }
+        
+        Ok(clauses)
+    }
+
 }
 
 impl Default for DLClauseGenerator {
