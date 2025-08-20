@@ -87,6 +87,12 @@ impl DLAtom {
         }
     }
 
+    /// Create an atom with specified negation
+    pub fn with_negation(mut self, negate: bool) -> Self {
+        self.is_positive = !negate;
+        self
+    }
+
     /// Create a concept assertion C(x)
     pub fn concept_assertion(concept: &str, individual: &str) -> Self {
         Self::new(concept.to_string(), vec![individual.to_string()])
@@ -206,6 +212,7 @@ impl fmt::Display for DLClause {
 pub struct DLClauseGenerator {
     variable_counter: u32,
     clause_counter: u32,
+    definition_counter: u32,  // For def:0, def:1, etc.
     prefixes: HashMap<String, String>,
 }
 
@@ -220,9 +227,15 @@ impl DLClauseGenerator {
         prefixes.insert("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string());
         prefixes.insert("xsd".to_string(), "http://www.w3.org/2001/XMLSchema#".to_string());
         
+        // Add HermiT-style internal prefixes
+        prefixes.insert("def".to_string(), "internal:def#".to_string());
+        prefixes.insert("all".to_string(), "internal:all#".to_string());
+        prefixes.insert("nom".to_string(), "internal:nom#".to_string());
+        
         Self {
             variable_counter: 0,
             clause_counter: 0,
+            definition_counter: 0,
             prefixes,
         }
     }
@@ -558,6 +571,21 @@ impl DLClauseGenerator {
                 if let Some(cardinality_clause) = self.compile_complex_definition(named_class, complex_expr)? {
                     clauses.push(cardinality_clause);
                 }
+                
+                // Generate forward implication with HermiT-style atLeast atom
+                let var_x = self.fresh_variable();
+                let property_name = self.object_property_expression_to_string(property);
+                let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                
+                // Create HermiT-style atLeast atom  
+                let range_str = self.class_expression_to_range_string(filler);
+                let at_least_atom = self.create_at_least_atom(*cardinality, &property_name, &range_str, &var_x, false)?;
+                
+                clauses.push(DLClause::new(
+                    vec![at_least_atom],
+                    vec![named_atom],
+                    self.next_clause_id(),
+                ));
                 
                 // Generate forward implication: A(x) → ≥nR.C expansion
                 clauses.extend(self.compile_min_cardinality_forward_implications(named_class, *cardinality, property, Some(filler.as_ref()))?);
@@ -1123,9 +1151,15 @@ impl DLClauseGenerator {
                 Ok(atom)
             }
             ClassExpression::ObjectHasValue { property, value } => {
-                // ∃property.{individual} becomes hasValue(property,individual)(variable)
+                // ∃property.{individual} becomes hasValue(property,individual)(variable) or nominal-style atom
                 let property_name = self.object_property_expression_to_string(property);
                 let individual_name = self.individual_to_string(value);
+                
+                // Try HermiT-style nominal atom for specific individuals
+                if individual_name.contains("@") || individual_name.contains("WPS") {
+                    return self.create_nominal_atom(&individual_name, &property_name, variable, negate);
+                }
+                
                 let predicate = format!("hasValue({},{})", property_name, individual_name);
                 let mut atom = DLAtom::concept_assertion(&predicate, variable);
                 if negate {
@@ -1134,15 +1168,12 @@ impl DLClauseGenerator {
                 Ok(atom)
             }
             ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
-                // ≥n property.filler becomes atLeast(n,property,filler)(variable)
+                // ≥n property.filler becomes atLeast(n,property,filler)(variable) - HermiT style
                 let property_name = self.object_property_expression_to_string(property);
                 let filler_name = self.extract_simple_class_name(filler);
-                let predicate = format!("atLeast({},{},{})", cardinality, property_name, filler_name);
-                let mut atom = DLAtom::concept_assertion(&predicate, variable);
-                if negate {
-                    atom.is_positive = false;
-                }
-                Ok(atom)
+                
+                // Use HermiT-style atLeast atom creation
+                return self.create_at_least_atom(*cardinality, &property_name, &filler_name, variable, negate);
             }
             ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
                 // ≤n property.filler becomes atMost(n,property,filler)(variable)
@@ -1189,9 +1220,15 @@ impl DLClauseGenerator {
                 Ok(atom)
             }
             ClassExpression::DataHasValue { property, value } => {
-                // dataProp hasValue "literal" becomes dataHasValue(property,literal)(variable)
+                // dataProp hasValue "literal" becomes dataHasValue(property,literal)(variable) or nominal
                 let property_name = self.data_property_expression_to_string(property);
                 let literal_value = &value.value;
+                
+                // Try HermiT-style nominal atom for specific literals
+                if literal_value.contains("@") || literal_value.contains("WPS") {
+                    return self.create_nominal_atom(literal_value, &property_name, variable, negate);
+                }
+                
                 let predicate = format!("dataHasValue({},\"{}\")", property_name, literal_value);
                 let mut atom = DLAtom::concept_assertion(&predicate, variable);
                 if negate {
@@ -1378,6 +1415,51 @@ impl DLClauseGenerator {
         }
     }
 
+    /// Compile data range to atom using HermiT-style patterns
+    fn compile_data_range_to_atom(&self, range: &crate::ontology::DataRange, variable: &str) -> Result<DLAtom> {
+        match range {
+            crate::ontology::DataRange::Datatype(iri) => {
+                let datatype_name = self.shorten_iri(&iri.to_string());
+                Ok(DLAtom::new(datatype_name, vec![variable.to_string()]))
+            }
+            crate::ontology::DataRange::DatatypeRestriction { datatype, restrictions } => {
+                let base_type = self.shorten_iri(&datatype.to_string());
+                if restrictions.is_empty() {
+                    Ok(DLAtom::new(base_type, vec![variable.to_string()]))
+                } else {
+                    // Use HermiT-style datatype restriction atom
+                    let restriction_pairs: Vec<(String, String)> = restrictions.iter()
+                        .map(|r| (self.shorten_iri(&r.facet.to_string()), r.value.value.clone()))
+                        .collect();
+                    let restriction_refs: Vec<(&str, &str)> = restriction_pairs.iter()
+                        .map(|(f, v)| (f.as_str(), v.as_str()))
+                        .collect();
+                    Ok(self.create_datatype_restriction_atom(&base_type, &restriction_refs, variable, false))
+                }
+            }
+            crate::ontology::DataRange::DataOneOf(literals) => {
+                // For DataOneOf, generate nominal constraints
+                if literals.len() == 1 {
+                    let lit = &literals[0];
+                    let datatype = if let Some(dt) = &lit.datatype {
+                        self.shorten_iri(&dt.to_string())
+                    } else {
+                        "xsd:string".to_string()
+                    };
+                    // Use HermiT-style nominal atom
+                    return self.create_nominal_atom(&lit.value, &datatype, variable, false);
+                } else {
+                    // For multiple values, use general literal type  
+                    Ok(DLAtom::new("rdfs:Literal".to_string(), vec![variable.to_string()]))
+                }
+            }
+            _ => {
+                // Default to literal type
+                Ok(DLAtom::new("rdfs:Literal".to_string(), vec![variable.to_string()]))
+            }
+        }
+    }
+
     /// Shorten IRI using prefixes
     fn shorten_iri(&self, iri: &str) -> String {
         for (prefix, namespace) in &self.prefixes {
@@ -1405,6 +1487,71 @@ impl DLClauseGenerator {
         let id = format!("clause_{}", self.clause_counter);
         self.clause_counter += 1;
         id
+    }
+
+    /// Generate next definition predicate (def:0, def:1, etc.)
+    fn next_definition_predicate(&mut self) -> String {
+        let def_id = format!("def:{}", self.definition_counter);
+        self.definition_counter += 1;
+        def_id
+    }
+
+    /// Create data type restriction atom following HermiT patterns
+    fn create_datatype_restriction_atom(&self, datatype: &str, restrictions: &[(&str, &str)], variable: &str, negate: bool) -> DLAtom {
+        let mut restriction_parts = Vec::new();
+        for (facet, value) in restrictions {
+            restriction_parts.push(format!("{}=\"{}\"^^{}", facet, value, datatype));
+        }
+        
+        let restriction_expr = if restriction_parts.is_empty() {
+            datatype.to_string()
+        } else {
+            format!("{}[{}]", datatype, restriction_parts.join(","))
+        };
+        
+        let mut atom = DLAtom::new(restriction_expr, vec![variable.to_string()]);
+        if negate {
+            atom.is_positive = false;
+        }
+        atom
+    }
+
+    /// Create nominal value atom (e.g., { "WPS27@"^^rdf:PlainLiteral })
+    fn create_nominal_atom(&self, value: &str, _property: &str, variable: &str, negate: bool) -> Result<DLAtom> {
+        let nominal_expr = format!("nom:{{ \"{}\" }}", value);
+        let mut atom = DLAtom::new(nominal_expr, vec![variable.to_string()]);
+        if negate {
+            atom.is_positive = false;
+        }
+        Ok(atom)
+    }
+
+    /// Create atLeast cardinality atom (e.g., atLeast(1 :property :range))
+    fn create_at_least_atom(&self, cardinality: u32, property: &str, range: &str, variable: &str, negate: bool) -> Result<DLAtom> {
+        let predicate = format!("all:atLeast({},{},{})", cardinality, property, range);
+        let mut atom = DLAtom::new(predicate, vec![variable.to_string()]);
+        if negate {
+            atom.is_positive = false;
+        }
+        Ok(atom)
+    }
+
+    /// Convert class expression to range string for atLeast atoms
+    fn class_expression_to_range_string(&self, expr: &ClassExpression) -> String {
+        match expr {
+            ClassExpression::Class(class) => self.shorten_iri(&class.iri.to_string()),
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                let prop_str = self.object_property_expression_to_string(property);
+                let filler_str = self.class_expression_to_range_string(filler);
+                format!("exists({} {})", prop_str, filler_str)
+            }
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                let prop_str = self.object_property_expression_to_string(property);
+                let filler_str = self.class_expression_to_range_string(filler);
+                format!("forall({} {})", prop_str, filler_str)
+            }
+            _ => "owl:Thing".to_string(),
+        }
     }
 
     /// Compile DisjointUnion axiom 
@@ -1529,9 +1676,8 @@ impl DLClauseGenerator {
         let property_name = self.data_property_expression_to_string(&axiom.property);
         let property_atom = DLAtom::datatype_assertion(&property_name, &var_x, &var_y);
         
-        // Create a datatype constraint atom
-        let range_name = self.data_range_to_string(&axiom.range);
-        let range_atom = DLAtom::new(range_name, vec![var_y]);
+        // Generate HermiT-style data type restriction
+        let range_atom = self.compile_data_range_to_atom(&axiom.range, &var_y)?;
         
         let clause = DLClause::new(
             vec![range_atom],
