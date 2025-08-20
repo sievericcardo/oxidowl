@@ -7,6 +7,7 @@ use crate::{
     ontology::{
         Axiom, Class, ClassExpression, DeclarationAxiom, Entity, IRI, Individual, NamedIndividual,
         ObjectProperty, ObjectPropertyExpression, Ontology, axioms::DisjointUnionAxiom,
+        DataProperty, DataPropertyExpression, DataRange,
     },
 };
 use std::{
@@ -188,6 +189,36 @@ pub fn parse(content: &str) -> Result<Ontology> {
             }
             "FunctionalObjectProperty" => {
                 if let Ok(axiom) = parse_functional_object_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "FunctionalDataProperty" => {
+                println!("DEBUG: Found FunctionalDataProperty in XML");
+                if let Ok(axiom) = parse_functional_data_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "ObjectPropertyDomain" => {
+                println!("DEBUG: Found ObjectPropertyDomain in XML");
+                if let Ok(axiom) = parse_object_property_domain(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "ObjectPropertyRange" => {
+                println!("DEBUG: Found ObjectPropertyRange in XML");
+                if let Ok(axiom) = parse_object_property_range(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "DataPropertyDomain" => {
+                println!("DEBUG: Found DataPropertyDomain in XML");
+                if let Ok(axiom) = parse_data_property_domain(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "DataPropertyRange" => {
+                println!("DEBUG: Found DataPropertyRange in XML");
+                if let Ok(axiom) = parse_data_property_range(&child) {
                     ontology.add_axiom(axiom);
                 }
             }
@@ -999,4 +1030,166 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     }
     writeln!(file, "</Ontology>")?;
     Ok(())
+}
+
+/// Parse FunctionalDataProperty axiom
+fn parse_functional_data_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "FunctionalDataProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_data_property_expression(&children[0])?;
+    Ok(Axiom::FunctionalDataProperty(
+        crate::ontology::FunctionalDataPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse ObjectPropertyDomain axiom
+fn parse_object_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 2 {
+        return Err(Error::io(
+            "ObjectPropertyDomain must have exactly 2 children".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+    let domain = parse_class_expression(&children[1], None)?;
+    
+    Ok(Axiom::ObjectPropertyDomain(
+        crate::ontology::ObjectPropertyDomainAxiom {
+            id: generate_axiom_id(),
+            property,
+            domain,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse ObjectPropertyRange axiom
+fn parse_object_property_range(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 2 {
+        return Err(Error::io(
+            "ObjectPropertyRange must have exactly 2 children".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+    let range = parse_class_expression(&children[1], None)?;
+    
+    Ok(Axiom::ObjectPropertyRange(
+        crate::ontology::ObjectPropertyRangeAxiom {
+            id: generate_axiom_id(),
+            property,
+            range,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse DataPropertyDomain axiom
+fn parse_data_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 2 {
+        return Err(Error::io(
+            "DataPropertyDomain must have exactly 2 children".to_string(),
+        ));
+    }
+
+    let property = parse_data_property_expression(&children[0])?;
+    let domain = parse_class_expression(&children[1], None)?;
+    
+    Ok(Axiom::DataPropertyDomain(
+        crate::ontology::DataPropertyDomainAxiom {
+            id: generate_axiom_id(),
+            property,
+            domain,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse DataPropertyRange axiom
+fn parse_data_property_range(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 2 {
+        return Err(Error::io(
+            "DataPropertyRange must have exactly 2 children".to_string(),
+        ));
+    }
+
+    let property = parse_data_property_expression(&children[0])?;
+    let range = parse_data_range(&children[1])?;
+    
+    Ok(Axiom::DataPropertyRange(
+        crate::ontology::DataPropertyRangeAxiom {
+            id: generate_axiom_id(),
+            property,
+            range,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse data property expression
+fn parse_data_property_expression(element: &roxmltree::Node) -> Result<DataPropertyExpression> {
+    match element.tag_name().name() {
+        "DataProperty" => {
+            if let Some(iri) = element.attribute("IRI") {
+                Ok(DataPropertyExpression::DataProperty(DataProperty {
+                    iri: IRI::new(iri),
+                }))
+            } else {
+                Err(Error::io(
+                    "DataProperty element missing IRI attribute".to_string(),
+                ))
+            }
+        }
+        _ => Err(Error::io(format!(
+            "Unsupported data property expression: {}",
+            element.tag_name().name()
+        ))),
+    }
+}
+
+/// Parse data range
+fn parse_data_range(element: &roxmltree::Node) -> Result<DataRange> {
+    match element.tag_name().name() {
+        "Datatype" => {
+            if let Some(iri) = element.attribute("IRI") {
+                Ok(DataRange::Datatype(IRI::new(iri)))
+            } else {
+                Err(Error::io(
+                    "Datatype element missing IRI attribute".to_string(),
+                ))
+            }
+        }
+        _ => {
+            // For now, return a basic string datatype for unknown ranges
+            Ok(DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#string")))
+        }
+    }
 }

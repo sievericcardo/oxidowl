@@ -491,16 +491,219 @@ impl DLClauseGenerator {
                 return self.compile_equivalent_classes_standard(axiom);
             };
             
-            // Generate disjunctive clause for complex definition
-            if let Some(disjunctive_clause) = self.compile_complex_definition(named_class, complex_expr)? {
-                clauses.push(disjunctive_clause);
-            }
+            // Generate specialized clauses for complex definitions
+            clauses.extend(self.compile_complex_equivalence(named_class, complex_expr)?);
             
-            // Also generate standard implications
+            // Also generate standard implications for completeness
             clauses.extend(self.compile_equivalent_classes_standard(axiom)?);
         } else {
             // Generate bidirectional implications for each pair (standard case)
             clauses.extend(self.compile_equivalent_classes_standard(axiom)?);
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Compile complex equivalence: A ≡ ComplexExpression
+    /// Generates both forward and backward implications plus specialized clauses
+    fn compile_complex_equivalence(&mut self, named_class: &ClassExpression, complex_expr: &ClassExpression) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        match complex_expr {
+            ClassExpression::ObjectIntersectionOf(conjuncts) => {
+                let var_x = self.fresh_variable();
+                
+                // Generate forward implications: A(x) → B(x), A(x) → C(x), ...
+                for conjunct in conjuncts {
+                    let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                    let conjunct_atom = self.compile_class_expression_to_atom(conjunct, &var_x, false)?;
+                    
+                    clauses.push(DLClause::new(
+                        vec![conjunct_atom],
+                        vec![named_atom],
+                        self.next_clause_id(),
+                    ));
+                }
+                
+                // Generate backward implication with expanded complex expressions
+                if let Some(reverse_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(reverse_clause);
+                }
+                
+                // Generate additional expansion clauses for complex expressions
+                clauses.extend(self.compile_complex_expression_expansions(conjuncts, &var_x)?);
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                // A ≡ ∃R.C generates: A(x) → R(x,y) ∧ C(y) and R(x,y) ∧ C(y) → A(x)
+                if let Some(definition_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(definition_clause);
+                }
+                
+                // Also generate forward implication
+                let var_x = self.fresh_variable();
+                let var_y = self.fresh_variable();
+                let property_name = self.object_property_expression_to_string(property);
+                let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+                let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+                
+                clauses.push(DLClause::new(
+                    vec![property_atom, filler_atom],
+                    vec![named_atom],
+                    self.next_clause_id(),
+                ));
+            }
+            ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                // Generate cardinality expansion clauses
+                if let Some(cardinality_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(cardinality_clause);
+                }
+                
+                // Generate forward implication: A(x) → ≥nR.C expansion
+                clauses.extend(self.compile_min_cardinality_forward_implications(named_class, *cardinality, property, Some(filler.as_ref()))?);
+            }
+            ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
+                // Generate maximum cardinality constraint
+                if let Some(constraint_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(constraint_clause);
+                }
+            }
+            ClassExpression::ObjectExactCardinality { cardinality, property, filler } => {
+                // Generate both minimum and maximum constraints
+                if let Some(exact_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(exact_clause);
+                }
+                
+                // Add maximum cardinality constraint
+                let max_expr = ClassExpression::ObjectMaxCardinality {
+                    cardinality: *cardinality,
+                    property: property.clone(),
+                    filler: filler.clone(),
+                };
+                if let Some(max_clause) = self.compile_complex_definition(named_class, &max_expr)? {
+                    clauses.push(max_clause);
+                }
+            }
+            ClassExpression::ObjectHasSelf { property } => {
+                // A ≡ ∃R.Self generates: A(x) → R(x,x) and R(x,x) → A(x)
+                if let Some(self_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(self_clause);
+                }
+                
+                // Generate forward implication
+                let var_x = self.fresh_variable();
+                let property_name = self.object_property_expression_to_string(property);
+                let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+                let self_property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_x);
+                
+                clauses.push(DLClause::new(
+                    vec![self_property_atom],
+                    vec![named_atom],
+                    self.next_clause_id(),
+                ));
+            }
+            _ => {
+                // For other complex expressions, try the general definition
+                if let Some(definition_clause) = self.compile_complex_definition(named_class, complex_expr)? {
+                    clauses.push(definition_clause);
+                }
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Generate expansion clauses for complex expressions within intersections
+    fn compile_complex_expression_expansions(&mut self, conjuncts: &[ClassExpression], var_x: &str) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        for conjunct in conjuncts {
+            match conjunct {
+                ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                    // For ∃R.C, generate existence expansion
+                    let var_y = self.fresh_variable();
+                    let property_name = self.object_property_expression_to_string(property);
+                    let conjunct_atom = self.compile_class_expression_to_atom(conjunct, var_x, true)?;
+                    let property_atom = DLAtom::role_assertion(&property_name, var_x, &var_y);
+                    let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+                    
+                    clauses.push(DLClause::new(
+                        vec![property_atom, filler_atom],
+                        vec![conjunct_atom],
+                        self.next_clause_id(),
+                    ));
+                }
+                ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                    // Generate witness expansion for minimum cardinality
+                    clauses.extend(self.compile_min_cardinality_expansion(conjunct, var_x, *cardinality, property, Some(filler.as_ref()))?);
+                }
+                _ => {
+                    // For simple classes, no additional expansion needed
+                }
+            }
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Generate forward implications for minimum cardinality
+    fn compile_min_cardinality_forward_implications(&mut self, named_class: &ClassExpression, cardinality: u32, property: &ObjectPropertyExpression, filler: Option<&ClassExpression>) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        let var_x = self.fresh_variable();
+        let property_name = self.object_property_expression_to_string(property);
+        
+        // Generate A(x) → ≥nR.C means we need at least n R-successors
+        // This translates to generating witness existence clauses
+        if cardinality > 0 {
+            let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+            
+            // Generate existence of at least one R-successor (simplified)
+            let var_y = self.fresh_variable();
+            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+            let mut head_atoms = vec![property_atom];
+            
+            if let Some(filler_expr) = filler {
+                let filler_atom = self.compile_class_expression_to_atom(filler_expr, &var_y, false)?;
+                head_atoms.push(filler_atom);
+            }
+            
+            clauses.push(DLClause::new(
+                head_atoms,
+                vec![named_atom],
+                self.next_clause_id(),
+            ));
+        }
+        
+        Ok(clauses)
+    }
+
+    /// Generate expansion clauses for minimum cardinality restrictions
+    fn compile_min_cardinality_expansion(&mut self, restriction: &ClassExpression, var_x: &str, cardinality: u32, property: &ObjectPropertyExpression, filler: Option<&ClassExpression>) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+        
+        if cardinality == 0 {
+            return Ok(clauses); // Trivially satisfied
+        }
+        
+        let property_name = self.object_property_expression_to_string(property);
+        let restriction_atom = self.compile_class_expression_to_atom(restriction, var_x, true)?;
+        
+        // Generate existence of witness individuals
+        for i in 0..cardinality {
+            let var_y = format!("y{}", i);
+            let property_atom = DLAtom::role_assertion(&property_name, var_x, &var_y);
+            let mut head_atoms = vec![property_atom];
+            
+            if let Some(filler_expr) = filler {
+                let filler_atom = self.compile_class_expression_to_atom(filler_expr, &var_y, false)?;
+                head_atoms.push(filler_atom);
+            }
+            
+            clauses.push(DLClause::new(
+                head_atoms,
+                vec![restriction_atom.clone()],
+                self.next_clause_id(),
+            ));
         }
         
         Ok(clauses)
@@ -539,7 +742,7 @@ impl DLClauseGenerator {
         
         Ok(clauses)
     }
-    
+
     /// Check if a class expression is a simple named class
     fn is_named_class(&self, expr: &ClassExpression) -> bool {
         matches!(expr, ClassExpression::Class(_))
@@ -550,109 +753,225 @@ impl DLClauseGenerator {
     fn compile_complex_definition(&mut self, named_class: &ClassExpression, complex_expr: &ClassExpression) -> Result<Option<DLClause>> {
         match complex_expr {
             ClassExpression::ObjectIntersectionOf(conjuncts) => {
-                let var_x = self.fresh_variable();
-                
-                // For each conjunct, generate implication clauses
-                // A ≡ B ⊓ C becomes: A(x) → B(x), A(x) → C(x), and B(x) ∧ C(x) → A(x)
-                let _clauses: Vec<DLClause> = Vec::new();
-                
-                // Generate A(x) → B(x) for each conjunct B
-                for conjunct in conjuncts {
-                    match conjunct {
-                        ClassExpression::ObjectSomeValuesFrom { property, filler } => {
-                            // Handle ∃property.filler restrictions
-                            let property_name = self.object_property_expression_to_string(property);
-                            
-                            // Generate: A(x) → ∃property.filler(x)
-                            // In DL clause form: property(x,y) ∧ filler(y) :- A(x)
-                            let var_y = self.fresh_variable();
-                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
-                            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
-                            let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
-                            
-                            return Ok(Some(DLClause::new(
-                                vec![property_atom, filler_atom],
-                                vec![a_atom],
-                                self.next_clause_id(),
-                            )));
-                        }
-                        ClassExpression::DataSomeValuesFrom { property, filler } => {
-                            // Handle data property restrictions with ranges
-                            let property_name = self.data_property_expression_to_string(property);
-                            let range_restriction = self.data_range_to_string(filler);
-                            
-                            // Generate: A(x) → ∃property.range(x)
-                            // As atLeast(1 property range)(x) :- A(x)
-                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
-                            let restriction_atom = DLAtom::new(
-                                format!("atLeast(1 {} {})", property_name, range_restriction),
-                                vec![var_x.clone()]
-                            );
-                            
-                            return Ok(Some(DLClause::new(
-                                vec![restriction_atom],
-                                vec![a_atom],
-                                self.next_clause_id(),
-                            )));
-                        }
-                        ClassExpression::ObjectHasValue { property, value } => {
-                            // Handle ∃property.{individual} 
-                            let property_name = self.object_property_expression_to_string(property);
-                            let individual_name = self.individual_to_string(value);
-                            
-                            // Generate: A(x) → property(x, individual)
-                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
-                            let has_value_atom = DLAtom::new(
-                                format!("atLeast(1 {} {{ \"{}\" }})", property_name, individual_name),
-                                vec![var_x.clone()]
-                            );
-                            
-                            return Ok(Some(DLClause::new(
-                                vec![has_value_atom],
-                                vec![a_atom],
-                                self.next_clause_id(),
-                            )));
-                        }
-                        ClassExpression::DataHasValue { property, value } => {
-                            // Handle data property has value
-                            let property_name = self.data_property_expression_to_string(property);
-                            let value_str = &value.value;
-                            
-                            // Generate: A(x) → property(x, "value")
-                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
-                            let has_value_atom = DLAtom::new(
-                                format!("atLeast(1 {} {{ \"{}\" }})", property_name, value_str),
-                                vec![var_x.clone()]
-                            );
-                            
-                            return Ok(Some(DLClause::new(
-                                vec![has_value_atom],
-                                vec![a_atom],
-                                self.next_clause_id(),
-                            )));
-                        }
-                        _ => {
-                            // For other types, create basic implication
-                            let a_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
-                            let b_atom = self.compile_class_expression_to_atom(conjunct, &var_x, false)?;
-                            
-                            return Ok(Some(DLClause::new(
-                                vec![b_atom],
-                                vec![a_atom],
-                                self.next_clause_id(),
-                            )));
+                self.compile_intersection_definition(named_class, conjuncts)
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                self.compile_existential_definition(named_class, property, filler)
+            }
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                self.compile_universal_definition(named_class, property, filler)
+            }
+            ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                self.compile_min_cardinality_definition(named_class, *cardinality, property, Some(filler.as_ref()))
+            }
+            ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
+                self.compile_max_cardinality_definition(named_class, *cardinality, property, Some(filler.as_ref()))
+            }
+            ClassExpression::ObjectExactCardinality { cardinality, property, filler } => {
+                self.compile_exact_cardinality_definition(named_class, *cardinality, property, Some(filler.as_ref()))
+            }
+            ClassExpression::ObjectHasSelf { property } => {
+                self.compile_self_restriction_definition(named_class, property)
+            }
+            _ => Ok(None), // Not implemented yet
+        }
+    }
+
+    /// Compile intersection definition: A ≡ B ⊓ C ⊓ ... 
+    /// Generates: B(x) ∧ C(x) ∧ ... → A(x) (reverse implication as disjunctive clause)
+    fn compile_intersection_definition(&mut self, named_class: &ClassExpression, conjuncts: &[ClassExpression]) -> Result<Option<DLClause>> {
+        let var_x = self.fresh_variable();
+        let mut body_atoms = Vec::new();
+        
+        // Generate atoms for each conjunct in the body
+        for conjunct in conjuncts {
+            match conjunct {
+                ClassExpression::Class(_) => {
+                    let conjunct_atom = self.compile_class_expression_to_atom(conjunct, &var_x, true)?;
+                    body_atoms.push(conjunct_atom);
+                }
+                ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                    // For ∃R.C, generate R(x,y) ∧ C(y) atoms
+                    let var_y = self.fresh_variable();
+                    let property_name = self.object_property_expression_to_string(property);
+                    let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+                    let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+                    body_atoms.push(property_atom);
+                    body_atoms.push(filler_atom);
+                }
+                ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                    // For ≥nR.C, generate witness individuals
+                    let property_name = self.object_property_expression_to_string(property);
+                    for i in 0..*cardinality {
+                        let var_y = format!("y{}", i);
+                        let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+                        body_atoms.push(property_atom);
+                        
+                        let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+                        body_atoms.push(filler_atom);
+                        
+                        // Add inequality constraints for distinctness
+                        for j in 0..i {
+                            let other_var = format!("y{}", j);
+                            let inequality = DLAtom::new(format!("[{} != {}]", var_y, other_var), vec![]);
+                            body_atoms.push(inequality);
                         }
                     }
                 }
-                
-                // No specific conjuncts handled, return None
-                Ok(None)
-            }
-            _ => {
-                // For non-intersection complex expressions, don't generate disjunctive clauses yet
-                Ok(None)
+                _ => {
+                    // Handle other complex expressions
+                    let conjunct_atom = self.compile_class_expression_to_atom(conjunct, &var_x, true)?;
+                    body_atoms.push(conjunct_atom);
+                }
             }
         }
+        
+        // Generate head atom for the named class
+        let head_atom = self.compile_class_expression_to_atom(named_class, &var_x, false)?;
+        
+        Ok(Some(DLClause::new(
+            vec![head_atom],
+            body_atoms,
+            self.next_clause_id(),
+        )))
+    }
+
+    /// Compile existential definition: A ≡ ∃R.C
+    /// Generates: R(x,y) ∧ C(y) → A(x)
+    fn compile_existential_definition(&mut self, named_class: &ClassExpression, property: &ObjectPropertyExpression, filler: &ClassExpression) -> Result<Option<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(property);
+        let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+        let head_atom = self.compile_class_expression_to_atom(named_class, &var_x, false)?;
+        
+        Ok(Some(DLClause::new(
+            vec![head_atom],
+            vec![property_atom, filler_atom],
+            self.next_clause_id(),
+        )))
+    }
+
+    /// Compile universal definition: A ≡ ∀R.C  
+    /// Generates: A(x) ∧ R(x,y) → C(y) (constraint form)
+    fn compile_universal_definition(&mut self, named_class: &ClassExpression, property: &ObjectPropertyExpression, filler: &ClassExpression) -> Result<Option<DLClause>> {
+        let var_x = self.fresh_variable();
+        let var_y = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(property);
+        let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+        let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+        let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
+        
+        Ok(Some(DLClause::new(
+            vec![filler_atom],
+            vec![named_atom, property_atom],
+            self.next_clause_id(),
+        )))
+    }
+
+    /// Compile minimum cardinality definition: A ≡ ≥nR.C
+    /// Generates: R(x,y1) ∧ C(y1) ∧ ... ∧ R(x,yn) ∧ C(yn) ∧ yi ≠ yj → A(x)
+    fn compile_min_cardinality_definition(&mut self, named_class: &ClassExpression, cardinality: u32, property: &ObjectPropertyExpression, filler: Option<&ClassExpression>) -> Result<Option<DLClause>> {
+        if cardinality == 0 {
+            return Ok(None); // Trivially satisfied
+        }
+        
+        let var_x = self.fresh_variable();
+        let mut body_atoms = Vec::new();
+        
+        let property_name = self.object_property_expression_to_string(property);
+        
+        // Generate witness individuals
+        for i in 0..cardinality {
+            let var_y = format!("y{}", i);
+            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+            body_atoms.push(property_atom);
+            
+            // Add filler constraint if specified
+            if let Some(filler_expr) = filler {
+                let filler_atom = self.compile_class_expression_to_atom(filler_expr, &var_y, false)?;
+                body_atoms.push(filler_atom);
+            }
+            
+            // Add distinctness constraints
+            for j in 0..i {
+                let other_var = format!("y{}", j);
+                let inequality = DLAtom::new(format!("[{} != {}]", var_y, other_var), vec![]);
+                body_atoms.push(inequality);
+            }
+        }
+        
+        let head_atom = self.compile_class_expression_to_atom(named_class, &var_x, false)?;
+        
+        Ok(Some(DLClause::new(
+            vec![head_atom],
+            body_atoms,
+            self.next_clause_id(),
+        )))
+    }
+
+    /// Compile maximum cardinality definition: A ≡ ≤nR.C
+    /// Generates constraint clauses for violations
+    fn compile_max_cardinality_definition(&mut self, named_class: &ClassExpression, cardinality: u32, property: &ObjectPropertyExpression, filler: Option<&ClassExpression>) -> Result<Option<DLClause>> {
+        let var_x = self.fresh_variable();
+        let mut body_atoms = Vec::new();
+        
+        let property_name = self.object_property_expression_to_string(property);
+        let named_atom = self.compile_class_expression_to_atom(named_class, &var_x, true)?;
+        body_atoms.push(named_atom);
+        
+        // Generate constraint for having more than n distinct fillers
+        for i in 0..=cardinality {
+            let var_y = format!("y{}", i);
+            let property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_y);
+            body_atoms.push(property_atom);
+            
+            if let Some(filler_expr) = filler {
+                let filler_atom = self.compile_class_expression_to_atom(filler_expr, &var_y, false)?;
+                body_atoms.push(filler_atom);
+            }
+            
+            // Add distinctness constraints
+            for j in 0..i {
+                let other_var = format!("y{}", j);
+                let inequality = DLAtom::new(format!("[{} != {}]", var_y, other_var), vec![]);
+                body_atoms.push(inequality);
+            }
+        }
+        
+        // Generate constraint clause (empty head = clash)
+        Ok(Some(DLClause::new(
+            vec![], // Empty head indicates constraint/clash
+            body_atoms,
+            self.next_clause_id(),
+        )))
+    }
+
+    /// Compile exact cardinality definition: A ≡ =nR.C
+    /// Generates both minimum and maximum cardinality constraints
+    fn compile_exact_cardinality_definition(&mut self, named_class: &ClassExpression, cardinality: u32, property: &ObjectPropertyExpression, filler: Option<&ClassExpression>) -> Result<Option<DLClause>> {
+        // For exact cardinality, we generate the minimum cardinality clause
+        // The maximum constraint would be handled separately
+        self.compile_min_cardinality_definition(named_class, cardinality, property, filler)
+    }
+
+    /// Compile self restriction definition: A ≡ ∃R.Self
+    /// Generates: R(x,x) → A(x)
+    fn compile_self_restriction_definition(&mut self, named_class: &ClassExpression, property: &ObjectPropertyExpression) -> Result<Option<DLClause>> {
+        let var_x = self.fresh_variable();
+        
+        let property_name = self.object_property_expression_to_string(property);
+        let self_property_atom = DLAtom::role_assertion(&property_name, &var_x, &var_x);
+        let head_atom = self.compile_class_expression_to_atom(named_class, &var_x, false)?;
+        
+        Ok(Some(DLClause::new(
+            vec![head_atom],
+            vec![self_property_atom],
+            self.next_clause_id(),
+        )))
     }
 
 
