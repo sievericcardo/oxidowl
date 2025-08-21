@@ -27,6 +27,8 @@ pub struct DLAtom {
     pub arguments: Vec<String>,
     /// Whether this is a positive or negative atom
     pub is_positive: bool,
+    /// Additional constraints or annotations
+    pub constraints: Vec<String>,
 }
 
 /// Result of DL clause generation
@@ -61,6 +63,7 @@ impl DLAtom {
             predicate,
             arguments,
             is_positive: true,
+            constraints: Vec::new(),
         }
     }
 
@@ -70,12 +73,19 @@ impl DLAtom {
             predicate,
             arguments,
             is_positive: false,
+            constraints: Vec::new(),
         }
     }
 
     /// Create an atom with specified negation
     pub fn with_negation(mut self, negate: bool) -> Self {
         self.is_positive = !negate;
+        self
+    }
+
+    /// Add a constraint to this atom
+    pub fn with_constraint(mut self, constraint: String) -> Self {
+        self.constraints.push(constraint);
         self
     }
 
@@ -99,6 +109,48 @@ impl DLAtom {
             vec![subject.to_string(), value.to_string()],
         )
     }
+
+    /// Create an atLeast cardinality atom - HermiT style
+    pub fn at_least_cardinality(cardinality: u32, property: &str, range: &str, subject: &str) -> Self {
+        Self::new(
+            format!("atLeast({},{},{})", cardinality, property, range),
+            vec![subject.to_string()],
+        )
+    }
+
+    /// Create an atMost cardinality atom - HermiT style
+    pub fn at_most_cardinality(cardinality: u32, property: &str, range: &str, subject: &str) -> Self {
+        Self::new(
+            format!("atMost({},{},{})", cardinality, property, range),
+            vec![subject.to_string()],
+        )
+    }
+
+    /// Create an equality constraint atom - HermiT style
+    pub fn equality_constraint(var1: &str, var2: &str) -> Self {
+        Self::new(
+            format!("[{} == {}]", var1, var2),
+            vec![],
+        )
+    }
+
+    /// Create a datatype restriction atom - HermiT style
+    pub fn datatype_restriction(datatype: &str, restrictions: &[String], variable: &str) -> Self {
+        let restriction_str = if restrictions.is_empty() {
+            datatype.to_string()
+        } else {
+            format!("{}[{}]", datatype, restrictions.join(","))
+        };
+        Self::new(restriction_str, vec![variable.to_string()])
+    }
+
+    /// Create a nominal atom - HermiT style
+    pub fn nominal(value: &str, variable: &str) -> Self {
+        Self::new(
+            format!("{{{}}}", value),
+            vec![variable.to_string()],
+        )
+    }
 }
 
 impl fmt::Display for DLAtom {
@@ -106,20 +158,27 @@ impl fmt::Display for DLAtom {
         let prefix = if self.is_positive { "" } else { "not(" };
         let suffix = if self.is_positive { "" } else { ")" };
 
+        let constraint_str = if self.constraints.is_empty() {
+            String::new()
+        } else {
+            format!("@{}", self.constraints.join("@"))
+        };
+
         if self.arguments.is_empty() {
-            write!(f, "{prefix}{}{suffix}", self.predicate)
+            write!(f, "{prefix}{}{}{suffix}", self.predicate, constraint_str)
         } else if self.arguments.len() == 1 {
             write!(
                 f,
-                "{prefix}{}({}){suffix}",
-                self.predicate, self.arguments[0]
+                "{prefix}{}({}){}{suffix}",
+                self.predicate, self.arguments[0], constraint_str
             )
         } else {
             write!(
                 f,
-                "{prefix}{}({}){suffix}",
+                "{prefix}{}({}){}{suffix}",
                 self.predicate,
-                self.arguments.join(",")
+                self.arguments.join(","),
+                constraint_str
             )
         }
     }

@@ -17,6 +17,11 @@ pub trait AxiomCompiler: HelperMethods + UnionDisjunctiveCompiler {
     /// Compile a single axiom to DL clauses
     fn compile_axiom(&mut self, axiom: &Axiom) -> Result<Vec<DLClause>> {
         match axiom {
+            Axiom::Declaration(_) => {
+                // Declaration axioms don't generate DL clauses - they just declare entities
+                debug!("Skipping Declaration axiom - no clauses generated");
+                Ok(Vec::new())
+            }
             Axiom::SubClassOf(axiom) => self.compile_subclass_axiom(axiom),
             Axiom::EquivalentClasses(axiom) => self.compile_equivalent_classes_axiom(axiom),
             Axiom::DisjointClasses(axiom) => self.compile_disjoint_classes_axiom(axiom),
@@ -748,7 +753,17 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
             self.next_clause_id(),
         );
 
-        Ok(vec![clause])
+        // Also generate HermiT-style atMost constraint
+        let range_str = self.get_property_range(&property_name).unwrap_or_else(|| "owl:Thing".to_string());
+        
+        let at_most_atom = self.create_at_most_atom(1, &property_name, &range_str, &var_x, false)?;
+        let functional_clause = DLClause::new(
+            vec![at_most_atom],
+            vec![],
+            self.next_clause_id(),
+        );
+
+        Ok(vec![clause, functional_clause])
     }
 
     fn compile_functional_data_property_axiom(

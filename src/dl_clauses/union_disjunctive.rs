@@ -3,7 +3,10 @@
 //! This module contains methods for generating comprehensive disjunctive clauses
 //! from ObjectUnionOf expressions, following HermiT's style of clause generation.
 
-use crate::{error::Result, ontology::ClassExpression};
+use crate::{
+    error::Result,
+    ontology::ClassExpression,
+};
 
 use super::{
     helpers::HelperMethods,
@@ -135,6 +138,14 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
                         var_x,
                     )?);
                 }
+                
+                // Generate atLeast expansion rules like HermiT
+                clauses.extend(self.compile_at_least_expansion_rules(
+                    *cardinality,
+                    &property_name,
+                    &range_str,
+                    var_x,
+                )?);
             }
             ClassExpression::ObjectMaxCardinality {
                 cardinality,
@@ -277,6 +288,47 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
                     }
                 }
             }
+        }
+
+        Ok(clauses)
+    }
+
+    /// Generate atLeast expansion rules like HermiT
+    fn compile_at_least_expansion_rules(
+        &mut self,
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        var_x: &str,
+    ) -> Result<Vec<DLClause>> {
+        let mut clauses = Vec::new();
+
+        // Generate atLeast(n,R,C)(x) → R(x,y1) ∧ C(y1) ∧ ... ∧ R(x,yn) ∧ C(yn)
+        let at_least_atom = self.create_at_least_atom(cardinality, property, range, var_x, true)?;
+        
+        let mut expansion_atoms = Vec::new();
+        for i in 0..cardinality {
+            let var_y = format!("{}_{}", self.fresh_variable(), i);
+            let role_atom = DLAtom::role_assertion(property, var_x, &var_y);
+            let range_atom = if range == "owl:Thing" {
+                // For Thing, we don't need explicit range constraint
+                continue;
+            } else {
+                DLAtom::concept_assertion(range, &var_y)
+            };
+            
+            expansion_atoms.push(role_atom);
+            if range != "owl:Thing" {
+                expansion_atoms.push(range_atom);
+            }
+        }
+
+        if !expansion_atoms.is_empty() {
+            clauses.push(DLClause::new(
+                expansion_atoms,
+                vec![at_least_atom],
+                self.next_clause_id(),
+            ));
         }
 
         Ok(clauses)
