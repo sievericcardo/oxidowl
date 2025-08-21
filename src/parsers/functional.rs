@@ -154,19 +154,25 @@ impl FunctionalParser {
                     self.parse_object_property_assertion(tokens, position, ontology, prefixes)?;
             }
             "TransitiveObjectProperty" => {
-                position = self.parse_transitive_object_property(tokens, position, ontology, prefixes)?;
+                position =
+                    self.parse_transitive_object_property(tokens, position, ontology, prefixes)?;
             }
             "SymmetricObjectProperty" => {
-                position = self.parse_symmetric_object_property(tokens, position, ontology, prefixes)?;
+                position =
+                    self.parse_symmetric_object_property(tokens, position, ontology, prefixes)?;
             }
             "ReflexiveObjectProperty" => {
-                position = self.parse_reflexive_object_property(tokens, position, ontology, prefixes)?;
+                position =
+                    self.parse_reflexive_object_property(tokens, position, ontology, prefixes)?;
             }
             "FunctionalObjectProperty" => {
-                position = self.parse_functional_object_property(tokens, position, ontology, prefixes)?;
+                position =
+                    self.parse_functional_object_property(tokens, position, ontology, prefixes)?;
             }
             "InverseFunctionalObjectProperty" => {
-                position = self.parse_inverse_functional_object_property(tokens, position, ontology, prefixes)?;
+                position = self.parse_inverse_functional_object_property(
+                    tokens, position, ontology, prefixes,
+                )?;
             }
             "HasKey" => {
                 position = self.parse_has_key(tokens, position, ontology, prefixes)?;
@@ -251,7 +257,7 @@ impl FunctionalParser {
 
             // Parse content inside the ontology declaration
             let mut paren_count = 1;
-            
+
             while position < tokens.len() && paren_count > 0 {
                 if tokens[position] == "(" {
                     paren_count += 1;
@@ -261,15 +267,16 @@ impl FunctionalParser {
                         break; // Exit when we find the matching closing parenthesis
                     }
                 }
-                
+
                 // Parse statements inside the ontology
-                if paren_count == 1 {  // Only parse top-level statements
+                if paren_count == 1 {
+                    // Only parse top-level statements
                     position = self.parse_statement(tokens, position, ontology, prefixes)?;
                 } else {
                     position += 1;
                 }
             }
-            
+
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1; // Skip final ")"
             }
@@ -362,12 +369,22 @@ impl FunctionalParser {
 
                 let subclass = crate::ontology::Class {
                     iri: url::Url::parse(&sub_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid subclass IRI '{}': {}", sub_iri, e)))?
+                        .map_err(|e| {
+                            Error::ontology_parsing(format!(
+                                "Invalid subclass IRI '{}': {}",
+                                sub_iri, e
+                            ))
+                        })?
                         .into(),
                 };
                 let superclass = crate::ontology::Class {
                     iri: url::Url::parse(&super_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid superclass IRI '{}': {}", super_iri, e)))?
+                        .map_err(|e| {
+                            Error::ontology_parsing(format!(
+                                "Invalid superclass IRI '{}': {}",
+                                super_iri, e
+                            ))
+                        })?
                         .into(),
                 };
 
@@ -547,8 +564,11 @@ impl FunctionalParser {
                 let expanded = format!("{base}{local}");
                 // Validate the expanded IRI can be parsed as a URL
                 if url::Url::parse(&expanded).is_err() {
-                    return Err(crate::error::Error::OntologyParsing { 
-                        message: format!("Invalid IRI: relative URL without a base. Original: '{}', Expanded: '{}', Available prefixes: {:?}", iri, expanded, prefixes) 
+                    return Err(crate::error::Error::OntologyParsing {
+                        message: format!(
+                            "Invalid IRI: relative URL without a base. Original: '{}', Expanded: '{}', Available prefixes: {:?}",
+                            iri, expanded, prefixes
+                        ),
                     });
                 }
                 Ok(expanded)
@@ -651,34 +671,34 @@ impl FunctionalParser {
         prefixes: &HashMap<String, String>,
     ) -> Result<usize> {
         position += 1; // Skip "TransitiveObjectProperty"
-        
+
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                 position += 1;
-                
+
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&property_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
-                
+
                 let axiom = crate::ontology::TransitiveObjectPropertyAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::TransitiveObjectProperty(axiom));
-                
+
                 if position < tokens.len() && tokens[position] == ")" {
                     position += 1; // Skip ")"
                 }
             }
         }
-        
+
         Ok(position)
     }
 
@@ -691,34 +711,34 @@ impl FunctionalParser {
         prefixes: &HashMap<String, String>,
     ) -> Result<usize> {
         position += 1; // Skip "SymmetricObjectProperty"
-        
+
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                 position += 1;
-                
+
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&property_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
-                
+
                 let axiom = crate::ontology::SymmetricObjectPropertyAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::SymmetricObjectProperty(axiom));
-                
+
                 if position < tokens.len() && tokens[position] == ")" {
                     position += 1; // Skip ")"
                 }
             }
         }
-        
+
         Ok(position)
     }
 
@@ -731,34 +751,34 @@ impl FunctionalParser {
         prefixes: &HashMap<String, String>,
     ) -> Result<usize> {
         position += 1; // Skip "ReflexiveObjectProperty"
-        
+
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                 position += 1;
-                
+
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&property_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
-                
+
                 let axiom = crate::ontology::ReflexiveObjectPropertyAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::ReflexiveObjectProperty(axiom));
-                
+
                 if position < tokens.len() && tokens[position] == ")" {
                     position += 1; // Skip ")"
                 }
             }
         }
-        
+
         Ok(position)
     }
 
@@ -771,34 +791,34 @@ impl FunctionalParser {
         prefixes: &HashMap<String, String>,
     ) -> Result<usize> {
         position += 1; // Skip "FunctionalObjectProperty"
-        
+
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                 position += 1;
-                
+
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&property_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
-                
+
                 let axiom = crate::ontology::FunctionalObjectPropertyAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::FunctionalObjectProperty(axiom));
-                
+
                 if position < tokens.len() && tokens[position] == ")" {
                     position += 1; // Skip ")"
                 }
             }
         }
-        
+
         Ok(position)
     }
 
@@ -811,34 +831,36 @@ impl FunctionalParser {
         prefixes: &HashMap<String, String>,
     ) -> Result<usize> {
         position += 1; // Skip "InverseFunctionalObjectProperty"
-        
+
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                 position += 1;
-                
+
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&property_iri)
                         .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
-                
+
                 let axiom = crate::ontology::InverseFunctionalObjectPropertyAxiom {
                     id: generate_axiom_id(),
                     property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
                     annotations: vec![],
                 };
-                ontology.add_axiom(crate::ontology::Axiom::InverseFunctionalObjectProperty(axiom));
-                
+                ontology.add_axiom(crate::ontology::Axiom::InverseFunctionalObjectProperty(
+                    axiom,
+                ));
+
                 if position < tokens.len() && tokens[position] == ")" {
                     position += 1; // Skip ")"
                 }
             }
         }
-        
+
         Ok(position)
     }
 }

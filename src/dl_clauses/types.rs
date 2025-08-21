@@ -111,7 +111,12 @@ impl DLAtom {
     }
 
     /// Create an atLeast cardinality atom - HermiT style
-    pub fn at_least_cardinality(cardinality: u32, property: &str, range: &str, subject: &str) -> Self {
+    pub fn at_least_cardinality(
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        subject: &str,
+    ) -> Self {
         Self::new(
             format!("atLeast({},{},{})", cardinality, property, range),
             vec![subject.to_string()],
@@ -119,7 +124,12 @@ impl DLAtom {
     }
 
     /// Create an atMost cardinality atom - HermiT style
-    pub fn at_most_cardinality(cardinality: u32, property: &str, range: &str, subject: &str) -> Self {
+    pub fn at_most_cardinality(
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        subject: &str,
+    ) -> Self {
         Self::new(
             format!("atMost({},{},{})", cardinality, property, range),
             vec![subject.to_string()],
@@ -128,10 +138,7 @@ impl DLAtom {
 
     /// Create an equality constraint atom - HermiT style
     pub fn equality_constraint(var1: &str, var2: &str) -> Self {
-        Self::new(
-            format!("[{} == {}]", var1, var2),
-            vec![],
-        )
+        Self::new(format!("[{} == {}]", var1, var2), vec![])
     }
 
     /// Create a datatype restriction atom - HermiT style
@@ -146,10 +153,7 @@ impl DLAtom {
 
     /// Create a nominal atom - HermiT style
     pub fn nominal(value: &str, variable: &str) -> Self {
-        Self::new(
-            format!("{{{}}}", value),
-            vec![variable.to_string()],
-        )
+        Self::new(format!("{{{}}}", value), vec![variable.to_string()])
     }
 }
 

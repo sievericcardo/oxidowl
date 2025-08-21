@@ -3,10 +3,7 @@
 //! This module contains methods for generating comprehensive disjunctive clauses
 //! from ObjectUnionOf expressions, following HermiT's style of clause generation.
 
-use crate::{
-    error::Result,
-    ontology::ClassExpression,
-};
+use crate::{error::Result, ontology::ClassExpression};
 
 use super::{
     helpers::HelperMethods,
@@ -138,7 +135,7 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
                         var_x,
                     )?);
                 }
-                
+
                 // Generate atLeast expansion rules like HermiT
                 clauses.extend(self.compile_at_least_expansion_rules(
                     *cardinality,
@@ -305,7 +302,7 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
 
         // Generate atLeast(n,R,C)(x) → R(x,y1) ∧ C(y1) ∧ ... ∧ R(x,yn) ∧ C(yn)
         let at_least_atom = self.create_at_least_atom(cardinality, property, range, var_x, true)?;
-        
+
         let mut expansion_atoms = Vec::new();
         for i in 0..cardinality {
             let var_y = format!("{}_{}", self.fresh_variable(), i);
@@ -316,7 +313,7 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
             } else {
                 DLAtom::concept_assertion(range, &var_y)
             };
-            
+
             expansion_atoms.push(role_atom);
             if range != "owl:Thing" {
                 expansion_atoms.push(range_atom);

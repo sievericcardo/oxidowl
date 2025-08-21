@@ -754,14 +754,13 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
         );
 
         // Also generate HermiT-style atMost constraint
-        let range_str = self.get_property_range(&property_name).unwrap_or_else(|| "owl:Thing".to_string());
-        
-        let at_most_atom = self.create_at_most_atom(1, &property_name, &range_str, &var_x, false)?;
-        let functional_clause = DLClause::new(
-            vec![at_most_atom],
-            vec![],
-            self.next_clause_id(),
-        );
+        let range_str = self
+            .get_property_range(&property_name)
+            .unwrap_or_else(|| "owl:Thing".to_string());
+
+        let at_most_atom =
+            self.create_at_most_atom(1, &property_name, &range_str, &var_x, false)?;
+        let functional_clause = DLClause::new(vec![at_most_atom], vec![], self.next_clause_id());
 
         Ok(vec![clause, functional_clause])
     }
