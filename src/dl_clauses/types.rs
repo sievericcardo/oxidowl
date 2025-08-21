@@ -86,12 +86,18 @@ impl DLAtom {
 
     /// Create a role assertion R(x, y)
     pub fn role_assertion(role: &str, subject: &str, object: &str) -> Self {
-        Self::new(role.to_string(), vec![subject.to_string(), object.to_string()])
+        Self::new(
+            role.to_string(),
+            vec![subject.to_string(), object.to_string()],
+        )
     }
 
     /// Create a datatype property assertion P(x, v)
     pub fn datatype_assertion(property: &str, subject: &str, value: &str) -> Self {
-        Self::new(property.to_string(), vec![subject.to_string(), value.to_string()])
+        Self::new(
+            property.to_string(),
+            vec![subject.to_string(), value.to_string()],
+        )
     }
 }
 
@@ -99,13 +105,22 @@ impl fmt::Display for DLAtom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let prefix = if self.is_positive { "" } else { "not(" };
         let suffix = if self.is_positive { "" } else { ")" };
-        
+
         if self.arguments.is_empty() {
             write!(f, "{prefix}{}{suffix}", self.predicate)
         } else if self.arguments.len() == 1 {
-            write!(f, "{prefix}{}({}){suffix}", self.predicate, self.arguments[0])
+            write!(
+                f,
+                "{prefix}{}({}){suffix}",
+                self.predicate, self.arguments[0]
+            )
         } else {
-            write!(f, "{prefix}{}({}){suffix}", self.predicate, self.arguments.join(","))
+            write!(
+                f,
+                "{prefix}{}({}){suffix}",
+                self.predicate,
+                self.arguments.join(",")
+            )
         }
     }
 }
@@ -114,7 +129,7 @@ impl DLClause {
     /// Create a new DL clause
     pub fn new(head: Vec<DLAtom>, body: Vec<DLAtom>, id: String) -> Self {
         let mut variables = HashSet::new();
-        
+
         // Collect variables from head and body
         for atom in &head {
             for arg in &atom.arguments {
@@ -164,7 +179,15 @@ impl fmt::Display for DLClause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.head.is_empty() {
             // Constraint (contradiction)
-            write!(f, ": - {}", self.body.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", "))
+            write!(
+                f,
+                ": - {}",
+                self.body
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         } else if self.head.len() == 1 {
             // Deterministic clause
             if self.body.is_empty() {
@@ -172,20 +195,46 @@ impl fmt::Display for DLClause {
                 write!(f, "{}", self.head[0])
             } else {
                 // Rule
-                write!(f, "{} :- {}", 
+                write!(
+                    f,
+                    "{} :- {}",
                     self.head[0],
-                    self.body.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", "))
+                    self.body
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
         } else {
             // Disjunctive clause
             if self.body.is_empty() {
                 // Disjunctive fact
-                write!(f, "{}", self.head.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" v "))
+                write!(
+                    f,
+                    "{}",
+                    self.head
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" v ")
+                )
             } else {
                 // Disjunctive rule
-                write!(f, "{} :- {}", 
-                    self.head.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" v "),
-                    self.body.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", "))
+                write!(
+                    f,
+                    "{} :- {}",
+                    self.head
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" v "),
+                    self.body
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
         }
     }
@@ -235,15 +284,15 @@ impl DLClauseSet {
     pub fn update_statistics(&mut self) {
         self.statistics.deterministic_clause_count = self.deterministic_clauses.len();
         self.statistics.disjunctive_clause_count = self.disjunctive_clauses.len();
-        self.statistics.disjunction_count = self.disjunctive_clauses.iter()
+        self.statistics.disjunction_count = self
+            .disjunctive_clauses
+            .iter()
             .map(|c| c.head.len().saturating_sub(1))
             .sum();
-        self.statistics.positive_fact_count = self.abox_facts.iter()
-            .filter(|f| f.is_positive)
-            .count();
-        self.statistics.negative_fact_count = self.abox_facts.iter()
-            .filter(|f| !f.is_positive)
-            .count();
+        self.statistics.positive_fact_count =
+            self.abox_facts.iter().filter(|f| f.is_positive).count();
+        self.statistics.negative_fact_count =
+            self.abox_facts.iter().filter(|f| !f.is_positive).count();
     }
 
     /// Get total number of clauses

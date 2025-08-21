@@ -1787,15 +1787,15 @@ impl Reasoner {
     /// Generate DL clauses from the current ontology
     pub fn dump_dl_clauses(&self) -> Result<DLClauseSet> {
         let start_time = Instant::now();
-        
+
         info!("Generating DL clauses from ontology");
-        
+
         let ontology = self.get_ontology()?;
         let ontology_guard = ontology.read().unwrap();
-        
+
         let mut generator = DLClauseGenerator::new();
         let clause_set = generator.generate_clauses(&ontology_guard)?;
-        
+
         let generation_time = start_time.elapsed();
         info!(
             "DL clause generation completed in {generation_time:?}: {} deterministic, {} disjunctive, {} facts",
@@ -1803,7 +1803,7 @@ impl Reasoner {
             clause_set.statistics.disjunctive_clause_count,
             clause_set.statistics.positive_fact_count + clause_set.statistics.negative_fact_count
         );
-        
+
         Ok(clause_set)
     }
 

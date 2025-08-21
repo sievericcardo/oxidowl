@@ -2,21 +2,21 @@
 
 use crate::{
     error::Result,
-    ontology::{Ontology, Axiom},
+    ontology::{Axiom, Ontology},
 };
 use log::debug;
 use std::collections::HashMap;
 
 use super::{
-    types::{DLClause, DLClauseSet, DLAtom, DLClauseStatistics},
     axiom_compilers::AxiomCompiler,
+    types::{DLAtom, DLClause, DLClauseSet, DLClauseStatistics},
 };
 
 /// DL clause generator that converts OWL axioms to DL clauses
 pub struct DLClauseGenerator {
     pub variable_counter: u32,
     pub clause_counter: u32,
-    pub definition_counter: u32,  // For def:0, def:1, etc.
+    pub definition_counter: u32, // For def:0, def:1, etc.
     pub prefixes: HashMap<String, String>,
 }
 
@@ -24,18 +24,30 @@ impl DLClauseGenerator {
     /// Create a new DL clause generator
     pub fn new() -> Self {
         let mut prefixes = HashMap::new();
-        
+
         // Add standard prefixes
-        prefixes.insert("owl".to_string(), "http://www.w3.org/2002/07/owl#".to_string());
-        prefixes.insert("rdf".to_string(), "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string());
-        prefixes.insert("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string());
-        prefixes.insert("xsd".to_string(), "http://www.w3.org/2001/XMLSchema#".to_string());
-        
+        prefixes.insert(
+            "owl".to_string(),
+            "http://www.w3.org/2002/07/owl#".to_string(),
+        );
+        prefixes.insert(
+            "rdf".to_string(),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+        );
+        prefixes.insert(
+            "rdfs".to_string(),
+            "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+        );
+        prefixes.insert(
+            "xsd".to_string(),
+            "http://www.w3.org/2001/XMLSchema#".to_string(),
+        );
+
         // Add HermiT-style internal prefixes
         prefixes.insert("def".to_string(), "internal:def#".to_string());
         prefixes.insert("all".to_string(), "internal:all#".to_string());
         prefixes.insert("nom".to_string(), "internal:nom#".to_string());
-        
+
         Self {
             variable_counter: 0,
             clause_counter: 0,
@@ -57,11 +69,11 @@ impl DLClauseGenerator {
         for axiom in ontology.axioms() {
             debug!("Processing axiom type: {}", self.axiom_type_name(axiom));
             let clauses = self.compile_axiom(axiom)?;
-            
+
             if !clauses.is_empty() {
                 debug!("Generated {} clauses from axiom", clauses.len());
             }
-            
+
             for clause in clauses {
                 if clause.is_fact() {
                     // Convert single-head facts to ABox facts
@@ -77,19 +89,31 @@ impl DLClauseGenerator {
         }
 
         // Apply advanced optimizations
-        debug!("Applying absorption optimization to {} deterministic clauses", deterministic_clauses.len());
+        debug!(
+            "Applying absorption optimization to {} deterministic clauses",
+            deterministic_clauses.len()
+        );
         self.apply_absorption(&mut deterministic_clauses);
-        debug!("After absorption: {} deterministic clauses", deterministic_clauses.len());
+        debug!(
+            "After absorption: {} deterministic clauses",
+            deterministic_clauses.len()
+        );
 
         // Apply structural transformation optimizations
         self.apply_structural_transformations(&mut deterministic_clauses);
-        debug!("After structural transformations: {} deterministic clauses", deterministic_clauses.len());
+        debug!(
+            "After structural transformations: {} deterministic clauses",
+            deterministic_clauses.len()
+        );
 
         // Calculate statistics
         let statistics = DLClauseStatistics {
             deterministic_clause_count: deterministic_clauses.len(),
             disjunctive_clause_count: disjunctive_clauses.len(),
-            disjunction_count: disjunctive_clauses.iter().map(|c| c.head.len()).sum::<usize>(),
+            disjunction_count: disjunctive_clauses
+                .iter()
+                .map(|c| c.head.len())
+                .sum::<usize>(),
             positive_fact_count: abox_facts.iter().filter(|f| f.is_positive).count(),
             negative_fact_count: abox_facts.iter().filter(|f| !f.is_positive).count(),
         };
@@ -127,9 +151,11 @@ impl DLClauseGenerator {
     /// Check if two clauses can be absorbed
     fn can_absorb(&self, clause1: &DLClause, clause2: &DLClause) -> bool {
         // Can absorb if both have single positive body atom and same body
-        clause1.body.len() == 1 && clause2.body.len() == 1 &&
-        clause1.body[0] == clause2.body[0] &&
-        clause1.head.len() == 1 && clause2.head.len() == 1
+        clause1.body.len() == 1
+            && clause2.body.len() == 1
+            && clause1.body[0] == clause2.body[0]
+            && clause1.head.len() == 1
+            && clause2.head.len() == 1
     }
 
     /// Absorb two clauses into one
@@ -157,18 +183,19 @@ impl DLClauseGenerator {
         // - Constraint propagation
 
         let initial_count = clauses.len();
-        
+
         // Remove tautologies (clauses where head and body contain the same positive atom)
         clauses.retain(|clause| {
             !clause.head.iter().any(|head_atom| {
                 clause.body.iter().any(|body_atom| {
-                    head_atom.predicate == body_atom.predicate &&
-                    head_atom.arguments == body_atom.arguments &&
-                    head_atom.is_positive && body_atom.is_positive
+                    head_atom.predicate == body_atom.predicate
+                        && head_atom.arguments == body_atom.arguments
+                        && head_atom.is_positive
+                        && body_atom.is_positive
                 })
             })
         });
-        
+
         // Remove subsumed clauses (simplified check)
         let mut i = 0;
         while i < clauses.len() {
@@ -188,7 +215,10 @@ impl DLClauseGenerator {
 
         let final_count = clauses.len();
         if final_count < initial_count {
-            debug!("Structural transformations removed {} clauses", initial_count - final_count);
+            debug!(
+                "Structural transformations removed {} clauses",
+                initial_count - final_count
+            );
         }
     }
 
@@ -198,11 +228,11 @@ impl DLClauseGenerator {
         // Simple subsumption check: clause1 is subsumed by clause2 if:
         // - clause2's head is a subset of clause1's head
         // - clause2's body is a subset of clause1's body
-        
+
         if clause2.head.len() > clause1.head.len() || clause2.body.len() > clause1.body.len() {
             return false;
         }
-        
+
         // Check if all atoms in clause2's head are in clause1's head
         clause2.head.iter().all(|atom2| {
             clause1.head.iter().any(|atom1| atom1 == atom2)
@@ -254,7 +284,10 @@ impl DLClauseGenerator {
     }
 
     /// Extract IRI from class expression (simplified)
-    fn extract_iri_from_class_expression(&self, expr: &crate::ontology::ClassExpression) -> Option<String> {
+    fn extract_iri_from_class_expression(
+        &self,
+        expr: &crate::ontology::ClassExpression,
+    ) -> Option<String> {
         match expr {
             crate::ontology::ClassExpression::Class(class) => Some(class.iri.to_string()),
             _ => None,
@@ -276,14 +309,14 @@ impl DLClauseGenerator {
     fn axiom_type_name(&self, axiom: &Axiom) -> &'static str {
         match axiom {
             Axiom::ClassAssertion(_) => "ClassAssertion",
-            Axiom::SubClassOf(_) => "SubClassOf", 
+            Axiom::SubClassOf(_) => "SubClassOf",
             Axiom::EquivalentClasses(_) => "EquivalentClasses",
             Axiom::DisjointClasses(_) => "DisjointClasses",
             Axiom::DisjointUnion(_) => "DisjointUnion",
             Axiom::Declaration(_) => "Declaration",
             Axiom::ObjectPropertyAssertion(_) => "ObjectPropertyAssertion",
             Axiom::NegativeObjectPropertyAssertion(_) => "NegativeObjectPropertyAssertion",
-            Axiom::DataPropertyAssertion(_) => "DataPropertyAssertion", 
+            Axiom::DataPropertyAssertion(_) => "DataPropertyAssertion",
             Axiom::NegativeDataPropertyAssertion(_) => "NegativeDataPropertyAssertion",
             Axiom::SubObjectPropertyOf(_) => "SubObjectPropertyOf",
             Axiom::EquivalentObjectProperties(_) => "EquivalentObjectProperties",

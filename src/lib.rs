@@ -53,7 +53,7 @@ pub mod visitor; // Visitor pattern for ontology traversal
 
 // Re-export main types for convenience
 pub use crate::core::reasoner::Reasoner;
-pub use crate::dl_clauses::{DLClause, DLClauseGenerator, DLClauseSet, DLAtom};
+pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};

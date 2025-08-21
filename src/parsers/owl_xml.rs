@@ -5,9 +5,9 @@
 use crate::{
     Error, Result,
     ontology::{
-        Axiom, Class, ClassExpression, DeclarationAxiom, Entity, IRI, Individual, NamedIndividual,
-        ObjectProperty, ObjectPropertyExpression, Ontology, axioms::DisjointUnionAxiom,
-        DataProperty, DataPropertyExpression, DataRange,
+        Axiom, Class, ClassExpression, DataProperty, DataPropertyExpression, DataRange,
+        DeclarationAxiom, Entity, IRI, Individual, NamedIndividual, ObjectProperty,
+        ObjectPropertyExpression, Ontology, axioms::DisjointUnionAxiom,
     },
 };
 use std::{
@@ -1068,7 +1068,7 @@ fn parse_object_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
 
     let property = parse_object_property_expression(&children[0])?;
     let domain = parse_class_expression(&children[1], None)?;
-    
+
     Ok(Axiom::ObjectPropertyDomain(
         crate::ontology::ObjectPropertyDomainAxiom {
             id: generate_axiom_id(),
@@ -1093,7 +1093,7 @@ fn parse_object_property_range(element: &roxmltree::Node) -> Result<Axiom> {
 
     let property = parse_object_property_expression(&children[0])?;
     let range = parse_class_expression(&children[1], None)?;
-    
+
     Ok(Axiom::ObjectPropertyRange(
         crate::ontology::ObjectPropertyRangeAxiom {
             id: generate_axiom_id(),
@@ -1118,7 +1118,7 @@ fn parse_data_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
 
     let property = parse_data_property_expression(&children[0])?;
     let domain = parse_class_expression(&children[1], None)?;
-    
+
     Ok(Axiom::DataPropertyDomain(
         crate::ontology::DataPropertyDomainAxiom {
             id: generate_axiom_id(),
@@ -1143,7 +1143,7 @@ fn parse_data_property_range(element: &roxmltree::Node) -> Result<Axiom> {
 
     let property = parse_data_property_expression(&children[0])?;
     let range = parse_data_range(&children[1])?;
-    
+
     Ok(Axiom::DataPropertyRange(
         crate::ontology::DataPropertyRangeAxiom {
             id: generate_axiom_id(),
@@ -1189,7 +1189,9 @@ fn parse_data_range(element: &roxmltree::Node) -> Result<DataRange> {
         }
         _ => {
             // For now, return a basic string datatype for unknown ranges
-            Ok(DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#string")))
+            Ok(DataRange::Datatype(IRI::new(
+                "http://www.w3.org/2001/XMLSchema#string",
+            )))
         }
     }
 }

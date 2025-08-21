@@ -1333,9 +1333,18 @@ async fn execute_dump_clauses(
     }
 
     println!("DL clause generation completed:");
-    println!("  Deterministic clauses: {}", clause_set.statistics.deterministic_clause_count);
-    println!("  Disjunctive clauses: {}", clause_set.statistics.disjunctive_clause_count);
-    println!("  ABox facts: {}", clause_set.statistics.positive_fact_count + clause_set.statistics.negative_fact_count);
+    println!(
+        "  Deterministic clauses: {}",
+        clause_set.statistics.deterministic_clause_count
+    );
+    println!(
+        "  Disjunctive clauses: {}",
+        clause_set.statistics.disjunctive_clause_count
+    );
+    println!(
+        "  ABox facts: {}",
+        clause_set.statistics.positive_fact_count + clause_set.statistics.negative_fact_count
+    );
 
     Ok(())
 }
