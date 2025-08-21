@@ -5,7 +5,7 @@
 
 use crate::{
     error::Result,
-    ontology::{ClassExpression, ObjectPropertyExpression, DataPropertyExpression, DataRange, Individual, Literal},
+    ontology::{ClassExpression, ObjectPropertyExpression, DataPropertyExpression, DataRange, Individual, Literal, SWRLIArgument, SWRLDArgument},
 };
 
 use super::{
@@ -38,6 +38,12 @@ pub trait HelperMethods {
     /// Convert individual to string
     fn individual_to_string(&self, individual: &Individual) -> String;
 
+    /// Convert literal to string
+    fn literal_to_string(&self, literal: &Literal) -> String;
+
+    /// Compile data range to constraint atom
+    fn compile_data_range_to_constraint(&mut self, range: &DataRange, variable: &str) -> Result<DLAtom>;
+
     /// Convert class expression to range string (for cardinality atoms)
     fn class_expression_to_range_string(&self, expr: &ClassExpression) -> String;
 
@@ -55,6 +61,12 @@ pub trait HelperMethods {
 
     /// Check if a class expression is a simple named class
     fn is_named_class(&self, expr: &ClassExpression) -> bool;
+
+    /// Convert SWRL individual argument to string
+    fn swrl_argument_to_string(&self, arg: &crate::ontology::SWRLIArgument) -> String;
+
+    /// Convert SWRL data argument to string  
+    fn swrl_dargument_to_string(&self, arg: &crate::ontology::SWRLDArgument) -> String;
 }
 
 impl HelperMethods for super::generator::DLClauseGenerator {
@@ -240,6 +252,37 @@ impl HelperMethods for super::generator::DLClauseGenerator {
         match individual {
             Individual::Named(named) => self.iri_to_string(&named.iri),
             Individual::Anonymous(anon) => format!("_:{}", anon.id),
+        }
+    }
+
+    fn literal_to_string(&self, literal: &Literal) -> String {
+        literal.value.clone()
+    }
+
+    fn compile_data_range_to_constraint(&mut self, range: &DataRange, variable: &str) -> Result<DLAtom> {
+        match range {
+            DataRange::Datatype(dt) => {
+                let datatype_str = format!("{}", dt);
+                Ok(DLAtom::new(format!("{}({})", datatype_str, variable), vec![variable.to_string()]))
+            }
+            _ => {
+                let range_string = self.data_range_to_string(range);
+                Ok(DLAtom::new(format!("{}({})", range_string, variable), vec![variable.to_string()]))
+            }
+        }
+    }
+
+    fn swrl_argument_to_string(&self, arg: &crate::ontology::SWRLIArgument) -> String {
+        match arg {
+            crate::ontology::SWRLIArgument::Individual(ind) => self.individual_to_string(ind),
+            crate::ontology::SWRLIArgument::Variable(var) => format!("?{}", var.iri),
+        }
+    }
+
+    fn swrl_dargument_to_string(&self, arg: &crate::ontology::SWRLDArgument) -> String {
+        match arg {
+            crate::ontology::SWRLDArgument::Literal(lit) => self.literal_to_string(lit),
+            crate::ontology::SWRLDArgument::Variable(var) => format!("?{}", var.iri),
         }
     }
 
