@@ -243,7 +243,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Dump DL clauses (similar to HermiT)
+    /// Dump DL clauses (similar to `HermiT`)
     DumpClauses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
