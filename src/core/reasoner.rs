@@ -11,6 +11,7 @@ use crate::{
         dependency::DependencySet,
         tableau::{RoleLabel, Tableau, TableauBuilder, TableauState},
     },
+    dl_clauses::{DLClauseGenerator, DLClauseSet},
     ontology::{
         Axiom, ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
         Ontology, OntologyFormat, OntologyRef,
@@ -168,6 +169,118 @@ impl ClassificationResult {
 
         write!(file, "{json_output}")?;
         Ok(())
+    }
+
+    pub fn save_to_file_pretty_print<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let mut file = File::create(path)?;
+
+        writeln!(file, "Class Hierarchy (Pretty Print)")?;
+        writeln!(file, "=============================")?;
+
+        for (class, superclasses) in &self.hierarchy {
+            let class_name = match class {
+                ClassExpression::Class(c) => {
+                    let iri_str = c.iri.to_string();
+                    if let Some(name) = iri_str.split('#').next_back() {
+                        name.to_string()
+                    } else if let Some(name) = iri_str.split('/').next_back() {
+                        name.to_string()
+                    } else {
+                        iri_str
+                    }
+                }
+                _ => format!("{class:?}"),
+            };
+
+            writeln!(file, "{class_name}")?;
+            for superclass in superclasses {
+                let superclass_name = match superclass {
+                    ClassExpression::Class(c) => {
+                        let iri_str = c.iri.to_string();
+                        if let Some(name) = iri_str.split('#').next_back() {
+                            name.to_string()
+                        } else if let Some(name) = iri_str.split('/').next_back() {
+                            name.to_string()
+                        } else {
+                            iri_str
+                        }
+                    }
+                    _ => format!("{superclass:?}"),
+                };
+                writeln!(file, "  ⊑ {superclass_name}")?;
+            }
+            writeln!(file)?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Property classification result containing property hierarchies
+#[derive(Debug, Clone)]
+pub struct PropertyClassificationResult {
+    pub object_property_hierarchy:
+        Option<HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>>,
+    pub data_property_hierarchy:
+        Option<HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>>,
+}
+
+impl PropertyClassificationResult {
+    #[must_use]
+    pub fn new_object_properties(
+        hierarchy: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
+    ) -> Self {
+        Self {
+            object_property_hierarchy: Some(hierarchy),
+            data_property_hierarchy: None,
+        }
+    }
+
+    #[must_use]
+    pub fn new_data_properties(
+        hierarchy: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
+    ) -> Self {
+        Self {
+            object_property_hierarchy: None,
+            data_property_hierarchy: Some(hierarchy),
+        }
+    }
+
+    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let mut file = File::create(path)?;
+
+        if let Some(ref obj_hierarchy) = self.object_property_hierarchy {
+            writeln!(file, "Object Property Hierarchy:")?;
+            for (property, superproperties) in obj_hierarchy {
+                writeln!(file, "{property:?}:")?;
+                for superprop in superproperties {
+                    writeln!(file, "  ⊑ {superprop:?}")?;
+                }
+            }
+        }
+
+        if let Some(ref data_hierarchy) = self.data_property_hierarchy {
+            writeln!(file, "Data Property Hierarchy:")?;
+            for (property, superproperties) in data_hierarchy {
+                writeln!(file, "{property:?}:")?;
+                for superprop in superproperties {
+                    writeln!(file, "  ⊑ {superprop:?}")?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn save_to_file_pretty_print<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        // For now, just use the regular save method
+        self.save_to_file(path)
     }
 }
 
@@ -753,6 +866,205 @@ impl Reasoner {
 
         info!("Classification completed in {reasoning_time:?}");
         Ok(result)
+    }
+
+    /// Classify object properties
+    pub fn classify_object_properties(&mut self) -> Result<PropertyClassificationResult> {
+        let start_time = Instant::now();
+
+        info!("Starting object property classification");
+
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+
+        // Get all object properties from the ontology
+        let signature = ontology_guard.signature()?;
+        let properties: Vec<ObjectPropertyExpression> = signature
+            .object_properties
+            .iter()
+            .map(|p| ObjectPropertyExpression::ObjectProperty(p.clone()))
+            .collect();
+
+        let mut hierarchy = HashMap::new();
+
+        info!("Classifying {} object properties", properties.len());
+
+        // Build property hierarchy using subsumption checks
+        for property in &properties {
+            let mut superproperties = HashSet::new();
+
+            for superproperty in &properties {
+                if property != superproperty {
+                    // Check if property is subproperty of superproperty
+                    if self.is_subproperty_of(property, superproperty)? {
+                        superproperties.insert(superproperty.clone());
+                    }
+                }
+            }
+
+            hierarchy.insert(property.clone(), superproperties);
+        }
+
+        let result = PropertyClassificationResult::new_object_properties(hierarchy);
+
+        let reasoning_time = start_time.elapsed();
+        self.statistics.total_reasoning_time += reasoning_time;
+
+        info!("Object property classification completed in {reasoning_time:?}");
+        Ok(result)
+    }
+
+    /// Classify data properties
+    pub fn classify_data_properties(&mut self) -> Result<PropertyClassificationResult> {
+        let start_time = Instant::now();
+
+        info!("Starting data property classification");
+
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+
+        // Get all data properties from the ontology
+        let signature = ontology_guard.signature()?;
+        let properties: Vec<DataPropertyExpression> = signature
+            .data_properties
+            .iter()
+            .map(|p| DataPropertyExpression::DataProperty(p.clone()))
+            .collect();
+
+        let mut hierarchy = HashMap::new();
+
+        info!("Classifying {} data properties", properties.len());
+
+        // Build property hierarchy using subsumption checks
+        for property in &properties {
+            let mut superproperties = HashSet::new();
+
+            for superproperty in &properties {
+                if property != superproperty {
+                    // Check if property is subproperty of superproperty
+                    if self.is_data_subproperty_of(property, superproperty)? {
+                        superproperties.insert(superproperty.clone());
+                    }
+                }
+            }
+
+            hierarchy.insert(property.clone(), superproperties);
+        }
+
+        let result = PropertyClassificationResult::new_data_properties(hierarchy);
+
+        let reasoning_time = start_time.elapsed();
+        self.statistics.total_reasoning_time += reasoning_time;
+
+        info!("Data property classification completed in {reasoning_time:?}");
+        Ok(result)
+    }
+
+    /// Get all unsatisfiable classes (equivalent to owl:Nothing)
+    pub fn get_unsatisfiable_classes(&mut self) -> Result<Vec<ClassExpression>> {
+        let start_time = Instant::now();
+
+        info!("Finding unsatisfiable classes");
+
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+
+        // Get all named classes from the ontology
+        let signature = ontology_guard.signature()?;
+        let classes: Vec<ClassExpression> = signature
+            .classes
+            .iter()
+            .map(|c| ClassExpression::Class(c.clone()))
+            .collect();
+
+        let mut unsatisfiable_classes = Vec::new();
+
+        for class in &classes {
+            if let ClassExpression::Class(cls) = class {
+                if !self.is_class_satisfiable(&cls.iri.to_string())? {
+                    unsatisfiable_classes.push(class.clone());
+                }
+            }
+        }
+
+        let reasoning_time = start_time.elapsed();
+        self.statistics.total_reasoning_time += reasoning_time;
+
+        info!(
+            "Found {} unsatisfiable classes in {reasoning_time:?}",
+            unsatisfiable_classes.len()
+        );
+        Ok(unsatisfiable_classes)
+    }
+
+    /// Check entailment between two ontologies
+    pub fn check_entailment(
+        &mut self,
+        premise_file: &Path,
+        conclusion_file: &Path,
+        format: OntologyFormat,
+    ) -> Result<bool> {
+        let start_time = Instant::now();
+
+        info!(
+            "Checking entailment: {} |= {}",
+            premise_file.display(),
+            conclusion_file.display()
+        );
+
+        // Load premise ontology
+        let premise_ontology = Ontology::from_file(premise_file, None)?;
+
+        // Load conclusion ontology
+        let conclusion_ontology = Ontology::from_file(conclusion_file, None)?;
+
+        // Check if premise entails conclusion
+        let entails = self.check_ontology_entailment(&premise_ontology, &conclusion_ontology)?;
+
+        let reasoning_time = start_time.elapsed();
+        self.statistics.total_reasoning_time += reasoning_time;
+
+        info!("Entailment check completed in {reasoning_time:?}: {entails}");
+        Ok(entails)
+    }
+
+    /// Get available prefixes from the ontology
+    pub fn get_prefixes(&self) -> Result<HashMap<String, String>> {
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+
+        // Extract prefixes from the ontology
+        let mut prefixes = HashMap::new();
+
+        // Add default OWL prefixes
+        prefixes.insert(
+            "owl".to_string(),
+            "http://www.w3.org/2002/07/owl#".to_string(),
+        );
+        prefixes.insert(
+            "rdf".to_string(),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+        );
+        prefixes.insert(
+            "rdfs".to_string(),
+            "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+        );
+        prefixes.insert(
+            "xsd".to_string(),
+            "http://www.w3.org/2001/XMLSchema#".to_string(),
+        );
+
+        // Add ontology-specific prefixes based on IRIs found
+        if let Some(ontology_iri) = ontology_guard.get_iri() {
+            let iri_str = ontology_iri.as_str();
+            if let Some(base) = iri_str.strip_suffix('#') {
+                prefixes.insert("".to_string(), format!("{base}#"));
+            } else if let Some(base) = iri_str.strip_suffix('/') {
+                prefixes.insert("".to_string(), format!("{base}/"));
+            }
+        }
+
+        Ok(prefixes)
     }
 
     /// Perform realization (find most specific classes for individuals)
@@ -1472,6 +1784,43 @@ impl Reasoner {
         Ok(Vec::new())
     }
 
+    /// Generate DL clauses from the current ontology
+    pub fn dump_dl_clauses(&self) -> Result<DLClauseSet> {
+        let start_time = Instant::now();
+
+        info!("Generating DL clauses from ontology");
+
+        let ontology = self.get_ontology()?;
+        let ontology_guard = ontology.read().unwrap();
+
+        let mut generator = DLClauseGenerator::new();
+        let clause_set = generator.generate_clauses(&ontology_guard)?;
+
+        let generation_time = start_time.elapsed();
+        info!(
+            "DL clause generation completed in {generation_time:?}: {} deterministic, {} disjunctive, {} facts",
+            clause_set.statistics.deterministic_clause_count,
+            clause_set.statistics.disjunctive_clause_count,
+            clause_set.statistics.positive_fact_count + clause_set.statistics.negative_fact_count
+        );
+
+        Ok(clause_set)
+    }
+
+    /// Save DL clauses to a file
+    pub fn save_dl_clauses<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let clause_set = self.dump_dl_clauses()?;
+        clause_set.save_to_file(&path)?;
+        info!("DL clauses saved to: {}", path.as_ref().display());
+        Ok(())
+    }
+
+    /// Get DL clauses as HermiT-formatted string
+    pub fn get_dl_clauses_string(&self) -> Result<String> {
+        let clause_set = self.dump_dl_clauses()?;
+        Ok(clause_set.to_hermit_format())
+    }
+
     // Private methods for running tableau algorithms
 
     fn run_tableau_consistency_check(
@@ -1869,5 +2218,109 @@ impl Reasoner {
         }
 
         Ok(())
+    }
+
+    /// Check if one object property is a subproperty of another
+    fn is_subproperty_of(
+        &self,
+        subproperty: &ObjectPropertyExpression,
+        superproperty: &ObjectPropertyExpression,
+    ) -> Result<bool> {
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+
+            // Check for direct SubObjectPropertyOf axioms
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
+                    if &sub_axiom.sub_property == subproperty
+                        && &sub_axiom.super_property == superproperty
+                    {
+                        return Ok(true);
+                    }
+                }
+            }
+
+            // Check for property chains that could establish subsumption
+            // This is a simplified implementation
+            // TODO: Implement full property chain reasoning
+        }
+
+        Ok(false)
+    }
+
+    /// Check if one data property is a subproperty of another
+    fn is_data_subproperty_of(
+        &self,
+        subproperty: &DataPropertyExpression,
+        superproperty: &DataPropertyExpression,
+    ) -> Result<bool> {
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+
+            // Check for direct SubDataPropertyOf axioms
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::SubDataPropertyOf(sub_axiom) = axiom {
+                    if &sub_axiom.sub_property == subproperty
+                        && &sub_axiom.super_property == superproperty
+                    {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Check if one ontology entails another
+    fn check_ontology_entailment(
+        &mut self,
+        premise: &Ontology,
+        conclusion: &Ontology,
+    ) -> Result<bool> {
+        // Load the premise ontology
+        self.load_ontology(premise.clone())?;
+
+        // Check if all axioms in the conclusion are entailed by the premise
+        for axiom in conclusion.axioms() {
+            if !self.is_axiom_entailed(axiom)? {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Check if a specific axiom is entailed by the current ontology
+    fn is_axiom_entailed(&mut self, axiom: &Axiom) -> Result<bool> {
+        match axiom {
+            crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
+                // Check if subclass ⊑ superclass is entailed
+                self.is_subsumed_by(&subclass_axiom.subclass, &subclass_axiom.superclass)
+            }
+            crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) => {
+                // Check if individual ∈ class is entailed
+                if let Individual::Named(named) = &class_assertion.individual {
+                    self.is_instance_of_expression(
+                        &class_assertion.individual,
+                        &class_assertion.class,
+                    )
+                } else {
+                    // For anonymous individuals, this is more complex
+                    Ok(false)
+                }
+            }
+            crate::ontology::axioms::Axiom::ObjectPropertyAssertion(prop_assertion) => {
+                // Check if (individual1, individual2) ∈ property is entailed
+                // This would require sophisticated ABox reasoning
+                // For now, return false as a placeholder
+                Ok(false)
+            }
+            // Add more axiom types as needed
+            _ => {
+                // For other axiom types, return false for now
+                Ok(false)
+            }
+        }
     }
 }

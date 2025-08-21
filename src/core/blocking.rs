@@ -33,6 +33,9 @@ impl BlockingStrategy {
             ConfigBlockingStrategy::Ancestor => Ok(Box::new(AncestorBlocking::new())),
             ConfigBlockingStrategy::Pairwise => Ok(Box::new(PairwiseBlocking::new())),
             ConfigBlockingStrategy::Dynamic => Ok(Box::new(DynamicBlocking::new())),
+            ConfigBlockingStrategy::Single => Ok(Box::new(SingleBlocking::new())),
+            ConfigBlockingStrategy::Core => Ok(Box::new(CoreBlocking::new())),
+            ConfigBlockingStrategy::Optimal => Ok(Box::new(OptimalBlocking::new())),
         }
     }
 }
@@ -327,6 +330,213 @@ fn signature_similarity(sig1: &[ConceptLabel], sig2: &[ConceptLabel]) -> f64 {
         1.0
     } else {
         intersection_size as f64 / union_size as f64
+    }
+}
+
+/// Single blocking strategy (HermiT-style)
+#[derive(Debug)]
+pub struct SingleBlocking {
+    /// Cache of node signatures
+    signature_cache: HashMap<NodeId, Vec<ConceptLabel>>,
+}
+
+impl Default for SingleBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SingleBlocking {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            signature_cache: HashMap::new(),
+        }
+    }
+}
+
+impl BlockingChecker for SingleBlocking {
+    fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
+        let node_signature = self.get_signature(node);
+
+        // Single blocking: check only against nodes with exactly the same signature
+        for other_node in nodes {
+            if other_node.id != node.id && other_node.id < node.id {
+                let other_signature = self.get_signature(other_node);
+                if signatures_equal(&other_signature, &node_signature) {
+                    return Some(other_node.id);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn update_blocking(&mut self, nodes: &mut [TableauNode]) -> Result<()> {
+        // Clear cache
+        self.signature_cache.clear();
+
+        // Update blocking information for all nodes
+        for i in 0..nodes.len() {
+            let blocker = self.is_blocked(&nodes[i], nodes);
+            nodes[i].blocking_info.is_blocked = blocker.is_some();
+            nodes[i].blocking_info.blocker = blocker;
+        }
+
+        Ok(())
+    }
+
+    fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
+        if let Some(cached) = self.signature_cache.get(&node.id) {
+            return cached.clone();
+        }
+
+        let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
+        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature
+    }
+}
+
+/// Core blocking strategy (HermiT-style)
+#[derive(Debug)]
+pub struct CoreBlocking {
+    /// Cache of core concepts for nodes
+    core_cache: HashMap<NodeId, Vec<ConceptLabel>>,
+}
+
+impl Default for CoreBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CoreBlocking {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            core_cache: HashMap::new(),
+        }
+    }
+
+    /// Extract core concepts from a node (only atomic concepts and negations)
+    fn get_core_concepts(&self, node: &TableauNode) -> Vec<ConceptLabel> {
+        node.concepts
+            .iter()
+            .filter(|concept| match concept {
+                ConceptLabel::Atomic(_) => true,
+                // For now, treat all concepts as core since ConceptLabel structure may vary
+                _ => true,
+            })
+            .cloned()
+            .collect()
+    }
+}
+
+impl BlockingChecker for CoreBlocking {
+    fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
+        let node_core = self.get_core_concepts(node);
+
+        // Core blocking: check only core concepts
+        for other_node in nodes {
+            if other_node.id != node.id && other_node.id < node.id {
+                let other_core = self.get_core_concepts(other_node);
+                if signatures_subsume(&other_core, &node_core) {
+                    return Some(other_node.id);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn update_blocking(&mut self, nodes: &mut [TableauNode]) -> Result<()> {
+        // Clear cache
+        self.core_cache.clear();
+
+        // Update blocking information for all nodes
+        for i in 0..nodes.len() {
+            let blocker = self.is_blocked(&nodes[i], nodes);
+            nodes[i].blocking_info.is_blocked = blocker.is_some();
+            nodes[i].blocking_info.blocker = blocker;
+        }
+
+        Ok(())
+    }
+
+    fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
+        self.get_core_concepts(node)
+    }
+}
+
+/// Optimal blocking strategy (HermiT-style) - combines multiple strategies
+#[derive(Debug)]
+pub struct OptimalBlocking {
+    /// Current active strategy
+    current_strategy: Box<dyn BlockingChecker>,
+    /// Performance statistics
+    statistics: OptimalBlockingStats,
+}
+
+#[derive(Debug, Default)]
+struct OptimalBlockingStats {
+    nodes_blocked: usize,
+    blocking_checks: usize,
+    cache_hits: usize,
+}
+
+impl Default for OptimalBlocking {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OptimalBlocking {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            current_strategy: Box::new(AnywhereBlocking::new()),
+            statistics: OptimalBlockingStats::default(),
+        }
+    }
+
+    /// Adapt the blocking strategy based on performance
+    fn adapt_strategy(&mut self) {
+        // Simple adaptation: if too many checks with few blocks, switch to more restrictive
+        if self.statistics.blocking_checks > 1000
+            && self.statistics.nodes_blocked < self.statistics.blocking_checks / 10
+        {
+            // Switch to single blocking for better precision
+            if !self.is_single_blocking() {
+                self.current_strategy = Box::new(SingleBlocking::new());
+            }
+        }
+    }
+
+    fn is_single_blocking(&self) -> bool {
+        format!("{:?}", self.current_strategy).contains("SingleBlocking")
+    }
+}
+
+impl BlockingChecker for OptimalBlocking {
+    fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
+        self.current_strategy.is_blocked(node, nodes)
+    }
+
+    fn update_blocking(&mut self, nodes: &mut [TableauNode]) -> Result<()> {
+        let result = self.current_strategy.update_blocking(nodes);
+
+        // Update statistics
+        self.statistics.nodes_blocked = nodes.iter().filter(|n| n.blocking_info.is_blocked).count();
+        self.statistics.blocking_checks += nodes.len();
+
+        // Adapt strategy if needed
+        self.adapt_strategy();
+
+        result
+    }
+
+    fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
+        self.current_strategy.get_signature(node)
     }
 }
 
