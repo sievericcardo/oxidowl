@@ -442,8 +442,25 @@ impl Ontology {
                 | concepts::ClassExpression::ObjectAllValuesFrom { filler, .. } => {
                     extract_classes_from_expression(filler, classes);
                 }
-                _ => {
-                    // Handle other expression types as needed
+                concepts::ClassExpression::ObjectMinCardinality { filler, .. }
+                | concepts::ClassExpression::ObjectMaxCardinality { filler, .. }
+                | concepts::ClassExpression::ObjectExactCardinality { filler, .. } => {
+                    extract_classes_from_expression(filler, classes);
+                }
+                concepts::ClassExpression::ObjectHasValue { .. }
+                | concepts::ClassExpression::ObjectHasSelf { .. }
+                | concepts::ClassExpression::ObjectOneOf(..) 
+                | concepts::ClassExpression::DataSomeValuesFrom { .. }
+                | concepts::ClassExpression::DataAllValuesFrom { .. }
+                | concepts::ClassExpression::DataMinCardinality { .. }
+                | concepts::ClassExpression::DataMaxCardinality { .. }
+                | concepts::ClassExpression::DataExactCardinality { .. }
+                | concepts::ClassExpression::DataHasValue { .. }
+                | concepts::ClassExpression::AnnotationAssertion { .. }
+                | concepts::ClassExpression::SubAnnotationPropertyOf { .. }
+                | concepts::ClassExpression::AnnotationPropertyDomain { .. }
+                | concepts::ClassExpression::AnnotationPropertyRange { .. } => {
+                    // These don't contain nested class expressions
                 }
             }
         }
@@ -523,6 +540,28 @@ impl Ontology {
                     extract_classes_from_expression(&axiom.class, &mut signature.classes);
                     for disjoint_class in &axiom.disjoint_classes {
                         extract_classes_from_expression(disjoint_class, &mut signature.classes);
+                    }
+                }
+                axioms::Axiom::DisjointClasses(axiom) => {
+                    log::debug!("Processing DisjointClasses axiom");
+                    for class_expr in &axiom.classes {
+                        extract_classes_from_expression(class_expr, &mut signature.classes);
+                    }
+                }
+                axioms::Axiom::ObjectPropertyAssertion(axiom) => {
+                    log::debug!("Processing ObjectPropertyAssertion axiom");
+                    // Add individuals but these don't typically contain classes
+                    if !signature.individuals.contains(&axiom.source) {
+                        signature.individuals.push(axiom.source.clone());
+                    }
+                    if !signature.individuals.contains(&axiom.target) {
+                        signature.individuals.push(axiom.target.clone());
+                    }
+                }
+                axioms::Axiom::DataPropertyAssertion(axiom) => {
+                    log::debug!("Processing DataPropertyAssertion axiom");
+                    if !signature.individuals.contains(&axiom.individual) {
+                        signature.individuals.push(axiom.individual.clone());
                     }
                 }
                 // Handle other axiom types as needed

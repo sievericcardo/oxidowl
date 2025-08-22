@@ -5,7 +5,7 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{Result, config::ReasonerConfig, core::reasoner::Reasoner, ontology::OntologyFormat};
-use std::{fs, path::PathBuf, time::Instant};
+use std::{fs, io::Write, path::PathBuf, time::Instant};
 use tracing::{Level, error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -515,11 +515,22 @@ impl From<InputFormat> for OntologyFormat {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Setup logging
-    setup_logging(cli.verbose, cli.quiet);
+    // Determine if we're in HermiT mode (using individual flags vs subcommands)
+    let is_hermit_mode = cli.command.is_none() && (
+        cli.classify || cli.classify_object_properties || cli.classify_data_properties || 
+        cli.consistency || cli.load || cli.unsatisfiable_classes || 
+        cli.subclasses.is_some() || cli.superclasses.is_some() || 
+        cli.equivalent_classes.is_some()
+    );
 
-    // Print version information
-    if !cli.quiet {
+    // In HermiT mode with no explicit verbosity, suppress INFO logs for cleaner output
+    let effective_quiet = cli.quiet || (is_hermit_mode && cli.verbose == 0);
+
+    // Setup logging
+    setup_logging(cli.verbose, effective_quiet);
+
+    // Print version information (only if not in quiet HermiT mode)
+    if !effective_quiet {
         println!("{}", oxidowl::version_info());
         println!("Starting Oxidowl ...");
     }
@@ -529,7 +540,6 @@ async fn main() -> Result<()> {
 
     // Execute command
     let start_time = Instant::now();
-    let quiet = cli.quiet;
     let result = if let Some(command) = &cli.command {
         // Legacy subcommand mode for backward compatibility
         execute_command(command.clone(), config).await
@@ -541,7 +551,7 @@ async fn main() -> Result<()> {
 
     match result {
         Ok(()) => {
-            if !quiet {
+            if !effective_quiet {
                 info!("Operation completed successfully in {:?}", elapsed);
                 println!("Stopping Oxidowl ...");
             }
@@ -607,19 +617,17 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if !cli.quiet {
             println!("Checking consistency...");
         }
-        info!("Checking ontology consistency");
-        let start = Instant::now();
         let is_consistent = reasoner.is_consistent()?;
-        let elapsed = start.elapsed();
-        info!("Consistency check completed in {:?}: {}", elapsed, is_consistent);
         
-        if !cli.quiet {
-            if is_consistent {
-                println!("Consistency check: CONSISTENT");
-                // Add HermiT-style satisfiability statement
-                println!("http://www.w3.org/2002/07/owl#Thing is satisfiable.");
-            } else {
-                println!("Consistency check: INCONSISTENT");
+        if is_consistent {
+            if !cli.quiet {
+                println!("✓ Consistency check: CONSISTENT");
+            }
+            // Always show HermiT-style satisfiability statement
+            println!("http://www.w3.org/2002/07/owl#Thing is satisfiable.");
+        } else {
+            if !cli.quiet {
+                println!("✗ Consistency check: INCONSISTENT");
             }
         }
         
@@ -628,7 +636,9 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(output_path) = &cli.output {
                 let result = if is_consistent { "consistent" } else { "inconsistent" };
                 fs::write(output_path, result)?;
-                println!("Consistency result saved to {}", output_path.display());
+                if !cli.quiet {
+                    println!("Consistency result saved to {}", output_path.display());
+                }
             }
         }
     }
@@ -639,15 +649,16 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if !cli.quiet {
             println!("Performing class classification...");
         }
-        info!("Starting classification");
-        let start = Instant::now();
         let hierarchy = reasoner.classify()?;
-        let elapsed = start.elapsed();
-        info!("Classification completed in {:?}", elapsed);
         
         if !cli.quiet {
-            println!("Class classification completed");
+            println!("✓ Class classification completed");
+            println!();
         }
+        
+        // Always print the hierarchy results when classification is performed (HermiT-style)
+        let mut stdout = std::io::stdout();
+        hierarchy.write_hermit_style_hierarchy(&mut stdout)?;
         
         class_hierarchy = Some(hierarchy);
     }
@@ -658,14 +669,10 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if !cli.quiet {
             println!("Performing object property classification...");
         }
-        info!("Starting object property classification");
-        let start = Instant::now();
         let hierarchy = reasoner.classify_object_properties()?;
-        let elapsed = start.elapsed();
-        info!("Object property classification completed in {:?}", elapsed);
         
         if !cli.quiet {
-            println!("Object property classification completed");
+            println!("✓ Object property classification completed");
         }
         
         obj_prop_hierarchy = Some(hierarchy);
@@ -677,11 +684,11 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if !cli.quiet {
             println!("Performing data property classification...");
         }
-        info!("Starting data property classification");
-        let start = Instant::now();
         let hierarchy = reasoner.classify_data_properties()?;
-        let elapsed = start.elapsed();
-        info!("Data property classification completed in {:?}", elapsed);
+        
+        if !cli.quiet {
+            println!("✓ Data property classification completed");
+        }
         
         if !cli.quiet {
             println!("Data property classification completed");

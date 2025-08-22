@@ -214,8 +214,11 @@ impl ClassificationResult {
         let mut all_nodes = HashMap::new();
         let owl_thing_iri = "http://www.w3.org/2002/07/owl#Thing";
 
-        // First pass: create all nodes
-        for (class, _) in &self.hierarchy {
+        // First, compute direct subsumption relationships
+        let direct_hierarchy = self.compute_direct_hierarchy()?;
+
+        // Create all nodes
+        for (class, _) in &direct_hierarchy {
             let class_name = self.extract_class_name(class);
             let class_iri = self.extract_class_iri(class);
             
@@ -229,46 +232,20 @@ impl ClassificationResult {
             }
         }
 
-        // Second pass: build parent-child relationships
-        for (class, superclasses) in &self.hierarchy {
-            let class_iri = self.extract_class_iri(class);
-            
-            if class_iri == owl_thing_iri {
-                continue;
-            }
-
-            // Find the most specific parent (not owl:Thing if there are other parents)
-            let mut specific_parents = Vec::new();
-            for superclass in superclasses {
-                let super_iri = self.extract_class_iri(superclass);
-                if super_iri != owl_thing_iri {
-                    specific_parents.push(super_iri);
-                }
-            }
-
-            // If we have specific parents, use them; otherwise use owl:Thing
-            if specific_parents.is_empty() && superclasses.iter().any(|sc| self.extract_class_iri(sc) == owl_thing_iri) {
-                // This is a direct child of owl:Thing
-                continue; // We'll handle these as root nodes
-            }
-
-            // For classes with specific parents, we'll let the tree building handle hierarchy
-        }
-
-        // Third pass: build the actual tree structure
+        // Build the actual tree structure
         let mut root_classes = Vec::new();
         
         for (class_iri, mut node) in all_nodes {
             // Check if this class should be a root (direct child of owl:Thing)
-            if let Some((_, superclasses)) = self.hierarchy.iter().find(|(c, _)| self.extract_class_iri(c) == class_iri) {
-                let is_root = superclasses.iter().all(|sc| {
+            if let Some((_, direct_superclasses)) = direct_hierarchy.iter().find(|(c, _)| self.extract_class_iri(c) == class_iri) {
+                let is_root = direct_superclasses.iter().any(|sc| {
                     let super_iri = self.extract_class_iri(sc);
                     super_iri == owl_thing_iri
-                }) || superclasses.is_empty();
+                }) || direct_superclasses.is_empty();
 
                 if is_root {
-                    // Build children recursively
-                    node.children = self.build_children_for_iri(&class_iri)?;
+                    // Build children recursively using direct hierarchy
+                    node.children = self.build_children_for_iri_direct(&class_iri, &direct_hierarchy)?;
                     root_classes.push(node);
                 }
             }
@@ -276,6 +253,74 @@ impl ClassificationResult {
 
         root_classes.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(root_classes)
+    }
+
+    /// Compute direct subsumption relationships (remove transitive relationships)
+    fn compute_direct_hierarchy(&self) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
+        let mut direct_hierarchy = HashMap::new();
+
+        for (subclass, all_superclasses) in &self.hierarchy {
+            let mut direct_superclasses = HashSet::new();
+            
+            // For each superclass, check if it's a direct parent (not implied by transitivity)
+            for superclass in all_superclasses {
+                let mut is_direct = true;
+                
+                // Check if there's an intermediate class that makes this relationship transitive
+                for intermediate in all_superclasses {
+                    if intermediate != superclass && intermediate != subclass {
+                        // If intermediate is a superclass of subclass AND superclass is a superclass of intermediate,
+                        // then subclass -> superclass is transitive (not direct)
+                        if let Some(intermediate_superclasses) = self.hierarchy.get(intermediate) {
+                            if intermediate_superclasses.contains(superclass) {
+                                is_direct = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if is_direct {
+                    direct_superclasses.insert(superclass.clone());
+                }
+            }
+            
+            direct_hierarchy.insert(subclass.clone(), direct_superclasses);
+        }
+
+        Ok(direct_hierarchy)
+    }
+
+    /// Build children for a specific class IRI using direct hierarchy
+    fn build_children_for_iri_direct(
+        &self, 
+        parent_iri: &str, 
+        direct_hierarchy: &HashMap<ClassExpression, HashSet<ClassExpression>>
+    ) -> Result<Vec<ClassNode>> {
+        let mut children = Vec::new();
+
+        // Find all classes that are direct children of this parent
+        for (subclass, direct_superclasses) in direct_hierarchy {
+            let subclass_iri = self.extract_class_iri(subclass);
+            
+            // Check if this parent is a direct superclass
+            for superclass in direct_superclasses {
+                let super_iri = self.extract_class_iri(superclass);
+                if super_iri == parent_iri {
+                    let child_name = self.extract_class_name(subclass);
+                    let child_node = ClassNode {
+                        name: child_name,
+                        iri: subclass_iri.clone(),
+                        children: self.build_children_for_iri_direct(&subclass_iri, direct_hierarchy)?,
+                    };
+                    children.push(child_node);
+                    break;
+                }
+            }
+        }
+
+        children.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(children)
     }
 
     /// Build children for a specific class IRI
