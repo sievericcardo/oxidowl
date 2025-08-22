@@ -16,8 +16,12 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 #[command(author = "Team Oxidowl")]
 #[command(long_about = None)]
 struct Cli {
+    /// Input ontology files
+    #[arg(value_name = "FILE")]
+    input: Vec<PathBuf>,
+
     /// Configuration file
-    #[arg(short, long)]
+    #[arg(long)]
     config: Option<PathBuf>,
 
     /// Verbose output
@@ -28,13 +32,136 @@ struct Cli {
     #[arg(short, long)]
     quiet: bool,
 
+    /// Load ontologies (similar to HermiT's -l)
+    #[arg(short = 'l', long)]
+    load: bool,
+
+    /// Perform class classification (similar to HermiT's -c)
+    #[arg(short = 'c', long)]
+    classify: bool,
+
+    /// Classify object properties (similar to HermiT's -O)
+    #[arg(short = 'O', long)]
+    classify_object_properties: bool,
+
+    /// Classify data properties (similar to HermiT's -D)
+    #[arg(short = 'D', long)]
+    classify_data_properties: bool,
+
+    /// Check consistency (similar to HermiT's -k)
+    #[arg(short = 'k', long)]
+    consistency: bool,
+
+    /// Pretty print the hierarchy (similar to HermiT's -P)
+    #[arg(short = 'P', long)]
+    pretty_print: bool,
+
+    /// Only check direct relationships (similar to HermiT's -d)
+    #[arg(short = 'd', long)]
+    direct: bool,
+
+    /// Output file for results
+    #[arg(short, long, value_name = "FILE")]
+    output: Option<PathBuf>,
+
+    /// Input format
+    #[arg(short, long, value_enum)]
+    format: Option<InputFormat>,
+
+    /// Default namespace for entity resolution
+    #[arg(short, long)]
+    namespace: Option<String>,
+
+    /// Get subclasses of a class (similar to HermiT's -s)
+    #[arg(short = 's', long, value_name = "CLASS")]
+    subclasses: Option<String>,
+
+    /// Get superclasses of a class (similar to HermiT's -S)
+    #[arg(short = 'S', long, value_name = "CLASS")]
+    superclasses: Option<String>,
+
+    /// Get equivalent classes of a class (similar to HermiT's -e)
+    #[arg(short = 'e', long, value_name = "CLASS")]
+    equivalent_classes: Option<String>,
+
+    /// Get unsatisfiable classes (similar to HermiT's -U)
+    #[arg(short = 'U', long)]
+    unsatisfiable_classes: bool,
+
+    /// Check entailment (similar to HermiT's --checkEntailment)
+    #[arg(long, value_name = "PREMISE_FILE")]
+    check_entailment: Option<PathBuf>,
+
+    /// Print available prefixes (similar to HermiT's --print-prefixes)
+    #[arg(long)]
+    print_prefixes: bool,
+
+    /// Dump DL clauses (similar to HermiT's --dump-clauses)
+    #[arg(long)]
+    dump_clauses: bool,
+
+    /// Use legacy subcommand mode (for backward compatibility)
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand, Clone)]
 enum Commands {
-    /// Check ontology consistency
+    /// Parse and preprocess ontologies (legacy mode)
+    Load {
+        /// Input ontology files
+        #[arg(short, long, value_name = "FILE")]
+        input: Vec<PathBuf>,
+
+        /// Output file for results
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+
+        /// Input format
+        #[arg(short, long, value_enum)]
+        format: Option<InputFormat>,
+    },
+
+    /// Full reasoning suite (legacy mode)
+    FullReasoning {
+        /// Input ontology files
+        #[arg(value_name = "FILE")]
+        input: Vec<PathBuf>,
+
+        /// Output file for results
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+
+        /// Input format
+        #[arg(short, long, value_enum)]
+        format: Option<InputFormat>,
+
+        /// Skip class classification
+        #[arg(long)]
+        skip_classification: bool,
+
+        /// Skip object property classification  
+        #[arg(long)]
+        skip_object_properties: bool,
+
+        /// Skip data property classification
+        #[arg(long)]  
+        skip_data_properties: bool,
+
+        /// Skip consistency check
+        #[arg(long)]
+        skip_consistency: bool,
+
+        /// Skip pretty printing
+        #[arg(long)]
+        skip_pretty_print: bool,
+
+        /// Only check direct relationships
+        #[arg(short = 'd', long)]
+        direct: bool,
+    },
+
+    /// Check ontology consistency (similar to HermiT's -k)
     Consistency {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -53,7 +180,7 @@ enum Commands {
         class_iri: Option<String>,
     },
 
-    /// Perform ontology classification
+    /// Perform ontology classification (similar to HermiT's -c)
     Classification {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -71,12 +198,12 @@ enum Commands {
         #[arg(short, long, value_enum)]
         format: Option<InputFormat>,
 
-        /// Pretty print the hierarchy with proper indentation
+        /// Pretty print the hierarchy with proper indentation (similar to HermiT's -P)
         #[arg(short = 'P', long)]
         pretty_print: bool,
     },
 
-    /// Classify object properties
+    /// Classify object properties (similar to HermiT's -O)
     ClassifyObjectProperties {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -90,12 +217,12 @@ enum Commands {
         #[arg(short, long, value_enum)]
         format: Option<InputFormat>,
 
-        /// Pretty print the hierarchy
+        /// Pretty print the hierarchy (similar to HermiT's -P)
         #[arg(short = 'P', long)]
         pretty_print: bool,
     },
 
-    /// Classify data properties
+    /// Classify data properties (similar to HermiT's -D)
     ClassifyDataProperties {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -109,7 +236,7 @@ enum Commands {
         #[arg(short, long, value_enum)]
         format: Option<InputFormat>,
 
-        /// Pretty print the hierarchy
+        /// Pretty print the hierarchy (similar to HermiT's -P)
         #[arg(short = 'P', long)]
         pretty_print: bool,
     },
@@ -133,7 +260,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get subclasses of a class
+    /// Get subclasses of a class (similar to HermiT's -s)
     Subclasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -143,7 +270,7 @@ enum Commands {
         #[arg(short = 'x', long, value_name = "IRI")]
         class_iri: String,
 
-        /// Return only direct subclasses
+        /// Return only direct subclasses (similar to HermiT's -d)
         #[arg(short = 'd', long)]
         direct: bool,
 
@@ -156,7 +283,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get superclasses of a class
+    /// Get superclasses of a class (similar to HermiT's -S)
     Superclasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -166,7 +293,7 @@ enum Commands {
         #[arg(short = 'x', long, value_name = "IRI")]
         class_iri: String,
 
-        /// Return only direct superclasses
+        /// Return only direct superclasses (similar to HermiT's -d)
         #[arg(short = 'd', long)]
         direct: bool,
 
@@ -179,7 +306,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get equivalent classes of a class
+    /// Get equivalent classes of a class (similar to HermiT's -e)
     EquivalentClasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -198,7 +325,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get unsatisfiable classes
+    /// Get unsatisfiable classes (similar to HermiT's -U)
     UnsatisfiableClasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -213,13 +340,13 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Check entailment between premise and conclusion ontologies
+    /// Check entailment between premise and conclusion ontologies (similar to HermiT's --checkEntailment)
     CheckEntailment {
-        /// Premise ontology file
+        /// Premise ontology file (similar to HermiT's --premise)
         #[arg(long, value_name = "FILE")]
         premise: PathBuf,
 
-        /// Conclusion ontology file
+        /// Conclusion ontology file (similar to HermiT's --conclusion)
         #[arg(long, value_name = "FILE")]
         conclusion: PathBuf,
 
@@ -232,7 +359,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Print available prefixes
+    /// Print available prefixes (similar to HermiT's --print-prefixes)
     PrintPrefixes {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -243,7 +370,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Dump DL clauses (similar to `HermiT`)
+    /// Dump DL clauses (similar to HermiT's --dump-clauses)
     DumpClauses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -402,12 +529,19 @@ async fn main() -> Result<()> {
 
     // Execute command
     let start_time = Instant::now();
-    let result = execute_command(cli.command, config).await;
+    let quiet = cli.quiet;
+    let result = if let Some(command) = &cli.command {
+        // Legacy subcommand mode for backward compatibility
+        execute_command(command.clone(), config).await
+    } else {
+        // New HermiT-style flag mode
+        execute_hermit_style_flags(cli, config).await
+    };
     let elapsed = start_time.elapsed();
 
     match result {
         Ok(()) => {
-            if !cli.quiet {
+            if !quiet {
                 info!("Operation completed successfully in {:?}", elapsed);
                 println!("Stopping Oxidowl ...");
             }
@@ -419,6 +553,273 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
+}
+
+async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
+    // Check if no input files provided and no help flags
+    if cli.input.is_empty() && !cli.print_prefixes && !cli.dump_clauses {
+        return Err(oxidowl::Error::io("No input files provided".to_string()));
+    }
+
+    // Validate that at least one operation flag is specified
+    let has_operation = cli.load 
+        || cli.classify 
+        || cli.classify_object_properties 
+        || cli.classify_data_properties 
+        || cli.consistency 
+        || cli.unsatisfiable_classes
+        || cli.subclasses.is_some()
+        || cli.superclasses.is_some()
+        || cli.equivalent_classes.is_some()
+        || cli.check_entailment.is_some()
+        || cli.print_prefixes
+        || cli.dump_clauses;
+
+    if !has_operation {
+        return Err(oxidowl::Error::io("No operation specified. Use flags like -c, -O, -D, -k, -l, etc.".to_string()));
+    }
+
+    let mut reasoner = Reasoner::new(config)?;
+    let ontology_format = cli.format.map_or(OntologyFormat::Auto, Into::into);
+
+    // Step 1: Load ontologies if any operation requires it
+    if !cli.input.is_empty() && (cli.load || cli.classify || cli.classify_object_properties || cli.classify_data_properties || cli.consistency || cli.unsatisfiable_classes || cli.subclasses.is_some() || cli.superclasses.is_some() || cli.equivalent_classes.is_some()) {
+        if !cli.quiet {
+            println!("Loading {} ontology file(s)...", cli.input.len());
+        }
+        
+        for file in &cli.input {
+            info!("Loading ontology: {}", file.display());
+            info!("Loading ontology from: {}", file.display());
+            let start = Instant::now();
+            reasoner.load_ontology_from_file(file, ontology_format)?;
+            let elapsed = start.elapsed();
+            info!("Ontology loaded in {:?}", elapsed);
+        }
+        
+        if !cli.quiet {
+            println!("✓ Ontology loading completed");
+        }
+    }
+
+    // Step 2: Consistency checking (-k)
+    if cli.consistency {
+        if !cli.quiet {
+            println!("Checking consistency...");
+        }
+        info!("Checking ontology consistency");
+        let start = Instant::now();
+        let is_consistent = reasoner.is_consistent()?;
+        let elapsed = start.elapsed();
+        info!("Consistency check completed in {:?}: {}", elapsed, is_consistent);
+        
+        if !cli.quiet {
+            println!("✓ Consistency check: {}", if is_consistent { "CONSISTENT" } else { "INCONSISTENT" });
+        }
+        
+        if cli.output.is_some() {
+            // Save consistency result to file if output specified
+            if let Some(output_path) = &cli.output {
+                let result = if is_consistent { "consistent" } else { "inconsistent" };
+                fs::write(output_path, result)?;
+                println!("✓ Consistency result saved to {}", output_path.display());
+            }
+        }
+    }
+
+    // Step 3: Class classification (-c)
+    let mut class_hierarchy = None;
+    if cli.classify {
+        if !cli.quiet {
+            println!("Performing class classification...");
+        }
+        info!("Starting classification");
+        let start = Instant::now();
+        let hierarchy = reasoner.classify()?;
+        let elapsed = start.elapsed();
+        info!("Classification completed in {:?}", elapsed);
+        
+        if !cli.quiet {
+            println!("✓ Class classification completed");
+        }
+        
+        class_hierarchy = Some(hierarchy);
+    }
+
+    // Step 4: Object property classification (-O)
+    let mut obj_prop_hierarchy = None;
+    if cli.classify_object_properties {
+        if !cli.quiet {
+            println!("Performing object property classification...");
+        }
+        info!("Starting object property classification");
+        let start = Instant::now();
+        let hierarchy = reasoner.classify_object_properties()?;
+        let elapsed = start.elapsed();
+        info!("Object property classification completed in {:?}", elapsed);
+        
+        if !cli.quiet {
+            println!("✓ Object property classification completed");
+        }
+        
+        obj_prop_hierarchy = Some(hierarchy);
+    }
+
+    // Step 5: Data property classification (-D)
+    let mut data_prop_hierarchy = None;
+    if cli.classify_data_properties {
+        if !cli.quiet {
+            println!("Performing data property classification...");
+        }
+        info!("Starting data property classification");
+        let start = Instant::now();
+        let hierarchy = reasoner.classify_data_properties()?;
+        let elapsed = start.elapsed();
+        info!("Data property classification completed in {:?}", elapsed);
+        
+        if !cli.quiet {
+            println!("✓ Data property classification completed");
+        }
+        
+        data_prop_hierarchy = Some(hierarchy);
+    }
+
+    // Step 6: Output results (-P for pretty print)
+    if cli.pretty_print || cli.output.is_some() {
+        if let Some(output_path) = &cli.output {
+            // Save to file
+            if let Some(hierarchy) = &class_hierarchy {
+                if cli.pretty_print {
+                    hierarchy.save_to_file_pretty_print(output_path)?;
+                    println!("✓ Class hierarchy saved to {} with pretty printing", output_path.display());
+                } else {
+                    hierarchy.save_to_file(output_path)?;
+                    println!("✓ Class hierarchy saved to {}", output_path.display());
+                }
+            }
+            if let Some(hierarchy) = &obj_prop_hierarchy {
+                let prop_output = output_path.with_file_name(format!("{}_object_properties.txt", output_path.file_stem().unwrap().to_string_lossy()));
+                hierarchy.save_to_file(&prop_output)?;
+                println!("✓ Object property hierarchy saved to {}", prop_output.display());
+            }
+            if let Some(hierarchy) = &data_prop_hierarchy {
+                let prop_output = output_path.with_file_name(format!("{}_data_properties.txt", output_path.file_stem().unwrap().to_string_lossy()));
+                hierarchy.save_to_file(&prop_output)?;
+                println!("✓ Data property hierarchy saved to {}", prop_output.display());
+            }
+        } else {
+            // Print to stdout
+            if let Some(hierarchy) = &class_hierarchy {
+                if cli.pretty_print {
+                    println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
+                    use std::io;
+                    hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
+                } else {
+                    println!("\n=== CLASS HIERARCHY ===");
+                    // Simple hierarchy display
+                    for (class_name, superclasses) in &hierarchy.hierarchy {
+                        let class_str = format_class_expression(class_name);
+                        println!("{}", class_str);
+                        for superclass in superclasses {
+                            println!("  ⊑ {}", format_class_expression(superclass));
+                        }
+                    }
+                }
+            }
+            if let Some(hierarchy) = &obj_prop_hierarchy {
+                println!("\n=== OBJECT PROPERTY HIERARCHY ===");
+                if let Some(obj_props) = &hierarchy.object_property_hierarchy {
+                    for (prop_name, superprops) in obj_props {
+                        println!("{:?}", prop_name);
+                        for superprop in superprops {
+                            println!("  ⊑ {:?}", superprop);
+                        }
+                    }
+                }
+            }
+            if let Some(hierarchy) = &data_prop_hierarchy {
+                println!("\n=== DATA PROPERTY HIERARCHY ===");
+                if let Some(data_props) = &hierarchy.data_property_hierarchy {
+                    for (prop_name, superprops) in data_props {
+                        println!("{:?}", prop_name);
+                        for superprop in superprops {
+                            println!("  ⊑ {:?}", superprop);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle specific query operations
+    if let Some(class_name) = cli.subclasses {
+        // Convert string to ClassExpression - for now just use as-is
+        // TODO: Proper IRI/ClassExpression conversion
+        println!("Subclasses of {}:", class_name);
+        println!("  (Note: Subclass queries need ClassExpression conversion - feature pending)");
+    }
+
+    if let Some(class_name) = cli.superclasses {
+        println!("Superclasses of {}:", class_name);
+        println!("  (Note: Superclass queries need ClassExpression conversion - feature pending)");
+    }
+
+    if let Some(class_name) = cli.equivalent_classes {
+        println!("Equivalent classes of {}:", class_name);
+        println!("  (Note: Equivalent class queries need ClassExpression conversion - feature pending)");
+    }
+
+    if cli.unsatisfiable_classes {
+        let unsatisfiable_classes = reasoner.get_unsatisfiable_classes()?;
+        println!("Unsatisfiable classes:");
+        for class in unsatisfiable_classes {
+            println!("  {}", format_class_expression(&class));
+        }
+    }
+
+    if let Some(premise_file) = cli.check_entailment {
+        if cli.input.len() != 1 {
+            return Err(oxidowl::Error::io("Entailment checking requires exactly one conclusion file as input".to_string()));
+        }
+        let conclusion_file = &cli.input[0];
+        let entails = reasoner.check_entailment(&premise_file, conclusion_file, ontology_format)?;
+        println!("Entailment result: {} {} {}", premise_file.display(), if entails { "entails" } else { "does not entail" }, conclusion_file.display());
+    }
+
+    if cli.print_prefixes {
+        let prefixes = reasoner.get_prefixes()?;
+        println!("Available prefixes:");
+        for (prefix, iri) in prefixes {
+            println!("  {} = {}", prefix, iri);
+        }
+    }
+
+    if cli.dump_clauses {
+        let clauses = reasoner.dump_dl_clauses()?;
+        if cli.pretty_print {
+            println!("DL Clauses (pretty printed):");
+            println!("  Deterministic clauses:");
+            for clause in &clauses.deterministic_clauses {
+                println!("    {:#}", clause);
+            }
+            println!("  Disjunctive clauses:");
+            for clause in &clauses.disjunctive_clauses {
+                println!("    {:#}", clause);
+            }
+        } else {
+            println!("DL Clauses:");
+            println!("  Deterministic clauses:");
+            for clause in &clauses.deterministic_clauses {
+                println!("    {}", clause);
+            }
+            println!("  Disjunctive clauses:");
+            for clause in &clauses.disjunctive_clauses {
+                println!("    {}", clause);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn setup_logging(verbosity: u8, quiet: bool) {
@@ -485,6 +886,33 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
 
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
+        Commands::Load {
+            input,
+            output,
+            format,
+        } => execute_load(input, output, format, config).await,
+        Commands::FullReasoning {
+            input,
+            output,
+            format,
+            skip_classification,
+            skip_object_properties,
+            skip_data_properties,
+            skip_consistency,
+            skip_pretty_print,
+            direct,
+        } => execute_full_reasoning(
+            input,
+            output,
+            format,
+            skip_classification,
+            skip_object_properties,
+            skip_data_properties,
+            skip_consistency,
+            skip_pretty_print,
+            direct,
+            config,
+        ).await,
         Commands::Consistency {
             input,
             output,
@@ -618,6 +1046,137 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
                                                                        */
                                                                        */
     }
+}
+
+async fn execute_full_reasoning(
+    input: Vec<PathBuf>,
+    output: Option<PathBuf>,
+    format: Option<InputFormat>,
+    skip_classification: bool,
+    skip_object_properties: bool,
+    skip_data_properties: bool,
+    skip_consistency: bool,
+    skip_pretty_print: bool,
+    _direct: bool,
+    config: ReasonerConfig,
+) -> Result<()> {
+    if input.is_empty() {
+        return Err(oxidowl::Error::io("No input files provided".to_string()));
+    }
+
+    println!("Performing full reasoning suite (HermiT-style) on {} file(s)", input.len());
+
+    let mut reasoner = Reasoner::new(config)?;
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
+    // Step 1: Load ontologies (-l equivalent)
+    info!("Step 1: Loading ontologies...");
+    for file in &input {
+        info!("Loading ontology: {}", file.display());
+        reasoner.load_ontology_from_file(file, ontology_format)?;
+    }
+    println!("✓ Ontology loading completed");
+
+    // Step 2: Consistency check (-k equivalent)
+    if !skip_consistency {
+        info!("Step 2: Checking consistency...");
+        let consistency_result = reasoner.is_consistent()?;
+        println!("✓ Consistency check: {}", if consistency_result { "CONSISTENT" } else { "INCONSISTENT" });
+        
+        // Check owl:Thing satisfiability like HermiT does
+        let owl_thing_satisfiable = reasoner.is_class_satisfiable("http://www.w3.org/2002/07/owl#Thing")?;
+        println!("http://www.w3.org/2002/07/owl#Thing is {}.", if owl_thing_satisfiable { "satisfiable" } else { "unsatisfiable" });
+    }
+
+    // Step 3: Classification (-c equivalent)
+    let class_hierarchy = if !skip_classification {
+        info!("Step 3: Performing class classification...");
+        let hierarchy = reasoner.classify()?;
+        println!("✓ Class classification completed");
+        Some(hierarchy)
+    } else {
+        None
+    };
+
+    // Step 4: Object property classification (-O equivalent)
+    let _object_property_hierarchy = if !skip_object_properties {
+        info!("Step 4: Performing object property classification...");
+        let obj_hierarchy = reasoner.classify_object_properties()?;
+        println!("✓ Object property classification completed");
+        Some(obj_hierarchy)
+    } else {
+        None
+    };
+
+    // Step 5: Data property classification (-D equivalent)
+    let _data_property_hierarchy = if !skip_data_properties {
+        info!("Step 5: Performing data property classification...");
+        let data_hierarchy = reasoner.classify_data_properties()?;
+        println!("✓ Data property classification completed");
+        Some(data_hierarchy)
+    } else {
+        None
+    };
+
+    // Step 6: Output results with pretty printing (-P equivalent)
+    if let Some(output_path) = output {
+        if let Some(hierarchy) = &class_hierarchy {
+            if !skip_pretty_print {
+                hierarchy.save_to_file_pretty_print(&output_path)?;
+                println!("✓ Results saved to {} with pretty printing", output_path.display());
+            } else {
+                hierarchy.save_to_file(&output_path)?;
+                println!("✓ Results saved to {}", output_path.display());
+            }
+        }
+    } else if let Some(hierarchy) = &class_hierarchy {
+        if !skip_pretty_print {
+            println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
+            // Print to stdout using HermiT format
+            use std::io;
+            hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
+        }
+    }
+
+    println!("\n✓ Full reasoning suite completed successfully");
+    Ok(())
+}
+
+async fn execute_load(
+    input: Vec<PathBuf>,
+    output: Option<PathBuf>,
+    format: Option<InputFormat>,
+    config: ReasonerConfig,
+) -> Result<()> {
+    if input.is_empty() {
+        return Err(oxidowl::Error::io("No input files provided".to_string()));
+    }
+
+    info!("Loading and preprocessing {} file(s)", input.len());
+
+    let mut reasoner = Reasoner::new(config)?;
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+
+    // Load multiple ontologies if provided
+    for file in &input {
+        info!("Loading ontology: {}", file.display());
+        reasoner.load_ontology_from_file(file, ontology_format)?;
+    }
+
+    info!("Ontology loading completed successfully");
+
+    if let Some(output_path) = output {
+        // Save basic ontology information
+        let info = format!(
+            "Ontology loaded successfully\nFiles processed: {}\nLoading completed",
+            input.len()
+        );
+        fs::write(output_path, info)?;
+    } else {
+        println!("Ontology loading completed. {} files processed.", input.len());
+    }
+
+    Ok(())
 }
 
 async fn execute_consistency_check(
