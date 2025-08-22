@@ -1057,6 +1057,20 @@ impl Reasoner {
             total_pairs
         );
 
+        // Debug: Log all SubClassOf axioms in the ontology
+        let mut subclass_count = 0;
+        for axiom in ontology_guard.axioms() {
+            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                subclass_count += 1;
+                log::debug!("Found SubClassOf axiom {}: {:?} ⊑ {:?}", 
+                    subclass_count,
+                    subclass_axiom.subclass,
+                    subclass_axiom.superclass
+                );
+            }
+        }
+        info!("Found {} SubClassOf axioms in ontology", subclass_count);
+
         // Build hierarchy using axiom-based reasoning
         for subclass in &classes {
             let mut superclasses = HashSet::new();
@@ -1519,7 +1533,9 @@ impl Reasoner {
         // First check for direct SubClassOf axioms
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                log::debug!("Checking SubClassOf axiom: {:?} -> {:?}", subclass_axiom.subclass, subclass_axiom.superclass);
                 if subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass {
+                    log::debug!("Found direct subsumption: {:?} -> {:?}", subclass, superclass);
                     return Ok(true);
                 }
             }

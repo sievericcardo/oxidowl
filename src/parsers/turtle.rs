@@ -384,6 +384,12 @@ impl TurtleParser {
 
         // Parse standard triple
         let tokens = self.tokenize_statement(statement)?;
+        
+        // Handle semicolon-separated predicates
+        if tokens.iter().any(|t| matches!(t, Token::Semicolon)) {
+            return self.parse_semicolon_statement(&tokens, ontology, state);
+        }
+        
         if tokens.len() >= 3 {
             let subject = self.resolve_token(&tokens[0], state)?;
             let predicate = self.resolve_token(&tokens[1], state)?;
@@ -392,6 +398,99 @@ impl TurtleParser {
             self.process_enhanced_triple(ontology, subject, predicate, object)?;
         }
 
+        Ok(())
+    }
+
+    /// Parse statements with semicolon-separated predicates
+    fn parse_semicolon_statement(
+        &self,
+        tokens: &[Token],
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
+        if tokens.is_empty() {
+            return Ok(());
+        }
+
+        // First token should be the subject
+        let subject = self.resolve_token(&tokens[0], state)
+            .map_err(|e| Error::ontology_parsing(format!("Failed to resolve subject token: {}", e)))?;
+        
+        // Process predicate-object pairs separated by semicolons
+        let mut i = 1;
+        while i < tokens.len() {
+            // Skip semicolons
+            if matches!(tokens[i], Token::Semicolon) {
+                i += 1;
+                continue;
+            }
+            
+            // Skip periods (end of statement)
+            if matches!(tokens[i], Token::Period) {
+                break;
+            }
+            
+            // We need at least predicate and object
+            if i + 1 >= tokens.len() {
+                break;
+            }
+            
+            let predicate = self.resolve_token(&tokens[i], state)
+                .map_err(|e| Error::ontology_parsing(format!("Failed to resolve predicate token at index {}: {}", i, e)))?;
+            // Try to resolve the object token, but be more defensive about complex structures
+            let object = match self.resolve_token(&tokens[i + 1], state) {
+                Ok(obj) => obj,
+                Err(e) => {
+                    eprintln!("Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.", i + 1, e);
+                    // Skip to next statement
+                    while i < tokens.len() && !matches!(tokens[i], Token::Period | Token::Semicolon) {
+                        i += 1;
+                    }
+                    continue;
+                }
+            };
+            
+            // Process this triple
+            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), object)?;
+            
+            // Move to next predicate-object pair
+            i += 2;
+            
+            // Handle comma-separated objects for the same predicate
+            while i < tokens.len() && matches!(tokens[i], Token::Comma) {
+                i += 1; // Skip comma
+                if i < tokens.len() && !matches!(tokens[i], Token::Semicolon | Token::Period) {
+                    // Skip complex objects like blank nodes that start with [
+                    if matches!(tokens[i], Token::LeftBracket) {
+                        // Skip to the end of the blank node
+                        let mut bracket_depth = 1;
+                        i += 1;
+                        while i < tokens.len() && bracket_depth > 0 {
+                            match tokens[i] {
+                                Token::LeftBracket => bracket_depth += 1,
+                                Token::RightBracket => bracket_depth -= 1,
+                                _ => {}
+                            }
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    
+                    // Only process simple objects
+                    match self.resolve_token(&tokens[i], state) {
+                        Ok(next_object) => {
+                            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), next_object)?;
+                            i += 1;
+                        }
+                        Err(_) => {
+                            // Skip problematic tokens instead of failing
+                            i += 1;
+                        }
+                    }
+                }
+            }
+        }
+        
         Ok(())
     }
 
