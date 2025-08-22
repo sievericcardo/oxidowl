@@ -598,7 +598,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         }
         
         if !cli.quiet {
-            println!("✓ Ontology loading completed");
+            println!("Ontology loading completed");
         }
     }
 
@@ -614,7 +614,13 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         info!("Consistency check completed in {:?}: {}", elapsed, is_consistent);
         
         if !cli.quiet {
-            println!("✓ Consistency check: {}", if is_consistent { "CONSISTENT" } else { "INCONSISTENT" });
+            if is_consistent {
+                println!("Consistency check: CONSISTENT");
+                // Add HermiT-style satisfiability statement
+                println!("http://www.w3.org/2002/07/owl#Thing is satisfiable.");
+            } else {
+                println!("Consistency check: INCONSISTENT");
+            }
         }
         
         if cli.output.is_some() {
@@ -622,7 +628,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(output_path) = &cli.output {
                 let result = if is_consistent { "consistent" } else { "inconsistent" };
                 fs::write(output_path, result)?;
-                println!("✓ Consistency result saved to {}", output_path.display());
+                println!("Consistency result saved to {}", output_path.display());
             }
         }
     }
@@ -640,7 +646,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         info!("Classification completed in {:?}", elapsed);
         
         if !cli.quiet {
-            println!("✓ Class classification completed");
+            println!("Class classification completed");
         }
         
         class_hierarchy = Some(hierarchy);
@@ -659,7 +665,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         info!("Object property classification completed in {:?}", elapsed);
         
         if !cli.quiet {
-            println!("✓ Object property classification completed");
+            println!("Object property classification completed");
         }
         
         obj_prop_hierarchy = Some(hierarchy);
@@ -678,7 +684,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         info!("Data property classification completed in {:?}", elapsed);
         
         if !cli.quiet {
-            println!("✓ Data property classification completed");
+            println!("Data property classification completed");
         }
         
         data_prop_hierarchy = Some(hierarchy);
@@ -691,21 +697,21 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(hierarchy) = &class_hierarchy {
                 if cli.pretty_print {
                     hierarchy.save_to_file_pretty_print(output_path)?;
-                    println!("✓ Class hierarchy saved to {} with pretty printing", output_path.display());
+                    println!("Class hierarchy saved to {} with pretty printing", output_path.display());
                 } else {
                     hierarchy.save_to_file(output_path)?;
-                    println!("✓ Class hierarchy saved to {}", output_path.display());
+                    println!("Class hierarchy saved to {}", output_path.display());
                 }
             }
             if let Some(hierarchy) = &obj_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!("{}_object_properties.txt", output_path.file_stem().unwrap().to_string_lossy()));
                 hierarchy.save_to_file(&prop_output)?;
-                println!("✓ Object property hierarchy saved to {}", prop_output.display());
+                println!("Object property hierarchy saved to {}", prop_output.display());
             }
             if let Some(hierarchy) = &data_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!("{}_data_properties.txt", output_path.file_stem().unwrap().to_string_lossy()));
                 hierarchy.save_to_file(&prop_output)?;
-                println!("✓ Data property hierarchy saved to {}", prop_output.display());
+                println!("Data property hierarchy saved to {}", prop_output.display());
             }
         } else {
             // Print to stdout
@@ -1075,13 +1081,13 @@ async fn execute_full_reasoning(
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file, ontology_format)?;
     }
-    println!("✓ Ontology loading completed");
+    println!("Ontology loading completed");
 
     // Step 2: Consistency check (-k equivalent)
     if !skip_consistency {
         info!("Step 2: Checking consistency...");
         let consistency_result = reasoner.is_consistent()?;
-        println!("✓ Consistency check: {}", if consistency_result { "CONSISTENT" } else { "INCONSISTENT" });
+        println!("Consistency check: {}", if consistency_result { "CONSISTENT" } else { "INCONSISTENT" });
         
         // Check owl:Thing satisfiability like HermiT does
         let owl_thing_satisfiable = reasoner.is_class_satisfiable("http://www.w3.org/2002/07/owl#Thing")?;
@@ -1092,7 +1098,7 @@ async fn execute_full_reasoning(
     let class_hierarchy = if !skip_classification {
         info!("Step 3: Performing class classification...");
         let hierarchy = reasoner.classify()?;
-        println!("✓ Class classification completed");
+        println!("Class classification completed");
         Some(hierarchy)
     } else {
         None
@@ -1102,7 +1108,7 @@ async fn execute_full_reasoning(
     let _object_property_hierarchy = if !skip_object_properties {
         info!("Step 4: Performing object property classification...");
         let obj_hierarchy = reasoner.classify_object_properties()?;
-        println!("✓ Object property classification completed");
+        println!("Object property classification completed");
         Some(obj_hierarchy)
     } else {
         None
@@ -1112,7 +1118,7 @@ async fn execute_full_reasoning(
     let _data_property_hierarchy = if !skip_data_properties {
         info!("Step 5: Performing data property classification...");
         let data_hierarchy = reasoner.classify_data_properties()?;
-        println!("✓ Data property classification completed");
+        println!("Data property classification completed");
         Some(data_hierarchy)
     } else {
         None
@@ -1123,10 +1129,10 @@ async fn execute_full_reasoning(
         if let Some(hierarchy) = &class_hierarchy {
             if !skip_pretty_print {
                 hierarchy.save_to_file_pretty_print(&output_path)?;
-                println!("✓ Results saved to {} with pretty printing", output_path.display());
+                println!("Results saved to {} with pretty printing", output_path.display());
             } else {
                 hierarchy.save_to_file(&output_path)?;
-                println!("✓ Results saved to {}", output_path.display());
+                println!("Results saved to {}", output_path.display());
             }
         }
     } else if let Some(hierarchy) = &class_hierarchy {
@@ -1138,7 +1144,7 @@ async fn execute_full_reasoning(
         }
     }
 
-    println!("\n✓ Full reasoning suite completed successfully");
+    println!("\nFull reasoning suite completed successfully");
     Ok(())
 }
 

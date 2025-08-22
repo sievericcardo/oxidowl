@@ -448,18 +448,18 @@ impl Ontology {
             }
         }
 
-        println!("Computing signature from {} axioms", self.axioms.len());
+        log::debug!("Computing signature from {} axioms", self.axioms.len());
 
         // Extract entities from axioms
         for axiom in &self.axioms {
             let discriminant = std::mem::discriminant(axiom);
-            println!("Processing axiom discriminant: {discriminant:?}");
+            log::debug!("Processing axiom discriminant: {discriminant:?}");
             match axiom {
                 axioms::Axiom::Declaration(decl) => {
                     match &decl.entity {
                         axioms::Entity::Class(iri) => {
                             signature.classes.push(concepts::Class { iri: iri.clone() });
-                            println!("Added class from declaration: {iri}");
+                            log::debug!("Added class from declaration: {iri}");
                         }
                         axioms::Entity::ObjectProperty(iri) => {
                             // Try to convert to URL, but continue if it fails (for relative IRIs)
@@ -488,12 +488,12 @@ impl Ontology {
                     }
                 }
                 axioms::Axiom::SubClassOf(axiom) => {
-                    println!("Processing SubClassOf axiom");
+                    log::debug!("Processing SubClassOf axiom");
                     extract_classes_from_expression(&axiom.subclass, &mut signature.classes);
                     extract_classes_from_expression(&axiom.superclass, &mut signature.classes);
                 }
                 axioms::Axiom::EquivalentClasses(axiom) => {
-                    println!(
+                    log::debug!(
                         "Processing EquivalentClasses axiom with {} classes",
                         axiom.classes.len()
                     );
@@ -502,7 +502,7 @@ impl Ontology {
                     }
                 }
                 axioms::Axiom::ClassAssertion(axiom) => {
-                    println!("Processing ClassAssertion axiom");
+                    log::debug!("Processing ClassAssertion axiom");
                     extract_classes_from_expression(&axiom.class, &mut signature.classes);
                     // Also add the individual
                     if !signature.individuals.iter().any(|i| match i {
@@ -519,7 +519,7 @@ impl Ontology {
                     }
                 }
                 axioms::Axiom::DisjointUnion(axiom) => {
-                    println!("Processing DisjointUnion axiom");
+                    log::debug!("Processing DisjointUnion axiom");
                     extract_classes_from_expression(&axiom.class, &mut signature.classes);
                     for disjoint_class in &axiom.disjoint_classes {
                         extract_classes_from_expression(disjoint_class, &mut signature.classes);
@@ -527,7 +527,7 @@ impl Ontology {
                 }
                 // Handle other axiom types as needed
                 axiom => {
-                    println!(
+                    log::debug!(
                         "Processing other axiom type: {:?}",
                         std::mem::discriminant(axiom)
                     );
@@ -535,13 +535,13 @@ impl Ontology {
             }
         }
 
-        println!(
+        log::debug!(
             "Final signature: {} classes, {} individuals",
             signature.classes.len(),
             signature.individuals.len()
         );
         for class in &signature.classes {
-            println!("  Class: {}", class.iri);
+            log::debug!("  Class: {}", class.iri);
         }
 
         Ok(signature)
