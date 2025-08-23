@@ -369,22 +369,22 @@ impl ClassificationResult {
     /// Write class hierarchy in HermiT format
     fn write_class_hierarchy<W: Write>(&self, writer: &mut W, root_classes: &[ClassNode]) -> Result<()> {
         for class in root_classes {
-            self.write_class_node(writer, class, 1)?;
+            self.write_class_node(writer, class, "owl:Thing", 1)?;
         }
         Ok(())
     }
 
     /// Write a single class node with proper indentation
-    fn write_class_node<W: Write>(&self, writer: &mut W, node: &ClassNode, level: usize) -> Result<()> {
+    fn write_class_node<W: Write>(&self, writer: &mut W, node: &ClassNode, parent_name: &str, level: usize) -> Result<()> {
         let indent = "  ".repeat(level);
         
-        // Write SubClassOf and Declaration for this class
-        writeln!(writer, "{}SubClassOf( :{} owl:Thing ) Declaration( Class( :{} ) )",
-                indent, node.name, node.name)?;
+        // Write SubClassOf and Declaration for this class with correct parent
+        writeln!(writer, "{}SubClassOf( :{} {} ) Declaration( Class( :{} ) )",
+                indent, node.name, parent_name, node.name)?;
         
-        // Write children with increased indentation
+        // Write children with increased indentation, using this node as parent
         for child in &node.children {
-            self.write_class_node(writer, child, level + 1)?;
+            self.write_class_node(writer, child, &format!(":{}", node.name), level + 1)?;
         }
         
         Ok(())

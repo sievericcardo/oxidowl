@@ -378,8 +378,17 @@ impl TurtleParser {
             return self.parse_disjoint_union(statement, ontology, state);
         }
 
+        // Check if this statement contains both owl:equivalentClass and other predicates
         if statement.contains("owl:equivalentClass") {
-            return self.parse_equivalent_class(statement, ontology, state);
+            // Process the equivalent class part
+            self.parse_equivalent_class_enhanced(statement, ontology, state)?;
+            
+            // Also check for additional predicates like rdfs:subClassOf in the same statement
+            if statement.contains("rdfs:subClassOf") {
+                // Extract and process the subClassOf relationship
+                self.extract_and_process_subclass_from_statement(statement, ontology, state)?;
+            }
+            return Ok(());
         }
 
         // Parse standard triple
@@ -590,7 +599,268 @@ impl TurtleParser {
         Ok(())
     }
 
+    /// Enhanced equivalent class parsing that handles complex class expressions
+    fn parse_equivalent_class_enhanced(
+        &self,
+        statement: &str,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
+        eprintln!("Parsing equivalent class statement: {}", statement.trim());
+        
+        // Extract the subject (class being defined)
+        if let Some(subject_end) = statement.find("owl:equivalentClass") {
+            let subject_part = &statement[..subject_end].trim();
+            
+            // Extract subject IRI
+            let subject_iri = if subject_part.contains(' ') {
+                // Handle cases like "ast:HealthyMoistStrategy rdf:type owl:Class ;"
+                subject_part.split_whitespace().next().unwrap_or(subject_part)
+            } else {
+                subject_part
+            };
+
+            // Convert to token and resolve
+            let subject_token = if subject_iri.starts_with('<') && subject_iri.ends_with('>') {
+                Token::IRI(subject_iri[1..subject_iri.len()-1].to_string())
+            } else if subject_iri.contains(':') {
+                let parts: Vec<&str> = subject_iri.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                } else {
+                    Token::PrefixedName("".to_string(), subject_iri.to_string())
+                }
+            } else {
+                Token::PrefixedName("".to_string(), subject_iri.to_string())
+            };
+            
+            let subject_uri = self.resolve_token(&subject_token, state)?;
+            let subject_class = Class::new(IRI::new(&subject_uri));
+            
+            // Look for intersection patterns like "[ owl:intersectionOf ( ast:Healthy ast:MoistPlant ) ]"
+            if statement.contains("owl:intersectionOf") {
+                if let Some(start) = statement.find("owl:intersectionOf") {
+                    if let Some(paren_start) = statement[start..].find('(') {
+                        if let Some(paren_end) = statement[start + paren_start..].find(')') {
+                            let classes_str = &statement[start + paren_start + 1..start + paren_start + paren_end];
+                            
+                            eprintln!("Found intersection classes: {}", classes_str);
+                            
+                            // Parse individual classes in the intersection
+                            let mut intersection_classes = Vec::new();
+                            let mut current_token = String::new();
+                            let mut in_restriction = false;
+                            let mut bracket_depth = 0;
+                            
+                            for char in classes_str.chars() {
+                                match char {
+                                    '[' => {
+                                        bracket_depth += 1;
+                                        in_restriction = true;
+                                        current_token.push(char);
+                                    }
+                                    ']' => {
+                                        bracket_depth -= 1;
+                                        current_token.push(char);
+                                        if bracket_depth == 0 {
+                                            in_restriction = false;
+                                            // Skip complex restrictions for now
+                                            current_token.clear();
+                                        }
+                                    }
+                                    ' ' | '\t' | '\n' => {
+                                        if !in_restriction && !current_token.trim().is_empty() {
+                                            let class_token_str = current_token.trim();
+                                            if self.is_valid_class_reference(class_token_str) {
+                                                // Convert to token and resolve
+                                                let class_token = if class_token_str.starts_with('<') && class_token_str.ends_with('>') {
+                                                    Token::IRI(class_token_str[1..class_token_str.len()-1].to_string())
+                                                } else if class_token_str.contains(':') {
+                                                    let parts: Vec<&str> = class_token_str.splitn(2, ':').collect();
+                                                    if parts.len() == 2 {
+                                                        Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                                                    } else {
+                                                        Token::PrefixedName("".to_string(), class_token_str.to_string())
+                                                    }
+                                                } else {
+                                                    Token::PrefixedName("".to_string(), class_token_str.to_string())
+                                                };
+                                                
+                                                match self.resolve_token(&class_token, state) {
+                                                    Ok(class_uri) => {
+                                                        let class = Class::new(IRI::new(&class_uri));
+                                                        intersection_classes.push(ClassExpression::Class(class));
+                                                        eprintln!("Added intersection class: {}", class_uri);
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("Warning: Could not resolve intersection class {}: {}", class_token_str, e);
+                                                    }
+                                                }
+                                            }
+                                            current_token.clear();
+                                        } else if !in_restriction {
+                                            current_token.push(char);
+                                        }
+                                    }
+                                    _ => {
+                                        current_token.push(char);
+                                    }
+                                }
+                            }
+                            
+                            // Handle the last token
+                            if !in_restriction && !current_token.trim().is_empty() {
+                                let class_token_str = current_token.trim();
+                                if self.is_valid_class_reference(class_token_str) {
+                                    // Convert to token and resolve - same logic as above
+                                    let class_token = if class_token_str.starts_with('<') && class_token_str.ends_with('>') {
+                                        Token::IRI(class_token_str[1..class_token_str.len()-1].to_string())
+                                    } else if class_token_str.contains(':') {
+                                        let parts: Vec<&str> = class_token_str.splitn(2, ':').collect();
+                                        if parts.len() == 2 {
+                                            Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                                        } else {
+                                            Token::PrefixedName("".to_string(), class_token_str.to_string())
+                                        }
+                                    } else {
+                                        Token::PrefixedName("".to_string(), class_token_str.to_string())
+                                    };
+                                    
+                                    match self.resolve_token(&class_token, state) {
+                                        Ok(class_uri) => {
+                                            let class = Class::new(IRI::new(&class_uri));
+                                            intersection_classes.push(ClassExpression::Class(class));
+                                            eprintln!("Added intersection class: {}", class_uri);
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Warning: Could not resolve intersection class {}: {}", class_token_str, e);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if !intersection_classes.is_empty() {
+                                // Create equivalent classes axiom with intersection
+                                let intersection_expr = ClassExpression::ObjectIntersectionOf(intersection_classes);
+                                
+                                let equiv_axiom = EquivalentClassesAxiom {
+                                    id: generate_axiom_id(),
+                                    classes: vec![
+                                        ClassExpression::Class(subject_class),
+                                        intersection_expr,
+                                    ],
+                                    annotations: vec![],
+                                };
+                                
+                                eprintln!("Creating EquivalentClasses axiom for intersection");
+                                ontology.add_axiom(Axiom::EquivalentClasses(equiv_axiom));
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to simple equivalent class handling
+            return self.parse_equivalent_class(statement, ontology, state);
+        }
+        
+        Ok(())
+    }
+
+    /// Check if a token is a valid class reference (not OWL keywords or literals)
+    fn is_valid_class_reference(&self, token: &str) -> bool {
+        !token.is_empty() 
+            && !token.starts_with('[')
+            && !token.starts_with('"')
+            && !token.starts_with("rdf:")
+            && !token.starts_with("owl:")
+            && !token.starts_with("rdfs:")
+            && !token.starts_with("xsd:")
+            && token != ";"
+            && token != ","
+            && token != "("
+            && token != ")"
+            && token != "."
+    }
+
     /// Enhanced tokenization
+    /// Extract and process rdfs:subClassOf relationships from complex statements
+    fn extract_and_process_subclass_from_statement(
+        &self,
+        statement: &str,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
+        // Look for rdfs:subClassOf pattern in the statement
+        if let Some(subclass_start) = statement.find("rdfs:subClassOf") {
+            // Extract the subject (everything before the first predicate)
+            let subject_part = if let Some(type_pos) = statement.find("rdf:type") {
+                &statement[..type_pos].trim()
+            } else {
+                return Ok(()); // Can't determine subject
+            };
+            
+            let subject_iri = subject_part.split_whitespace().next().unwrap_or("").trim();
+            
+            // Extract the object (everything after rdfs:subClassOf until end or next predicate)
+            let after_subclass = &statement[subclass_start + 15..]; // Skip "rdfs:subClassOf"
+            let object_part = after_subclass.split_whitespace().next().unwrap_or("").trim();
+            
+            // Clean up object (remove trailing punctuation)
+            let object_iri = object_part.trim_end_matches('.').trim_end_matches(';').trim();
+            
+            if !subject_iri.is_empty() && !object_iri.is_empty() {
+                // Resolve tokens
+                let subject_token = if subject_iri.contains(':') {
+                    let parts: Vec<&str> = subject_iri.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                };
+                
+                let object_token = if object_iri.contains(':') {
+                    let parts: Vec<&str> = object_iri.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                };
+                
+                // Resolve to URIs
+                let subject_uri = self.resolve_token(&subject_token, state)?;
+                let object_uri = self.resolve_token(&object_token, state)?;
+                
+                // Create SubClassOf axiom
+                let subclass = ClassExpression::Class(Class {
+                    iri: IRI::new(&subject_uri).to_url()?.into(),
+                });
+                let superclass = ClassExpression::Class(Class {
+                    iri: IRI::new(&object_uri).to_url()?.into(),
+                });
+                
+                let axiom = SubClassOfAxiom {
+                    id: generate_axiom_id(),
+                    subclass,
+                    superclass,
+                    annotations: vec![],
+                };
+                
+                println!("Creating enhanced SubClassOf axiom: {} rdfs:subClassOf {}", subject_uri, object_uri);
+                ontology.add_axiom(Axiom::SubClassOf(axiom));
+            }
+        }
+        
+        Ok(())
+    }
+
     fn tokenize_statement(&self, statement: &str) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
