@@ -5,7 +5,7 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{Result, config::ReasonerConfig, core::reasoner::Reasoner, ontology::OntologyFormat};
-use std::{fs, io::Write, path::PathBuf, time::Instant};
+use std::{fs, path::PathBuf, time::Instant};
 use tracing::{Level, error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -32,31 +32,31 @@ struct Cli {
     #[arg(short, long)]
     quiet: bool,
 
-    /// Load ontologies (similar to HermiT's -l)
+    /// Load ontologies (similar to `HermiT`'s -l)
     #[arg(short = 'l', long)]
     load: bool,
 
-    /// Perform class classification (similar to HermiT's -c)
+    /// Perform class classification (similar to `HermiT`'s -c)
     #[arg(short = 'c', long)]
     classify: bool,
 
-    /// Classify object properties (similar to HermiT's -O)
+    /// Classify object properties (similar to `HermiT`'s -O)
     #[arg(short = 'O', long)]
     classify_object_properties: bool,
 
-    /// Classify data properties (similar to HermiT's -D)
+    /// Classify data properties (similar to `HermiT`'s -D)
     #[arg(short = 'D', long)]
     classify_data_properties: bool,
 
-    /// Check consistency (similar to HermiT's -k)
+    /// Check consistency (similar to `HermiT`'s -k)
     #[arg(short = 'k', long)]
     consistency: bool,
 
-    /// Pretty print the hierarchy (similar to HermiT's -P)
+    /// Pretty print the hierarchy (similar to `HermiT`'s -P)
     #[arg(short = 'P', long)]
     pretty_print: bool,
 
-    /// Only check direct relationships (similar to HermiT's -d)
+    /// Only check direct relationships (similar to `HermiT`'s -d)
     #[arg(short = 'd', long)]
     direct: bool,
 
@@ -72,31 +72,31 @@ struct Cli {
     #[arg(short, long)]
     namespace: Option<String>,
 
-    /// Get subclasses of a class (similar to HermiT's -s)
+    /// Get subclasses of a class (similar to `HermiT`'s -s)
     #[arg(short = 's', long, value_name = "CLASS")]
     subclasses: Option<String>,
 
-    /// Get superclasses of a class (similar to HermiT's -S)
+    /// Get superclasses of a class (similar to `HermiT`'s -S)
     #[arg(short = 'S', long, value_name = "CLASS")]
     superclasses: Option<String>,
 
-    /// Get equivalent classes of a class (similar to HermiT's -e)
+    /// Get equivalent classes of a class (similar to `HermiT`'s -e)
     #[arg(short = 'e', long, value_name = "CLASS")]
     equivalent_classes: Option<String>,
 
-    /// Get unsatisfiable classes (similar to HermiT's -U)
+    /// Get unsatisfiable classes (similar to `HermiT`'s -U)
     #[arg(short = 'U', long)]
     unsatisfiable_classes: bool,
 
-    /// Check entailment (similar to HermiT's --checkEntailment)
+    /// Check entailment (similar to `HermiT`'s --checkEntailment)
     #[arg(long, value_name = "PREMISE_FILE")]
     check_entailment: Option<PathBuf>,
 
-    /// Print available prefixes (similar to HermiT's --print-prefixes)
+    /// Print available prefixes (similar to `HermiT`'s --print-prefixes)
     #[arg(long)]
     print_prefixes: bool,
 
-    /// Dump DL clauses (similar to HermiT's --dump-clauses)
+    /// Dump DL clauses (similar to `HermiT`'s --dump-clauses)
     #[arg(long)]
     dump_clauses: bool,
 
@@ -161,7 +161,7 @@ enum Commands {
         direct: bool,
     },
 
-    /// Check ontology consistency (similar to HermiT's -k)
+    /// Check ontology consistency (similar to `HermiT`'s -k)
     Consistency {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -180,7 +180,7 @@ enum Commands {
         class_iri: Option<String>,
     },
 
-    /// Perform ontology classification (similar to HermiT's -c)
+    /// Perform ontology classification (similar to `HermiT`'s -c)
     Classification {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -198,12 +198,12 @@ enum Commands {
         #[arg(short, long, value_enum)]
         format: Option<InputFormat>,
 
-        /// Pretty print the hierarchy with proper indentation (similar to HermiT's -P)
+        /// Pretty print the hierarchy with proper indentation (similar to `HermiT`'s -P)
         #[arg(short = 'P', long)]
         pretty_print: bool,
     },
 
-    /// Classify object properties (similar to HermiT's -O)
+    /// Classify object properties (similar to `HermiT`'s -O)
     ClassifyObjectProperties {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -217,12 +217,12 @@ enum Commands {
         #[arg(short, long, value_enum)]
         format: Option<InputFormat>,
 
-        /// Pretty print the hierarchy (similar to HermiT's -P)
+        /// Pretty print the hierarchy (similar to `HermiT`'s -P)
         #[arg(short = 'P', long)]
         pretty_print: bool,
     },
 
-    /// Classify data properties (similar to HermiT's -D)
+    /// Classify data properties (similar to `HermiT`'s -D)
     ClassifyDataProperties {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -236,7 +236,7 @@ enum Commands {
         #[arg(short, long, value_enum)]
         format: Option<InputFormat>,
 
-        /// Pretty print the hierarchy (similar to HermiT's -P)
+        /// Pretty print the hierarchy (similar to `HermiT`'s -P)
         #[arg(short = 'P', long)]
         pretty_print: bool,
     },
@@ -260,7 +260,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get subclasses of a class (similar to HermiT's -s)
+    /// Get subclasses of a class (similar to `HermiT`'s -s)
     Subclasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -270,7 +270,7 @@ enum Commands {
         #[arg(short = 'x', long, value_name = "IRI")]
         class_iri: String,
 
-        /// Return only direct subclasses (similar to HermiT's -d)
+        /// Return only direct subclasses (similar to `HermiT`'s -d)
         #[arg(short = 'd', long)]
         direct: bool,
 
@@ -283,7 +283,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get superclasses of a class (similar to HermiT's -S)
+    /// Get superclasses of a class (similar to `HermiT`'s -S)
     Superclasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -293,7 +293,7 @@ enum Commands {
         #[arg(short = 'x', long, value_name = "IRI")]
         class_iri: String,
 
-        /// Return only direct superclasses (similar to HermiT's -d)
+        /// Return only direct superclasses (similar to `HermiT`'s -d)
         #[arg(short = 'd', long)]
         direct: bool,
 
@@ -306,7 +306,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get equivalent classes of a class (similar to HermiT's -e)
+    /// Get equivalent classes of a class (similar to `HermiT`'s -e)
     EquivalentClasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -325,7 +325,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Get unsatisfiable classes (similar to HermiT's -U)
+    /// Get unsatisfiable classes (similar to `HermiT`'s -U)
     UnsatisfiableClasses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -340,13 +340,13 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Check entailment between premise and conclusion ontologies (similar to HermiT's --checkEntailment)
+    /// Check entailment between premise and conclusion ontologies (similar to `HermiT`'s --checkEntailment)
     CheckEntailment {
-        /// Premise ontology file (similar to HermiT's --premise)
+        /// Premise ontology file (similar to `HermiT`'s --premise)
         #[arg(long, value_name = "FILE")]
         premise: PathBuf,
 
-        /// Conclusion ontology file (similar to HermiT's --conclusion)
+        /// Conclusion ontology file (similar to `HermiT`'s --conclusion)
         #[arg(long, value_name = "FILE")]
         conclusion: PathBuf,
 
@@ -359,7 +359,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Print available prefixes (similar to HermiT's --print-prefixes)
+    /// Print available prefixes (similar to `HermiT`'s --print-prefixes)
     PrintPrefixes {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -370,7 +370,7 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Dump DL clauses (similar to HermiT's --dump-clauses)
+    /// Dump DL clauses (similar to `HermiT`'s --dump-clauses)
     DumpClauses {
         /// Input ontology files
         #[arg(short, long, value_name = "FILE")]
@@ -625,10 +625,8 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             }
             // Always show HermiT-style satisfiability statement
             println!("http://www.w3.org/2002/07/owl#Thing is satisfiable.");
-        } else {
-            if !cli.quiet {
-                println!("✗ Consistency check: INCONSISTENT");
-            }
+        } else if !cli.quiet {
+            println!("✗ Consistency check: INCONSISTENT");
         }
         
         if cli.output.is_some() {
@@ -732,7 +730,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                     // Simple hierarchy display
                     for (class_name, superclasses) in &hierarchy.hierarchy {
                         let class_str = format_class_expression(class_name);
-                        println!("{}", class_str);
+                        println!("{class_str}");
                         for superclass in superclasses {
                             println!("  ⊑ {}", format_class_expression(superclass));
                         }
@@ -743,9 +741,9 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                 println!("\n=== OBJECT PROPERTY HIERARCHY ===");
                 if let Some(obj_props) = &hierarchy.object_property_hierarchy {
                     for (prop_name, superprops) in obj_props {
-                        println!("{:?}", prop_name);
+                        println!("{prop_name:?}");
                         for superprop in superprops {
-                            println!("  ⊑ {:?}", superprop);
+                            println!("  ⊑ {superprop:?}");
                         }
                     }
                 }
@@ -754,9 +752,9 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                 println!("\n=== DATA PROPERTY HIERARCHY ===");
                 if let Some(data_props) = &hierarchy.data_property_hierarchy {
                     for (prop_name, superprops) in data_props {
-                        println!("{:?}", prop_name);
+                        println!("{prop_name:?}");
                         for superprop in superprops {
-                            println!("  ⊑ {:?}", superprop);
+                            println!("  ⊑ {superprop:?}");
                         }
                     }
                 }
@@ -768,17 +766,17 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
     if let Some(class_name) = cli.subclasses {
         // Convert string to ClassExpression - for now just use as-is
         // TODO: Proper IRI/ClassExpression conversion
-        println!("Subclasses of {}:", class_name);
+        println!("Subclasses of {class_name}:");
         println!("  (Note: Subclass queries need ClassExpression conversion - feature pending)");
     }
 
     if let Some(class_name) = cli.superclasses {
-        println!("Superclasses of {}:", class_name);
+        println!("Superclasses of {class_name}:");
         println!("  (Note: Superclass queries need ClassExpression conversion - feature pending)");
     }
 
     if let Some(class_name) = cli.equivalent_classes {
-        println!("Equivalent classes of {}:", class_name);
+        println!("Equivalent classes of {class_name}:");
         println!("  (Note: Equivalent class queries need ClassExpression conversion - feature pending)");
     }
 
@@ -803,7 +801,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         let prefixes = reasoner.get_prefixes()?;
         println!("Available prefixes:");
         for (prefix, iri) in prefixes {
-            println!("  {} = {}", prefix, iri);
+            println!("  {prefix} = {iri}");
         }
     }
 
@@ -813,21 +811,21 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             println!("DL Clauses (pretty printed):");
             println!("  Deterministic clauses:");
             for clause in &clauses.deterministic_clauses {
-                println!("    {:#}", clause);
+                println!("    {clause:#}");
             }
             println!("  Disjunctive clauses:");
             for clause in &clauses.disjunctive_clauses {
-                println!("    {:#}", clause);
+                println!("    {clause:#}");
             }
         } else {
             println!("DL Clauses:");
             println!("  Deterministic clauses:");
             for clause in &clauses.deterministic_clauses {
-                println!("    {}", clause);
+                println!("    {clause}");
             }
             println!("  Disjunctive clauses:");
             for clause in &clauses.disjunctive_clauses {
-                println!("    {}", clause);
+                println!("    {clause}");
             }
         }
     }
@@ -1102,54 +1100,53 @@ async fn execute_full_reasoning(
     }
 
     // Step 3: Classification (-c equivalent)
-    let class_hierarchy = if !skip_classification {
+    let class_hierarchy = if skip_classification {
+        None
+    } else {
         info!("Step 3: Performing class classification...");
         let hierarchy = reasoner.classify()?;
         println!("Class classification completed");
         Some(hierarchy)
-    } else {
-        None
     };
 
     // Step 4: Object property classification (-O equivalent)
-    let _object_property_hierarchy = if !skip_object_properties {
+    let _object_property_hierarchy = if skip_object_properties {
+        None
+    } else {
         info!("Step 4: Performing object property classification...");
         let obj_hierarchy = reasoner.classify_object_properties()?;
         println!("Object property classification completed");
         Some(obj_hierarchy)
-    } else {
-        None
     };
 
     // Step 5: Data property classification (-D equivalent)
-    let _data_property_hierarchy = if !skip_data_properties {
+    let _data_property_hierarchy = if skip_data_properties {
+        None
+    } else {
         info!("Step 5: Performing data property classification...");
         let data_hierarchy = reasoner.classify_data_properties()?;
         println!("Data property classification completed");
         Some(data_hierarchy)
-    } else {
-        None
     };
 
     // Step 6: Output results with pretty printing (-P equivalent)
     if let Some(output_path) = output {
         if let Some(hierarchy) = &class_hierarchy {
-            if !skip_pretty_print {
-                hierarchy.save_to_file_pretty_print(&output_path)?;
-                println!("Results saved to {} with pretty printing", output_path.display());
-            } else {
+            if skip_pretty_print {
                 hierarchy.save_to_file(&output_path)?;
                 println!("Results saved to {}", output_path.display());
+            } else {
+                hierarchy.save_to_file_pretty_print(&output_path)?;
+                println!("Results saved to {} with pretty printing", output_path.display());
             }
         }
-    } else if let Some(hierarchy) = &class_hierarchy {
-        if !skip_pretty_print {
+    } else if let Some(hierarchy) = &class_hierarchy
+        && !skip_pretty_print {
             println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
             // Print to stdout using HermiT format
             use std::io;
             hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
         }
-    }
 
     println!("\nFull reasoning suite completed successfully");
     Ok(())
