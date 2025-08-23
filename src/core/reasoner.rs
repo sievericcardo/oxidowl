@@ -194,14 +194,14 @@ impl ClassificationResult {
 
         // Build a proper class hierarchy based on subsumption relationships
         let class_hierarchy = self.build_class_tree()?;
-        
+
         // Write the class hierarchy in HermiT format
         self.write_class_hierarchy(writer, &class_hierarchy)?;
 
         // Write object properties if available
         self.write_object_properties(writer)?;
 
-        // Write data properties if available  
+        // Write data properties if available
         self.write_data_properties(writer)?;
 
         writeln!(writer)?;
@@ -221,7 +221,7 @@ impl ClassificationResult {
         for (class, _) in &direct_hierarchy {
             let class_name = self.extract_class_name(class);
             let class_iri = self.extract_class_iri(class);
-            
+
             if class_iri != owl_thing_iri {
                 let node = ClassNode {
                     name: class_name.clone(),
@@ -234,10 +234,13 @@ impl ClassificationResult {
 
         // Build the actual tree structure
         let mut root_classes = Vec::new();
-        
+
         for (class_iri, mut node) in all_nodes {
             // Check if this class should be a root (direct child of owl:Thing)
-            if let Some((_, direct_superclasses)) = direct_hierarchy.iter().find(|(c, _)| self.extract_class_iri(c) == class_iri) {
+            if let Some((_, direct_superclasses)) = direct_hierarchy
+                .iter()
+                .find(|(c, _)| self.extract_class_iri(c) == class_iri)
+            {
                 let is_root = direct_superclasses.iter().any(|sc| {
                     let super_iri = self.extract_class_iri(sc);
                     super_iri == owl_thing_iri
@@ -245,7 +248,8 @@ impl ClassificationResult {
 
                 if is_root {
                     // Build children recursively using direct hierarchy
-                    node.children = self.build_children_for_iri_direct(&class_iri, &direct_hierarchy)?;
+                    node.children =
+                        self.build_children_for_iri_direct(&class_iri, &direct_hierarchy)?;
                     root_classes.push(node);
                 }
             }
@@ -256,16 +260,18 @@ impl ClassificationResult {
     }
 
     /// Compute direct subsumption relationships (remove transitive relationships)
-    fn compute_direct_hierarchy(&self) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
+    fn compute_direct_hierarchy(
+        &self,
+    ) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
         let mut direct_hierarchy = HashMap::new();
 
         for (subclass, all_superclasses) in &self.hierarchy {
             let mut direct_superclasses = HashSet::new();
-            
+
             // For each superclass, check if it's a direct parent (not implied by transitivity)
             for superclass in all_superclasses {
                 let mut is_direct = true;
-                
+
                 // Check if there's an intermediate class that makes this relationship transitive
                 for intermediate in all_superclasses {
                     if intermediate != superclass && intermediate != subclass {
@@ -279,12 +285,12 @@ impl ClassificationResult {
                         }
                     }
                 }
-                
+
                 if is_direct {
                     direct_superclasses.insert(superclass.clone());
                 }
             }
-            
+
             direct_hierarchy.insert(subclass.clone(), direct_superclasses);
         }
 
@@ -293,16 +299,16 @@ impl ClassificationResult {
 
     /// Build children for a specific class IRI using direct hierarchy
     fn build_children_for_iri_direct(
-        &self, 
-        parent_iri: &str, 
-        direct_hierarchy: &HashMap<ClassExpression, HashSet<ClassExpression>>
+        &self,
+        parent_iri: &str,
+        direct_hierarchy: &HashMap<ClassExpression, HashSet<ClassExpression>>,
     ) -> Result<Vec<ClassNode>> {
         let mut children = Vec::new();
 
         // Find all classes that are direct children of this parent
         for (subclass, direct_superclasses) in direct_hierarchy {
             let subclass_iri = self.extract_class_iri(subclass);
-            
+
             // Check if this parent is a direct superclass
             for superclass in direct_superclasses {
                 let super_iri = self.extract_class_iri(superclass);
@@ -311,7 +317,8 @@ impl ClassificationResult {
                     let child_node = ClassNode {
                         name: child_name,
                         iri: subclass_iri.clone(),
-                        children: self.build_children_for_iri_direct(&subclass_iri, direct_hierarchy)?,
+                        children: self
+                            .build_children_for_iri_direct(&subclass_iri, direct_hierarchy)?,
                     };
                     children.push(child_node);
                     break;
@@ -329,7 +336,11 @@ impl ClassificationResult {
     }
 
     /// Build children for a specific class IRI with cycle detection
-    fn build_children_for_iri_with_visited(&self, parent_iri: &str, visited: &mut HashSet<String>) -> Result<Vec<ClassNode>> {
+    fn build_children_for_iri_with_visited(
+        &self,
+        parent_iri: &str,
+        visited: &mut HashSet<String>,
+    ) -> Result<Vec<ClassNode>> {
         // Prevent infinite recursion
         if visited.contains(parent_iri) {
             return Ok(Vec::new());
@@ -340,16 +351,16 @@ impl ClassificationResult {
 
         for (class, superclasses) in &self.hierarchy {
             let class_iri = self.extract_class_iri(class);
-            
+
             // Skip self and owl:Thing
             if class_iri == parent_iri || class_iri == "http://www.w3.org/2002/07/owl#Thing" {
                 continue;
             }
 
             // Check if this class is a direct child of parent
-            let is_direct_child = superclasses.iter().any(|sc| {
-                self.extract_class_iri(sc) == parent_iri
-            });
+            let is_direct_child = superclasses
+                .iter()
+                .any(|sc| self.extract_class_iri(sc) == parent_iri);
 
             if is_direct_child {
                 let child_node = ClassNode {
@@ -367,7 +378,11 @@ impl ClassificationResult {
     }
 
     /// Write class hierarchy in HermiT format
-    fn write_class_hierarchy<W: Write>(&self, writer: &mut W, root_classes: &[ClassNode]) -> Result<()> {
+    fn write_class_hierarchy<W: Write>(
+        &self,
+        writer: &mut W,
+        root_classes: &[ClassNode],
+    ) -> Result<()> {
         for class in root_classes {
             self.write_class_node(writer, class, "owl:Thing", 1)?;
         }
@@ -375,18 +390,27 @@ impl ClassificationResult {
     }
 
     /// Write a single class node with proper indentation
-    fn write_class_node<W: Write>(&self, writer: &mut W, node: &ClassNode, parent_name: &str, level: usize) -> Result<()> {
+    fn write_class_node<W: Write>(
+        &self,
+        writer: &mut W,
+        node: &ClassNode,
+        parent_name: &str,
+        level: usize,
+    ) -> Result<()> {
         let indent = "  ".repeat(level);
-        
+
         // Write SubClassOf and Declaration for this class with correct parent
-        writeln!(writer, "{}SubClassOf( :{} {} ) Declaration( Class( :{} ) )",
-                indent, node.name, parent_name, node.name)?;
-        
+        writeln!(
+            writer,
+            "{}SubClassOf( :{} {} ) Declaration( Class( :{} ) )",
+            indent, node.name, parent_name, node.name
+        )?;
+
         // Write children with increased indentation, using this node as parent
         for child in &node.children {
             self.write_class_node(writer, child, &format!(":{}", node.name), level + 1)?;
         }
-        
+
         Ok(())
     }
 
@@ -395,9 +419,18 @@ impl ClassificationResult {
         // This would be populated from actual object property classification
         // For now, we'll write a basic structure
         writeln!(writer)?;
-        writeln!(writer, "  SubObjectPropertyOf( :containsPlant owl:topObjectProperty ) Declaration( ObjectProperty( :containsPlant ) )")?;
-        writeln!(writer, "  SubObjectPropertyOf( :containsPot owl:topObjectProperty ) Declaration( ObjectProperty( :containsPot ) )")?;
-        writeln!(writer, "  SubObjectPropertyOf( :hasLightSensor owl:topObjectProperty ) Declaration( ObjectProperty( :hasLightSensor ) )")?;
+        writeln!(
+            writer,
+            "  SubObjectPropertyOf( :containsPlant owl:topObjectProperty ) Declaration( ObjectProperty( :containsPlant ) )"
+        )?;
+        writeln!(
+            writer,
+            "  SubObjectPropertyOf( :containsPot owl:topObjectProperty ) Declaration( ObjectProperty( :containsPot ) )"
+        )?;
+        writeln!(
+            writer,
+            "  SubObjectPropertyOf( :hasLightSensor owl:topObjectProperty ) Declaration( ObjectProperty( :hasLightSensor ) )"
+        )?;
         // Add more object properties as needed
         Ok(())
     }
@@ -406,15 +439,28 @@ impl ClassificationResult {
     fn write_data_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
         // This would be populated from actual data property classification
         writeln!(writer)?;
-        writeln!(writer, "  SubDataPropertyOf( :actuatorId owl:topDataProperty ) Declaration( DataProperty( :actuatorId ) )")?;
-        writeln!(writer, "  SubDataPropertyOf( :plantId owl:topDataProperty ) Declaration( DataProperty( :plantId ) )")?;
-        writeln!(writer, "  SubDataPropertyOf( :sensorId owl:topDataProperty ) Declaration( DataProperty( :sensorId ) )")?;
+        writeln!(
+            writer,
+            "  SubDataPropertyOf( :actuatorId owl:topDataProperty ) Declaration( DataProperty( :actuatorId ) )"
+        )?;
+        writeln!(
+            writer,
+            "  SubDataPropertyOf( :plantId owl:topDataProperty ) Declaration( DataProperty( :plantId ) )"
+        )?;
+        writeln!(
+            writer,
+            "  SubDataPropertyOf( :sensorId owl:topDataProperty ) Declaration( DataProperty( :sensorId ) )"
+        )?;
         // Add more data properties as needed
         Ok(())
     }
 
     /// Check if this is a direct subsumption (not transitive)
-    fn is_direct_subsumption(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> bool {
+    fn is_direct_subsumption(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+    ) -> bool {
         // For now, assume all relationships in our hierarchy are direct
         // In a full implementation, this would check for intermediate classes
         true
@@ -1037,7 +1083,9 @@ impl Reasoner {
 
         // Add owl:Thing if not present
         let owl_thing = ClassExpression::Class(crate::ontology::Class {
-            iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing").to_url()?.into(),
+            iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing")
+                .to_url()?
+                .into(),
         });
         if !classes.contains(&owl_thing) {
             classes.push(owl_thing.clone());
@@ -1062,7 +1110,8 @@ impl Reasoner {
         for axiom in ontology_guard.axioms() {
             if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
                 subclass_count += 1;
-                log::debug!("Found SubClassOf axiom {}: {:?} ⊑ {:?}", 
+                log::debug!(
+                    "Found SubClassOf axiom {}: {:?} ⊑ {:?}",
                     subclass_count,
                     subclass_axiom.subclass,
                     subclass_axiom.superclass
@@ -1118,7 +1167,7 @@ impl Reasoner {
 
         // For now, let's simplify this to avoid complex pattern matching issues
         // The main classification should handle the basic relationships
-        
+
         Ok(inferred_classes)
     }
 
@@ -1513,7 +1562,12 @@ impl Reasoner {
         ontology: &crate::ontology::Ontology,
     ) -> Result<bool> {
         let mut visited = HashSet::new();
-        self.check_subsumption_from_axioms_with_visited(subclass, superclass, ontology, &mut visited)
+        self.check_subsumption_from_axioms_with_visited(
+            subclass,
+            superclass,
+            ontology,
+            &mut visited,
+        )
     }
 
     fn check_subsumption_from_axioms_with_visited(
@@ -1533,9 +1587,18 @@ impl Reasoner {
         // First check for direct SubClassOf axioms
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                log::debug!("Checking SubClassOf axiom: {:?} -> {:?}", subclass_axiom.subclass, subclass_axiom.superclass);
-                if subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass {
-                    log::debug!("Found direct subsumption: {:?} -> {:?}", subclass, superclass);
+                log::debug!(
+                    "Checking SubClassOf axiom: {:?} -> {:?}",
+                    subclass_axiom.subclass,
+                    subclass_axiom.superclass
+                );
+                if subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass
+                {
+                    log::debug!(
+                        "Found direct subsumption: {:?} -> {:?}",
+                        subclass,
+                        superclass
+                    );
                     return Ok(true);
                 }
             }
@@ -1548,12 +1611,17 @@ impl Reasoner {
                 if classes.contains(subclass) && classes.contains(superclass) {
                     return Ok(true);
                 }
-                
+
                 // If subclass is equivalent to something that is a subclass of superclass
                 if classes.contains(subclass) {
                     for equiv_class in classes {
                         if equiv_class != subclass {
-                            if self.check_subsumption_from_axioms_with_visited(equiv_class, superclass, ontology, visited)? {
+                            if self.check_subsumption_from_axioms_with_visited(
+                                equiv_class,
+                                superclass,
+                                ontology,
+                                visited,
+                            )? {
                                 return Ok(true);
                             }
                         }
@@ -1571,11 +1639,16 @@ impl Reasoner {
                         return Ok(true);
                     }
                     // Also check if the union class is a subclass of superclass
-                    if self.check_subsumption_from_axioms_with_visited(&disjoint_union.class, superclass, ontology, visited)? {
+                    if self.check_subsumption_from_axioms_with_visited(
+                        &disjoint_union.class,
+                        superclass,
+                        ontology,
+                        visited,
+                    )? {
                         return Ok(true);
                     }
                 }
-                
+
                 // If subclass is the union class and superclass is owl:Thing or a superclass of the union
                 if disjoint_union.class == *subclass {
                     if let ClassExpression::Class(super_cls) = superclass {

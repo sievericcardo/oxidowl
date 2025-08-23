@@ -449,7 +449,7 @@ impl Ontology {
                 }
                 concepts::ClassExpression::ObjectHasValue { .. }
                 | concepts::ClassExpression::ObjectHasSelf { .. }
-                | concepts::ClassExpression::ObjectOneOf(..) 
+                | concepts::ClassExpression::ObjectOneOf(..)
                 | concepts::ClassExpression::DataSomeValuesFrom { .. }
                 | concepts::ClassExpression::DataAllValuesFrom { .. }
                 | concepts::ClassExpression::DataMinCardinality { .. }

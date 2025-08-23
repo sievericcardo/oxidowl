@@ -145,7 +145,7 @@ enum Commands {
         skip_object_properties: bool,
 
         /// Skip data property classification
-        #[arg(long)]  
+        #[arg(long)]
         skip_data_properties: bool,
 
         /// Skip consistency check
@@ -516,12 +516,16 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Determine if we're in HermiT mode (using individual flags vs subcommands)
-    let is_hermit_mode = cli.command.is_none() && (
-        cli.classify || cli.classify_object_properties || cli.classify_data_properties || 
-        cli.consistency || cli.load || cli.unsatisfiable_classes || 
-        cli.subclasses.is_some() || cli.superclasses.is_some() || 
-        cli.equivalent_classes.is_some()
-    );
+    let is_hermit_mode = cli.command.is_none()
+        && (cli.classify
+            || cli.classify_object_properties
+            || cli.classify_data_properties
+            || cli.consistency
+            || cli.load
+            || cli.unsatisfiable_classes
+            || cli.subclasses.is_some()
+            || cli.superclasses.is_some()
+            || cli.equivalent_classes.is_some());
 
     // In HermiT mode with no explicit verbosity, suppress INFO logs for cleaner output
     let effective_quiet = cli.quiet || (is_hermit_mode && cli.verbose == 0);
@@ -572,11 +576,11 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
     }
 
     // Validate that at least one operation flag is specified
-    let has_operation = cli.load 
-        || cli.classify 
-        || cli.classify_object_properties 
-        || cli.classify_data_properties 
-        || cli.consistency 
+    let has_operation = cli.load
+        || cli.classify
+        || cli.classify_object_properties
+        || cli.classify_data_properties
+        || cli.consistency
         || cli.unsatisfiable_classes
         || cli.subclasses.is_some()
         || cli.superclasses.is_some()
@@ -586,18 +590,30 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         || cli.dump_clauses;
 
     if !has_operation {
-        return Err(oxidowl::Error::io("No operation specified. Use flags like -c, -O, -D, -k, -l, etc.".to_string()));
+        return Err(oxidowl::Error::io(
+            "No operation specified. Use flags like -c, -O, -D, -k, -l, etc.".to_string(),
+        ));
     }
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = cli.format.map_or(OntologyFormat::Auto, Into::into);
 
     // Step 1: Load ontologies if any operation requires it
-    if !cli.input.is_empty() && (cli.load || cli.classify || cli.classify_object_properties || cli.classify_data_properties || cli.consistency || cli.unsatisfiable_classes || cli.subclasses.is_some() || cli.superclasses.is_some() || cli.equivalent_classes.is_some()) {
+    if !cli.input.is_empty()
+        && (cli.load
+            || cli.classify
+            || cli.classify_object_properties
+            || cli.classify_data_properties
+            || cli.consistency
+            || cli.unsatisfiable_classes
+            || cli.subclasses.is_some()
+            || cli.superclasses.is_some()
+            || cli.equivalent_classes.is_some())
+    {
         if !cli.quiet {
             println!("Loading {} ontology file(s)...", cli.input.len());
         }
-        
+
         for file in &cli.input {
             info!("Loading ontology: {}", file.display());
             info!("Loading ontology from: {}", file.display());
@@ -606,7 +622,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             let elapsed = start.elapsed();
             info!("Ontology loaded in {:?}", elapsed);
         }
-        
+
         if !cli.quiet {
             println!("Ontology loading completed");
         }
@@ -618,7 +634,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             println!("Checking consistency...");
         }
         let is_consistent = reasoner.is_consistent()?;
-        
+
         if is_consistent {
             if !cli.quiet {
                 println!("✓ Consistency check: CONSISTENT");
@@ -628,11 +644,15 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         } else if !cli.quiet {
             println!("✗ Consistency check: INCONSISTENT");
         }
-        
+
         if cli.output.is_some() {
             // Save consistency result to file if output specified
             if let Some(output_path) = &cli.output {
-                let result = if is_consistent { "consistent" } else { "inconsistent" };
+                let result = if is_consistent {
+                    "consistent"
+                } else {
+                    "inconsistent"
+                };
                 fs::write(output_path, result)?;
                 if !cli.quiet {
                     println!("Consistency result saved to {}", output_path.display());
@@ -648,16 +668,16 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             println!("Performing class classification...");
         }
         let hierarchy = reasoner.classify()?;
-        
+
         if !cli.quiet {
             println!("✓ Class classification completed");
             println!();
         }
-        
+
         // Always print the hierarchy results when classification is performed (HermiT-style)
         let mut stdout = std::io::stdout();
         hierarchy.write_hermit_style_hierarchy(&mut stdout)?;
-        
+
         class_hierarchy = Some(hierarchy);
     }
 
@@ -668,11 +688,11 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             println!("Performing object property classification...");
         }
         let hierarchy = reasoner.classify_object_properties()?;
-        
+
         if !cli.quiet {
             println!("✓ Object property classification completed");
         }
-        
+
         obj_prop_hierarchy = Some(hierarchy);
     }
 
@@ -683,15 +703,15 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             println!("Performing data property classification...");
         }
         let hierarchy = reasoner.classify_data_properties()?;
-        
+
         if !cli.quiet {
             println!("✓ Data property classification completed");
         }
-        
+
         if !cli.quiet {
             println!("Data property classification completed");
         }
-        
+
         data_prop_hierarchy = Some(hierarchy);
     }
 
@@ -702,19 +722,31 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(hierarchy) = &class_hierarchy {
                 if cli.pretty_print {
                     hierarchy.save_to_file_pretty_print(output_path)?;
-                    println!("Class hierarchy saved to {} with pretty printing", output_path.display());
+                    println!(
+                        "Class hierarchy saved to {} with pretty printing",
+                        output_path.display()
+                    );
                 } else {
                     hierarchy.save_to_file(output_path)?;
                     println!("Class hierarchy saved to {}", output_path.display());
                 }
             }
             if let Some(hierarchy) = &obj_prop_hierarchy {
-                let prop_output = output_path.with_file_name(format!("{}_object_properties.txt", output_path.file_stem().unwrap().to_string_lossy()));
+                let prop_output = output_path.with_file_name(format!(
+                    "{}_object_properties.txt",
+                    output_path.file_stem().unwrap().to_string_lossy()
+                ));
                 hierarchy.save_to_file(&prop_output)?;
-                println!("Object property hierarchy saved to {}", prop_output.display());
+                println!(
+                    "Object property hierarchy saved to {}",
+                    prop_output.display()
+                );
             }
             if let Some(hierarchy) = &data_prop_hierarchy {
-                let prop_output = output_path.with_file_name(format!("{}_data_properties.txt", output_path.file_stem().unwrap().to_string_lossy()));
+                let prop_output = output_path.with_file_name(format!(
+                    "{}_data_properties.txt",
+                    output_path.file_stem().unwrap().to_string_lossy()
+                ));
                 hierarchy.save_to_file(&prop_output)?;
                 println!("Data property hierarchy saved to {}", prop_output.display());
             }
@@ -777,7 +809,9 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
 
     if let Some(class_name) = cli.equivalent_classes {
         println!("Equivalent classes of {class_name}:");
-        println!("  (Note: Equivalent class queries need ClassExpression conversion - feature pending)");
+        println!(
+            "  (Note: Equivalent class queries need ClassExpression conversion - feature pending)"
+        );
     }
 
     if cli.unsatisfiable_classes {
@@ -790,11 +824,22 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
 
     if let Some(premise_file) = cli.check_entailment {
         if cli.input.len() != 1 {
-            return Err(oxidowl::Error::io("Entailment checking requires exactly one conclusion file as input".to_string()));
+            return Err(oxidowl::Error::io(
+                "Entailment checking requires exactly one conclusion file as input".to_string(),
+            ));
         }
         let conclusion_file = &cli.input[0];
         let entails = reasoner.check_entailment(&premise_file, conclusion_file, ontology_format)?;
-        println!("Entailment result: {} {} {}", premise_file.display(), if entails { "entails" } else { "does not entail" }, conclusion_file.display());
+        println!(
+            "Entailment result: {} {} {}",
+            premise_file.display(),
+            if entails {
+                "entails"
+            } else {
+                "does not entail"
+            },
+            conclusion_file.display()
+        );
     }
 
     if cli.print_prefixes {
@@ -912,18 +957,21 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             skip_consistency,
             skip_pretty_print,
             direct,
-        } => execute_full_reasoning(
-            input,
-            output,
-            format,
-            skip_classification,
-            skip_object_properties,
-            skip_data_properties,
-            skip_consistency,
-            skip_pretty_print,
-            direct,
-            config,
-        ).await,
+        } => {
+            execute_full_reasoning(
+                input,
+                output,
+                format,
+                skip_classification,
+                skip_object_properties,
+                skip_data_properties,
+                skip_consistency,
+                skip_pretty_print,
+                direct,
+                config,
+            )
+            .await
+        }
         Commands::Consistency {
             input,
             output,
@@ -1075,7 +1123,10 @@ async fn execute_full_reasoning(
         return Err(oxidowl::Error::io("No input files provided".to_string()));
     }
 
-    println!("Performing full reasoning suite (HermiT-style) on {} file(s)", input.len());
+    println!(
+        "Performing full reasoning suite (HermiT-style) on {} file(s)",
+        input.len()
+    );
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
@@ -1092,11 +1143,26 @@ async fn execute_full_reasoning(
     if !skip_consistency {
         info!("Step 2: Checking consistency...");
         let consistency_result = reasoner.is_consistent()?;
-        println!("Consistency check: {}", if consistency_result { "CONSISTENT" } else { "INCONSISTENT" });
-        
+        println!(
+            "Consistency check: {}",
+            if consistency_result {
+                "CONSISTENT"
+            } else {
+                "INCONSISTENT"
+            }
+        );
+
         // Check owl:Thing satisfiability like HermiT does
-        let owl_thing_satisfiable = reasoner.is_class_satisfiable("http://www.w3.org/2002/07/owl#Thing")?;
-        println!("http://www.w3.org/2002/07/owl#Thing is {}.", if owl_thing_satisfiable { "satisfiable" } else { "unsatisfiable" });
+        let owl_thing_satisfiable =
+            reasoner.is_class_satisfiable("http://www.w3.org/2002/07/owl#Thing")?;
+        println!(
+            "http://www.w3.org/2002/07/owl#Thing is {}.",
+            if owl_thing_satisfiable {
+                "satisfiable"
+            } else {
+                "unsatisfiable"
+            }
+        );
     }
 
     // Step 3: Classification (-c equivalent)
@@ -1137,16 +1203,20 @@ async fn execute_full_reasoning(
                 println!("Results saved to {}", output_path.display());
             } else {
                 hierarchy.save_to_file_pretty_print(&output_path)?;
-                println!("Results saved to {} with pretty printing", output_path.display());
+                println!(
+                    "Results saved to {} with pretty printing",
+                    output_path.display()
+                );
             }
         }
     } else if let Some(hierarchy) = &class_hierarchy
-        && !skip_pretty_print {
-            println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
-            // Print to stdout using HermiT format
-            use std::io;
-            hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
-        }
+        && !skip_pretty_print
+    {
+        println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
+        // Print to stdout using HermiT format
+        use std::io;
+        hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
+    }
 
     println!("\nFull reasoning suite completed successfully");
     Ok(())
@@ -1183,7 +1253,10 @@ async fn execute_load(
         );
         fs::write(output_path, info)?;
     } else {
-        println!("Ontology loading completed. {} files processed.", input.len());
+        println!(
+            "Ontology loading completed. {} files processed.",
+            input.len()
+        );
     }
 
     Ok(())
