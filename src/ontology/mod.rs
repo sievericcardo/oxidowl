@@ -7,12 +7,14 @@ use url::Url;
 
 pub mod axioms;
 pub mod concepts;
+pub mod datatypes;
 pub mod individuals;
 pub mod properties;
 
 // Re-export main types
 pub use axioms::*;
 pub use concepts::*;
+pub use datatypes::*;
 pub use individuals::*;
 pub use properties::*;
 

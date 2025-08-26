@@ -48,6 +48,7 @@ pub mod parsers;
 pub mod query;
 pub mod reasoning;
 pub mod swrl; // SWRL (Semantic Web Rule Language) support
+pub mod validation; // OWL 2 DL validation and profile checking
 pub mod visitor; // Visitor pattern for ontology traversal
 // pub mod utils;
 
@@ -57,6 +58,7 @@ pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
+pub use crate::validation::{OWL2DLValidator, ValidationReport, OWL2Profile};
 
 // Re-export error types
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};
