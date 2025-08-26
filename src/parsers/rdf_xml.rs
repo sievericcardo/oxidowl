@@ -84,17 +84,191 @@ impl RdfXmlParser {
             self.validate_xml_structure(content)?;
         }
 
-        // TODO: Implement comprehensive RDF/XML parsing
-        // For now, return a minimal ontology with basic parsing
-        let ontology = Ontology::new();
+        let mut ontology = Ontology::new();
 
-        // Basic RDF/XML structure detection
+        // Basic RDF/XML structure detection and parsing
         if content.contains("<rdf:RDF") || content.contains("<RDF") {
             // This is likely an RDF/XML document
-            // TODO: Implement proper RDF/XML parsing here
+            self.parse_rdf_xml_content(content, &mut ontology)?;
+        } else {
+            return Err(Error::ParseError("Invalid RDF/XML document: missing RDF root element".to_string()));
         }
 
         Ok(ontology)
+    }
+
+    /// Parse RDF/XML content and extract ontology elements
+    fn parse_rdf_xml_content(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Simple regex-based parsing for basic RDF/XML structures
+        // This is a simplified implementation - a full parser would use a proper XML parser
+        
+        // Parse namespace declarations
+        self.extract_namespaces(content, ontology)?;
+        
+        // Parse class declarations
+        self.extract_classes(content, ontology)?;
+        
+        // Parse property declarations  
+        self.extract_properties(content, ontology)?;
+        
+        // Parse individuals
+        self.extract_individuals(content, ontology)?;
+        
+        // Parse axioms
+        self.extract_axioms(content, ontology)?;
+        
+        Ok(())
+    }
+
+    /// Extract namespace declarations from RDF/XML
+    fn extract_namespaces(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Look for xmlns declarations
+        for line in content.lines() {
+            if line.contains("xmlns") {
+                // Extract namespace URIs and prefixes
+                // This is a simplified extraction
+                if let Some(ns_start) = line.find("xmlns:") {
+                    if let Some(eq_pos) = line[ns_start..].find('=') {
+                        if let Some(quote_start) = line[ns_start + eq_pos..].find('"') {
+                            if let Some(quote_end) = line[ns_start + eq_pos + quote_start + 1..].find('"') {
+                                let prefix = &line[ns_start + 6..ns_start + eq_pos];
+                                let uri = &line[ns_start + eq_pos + quote_start + 1..ns_start + eq_pos + quote_start + 1 + quote_end];
+                                
+                                // Add to ontology prefixes if the ontology supports it
+                                // For now, we'll store this information internally
+                                log::debug!("Found namespace: {} -> {}", prefix, uri);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Extract class declarations
+    fn extract_classes(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Look for owl:Class declarations
+        // This is a simplified pattern matching approach
+        let class_patterns = [
+            r#"<owl:Class rdf:about="([^"]+)""#,
+            r#"<owl:Class rdf:ID="([^"]+)""#,
+            r#"rdf:type.*owl:Class"#,
+        ];
+        
+        for pattern in &class_patterns {
+            if let Ok(regex) = regex::Regex::new(pattern) {
+                for caps in regex.captures_iter(content) {
+                    if let Some(class_iri) = caps.get(1) {
+                        let iri = crate::ontology::IRI::new(class_iri.as_str());
+                        
+                        // Add declaration axiom
+                        let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
+                            id: ontology.axioms().len() as u64,
+                            entity: crate::ontology::axioms::Entity::Class(iri),
+                        };
+                        ontology.add_axiom(crate::ontology::axioms::Axiom::Declaration(decl_axiom));
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Extract property declarations
+    fn extract_properties(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Look for owl:ObjectProperty and owl:DatatypeProperty declarations
+        let obj_prop_patterns = [
+            r#"<owl:ObjectProperty rdf:about="([^"]+)""#,
+            r#"<owl:ObjectProperty rdf:ID="([^"]+)""#,
+        ];
+        
+        for pattern in &obj_prop_patterns {
+            if let Ok(regex) = regex::Regex::new(pattern) {
+                for caps in regex.captures_iter(content) {
+                    if let Some(prop_iri) = caps.get(1) {
+                        let iri = crate::ontology::IRI::new(prop_iri.as_str());
+                        let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
+                            id: ontology.axioms().len() as u64,
+                            entity: crate::ontology::axioms::Entity::ObjectProperty(iri),
+                        };
+                        ontology.add_axiom(crate::ontology::axioms::Axiom::Declaration(decl_axiom));
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Extract individual declarations
+    fn extract_individuals(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Look for individual declarations and class assertions
+        let individual_patterns = [
+            r#"<owl:NamedIndividual rdf:about="([^"]+)""#,
+            r#"<([^>\s]+)\s+rdf:about="([^"]+)"[^>]*>"#,
+        ];
+        
+        for pattern in &individual_patterns {
+            if let Ok(regex) = regex::Regex::new(pattern) {
+                for caps in regex.captures_iter(content) {
+                    if caps.len() >= 2 {
+                        let ind_iri = if caps.len() == 2 {
+                            caps.get(1).unwrap().as_str()
+                        } else {
+                            caps.get(2).unwrap().as_str()
+                        };
+                        
+                        let iri = crate::ontology::IRI::new(ind_iri);
+                        
+                        let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
+                            id: ontology.axioms().len() as u64,
+                            entity: crate::ontology::axioms::Entity::NamedIndividual(iri),
+                        };
+                        ontology.add_axiom(crate::ontology::axioms::Axiom::Declaration(decl_axiom));
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Extract axioms from RDF/XML
+    fn extract_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Look for subclass relationships
+        self.extract_subclass_axioms(content, ontology)?;
+        
+        // Look for property assertions
+        self.extract_property_assertions(content, ontology)?;
+        
+        Ok(())
+    }
+
+    /// Extract subclass axioms
+    fn extract_subclass_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // Look for rdfs:subClassOf relationships
+        let subclass_pattern = r#"<rdfs:subClassOf rdf:resource="([^"]+)""#;
+        
+        if let Ok(regex) = regex::Regex::new(subclass_pattern) {
+            for caps in regex.captures_iter(content) {
+                if let Some(superclass_iri) = caps.get(1) {
+                    // We would need more context to get the subclass IRI
+                    // This is a simplified extraction
+                    log::debug!("Found subclass relationship to: {}", superclass_iri.as_str());
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Extract property assertions
+    fn extract_property_assertions(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+        // This would involve more complex parsing to extract property assertions
+        // from the RDF/XML structure
+        Ok(())
     }
 
     /// Validate XML structure

@@ -457,11 +457,7 @@ impl Ontology {
                 | concepts::ClassExpression::DataMinCardinality { .. }
                 | concepts::ClassExpression::DataMaxCardinality { .. }
                 | concepts::ClassExpression::DataExactCardinality { .. }
-                | concepts::ClassExpression::DataHasValue { .. }
-                | concepts::ClassExpression::AnnotationAssertion { .. }
-                | concepts::ClassExpression::SubAnnotationPropertyOf { .. }
-                | concepts::ClassExpression::AnnotationPropertyDomain { .. }
-                | concepts::ClassExpression::AnnotationPropertyRange { .. } => {
+                | concepts::ClassExpression::DataHasValue { .. } => {
                     // These don't contain nested class expressions
                 }
             }

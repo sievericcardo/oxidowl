@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use super::types::{DLAtom, DLClause};
+use crate::dl_clauses::types::{DLAtom, DLClause};
 
 /// Trait containing helper methods for DL clause generation
 pub trait HelperMethods {

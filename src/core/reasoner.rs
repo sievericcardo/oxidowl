@@ -2939,13 +2939,50 @@ impl Reasoner {
         superproperty: &ObjectPropertyExpression,
         chain: &[ObjectPropertyExpression],
     ) -> Result<bool> {
-        // Check if subproperty could be part of this chain leading to superproperty
-        for chain_prop in chain {
+        // If the chain is empty, no subsumption
+        if chain.is_empty() {
+            return Ok(false);
+        }
+
+        // If the chain has only one property, check direct match
+        if chain.len() == 1 {
+            return Ok(self.properties_match(&chain[0], subproperty)? && 
+                     self.properties_match(&chain[0], superproperty)?);
+        }
+
+        // For longer chains, check if subproperty appears in the chain
+        // and if the chain composition implies superproperty
+        let mut subprop_found = false;
+        let mut subprop_index = None;
+        
+        for (i, chain_prop) in chain.iter().enumerate() {
             if self.properties_match(chain_prop, subproperty)? {
-                // Found subproperty in chain, check if chain implies superproperty
-                return Ok(true);
+                subprop_found = true;
+                subprop_index = Some(i);
+                break;
             }
         }
+
+        if !subprop_found {
+            return Ok(false);
+        }
+
+        // Check if the chain composition could lead to the superproperty
+        // This is a simplified check - a full implementation would need
+        // more sophisticated property chain reasoning
+        if let Some(idx) = subprop_index {
+            // If subproperty is at the end of the chain, check if the whole chain
+            // composition is equivalent to superproperty
+            if idx == chain.len() - 1 {
+                // Would need to check if chain[0] ∘ chain[1] ∘ ... ∘ chain[idx-1] ∘ subproperty
+                // is subsumed by superproperty
+                return Ok(true); // Simplified - assumes any chain containing subproperty works
+            }
+            
+            // If subproperty is in the middle, check composition
+            return Ok(true); // Simplified for now
+        }
+
         Ok(false)
     }
 
@@ -2964,8 +3001,44 @@ impl Reasoner {
             return self.properties_match(&remaining_chain[0], target);
         }
         
-        // For longer chains, we'd need more sophisticated reasoning
-        // This is a placeholder for complex chain reasoning
+        // For longer chains, check if there are sub-property relationships
+        // that could establish the connection
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) => {
+                    // Check if the chain or part of it is a sub-property of target
+                    if let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property {
+                        if chain.len() == remaining_chain.len() {
+                            let mut all_match = true;
+                            for (i, prop) in chain.iter().enumerate() {
+                                if !self.properties_match(prop, &remaining_chain[i])? {
+                                    all_match = false;
+                                    break;
+                                }
+                            }
+                            if all_match && self.properties_match(&sub_axiom.super_property, target)? {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+                crate::ontology::axioms::Axiom::TransitiveObjectProperty(trans_axiom) => {
+                    // If target is transitive and appears in the chain, check transitivity
+                    if self.properties_match(&trans_axiom.property, target)? {
+                        for chain_prop in remaining_chain {
+                            if self.properties_match(chain_prop, target)? {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // If no direct relationships found, try to establish through intermediate properties
+        // This is a simplified approach - a full implementation would use more sophisticated
+        // graph-based reasoning
         Ok(false)
     }
 

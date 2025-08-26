@@ -7,7 +7,7 @@ use crate::{
 use log::debug;
 use std::collections::HashMap;
 
-use super::{
+use crate::dl_clauses::{
     axiom_compilers::AxiomCompiler,
     types::{DLAtom, DLClause, DLClauseSet, DLClauseStatistics},
 };

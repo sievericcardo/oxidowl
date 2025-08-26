@@ -5,7 +5,7 @@
 
 use crate::{error::Result, ontology::ClassExpression};
 
-use super::{
+use crate::dl_clauses::{
     helpers::HelperMethods,
     types::{DLAtom, DLClause},
 };

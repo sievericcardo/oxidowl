@@ -6,7 +6,7 @@
 use crate::error::Result;
 use std::{fs::File, io::Write, path::Path};
 
-use super::types::DLClauseSet;
+use crate::dl_clauses::types::DLClauseSet;
 
 impl DLClauseSet {
     /// Save DL clauses to a file in HermiT format

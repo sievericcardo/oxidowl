@@ -209,12 +209,6 @@ impl ProfileValidator for QLValidator {
             ClassExpression::DataExactCardinality { property: _, cardinality: _, filler: _ } => false,
             ClassExpression::ObjectHasSelf { property: _ } => false,
             ClassExpression::ObjectOneOf(_) => false,
-            
-            // Annotation expressions (should not be in ClassExpression but need to handle for now)
-            ClassExpression::AnnotationAssertion { .. } => false,
-            ClassExpression::SubAnnotationPropertyOf { .. } => false,
-            ClassExpression::AnnotationPropertyDomain { .. } => false,
-            ClassExpression::AnnotationPropertyRange { .. } => false,
         }
     }
 

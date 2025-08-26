@@ -6,7 +6,7 @@ use crate::{
 };
 use log::debug;
 
-use super::{
+use crate::dl_clauses::{
     helpers::HelperMethods,
     types::{DLAtom, DLClause},
     union_disjunctive::UnionDisjunctiveCompiler,

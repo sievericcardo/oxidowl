@@ -159,17 +159,6 @@ impl ELValidator {
                     "Data cardinality restrictions not allowed in OWL 2 EL",
                 ))
             }
-            ClassExpression::AnnotationAssertion { .. }
-            | ClassExpression::SubAnnotationPropertyOf { .. }
-            | ClassExpression::AnnotationPropertyDomain { .. }
-            | ClassExpression::AnnotationPropertyRange { .. } => {
-                Err(ProfileViolation::new(
-                    ProfileViolationType::DisallowedClassExpression(
-                        "Annotation axioms in class expressions".to_string()
-                    ),
-                    "Annotation axioms not allowed as class expressions in OWL 2 EL",
-                ))
-            }
         }
     }
 
@@ -179,11 +168,53 @@ impl ELValidator {
     }
 
     /// Validate a data range for OWL 2 EL
-    fn validate_data_range(&self, _range: &DataRange) -> Result<(), ProfileViolation> {
-        // In OWL 2 EL, only basic datatypes are allowed
-        // Complex data ranges like unions, intersections are not allowed
-        // For now, we accept all data ranges but this could be made more restrictive
-        Ok(())
+    fn validate_data_range(&self, range: &DataRange) -> Result<(), ProfileViolation> {
+        match range {
+            // Only basic datatypes are allowed in OWL 2 EL
+            DataRange::Datatype(_) => Ok(()),
+            
+            // Complex data ranges are not allowed
+            DataRange::DataIntersectionOf(_) => {
+                Err(ProfileViolation::new(
+                    ProfileViolationType::DisallowedDataRange(
+                        "DataIntersectionOf".to_string()
+                    ),
+                    "Data intersections not allowed in OWL 2 EL",
+                ))
+            }
+            DataRange::DataUnionOf(_) => {
+                Err(ProfileViolation::new(
+                    ProfileViolationType::DisallowedDataRange(
+                        "DataUnionOf".to_string()
+                    ),
+                    "Data unions not allowed in OWL 2 EL",
+                ))
+            }
+            DataRange::DataComplementOf(_) => {
+                Err(ProfileViolation::new(
+                    ProfileViolationType::DisallowedDataRange(
+                        "DataComplementOf".to_string()
+                    ),
+                    "Data complements not allowed in OWL 2 EL",
+                ))
+            }
+            DataRange::DataOneOf(_) => {
+                Err(ProfileViolation::new(
+                    ProfileViolationType::DisallowedDataRange(
+                        "DataOneOf".to_string()
+                    ),
+                    "Data enumerations not allowed in OWL 2 EL",
+                ))
+            }
+            DataRange::DatatypeRestriction { .. } => {
+                Err(ProfileViolation::new(
+                    ProfileViolationType::DisallowedDataRange(
+                        "DatatypeRestriction".to_string()
+                    ),
+                    "Datatype restrictions not allowed in OWL 2 EL",
+                ))
+            }
+        }
     }
 
     /// Check if an axiom is allowed in OWL 2 EL
