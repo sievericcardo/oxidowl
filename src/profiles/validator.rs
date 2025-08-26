@@ -10,14 +10,14 @@ use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileDetectionResult, ProfileValidator
 };
 use crate::profiles::el::ELValidator;
+use crate::profiles::ql::QLValidator;
+use crate::profiles::rl::RLValidator;
 
 /// Main profile validator that can handle all OWL 2 profiles
 pub struct OWL2ProfileValidator {
     el_validator: ELValidator,
-    // TODO: Add other profile validators when implemented
-    // ql_validator: QLValidator,
-    // rl_validator: RLValidator,
-    // dl_validator: DLValidator,
+    ql_validator: QLValidator,
+    rl_validator: RLValidator,
 }
 
 impl OWL2ProfileValidator {
@@ -25,6 +25,8 @@ impl OWL2ProfileValidator {
     pub fn new() -> Self {
         Self {
             el_validator: ELValidator::new(),
+            ql_validator: QLValidator::new(),
+            rl_validator: RLValidator::new(),
         }
     }
 
@@ -36,28 +38,8 @@ impl OWL2ProfileValidator {
     ) -> Result<ProfileValidationReport, OxidowlError> {
         match profile {
             OWL2Profile::EL => self.el_validator.validate(ontology),
-            OWL2Profile::QL => {
-                // TODO: Implement QL validator
-                let mut report = ProfileValidationReport::new(profile);
-                report.add_violation(crate::profiles::ProfileViolation::new(
-                    crate::profiles::ProfileViolationType::UnsupportedFeature(
-                        "OWL 2 QL validation not yet implemented".to_string()
-                    ),
-                    "QL profile validation unavailable",
-                ));
-                Ok(report)
-            }
-            OWL2Profile::RL => {
-                // TODO: Implement RL validator
-                let mut report = ProfileValidationReport::new(profile);
-                report.add_violation(crate::profiles::ProfileViolation::new(
-                    crate::profiles::ProfileViolationType::UnsupportedFeature(
-                        "OWL 2 RL validation not yet implemented".to_string()
-                    ),
-                    "RL profile validation unavailable",
-                ));
-                Ok(report)
-            }
+            OWL2Profile::QL => self.ql_validator.validate(ontology),
+            OWL2Profile::RL => self.rl_validator.validate(ontology),
             OWL2Profile::DL => {
                 // Use the existing OWL 2 DL validator
                 let mut dl_validator = crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
@@ -125,6 +107,8 @@ impl OWL2ProfileValidator {
     pub fn get_validator(&self, profile: OWL2Profile) -> Box<dyn ProfileValidator> {
         match profile {
             OWL2Profile::EL => Box::new(ELValidator::new()),
+            OWL2Profile::QL => Box::new(QLValidator::new()),
+            OWL2Profile::RL => Box::new(RLValidator::new()),
             _ => Box::new(GenericValidator::new(profile)),
         }
     }

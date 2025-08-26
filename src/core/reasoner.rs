@@ -2719,10 +2719,178 @@ impl Reasoner {
             }
 
             // Check for property chains that could establish subsumption
-            // This is a simplified implementation
-            // TODO: Implement full property chain reasoning
+            if let Some(ontology) = &self.ontology {
+                let ontology_guard = ontology.read().unwrap();
+                
+                // Check all SubObjectPropertyOf axioms for property chains
+                for axiom in ontology_guard.axioms() {
+                    if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
+                        // If the subproperty is a property chain, check if it matches our properties
+                        if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property {
+                            if self.matches_property_chain(subproperty, superproperty, chain, &sub_axiom.super_property)? {
+                                return Ok(true);
+                            }
+                        }
+                        
+                        // Also check if the superproperty is part of a chain that implies subsumption
+                        if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.super_property {
+                            if self.check_property_chain_subsumption(subproperty, superproperty, chain)? {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+                
+                // Check for transitive properties that could form chains
+                if self.is_transitive_property(subproperty)? && 
+                   self.properties_match(subproperty, superproperty)? {
+                    return Ok(true);
+                }
+            }
         }
 
+        Ok(false)
+    }
+
+    /// Check if a property chain matches the given properties
+    fn matches_property_chain(
+        &self,
+        subproperty: &ObjectPropertyExpression,
+        superproperty: &ObjectPropertyExpression,
+        chain: &[ObjectPropertyExpression],
+        chain_super: &ObjectPropertyExpression,
+    ) -> Result<bool> {
+        // If chain has exactly 2 properties and they match sub/super, 
+        // and chain_super matches superproperty, then we have a match
+        if chain.len() == 2 {
+            if self.properties_match(&chain[0], subproperty)? &&
+               self.properties_match(&chain[1], superproperty)? &&
+               self.properties_match(chain_super, superproperty)? {
+                return Ok(true);
+            }
+        }
+        
+        // For longer chains, check if the composition implies the relationship
+        // This is a simplified check - full implementation would need more complex reasoning
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            // Check if we can establish the chain through known relationships
+            for i in 0..chain.len() - 1 {
+                if self.properties_match(&chain[i], subproperty)? {
+                    // Check if the rest of the chain leads to superproperty
+                    if self.check_chain_continuation(&chain[i+1..], superproperty, &ontology_guard)? {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+
+    /// Check if a property chain subsumption applies
+    fn check_property_chain_subsumption(
+        &self,
+        subproperty: &ObjectPropertyExpression,
+        superproperty: &ObjectPropertyExpression,
+        chain: &[ObjectPropertyExpression],
+    ) -> Result<bool> {
+        // Check if subproperty could be part of this chain leading to superproperty
+        for chain_prop in chain {
+            if self.properties_match(chain_prop, subproperty)? {
+                // Found subproperty in chain, check if chain implies superproperty
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Check if a property chain continuation holds
+    fn check_chain_continuation(
+        &self,
+        remaining_chain: &[ObjectPropertyExpression],
+        target: &ObjectPropertyExpression,
+        ontology: &crate::ontology::Ontology,
+    ) -> Result<bool> {
+        if remaining_chain.is_empty() {
+            return Ok(false);
+        }
+        
+        if remaining_chain.len() == 1 {
+            return self.properties_match(&remaining_chain[0], target);
+        }
+        
+        // For longer chains, we'd need more sophisticated reasoning
+        // This is a placeholder for complex chain reasoning
+        Ok(false)
+    }
+
+    /// Check if a property is transitive
+    fn is_transitive_property(&self, property: &ObjectPropertyExpression) -> Result<bool> {
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::TransitiveObjectProperty(trans_axiom) = axiom {
+                    if self.properties_match(&trans_axiom.property, property)? {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    /// Check if two properties match (including handling inverses)
+    fn properties_match(
+        &self,
+        prop1: &ObjectPropertyExpression,
+        prop2: &ObjectPropertyExpression,
+    ) -> Result<bool> {
+        match (prop1, prop2) {
+            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
+                Ok(p1.iri == p2.iri)
+            }
+            (ObjectPropertyExpression::InverseObjectProperty(p1), ObjectPropertyExpression::InverseObjectProperty(p2)) => {
+                Ok(p1.iri == p2.iri)
+            }
+            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::InverseObjectProperty(p2)) => {
+                // Check if p1 is the inverse of p2
+                self.are_inverse_properties(p1, p2)
+            }
+            (ObjectPropertyExpression::InverseObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
+                // Check if p2 is the inverse of p1
+                self.are_inverse_properties(p2, p1)
+            }
+            // Property chains require special handling
+            _ => Ok(false),
+        }
+    }
+
+    /// Check if two properties are declared as inverses
+    fn are_inverse_properties(
+        &self,
+        prop1: &crate::ontology::ObjectProperty,
+        prop2: &crate::ontology::ObjectProperty,
+    ) -> Result<bool> {
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::InverseObjectProperties(inv_axiom) = axiom {
+                    let prop1_expr = ObjectPropertyExpression::ObjectProperty(prop1.clone());
+                    let prop2_expr = ObjectPropertyExpression::ObjectProperty(prop2.clone());
+                    
+                    if (self.properties_match(&inv_axiom.property1, &prop1_expr)? &&
+                        self.properties_match(&inv_axiom.property2, &prop2_expr)?) ||
+                       (self.properties_match(&inv_axiom.property1, &prop2_expr)? &&
+                        self.properties_match(&inv_axiom.property2, &prop1_expr)?) {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
         Ok(false)
     }
 

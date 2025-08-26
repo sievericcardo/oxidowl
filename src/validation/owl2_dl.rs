@@ -21,6 +21,17 @@ pub struct ValidationError {
     pub location: Option<String>,
 }
 
+impl ValidationError {
+    pub fn new(error_type: ValidationErrorType, message: String) -> Self {
+        Self {
+            error_type,
+            message,
+            axiom_id: None,
+            location: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidationWarning {
     pub warning_type: ValidationWarningType,
@@ -38,6 +49,19 @@ pub enum ValidationErrorType {
     UndeclaredEntity,
     InvalidDatatype,
     CyclicPropertyHierarchy,
+    DatatypeMismatch,
+    UnrecognizedDatatype,
+    InvalidFacetRestriction,
+    IncompatibleDataRanges,
+    InvalidLiteralEnumeration,
+    InvalidDatatypeDefinition,
+    CircularDatatypeDefinition,
+    InconsistentDatatypeDefinition,
+    UnknownDatatype,
+    EmptyDataIntersection,
+    EmptyDataUnion,
+    EmptyDataEnumeration,
+    InvalidLiteralValue,
 }
 
 impl std::fmt::Display for ValidationErrorType {
@@ -66,6 +90,45 @@ impl std::fmt::Display for ValidationErrorType {
             }
             ValidationErrorType::CyclicPropertyHierarchy => {
                 write!(f, "Cyclic property hierarchy")
+            }
+            ValidationErrorType::DatatypeMismatch => {
+                write!(f, "Datatype mismatch")
+            }
+            ValidationErrorType::UnrecognizedDatatype => {
+                write!(f, "Unrecognized datatype")
+            }
+            ValidationErrorType::InvalidFacetRestriction => {
+                write!(f, "Invalid facet restriction")
+            }
+            ValidationErrorType::IncompatibleDataRanges => {
+                write!(f, "Incompatible data ranges")
+            }
+            ValidationErrorType::InvalidLiteralEnumeration => {
+                write!(f, "Invalid literal enumeration")
+            }
+            ValidationErrorType::InvalidDatatypeDefinition => {
+                write!(f, "Invalid datatype definition")
+            }
+            ValidationErrorType::CircularDatatypeDefinition => {
+                write!(f, "Circular datatype definition")
+            }
+            ValidationErrorType::InconsistentDatatypeDefinition => {
+                write!(f, "Inconsistent datatype definition")
+            }
+            ValidationErrorType::UnknownDatatype => {
+                write!(f, "Unknown datatype")
+            }
+            ValidationErrorType::EmptyDataIntersection => {
+                write!(f, "Empty data intersection")
+            }
+            ValidationErrorType::EmptyDataUnion => {
+                write!(f, "Empty data union")
+            }
+            ValidationErrorType::EmptyDataEnumeration => {
+                write!(f, "Empty data enumeration")
+            }
+            ValidationErrorType::InvalidLiteralValue => {
+                write!(f, "Invalid literal value")
             }
         }
     }
@@ -297,15 +360,150 @@ impl OWL2DLValidator {
 
         // Check that only recognized datatypes are used
         for axiom in self.ontology.axioms() {
-            // This will be enhanced when we implement the complete datatype map
-            // For now, perform basic validation
-            if let Axiom::DataPropertyRange(_range_axiom) = axiom {
-                // Skip datatype validation for now to avoid type conflicts
-                // TODO: Implement proper datatype validation
-            }
+            self.validate_datatype_usage_in_axiom(axiom, &mut errors)?;
         }
 
         Ok(errors)
+    }
+
+    /// Validate datatype usage within an axiom
+    fn validate_datatype_usage_in_axiom(&self, axiom: &Axiom, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        match axiom {
+            Axiom::DataPropertyRange(range_axiom) => {
+                self.validate_data_range(&range_axiom.range, errors)?;
+            },
+            Axiom::DataPropertyAssertion(assertion_axiom) => {
+                // Validate the literal value against the property's range
+                if let Some(range) = self.get_data_property_range(&assertion_axiom.property) {
+                    if !self.is_literal_compatible_with_range(&assertion_axiom.value, &range) {
+                        errors.push(ValidationError::new(
+                            ValidationErrorType::DatatypeMismatch,
+                            format!(
+                                "Literal {:?} is not compatible with data property range {}",
+                                assertion_axiom.value,
+                                self.format_data_range(&range)
+                            ),
+                        ));
+                    }
+                }
+            },
+            Axiom::DatatypeDefinition(datatype_def) => {
+                // Validate the datatype definition itself
+                self.validate_datatype_definition(datatype_def, errors)?;
+            },
+            _ => {
+                // Check for any embedded data ranges in other axioms
+                self.validate_embedded_data_ranges_in_axiom(axiom, errors)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate a data range
+    fn validate_data_range(&self, range: &crate::ontology::DataRange, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        match range {
+            crate::ontology::DataRange::Datatype(iri) => {
+                if !self.is_recognized_datatype(iri) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::UnrecognizedDatatype,
+                        format!("Unrecognized datatype: {}", iri),
+                    ));
+                }
+            },
+            crate::ontology::DataRange::DatatypeRestriction { datatype, restrictions } => {
+                // Validate the base datatype
+                if !self.is_recognized_datatype(datatype) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::UnrecognizedDatatype,
+                        format!("Unrecognized base datatype in restriction: {}", datatype),
+                    ));
+                }
+                
+                // Validate facet restrictions
+                for restriction in restrictions {
+                    self.validate_facet_restriction(datatype, restriction, errors)?;
+                }
+            },
+            crate::ontology::DataRange::DataIntersectionOf(ranges) => {
+                for range in ranges {
+                    self.validate_data_range(range, errors)?;
+                }
+                // Check for compatibility of intersected ranges
+                self.validate_data_range_intersection(ranges, errors)?;
+            },
+            crate::ontology::DataRange::DataUnionOf(ranges) => {
+                for range in ranges {
+                    self.validate_data_range(range, errors)?;
+                }
+            },
+            crate::ontology::DataRange::DataComplementOf(range) => {
+                self.validate_data_range(range, errors)?;
+            },
+            crate::ontology::DataRange::DataOneOf(literals) => {
+                // Validate that all literals are of compatible types
+                self.validate_literal_enumeration(literals, errors)?;
+            },
+        }
+        Ok(())
+    }
+
+    /// Check if a datatype is recognized according to OWL 2
+    fn is_recognized_datatype(&self, iri: &crate::ontology::IRI) -> bool {
+        let iri_str = iri.as_str();
+        
+        // OWL 2 built-in datatypes
+        matches!(iri_str,
+            // XML Schema datatypes
+            "http://www.w3.org/2001/XMLSchema#string" |
+            "http://www.w3.org/2001/XMLSchema#boolean" |
+            "http://www.w3.org/2001/XMLSchema#decimal" |
+            "http://www.w3.org/2001/XMLSchema#float" |
+            "http://www.w3.org/2001/XMLSchema#double" |
+            "http://www.w3.org/2001/XMLSchema#dateTime" |
+            "http://www.w3.org/2001/XMLSchema#time" |
+            "http://www.w3.org/2001/XMLSchema#date" |
+            "http://www.w3.org/2001/XMLSchema#gYearMonth" |
+            "http://www.w3.org/2001/XMLSchema#gYear" |
+            "http://www.w3.org/2001/XMLSchema#gMonthDay" |
+            "http://www.w3.org/2001/XMLSchema#gDay" |
+            "http://www.w3.org/2001/XMLSchema#gMonth" |
+            "http://www.w3.org/2001/XMLSchema#hexBinary" |
+            "http://www.w3.org/2001/XMLSchema#base64Binary" |
+            "http://www.w3.org/2001/XMLSchema#anyURI" |
+            "http://www.w3.org/2001/XMLSchema#QName" |
+            "http://www.w3.org/2001/XMLSchema#NOTATION" |
+            "http://www.w3.org/2001/XMLSchema#normalizedString" |
+            "http://www.w3.org/2001/XMLSchema#token" |
+            "http://www.w3.org/2001/XMLSchema#language" |
+            "http://www.w3.org/2001/XMLSchema#NMTOKEN" |
+            "http://www.w3.org/2001/XMLSchema#NMTOKENS" |
+            "http://www.w3.org/2001/XMLSchema#Name" |
+            "http://www.w3.org/2001/XMLSchema#NCName" |
+            "http://www.w3.org/2001/XMLSchema#ID" |
+            "http://www.w3.org/2001/XMLSchema#IDREF" |
+            "http://www.w3.org/2001/XMLSchema#IDREFS" |
+            "http://www.w3.org/2001/XMLSchema#ENTITY" |
+            "http://www.w3.org/2001/XMLSchema#ENTITIES" |
+            "http://www.w3.org/2001/XMLSchema#integer" |
+            "http://www.w3.org/2001/XMLSchema#nonPositiveInteger" |
+            "http://www.w3.org/2001/XMLSchema#negativeInteger" |
+            "http://www.w3.org/2001/XMLSchema#long" |
+            "http://www.w3.org/2001/XMLSchema#int" |
+            "http://www.w3.org/2001/XMLSchema#short" |
+            "http://www.w3.org/2001/XMLSchema#byte" |
+            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger" |
+            "http://www.w3.org/2001/XMLSchema#unsignedLong" |
+            "http://www.w3.org/2001/XMLSchema#unsignedInt" |
+            "http://www.w3.org/2001/XMLSchema#unsignedShort" |
+            "http://www.w3.org/2001/XMLSchema#unsignedByte" |
+            "http://www.w3.org/2001/XMLSchema#positiveInteger" |
+            // RDF datatypes
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral" |
+            "http://www.w3.org/2001/XMLSchema#duration" |
+            // OWL specific
+            "http://www.w3.org/2002/07/owl#real" |
+            "http://www.w3.org/2002/07/owl#rational"
+        )
     }
 
     /// Validate entity declarations
@@ -477,6 +675,335 @@ impl OWL2DLValidator {
         // Extract all entities used in an axiom
         // This would be a comprehensive extraction of all IRIs used
         Vec::new()
+    }
+
+    /// Get the range of a data property if defined
+    fn get_data_property_range(&self, property: &crate::ontology::DataPropertyExpression) -> Option<crate::ontology::DataRange> {
+        for axiom in self.ontology.axioms() {
+            if let Axiom::DataPropertyRange(range_axiom) = axiom {
+                if self.property_expression_matches(&range_axiom.property, property).unwrap_or(false) {
+                    return Some(range_axiom.range.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if a literal is compatible with a data range
+    fn is_literal_compatible_with_range(&self, literal: &crate::ontology::Literal, range: &crate::ontology::DataRange) -> bool {
+        use crate::ontology::DataRange;
+        
+        match range {
+            DataRange::Datatype(datatype) => {
+                self.check_literal_datatype_compatibility(literal, datatype)
+            }
+            DataRange::DataIntersectionOf(ranges) => {
+                // Literal must be compatible with all ranges in intersection
+                ranges.iter().all(|r| self.is_literal_compatible_with_range(literal, r))
+            }
+            DataRange::DataUnionOf(ranges) => {
+                // Literal must be compatible with at least one range in union
+                ranges.iter().any(|r| self.is_literal_compatible_with_range(literal, r))
+            }
+            DataRange::DataComplementOf(complement_range) => {
+                // Literal must NOT be compatible with the complement range
+                !self.is_literal_compatible_with_range(literal, complement_range)
+            }
+            DataRange::DataOneOf(literals) => {
+                // Literal must be one of the enumerated values
+                literals.iter().any(|l| self.literals_equal(literal, l))
+            }
+            DataRange::DatatypeRestriction { datatype, restrictions } => {
+                // Check base datatype and all facet restrictions
+                self.check_literal_datatype_compatibility(literal, datatype) &&
+                self.check_facet_restrictions(literal, restrictions)
+            }
+        }
+    }
+
+    /// Check if two literals are equal
+    fn literals_equal(&self, lit1: &crate::ontology::Literal, lit2: &crate::ontology::Literal) -> bool {
+        lit1.value == lit2.value && lit1.datatype == lit2.datatype
+    }
+
+    /// Check if a literal is compatible with a specific datatype
+    fn check_literal_datatype_compatibility(&self, literal: &crate::ontology::Literal, datatype: &crate::ontology::IRI) -> bool {
+        // If literal has explicit datatype, check for exact match or subtype relationship
+        if let Some(literal_datatype_url) = &literal.datatype {
+            let literal_datatype = crate::ontology::IRI::new(literal_datatype_url.as_str());
+            return literal_datatype == *datatype || 
+                   self.is_datatype_subtype(&literal_datatype, datatype);
+        }
+        
+        // For plain literals, check if they can be interpreted as the target datatype
+        self.can_parse_as_datatype(&literal.value, datatype)
+    }
+
+    /// Check if one datatype is a subtype of another
+    fn is_datatype_subtype(&self, subtype: &crate::ontology::IRI, supertype: &crate::ontology::IRI) -> bool {
+        // Implement basic XML Schema type hierarchy
+        let subtype_str = subtype.as_str();
+        let supertype_str = supertype.as_str();
+        
+        // Examples of subtype relationships in XML Schema
+        match (subtype_str, supertype_str) {
+            // Integer hierarchy
+            ("http://www.w3.org/2001/XMLSchema#int", "http://www.w3.org/2001/XMLSchema#integer") => true,
+            ("http://www.w3.org/2001/XMLSchema#short", "http://www.w3.org/2001/XMLSchema#int") => true,
+            ("http://www.w3.org/2001/XMLSchema#byte", "http://www.w3.org/2001/XMLSchema#short") => true,
+            
+            // Unsigned integer hierarchy
+            ("http://www.w3.org/2001/XMLSchema#unsignedInt", "http://www.w3.org/2001/XMLSchema#unsignedLong") => true,
+            ("http://www.w3.org/2001/XMLSchema#unsignedShort", "http://www.w3.org/2001/XMLSchema#unsignedInt") => true,
+            ("http://www.w3.org/2001/XMLSchema#unsignedByte", "http://www.w3.org/2001/XMLSchema#unsignedShort") => true,
+            
+            // All numeric types derive from decimal
+            (sub, "http://www.w3.org/2001/XMLSchema#decimal") if self.is_numeric_datatype(sub) => true,
+            
+            _ => false,
+        }
+    }
+
+    /// Check if a string can be parsed as a specific datatype
+    fn can_parse_as_datatype(&self, value: &str, datatype: &crate::ontology::IRI) -> bool {
+        match datatype.as_str() {
+            "http://www.w3.org/2001/XMLSchema#string" => true,
+            "http://www.w3.org/2001/XMLSchema#boolean" => {
+                matches!(value, "true" | "false" | "1" | "0")
+            }
+            "http://www.w3.org/2001/XMLSchema#integer" => value.parse::<i64>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#int" => value.parse::<i32>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#short" => value.parse::<i16>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#byte" => value.parse::<i8>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#decimal" => value.parse::<f64>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#float" => value.parse::<f32>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#double" => value.parse::<f64>().is_ok(),
+            "http://www.w3.org/2001/XMLSchema#date" => {
+                // Simple date format check (YYYY-MM-DD)
+                value.len() == 10 && value.chars().nth(4) == Some('-') && value.chars().nth(7) == Some('-')
+            }
+            "http://www.w3.org/2001/XMLSchema#dateTime" => {
+                // Simple datetime format check
+                value.contains('T')
+            }
+            "http://www.w3.org/2001/XMLSchema#time" => {
+                // Simple time format check (HH:MM:SS)
+                value.contains(':')
+            }
+            _ => true, // Conservative approach for unknown datatypes
+        }
+    }
+
+    /// Check if a datatype IRI represents a numeric type
+    fn is_numeric_datatype(&self, datatype: &str) -> bool {
+        matches!(datatype,
+            "http://www.w3.org/2001/XMLSchema#integer" |
+            "http://www.w3.org/2001/XMLSchema#int" |
+            "http://www.w3.org/2001/XMLSchema#short" |
+            "http://www.w3.org/2001/XMLSchema#byte" |
+            "http://www.w3.org/2001/XMLSchema#long" |
+            "http://www.w3.org/2001/XMLSchema#unsignedLong" |
+            "http://www.w3.org/2001/XMLSchema#unsignedInt" |
+            "http://www.w3.org/2001/XMLSchema#unsignedShort" |
+            "http://www.w3.org/2001/XMLSchema#unsignedByte" |
+            "http://www.w3.org/2001/XMLSchema#decimal" |
+            "http://www.w3.org/2001/XMLSchema#float" |
+            "http://www.w3.org/2001/XMLSchema#double"
+        )
+    }
+
+    /// Check facet restrictions on a literal
+    fn check_facet_restrictions(&self, literal: &crate::ontology::Literal, restrictions: &[crate::ontology::FacetRestriction]) -> bool {
+        for restriction in restrictions {
+            if !self.check_single_facet_restriction(literal, restriction) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Check a single facet restriction
+    fn check_single_facet_restriction(&self, literal: &crate::ontology::Literal, restriction: &crate::ontology::FacetRestriction) -> bool {
+        // Convert facet IRI to a more usable form for matching
+        let facet_str = restriction.facet.as_str();
+        
+        match facet_str {
+            "http://www.w3.org/2001/XMLSchema#length" => {
+                if let Ok(length) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() == length
+                } else {
+                    false
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#minLength" => {
+                if let Ok(min_length) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() >= min_length
+                } else {
+                    false
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxLength" => {
+                if let Ok(max_length) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() <= max_length
+                } else {
+                    false
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#pattern" => {
+                // Simple pattern matching - in practice would use regex
+                literal.value.contains(&restriction.value.value)
+            }
+            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a >= b)
+            }
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a <= b)
+            }
+            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a > b)
+            }
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a < b)
+            }
+            _ => {
+                // For unknown facet types, conservatively return true
+                true
+            }
+        }
+    }
+
+    /// Compare numeric values with a given comparison function
+    fn compare_numeric_values<F>(&self, value1: &str, value2: &str, cmp: F) -> bool 
+    where
+        F: Fn(f64, f64) -> bool,
+    {
+        if let (Ok(val1), Ok(val2)) = (value1.parse::<f64>(), value2.parse::<f64>()) {
+            cmp(val1, val2)
+        } else {
+            false
+        }
+    }
+
+    /// Check if property expressions match
+    fn property_expression_matches(
+        &self,
+        prop1: &crate::ontology::DataPropertyExpression,
+        prop2: &crate::ontology::DataPropertyExpression,
+    ) -> Result<bool, crate::error::OxidowlError> {
+        match (prop1, prop2) {
+            (crate::ontology::DataPropertyExpression::DataProperty(p1), 
+             crate::ontology::DataPropertyExpression::DataProperty(p2)) => {
+                Ok(p1.iri == p2.iri)
+            }
+            _ => Ok(false), // Other property expression types not implemented yet
+        }
+    }
+
+    /// Format a data range for error messages
+    fn format_data_range(&self, range: &crate::ontology::DataRange) -> String {
+        match range {
+            crate::ontology::DataRange::Datatype(iri) => iri.to_string(),
+            crate::ontology::DataRange::DatatypeRestriction { datatype, .. } => format!("restriction on {}", datatype),
+            crate::ontology::DataRange::DataIntersectionOf(_) => "intersection of data ranges".to_string(),
+            crate::ontology::DataRange::DataUnionOf(_) => "union of data ranges".to_string(),
+            crate::ontology::DataRange::DataComplementOf(_) => "complement of data range".to_string(),
+            crate::ontology::DataRange::DataOneOf(_) => "enumeration of literals".to_string(),
+        }
+    }
+
+    /// Validate a datatype definition
+    fn validate_datatype_definition(&self, _datatype_def: &crate::ontology::datatypes::DatatypeDefinitionAxiom, _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // TODO: Implement comprehensive datatype definition validation
+        // This is currently stubbed out due to type compatibility issues between
+        // horned_owl::model types and our internal ontology types.
+        // Future implementation should include:
+        // - Datatype IRI validation
+        // - Data range validation
+        // - Circular dependency detection
+        // - XML Schema consistency checking
+        Ok(())
+    }
+
+    /// Validate embedded data ranges in axioms
+    fn validate_embedded_data_ranges_in_axiom(&self, axiom: &Axiom, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        match axiom {
+            Axiom::SubClassOf(subclass_axiom) => {
+                self.validate_data_ranges_in_class_expression(&subclass_axiom.subclass, errors)?;
+                self.validate_data_ranges_in_class_expression(&subclass_axiom.superclass, errors)?;
+            },
+            Axiom::EquivalentClasses(equiv_axiom) => {
+                for class_expr in &equiv_axiom.classes {
+                    self.validate_data_ranges_in_class_expression(class_expr, errors)?;
+                }
+            },
+            Axiom::DisjointClasses(disjoint_axiom) => {
+                for class_expr in &disjoint_axiom.classes {
+                    self.validate_data_ranges_in_class_expression(class_expr, errors)?;
+                }
+            },
+            Axiom::ClassAssertion(class_assertion) => {
+                self.validate_data_ranges_in_class_expression(&class_assertion.class, errors)?;
+            },
+            _ => {} // Other axioms don't typically contain embedded data ranges
+        }
+        Ok(())
+    }
+
+    /// Validate data ranges within class expressions
+    fn validate_data_ranges_in_class_expression(&self, expr: &crate::ontology::ClassExpression, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        match expr {
+            crate::ontology::ClassExpression::DataSomeValuesFrom { filler, .. } |
+            crate::ontology::ClassExpression::DataAllValuesFrom { filler, .. } => {
+                self.validate_data_range(filler, errors)?;
+            },
+            crate::ontology::ClassExpression::DataMinCardinality { filler, .. } |
+            crate::ontology::ClassExpression::DataMaxCardinality { filler, .. } |
+            crate::ontology::ClassExpression::DataExactCardinality { filler, .. } => {
+                self.validate_data_range(filler, errors)?;
+            },
+            crate::ontology::ClassExpression::ObjectIntersectionOf(exprs) |
+            crate::ontology::ClassExpression::ObjectUnionOf(exprs) => {
+                for expr in exprs {
+                    self.validate_data_ranges_in_class_expression(expr, errors)?;
+                }
+            },
+            crate::ontology::ClassExpression::ObjectComplementOf(expr) => {
+                self.validate_data_ranges_in_class_expression(expr, errors)?;
+            },
+            crate::ontology::ClassExpression::ObjectSomeValuesFrom { filler, .. } |
+            crate::ontology::ClassExpression::ObjectAllValuesFrom { filler, .. } => {
+                self.validate_data_ranges_in_class_expression(filler, errors)?;
+            },
+            crate::ontology::ClassExpression::ObjectMinCardinality { filler, .. } |
+            crate::ontology::ClassExpression::ObjectMaxCardinality { filler, .. } |
+            crate::ontology::ClassExpression::ObjectExactCardinality { filler, .. } => {
+                self.validate_data_ranges_in_class_expression(filler, errors)?;
+            },
+            _ => {} // Other class expressions don't contain data ranges
+        }
+        Ok(())
+    }
+
+    /// Validate facet restrictions
+    fn validate_facet_restriction(&self, _datatype: &crate::ontology::IRI, _restriction: &crate::ontology::FacetRestriction, _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // TODO: Implement facet restriction validation
+        // This should check that the facet is applicable to the datatype
+        // and that the restriction value is valid
+        Ok(())
+    }
+
+    /// Validate data range intersection compatibility
+    fn validate_data_range_intersection(&self, _ranges: &[crate::ontology::DataRange], _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // TODO: Implement intersection compatibility checking
+        // This should detect cases where intersected ranges are incompatible
+        Ok(())
+    }
+
+    /// Validate literal enumeration
+    fn validate_literal_enumeration(&self, _literals: &[crate::ontology::Literal], _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // TODO: Implement literal enumeration validation
+        // This should check that all literals are of compatible types
+        Ok(())
     }
 
     /// Detect which OWL 2 profile the ontology conforms to

@@ -6,7 +6,7 @@
 use crate::ontology::{Axiom, Ontology};
 use crate::swrl::{
     SWRLAtom, SWRLConfig, SWRLExecutionContext, SWRLExecutionResult, SWRLReasoningStrategy,
-    SWRLRule, SWRLRuleState, SWRLStatistics,
+    SWRLRule, SWRLRuleState, SWRLStatistics, SWRLDArgument, SWRLIArgument,
     builtins::{SWRLBuiltIn, SWRLBuiltInRegistry},
     interpreter::SWRLInterpreter,
     validation::SWRLValidator,
@@ -358,10 +358,248 @@ impl SWRLRuleEngine {
     }
 
     /// Execute rules with a specific query goal (for backward chaining)
-    pub fn execute_with_goal(&mut self, _goal: &SWRLAtom) -> Result<SWRLExecutionResult> {
-        // TODO: Implement goal-driven backward chaining
-        warn!("Goal-driven execution not yet implemented");
-        Ok(SWRLExecutionResult::empty())
+    pub fn execute_with_goal(&mut self, goal: &SWRLAtom) -> Result<SWRLExecutionResult> {
+        info!("Starting goal-driven execution for goal: {:?}", goal);
+        
+        let mut result = SWRLExecutionResult::empty();
+        let mut goal_stack = vec![goal.clone()];
+        let mut visited_goals = HashSet::new();
+        let max_depth = self.config.max_rule_applications;
+        
+        while let Some(current_goal) = goal_stack.pop() {
+            // Prevent infinite recursion
+            if visited_goals.contains(&current_goal) {
+                continue;
+            }
+            
+            if visited_goals.len() >= max_depth {
+                warn!("Maximum goal depth reached, stopping backward chaining");
+                break;
+            }
+            
+            visited_goals.insert(current_goal.clone());
+            
+            // Check if goal is already satisfied by known facts
+            if self.is_goal_satisfied(&current_goal)? {
+                continue;
+            }
+            
+            // Find rules that can prove this goal
+            let applicable_rules = self.find_rules_for_goal(&current_goal)?;
+            
+            for rule_id in applicable_rules {
+                // Get the rule from the ontology
+                let rule_to_execute = if let Some(ontology) = &self.ontology {
+                    let ontology_guard = ontology.read().unwrap();
+                    let mut found_rule = None;
+                    for axiom in ontology_guard.axioms() {
+                        if let Axiom::Rule(rule_axiom) = axiom {
+                            if rule_axiom.id == rule_id {
+                                found_rule = Some(rule_axiom.rule.clone());
+                                break;
+                            }
+                        }
+                    }
+                    found_rule
+                } else {
+                    None
+                };
+                
+                if let Some(rule) = rule_to_execute {
+                    // For each rule that can prove the goal, try to prove its body
+                    let subgoals = self.extract_subgoals_from_rule_body(&rule.body)?;
+                    
+                    // Add subgoals to the stack for backward chaining
+                    let mut all_subgoals_satisfied = true;
+                    for subgoal in &subgoals {
+                        if !self.is_goal_satisfied(subgoal)? {
+                            goal_stack.push(subgoal.clone());
+                            all_subgoals_satisfied = false;
+                        }
+                    }
+                    
+                    // If all subgoals are satisfied, we can fire this rule
+                    if all_subgoals_satisfied {
+                        if let Ok(rule_result) = self.execute_single_rule(&rule) {
+                            // For now, we'll simulate result merging by tracking success
+                            if rule_result.fired {
+                                result.fired = true;
+                                result.inferences.extend(rule_result.inferences);
+                                result.applications += rule_result.applications;
+                            }
+                            
+                            // Check if our original goal is now satisfied
+                            if self.is_goal_satisfied(goal)? {
+                                info!("Goal achieved through backward chaining");
+                                return Ok(result);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if self.is_goal_satisfied(goal)? {
+            info!("Goal-driven execution completed successfully");
+        } else {
+            warn!("Goal could not be satisfied through backward chaining");
+        }
+        
+        Ok(result)
+    }
+
+    /// Check if a goal is satisfied by current facts/knowledge
+    fn is_goal_satisfied(&self, goal: &SWRLAtom) -> Result<bool> {
+        match goal {
+            SWRLAtom::ClassAtom { predicate, argument } => {
+                // Check if the individual is known to be of this class
+                self.check_class_membership(predicate, argument)
+            }
+            SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
+                // Check if the object property relation exists
+                self.check_object_property_relation(predicate, first_argument, second_argument)
+            }
+            SWRLAtom::DataPropertyAtom { predicate, first_argument, second_argument } => {
+                // Check if the data property relation exists
+                self.check_data_property_relation(predicate, first_argument, second_argument)
+            }
+            SWRLAtom::SameIndividualAtom { first_argument, second_argument } => {
+                // Check if individuals are known to be the same
+                self.check_same_individual(first_argument, second_argument)
+            }
+            SWRLAtom::DifferentIndividualsAtom { first_argument, second_argument } => {
+                // Check if individuals are known to be different
+                self.check_different_individuals(first_argument, second_argument)
+            }
+            SWRLAtom::DataRangeAtom { predicate, argument } => {
+                // Check if the data value is in the specified data range
+                self.check_data_range_membership(predicate, argument)
+            }
+            SWRLAtom::BuiltInAtom { predicate, arguments } => {
+                // Evaluate built-in predicates
+                self.evaluate_builtin_atom(predicate, arguments)
+            }
+        }
+    }
+
+    /// Find rules that can potentially prove a given goal
+    fn find_rules_for_goal(&self, goal: &SWRLAtom) -> Result<Vec<u64>> {
+        let mut applicable_rules = Vec::new();
+        
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            for axiom in ontology_guard.axioms() {
+                if let Axiom::Rule(rule_axiom) = axiom {
+                    // Check if any atom in the rule head matches our goal
+                    for head_atom in &rule_axiom.rule.head {
+                        if self.atoms_unify(head_atom, goal)? {
+                            applicable_rules.push(rule_axiom.id);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(applicable_rules)
+    }
+
+    /// Extract subgoals from a rule body for backward chaining
+    fn extract_subgoals_from_rule_body(&self, body: &[SWRLAtom]) -> Result<Vec<SWRLAtom>> {
+        // For now, treat all body atoms as subgoals
+        // In a more sophisticated implementation, we'd handle variable bindings
+        Ok(body.to_vec())
+    }
+
+    /// Check if two atoms can unify (simplified implementation)
+    fn atoms_unify(&self, atom1: &SWRLAtom, atom2: &SWRLAtom) -> Result<bool> {
+        match (atom1, atom2) {
+            (SWRLAtom::ClassAtom { predicate: p1, .. }, SWRLAtom::ClassAtom { predicate: p2, .. }) => {
+                Ok(p1 == p2)
+            }
+            (SWRLAtom::ObjectPropertyAtom { predicate: p1, .. }, SWRLAtom::ObjectPropertyAtom { predicate: p2, .. }) => {
+                Ok(p1 == p2)
+            }
+            (SWRLAtom::DataPropertyAtom { predicate: p1, .. }, SWRLAtom::DataPropertyAtom { predicate: p2, .. }) => {
+                Ok(p1 == p2)
+            }
+            _ => Ok(false),
+        }
+    }
+
+    /// Check class membership (placeholder implementation)
+    fn check_class_membership(&self, _class: &crate::ontology::ClassExpression, _individual: &SWRLIArgument) -> Result<bool> {
+        // TODO: Integrate with ontology reasoning to check class membership
+        Ok(false)
+    }
+
+    /// Check object property relation (placeholder implementation)
+    fn check_object_property_relation(
+        &self,
+        _property: &crate::ontology::ObjectPropertyExpression,
+        _first: &SWRLIArgument,
+        _second: &SWRLIArgument,
+    ) -> Result<bool> {
+        // TODO: Integrate with ontology reasoning to check property relations
+        Ok(false)
+    }
+
+    /// Check data property relation (placeholder implementation)
+    fn check_data_property_relation(
+        &self,
+        _property: &crate::ontology::DataPropertyExpression,
+        _first: &SWRLIArgument,
+        _second: &SWRLDArgument,
+    ) -> Result<bool> {
+        // TODO: Integrate with ontology reasoning to check data property relations
+        Ok(false)
+    }
+
+    /// Check if two individuals are the same (placeholder implementation)
+    fn check_same_individual(&self, _first: &SWRLIArgument, _second: &SWRLIArgument) -> Result<bool> {
+        // TODO: Integrate with ontology reasoning for identity checking
+        Ok(false)
+    }
+
+    /// Check if two individuals are different (placeholder implementation)
+    fn check_different_individuals(&self, _first: &SWRLIArgument, _second: &SWRLIArgument) -> Result<bool> {
+        // TODO: Integrate with ontology reasoning for difference checking
+        Ok(false)
+    }
+
+    /// Check if a data value satisfies a data range constraint
+    fn check_data_range_membership(&self, _range: &crate::ontology::DataRange, _value: &SWRLDArgument) -> Result<bool> {
+        // TODO: Implement data range checking
+        Ok(false)
+    }
+
+    /// Evaluate a built-in atom (placeholder implementation)
+    fn evaluate_builtin_atom(&self, predicate: &crate::ontology::IRI, arguments: &[SWRLDArgument]) -> Result<bool> {
+        if let Some(builtin) = self.builtin_registry.get_builtin(predicate) {
+            // Convert arguments to values
+            let values: Result<Vec<crate::swrl::builtins::SWRLValue>> = arguments.iter()
+                .map(|arg| self.convert_swrl_argument_to_value(arg))
+                .collect();
+            
+            match values {
+                Ok(vals) => {
+                    match builtin.execute(&vals) {
+                        Ok(_) => Ok(true),
+                        Err(_) => Ok(false),
+                    }
+                },
+                Err(_) => Ok(false),
+            }
+        } else {
+            warn!("Unknown built-in predicate: {}", predicate.as_str());
+            Ok(false)
+        }
+    }
+
+    /// Convert SWRL argument to value for built-in evaluation
+    fn convert_swrl_argument_to_value(&self, _argument: &SWRLDArgument) -> Result<crate::swrl::builtins::SWRLValue> {
+        // TODO: Implement proper argument conversion
+        Ok(crate::swrl::builtins::SWRLValue::String("placeholder".to_string()))
     }
 
     /// Check if any rules can potentially fire

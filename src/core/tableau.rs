@@ -809,10 +809,226 @@ impl Tableau {
 
         debug!("Property chain rule applied, checking for property chains");
 
-        // TODO: Get property chain axioms from the ontology when available
-        // This would require passing ontology as parameter or storing reference
+        // Collect property chains and transitive properties first to avoid borrowing issues
+        let mut property_chains = Vec::new();
+        let mut transitive_properties = Vec::new();
+
+        if let Some(ontology) = &self.reasoner_ontology {
+            // Get all SubObjectPropertyOf axioms that involve property chains
+            for axiom in ontology.axioms() {
+                if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
+                    if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property {
+                        property_chains.push((chain.clone(), sub_axiom.super_property.clone()));
+                    }
+                }
+            }
+            
+            // Also check for transitive properties that create implicit chains
+            for axiom in ontology.axioms() {
+                if let crate::ontology::axioms::Axiom::TransitiveObjectProperty(trans_axiom) = axiom {
+                    transitive_properties.push(trans_axiom.property.clone());
+                }
+            }
+        }
+
+        // Now apply the collected property chains and transitive properties
+        for (chain, super_property) in property_chains {
+            self.apply_property_chain(&chain, &super_property)?;
+        }
+
+        for property in transitive_properties {
+            self.apply_transitive_property(&property)?;
+        }
 
         Ok(())
+    }
+
+    /// Apply property chain inference
+    fn apply_property_chain(
+        &mut self,
+        chain: &[crate::ontology::ObjectPropertyExpression],
+        super_property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<()> {
+        // For each combination of edges that could form this chain
+        let nodes_count = self.nodes.len();
+        
+        for start_node in 0..nodes_count {
+            self.find_and_apply_chain_from_node(start_node, chain, super_property, 0)?;
+        }
+        
+        Ok(())
+    }
+
+    /// Find and apply property chains starting from a specific node
+    fn find_and_apply_chain_from_node(
+        &mut self,
+        current_node: usize,
+        remaining_chain: &[crate::ontology::ObjectPropertyExpression],
+        super_property: &crate::ontology::ObjectPropertyExpression,
+        depth: usize,
+    ) -> Result<()> {
+        // Prevent infinite recursion
+        if depth > 10 || remaining_chain.is_empty() {
+            return Ok(());
+        }
+        
+        if remaining_chain.len() == 1 {
+            // Last property in chain - look for edges with this property
+            // and create super_property edge to the end node
+            let target_property = &remaining_chain[0];
+            
+            for edge in &self.edges.clone() {
+                if edge.from == current_node && self.role_matches_property(&edge.role, target_property)? {
+                    // Found complete chain - add super_property edge
+                    self.add_inferred_property_edge(edge.from, edge.to, super_property)?;
+                }
+            }
+        } else {
+            // More properties in chain - find intermediate nodes
+            let first_property = &remaining_chain[0];
+            let rest_chain = &remaining_chain[1..];
+            
+            for edge in &self.edges.clone() {
+                if edge.from == current_node && self.role_matches_property(&edge.role, first_property)? {
+                    // Continue chain from the target node
+                    self.find_and_apply_chain_from_node(edge.to, rest_chain, super_property, depth + 1)?;
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Apply transitive property inference
+    fn apply_transitive_property(
+        &mut self,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<()> {
+        let edges_copy = self.edges.clone();
+        
+        // For each pair of edges with the same transitive property
+        for edge1 in &edges_copy {
+            if self.role_matches_property(&edge1.role, property)? {
+                for edge2 in &edges_copy {
+                    if edge2.from == edge1.to && 
+                       self.role_matches_property(&edge2.role, property)? {
+                        // Add transitive edge
+                        self.add_inferred_property_edge(edge1.from, edge2.to, property)?;
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Add an inferred property edge
+    fn add_inferred_property_edge(
+        &mut self,
+        from: usize,
+        to: usize,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<()> {
+        // Check if edge already exists
+        for existing_edge in &self.edges {
+            if existing_edge.from == from && 
+               existing_edge.to == to && 
+               self.role_matches_property(&existing_edge.role, property)? {
+                return Ok(()); // Edge already exists
+            }
+        }
+        
+        // Convert property expression to role label
+        let role_label = self.property_to_role_label(property)?;
+        
+        // Add new edge
+        let new_edge = TableauEdge {
+            from,
+            to,
+            role: role_label,
+            dependencies: DependencySet::new(),
+        };
+        
+        self.edges.push(new_edge);
+        debug!("Added inferred property edge from {} to {} with property {:?}", from, to, property);
+        
+        Ok(())
+    }
+
+    /// Check if two property expressions match
+    fn property_expressions_match(
+        &self,
+        prop1: &crate::ontology::ObjectPropertyExpression,
+        prop2: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<bool> {
+        use crate::ontology::ObjectPropertyExpression;
+        
+        match (prop1, prop2) {
+            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
+                Ok(p1.iri == p2.iri)
+            }
+            (ObjectPropertyExpression::InverseObjectProperty(p1), ObjectPropertyExpression::InverseObjectProperty(p2)) => {
+                Ok(p1.iri == p2.iri)
+            }
+            (ObjectPropertyExpression::PropertyChain(c1), ObjectPropertyExpression::PropertyChain(c2)) => {
+                Ok(c1.len() == c2.len() && 
+                   c1.iter().zip(c2.iter()).all(|(p1, p2)| 
+                       self.property_expressions_match(p1, p2).unwrap_or(false)))
+            }
+            _ => Ok(false),
+        }
+    }
+
+    /// Check if a role label matches a property expression
+    fn role_matches_property(
+        &self,
+        role: &RoleLabel,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<bool> {
+        use crate::ontology::ObjectPropertyExpression;
+        
+        match property {
+            ObjectPropertyExpression::ObjectProperty(prop) => {
+                match role {
+                    RoleLabel::Atomic(name) => Ok(name == &prop.iri.as_str()),
+                    _ => Ok(false),
+                }
+            }
+            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                match role {
+                    RoleLabel::Inverse(name) => Ok(name == &prop.iri.as_str()),
+                    _ => Ok(false),
+                }
+            }
+            ObjectPropertyExpression::PropertyChain(_) => {
+                // Property chains don't directly correspond to single role labels
+                Ok(false)
+            }
+        }
+    }
+
+    /// Convert a property expression to a role label
+    fn property_to_role_label(
+        &self,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<RoleLabel> {
+        use crate::ontology::ObjectPropertyExpression;
+        
+        match property {
+            ObjectPropertyExpression::ObjectProperty(prop) => {
+                Ok(RoleLabel::Atomic(prop.iri.as_str().to_string()))
+            }
+            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                Ok(RoleLabel::Inverse(prop.iri.as_str().to_string()))
+            }
+            ObjectPropertyExpression::PropertyChain(_) => {
+                // For property chains, we can't create a simple role label
+                // This is a simplification - in practice, we'd need more complex handling
+                Err(crate::Error::InvalidPropertyChain {
+                    message: "Cannot convert property chain to role label".to_string(),
+                })
+            }
+        }
     }
 
     /// Check property chains starting from a specific node
