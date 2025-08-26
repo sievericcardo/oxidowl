@@ -122,6 +122,9 @@ pub enum AxiomType {
 
     // OWL 2 Key Axioms
     HasKey,
+
+    // Datatype Definition Axioms
+    DatatypeDefinition,
 }
 
 /// Axiom enum representing all OWL 2 DL axioms.
@@ -179,6 +182,9 @@ pub enum Axiom {
 
     // OWL 2 Key Axioms
     HasKey(HasKeyAxiom),
+
+    // Datatype Definition Axioms  
+    DatatypeDefinition(crate::ontology::datatypes::DatatypeDefinitionAxiom),
 }
 
 /// Class Axioms
@@ -564,6 +570,7 @@ impl AxiomTrait for Axiom {
             Axiom::AnnotationPropertyRange(axiom) => axiom.id,
             Axiom::Rule(axiom) => axiom.id,
             Axiom::HasKey(axiom) => axiom.id,
+            Axiom::DatatypeDefinition(axiom) => axiom.id,
         }
     }
 
@@ -606,6 +613,7 @@ impl AxiomTrait for Axiom {
             Axiom::AnnotationPropertyRange(_) => AxiomType::AnnotationPropertyRange,
             Axiom::Rule(_) => AxiomType::Rule,
             Axiom::HasKey(_) => AxiomType::HasKey,
+            Axiom::DatatypeDefinition(_) => AxiomType::DatatypeDefinition,
         }
     }
 
@@ -683,6 +691,7 @@ impl AxiomStore {
             Axiom::AnnotationPropertyRange(axiom) => axiom.id = id,
             Axiom::Rule(axiom) => axiom.id = id,
             Axiom::HasKey(axiom) => axiom.id = id,
+            Axiom::DatatypeDefinition(axiom) => axiom.id = id,
             Axiom::Declaration(_) => {
                 // Declaration axioms don't need ID assignment
             }

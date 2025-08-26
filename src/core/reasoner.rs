@@ -1733,7 +1733,7 @@ impl Reasoner {
     pub fn execute_sparql_query(&self, query: &str) -> Result<String> {
         info!("Executing SPARQL query");
 
-        // TODO:  integrate with the SPARQL engine
+        // TODO:  integrate with the SPARQL engine --- for future
         // For now, return a placeholder
         Ok("SPARQL query results would be here".to_string())
     }
@@ -1742,7 +1742,7 @@ impl Reasoner {
     pub fn process_owllink_request(&self, request: &str) -> Result<String> {
         info!("Processing OWLlink request");
 
-        // TODO:  integrate with the OWLlink processor
+        // TODO:  integrate with the OWLlink processor --- for future
         // For now, return a placeholder
         Ok("OWLlink response would be here".to_string())
     }

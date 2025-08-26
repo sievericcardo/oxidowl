@@ -345,6 +345,7 @@ impl DLClauseGenerator {
             Axiom::AnnotationPropertyDomain(_) => "AnnotationPropertyDomain",
             Axiom::AnnotationPropertyRange(_) => "AnnotationPropertyRange",
             Axiom::Rule(_) => "Rule",
+            Axiom::DatatypeDefinition(_) => "DatatypeDefinition",
         }
     }
 

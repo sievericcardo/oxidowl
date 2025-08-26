@@ -41,10 +41,12 @@ pub mod config;
 pub mod core;
 pub mod dl_clauses; // DL clause generation and dumping
 pub mod error;
+pub mod import; // Import management and dependency resolution
 // pub mod network;
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
 pub mod ontology;
 pub mod parsers;
+pub mod profiles; // OWL 2 profiles support and validation
 pub mod query;
 pub mod reasoning;
 pub mod swrl; // SWRL (Semantic Web Rule Language) support
@@ -55,6 +57,13 @@ pub mod visitor; // Visitor pattern for ontology traversal
 // Re-export main types for convenience
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
+pub use crate::import::{ImportManager, ImportDeclaration, ImportError};
+pub use crate::profiles::{
+    OWL2Profile as ProfileType, 
+    ProfileValidator, 
+    el::ELValidator, 
+    validator::OWL2ProfileValidator
+};
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};

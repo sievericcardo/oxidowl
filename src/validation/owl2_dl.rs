@@ -40,6 +40,37 @@ pub enum ValidationErrorType {
     CyclicPropertyHierarchy,
 }
 
+impl std::fmt::Display for ValidationErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValidationErrorType::NonSimplePropertyInCardinalityRestriction => {
+                write!(f, "Non-simple property in cardinality restriction")
+            }
+            ValidationErrorType::AnonymousIndividualInAssertion => {
+                write!(f, "Anonymous individual in assertion")
+            }
+            ValidationErrorType::DataTypeRestrictionViolation => {
+                write!(f, "Datatype restriction violation")
+            }
+            ValidationErrorType::PropertyHierarchyViolation => {
+                write!(f, "Property hierarchy violation")
+            }
+            ValidationErrorType::SimpleRoleViolation => {
+                write!(f, "Simple role violation")
+            }
+            ValidationErrorType::UndeclaredEntity => {
+                write!(f, "Undeclared entity")
+            }
+            ValidationErrorType::InvalidDatatype => {
+                write!(f, "Invalid datatype")
+            }
+            ValidationErrorType::CyclicPropertyHierarchy => {
+                write!(f, "Cyclic property hierarchy")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidationWarningType {
     DeprecatedConstruct,

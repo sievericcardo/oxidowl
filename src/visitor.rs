@@ -126,6 +126,7 @@ pub trait OntologyVisitor<R = ()> {
             }
             Axiom::Rule(rule) => self.visit_swrl_rule_axiom(rule),
             Axiom::HasKey(haskey) => self.visit_haskey_axiom(haskey),
+            Axiom::DatatypeDefinition(dt_def) => self.visit_datatype_definition_axiom(dt_def),
         }
     }
 
@@ -524,6 +525,11 @@ pub trait OntologyVisitor<R = ()> {
         for data_prop in &axiom.data_properties {
             self.visit_data_property_expression(data_prop)?;
         }
+        Ok(())
+    }
+
+    fn visit_datatype_definition_axiom(&mut self, _axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom) -> Result<()> {
+        // Default implementation - visit the datatype and data range if needed
         Ok(())
     }
 
