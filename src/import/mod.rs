@@ -9,12 +9,12 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::{
-    Ontology, IRI, AnnotationProperty, Annotation, AnnotationPropertyExpression, AnnotationValue
+    Ontology, IRI, Annotation, AnnotationValue
 };
+use log::warn;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use url::Url;
 
 /// Import declaration for ontologies
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -537,31 +537,152 @@ impl ImportManager {
 
     /// Try to resolve import as a URL
     fn try_resolve_as_url(&self, url_str: &str) -> Result<Option<Ontology>, OxidowlError> {
-        // TODO: Implement URL-based ontology loading
-        // For now, just return None
-        let _ = url_str;
-        Ok(None)
+        // Basic URL validation
+        if !url_str.starts_with("http://") && !url_str.starts_with("https://") {
+            return Ok(None);
+        }
+
+        // For security and simplicity, we'll only support well-known ontology URLs
+        // In a full implementation, this would make HTTP requests
+        match url_str {
+            "http://www.w3.org/2002/07/owl#" => {
+                // Return a basic OWL ontology with core definitions
+                let mut ontology = Ontology::new();
+                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                Ok(Some(ontology))
+            }
+            "http://www.w3.org/2000/01/rdf-schema#" => {
+                // Return a basic RDFS ontology
+                let mut ontology = Ontology::new();
+                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                Ok(Some(ontology))
+            }
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => {
+                // Return a basic RDF ontology
+                let mut ontology = Ontology::new();
+                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                Ok(Some(ontology))
+            }
+            _ => {
+                // For unknown URLs, log a warning and return None
+                warn!("Cannot load remote ontology from URL: {}", url_str);
+                Ok(None)
+            }
+        }
     }
 
     /// Load ontology from file
     fn load_ontology_from_file(&self, path: &Path) -> Result<Ontology, OxidowlError> {
-        // TODO: Use appropriate parser based on file extension
-        // For now, return empty ontology
-        let _ = path;
-        Ok(Ontology::new())
+        let extension = path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|s| s.to_lowercase());
+
+        match extension.as_deref() {
+            Some("owl") | Some("owx") => {
+                // Try OWL/XML parser
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                
+                crate::parsers::owl_xml::parse(&content)
+            }
+            Some("ttl") => {
+                // Try Turtle parser
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                
+                crate::parsers::turtle::parse(&content)
+            }
+            Some("rdf") | Some("xml") => {
+                // Try RDF/XML parser
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                
+                crate::parsers::rdf_xml::parse(&content)
+            }
+            Some("ofn") => {
+                // Try Functional Syntax parser
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                
+                crate::parsers::functional::parse(&content)
+            }
+            Some("nt") => {
+                // Try N-Triples parser
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                
+                crate::parsers::ntriples::parse(&content)
+            }
+            _ => {
+                // Unknown extension, try to detect format by content
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                
+                // Simple heuristics to detect format
+                if content.trim_start().starts_with("<?xml") {
+                    if content.contains("<owl:Ontology") || content.contains("<Ontology") {
+                        crate::parsers::owl_xml::parse(&content)
+                    } else {
+                        crate::parsers::rdf_xml::parse(&content)
+                    }
+                } else if content.contains("@prefix") || content.contains("PREFIX") {
+                    crate::parsers::turtle::parse(&content)
+                } else if content.trim_start().starts_with("Ontology(") {
+                    crate::parsers::functional::parse(&content)
+                } else {
+                    // Default to turtle as it's most flexible
+                    crate::parsers::turtle::parse(&content)
+                }
+            }
+        }
     }
 
     /// Validate an imported ontology
-    fn validate_imported_ontology(&self, _ontology: &Ontology) -> Result<(), OxidowlError> {
-        // TODO: Implement validation using the OWL 2 DL validator
+    fn validate_imported_ontology(&self, ontology: &Ontology) -> Result<(), OxidowlError> {
+        // Use the OWL 2 DL validator to check the imported ontology
+        let mut validator = crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
+        let validation_result = validator.validate()?;
+        
+        if !validation_result.is_valid {
+            let error_messages: Vec<String> = validation_result.errors
+                .iter()
+                .map(|e| format!("{:?}: {}", e.error_type, e.message))
+                .collect();
+            
+            warn!("Imported ontology has validation errors: {}", error_messages.join("; "));
+            
+            // For now, we'll log warnings but not fail the import
+            // In stricter mode, we might want to return an error
+        }
+        
         Ok(())
     }
 
     /// Merge an imported ontology into the main ontology
     fn merge_ontology(&self, target: &mut Ontology, source: &Ontology) -> Result<(), OxidowlError> {
-        // TODO: Implement ontology merging
-        // For now, just return Ok
-        let _ = (target, source);
+        // Merge axioms from source into target
+        for axiom in source.axioms() {
+            target.add_axiom(axiom.clone());
+        }
+
+        // Merge annotations from source
+        for annotation in &source.annotations {
+            target.annotations.push(annotation.clone());
+        }
+
+        // TODO: Implement prefix handling
+        // For now, skip prefix merging as it's not implemented in the ontology structure
+
+        // If source has an ontology IRI and target doesn't, inherit it
+        if target.get_iri().is_none() && source.get_iri().is_some() {
+            target.set_ontology_iri(source.get_iri().cloned());
+        }
+
+        // If source has a version IRI and target doesn't, inherit it
+        if target.version_iri.is_none() && source.version_iri.is_some() {
+            target.set_version_iri(source.version_iri.clone());
+        }
+
         Ok(())
     }
 

@@ -2252,14 +2252,157 @@ impl Reasoner {
 
     /// Explain entailment
     pub fn explain_entailment(&self, axiom: &Axiom) -> Result<Vec<Axiom>> {
-        // TODO:  use explanation support
-        Ok(Vec::new())
+        // Basic explanation by finding relevant axioms that contribute to the entailment
+        let mut explanation = Vec::new();
+        
+        if let Some(ontology_ref) = &self.ontology {
+            if let Ok(ontology) = ontology_ref.read() {
+                match axiom {
+                    Axiom::SubClassOf(subclass_axiom) => {
+                        // Look for transitive chains and direct declarations
+                        let subclass = &subclass_axiom.subclass;
+                        let superclass = &subclass_axiom.superclass;
+                        
+                        // Check for direct axioms that support this inference
+                        for ontology_axiom in ontology.axioms() {
+                            match ontology_axiom {
+                                Axiom::SubClassOf(existing_axiom) => {
+                                    // Direct match
+                                    if existing_axiom.subclass == *subclass && existing_axiom.superclass == *superclass {
+                                        explanation.push(ontology_axiom.clone());
+                                    }
+                                    // Transitive support (simplified)
+                                    else if existing_axiom.subclass == *subclass {
+                                        explanation.push(ontology_axiom.clone());
+                                    }
+                                    else if existing_axiom.superclass == *superclass {
+                                        explanation.push(ontology_axiom.clone());
+                                    }
+                                }
+                                Axiom::EquivalentClasses(equiv_axiom) => {
+                                    // Check if either class is in the equivalence
+                                    if equiv_axiom.classes.contains(subclass) || equiv_axiom.classes.contains(superclass) {
+                                        explanation.push(ontology_axiom.clone());
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Axiom::ClassAssertion(class_assertion) => {
+                        // Find axioms that support the class membership
+                        for ontology_axiom in ontology.axioms() {
+                            match ontology_axiom {
+                                Axiom::ClassAssertion(existing_assertion) => {
+                                    if existing_assertion.individual == class_assertion.individual {
+                                        explanation.push(ontology_axiom.clone());
+                                    }
+                                }
+                                Axiom::SubClassOf(subclass_axiom) => {
+                                    // Check if this subclass relationship contributes
+                                    if subclass_axiom.superclass == class_assertion.class {
+                                        explanation.push(ontology_axiom.clone());
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {
+                        // For other axiom types, just look for exact matches
+                        for ontology_axiom in ontology.axioms() {
+                            if std::mem::discriminant(ontology_axiom) == std::mem::discriminant(axiom) {
+                                explanation.push(ontology_axiom.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(explanation)
     }
 
     /// Explain inconsistency
     pub fn explain_inconsistency(&self) -> Result<Vec<Axiom>> {
-        // TODO:  use explanation support
-        Ok(Vec::new())
+        // Find axioms that contribute to inconsistencies
+        let mut explanation = Vec::new();
+        
+        if let Some(ontology_ref) = &self.ontology {
+            if let Ok(ontology) = ontology_ref.read() {
+                // Check for obvious contradictions
+                let mut disjoint_classes = std::collections::HashMap::new();
+                let mut class_assertions = std::collections::HashMap::new();
+                
+                // Collect disjoint class declarations
+                for axiom in ontology.axioms() {
+                    match axiom {
+                        Axiom::DisjointClasses(disjoint_axiom) => {
+                            for (i, class1) in disjoint_axiom.classes.iter().enumerate() {
+                                for class2 in disjoint_axiom.classes.iter().skip(i + 1) {
+                                    disjoint_classes.insert((class1.clone(), class2.clone()), axiom.clone());
+                                }
+                            }
+                        }
+                        Axiom::ClassAssertion(class_assertion) => {
+                            class_assertions
+                                .entry(class_assertion.individual.clone())
+                                .or_insert_with(Vec::new)
+                                .push((class_assertion.class.clone(), axiom.clone()));
+                        }
+                        _ => {}
+                    }
+                }
+                
+                // Check for individuals asserted to be in disjoint classes
+                for (individual, assertions) in &class_assertions {
+                    for (i, (class1, axiom1)) in assertions.iter().enumerate() {
+                        for (class2, axiom2) in assertions.iter().skip(i + 1) {
+                            // Check if these classes are disjoint
+                            if let Some(disjoint_axiom) = disjoint_classes.get(&(class1.clone(), class2.clone())) 
+                                .or_else(|| disjoint_classes.get(&(class2.clone(), class1.clone()))) {
+                                explanation.push(axiom1.clone());
+                                explanation.push(axiom2.clone());
+                                explanation.push(disjoint_axiom.clone());
+                            }
+                        }
+                    }
+                }
+                
+                // Check for functional property violations
+                let mut functional_properties = std::collections::HashSet::new();
+                let mut property_assertions = std::collections::HashMap::new();
+                
+                for axiom in ontology.axioms() {
+                    match axiom {
+                        Axiom::FunctionalObjectProperty(func_axiom) => {
+                            functional_properties.insert(func_axiom.property.clone());
+                            explanation.push(axiom.clone());
+                        }
+                        Axiom::ObjectPropertyAssertion(prop_assertion) => {
+                            if functional_properties.contains(&prop_assertion.property) {
+                                property_assertions
+                                    .entry((prop_assertion.source.clone(), prop_assertion.property.clone()))
+                                    .or_insert_with(Vec::new)
+                                    .push((prop_assertion.target.clone(), axiom.clone()));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                
+                // Check for multiple values for functional properties
+                for ((source, property), targets) in &property_assertions {
+                    if targets.len() > 1 {
+                        for (target, axiom) in targets {
+                            explanation.push(axiom.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(explanation)
     }
 
     /// Generate DL clauses from the current ontology

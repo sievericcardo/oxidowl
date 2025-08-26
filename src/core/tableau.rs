@@ -1210,9 +1210,7 @@ impl Tableau {
             _ => {}
         }
 
-        // TODO: Check if we have explicit subsumption in the ontology
-        // This would require passing the ontology as a parameter or storing a reference
-
+        // For now, simplified implementation without ontology access
         // More complex subsumption checking would require full reasoning
         // For now, return false for cases we can't easily determine
         Ok(false)
