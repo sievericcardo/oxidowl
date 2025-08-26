@@ -348,9 +348,7 @@ mod tests {
         
         let class_a = ClassExpression::class(IRI::new("http://example.org/A"));
         let class_b = ClassExpression::class(IRI::new("http://example.org/B"));
-        let intersection = ClassExpression::ObjectIntersectionOf { 
-            operands: vec![class_a, class_b] 
-        };
+        let intersection = ClassExpression::ObjectIntersectionOf(vec![class_a, class_b]);
         
         assert!(validator.is_class_expression_allowed(&intersection));
     }
@@ -361,9 +359,7 @@ mod tests {
         
         let class_a = ClassExpression::class(IRI::new("http://example.org/A"));
         let class_b = ClassExpression::class(IRI::new("http://example.org/B"));
-        let union = ClassExpression::ObjectUnionOf { 
-            operands: vec![class_a, class_b] 
-        };
+        let union = ClassExpression::ObjectUnionOf(vec![class_a, class_b]);
         
         assert!(!validator.is_class_expression_allowed(&union));
     }
@@ -373,9 +369,7 @@ mod tests {
         let validator = ELValidator::new();
         
         let class_a = ClassExpression::class(IRI::new("http://example.org/A"));
-        let complement = ClassExpression::ObjectComplementOf { 
-            operand: Box::new(class_a) 
-        };
+        let complement = ClassExpression::ObjectComplementOf(Box::new(class_a));
         
         assert!(!validator.is_class_expression_allowed(&complement));
     }
@@ -385,7 +379,7 @@ mod tests {
         let validator = ELValidator::new();
         
         let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild"))
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild")).unwrap()
         );
         let filler = ClassExpression::class(IRI::new("http://example.org/Person"));
         let existential = ClassExpression::ObjectSomeValuesFrom { 
@@ -401,7 +395,7 @@ mod tests {
         let validator = ELValidator::new();
         
         let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild"))
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild")).unwrap()
         );
         let filler = ClassExpression::class(IRI::new("http://example.org/Person"));
         let universal = ClassExpression::ObjectAllValuesFrom { 
@@ -417,7 +411,7 @@ mod tests {
         let validator = ELValidator::new();
         
         let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/knows"))
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/knows")).unwrap()
         );
         let self_restriction = ClassExpression::ObjectHasSelf { property };
         
@@ -428,10 +422,8 @@ mod tests {
     fn test_el_allows_simple_nominals() {
         let validator = ELValidator::new();
         
-        let individual = Individual::new(IRI::new("http://example.org/john"));
-        let nominal = ClassExpression::ObjectOneOf { 
-            individuals: vec![individual] 
-        };
+        let individual = Individual::named(IRI::new("http://example.org/john"));
+        let nominal = ClassExpression::ObjectOneOf(vec![individual]);
         
         assert!(validator.is_class_expression_allowed(&nominal));
     }

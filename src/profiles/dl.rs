@@ -128,7 +128,7 @@ mod tests {
         let prop_expr = crate::ontology::ObjectPropertyExpression::ObjectProperty(
             crate::ontology::ObjectProperty::new(
                 crate::ontology::IRI::new("http://example.org/prop")
-            )
+            ).unwrap()
         );
         assert!(validator.is_property_expression_allowed(&prop_expr));
     }

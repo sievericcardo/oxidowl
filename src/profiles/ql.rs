@@ -356,12 +356,14 @@ mod tests {
         
         // Atomic object property - allowed
         let prop = ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent"))
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).unwrap()
         );
         assert!(validator.is_property_expression_allowed(&prop));
         
         // Inverse property - not allowed in QL
-        let inverse_prop = ObjectPropertyExpression::InverseObjectProperty(Box::new(prop));
+        let inverse_prop = ObjectPropertyExpression::InverseObjectProperty(
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).unwrap()
+        );
         assert!(!validator.is_property_expression_allowed(&inverse_prop));
     }
 
@@ -371,7 +373,7 @@ mod tests {
         
         // Atomic datatype - allowed
         let datatype = DataRange::Datatype(
-            crate::ontology::Datatype::new(IRI::new("http://www.w3.org/2001/XMLSchema#string"))
+            IRI::new("http://www.w3.org/2001/XMLSchema#string")
         );
         assert!(validator.is_data_range_allowed(&datatype));
         
@@ -396,8 +398,14 @@ mod tests {
         let mut ontology = Ontology::new();
         
         // Add a non-QL axiom (functional property)
-        let prop = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop"));
-        ontology.axioms.push(Axiom::FunctionalObjectProperty(prop));
+        let prop = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).unwrap();
+        ontology.axioms.push(Axiom::FunctionalObjectProperty(
+            crate::ontology::axioms::FunctionalObjectPropertyAxiom {
+                id: 0,
+                property: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop),
+                annotations: Vec::new(),
+            }
+        ));
         
         let report = validator.validate(&ontology).unwrap();
         assert!(!report.conforms);

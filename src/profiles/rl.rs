@@ -382,23 +382,23 @@ mod tests {
         assert!(!validator.is_class_expression_allowed(&complement));
         
         // Max cardinality 1 - allowed in RL
-        let max_card = ClassExpression::ObjectMaxCardinality(
-            1,
-            ObjectPropertyExpression::ObjectProperty(
-                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop"))
+        let max_card = ClassExpression::ObjectMaxCardinality {
+            cardinality: 1,
+            property: ObjectPropertyExpression::ObjectProperty(
+                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).unwrap()
             ),
-            None
-        );
+            filler: Box::new(ClassExpression::Class(Class::new(IRI::new("http://example.org/Thing"))))
+        };
         assert!(validator.is_class_expression_allowed(&max_card));
         
         // Min cardinality - not allowed in RL
-        let min_card = ClassExpression::ObjectMinCardinality(
-            1,
-            ObjectPropertyExpression::ObjectProperty(
-                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop"))
+        let min_card = ClassExpression::ObjectMinCardinality {
+            cardinality: 1,
+            property: ObjectPropertyExpression::ObjectProperty(
+                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).unwrap()
             ),
-            None
-        );
+            filler: Box::new(ClassExpression::Class(Class::new(IRI::new("http://example.org/Thing"))))
+        };
         assert!(!validator.is_class_expression_allowed(&min_card));
     }
 
@@ -408,12 +408,14 @@ mod tests {
         
         // Atomic object property - allowed
         let prop = ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent"))
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).unwrap()
         );
         assert!(validator.is_property_expression_allowed(&prop));
         
         // Inverse property - not allowed in RL
-        let inverse_prop = ObjectPropertyExpression::InverseObjectProperty(Box::new(prop));
+        let inverse_prop = ObjectPropertyExpression::InverseObjectProperty(
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).unwrap()
+        );
         assert!(!validator.is_property_expression_allowed(&inverse_prop));
     }
 
@@ -423,7 +425,7 @@ mod tests {
         
         // Atomic datatype - allowed
         let datatype = DataRange::Datatype(
-            crate::ontology::Datatype::new(IRI::new("http://www.w3.org/2001/XMLSchema#string"))
+            IRI::new("http://www.w3.org/2001/XMLSchema#string")
         );
         assert!(validator.is_data_range_allowed(&datatype));
         
@@ -452,9 +454,16 @@ mod tests {
         let mut ontology = Ontology::new();
         
         // Add a non-RL axiom (inverse object property)
-        let prop1 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop1"));
-        let prop2 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop2"));
-        ontology.axioms.push(Axiom::InverseObjectProperties(prop1, prop2));
+        let prop1 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop1")).unwrap();
+        let prop2 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop2")).unwrap();
+        ontology.axioms.push(Axiom::InverseObjectProperties(
+            crate::ontology::axioms::InverseObjectPropertiesAxiom {
+                id: 0,
+                property1: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop1),
+                property2: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop2),
+                annotations: Vec::new(),
+            }
+        ));
         
         let report = validator.validate(&ontology).unwrap();
         assert!(!report.conforms);
