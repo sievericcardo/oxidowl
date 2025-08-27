@@ -2,7 +2,12 @@
 
 use oxidowl::{
     config::ReasonerConfig,
-    ontology::{ClassExpression, IRI, Ontology},
+    ontology::{
+        ClassExpression, IRI, Ontology,
+        concepts::Class,
+        individuals::{Individual, NamedIndividual},
+        axioms::{self, Axiom, DeclarationAxiom, Entity, AxiomId},
+    },
     parsers::TurtleParser,
     query::DLQueryEngine,
     reasoning::ReasoningService,
@@ -16,7 +21,7 @@ fn create_test_ontology() -> Ontology {
     
     if greenhouse_path.exists() {
         // Attempt to load the actual greenhouse ontology
-        match oxidowl::parsers::turtle::load_file(greenhouse_path) {
+        match oxidowl::parsers::turtle::parse_file(greenhouse_path) {
             Ok(ontology) => {
                 println!("Successfully loaded greenhouse.ttl");
                 return ontology;
@@ -39,19 +44,19 @@ fn create_test_ontology() -> Ontology {
     let sensor_class = Class::new(IRI::new("http://www.example.org/greenhouse#Sensor"));
     let controller_class = Class::new(IRI::new("http://www.example.org/greenhouse#Controller"));
     
-    // Add declaration axioms
+    // Add declaration axioms (using simple incremental IDs)
     ontology.add_axiom(axioms::Axiom::Declaration(axioms::DeclarationAxiom {
-        id: ontology.next_axiom_id(),
+        id: 1,
         entity: axioms::Entity::Class(pump_class.iri.clone()),
     }));
     
     ontology.add_axiom(axioms::Axiom::Declaration(axioms::DeclarationAxiom {
-        id: ontology.next_axiom_id(),
+        id: 2,
         entity: axioms::Entity::Class(sensor_class.iri.clone()),
     }));
     
     ontology.add_axiom(axioms::Axiom::Declaration(axioms::DeclarationAxiom {
-        id: ontology.next_axiom_id(),
+        id: 3,
         entity: axioms::Entity::Class(controller_class.iri.clone()),
     }));
     
@@ -62,9 +67,9 @@ fn create_test_ontology() -> Ontology {
     
     // Add class assertion
     ontology.add_axiom(axioms::Axiom::ClassAssertion(axioms::ClassAssertionAxiom {
-        id: ontology.next_axiom_id(),
+        id: 1,
         individual: pump1,
-        class_expression: ClassExpression::Class(pump_class),
+        class: ClassExpression::Class(pump_class),
         annotations: Vec::new(),
     }));
     

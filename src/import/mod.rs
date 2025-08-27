@@ -244,10 +244,19 @@ impl ImportDependencyGraph {
         for ontology_iri in self.dependencies.keys() {
             in_degree.insert(ontology_iri.clone(), 0);
         }
-
+        // Also include imported ontologies that might not be in keys
         for deps in self.dependencies.values() {
             for dep in deps {
-                *in_degree.entry(dep.clone()).or_insert(0) += 1;
+                in_degree.entry(dep.clone()).or_insert(0);
+            }
+        }
+
+        // Count incoming dependencies correctly
+        // If ontology_iri imports deps, then ontology_iri depends on deps
+        // So ontology_iri should have incoming edges from its dependencies
+        for (ontology_iri, deps) in &self.dependencies {
+            for _dep in deps {
+                *in_degree.get_mut(ontology_iri).unwrap() += 1;
             }
         }
 
@@ -262,12 +271,13 @@ impl ImportDependencyGraph {
         while let Some(current) = queue.pop_front() {
             result.push(current.clone());
 
-            if let Some(deps) = self.dependencies.get(&current) {
-                for dep in deps {
-                    if let Some(degree) = in_degree.get_mut(dep) {
+            // Reduce in-degree of ontologies that depend on current ontology
+            if let Some(dependents) = self.reverse_dependencies.get(&current) {
+                for dependent in dependents {
+                    if let Some(degree) = in_degree.get_mut(dependent) {
                         *degree -= 1;
                         if *degree == 0 {
-                            queue.push_back(dep.clone());
+                            queue.push_back(dependent.clone());
                         }
                     }
                 }

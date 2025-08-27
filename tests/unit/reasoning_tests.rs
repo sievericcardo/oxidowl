@@ -11,7 +11,7 @@ fn create_test_ontology() -> Ontology {
 #[tokio::test]
 async fn test_reasoning_service_creation() {
     let ontology = create_test_ontology();
-    let config = ReasonerConfig::test_config();
+    let config = ReasonerConfig::default();
 
     let _reasoning_service = ReasoningService::new(ontology, config);
 
@@ -22,7 +22,7 @@ async fn test_reasoning_service_creation() {
 #[tokio::test]
 async fn test_basic_functionality() {
     let ontology = create_test_ontology();
-    let config = ReasonerConfig::test_config();
+    let config = ReasonerConfig::default();
     let _reasoning_service = ReasoningService::new(ontology, config);
 
     // For now, just test that we can create the service

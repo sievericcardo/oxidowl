@@ -7,7 +7,7 @@ use oxidowl::{
 #[tokio::test]
 async fn test_query_engine_creation() {
     let ontology = Ontology::new();
-    let config = ReasonerConfig::test_config();
+    let config = ReasonerConfig::default();
     let reasoning_service = ReasoningService::new(ontology, config);
 
     let _query_engine = DLQueryEngine::new(reasoning_service);
@@ -18,7 +18,7 @@ async fn test_query_engine_creation() {
 #[tokio::test]
 async fn test_basic_query_functionality() {
     let ontology = Ontology::new();
-    let config = ReasonerConfig::test_config();
+    let config = ReasonerConfig::default();
     let reasoning_service = ReasoningService::new(ontology, config);
 
     let _query_engine = DLQueryEngine::new(reasoning_service);
