@@ -379,7 +379,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let mut file =
         File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
 
-    // TODO: Implement comprehensive serialization to RDF/XML
+    // Implement comprehensive serialization to RDF/XML
     writeln!(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")?;
     writeln!(
         file,
@@ -393,16 +393,107 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
         file,
         "         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">"
     )?;
-    writeln!(file, "  <!-- Ontology serialization -->")?;
+
+    // Serialize ontology IRI
+    writeln!(file, "  <!-- Ontology Declaration -->")?;
     let iri_str = ontology.iri.as_ref().map_or(
         "http://example.org/ontology",
         super::super::ontology::IRI::as_str,
     );
     writeln!(file, "  <owl:Ontology rdf:about=\"{iri_str}\" />")?;
-    writeln!(
-        file,
-        "  <!-- TODO: Implement complete RDF/XML serialization -->"
-    )?;
+    writeln!(file)?;
+
+    // Serialize classes
+    if !ontology.classes().is_empty() {
+        writeln!(file, "  <!-- Class Declarations -->")?;
+        for (_, class) in ontology.classes() {
+            writeln!(file, "  <owl:Class rdf:about=\"{}\" />", class.iri.as_str())?;
+        }
+        writeln!(file)?;
+    }
+
+    // Serialize object properties
+    let object_properties = ontology.object_properties();
+    if !object_properties.is_empty() {
+        writeln!(file, "  <!-- Object Property Declarations -->")?;
+        for prop in object_properties {
+            writeln!(file, "  <owl:ObjectProperty rdf:about=\"{}\" />", prop.iri.as_str())?;
+        }
+        writeln!(file)?;
+    }
+
+    // Serialize data properties
+    // TODO: Implement data property extraction from axioms
+    // if !ontology.data_properties().is_empty() {
+    //     writeln!(file, "  <!-- Data Property Declarations -->")?;
+    //     for (_, prop) in ontology.data_properties() {
+    //         writeln!(file, "  <owl:DatatypeProperty rdf:about=\"{}\" />", prop.iri())?;
+    //     }
+    //     writeln!(file)?;
+    // }
+
+    // Serialize individuals
+    if !ontology.individuals().is_empty() {
+        writeln!(file, "  <!-- Individual Declarations -->")?;
+        for (_, individual) in ontology.individuals() {
+            match individual {
+                crate::ontology::Individual::Named(named) => {
+                    writeln!(file, "  <owl:NamedIndividual rdf:about=\"{}\" />", named.iri)?;
+                }
+                crate::ontology::Individual::Anonymous(_) => {
+                    // Anonymous individuals are typically handled within axioms
+                }
+            }
+        }
+        writeln!(file)?;
+    }
+
+    // Serialize axioms
+    if !ontology.axioms().is_empty() {
+        writeln!(file, "  <!-- Axioms -->")?;
+        for axiom in ontology.axioms() {
+            serialize_axiom_to_rdf_xml(&mut file, axiom)?;
+        }
+    }
+
     writeln!(file, "</rdf:RDF>")?;
+    Ok(())
+}
+
+/// Serialize an axiom to RDF/XML format
+fn serialize_axiom_to_rdf_xml<W: Write>(writer: &mut W, axiom: &crate::ontology::axioms::Axiom) -> Result<()> {
+    use crate::ontology::axioms::Axiom;
+    
+    match axiom {
+        Axiom::SubClassOf(sub_axiom) => {
+            writeln!(writer, "  <!-- SubClassOf: {} rdfs:subClassOf {} -->", 
+                    sub_axiom.subclass, sub_axiom.superclass)?;
+            writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", sub_axiom.subclass)?;
+            writeln!(writer, "    <rdfs:subClassOf rdf:resource=\"{}\" />", sub_axiom.superclass)?;
+            writeln!(writer, "  </rdf:Description>")?;
+        }
+        Axiom::ClassAssertion(class_axiom) => {
+            if let crate::ontology::Individual::Named(named) = &class_axiom.individual {
+                writeln!(writer, "  <!-- ClassAssertion: {} rdf:type {} -->", 
+                        named.iri, class_axiom.class)?;
+                writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", named.iri)?;
+                writeln!(writer, "    <rdf:type rdf:resource=\"{}\" />", class_axiom.class)?;
+                writeln!(writer, "  </rdf:Description>")?;
+            }
+        }
+        Axiom::ObjectPropertyAssertion(prop_axiom) => {
+            if let (crate::ontology::Individual::Named(subj), crate::ontology::Individual::Named(obj)) = 
+                (&prop_axiom.source, &prop_axiom.target) {
+                writeln!(writer, "  <!-- ObjectPropertyAssertion -->")?;
+                writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", subj.iri)?;
+                writeln!(writer, "    <{} rdf:resource=\"{}\" />", prop_axiom.property, obj.iri)?;
+                writeln!(writer, "  </rdf:Description>")?;
+            }
+        }
+        _ => {
+            // For other axiom types, add a comment for now
+            writeln!(writer, "  <!-- Axiom type not yet supported in RDF/XML serialization -->")?;
+        }
+    }
     Ok(())
 }

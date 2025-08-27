@@ -771,8 +771,51 @@ impl Ontology {
                         }
                     }
                 }
+                axioms::Axiom::ClassAssertion(class_assertion) => {
+                    // Extract individual from class assertion
+                    if let Individual::Named(named) = &class_assertion.individual {
+                        individuals.push((named.iri.clone(), class_assertion.individual.clone()));
+                    }
+                }
+                axioms::Axiom::DataPropertyAssertion(data_assertion) => {
+                    // Extract individual from data property assertion
+                    if let Individual::Named(named) = &data_assertion.individual {
+                        individuals.push((named.iri.clone(), data_assertion.individual.clone()));
+                    }
+                }
+                axioms::Axiom::NegativeObjectPropertyAssertion(neg_obj_assertion) => {
+                    // Extract individuals from negative object property assertion
+                    if let Individual::Named(named) = &neg_obj_assertion.source {
+                        individuals.push((named.iri.clone(), neg_obj_assertion.source.clone()));
+                    }
+                    if let Individual::Named(named) = &neg_obj_assertion.target {
+                        individuals.push((named.iri.clone(), neg_obj_assertion.target.clone()));
+                    }
+                }
+                axioms::Axiom::NegativeDataPropertyAssertion(neg_data_assertion) => {
+                    // Extract individual from negative data property assertion
+                    if let Individual::Named(named) = &neg_data_assertion.individual {
+                        individuals.push((named.iri.clone(), neg_data_assertion.individual.clone()));
+                    }
+                }
+                axioms::Axiom::SameIndividual(same_individuals) => {
+                    // Extract individuals from same individual axiom
+                    for individual in &same_individuals.individuals {
+                        if let Individual::Named(named) = individual {
+                            individuals.push((named.iri.clone(), individual.clone()));
+                        }
+                    }
+                }
+                axioms::Axiom::DifferentIndividuals(diff_individuals) => {
+                    // Extract individuals from different individuals axiom
+                    for individual in &diff_individuals.individuals {
+                        if let Individual::Named(named) = individual {
+                            individuals.push((named.iri.clone(), individual.clone()));
+                        }
+                    }
+                }
                 _ => {
-                    // TODO: Extract individuals from other axiom types as needed
+                    // Other axiom types don't typically contain individuals
                 }
             }
         }

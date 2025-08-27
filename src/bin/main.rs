@@ -796,22 +796,51 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
 
     // Handle specific query operations
     if let Some(class_name) = cli.subclasses {
-        // Convert string to ClassExpression - for now just use as-is
-        // TODO: Proper IRI/ClassExpression conversion
-        println!("Subclasses of {class_name}:");
-        println!("  (Note: Subclass queries need ClassExpression conversion - feature pending)");
+        // Convert string to ClassExpression
+        let iri = oxidowl::ontology::IRI::new(&class_name);
+        let class = oxidowl::ontology::Class::new(iri);
+        let class_expr = oxidowl::ontology::ClassExpression::Class(class);
+        
+        if let Ok(subclasses) = reasoner.get_subclasses(&class_expr, false) {
+            println!("Subclasses of {class_name}:");
+            for subclass in subclasses {
+                println!("  {}", subclass);
+            }
+        } else {
+            println!("Could not retrieve subclasses for {class_name}");
+        }
     }
 
     if let Some(class_name) = cli.superclasses {
-        println!("Superclasses of {class_name}:");
-        println!("  (Note: Superclass queries need ClassExpression conversion - feature pending)");
+        // Convert string to ClassExpression
+        let iri = oxidowl::ontology::IRI::new(&class_name);
+        let class = oxidowl::ontology::Class::new(iri);
+        let class_expr = oxidowl::ontology::ClassExpression::Class(class);
+        
+        if let Ok(superclasses) = reasoner.get_superclasses(&class_expr, false) {
+            println!("Superclasses of {class_name}:");
+            for superclass in superclasses {
+                println!("  {}", superclass);
+            }
+        } else {
+            println!("Could not retrieve superclasses for {class_name}");
+        }
     }
 
     if let Some(class_name) = cli.equivalent_classes {
-        println!("Equivalent classes of {class_name}:");
-        println!(
-            "  (Note: Equivalent class queries need ClassExpression conversion - feature pending)"
-        );
+        // Convert string to ClassExpression
+        let iri = oxidowl::ontology::IRI::new(&class_name);
+        let class = oxidowl::ontology::Class::new(iri);
+        let class_expr = oxidowl::ontology::ClassExpression::Class(class);
+        
+        if let Ok(equivalent_classes) = reasoner.get_equivalent_classes(&class_expr) {
+            println!("Equivalent classes of {class_name}:");
+            for equivalent_class in equivalent_classes {
+                println!("  {}", equivalent_class);
+            }
+        } else {
+            println!("Could not retrieve equivalent classes for {class_name}");
+        }
     }
 
     if cli.unsatisfiable_classes {
