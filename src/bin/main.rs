@@ -1559,7 +1559,7 @@ async fn execute_owllink_file(
     info!("Processing OWLlink file: {}", input.display());
 
     let owllink_content = fs::read_to_string(&input)?;
-    let reasoner = Reasoner::new(config)?;
+    let mut reasoner = Reasoner::new(config)?;
 
     // Process OWLlink request
     let response = reasoner.process_owllink_request(&owllink_content)?;

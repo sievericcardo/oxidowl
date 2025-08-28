@@ -1893,7 +1893,7 @@ impl TableauBuilder {
         let mut tableau = Tableau::new(self.config.clone())?;
 
         // Add all axioms to the tableau
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.add_axiom_to_tableau(&mut tableau, axiom)?;
         }
 
@@ -1909,7 +1909,7 @@ impl TableauBuilder {
         let mut tableau = Tableau::new(self.config.clone())?;
 
         // Add all axioms
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.add_axiom_to_tableau(&mut tableau, axiom)?;
         }
 
@@ -1931,7 +1931,7 @@ impl TableauBuilder {
         let mut tableau = Tableau::new(self.config.clone())?;
 
         // Add all axioms
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.add_axiom_to_tableau(&mut tableau, axiom)?;
         }
 
@@ -1956,7 +1956,7 @@ impl TableauBuilder {
         let mut tableau = Tableau::new(self.config.clone())?;
 
         // Add all axioms
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.add_axiom_to_tableau(&mut tableau, axiom)?;
         }
 

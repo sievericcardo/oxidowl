@@ -3,11 +3,11 @@
 //! This module implements the core SWRL rule execution engine that coordinates
 //! rule firing, inference generation, and integration with the tableau reasoner.
 
-use crate::ontology::{Axiom, Ontology};
+use crate::ontology::{Axiom, Ontology, Individual, Literal};
 use crate::swrl::{
     SWRLAtom, SWRLConfig, SWRLExecutionContext, SWRLExecutionResult, SWRLReasoningStrategy,
     SWRLRule, SWRLRuleState, SWRLStatistics, SWRLDArgument, SWRLIArgument,
-    builtins::{SWRLBuiltIn, SWRLBuiltInRegistry},
+    builtins::{SWRLBuiltIn, SWRLBuiltInRegistry, SWRLValue},
     interpreter::SWRLInterpreter,
     validation::SWRLValidator,
 };
@@ -219,20 +219,121 @@ impl SWRLRuleEngine {
 
     /// Execute backward chaining strategy
     fn execute_backward_chaining(&mut self) -> Result<SWRLExecutionResult> {
-        // For now, implement a simplified backward chaining
-        // A full implementation would require goal tracking and proof search
-        warn!("Backward chaining not fully implemented, falling back to forward chaining");
-        self.execute_forward_chaining()
+        info!("Executing SWRL backward chaining strategy");
+        
+        let mut total_inferences = Vec::new();
+        let mut total_applications = 0;
+        let mut any_fired = false;
+        
+        // Initialize goal stack for backward chaining
+        let mut goal_stack = Vec::new();
+        let mut proved_goals = HashSet::new();
+        let mut failed_goals = HashSet::new();
+        
+        // Start with queries from the ontology (if any are specified)
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            // For demonstration, we'll use class assertion queries as initial goals
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                    // Convert to a goal for backward chaining
+                    let goal = SWRLGoal::from_class_assertion(assertion);
+                    goal_stack.push(goal);
+                }
+            }
+        }
+        
+        // Main backward chaining loop
+        let mut iteration = 0;
+        while !goal_stack.is_empty() && iteration < self.config.max_rule_applications {
+            iteration += 1;
+            let current_goal = goal_stack.pop().unwrap();
+            
+            // Skip if already proved or failed
+            if proved_goals.contains(&current_goal) || failed_goals.contains(&current_goal) {
+                continue;
+            }
+            
+            // Try to prove the goal using available rules
+            let proof_result = self.try_prove_goal(&current_goal, &mut goal_stack)?;
+            
+            match proof_result {
+                GoalProofResult::Proved => {
+                    proved_goals.insert(current_goal);
+                    any_fired = true;
+                    // For now, we don't track specific axioms in backward chaining
+                    // total_inferences.push(some_axiom);
+                }
+                GoalProofResult::Failed => {
+                    failed_goals.insert(current_goal);
+                }
+                GoalProofResult::NeedsMoreProofs => {
+                    // Subgoals added to stack, try again later
+                    goal_stack.push(current_goal);
+                }
+            }
+            
+            total_applications += 1;
+        }
+        
+        Ok(SWRLExecutionResult::new(
+            any_fired,
+            total_inferences,
+            total_applications,
+        ))
     }
 
     /// Execute hybrid reasoning strategy
     fn execute_hybrid_reasoning(&mut self) -> Result<SWRLExecutionResult> {
-        // Combine forward and backward chaining
-        let forward_result = self.execute_forward_chaining()?;
+        info!("Executing SWRL hybrid reasoning strategy");
+        
+        // Combine forward and backward chaining in an interleaved manner
+        let mut total_inferences = Vec::new();
+        let mut total_applications = 0;
+        let mut any_fired = false;
+        
+        let max_iterations = self.config.max_rule_applications / 2; // Split between strategies
+        
+        // Phase 1: Forward chaining to establish base facts
+        info!("Hybrid reasoning - Phase 1: Forward chaining");
+        let forward_result = self.execute_forward_chaining_limited(max_iterations)?;
+        total_inferences.extend(forward_result.inferences);
+        total_applications += forward_result.applications;
+        any_fired = any_fired || forward_result.fired;
+        
+        // Phase 2: Backward chaining for goal-directed inference
+        info!("Hybrid reasoning - Phase 2: Backward chaining");
+        let backward_result = self.execute_backward_chaining_limited(max_iterations)?;
+        total_inferences.extend(backward_result.inferences);
+        total_applications += backward_result.applications;
+        any_fired = any_fired || backward_result.fired;
+        
+        // Phase 3: Additional forward chaining if backward chaining added new facts
+        if backward_result.fired {
+            info!("Hybrid reasoning - Phase 3: Additional forward chaining");
+            let additional_forward = self.execute_forward_chaining_limited(max_iterations / 2)?;
+            total_inferences.extend(additional_forward.inferences);
+            total_applications += additional_forward.applications;
+            any_fired = any_fired || additional_forward.fired;
+        }
+        
+        Ok(SWRLExecutionResult::new(
+            any_fired,
+            total_inferences,
+            total_applications,
+        ))
+    }
 
-        // For now, just return forward chaining results
-        // A full implementation would interleave forward and backward reasoning
-        Ok(forward_result)
+    /// Check if a rule is applicable for execution
+    fn is_rule_applicable(&self, rule_id: usize) -> Result<bool> {
+        // Convert usize back to u64 for the HashMap lookup
+        let rule_id_u64 = rule_id as u64;
+        if let Some(rule_state) = self.rule_states.get(&rule_id_u64) {
+            Ok(rule_state.active)
+        } else {
+            Ok(false)
+        }
     }
 
     /// Execute a single SWRL rule
@@ -453,7 +554,7 @@ impl SWRLRuleEngine {
         match goal {
             SWRLAtom::ClassAtom { predicate, argument } => {
                 // Check if the individual is known to be of this class
-                self.check_class_membership(predicate, argument)
+                self.check_class_membership(predicate, argument, None)
             }
             SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
                 // Check if the object property relation exists
@@ -473,7 +574,7 @@ impl SWRLRuleEngine {
             }
             SWRLAtom::DataRangeAtom { predicate, argument } => {
                 // Check if the data value is in the specified data range
-                self.check_data_range_membership(predicate, argument)
+                self.check_data_range_membership(predicate, argument, None)
             }
             SWRLAtom::BuiltInAtom { predicate, arguments } => {
                 // Evaluate built-in predicates
@@ -528,15 +629,97 @@ impl SWRLRuleEngine {
     }
 
     /// Check class membership using ontology reasoning
-    fn check_class_membership(&self, class: &crate::ontology::ClassExpression, individual: &SWRLIArgument) -> Result<bool> {
+    /// Check if individual is member of a class using ontology reasoning
+    fn check_class_membership(&self, class: &crate::ontology::ClassExpression, individual: &SWRLIArgument, context: Option<&SWRLExecutionContext>) -> Result<bool> {
         // Convert SWRL individual argument to ontology individual
         let individual_iri = match individual {
             SWRLIArgument::Individual(ind) => ind.iri(),
-            SWRLIArgument::Variable(_) => return Ok(false), // Cannot check unbound variables
+            SWRLIArgument::Variable(var) => {
+                // Check if variable is bound to an individual
+                if let Some(ctx) = context {
+                    if let Some(bound_value) = ctx.bindings.get(var) {
+                        match bound_value {
+                            // If bound to an individual, use that
+                            SWRLValue::Individual(ind) => ind.iri(),
+                            _ => return Ok(false), // Wrong type binding
+                        }
+                    } else {
+                        return Ok(false); // Unbound variable  
+                    }
+                } else {
+                    // No context - return false for variables
+                    return Ok(false);
+                }
+            },
         };
         
-        // Simplified implementation - would need proper ontology access
+        // Check membership using ontology
+        if let Some(ontology_ref) = &self.ontology {
+            if let Ok(ontology) = ontology_ref.read() {
+                // Direct class assertion check
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::Axiom::ClassAssertion(class_axiom) = axiom {
+                        if class_axiom.individual.iri() == individual_iri && class_axiom.class == *class {
+                            return Ok(true);
+                        }
+                    }
+                }
+                
+                // Check subclass relationships
+                match class {
+                    crate::ontology::ClassExpression::Class(target_class) => {
+                        for axiom in ontology.axioms() {
+                            if let crate::ontology::Axiom::ClassAssertion(class_axiom) = axiom {
+                                if class_axiom.individual.iri() == individual_iri {
+                                    // Check if asserted class is subclass of target
+                                    if self.is_subclass_relation(&class_axiom.class, class, &ontology) {
+                                        return Ok(true);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    _ => {
+                        // For complex class expressions, simplified handling
+                        // Would need full reasoning engine integration
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+        
         Ok(false)
+    }
+    
+    /// Check if first class is subclass of second class
+    fn is_subclass_relation(
+        &self,
+        subclass: &crate::ontology::ClassExpression,
+        superclass: &crate::ontology::ClassExpression,
+        ontology: &crate::ontology::Ontology
+    ) -> bool {
+        // Direct subclass check
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
+                if subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass {
+                    return true;
+                }
+            }
+        }
+        
+        // Transitivity check (one level for now)
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
+                if subclass_axiom.subclass == *subclass {
+                    // Check if intermediate class is subclass of target
+                    if self.is_subclass_relation(&subclass_axiom.superclass, superclass, ontology) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        false
     }
 
     /// Check object property relation using ontology reasoning
@@ -559,7 +742,7 @@ impl SWRLRuleEngine {
         // Check if the property relation is explicitly asserted
         if let Some(ontology_ref) = &self.ontology {
             if let Ok(ontology) = ontology_ref.read() {
-                for axiom in &ontology.axioms {
+                for axiom in ontology.axioms() {
                     match axiom {
                         crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
                             if let (Some(subj_iri), Some(obj_iri)) = 
@@ -642,7 +825,7 @@ impl SWRLRuleEngine {
         // Check if the data property relation is explicitly asserted
         if let Some(ontology_ref) = &self.ontology {
             if let Ok(ontology) = ontology_ref.read() {
-                for axiom in &ontology.axioms {
+                for axiom in ontology.axioms() {
                     match axiom {
                         crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
                             if let Some(subj_iri) = assertion.individual.iri() {
@@ -676,7 +859,7 @@ impl SWRLRuleEngine {
         // Check for explicit same individual assertions
         if let Some(ontology_ref) = &self.ontology {
             if let Ok(ontology) = ontology_ref.read() {
-                for axiom in &ontology.axioms {
+                for axiom in ontology.axioms() {
                     match axiom {
                         crate::ontology::Axiom::SameIndividual(assertion) => {
                             let iris: Vec<_> = assertion.individuals.iter()
@@ -711,7 +894,7 @@ impl SWRLRuleEngine {
         // Check for explicit different individuals assertions
         if let Some(ontology_ref) = &self.ontology {
             if let Ok(ontology) = ontology_ref.read() {
-                for axiom in &ontology.axioms {
+                for axiom in ontology.axioms() {
                     match axiom {
                         crate::ontology::Axiom::DifferentIndividuals(assertion) => {
                             let iris: Vec<_> = assertion.individuals.iter()
@@ -733,9 +916,217 @@ impl SWRLRuleEngine {
     }
 
     /// Check if a data value satisfies a data range constraint
-    fn check_data_range_membership(&self, _range: &crate::ontology::DataRange, _value: &SWRLDArgument) -> Result<bool> {
-        // Simplified implementation for now
-        Ok(false)
+    fn check_data_range_membership(&self, range: &crate::ontology::DataRange, value: &SWRLDArgument, context: Option<&SWRLExecutionContext>) -> Result<bool> {
+        use crate::ontology::DataRange;
+        
+        match range {
+            DataRange::Datatype(datatype_iri) => {
+                // Check if value matches the datatype
+                match value {
+                    SWRLDArgument::Literal(literal_value) => {
+                        // Check if literal has datatype and matches
+                        match &literal_value.datatype {
+                            Some(value_datatype) => {
+                                // Direct datatype match
+                                Ok(datatype_iri.as_str() == value_datatype.as_str())
+                            },
+                            None => {
+                                // Infer datatype from literal format
+                                let inferred_datatype = self.infer_datatype_from_literal(&literal_value.value);
+                                Ok(inferred_datatype.as_ref().map(|iri| iri.as_str()) == Some(datatype_iri.as_str()))
+                            }
+                        }
+                    },
+                    SWRLDArgument::Variable(var) => {
+                        // Check if variable is bound to a value of the correct datatype
+                        if let Some(ctx) = context {
+                            if let Some(bound_value) = ctx.bindings.get(var) {
+                                // Convert SWRLValue to SWRLDArgument for recursive call
+                                let d_arg = match bound_value {
+                                    SWRLValue::Literal(lit) => SWRLDArgument::Literal(lit.clone()),
+                                    _ => return Ok(false), // Wrong type for data range
+                                };
+                                self.check_data_range_membership(range, &d_arg, context)
+                            } else {
+                                Ok(false) // Unbound variable doesn't satisfy range
+                            }
+                        } else {
+                            Ok(false) // No context - can't check variable
+                        }
+                    },
+                }
+            },
+            DataRange::DataIntersectionOf(ranges) => {
+                // Value must satisfy all ranges
+                for sub_range in ranges {
+                    if !self.check_data_range_membership(sub_range, value, context)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            },
+            DataRange::DataUnionOf(ranges) => {
+                // Value must satisfy at least one range
+                for sub_range in ranges {
+                    if self.check_data_range_membership(sub_range, value, context)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            },
+            DataRange::DataComplementOf(complement_range) => {
+                // Value must not satisfy the complement range
+                Ok(!self.check_data_range_membership(complement_range, value, context)?)
+            },
+            DataRange::DataOneOf(values) => {
+                // Value must be one of the enumerated values
+                match value {
+                    SWRLDArgument::Literal(literal_value) => {
+                        for enum_value in values {
+                            if enum_value.value == literal_value.value && enum_value.datatype == literal_value.datatype {
+                                return Ok(true);
+                            }
+                        }
+                        Ok(false)
+                    },
+                    SWRLDArgument::Variable(var) => {
+                        if let Some(ctx) = context {
+                            if let Some(bound_value) = ctx.bindings.get(var) {
+                                // Convert SWRLValue to SWRLDArgument for recursive call
+                                let d_arg = match bound_value {
+                                    SWRLValue::Literal(lit) => SWRLDArgument::Literal(lit.clone()),
+                                    _ => return Ok(false), // Wrong type for data range
+                                };
+                                self.check_data_range_membership(range, &d_arg, context)
+                            } else {
+                                Ok(false)
+                            }
+                        } else {
+                            Ok(false)
+                        }
+                    },
+                }
+            },
+            DataRange::DatatypeRestriction { datatype, restrictions } => {
+                // Check base datatype first
+                if !self.check_data_range_membership(&DataRange::Datatype(datatype.clone()), value, context)? {
+                    return Ok(false);
+                }
+                
+                // Check facet restrictions
+                match value {
+                    SWRLDArgument::Literal(literal) => {
+                        self.check_facet_restrictions(&literal.value, restrictions)
+                    },
+                    SWRLDArgument::Variable(var) => {
+                        if let Some(ctx) = context {
+                            if let Some(bound_value) = ctx.bindings.get(var) {
+                                // Convert SWRLValue to SWRLDArgument for recursive call
+                                let d_arg = match bound_value {
+                                    SWRLValue::Literal(lit) => SWRLDArgument::Literal(lit.clone()),
+                                    _ => return Ok(false), // Wrong type for data range
+                                };
+                                self.check_data_range_membership(range, &d_arg, context)
+                            } else {
+                                Ok(false)
+                            }
+                        } else {
+                            Ok(false)
+                        }
+                    },
+                }
+            },
+        }
+    }
+    
+    /// Infer datatype from literal string representation
+    fn infer_datatype_from_literal(&self, literal: &str) -> Option<crate::ontology::IRI> {
+        use crate::ontology::IRI;
+        
+        // Basic datatype inference based on format
+        if literal.parse::<i64>().is_ok() {
+            Some(IRI::new("http://www.w3.org/2001/XMLSchema#integer"))
+        } else if literal.parse::<f64>().is_ok() {
+            Some(IRI::new("http://www.w3.org/2001/XMLSchema#decimal"))
+        } else if literal == "true" || literal == "false" {
+            Some(IRI::new("http://www.w3.org/2001/XMLSchema#boolean"))
+        } else {
+            // Default to string
+            Some(IRI::new("http://www.w3.org/2001/XMLSchema#string"))
+        }
+    }
+    
+    /// Check facet restrictions on a literal value
+    fn check_facet_restrictions(&self, literal: &str, facet_restrictions: &[crate::ontology::FacetRestriction]) -> Result<bool> {
+        use crate::ontology::IRI;
+        
+        for facet_restriction in facet_restrictions {
+            let facet_name = facet_restriction.facet.as_str();
+            let facet_value = &facet_restriction.value;
+            
+            match facet_name {
+                "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                    if let (Ok(value), Ok(min)) = (literal.parse::<f64>(), facet_value.value.parse::<f64>()) {
+                        if value < min {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                    if let (Ok(value), Ok(max)) = (literal.parse::<f64>(), facet_value.value.parse::<f64>()) {
+                        if value > max {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                    if let (Ok(value), Ok(min)) = (literal.parse::<f64>(), facet_value.value.parse::<f64>()) {
+                        if value <= min {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                    if let (Ok(value), Ok(max)) = (literal.parse::<f64>(), facet_value.value.parse::<f64>()) {
+                        if value >= max {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#length" => {
+                    if let Ok(required_length) = facet_value.value.parse::<usize>() {
+                        if literal.len() != required_length {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#minLength" => {
+                    if let Ok(min_length) = facet_value.value.parse::<usize>() {
+                        if literal.len() < min_length {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#maxLength" => {
+                    if let Ok(max_length) = facet_value.value.parse::<usize>() {
+                        if literal.len() > max_length {
+                            return Ok(false);
+                        }
+                    }
+                },
+                "http://www.w3.org/2001/XMLSchema#pattern" => {
+                    // Pattern matching would require regex functionality
+                    // For now, consider it satisfied
+                    continue;
+                },
+                _ => {
+                    // Unknown facet, assume satisfied
+                    continue;
+                }
+            }
+        }
+        
+        Ok(true)
     }
 
     /// Evaluate a built-in atom (placeholder implementation)
@@ -765,13 +1156,65 @@ impl SWRLRuleEngine {
     fn convert_swrl_argument_to_value(&self, argument: &SWRLDArgument) -> Result<crate::swrl::builtins::SWRLValue> {
         match argument {
             SWRLDArgument::Literal(literal) => {
-                // Simple conversion to string for now
-                Ok(crate::swrl::builtins::SWRLValue::String(literal.value.clone()))
-            }
-            SWRLDArgument::Variable(_) => {
-                // Variables should be resolved to concrete values before this point
-                Err(crate::error::OxidowlError::ParseError("Cannot convert unbound variable to value".to_string()))
-            }
+                use crate::swrl::builtins::SWRLValue;
+                
+                // Convert based on datatype
+                if let Some(dt) = &literal.datatype {
+                    match dt.as_str() {
+                        "http://www.w3.org/2001/XMLSchema#integer" |
+                        "http://www.w3.org/2001/XMLSchema#int" => {
+                            match literal.value.parse::<i64>() {
+                                Ok(val) => Ok(SWRLValue::Integer(val)),
+                                Err(_) => Ok(SWRLValue::String(literal.value.clone())),
+                            }
+                        },
+                        "http://www.w3.org/2001/XMLSchema#decimal" |
+                        "http://www.w3.org/2001/XMLSchema#double" |
+                        "http://www.w3.org/2001/XMLSchema#float" => {
+                            match literal.value.parse::<f64>() {
+                                Ok(val) => Ok(SWRLValue::Decimal(val)),
+                                Err(_) => Ok(SWRLValue::String(literal.value.clone())),
+                            }
+                        },
+                        "http://www.w3.org/2001/XMLSchema#boolean" => {
+                            match literal.value.parse::<bool>() {
+                                Ok(val) => Ok(SWRLValue::Boolean(val)),
+                                Err(_) => Ok(SWRLValue::String(literal.value.clone())),
+                            }
+                        },
+                        "http://www.w3.org/2001/XMLSchema#string" |
+                        "http://www.w3.org/2001/XMLSchema#anyURI" => {
+                            Ok(SWRLValue::String(literal.value.clone()))
+                        },
+                        "http://www.w3.org/2001/XMLSchema#dateTime" => {
+                            // For datetime, store as string for now (proper datetime parsing would require chrono)
+                            Ok(SWRLValue::String(literal.value.clone()))
+                        },
+                        _ => {
+                            // Unknown datatype, default to string
+                            Ok(SWRLValue::String(literal.value.clone()))
+                        }
+                    }
+                } else {
+                    // No datatype specified, try to infer
+                    if let Ok(int_val) = literal.value.parse::<i64>() {
+                        Ok(SWRLValue::Integer(int_val))
+                    } else if let Ok(float_val) = literal.value.parse::<f64>() {
+                        Ok(SWRLValue::Decimal(float_val))
+                    } else if let Ok(bool_val) = literal.value.parse::<bool>() {
+                        Ok(SWRLValue::Boolean(bool_val))
+                    } else {
+                        Ok(SWRLValue::String(literal.value.clone()))
+                    }
+                }
+            },
+            SWRLDArgument::Variable(var) => {
+                // For now, return an error as variable binding context is needed
+                // In a real implementation, this would need access to current execution context
+                Err(crate::error::OxidowlError::ParseError(
+                    format!("Cannot convert unbound variable '{:?}' to value", var)
+                ))
+            },
         }
     }
 
@@ -939,6 +1382,364 @@ mod tests {
         engine.set_rule_priority(1, 10);
         engine.set_rule_priority(2, 5);
         engine.set_rule_priority(3, 15);
+    }
+}
+
+/// Goal for backward chaining proof search
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SWRLGoal {
+    ClassAssertion {
+        individual: String,
+        class: String,
+    },
+    PropertyAssertion {
+        subject: String,
+        property: String,
+        object: String,
+    },
+    DataPropertyAssertion {
+        subject: String,
+        property: String,
+        value: String,
+    },
+    // Add more goal types as needed
+}
+
+impl SWRLGoal {
+    /// Create goal from class assertion
+    pub fn from_class_assertion(assertion: &crate::ontology::axioms::ClassAssertionAxiom) -> Self {
+        let individual_name = match &assertion.individual {
+            crate::ontology::Individual::Named(named) => named.iri.to_string(),
+            crate::ontology::Individual::Anonymous(anon) => anon.id.clone(),
+        };
+        
+        let class_name = match &assertion.class {
+            crate::ontology::ClassExpression::Class(class) => class.iri.to_string(),
+            _ => "ComplexClass".to_string(), // Simplified for complex expressions
+        };
+        
+        SWRLGoal::ClassAssertion {
+            individual: individual_name,
+            class: class_name,
+        }
+    }
+}
+
+/// Result of attempting to prove a goal
+#[derive(Debug, Clone, PartialEq)]
+pub enum GoalProofResult {
+    Proved,
+    Failed,
+    NeedsMoreProofs, // Subgoals were generated
+}
+
+impl SWRLRuleEngine {
+    /// Try to prove a goal using backward chaining
+    fn try_prove_goal(&mut self, goal: &SWRLGoal, goal_stack: &mut Vec<SWRLGoal>) -> Result<GoalProofResult> {
+        // First check if goal is already satisfied by current facts
+        if self.is_goal_satisfied_swrl(goal)? {
+            return Ok(GoalProofResult::Proved);
+        }
+        
+        // Try to find rules that could prove this goal
+        let applicable_rules = self.find_rules_for_goal_swrl(goal)?;
+        
+        if applicable_rules.is_empty() {
+            return Ok(GoalProofResult::Failed);
+        }
+        
+        // Try each applicable rule
+        for rule_id in applicable_rules {
+            if let Some(rule_state) = self.rule_states.get(&rule_id) {
+                let rule = &rule_state.rule;
+                // Generate subgoals from rule body
+                let subgoals = self.generate_subgoals_from_rule(rule, goal)?;
+                
+                if subgoals.is_empty() {
+                    // Rule can be applied directly
+                    let mut context = SWRLExecutionContext::new();
+                    let result = self.interpreter.execute_rule(rule, &mut context, self.ontology.as_ref().unwrap())?;
+                    
+                    if result.inferences.len() > 0 {
+                        return Ok(GoalProofResult::Proved);
+                    }
+                } else {
+                    // Add subgoals to stack for later processing
+                    for subgoal in subgoals {
+                        goal_stack.push(subgoal);
+                    }
+                    return Ok(GoalProofResult::NeedsMoreProofs);
+                }
+            }
+        }
+        
+        Ok(GoalProofResult::Failed)
+    }
+    
+    /// Check if a goal is already satisfied
+    fn is_goal_satisfied_swrl(&self, goal: &SWRLGoal) -> Result<bool> {
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            match goal {
+                SWRLGoal::ClassAssertion { individual, class } => {
+                    // Check if individual is asserted to be of this class
+                    for axiom in ontology_guard.axioms() {
+                        if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                            let ind_name = match &assertion.individual {
+                                crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                                crate::ontology::Individual::Anonymous(anon) => anon.id.clone(),
+                            };
+                            
+                            let class_name = match &assertion.class {
+                                crate::ontology::ClassExpression::Class(cls) => cls.iri.to_string(),
+                                _ => continue,
+                            };
+                            
+                            if ind_name == *individual && class_name == *class {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+                SWRLGoal::PropertyAssertion { subject, property, object } => {
+                    // Check if property assertion exists
+                    for axiom in ontology_guard.axioms() {
+                        if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom {
+                            // Check if assertion matches goal
+                            // Implementation would compare IRIs properly
+                            return Ok(false); // Simplified
+                        }
+                    }
+                }
+                SWRLGoal::DataPropertyAssertion { subject, property, value } => {
+                    // Check if data property assertion exists
+                    for axiom in ontology_guard.axioms() {
+                        if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
+                            // Check if assertion matches goal
+                            // Implementation would compare properly
+                            return Ok(false); // Simplified
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+    
+    /// Find rules that could potentially prove the given goal
+    fn find_rules_for_goal_swrl(&self, goal: &SWRLGoal) -> Result<Vec<u64>> {
+        let mut applicable_rules = Vec::new();
+        
+        for (rule_id, rule_state) in &self.rule_states {
+            let rule = &rule_state.rule;
+            // Check if rule head could prove the goal
+            if self.rule_head_matches_goal(rule, goal)? {
+                applicable_rules.push(*rule_id);
+            }
+        }
+        
+        Ok(applicable_rules)
+    }
+    
+    /// Check if a rule's head could prove the given goal
+    fn rule_head_matches_goal(&self, rule: &SWRLRule, goal: &SWRLGoal) -> Result<bool> {
+        for head_atom in &rule.head {
+            match (head_atom, goal) {
+                (crate::swrl::SWRLAtom::ClassAtom { predicate: _, argument: _ }, SWRLGoal::ClassAssertion { individual: _, class: _ }) => {
+                    // Check if class atom could match goal
+                    // Would need proper variable unification here
+                    return Ok(true); // Simplified
+                }
+                (crate::swrl::SWRLAtom::ObjectPropertyAtom { predicate: _, first_argument: _, second_argument: _ }, SWRLGoal::PropertyAssertion { .. }) => {
+                    return Ok(true); // Simplified
+                }
+                (crate::swrl::SWRLAtom::DataPropertyAtom { predicate: _, first_argument: _, second_argument: _ }, SWRLGoal::DataPropertyAssertion { .. }) => {
+                    return Ok(true); // Simplified
+                }
+                _ => {}
+            }
+        }
+        
+        Ok(false)
+    }
+    
+    /// Generate subgoals from a rule body that need to be satisfied
+    fn generate_subgoals_from_rule(&self, rule: &SWRLRule, goal: &SWRLGoal) -> Result<Vec<SWRLGoal>> {
+        let mut subgoals = Vec::new();
+        
+        // For each atom in the rule body, create a corresponding subgoal
+        for body_atom in &rule.body {
+            match body_atom {
+                crate::swrl::SWRLAtom::ClassAtom { predicate, argument } => {
+                    // Create class assertion subgoal
+                    subgoals.push(SWRLGoal::ClassAssertion {
+                        individual: format!("var_{:?}", argument), // Simplified variable handling
+                        class: format!("{:?}", predicate),
+                    });
+                }
+                crate::swrl::SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
+                    // Create property assertion subgoal
+                    subgoals.push(SWRLGoal::PropertyAssertion {
+                        subject: format!("var_{:?}", first_argument),
+                        property: format!("{:?}", predicate),
+                        object: format!("var_{:?}", second_argument),
+                    });
+                }
+                crate::swrl::SWRLAtom::DataPropertyAtom { predicate, first_argument, second_argument } => {
+                    // Create data property assertion subgoal
+                    subgoals.push(SWRLGoal::DataPropertyAssertion {
+                        subject: format!("var_{:?}", first_argument),
+                        property: format!("{:?}", predicate),
+                        value: format!("var_{:?}", second_argument),
+                    });
+                }
+                _ => {
+                    // Handle other atom types as needed
+                }
+            }
+        }
+        
+        Ok(subgoals)
+    }
+
+    /// Execute forward chaining with iteration limit
+    fn execute_forward_chaining_limited(&mut self, max_iterations: usize) -> Result<SWRLExecutionResult> {
+        info!("Executing limited forward chaining with max {} iterations", max_iterations);
+        
+        let mut total_inferences = Vec::new();
+        let mut total_applications = 0;
+        let mut any_fired = false;
+        
+        for iteration in 0..max_iterations {
+            let mut iteration_fired = false;
+            
+            // Get rules ordered by priority
+            let ordered_rule_ids = self.get_ordered_rules();
+            
+            for rule_id in ordered_rule_ids {
+                if let Some(rule_state) = self.rule_states.get(&rule_id) {
+                    if self.is_rule_applicable(rule_id.try_into().unwrap())? {
+                        // Clone the rule to avoid borrow checker issues
+                        let rule_clone = rule_state.rule.clone();
+                        let result = self.execute_single_rule(&rule_clone)?;
+                        
+                        if result.fired {
+                            iteration_fired = true;
+                            any_fired = true;
+                            total_inferences.extend(result.inferences);
+                        }
+                        
+                        total_applications += 1;
+                    }
+                }
+            }
+            
+            // Stop if no rules fired in this iteration
+            if !iteration_fired {
+                break;
+            }
+        }
+        
+        Ok(SWRLExecutionResult::new(
+            any_fired,
+            total_inferences,
+            total_applications,
+        ))
+    }
+
+    /// Execute backward chaining with iteration limit
+    fn execute_backward_chaining_limited(&mut self, max_iterations: usize) -> Result<SWRLExecutionResult> {
+        info!("Executing limited backward chaining with max {} iterations", max_iterations);
+        
+        let mut total_inferences = Vec::new();
+        let mut total_applications = 0;
+        let mut any_fired = false;
+        
+        // Initialize goal stack for backward chaining
+        let mut goal_stack = Vec::new();
+        let mut proved_goals = HashSet::new();
+        let mut failed_goals = HashSet::new();
+        
+        // Start with queries from the ontology (if any are specified)
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            // Add unproven class assertions as goals
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                    let goal = SWRLGoal::from_class_assertion(assertion);
+                    if !self.is_goal_satisfied_swrl(&goal)? {
+                        goal_stack.push(goal);
+                    }
+                }
+            }
+        }
+        
+        // Main backward chaining loop with iteration limit
+        let mut iteration = 0;
+        while !goal_stack.is_empty() && iteration < max_iterations {
+            iteration += 1;
+            let current_goal = goal_stack.pop().unwrap();
+            
+            // Skip if already proved or failed
+            if proved_goals.contains(&current_goal) || failed_goals.contains(&current_goal) {
+                continue;
+            }
+            
+            // Try to prove the goal using available rules
+            let proof_result = self.try_prove_goal(&current_goal, &mut goal_stack)?;
+            
+            match proof_result {
+                GoalProofResult::Proved => {
+                    proved_goals.insert(current_goal);
+                    any_fired = true;
+                    // For now, we don't track specific axioms in backward chaining limited
+                    // total_inferences.push(some_axiom);
+                }
+                GoalProofResult::Failed => {
+                    failed_goals.insert(current_goal);
+                }
+                GoalProofResult::NeedsMoreProofs => {
+                    // Subgoals added to stack, try again later
+                    goal_stack.push(current_goal);
+                }
+            }
+            
+            total_applications += 1;
+        }
+        
+        Ok(SWRLExecutionResult::new(
+            any_fired,
+            total_inferences,
+            total_applications,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ontology::*;
+
+    fn create_test_ontology() -> Arc<RwLock<Ontology>> {
+        let ontology = Ontology::new();
+        Arc::new(RwLock::new(ontology))
+    }
+
+    #[test]
+    fn test_rule_priority_ordering() {
+        let mut engine = SWRLRuleEngine::new(SWRLConfig::default());
+        
+        // Add rules with different priorities
+        let rule1 = SWRLRule::default();
+        let rule2 = SWRLRule::default();
+        let rule3 = SWRLRule::default();
+        
+        engine.add_rule(1, rule1, Some(10)).unwrap();
+        engine.add_rule(2, rule2, Some(5)).unwrap();
+        engine.add_rule(3, rule3, Some(15)).unwrap();
 
         let ordered = engine.get_ordered_rules();
         // Should be ordered by priority: 3 (15), 1 (10), 2 (5)

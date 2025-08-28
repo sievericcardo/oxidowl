@@ -1,5 +1,3 @@
-//! SWRL Built-in Predicates
-//!
 //! This module provides implementation of standard SWRL built-in predicates
 //! and a registry system for managing and executing them.
 
@@ -17,6 +15,8 @@ pub enum SWRLValue {
     Integer(i64),
     /// Float value
     Float(f64),
+    /// Decimal value
+    Decimal(f64),
     /// Boolean value
     Boolean(bool),
     /// Date/time value (as string for now)
@@ -47,24 +47,29 @@ impl std::hash::Hash for SWRLValue {
                 // Hash float as bits to handle NaN/infinity properly
                 f.to_bits().hash(state);
             }
-            SWRLValue::Boolean(b) => {
+            SWRLValue::Decimal(d) => {
                 3u8.hash(state);
+                // Hash decimal as bits to handle NaN/infinity properly
+                d.to_bits().hash(state);
+            }
+            SWRLValue::Boolean(b) => {
+                4u8.hash(state);
                 b.hash(state);
             }
             SWRLValue::DateTime(dt) => {
-                4u8.hash(state);
+                5u8.hash(state);
                 dt.hash(state);
             }
             SWRLValue::Uri(uri) => {
-                5u8.hash(state);
+                6u8.hash(state);
                 uri.hash(state);
             }
             SWRLValue::Individual(ind) => {
-                6u8.hash(state);
+                7u8.hash(state);
                 ind.hash(state);
             }
             SWRLValue::Literal(lit) => {
-                7u8.hash(state);
+                8u8.hash(state);
                 lit.hash(state);
             }
         }
@@ -103,6 +108,7 @@ impl fmt::Display for SWRLValue {
             SWRLValue::String(s) => write!(f, "\"{s}\""),
             SWRLValue::Integer(i) => write!(f, "{i}"),
             SWRLValue::Float(fl) => write!(f, "{fl}"),
+            SWRLValue::Decimal(d) => write!(f, "{d}"),
             SWRLValue::Boolean(b) => write!(f, "{b}"),
             SWRLValue::DateTime(dt) => write!(f, "\"{dt}\""),
             SWRLValue::Uri(uri) => write!(f, "<{uri}>"),

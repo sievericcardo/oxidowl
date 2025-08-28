@@ -29,7 +29,7 @@ impl RLValidator {
     
     /// Validate class expressions in the ontology
     fn validate_class_expressions(&self, ontology: &Ontology, report: &mut ProfileValidationReport) -> Result<(), OxidowlError> {
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.check_class_expressions_in_axiom(axiom, report);
         }
         Ok(())
@@ -37,7 +37,7 @@ impl RLValidator {
     
     /// Validate property expressions in the ontology
     fn validate_property_expressions(&self, ontology: &Ontology, report: &mut ProfileValidationReport) -> Result<(), OxidowlError> {
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.check_property_expressions_in_axiom(axiom, report);
         }
         Ok(())
@@ -45,7 +45,7 @@ impl RLValidator {
     
     /// Validate data ranges in the ontology
     fn validate_data_ranges(&self, ontology: &Ontology, report: &mut ProfileValidationReport) -> Result<(), OxidowlError> {
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
             self.check_data_ranges_in_axiom(axiom, report);
         }
         Ok(())
@@ -91,15 +91,69 @@ impl RLValidator {
                 self.is_data_range_allowed(filler)
             },
             ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
-                (*cardinality == 0 && filler.as_ref() == &ClassExpression::nothing() && self.is_property_expression_allowed(property)) ||
-                (*cardinality == 1 && filler.as_ref() == &ClassExpression::thing() && self.is_property_expression_allowed(property))
+                (*cardinality == 0 || *cardinality == 1) && 
+                self.is_property_expression_allowed(property) && 
+                matches!(**filler, ClassExpression::Class(_))
             },
             ClassExpression::DataMaxCardinality { cardinality, filler, .. } => {
-                (*cardinality == 0 && self.is_data_range_allowed(filler)) ||
-                (*cardinality == 1 && self.is_data_range_allowed(filler))
+                (*cardinality == 0 || *cardinality == 1) && 
+                self.is_data_range_allowed(filler)
             },
             _ => false,
         }
+    }
+    
+    /// Check if a data property expression is allowed in RL
+    fn is_data_property_expression_allowed(&self, expr: &DataPropertyExpression) -> bool {
+        match expr {
+            DataPropertyExpression::DataProperty(_) => true,
+        }
+    }
+    
+    /// Check for prohibited RL constructs
+    fn check_prohibited_constructs(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
+        let prohibited_constructs = self.get_prohibited_constructs();
+        
+        // Check axiom type against prohibited list
+        let axiom_debug_str = format!("{:?}", axiom);
+        let axiom_type = axiom_debug_str.split('(').next().unwrap_or("Unknown");
+        if prohibited_constructs.contains(axiom_type) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                format!("Axiom type '{}' is prohibited in OWL 2 RL profile", axiom_type),
+            ));
+        }
+    }
+    
+    /// Get the set of constructs prohibited in OWL 2 RL
+    fn get_prohibited_constructs(&self) -> HashSet<&'static str> {
+        let mut prohibited = HashSet::new();
+        
+        // Prohibited axiom types
+        prohibited.insert("DisjointUnion");
+        prohibited.insert("InverseObjectProperties"); 
+        prohibited.insert("DatatypeDefinition");
+        
+        // Prohibited class expressions
+        prohibited.insert("ObjectComplementOf");
+        prohibited.insert("ObjectMinCardinality");
+        prohibited.insert("ObjectExactCardinality");
+        prohibited.insert("DataMinCardinality");
+        prohibited.insert("DataExactCardinality");
+        prohibited.insert("ObjectHasSelf");
+        prohibited.insert("ObjectOneOf");
+        
+        // Prohibited property expressions
+        prohibited.insert("InverseObjectProperty");
+        prohibited.insert("PropertyChain");
+        
+        // Prohibited data ranges
+        prohibited.insert("DataUnionOf");
+        prohibited.insert("DataComplementOf");
+        prohibited.insert("DataOneOf");
+        prohibited.insert("DatatypeRestriction");
+        
+        prohibited
     }
     
     /// Check class expressions within an axiom
@@ -173,7 +227,10 @@ impl ProfileValidator for RLValidator {
         let mut report = ProfileValidationReport::new(OWL2Profile::RL);
         
         // Validate all axioms in the ontology
-        for axiom in &ontology.axioms {
+        for axiom in ontology.axioms() {
+            // Check for prohibited constructs
+            self.check_prohibited_constructs(axiom, &mut report);
+            
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
                     ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
@@ -186,6 +243,9 @@ impl ProfileValidator for RLValidator {
         self.validate_class_expressions(ontology, &mut report)?;
         self.validate_property_expressions(ontology, &mut report)?;
         self.validate_data_ranges(ontology, &mut report)?;
+        
+        // Check ontology structure
+        self.validate_ontology_structure(ontology, &mut report)?;
         
         Ok(report)
     }
@@ -345,6 +405,75 @@ impl ProfileValidator for RLValidator {
 
     fn profile(&self) -> OWL2Profile {
         OWL2Profile::RL
+    }
+}
+
+impl RLValidator {
+    /// Validate overall ontology structure for RL compliance
+    fn validate_ontology_structure(&self, ontology: &Ontology, report: &mut ProfileValidationReport) -> Result<(), OxidowlError> {
+        // Check for complex constructs that might be allowed individually but problematic together
+        self.check_complex_construct_interactions(ontology, report);
+        
+        // Check for non-Horn clause patterns
+        self.check_horn_clause_compliance(ontology, report);
+        
+        Ok(())
+    }
+    
+    /// Check for interactions between complex constructs that might violate RL
+    fn check_complex_construct_interactions(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        // Look for patterns that combine multiple complex constructs in ways that exceed RL
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::SubClassOf(subclass_axiom) => {
+                    // Check for complex sub-class + complex super-class combinations
+                    self.check_complex_subclass_combinations(&subclass_axiom.subclass, &subclass_axiom.superclass, report);
+                },
+                _ => {}
+            }
+        }
+    }
+    
+    /// Check specific combinations of complex class expressions
+    fn check_complex_subclass_combinations(&self, subclass: &ClassExpression, superclass: &ClassExpression, report: &mut ProfileValidationReport) {
+        // Check for union in subclass position with complex superclass
+        if matches!(subclass, ClassExpression::ObjectUnionOf(_)) {
+            if !matches!(superclass, ClassExpression::Class(_) | ClassExpression::ObjectIntersectionOf(_)) {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedClassExpression(format!("Union subclass with complex superclass: {:?} ⊑ {:?}", subclass, superclass)),
+                    "Complex combinations of union subclass with non-atomic superclass may not be expressible in Horn clauses",
+                ));
+            }
+        }
+    }
+    
+    /// Check for Horn clause compliance
+    fn check_horn_clause_compliance(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        // OWL 2 RL should be translatable to Horn clauses
+        // Check for constructs that would violate this property
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::DisjointClasses(disjoint_axiom) => {
+                    if disjoint_axiom.classes.len() > 2 {
+                        // Pairwise disjointness is preferred for Horn clause translation
+                        report.add_violation(ProfileViolation::new(
+                            ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                            "Multi-way disjoint classes may not translate efficiently to Horn clauses",
+                        ));
+                    }
+                },
+                Axiom::EquivalentClasses(equiv_axiom) => {
+                    if equiv_axiom.classes.len() > 2 {
+                        // Pairwise equivalences are preferred
+                        report.add_violation(ProfileViolation::new(
+                            ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                            "Multi-way equivalent classes should be expressed as pairwise equivalences for Horn clause translation",
+                        ));
+                    }
+                },
+                _ => {}
+            }
+        }
     }
 }
 

@@ -32,7 +32,7 @@ pub use backward_chaining::{
     BackwardChainingEngine, FactBase, QueryResult, VariableBindings as BCVariableBindings,
 };
 pub use builtins::{
-    SWRLBuiltIn, SWRLBuiltInRegistry as BuiltInRegistry, SWRLValue as BuiltInValue, SWRLValue,
+    SWRLBuiltIn, SWRLBuiltInRegistry as BuiltInRegistry, SWRLValue,
 };
 pub use datetime_constructor_builtins::DateTimeConstructorRegistry;
 pub use engine::SWRLRuleEngine;
