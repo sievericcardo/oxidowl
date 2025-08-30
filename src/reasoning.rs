@@ -407,7 +407,7 @@ impl ReasoningService {
         let literals: HashSet<crate::ontology::Literal> = result
             .into_iter()
             .map(|s| crate::ontology::Literal {
-                value: s,
+                value: s.to_string(),
                 datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap()),
                 language: None,
             })
