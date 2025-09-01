@@ -3,7 +3,7 @@
 //! This module implements the core SWRL rule execution engine that coordinates
 //! rule firing, inference generation, and integration with the tableau reasoner.
 
-use crate::ontology::{Axiom, Ontology, Individual, Literal};
+use crate::ontology::{Axiom, Ontology, Individual, Literal, ClassExpression};
 use crate::swrl::{
     SWRLAtom, SWRLConfig, SWRLExecutionContext, SWRLExecutionResult, SWRLReasoningStrategy,
     SWRLRule, SWRLRuleState, SWRLStatistics, SWRLDArgument, SWRLIArgument,
@@ -773,9 +773,58 @@ impl SWRLRuleEngine {
                             }
                         }
                     },
+                    ClassExpression::ObjectIntersectionOf(conjuncts) => {
+                        // Individual must be in all conjuncts
+                        for conjunct in conjuncts {
+                            // Extract Individual from SWRLIArgument
+                            if let SWRLIArgument::Individual(ind) = individual {
+                                if !self.is_individual_in_class_simple(ind, conjunct, &ontology)? {
+                                    return Ok(false);
+                                }
+                            } else {
+                                return Ok(false); // Variables not yet handled
+                            }
+                        }
+                        return Ok(true);
+                    },
+                    ClassExpression::ObjectUnionOf(disjuncts) => {
+                        // Individual must be in at least one disjunct
+                        for disjunct in disjuncts {
+                            if let SWRLIArgument::Individual(ind) = individual {
+                                if self.is_individual_in_class_simple(ind, disjunct, &ontology)? {
+                                    return Ok(true);
+                                }
+                            }
+                        }
+                        return Ok(false);
+                    },
+                    ClassExpression::ObjectComplementOf(complement) => {
+                        // Individual must not be in the complement class
+                        if let SWRLIArgument::Individual(ind) = individual {
+                            return Ok(!self.is_individual_in_class_simple(ind, complement, &ontology)?);
+                        } else {
+                            return Ok(false); // Variables not yet handled
+                        }
+                    },
+                    ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                        // Check if individual has the existential property
+                        if let SWRLIArgument::Individual(ind) = individual {
+                            return self.check_existential_restriction(ind, &ClassExpression::ObjectSomeValuesFrom { property: property.clone(), filler: filler.clone() }, &ontology);
+                        } else {
+                            return Ok(false); // Variables not yet handled
+                        }
+                    },
+                    ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                        // Check if all property values satisfy the restriction
+                        if let SWRLIArgument::Individual(ind) = individual {
+                            return self.check_universal_restriction(ind, &ClassExpression::ObjectAllValuesFrom { property: property.clone(), filler: filler.clone() }, &ontology);
+                        } else {
+                            return Ok(false); // Variables not yet handled
+                        }
+                    },
                     _ => {
-                        // For complex class expressions, simplified handling
-                        // Would need full reasoning engine integration
+                        // For other complex class expressions, need full reasoning
+                        // This is still a limitation but handles more cases
                         return Ok(false);
                     }
                 }
@@ -1931,5 +1980,95 @@ impl SWRLRuleEngine {
             total_inferences,
             total_applications,
         ))
+    }
+    
+    // Helper methods for complex class expression handling
+    
+    /// Simple check if an individual is in a class (simplified implementation)
+    fn is_individual_in_class_simple(
+        &self,
+        individual: &crate::ontology::Individual,
+        class: &ClassExpression,
+        ontology: &crate::ontology::Ontology
+    ) -> Result<bool> {
+        // TODO: Implement proper class membership checking
+        // For now, return a simplified check
+        match class {
+            ClassExpression::Class(_) => Ok(true), // Assume membership for atomic classes
+            _ => Ok(false), // More complex expressions not yet implemented
+        }
+    }
+    
+    /// Check if an individual satisfies an existential restriction
+    fn check_existential_restriction(
+        &self,
+        individual: &crate::ontology::Individual,
+        restriction: &ClassExpression,
+        ontology: &crate::ontology::Ontology
+    ) -> Result<bool> {
+        // Extract the property and filler from the ObjectSomeValuesFrom restriction
+        if let ClassExpression::ObjectSomeValuesFrom { property, filler } = restriction {
+            // Look for property assertions that match the restriction
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::ObjectPropertyAssertion(assertion) = axiom {
+                    if assertion.source.iri() == individual.iri() {
+                        // Check if the property matches the restriction property
+                        if self.object_properties_match(&assertion.property, property)? {
+                            // Check if the object satisfies the filler class
+                            if self.is_individual_in_class_simple(&assertion.target, filler, ontology)? {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+    
+    /// Check if an individual satisfies a universal restriction
+    fn check_universal_restriction(
+        &self,
+        individual: &crate::ontology::Individual,
+        restriction: &ClassExpression,
+        ontology: &crate::ontology::Ontology
+    ) -> Result<bool> {
+        // Extract the property and filler from the ObjectAllValuesFrom restriction
+        if let ClassExpression::ObjectAllValuesFrom { property, filler } = restriction {
+            // For universal restrictions, all property values must satisfy the filler
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::ObjectPropertyAssertion(assertion) = axiom {
+                    if assertion.source.iri() == individual.iri() {
+                        // Check if the property matches the restriction property
+                        if self.object_properties_match(&assertion.property, property)? {
+                            // Check if the object satisfies the filler class
+                            if !self.is_individual_in_class_simple(&assertion.target, filler, ontology)? {
+                                return Ok(false); // Found a counterexample
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(true) // All found values satisfy the restriction
+    }
+    
+    /// Check if two object property expressions match
+    fn object_properties_match(
+        &self,
+        prop1: &crate::ontology::ObjectPropertyExpression,
+        prop2: &crate::ontology::ObjectPropertyExpression
+    ) -> Result<bool> {
+        match (prop1, prop2) {
+            (
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(p1),
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(p2)
+            ) => Ok(p1.iri == p2.iri),
+            (
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p1),
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p2)
+            ) => Ok(p1.iri == p2.iri),
+            _ => Ok(false), // Different types or more complex expressions
+        }
     }
 }

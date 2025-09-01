@@ -55,6 +55,7 @@ pub enum ValidationErrorType {
     IncompatibleDataRanges,
     InvalidLiteralEnumeration,
     InvalidDatatypeDefinition,
+    DuplicateDatatypeDefinition,
     CircularDatatypeDefinition,
     InconsistentDatatypeDefinition,
     UnknownDatatype,
@@ -130,6 +131,9 @@ impl std::fmt::Display for ValidationErrorType {
             ValidationErrorType::InvalidLiteralValue => {
                 write!(f, "Invalid literal value")
             }
+            ValidationErrorType::DuplicateDatatypeDefinition => {
+                write!(f, "Duplicate datatype definition")
+            }
         }
     }
 }
@@ -158,6 +162,7 @@ pub struct OWL2DLValidator {
     simple_properties: HashSet<crate::ontology::IRI>,
     property_hierarchy: HashMap<crate::ontology::IRI, Vec<crate::ontology::IRI>>,
     transitive_properties: HashSet<crate::ontology::IRI>,
+    defined_datatypes: HashSet<String>,
     validation_cache: HashMap<String, ValidationReport>,
 }
 
@@ -168,6 +173,7 @@ impl OWL2DLValidator {
             simple_properties: HashSet::new(),
             property_hierarchy: HashMap::new(),
             transitive_properties: HashSet::new(),
+            defined_datatypes: HashSet::new(),
             validation_cache: HashMap::new(),
         };
         
@@ -355,11 +361,13 @@ impl OWL2DLValidator {
     }
 
     /// Validate datatype restrictions 
-    fn validate_datatype_restrictions(&self) -> Result<Vec<ValidationError>, OxidowlError> {
+    fn validate_datatype_restrictions(&mut self) -> Result<Vec<ValidationError>, OxidowlError> {
         let mut errors = Vec::new();
 
         // Check that only recognized datatypes are used
-        for axiom in self.ontology.axioms() {
+        // Clone axioms to avoid borrow checker issues
+        let axioms: Vec<_> = self.ontology.axioms().into_iter().cloned().collect();
+        for axiom in &axioms {
             self.validate_datatype_usage_in_axiom(axiom, &mut errors)?;
         }
 
@@ -367,7 +375,7 @@ impl OWL2DLValidator {
     }
 
     /// Validate datatype usage within an axiom
-    fn validate_datatype_usage_in_axiom(&self, axiom: &Axiom, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+    fn validate_datatype_usage_in_axiom(&mut self, axiom: &Axiom, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
         match axiom {
             Axiom::DataPropertyRange(range_axiom) => {
                 self.validate_data_range(&range_axiom.range, errors)?;
@@ -912,9 +920,112 @@ impl OWL2DLValidator {
     }
 
     /// Validate a datatype definition
-    fn validate_datatype_definition(&self, _datatype_def: &crate::ontology::datatypes::DatatypeDefinitionAxiom, _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
-        // Simplified implementation to avoid API compatibility issues
+    fn validate_datatype_definition(&mut self, datatype_def: &crate::ontology::datatypes::DatatypeDefinitionAxiom, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // Check if the datatype is already defined
+        if self.defined_datatypes.contains(&datatype_def.datatype.to_string()) {
+            errors.push(ValidationError::new(
+                ValidationErrorType::DuplicateDatatypeDefinition,
+                format!("Datatype {} is defined multiple times", datatype_def.datatype.to_string()),
+            ));
+        }
+        
+        // Add to defined datatypes
+        self.defined_datatypes.insert(datatype_def.datatype.to_string());
+        
+        // TODO: Validate the datatype expression
+        // Need to convert horned_owl::DataRange to internal DataRange first
+        // self.validate_datatype_expression(&datatype_def.data_range, errors)?;
+        
+        // TODO: Check for circular datatype definitions 
+        // Need to implement conversion from horned_owl types first
+        // if self.has_circular_datatype_reference(&datatype_def.datatype.to_string(), &datatype_def.data_range) {
+        //     errors.push(ValidationError::new(
+        //         ValidationErrorType::CircularDatatypeDefinition,
+        //         format!("Circular reference in datatype definition: {}", datatype_def.datatype.to_string()),
+        //     ));
+        // }
+        
         Ok(())
+    }
+    
+    /// Check for circular datatype references
+    fn has_circular_datatype_reference(&self, datatype_iri: &str, expr: &crate::ontology::datatypes::DataRange) -> bool {
+        match expr {
+            crate::ontology::datatypes::DataRange::Datatype(dt) => dt.to_string() == datatype_iri,
+            crate::ontology::datatypes::DataRange::DataIntersectionOf(ranges) => {
+                ranges.iter().any(|r| self.has_circular_datatype_reference(datatype_iri, r))
+            },
+            crate::ontology::datatypes::DataRange::DataUnionOf(ranges) => {
+                ranges.iter().any(|r| self.has_circular_datatype_reference(datatype_iri, r))
+            },
+            crate::ontology::datatypes::DataRange::DataComplementOf(range) => {
+                self.has_circular_datatype_reference(datatype_iri, range)
+            },
+            _ => false,
+        }
+    }
+    
+    /// Validate a datatype expression
+    fn validate_datatype_expression(&self, expr: &crate::ontology::datatypes::DataRange, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        match expr {
+            crate::ontology::datatypes::DataRange::Datatype(datatype) => {
+                // Check if datatype is a known built-in or defined datatype
+                if !self.is_known_datatype(&datatype.to_string()) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::UnknownDatatype,
+                        format!("Unknown datatype: {}", datatype.to_string()),
+                    ));
+                }
+            },
+            crate::ontology::datatypes::DataRange::DataIntersectionOf(ranges) => {
+                for range in ranges {
+                    self.validate_datatype_expression(range, errors)?;
+                }
+            },
+            crate::ontology::datatypes::DataRange::DataUnionOf(ranges) => {
+                for range in ranges {
+                    self.validate_datatype_expression(range, errors)?;
+                }
+            },
+            crate::ontology::datatypes::DataRange::DataComplementOf(range) => {
+                self.validate_datatype_expression(range, errors)?;
+            },
+            _ => {
+                // Other datatype expressions are valid
+            }
+        }
+        Ok(())
+    }
+    
+    /// Check if a datatype IRI is known (built-in or previously defined)
+    fn is_known_datatype(&self, iri: &str) -> bool {
+        // Check built-in XML Schema datatypes
+        matches!(iri,
+            "http://www.w3.org/2001/XMLSchema#string" |
+            "http://www.w3.org/2001/XMLSchema#boolean" |
+            "http://www.w3.org/2001/XMLSchema#decimal" |
+            "http://www.w3.org/2001/XMLSchema#float" |
+            "http://www.w3.org/2001/XMLSchema#double" |
+            "http://www.w3.org/2001/XMLSchema#integer" |
+            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger" |
+            "http://www.w3.org/2001/XMLSchema#positiveInteger" |
+            "http://www.w3.org/2001/XMLSchema#nonPositiveInteger" |
+            "http://www.w3.org/2001/XMLSchema#negativeInteger" |
+            "http://www.w3.org/2001/XMLSchema#long" |
+            "http://www.w3.org/2001/XMLSchema#int" |
+            "http://www.w3.org/2001/XMLSchema#short" |
+            "http://www.w3.org/2001/XMLSchema#byte" |
+            "http://www.w3.org/2001/XMLSchema#unsignedLong" |
+            "http://www.w3.org/2001/XMLSchema#unsignedInt" |
+            "http://www.w3.org/2001/XMLSchema#unsignedShort" |
+            "http://www.w3.org/2001/XMLSchema#unsignedByte" |
+            "http://www.w3.org/2001/XMLSchema#dateTime" |
+            "http://www.w3.org/2001/XMLSchema#dateTimeStamp" |
+            "http://www.w3.org/2001/XMLSchema#anyURI" |
+            "http://www.w3.org/2001/XMLSchema#base64Binary" |
+            "http://www.w3.org/2001/XMLSchema#hexBinary" |
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral"
+        ) || self.defined_datatypes.contains(iri)
     }
 
     /// Validate embedded data ranges in axioms
@@ -978,9 +1089,83 @@ impl OWL2DLValidator {
     }
 
     /// Validate facet restrictions
-    fn validate_facet_restriction(&self, _datatype: &crate::ontology::IRI, _restriction: &crate::ontology::FacetRestriction, _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
-        // Simplified implementation to avoid API compatibility issues
+    fn validate_facet_restriction(&self, datatype: &crate::ontology::IRI, restriction: &crate::ontology::FacetRestriction, errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // Check if the facet is applicable to the datatype
+        let facet_name = &restriction.facet;
+        let datatype_iri = &datatype.to_string();
+        
+        match facet_name.as_str() {
+            "http://www.w3.org/2001/XMLSchema#minLength" |
+            "http://www.w3.org/2001/XMLSchema#maxLength" |
+            "http://www.w3.org/2001/XMLSchema#length" => {
+                // Length facets are only applicable to string-based datatypes
+                if !self.is_string_based_datatype(datatype_iri) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::InvalidFacetRestriction,
+                        format!("Length facet {} not applicable to datatype {}", facet_name, datatype_iri),
+                    ));
+                }
+            },
+            "http://www.w3.org/2001/XMLSchema#minInclusive" |
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" |
+            "http://www.w3.org/2001/XMLSchema#minExclusive" |
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                // Range facets are only applicable to ordered datatypes
+                if !self.is_ordered_datatype(datatype_iri) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::InvalidFacetRestriction,
+                        format!("Range facet {} not applicable to datatype {}", facet_name, datatype_iri),
+                    ));
+                }
+            },
+            "http://www.w3.org/2001/XMLSchema#pattern" => {
+                // Pattern facets are applicable to most datatypes
+                // Validate the regular expression
+                if let Err(_) = regex::Regex::new(&restriction.value.to_string()) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::InvalidDatatype,
+                        format!("Invalid regular expression pattern: {}", restriction.value.to_string()),
+                    ));
+                }
+            },
+            _ => {
+                errors.push(ValidationError::new(
+                    ValidationErrorType::InvalidFacetRestriction,
+                    format!("Unknown facet: {}", facet_name),
+                ));
+            }
+        }
+        
         Ok(())
+    }
+    
+    /// Check if datatype is string-based
+    fn is_string_based_datatype(&self, iri: &str) -> bool {
+        matches!(iri,
+            "http://www.w3.org/2001/XMLSchema#string" |
+            "http://www.w3.org/2001/XMLSchema#normalizedString" |
+            "http://www.w3.org/2001/XMLSchema#token" |
+            "http://www.w3.org/2001/XMLSchema#Name" |
+            "http://www.w3.org/2001/XMLSchema#NCName" |
+            "http://www.w3.org/2001/XMLSchema#anyURI"
+        )
+    }
+    
+    /// Check if datatype is ordered
+    fn is_ordered_datatype(&self, iri: &str) -> bool {
+        matches!(iri,
+            "http://www.w3.org/2001/XMLSchema#decimal" |
+            "http://www.w3.org/2001/XMLSchema#float" |
+            "http://www.w3.org/2001/XMLSchema#double" |
+            "http://www.w3.org/2001/XMLSchema#integer" |
+            "http://www.w3.org/2001/XMLSchema#long" |
+            "http://www.w3.org/2001/XMLSchema#int" |
+            "http://www.w3.org/2001/XMLSchema#short" |
+            "http://www.w3.org/2001/XMLSchema#byte" |
+            "http://www.w3.org/2001/XMLSchema#dateTime" |
+            "http://www.w3.org/2001/XMLSchema#date" |
+            "http://www.w3.org/2001/XMLSchema#time"
+        )
     }
 
     /// Validate data range intersection compatibility
