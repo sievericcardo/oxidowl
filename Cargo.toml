@@ -74,6 +74,7 @@ rio_xml = "0.8"
 regex = "1.11"
 uuid = { version = "1.17", features = ["v4"] }
 url = "2.3"
+lazy_static = "1.4"
 
 # File I/O and path handling
 tempfile = "3.5"

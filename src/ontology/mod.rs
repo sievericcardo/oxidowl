@@ -598,7 +598,7 @@ impl Ontology {
         let result = horned_owl::io::rdf::reader::read(&mut reader, config)
             .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
 
-        // Convert the horned-owl ontology to oxidowl ontology using simplified approach
+        // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
         adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)
     }

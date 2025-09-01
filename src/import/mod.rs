@@ -748,8 +748,8 @@ fn collect_namespaces_from_axiom(axiom: &crate::ontology::axioms::Axiom, namespa
             }
         }
         _ => {
-            // For other axiom types, we'd need more specific extraction
-            // This is a basic implementation focusing on the most common cases
+            // Enhanced extraction for all other axiom types
+            collect_namespaces_from_axiom_comprehensive(axiom, namespaces);
         }
     }
 }
@@ -788,6 +788,184 @@ fn collect_namespace_from_iri(iri: &crate::ontology::IRI, namespaces: &mut std::
     } else if let Some(pos) = iri_str.rfind('/') {
         let namespace = &iri_str[..pos + 1];
         namespaces.insert(namespace.to_string());
+    }
+}
+
+fn collect_namespace_from_url(url: &url::Url, namespaces: &mut std::collections::HashSet<String>) {
+    let url_str = url.as_str();
+    
+    // Extract namespace (everything before the last # or /)
+    if let Some(pos) = url_str.rfind('#') {
+        let namespace = &url_str[..pos + 1];
+        namespaces.insert(namespace.to_string());
+    } else if let Some(pos) = url_str.rfind('/') {
+        let namespace = &url_str[..pos + 1];
+        namespaces.insert(namespace.to_string());
+    }
+}
+
+/// Comprehensive namespace extraction for all axiom types
+fn collect_namespaces_from_axiom_comprehensive(axiom: &crate::ontology::Axiom, namespaces: &mut std::collections::HashSet<String>) {
+    use crate::ontology::Axiom;
+    
+    match axiom {
+        Axiom::ObjectPropertyAssertion(prop_axiom) => {
+            collect_namespaces_from_object_property_expression(&prop_axiom.property, namespaces);
+            if let crate::ontology::Individual::Named(named) = &prop_axiom.source {
+                collect_namespace_from_iri(&named.iri, namespaces);
+            }
+            if let crate::ontology::Individual::Named(named) = &prop_axiom.target {
+                collect_namespace_from_iri(&named.iri, namespaces);
+            }
+        }
+        Axiom::DataPropertyAssertion(data_axiom) => {
+            collect_namespaces_from_data_property_expression(&data_axiom.property, namespaces);
+            if let crate::ontology::Individual::Named(named) = &data_axiom.individual {
+                collect_namespace_from_iri(&named.iri, namespaces);
+            }
+        }
+        Axiom::NegativeObjectPropertyAssertion(neg_axiom) => {
+            collect_namespaces_from_object_property_expression(&neg_axiom.property, namespaces);
+            if let crate::ontology::Individual::Named(named) = &neg_axiom.source {
+                collect_namespace_from_iri(&named.iri, namespaces);
+            }
+            if let crate::ontology::Individual::Named(named) = &neg_axiom.target {
+                collect_namespace_from_iri(&named.iri, namespaces);
+            }
+        }
+        Axiom::NegativeDataPropertyAssertion(neg_data_axiom) => {
+            collect_namespaces_from_data_property_expression(&neg_data_axiom.property, namespaces);
+            if let crate::ontology::Individual::Named(named) = &neg_data_axiom.individual {
+                collect_namespace_from_iri(&named.iri, namespaces);
+            }
+        }
+        Axiom::SameIndividual(same_axiom) => {
+            for individual in &same_axiom.individuals {
+                if let crate::ontology::Individual::Named(named) = individual {
+                    collect_namespace_from_iri(&named.iri, namespaces);
+                }
+            }
+        }
+        Axiom::DifferentIndividuals(diff_axiom) => {
+            for individual in &diff_axiom.individuals {
+                if let crate::ontology::Individual::Named(named) = individual {
+                    collect_namespace_from_iri(&named.iri, namespaces);
+                }
+            }
+        }
+        Axiom::ObjectPropertyDomain(domain_axiom) => {
+            collect_namespaces_from_object_property_expression(&domain_axiom.property, namespaces);
+            collect_namespaces_from_class_expression(&domain_axiom.domain, namespaces);
+        }
+        Axiom::ObjectPropertyRange(range_axiom) => {
+            collect_namespaces_from_object_property_expression(&range_axiom.property, namespaces);
+            collect_namespaces_from_class_expression(&range_axiom.range, namespaces);
+        }
+        Axiom::DataPropertyDomain(data_domain_axiom) => {
+            collect_namespaces_from_data_property_expression(&data_domain_axiom.property, namespaces);
+            collect_namespaces_from_class_expression(&data_domain_axiom.domain, namespaces);
+        }
+        Axiom::DataPropertyRange(data_range_axiom) => {
+            collect_namespaces_from_data_property_expression(&data_range_axiom.property, namespaces);
+            collect_namespaces_from_data_range(&data_range_axiom.range, namespaces);
+        }
+        Axiom::FunctionalObjectProperty(func_axiom) => {
+            collect_namespaces_from_object_property_expression(&func_axiom.property, namespaces);
+        }
+        Axiom::InverseFunctionalObjectProperty(inv_func_axiom) => {
+            collect_namespaces_from_object_property_expression(&inv_func_axiom.property, namespaces);
+        }
+        Axiom::ReflexiveObjectProperty(refl_axiom) => {
+            collect_namespaces_from_object_property_expression(&refl_axiom.property, namespaces);
+        }
+        Axiom::IrreflexiveObjectProperty(irrefl_axiom) => {
+            collect_namespaces_from_object_property_expression(&irrefl_axiom.property, namespaces);
+        }
+        Axiom::SymmetricObjectProperty(sym_axiom) => {
+            collect_namespaces_from_object_property_expression(&sym_axiom.property, namespaces);
+        }
+        Axiom::AsymmetricObjectProperty(asym_axiom) => {
+            collect_namespaces_from_object_property_expression(&asym_axiom.property, namespaces);
+        }
+        Axiom::TransitiveObjectProperty(trans_axiom) => {
+            collect_namespaces_from_object_property_expression(&trans_axiom.property, namespaces);
+        }
+        Axiom::FunctionalDataProperty(func_data_axiom) => {
+            collect_namespaces_from_data_property_expression(&func_data_axiom.property, namespaces);
+        }
+        Axiom::HasKey(key_axiom) => {
+            collect_namespaces_from_class_expression(&key_axiom.class, namespaces);
+            for prop in &key_axiom.object_properties {
+                collect_namespaces_from_object_property_expression(prop, namespaces);
+            }
+            for prop in &key_axiom.data_properties {
+                collect_namespaces_from_data_property_expression(prop, namespaces);
+            }
+        }
+        _ => {
+            // For remaining axiom types, minimal extraction
+            // This covers annotation axioms and other less common types
+        }
+    }
+}
+
+/// Helper function to collect namespaces from object property expressions
+fn collect_namespaces_from_object_property_expression(expr: &crate::ontology::ObjectPropertyExpression, namespaces: &mut std::collections::HashSet<String>) {
+    use crate::ontology::ObjectPropertyExpression;
+    
+    match expr {
+        ObjectPropertyExpression::ObjectProperty(prop) => {
+            collect_namespace_from_url(&prop.iri, namespaces);
+        }
+        ObjectPropertyExpression::InverseObjectProperty(prop) => {
+            collect_namespace_from_url(&prop.iri, namespaces);
+        }
+        ObjectPropertyExpression::PropertyChain(chain) => {
+            for prop in chain {
+                collect_namespaces_from_object_property_expression(prop, namespaces);
+            }
+        }
+    }
+}
+
+/// Helper function to collect namespaces from data property expressions
+fn collect_namespaces_from_data_property_expression(expr: &crate::ontology::DataPropertyExpression, namespaces: &mut std::collections::HashSet<String>) {
+    use crate::ontology::DataPropertyExpression;
+    
+    match expr {
+        DataPropertyExpression::DataProperty(prop) => {
+            collect_namespace_from_iri(&prop.iri, namespaces);
+        }
+    }
+}
+
+/// Helper function to collect namespaces from data ranges
+fn collect_namespaces_from_data_range(range: &crate::ontology::DataRange, namespaces: &mut std::collections::HashSet<String>) {
+    use crate::ontology::DataRange;
+    
+    match range {
+        DataRange::Datatype(datatype_iri) => {
+            collect_namespace_from_iri(datatype_iri, namespaces);
+        }
+        DataRange::DataIntersectionOf(ranges) => {
+            for range in ranges {
+                collect_namespaces_from_data_range(range, namespaces);
+            }
+        }
+        DataRange::DataUnionOf(ranges) => {
+            for range in ranges {
+                collect_namespaces_from_data_range(range, namespaces);
+            }
+        }
+        DataRange::DataComplementOf(range) => {
+            collect_namespaces_from_data_range(range, namespaces);
+        }
+        DataRange::DataOneOf(_literals) => {
+            // Literals don't typically have namespaces in the same way
+        }
+        DataRange::DatatypeRestriction { datatype, restrictions: _ } => {
+            collect_namespace_from_iri(datatype, namespaces);
+        }
     }
 }
 

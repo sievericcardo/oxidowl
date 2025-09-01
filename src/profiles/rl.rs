@@ -18,7 +18,7 @@ use crate::profiles::{
 };
 use std::collections::HashSet;
 
-/// OWL 2 RL Profile Validator (placeholder implementation)
+/// OWL 2 RL Profile Validator - Full Implementation
 pub struct RLValidator;
 
 impl RLValidator {

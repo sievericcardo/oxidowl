@@ -49,6 +49,7 @@ pub mod parsers;
 pub mod profiles; // OWL 2 profiles support and validation
 pub mod query;
 pub mod reasoning;
+pub mod semantics; // RDF, RDFS, and OWL 2 semantics implementation
 pub mod swrl; // SWRL (Semantic Web Rule Language) support
 pub mod validation; // OWL 2 DL validation and profile checking
 pub mod visitor; // Visitor pattern for ontology traversal

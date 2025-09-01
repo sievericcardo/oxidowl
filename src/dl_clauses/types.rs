@@ -5,6 +5,14 @@ use std::{
     fmt,
 };
 
+/// Wrapper for individual identifiers in DL clauses
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Individual(pub usize);
+
+/// Wrapper for variable identifiers in DL clauses
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Variable(pub usize);
+
 /// A DL clause with head and body atoms
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DLClause {

@@ -134,6 +134,24 @@ pub trait SWRLBuiltIn: Send + Sync {
             !args.is_empty() // At least one argument for variable arity
         }
     }
+    /// Validate the argument count
+    fn validate_argument_count(&self, count: usize) -> bool {
+        if let Some(expected_arity) = self.arity() {
+            count == expected_arity
+        } else {
+            count > 0 // At least one argument for variable arity
+        }
+    }
+    /// Get expected argument count
+    fn expected_argument_count(&self) -> usize {
+        self.arity().unwrap_or(1) // Default to 1 for variable arity
+    }
+    /// Validate argument types
+    fn validate_argument_types(&self, _args: &[SWRLValue]) -> bool {
+        // Default implementation accepts all types
+        // Specific built-ins can override for type checking
+        true
+    }
 }
 
 impl fmt::Debug for dyn SWRLBuiltIn {

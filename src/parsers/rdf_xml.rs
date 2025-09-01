@@ -30,6 +30,9 @@ pub struct RdfXmlParserConfig {
 
     /// Whether to use strict RDF/XML compliance (default: false)
     pub strict_mode: bool,
+
+    /// Base URI for resolving relative URIs
+    pub base_uri: Option<String>,
 }
 
 impl Default for RdfXmlParserConfig {
@@ -41,6 +44,7 @@ impl Default for RdfXmlParserConfig {
             validate_rdf: true,
             max_depth: 100,
             strict_mode: false,
+            base_uri: None,
         }
     }
 }
@@ -148,32 +152,155 @@ impl RdfXmlParser {
 
     /// Extract class declarations
     fn extract_classes(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
-        // Look for owl:Class declarations
-        // This is a simplified pattern matching approach
-        let class_patterns = [
-            r#"<owl:Class rdf:about="([^"]+)""#,
-            r#"<owl:Class rdf:ID="([^"]+)""#,
-            r#"rdf:type.*owl:Class"#,
-        ];
+        // Enhanced RDF/XML class extraction with proper XML parsing
+        // This follows the RDF/XML specification more closely
         
-        for pattern in &class_patterns {
-            if let Ok(regex) = regex::Regex::new(pattern) {
-                for caps in regex.captures_iter(content) {
-                    if let Some(class_iri) = caps.get(1) {
-                        let iri = crate::ontology::IRI::new(class_iri.as_str());
-                        
-                        // Add declaration axiom
-                        let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
-                            id: ontology.axioms().len() as u64,
-                            entity: crate::ontology::axioms::Entity::Class(iri),
-                        };
-                        ontology.add_axiom(crate::ontology::axioms::Axiom::Declaration(decl_axiom));
+        use quick_xml::{Reader, events::Event};
+        
+        let mut reader = Reader::from_str(content);
+        // reader.trim_text(true); // Removed as this method doesn't exist in current quick-xml
+        
+        let mut buf: Vec<u8> = Vec::new();
+        let mut current_element = None;
+        let mut current_attributes = std::collections::HashMap::new();
+        
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(ref e)) => {
+                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    current_element = Some(name.clone());
+                    
+                    // Parse attributes
+                    current_attributes.clear();
+                    for attr in e.attributes() {
+                        if let Ok(attr) = attr {
+                            let key = String::from_utf8_lossy(attr.key.as_ref());
+                            let value = String::from_utf8_lossy(&attr.value);
+                            current_attributes.insert(key.to_string(), value.to_string());
+                        }
+                    }
+                    
+                    // Check for owl:Class elements
+                    if name == "owl:Class" || name.ends_with(":Class") {
+                        if let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
+                            self.add_class_declaration(class_iri, ontology)?;
+                        }
+                    }
+                    
+                    // Check for rdf:type relationships to owl:Class
+                    if name == "rdf:Description" || name.contains("Description") {
+                        if let Some(subject_iri) = self.extract_resource_iri(&current_attributes) {
+                            // Look for nested rdf:type owl:Class
+                            if self.has_class_type(&current_attributes) {
+                                self.add_class_declaration(subject_iri, ontology)?;
+                            }
+                        }
                     }
                 }
+                Ok(Event::Empty(ref e)) => {
+                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    
+                    // Parse attributes for self-closing elements
+                    current_attributes.clear();
+                    for attr in e.attributes() {
+                        if let Ok(attr) = attr {
+                            let key = String::from_utf8_lossy(attr.key.as_ref());
+                            let value = String::from_utf8_lossy(&attr.value);
+                            current_attributes.insert(key.to_string(), value.to_string());
+                        }
+                    }
+                    
+                    // Handle self-closing owl:Class elements
+                    if name == "owl:Class" || name.ends_with(":Class") {
+                        if let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
+                            self.add_class_declaration(class_iri, ontology)?;
+                        }
+                    }
+                }
+                Ok(Event::Text(ref e)) => {
+                    // Handle text content if needed for class declarations
+                    let _text = String::from_utf8_lossy(e).to_string();
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => {
+                    // Log XML parsing error but continue
+                    eprintln!("XML parsing error: {}", e);
+                    break;
+                }
+                _ => {}
             }
+            buf.clear();
         }
         
         Ok(())
+    }
+    
+    /// Extract resource IRI from XML attributes
+    fn extract_resource_iri(&self, attributes: &std::collections::HashMap<String, String>) -> Option<String> {
+        // Check for rdf:about
+        if let Some(about) = attributes.get("rdf:about") {
+            return Some(self.resolve_uri(about));
+        }
+        
+        // Check for rdf:ID  
+        if let Some(id) = attributes.get("rdf:ID") {
+            return Some(self.resolve_fragment_id(id));
+        }
+        
+        // Check for rdf:nodeID for blank nodes
+        if let Some(node_id) = attributes.get("rdf:nodeID") {
+            return Some(format!("_:{}", node_id));
+        }
+        
+        None
+    }
+    
+    /// Check if attributes indicate this is a class
+    fn has_class_type(&self, attributes: &std::collections::HashMap<String, String>) -> bool {
+        // Check for rdf:type attribute pointing to owl:Class
+        if let Some(type_val) = attributes.get("rdf:type") {
+            return type_val == "owl:Class" || type_val.ends_with("#Class");
+        }
+        
+        false
+    }
+    
+    /// Add class declaration to ontology
+    fn add_class_declaration(&self, class_iri: String, ontology: &mut Ontology) -> Result<()> {
+        let iri = crate::ontology::IRI::new(&class_iri);
+        
+        // Add declaration axiom
+        let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
+            id: ontology.axioms().len() as u64,
+            entity: crate::ontology::axioms::Entity::Class(iri),
+        };
+        ontology.add_axiom(crate::ontology::axioms::Axiom::Declaration(decl_axiom));
+        
+        Ok(())
+    }
+    
+    /// Resolve relative URI against base URI
+    fn resolve_uri(&self, uri: &str) -> String {
+        if uri.starts_with("http://") || uri.starts_with("https://") {
+            uri.to_string()
+        } else if let Some(base) = &self.config.base_uri {
+            if uri.starts_with('#') {
+                format!("{}{}", base, uri)
+            } else {
+                format!("{}{}", base, uri)
+            }
+        } else {
+            uri.to_string()
+        }
+    }
+    
+    /// Resolve fragment ID against base URI
+    fn resolve_fragment_id(&self, id: &str) -> String {
+        if let Some(base) = &self.config.base_uri {
+            format!("{}#{}", base, id)
+        } else {
+            format!("#{}", id)
+        }
     }
 
     /// Extract property declarations
@@ -423,14 +550,65 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     }
 
     // Serialize data properties
-    // TODO: Implement data property extraction from axioms
-    // if !ontology.data_properties().is_empty() {
-    //     writeln!(file, "  <!-- Data Property Declarations -->")?;
-    //     for (_, prop) in ontology.data_properties() {
-    //         writeln!(file, "  <owl:DatatypeProperty rdf:about=\"{}\" />", prop.iri())?;
-    //     }
-    //     writeln!(file)?;
-    // }
+    // Enhanced data property extraction and serialization
+    let mut data_properties = std::collections::HashSet::new();
+    
+    // Extract data properties from various axiom types
+    for axiom in ontology.axioms() {
+        match axiom {
+            crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &assertion.property {
+                    data_properties.insert(prop.clone());
+                }
+            },
+            crate::ontology::Axiom::SubDataPropertyOf(sub_prop) => {
+                if let crate::ontology::DataPropertyExpression::DataProperty(sub) = &sub_prop.sub_property {
+                    data_properties.insert(sub.clone());
+                }
+                if let crate::ontology::DataPropertyExpression::DataProperty(super_prop) = &sub_prop.super_property {
+                    data_properties.insert(super_prop.clone());
+                }
+            },
+            crate::ontology::Axiom::EquivalentDataProperties(equiv) => {
+                for prop_expr in &equiv.properties {
+                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = prop_expr {
+                        data_properties.insert(prop.clone());
+                    }
+                }
+            },
+            crate::ontology::Axiom::DisjointDataProperties(disj) => {
+                for prop_expr in &disj.properties {
+                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = prop_expr {
+                        data_properties.insert(prop.clone());
+                    }
+                }
+            },
+            crate::ontology::Axiom::FunctionalDataProperty(func) => {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &func.property {
+                    data_properties.insert(prop.clone());
+                }
+            },
+            crate::ontology::Axiom::DataPropertyDomain(domain) => {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &domain.property {
+                    data_properties.insert(prop.clone());
+                }
+            },
+            crate::ontology::Axiom::DataPropertyRange(range) => {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &range.property {
+                    data_properties.insert(prop.clone());
+                }
+            },
+            _ => {}
+        }
+    }
+    
+    if !data_properties.is_empty() {
+        writeln!(file, "  <!-- Data Property Declarations -->")?;
+        for prop in data_properties {
+            writeln!(file, "  <owl:DatatypeProperty rdf:about=\"{}\" />", prop.iri.as_str())?;
+        }
+        writeln!(file)?;
+    }
 
     // Serialize individuals
     if !ontology.individuals().is_empty() {

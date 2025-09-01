@@ -15,4 +15,4 @@ mod enhanced_test;
 
 // Re-export public types and functions
 pub use generator::DLClauseGenerator;
-pub use types::{DLAtom, DLClause, DLClauseSet, DLClauseStatistics};
+pub use types::{DLAtom, DLClause, DLClauseSet, DLClauseStatistics, Individual, Variable};

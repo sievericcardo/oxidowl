@@ -113,17 +113,7 @@ impl ReasoningService {
 
         let mut reasoner = self.reasoner.write().unwrap();
 
-        // Convert ClassExpression to IRI
-        let class_iri = match expression {
-            ClassExpression::Class(class) => class.iri.to_string(),
-            _ => {
-                return Err(Error::Reasoning {
-                    message: "Invalid class expression for satisfiability check".to_string(),
-                });
-            }
-        };
-
-        let result = reasoner.is_class_satisfiable(&class_iri)?;
+        let result = reasoner.is_class_satisfiable(expression)?;
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
@@ -431,7 +421,7 @@ impl ReasoningService {
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = self.reasoner.read().unwrap();
-            if let Ok(ontology) = reasoner.get_ontology() {
+            if let Some(ontology) = reasoner.get_ontology() {
                 if let Some(cached) = cache_manager.get_classification_result(&ontology) {
                     log::info!("Classification (cached) completed in {:?}", start.elapsed());
                     return Ok(cached);
@@ -461,7 +451,7 @@ impl ReasoningService {
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = self.reasoner.read().unwrap();
-            if let Ok(ontology) = reasoner.get_ontology() {
+            if let Some(ontology) = reasoner.get_ontology() {
                 cache_manager.store_classification_result(&ontology, result.clone());
             }
         }
@@ -491,7 +481,7 @@ impl ReasoningService {
 
             // Get the reasoner and update the ontology with inferences
             let mut reasoner = self.reasoner.write().unwrap();
-            if let Ok(ontology_ref) = reasoner.get_ontology() {
+            if let Some(ontology_ref) = reasoner.get_ontology() {
                 let mut ontology = ontology_ref.write().unwrap();
 
                 // Apply each inference to the ontology
@@ -524,9 +514,9 @@ impl ReasoningService {
     }
 
     /// Parse a DL query without executing it
-    pub fn parse_dl_query(&self, query_string: &str) -> Result<DLQuery> {
+    pub async fn parse_dl_query(&self, query_string: &str) -> Result<DLQuery> {
         let query_engine = DLQueryEngine::new(self.clone());
-        query_engine.parse_query(query_string)
+        query_engine.parse_query(query_string).await
     }
 
     /// Realize the ontology (compute individuals' types)
@@ -539,7 +529,7 @@ impl ReasoningService {
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = self.reasoner.read().unwrap();
-            if let Ok(ontology) = reasoner.get_ontology() {
+            if let Some(ontology) = reasoner.get_ontology() {
                 if let Some(cached) = cache_manager.get_realization_result(&ontology) {
                     log::info!("Realization (cached) completed in {:?}", start.elapsed());
                     return Ok(cached);
@@ -569,7 +559,7 @@ impl ReasoningService {
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = self.reasoner.read().unwrap();
-            if let Ok(ontology) = reasoner.get_ontology() {
+            if let Some(ontology) = reasoner.get_ontology() {
                 cache_manager.store_realization_result(&ontology, result.clone());
             }
         }
@@ -669,7 +659,7 @@ impl ReasoningService {
 
         let mut reasoner = self.reasoner.write().unwrap();
         for axiom in axioms {
-            reasoner.add_axiom(&axiom)?;
+            reasoner.add_axiom(axiom)?;
         }
 
         // Check timeout
@@ -756,7 +746,7 @@ impl ReasoningService {
         use std::hash::{Hash, Hasher};
 
         let reasoner = self.reasoner.read().unwrap();
-        if let Ok(ontology) = reasoner.get_ontology() {
+        if let Some(ontology) = reasoner.get_ontology() {
             let ontology_guard = ontology.read().unwrap();
 
             let mut hasher = DefaultHasher::new();
@@ -1003,13 +993,24 @@ impl QueryInterface {
 }
 
 impl ReasoningService {
+    /// Get the IRI of the current ontology
+    pub fn get_ontology_iri(&self) -> Result<Option<crate::ontology::IRI>> {
+        let reasoner = self.reasoner.read().unwrap();
+        if let Some(ontology_ref) = reasoner.get_ontology() {
+            let ontology = ontology_ref.read().unwrap();
+            Ok(ontology.get_iri().cloned())
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Calculate a hash for the current ontology
     fn calculate_ontology_hash(&self) -> u64 {
         let reasoner = self.reasoner.read().unwrap();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
 
         // Hash based on reasoner state as a simple fingerprint
-        let axiom_count = if let Ok(ontology) = reasoner.get_ontology() {
+        let axiom_count = if let Some(ontology) = reasoner.get_ontology() {
             ontology.read().unwrap().axioms().len()
         } else {
             0

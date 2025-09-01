@@ -802,16 +802,46 @@ impl ExtensionManager {
             }
         }
 
-        // Check for disjoint class conflicts (basic implementation)
+        // Check for disjoint class conflicts (enhanced OWL disjoint class reasoning)
         if args.len() == 1 && !predicate.contains('_') {
             // This is likely a concept assertion C(a)
-            // Check if there are any known disjoint concepts
             let disjoint_concepts = self.get_disjoint_concepts(predicate);
             if let Some(table) = self.get_table_for_arity(arity) {
                 for disjoint in disjoint_concepts {
                     if table.has_fact(&disjoint, args).unwrap_or(false) {
                         return true; // Disjoint class clash
                     }
+                }
+            }
+            
+            // Check for owl:disjointWith relations
+            if let Some(disjoint_table) = self.get_table_for_arity(2) {
+                let disjoint_key = "owl:disjointWith";
+                
+                // Check if any class disjoint with this predicate is asserted for the same individual
+                for fact in disjoint_table.get_all_facts() {
+                    if fact.len() >= 3 && fact[0] == disjoint_key {
+                        if let (Some(class1), Some(class2)) = (fact.get(1), fact.get(2)) {
+                            // If predicate is disjoint with class1, check if individual is in class1
+                            if let Some(table) = self.get_table_for_arity(arity) {
+                                if class2 == predicate && table.has_fact(class1, args).unwrap_or(false) {
+                                    return true;
+                                }
+                                // If predicate is disjoint with class2, check if individual is in class2  
+                                if class1 == predicate && table.has_fact(class2, args).unwrap_or(false) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Check for complement class relations (¬C ≡ owl:complementOf C)
+            let complement_predicate = format!("owl:complementOf_{}", predicate);
+            if let Some(table) = self.get_table_for_arity(arity) {
+                if table.has_fact(&complement_predicate, args).unwrap_or(false) {
+                    return true; // Individual cannot be in both C and ¬C
                 }
             }
         }
@@ -829,10 +859,119 @@ impl ExtensionManager {
     }
 
     /// Get concepts known to be disjoint with the given concept
-    fn get_disjoint_concepts(&self, _concept: &str) -> Vec<String> {
-        // Placeholder: In a full implementation, this would query the ontology
-        // for disjoint class axioms
-        vec![]
+    fn get_disjoint_concepts(&self, concept: &str) -> Vec<String> {
+        let mut disjoint_concepts = Vec::new();
+        
+        // Check explicit disjoint class declarations in the binary table
+        if let Some(binary_table) = self.get_table_for_arity(2) {
+            let disjoint_key = "owl:disjointWith";
+            
+            for fact in binary_table.get_all_facts() {
+                if fact.len() >= 3 && fact[0] == disjoint_key {
+                    if let (Some(class1), Some(class2)) = (fact.get(1), fact.get(2)) {
+                        if class1 == concept {
+                            disjoint_concepts.push(class2.clone());
+                        } else if class2 == concept {
+                            disjoint_concepts.push(class1.clone());
+                        }
+                    }
+                }
+            }
+            
+            // Check for AllDisjointClasses declarations
+            let all_disjoint_key = "owl:AllDisjointClasses";
+            for fact in binary_table.get_all_facts() {
+                if fact.len() >= 3 && fact[0] == all_disjoint_key {
+                    // This is a simplified check - a full implementation would parse the class list
+                    if let Some(class_list_id) = fact.get(2) {
+                        // If concept is in this disjoint class list, all other classes are disjoint
+                        if self.is_concept_in_disjoint_list(concept, class_list_id) {
+                            let other_classes = self.get_other_classes_in_disjoint_list(concept, class_list_id);
+                            disjoint_concepts.extend(other_classes);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Add built-in disjoint concepts
+        self.add_builtin_disjoint_concepts(concept, &mut disjoint_concepts);
+        
+        disjoint_concepts
+    }
+    
+    /// Check if a concept is in a disjoint class list
+    fn is_concept_in_disjoint_list(&self, concept: &str, list_id: &str) -> bool {
+        // Simplified implementation - would need proper RDF list parsing
+        // For now, just check if there's a membership relation
+        if let Some(table) = self.get_table_for_arity(2) {
+            table.has_fact("rdf:member", &[concept.to_string(), list_id.to_string()]).unwrap_or(false)
+        } else {
+            false
+        }
+    }
+    
+    /// Get other classes in the same disjoint class list
+    fn get_other_classes_in_disjoint_list(&self, exclude_concept: &str, list_id: &str) -> Vec<String> {
+        let mut other_classes = Vec::new();
+        
+        if let Some(table) = self.get_table_for_arity(2) {
+            for fact in table.get_all_facts() {
+                if fact.len() >= 3 && fact[0] == "rdf:member" {
+                    if let (Some(class), Some(list)) = (fact.get(1), fact.get(2)) {
+                        if list == list_id && class != exclude_concept {
+                            other_classes.push(class.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        other_classes
+    }
+    
+    /// Add built-in disjoint concepts for common OWL patterns
+    fn add_builtin_disjoint_concepts(&self, concept: &str, disjoint_concepts: &mut Vec<String>) {
+        // owl:Nothing is disjoint with everything except itself
+        if concept != "owl:Nothing" {
+            disjoint_concepts.push("owl:Nothing".to_string());
+        }
+        
+        // Add complement relationships
+        if concept.starts_with("owl:complementOf_") {
+            let base_concept = &concept[17..]; // Remove "owl:complementOf_" prefix
+            disjoint_concepts.push(base_concept.to_string());
+        } else {
+            disjoint_concepts.push(format!("owl:complementOf_{}", concept));
+        }
+        
+        // Add common built-in disjoint pairs
+        match concept {
+            "xsd:string" => {
+                disjoint_concepts.extend(vec![
+                    "xsd:integer".to_string(),
+                    "xsd:decimal".to_string(),
+                    "xsd:boolean".to_string(),
+                    "xsd:dateTime".to_string(),
+                ]);
+            },
+            "xsd:integer" | "xsd:decimal" => {
+                disjoint_concepts.extend(vec![
+                    "xsd:string".to_string(),
+                    "xsd:boolean".to_string(),
+                    "xsd:dateTime".to_string(),
+                ]);
+            },
+            "xsd:boolean" => {
+                disjoint_concepts.extend(vec![
+                    "xsd:string".to_string(),
+                    "xsd:integer".to_string(),
+                    "xsd:decimal".to_string(),
+                    "xsd:dateTime".to_string(),
+                ]);
+            },
+            _ => {}
+        }
     }
 
     /// Check if two nodes are unequal
@@ -1242,6 +1381,15 @@ impl ExtensionTable {
             }
         }
         Ok(false)
+    }
+
+    /// Get all facts from the table
+    pub fn get_all_facts(&self) -> Vec<Vec<String>> {
+        self.tuples
+            .iter()
+            .filter(|entry| entry.is_active)
+            .map(|entry| entry.tuple.clone())
+            .collect()
     }
 
     /// Get extension indices (non-delta)

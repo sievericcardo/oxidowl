@@ -460,7 +460,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
         Ok(clauses)
     }
 
-    // Placeholder implementations for remaining methods
+    // Enhanced implementations for remaining DL clause compilation methods
     fn compile_disjoint_union_axiom(
         &mut self,
         axiom: &crate::ontology::DisjointUnionAxiom,

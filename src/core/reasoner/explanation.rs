@@ -239,9 +239,8 @@ impl ExplanationService {
             }
         }
         
-        // Look for transitive chains
-        // This is a simplified approach - a full implementation would use path finding
-        self.find_subsumption_chain(subclass, superclass, ontology, &mut explanation)?;
+        // Look for transitive chains using enhanced path finding algorithm
+        self.find_subsumption_chain_enhanced(subclass, superclass, ontology, &mut explanation)?;
         
         Ok(explanation)
     }
@@ -398,6 +397,85 @@ impl ExplanationService {
             }
             _ => format!("{:?}", axiom)
         }
+    }
+    
+    /// Enhanced subsumption chain finding with breadth-first search
+    fn find_subsumption_chain_enhanced(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+        ontology: &Ontology,
+        explanation: &mut Vec<Axiom>
+    ) -> Result<()> {
+        use std::collections::{VecDeque, HashSet};
+        
+        // Use breadth-first search to find the shortest path
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut parent_map: std::collections::HashMap<String, (String, Axiom)> = std::collections::HashMap::new();
+        
+        let start_key = format!("{:?}", subclass);
+        let target_key = format!("{:?}", superclass);
+        
+        queue.push_back(start_key.clone());
+        visited.insert(start_key.clone());
+        
+        while let Some(current) = queue.pop_front() {
+            if current == target_key {
+                // Found path - reconstruct it
+                let mut path_axioms = Vec::new();
+                let mut trace_key = current;
+                
+                while let Some((parent_key, axiom)) = parent_map.get(&trace_key) {
+                    path_axioms.push(axiom.clone());
+                    trace_key = parent_key.clone();
+                    
+                    if trace_key == start_key {
+                        break;
+                    }
+                }
+                
+                // Add path axioms to explanation (reverse order for proper chain)
+                path_axioms.reverse();
+                explanation.extend(path_axioms);
+                return Ok(());
+            }
+            
+            // Find all superclasses of current class
+            for axiom in ontology.axioms() {
+                if let Axiom::SubClassOf(subclass_axiom) = axiom {
+                    let subclass_key = format!("{:?}", &subclass_axiom.subclass);
+                    let superclass_key = format!("{:?}", &subclass_axiom.superclass);
+                    
+                    if subclass_key == current && !visited.contains(&superclass_key) {
+                        visited.insert(superclass_key.clone());
+                        parent_map.insert(superclass_key.clone(), (current.clone(), axiom.clone()));
+                        queue.push_back(superclass_key);
+                    }
+                }
+                
+                // Also check equivalent classes
+                if let Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                    for (i, class1) in equiv_axiom.classes.iter().enumerate() {
+                        for (j, class2) in equiv_axiom.classes.iter().enumerate() {
+                            if i != j {
+                                let class1_key = format!("{:?}", class1);
+                                let class2_key = format!("{:?}", class2);
+                                
+                                if class1_key == current && !visited.contains(&class2_key) {
+                                    visited.insert(class2_key.clone());
+                                    parent_map.insert(class2_key.clone(), (current.clone(), axiom.clone()));
+                                    queue.push_back(class2_key);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // No direct path found - this is fine, not all subsumptions are explicit
+        Ok(())
     }
 
     /// Find minimal explanations (remove redundant axioms)
