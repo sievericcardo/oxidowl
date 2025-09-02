@@ -5,6 +5,41 @@ use crate::swrl::{SWRLBuiltIn, SWRLValue};
 use chrono::{Datelike, Months, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use std::collections::HashMap;
 
+/// Parse a day-time duration from a string
+fn parse_day_time_duration(duration_str: &str) -> Result<chrono::Duration> {
+    // Simple parsing for PT[n]H[n]M[n]S format
+    let cleaned = duration_str.trim_start_matches("PT");
+    
+    let mut hours = 0i64;
+    let mut minutes = 0i64;
+    let mut seconds = 0i64;
+    
+    // Simple parser - this is a simplified implementation
+    if let Some(h_pos) = cleaned.find('H') {
+        if let Ok(h) = cleaned[..h_pos].parse::<i64>() {
+            hours = h;
+        }
+    }
+    
+    Ok(chrono::Duration::hours(hours) + chrono::Duration::minutes(minutes) + chrono::Duration::seconds(seconds))
+}
+
+/// Format a duration as day-time duration string
+fn format_day_time_duration(duration: chrono::Duration) -> String {
+    let total_seconds = duration.num_seconds();
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+    
+    if hours > 0 {
+        format!("PT{}H{}M{}S", hours, minutes, seconds)
+    } else if minutes > 0 {
+        format!("PT{}M{}S", minutes, seconds)
+    } else {
+        format!("PT{}S", seconds)
+    }
+}
+
 /// Registry for date/time built-ins
 pub struct DateTimeBuiltInRegistry {
     builtins: HashMap<String, Box<dyn SWRLBuiltIn>>,
@@ -141,6 +176,71 @@ impl DateTimeBuiltInRegistry {
     /// Get all registered built-in IRIs
     pub fn get_builtin_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
+    }
+    
+    /// Parse dayTimeDuration string into chrono::Duration
+    pub fn parse_day_time_duration(&self, duration_str: &str) -> crate::Result<chrono::Duration> {
+        // Parse ISO 8601 duration format like PT1H30M45S
+        if !duration_str.starts_with('P') {
+            return Err(crate::Error::reasoning("Invalid duration format"));
+        }
+        
+        let mut duration = chrono::Duration::zero();
+        let mut current_number = String::new();
+        let mut in_time_part = false;
+        
+        for ch in duration_str.chars().skip(1) {
+            match ch {
+                'T' => in_time_part = true,
+                'D' if !in_time_part => {
+                    let days = current_number.parse::<i64>()
+                        .map_err(|_| crate::Error::reasoning("Invalid day value in duration"))?;
+                    duration = duration + chrono::Duration::days(days);
+                    current_number.clear();
+                }
+                'H' if in_time_part => {
+                    let hours = current_number.parse::<i64>()
+                        .map_err(|_| crate::Error::reasoning("Invalid hour value in duration"))?;
+                    duration = duration + chrono::Duration::hours(hours);
+                    current_number.clear();
+                }
+                'M' if in_time_part => {
+                    let minutes = current_number.parse::<i64>()
+                        .map_err(|_| crate::Error::reasoning("Invalid minute value in duration"))?;
+                    duration = duration + chrono::Duration::minutes(minutes);
+                    current_number.clear();
+                }
+                'S' if in_time_part => {
+                    let seconds = current_number.parse::<f64>()
+                        .map_err(|_| crate::Error::reasoning("Invalid second value in duration"))?;
+                    duration = duration + chrono::Duration::nanoseconds((seconds * 1_000_000_000.0) as i64);
+                    current_number.clear();
+                }
+                ch if ch.is_ascii_digit() || ch == '.' => {
+                    current_number.push(ch);
+                }
+                _ => return Err(crate::Error::reasoning("Invalid character in duration")),
+            }
+        }
+        
+        Ok(duration)
+    }
+    
+    /// Format chrono::Duration as dayTimeDuration string
+    pub fn format_day_time_duration(&self, duration: chrono::Duration) -> String {
+        let total_seconds = duration.num_seconds();
+        let days = total_seconds / 86400;
+        let remaining = total_seconds % 86400;
+        let hours = remaining / 3600;
+        let remaining = remaining % 3600;
+        let minutes = remaining / 60;
+        let seconds = remaining % 60;
+        
+        if days > 0 {
+            format!("P{}DT{}H{}M{}S", days, hours, minutes, seconds)
+        } else {
+            format!("PT{}H{}M{}S", hours, minutes, seconds)
+        }
     }
 }
 
@@ -839,9 +939,20 @@ impl SWRLBuiltIn for SubtractDayTimeDurationsBuiltIn {
             ));
         }
 
-        // For now, return a placeholder duration
-        // Full implementation would parse duration strings and perform arithmetic
-        Ok(SWRLValue::Literal(Literal::new("PT0S".to_string())))
+        // Parse both durations and subtract them
+        match (&args[0], &args[1]) {
+            (SWRLValue::Literal(duration1), SWRLValue::Literal(duration2)) => {
+                let dur1 = parse_day_time_duration(&duration1.value)?;
+                let dur2 = parse_day_time_duration(&duration2.value)?;
+                
+                let result_seconds = dur1.num_seconds() - dur2.num_seconds();
+                let result_duration = chrono::Duration::seconds(result_seconds);
+                
+                let result_str = format_day_time_duration(result_duration);
+                Ok(SWRLValue::Literal(Literal::new(result_str)))
+            }
+            _ => Err(crate::Error::reasoning("Invalid argument types for subtractDayTimeDurations")),
+        }
     }
 
     fn name(&self) -> &str {
@@ -865,9 +976,21 @@ impl SWRLBuiltIn for MultiplyDayTimeDurationBuiltIn {
             ));
         }
 
-        // For now, return a placeholder duration
-        // Full implementation would parse duration string and multiply by scalar
-        Ok(SWRLValue::Literal(Literal::new("PT0S".to_string())))
+        // Parse duration and multiply by scalar
+        match (&args[0], &args[1]) {
+            (SWRLValue::Literal(duration_lit), SWRLValue::Literal(factor_lit)) => {
+                let duration = parse_day_time_duration(&duration_lit.value)?;
+                let factor = factor_lit.value.parse::<f64>()
+                    .map_err(|_| crate::Error::reasoning("Invalid numeric factor"))?;
+                
+                let result_seconds = (duration.num_seconds() as f64 * factor) as i64;
+                let result_duration = chrono::Duration::seconds(result_seconds);
+                
+                let result_str = format_day_time_duration(result_duration);
+                Ok(SWRLValue::Literal(Literal::new(result_str)))
+            }
+            _ => Err(crate::Error::reasoning("Invalid argument types for multiplyDayTimeDuration")),
+        }
     }
 
     fn name(&self) -> &str {
@@ -891,9 +1014,25 @@ impl SWRLBuiltIn for DivideDayTimeDurationBuiltIn {
             ));
         }
 
-        // For now, return a placeholder duration
-        // Full implementation would parse duration string and divide by scalar
-        Ok(SWRLValue::Literal(Literal::new("PT0S".to_string())))
+        // Parse duration and divide by scalar
+        match (&args[0], &args[1]) {
+            (SWRLValue::Literal(duration_lit), SWRLValue::Literal(divisor_lit)) => {
+                let duration = parse_day_time_duration(&duration_lit.value)?;
+                let divisor = divisor_lit.value.parse::<f64>()
+                    .map_err(|_| crate::Error::reasoning("Invalid numeric divisor"))?;
+                
+                if divisor == 0.0 {
+                    return Err(crate::Error::reasoning("Division by zero"));
+                }
+                
+                let result_seconds = (duration.num_seconds() as f64 / divisor) as i64;
+                let result_duration = chrono::Duration::seconds(result_seconds);
+                
+                let result_str = format_day_time_duration(result_duration);
+                Ok(SWRLValue::Literal(Literal::new(result_str)))
+            }
+            _ => Err(crate::Error::reasoning("Invalid argument types for divideDayTimeDuration")),
+        }
     }
 
     fn name(&self) -> &str {

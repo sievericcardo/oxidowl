@@ -7,14 +7,17 @@ use crate::{
     Error, Result,
     cache::CacheManager,
     config::ReasonerConfig,
-    core::reasoner::{
-        classification::ClassificationService,
-        explanation::ExplanationService,
-        queries::QueryProcessor,
-        results::{ClassificationResult, RealizationResult},
-        statistics::ReasoningStatistics,
-        tableau::TableauFactory,
-        tasks::ReasoningTaskService,
+    core::{
+        reasoner::{
+            classification::ClassificationService,
+            explanation::ExplanationService,
+            queries::QueryProcessor,
+            results::{ClassificationResult, RealizationResult},
+            statistics::ReasoningStatistics,
+            tableau::TableauFactory,
+            tasks::ReasoningTaskService,
+        },
+        tableau::TableauState,
     },
     dl_clauses::{DLClauseGenerator, DLClauseSet},
     ontology::{Ontology, OntologyFormat, OntologyRef, ClassExpression, Individual, ObjectPropertyExpression, DataPropertyExpression},
@@ -165,9 +168,18 @@ impl Reasoner {
     /// Check if the ontology is consistent
     pub fn is_consistent(&self) -> Result<bool> {
         if let Some(ontology) = &self.ontology {
-            // TODO: Implement proper tableau-based consistency checking
-            // For now, return a simplified consistency check
-            Ok(true) // Placeholder - assume consistent for now
+            // Use tableau-based consistency checking
+            let ontology_ref = ontology.read().unwrap();
+            let mut tableau = self.tableau_factory.create_for_consistency(&*ontology_ref)?;
+            
+            // Run the tableau algorithm
+            let state = tableau.run()?;
+            
+            // Update statistics
+            let node_count = tableau.get_node_count();
+            let backtrack_count = tableau.get_backtrack_count();
+            
+            Ok(state == TableauState::Satisfiable)
         } else {
             Ok(true)  // Empty ontology is consistent
         }
@@ -176,20 +188,34 @@ impl Reasoner {
     /// Check if a class is satisfiable
     pub fn is_class_satisfiable(&self, class: &ClassExpression) -> Result<bool> {
         if let Some(ontology) = &self.ontology {
-            // Create a test individual and check if it can be of the given class
+            // Create a tableau for satisfiability checking
+            let ontology_ref = ontology.read().unwrap();
+            let mut tableau = self.tableau_factory.create_for_consistency(&*ontology_ref)?;
+            
+            // Create a test individual with the class to check
             let test_individual = crate::ontology::Individual::named(
                 crate::ontology::IRI::new("http://example.org/test#testIndividual")
             );
             
-            // Create a tableau node with the test individual having the class
-            // Note: This is a simplified implementation - proper tableau creation needed
-            // TODO: Implement proper tableau-based satisfiability checking
+            // Add the class assertion to test satisfiability
+            let test_assertion = crate::ontology::ClassAssertionAxiom {
+                id: 0, // Generate a proper ID
+                class: class.clone(),
+                individual: test_individual,
+                annotations: Vec::new(),
+            };
             
-            // For now, return a simplified check
-            match class {
-                ClassExpression::Class(c) if c.iri.to_string() == "http://www.w3.org/2002/07/owl#Nothing" => Ok(false),
-                _ => Ok(true), // Assume other classes are satisfiable for now
-            }
+            // Create a temporary ontology with the test assertion
+            let mut test_ontology = ontology.read().unwrap().clone();
+            test_ontology.add_axiom(crate::ontology::Axiom::ClassAssertion(test_assertion));
+            
+            // Initialize a new tableau with the test ontology
+            let mut test_tableau = self.tableau_factory.create_for_consistency(&test_ontology)?;
+            
+            // Run the tableau algorithm
+            let state = test_tableau.run()?;
+            
+            Ok(state == TableauState::Satisfiable)
         } else {
             // In empty ontology, all classes except owl:Nothing are satisfiable
             match class {
@@ -662,15 +688,11 @@ impl Reasoner {
 
     /// Get reasoning statistics
     pub fn get_statistics(&self) -> ReasoningStatistics {
-        // For now, return default statistics as a placeholder
-        // TODO: Implement proper statistics collection
-        ReasoningStatistics::default()
+        self.statistics.clone()
     }
 
     /// Get the size of the current ontology
     pub fn get_ontology_size(&self) -> usize {
-        // For now, return 0 as a placeholder
-        // TODO: Implement proper ontology size calculation
         if let Some(ref ontology) = self.ontology {
             ontology.read().unwrap().axioms().len()
         } else {
@@ -762,14 +784,68 @@ impl Reasoner {
 
     /// Classify object properties
     pub fn classify_object_properties(&mut self) -> Result<super::results::PropertyClassificationResult> {
-        // TODO: Implement object property classification
-        Ok(super::results::PropertyClassificationResult::new_object_properties(std::collections::HashMap::new()))
+        if let Some(ontology) = &self.ontology {
+            let ontology_ref = ontology.read().unwrap();
+            let mut hierarchy = std::collections::HashMap::new();
+            
+            // Extract all object properties from the ontology
+            let mut object_properties = std::collections::HashSet::new();
+            for axiom in ontology_ref.axioms() {
+                self.extract_object_properties_from_axiom(axiom, &mut object_properties);
+            }
+            
+            // Build hierarchy based on SubObjectPropertyOf axioms
+            for property in &object_properties {
+                let mut superproperties = std::collections::HashSet::new();
+                
+                for axiom in ontology_ref.axioms() {
+                    if let crate::ontology::Axiom::SubObjectPropertyOf(axiom) = axiom {
+                        if self.object_properties_equivalent(&axiom.sub_property, property)? {
+                            superproperties.insert(axiom.super_property.clone());
+                        }
+                    }
+                }
+                
+                hierarchy.insert(property.clone(), superproperties);
+            }
+            
+            Ok(super::results::PropertyClassificationResult::new_object_properties(hierarchy))
+        } else {
+            Ok(super::results::PropertyClassificationResult::new_object_properties(std::collections::HashMap::new()))
+        }
     }
 
     /// Classify data properties  
     pub fn classify_data_properties(&mut self) -> Result<super::results::PropertyClassificationResult> {
-        // TODO: Implement data property classification
-        Ok(super::results::PropertyClassificationResult::new_data_properties(std::collections::HashMap::new()))
+        if let Some(ontology) = &self.ontology {
+            let ontology_ref = ontology.read().unwrap();
+            let mut hierarchy = std::collections::HashMap::new();
+            
+            // Extract all data properties from the ontology
+            let mut data_properties = std::collections::HashSet::new();
+            for axiom in ontology_ref.axioms() {
+                self.extract_data_properties_from_axiom(axiom, &mut data_properties);
+            }
+            
+            // Build hierarchy based on SubDataPropertyOf axioms
+            for property in &data_properties {
+                let mut superproperties = std::collections::HashSet::new();
+                
+                for axiom in ontology_ref.axioms() {
+                    if let crate::ontology::Axiom::SubDataPropertyOf(axiom) = axiom {
+                        if self.data_properties_equivalent(&axiom.sub_property, property)? {
+                            superproperties.insert(axiom.super_property.clone());
+                        }
+                    }
+                }
+                
+                hierarchy.insert(property.clone(), superproperties);
+            }
+            
+            Ok(super::results::PropertyClassificationResult::new_data_properties(hierarchy))
+        } else {
+            Ok(super::results::PropertyClassificationResult::new_data_properties(std::collections::HashMap::new()))
+        }
     }
 
     /// Get unsatisfiable classes
@@ -811,8 +887,10 @@ impl Reasoner {
             let ontology = ontology_ref.read().unwrap();
             let mut prefixes = std::collections::HashMap::new();
             
-            // Add standard prefixes since ontology prefix extraction is not yet implemented
-            // TODO: Extract actual prefixes from the ontology
+            // Extract prefixes from ontology entities
+            for axiom in ontology.axioms() {
+                self.extract_prefixes_from_axiom(axiom, &mut prefixes);
+            }
             
             // Add standard prefixes if not present
             if !prefixes.contains_key("rdf") {
@@ -842,8 +920,13 @@ impl Reasoner {
 
     /// Dump DL clauses
     pub fn dump_dl_clauses(&self) -> Result<crate::dl_clauses::DLClauseSet> {
-        // TODO: Implement DL clause dumping
-        Ok(crate::dl_clauses::DLClauseSet::new())
+        if let Some(ontology) = &self.ontology {
+            let ontology_ref = ontology.read().unwrap();
+            let mut generator = DLClauseGenerator::new();
+            generator.generate_clauses(&*ontology_ref)
+        } else {
+            Ok(crate::dl_clauses::DLClauseSet::new())
+        }
     }
 
     /// Process OWLlink request
@@ -860,8 +943,8 @@ impl Reasoner {
 
     /// Get DL clauses as string
     pub fn get_dl_clauses_string(&self) -> Result<String> {
-        // TODO: Implement DL clause string generation
-        Ok(String::new())
+        let clause_set = self.dump_dl_clauses()?;
+        Ok(clause_set.to_string())
     }
     
     // Helper methods for reasoning
@@ -1035,10 +1118,136 @@ impl Reasoner {
         
         Ok(classes)
     }
+    
+    /// Extract prefixes from a single axiom
+    fn extract_prefixes_from_axiom(
+        &self,
+        axiom: &crate::ontology::Axiom,
+        prefixes: &mut std::collections::HashMap<String, String>,
+    ) {
+        match axiom {
+            crate::ontology::Axiom::ClassAssertion(assertion) => {
+                if let Some(iri) = self.extract_iri_from_class_expression(&assertion.class) {
+                    self.add_prefix_from_iri(&iri, prefixes);
+                }
+                if let Some(iri) = assertion.individual.iri() {
+                    self.add_prefix_from_iri(&iri.to_string(), prefixes);
+                }
+            }
+            crate::ontology::Axiom::SubClassOf(axiom) => {
+                if let Some(iri) = self.extract_iri_from_class_expression(&axiom.subclass) {
+                    self.add_prefix_from_iri(&iri, prefixes);
+                }
+                if let Some(iri) = self.extract_iri_from_class_expression(&axiom.superclass) {
+                    self.add_prefix_from_iri(&iri, prefixes);
+                }
+            }
+            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
+                if let Some(iri) = self.extract_iri_from_object_property(&assertion.property) {
+                    self.add_prefix_from_iri(&iri, prefixes);
+                }
+            }
+            _ => {} // Handle other axiom types as needed
+        }
+    }
+    
+    /// Extract IRI from class expression
+    fn extract_iri_from_class_expression(&self, expr: &ClassExpression) -> Option<String> {
+        match expr {
+            ClassExpression::Class(class) => Some(class.iri.to_string()),
+            _ => None,
+        }
+    }
+    
+    /// Extract IRI from object property expression
+    fn extract_iri_from_object_property(&self, expr: &ObjectPropertyExpression) -> Option<String> {
+        match expr {
+            ObjectPropertyExpression::ObjectProperty(prop) => Some(prop.iri.to_string()),
+            _ => None,
+        }
+    }
+    
+    /// Add prefix from IRI
+    fn add_prefix_from_iri(
+        &self,
+        iri: &str,
+        prefixes: &mut std::collections::HashMap<String, String>,
+    ) {
+        if let Some(hash_pos) = iri.rfind('#') {
+            let base = &iri[..hash_pos + 1];
+            if !prefixes.values().any(|v| v == base) {
+                // Try to detect common namespaces
+                let prefix_name = match base {
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf".to_string(),
+                    "http://www.w3.org/2000/01/rdf-schema#" => "rdfs".to_string(),
+                    "http://www.w3.org/2002/07/owl#" => "owl".to_string(),
+                    "http://www.w3.org/2001/XMLSchema#" => "xsd".to_string(),
+                    _ => format!("ns{}", prefixes.len()),
+                };
+                prefixes.insert(prefix_name, base.to_string());
+            }
+        }
+    }
+    
+    /// Extract object properties from axiom
+    fn extract_object_properties_from_axiom(
+        &self,
+        axiom: &crate::ontology::Axiom,
+        properties: &mut std::collections::HashSet<ObjectPropertyExpression>,
+    ) {
+        match axiom {
+            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
+                properties.insert(assertion.property.clone());
+            }
+            crate::ontology::Axiom::SubObjectPropertyOf(axiom) => {
+                properties.insert(axiom.sub_property.clone());
+                properties.insert(axiom.super_property.clone());
+            }
+            crate::ontology::Axiom::ObjectPropertyDomain(axiom) => {
+                properties.insert(axiom.property.clone());
+            }
+            crate::ontology::Axiom::ObjectPropertyRange(axiom) => {
+                properties.insert(axiom.property.clone());
+            }
+            crate::ontology::Axiom::FunctionalObjectProperty(axiom) => {
+                properties.insert(axiom.property.clone());
+            }
+            _ => {} // Handle other axiom types that mention object properties
+        }
+    }
+    
+    /// Extract data properties from axiom
+    fn extract_data_properties_from_axiom(
+        &self,
+        axiom: &crate::ontology::Axiom,
+        properties: &mut std::collections::HashSet<DataPropertyExpression>,
+    ) {
+        match axiom {
+            crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
+                properties.insert(assertion.property.clone());
+            }
+            crate::ontology::Axiom::SubDataPropertyOf(axiom) => {
+                properties.insert(axiom.sub_property.clone());
+                properties.insert(axiom.super_property.clone());
+            }
+            crate::ontology::Axiom::DataPropertyDomain(axiom) => {
+                properties.insert(axiom.property.clone());
+            }
+            crate::ontology::Axiom::DataPropertyRange(axiom) => {
+                properties.insert(axiom.property.clone());
+            }
+            crate::ontology::Axiom::FunctionalDataProperty(axiom) => {
+                properties.insert(axiom.property.clone());
+            }
+            _ => {} // Handle other axiom types that mention data properties
+        }
+    }
 
     /// Save DL clauses to file
-    pub fn save_dl_clauses<P: AsRef<std::path::Path>>(&self, _path: P) -> Result<()> {
-        // TODO: Implement DL clause saving
-        Ok(())
+    pub fn save_dl_clauses<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let clause_set = self.dump_dl_clauses()?;
+        let content = clause_set.to_string();
+        std::fs::write(path, content)
+            .map_err(|e| Error::Io { message: format!("Failed to write DL clauses: {}", e) })
     }
 }

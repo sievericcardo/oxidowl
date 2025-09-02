@@ -355,3 +355,9 @@ impl Error {
         }
     }
 }
+
+impl From<crate::validation::owl2_dl::ValidationError> for Error {
+    fn from(err: crate::validation::owl2_dl::ValidationError) -> Self {
+        Error::Config { message: err.message }
+    }
+}

@@ -14,9 +14,17 @@ pub struct ValidationReport {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ValidationSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ValidationError {
     pub error_type: ValidationErrorType,
     pub message: String,
+    pub severity: ValidationSeverity,
     pub axiom_id: Option<String>,
     pub location: Option<String>,
 }
@@ -26,6 +34,7 @@ impl ValidationError {
         Self {
             error_type,
             message,
+            severity: ValidationSeverity::Error,
             axiom_id: None,
             location: None,
         }
@@ -63,6 +72,8 @@ pub enum ValidationErrorType {
     EmptyDataUnion,
     EmptyDataEnumeration,
     InvalidLiteralValue,
+    DuplicateLiteral,
+    InvalidLiteralSyntax,
 }
 
 impl std::fmt::Display for ValidationErrorType {
@@ -130,6 +141,12 @@ impl std::fmt::Display for ValidationErrorType {
             }
             ValidationErrorType::InvalidLiteralValue => {
                 write!(f, "Invalid literal value")
+            }
+            ValidationErrorType::DuplicateLiteral => {
+                write!(f, "Duplicate literal")
+            }
+            ValidationErrorType::InvalidLiteralSyntax => {
+                write!(f, "Invalid literal syntax")
             }
             ValidationErrorType::DuplicateDatatypeDefinition => {
                 write!(f, "Duplicate datatype definition")
@@ -237,6 +254,7 @@ impl OWL2DLValidator {
                 errors.push(ValidationError {
                     error_type: ValidationErrorType::CyclicPropertyHierarchy,
                     message: format!("Cyclic property hierarchy detected involving property: {}", property),
+                    severity: ValidationSeverity::Error,
                     axiom_id: None,
                     location: Some(property.to_string()),
                 });
@@ -297,6 +315,7 @@ impl OWL2DLValidator {
                         errors.push(ValidationError {
                             error_type: ValidationErrorType::NonSimplePropertyInCardinalityRestriction,
                             message: format!("Non-simple property {} used in cardinality restriction", prop_iri),
+                            severity: ValidationSeverity::Error,
                             axiom_id: None,
                             location: Some(prop_iri.to_string()),
                         });
@@ -335,6 +354,7 @@ impl OWL2DLValidator {
                             errors.push(ValidationError {
                                 error_type: ValidationErrorType::AnonymousIndividualInAssertion,
                                 message: "Anonymous individual used in SameIndividual axiom".to_string(),
+                                severity: ValidationSeverity::Error,
                                 axiom_id: Some(same_axiom.id.to_string()),
                                 location: None,
                             });
@@ -347,6 +367,7 @@ impl OWL2DLValidator {
                             errors.push(ValidationError {
                                 error_type: ValidationErrorType::AnonymousIndividualInAssertion,
                                 message: "Anonymous individual used in DifferentIndividuals axiom".to_string(),
+                                severity: ValidationSeverity::Error,
                                 axiom_id: Some(diff_axiom.id.to_string()),
                                 location: None,
                             });
@@ -534,6 +555,7 @@ impl OWL2DLValidator {
                     errors.push(ValidationError {
                         error_type: ValidationErrorType::UndeclaredEntity,
                         message: format!("Undeclared entity used: {:?}", entity),
+                        severity: ValidationSeverity::Error,
                         axiom_id: Some(axiom.axiom_id().to_string()),
                         location: None,
                     });
@@ -1169,22 +1191,169 @@ impl OWL2DLValidator {
     }
 
     /// Validate data range intersection compatibility
-    fn validate_data_range_intersection(&self, _ranges: &[crate::ontology::DataRange], _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
-        // Simplified implementation to avoid API compatibility issues
+    fn validate_data_range_intersection(&self, ranges: &[crate::ontology::DataRange], errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // Check for incompatible data ranges in intersection
+        for (i, range1) in ranges.iter().enumerate() {
+            for range2 in ranges.iter().skip(i + 1) {
+                if self.are_data_ranges_disjoint(range1, range2)? {
+                    errors.push(ValidationError {
+                        error_type: ValidationErrorType::IncompatibleDataRanges,
+                        message: format!("Incompatible data ranges in intersection: {:?} and {:?}", range1, range2),
+                        severity: ValidationSeverity::Error,
+                        axiom_id: None,
+                        location: None,
+                    });
+                }
+            }
+        }
         Ok(())
+    }
+    
+    /// Check if two data ranges are disjoint
+    fn are_data_ranges_disjoint(&self, range1: &crate::ontology::DataRange, range2: &crate::ontology::DataRange) -> Result<bool, ValidationError> {
+        // Basic disjointness check for common data ranges
+        match (range1, range2) {
+            (crate::ontology::DataRange::Datatype(dt1), crate::ontology::DataRange::Datatype(dt2)) => {
+                // Check if datatypes are fundamentally incompatible
+                let iri1 = dt1.as_str();
+                let iri2 = dt2.as_str();
+                
+                let numeric_types = [
+                    "http://www.w3.org/2001/XMLSchema#integer",
+                    "http://www.w3.org/2001/XMLSchema#decimal",
+                    "http://www.w3.org/2001/XMLSchema#float",
+                    "http://www.w3.org/2001/XMLSchema#double",
+                ];
+                
+                let string_types = [
+                    "http://www.w3.org/2001/XMLSchema#string",
+                    "http://www.w3.org/2001/XMLSchema#normalizedString",
+                ];
+                
+                let is_numeric1 = numeric_types.contains(&iri1);
+                let is_numeric2 = numeric_types.contains(&iri2);
+                let is_string1 = string_types.contains(&iri1);
+                let is_string2 = string_types.contains(&iri2);
+                
+                // Different type categories are disjoint
+                Ok((is_numeric1 && is_string2) || (is_string1 && is_numeric2))
+            }
+            _ => Ok(false), // Conservative approach for complex ranges
+        }
     }
 
     /// Validate literal enumeration
-    fn validate_literal_enumeration(&self, _literals: &[crate::ontology::Literal], _errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
-        // Simplified implementation to avoid API compatibility issues
+    fn validate_literal_enumeration(&self, literals: &[crate::ontology::Literal], errors: &mut Vec<ValidationError>) -> Result<(), OxidowlError> {
+        // Check for duplicate literals
+        let mut seen_literals = std::collections::HashSet::new();
+        for literal in literals {
+            let literal_key = (literal.value.clone(), literal.datatype.as_ref().map(|dt| dt.to_string()));
+            if seen_literals.contains(&literal_key) {
+                errors.push(ValidationError {
+                    error_type: ValidationErrorType::DuplicateLiteral,
+                    message: format!("Duplicate literal in enumeration: {}", literal.value),
+                    severity: ValidationSeverity::Warning,
+                    axiom_id: None,
+                    location: None,
+                });
+            }
+            seen_literals.insert(literal_key);
+        }
+        
+        // Validate literal syntax
+        for literal in literals {
+            if let Some(datatype) = &literal.datatype {
+                if !self.is_valid_literal_for_datatype(&literal.value, &crate::ontology::IRI::from_url(datatype.clone()))? {
+                    errors.push(ValidationError {
+                        error_type: ValidationErrorType::InvalidLiteralSyntax,
+                        message: format!("Invalid literal '{}' for datatype {}", literal.value, datatype),
+                        severity: ValidationSeverity::Error,
+                        axiom_id: None,
+                        location: None,
+                    });
+                }
+            }
+        }
+        
         Ok(())
+    }
+    
+    /// Check if a literal is valid for a given datatype
+    fn is_valid_literal_for_datatype(&self, lexical_form: &str, datatype: &crate::ontology::IRI) -> Result<bool, ValidationError> {
+        match datatype.as_str() {
+            "http://www.w3.org/2001/XMLSchema#integer" => {
+                Ok(lexical_form.parse::<i64>().is_ok())
+            }
+            "http://www.w3.org/2001/XMLSchema#decimal" => {
+                Ok(lexical_form.parse::<f64>().is_ok())
+            }
+            "http://www.w3.org/2001/XMLSchema#boolean" => {
+                Ok(lexical_form == "true" || lexical_form == "false")
+            }
+            "http://www.w3.org/2001/XMLSchema#string" => {
+                Ok(true) // Any string is valid
+            }
+            _ => Ok(true), // Conservative approach for unknown datatypes
+        }
     }
 
     /// Detect which OWL 2 profile the ontology conforms to
     fn detect_profile(&self) -> OWL2Profile {
-        // Implement profile detection logic
-        // Check which profile constraints are satisfied
-        OWL2Profile::DL // Default to DL for now
+        let mut has_complex_class_expressions = false;
+        let mut has_number_restrictions = false;
+        let mut has_nominals = false;
+        let mut has_inverse_properties = false;
+        let mut has_complex_role_inclusions = false;
+        
+        // Analyze ontology constructs
+        for axiom in self.ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(axiom) => {
+                    if self.is_complex_class_expression(&axiom.subclass) || 
+                       self.is_complex_class_expression(&axiom.superclass) {
+                        has_complex_class_expressions = true;
+                    }
+                }
+                crate::ontology::Axiom::EquivalentClasses(axiom) => {
+                    for class in &axiom.classes {
+                        if self.is_complex_class_expression(class) {
+                            has_complex_class_expressions = true;
+                        }
+                    }
+                }
+                crate::ontology::Axiom::InverseObjectProperties(_) => {
+                    has_inverse_properties = true;
+                }
+                _ => {}
+            }
+        }
+        
+        // Determine profile based on constructs used
+        if has_complex_role_inclusions || has_nominals || has_number_restrictions {
+            OWL2Profile::DL
+        } else if has_inverse_properties || has_complex_class_expressions {
+            OWL2Profile::RL
+        } else {
+            OWL2Profile::EL
+        }
+    }
+    
+    /// Check if a class expression is complex (beyond EL expressivity)
+    fn is_complex_class_expression(&self, class_expr: &crate::ontology::ClassExpression) -> bool {
+        match class_expr {
+            crate::ontology::ClassExpression::Class(_) => false,
+            crate::ontology::ClassExpression::ObjectIntersectionOf(_) => false, // Allowed in EL
+            crate::ontology::ClassExpression::ObjectUnionOf(_) => true, // Not in EL
+            crate::ontology::ClassExpression::ObjectComplementOf(_) => true, // Not in EL
+            crate::ontology::ClassExpression::ObjectSomeValuesFrom { property: _, filler } => {
+                self.is_complex_class_expression(filler)
+            }
+            crate::ontology::ClassExpression::ObjectAllValuesFrom { property: _, filler: _ } => true, // Not in EL
+            crate::ontology::ClassExpression::ObjectMinCardinality { property: _, cardinality: _, filler: _ } => true, // Not in EL
+            crate::ontology::ClassExpression::ObjectMaxCardinality { property: _, cardinality: _, filler: _ } => true, // Not in EL
+            crate::ontology::ClassExpression::ObjectExactCardinality { property: _, cardinality: _, filler: _ } => true, // Not in EL
+            _ => false, // Conservative for other expressions
+        }
     }
 }
 

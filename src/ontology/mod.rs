@@ -52,6 +52,14 @@ impl IRI {
     pub fn as_str(&self) -> &str {
         &self.value
     }
+
+    /// Create IRI from URL
+    #[must_use]
+    pub fn from_url(url: Url) -> Self {
+        Self {
+            value: url.to_string(),
+        }
+    }
 }
 
 impl From<String> for IRI {

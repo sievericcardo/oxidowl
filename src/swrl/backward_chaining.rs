@@ -467,8 +467,103 @@ impl BackwardChainingEngine {
 
     /// Apply variable bindings to an atom
     fn apply_bindings_to_atom(&self, atom: &SWRLAtom, bindings: &VariableBindings) -> SWRLAtom {
-        // Apply bindings to atom - simplified implementation
-        atom.clone()
+        match atom {
+            SWRLAtom::ClassAtom { predicate: class, argument } => {
+                let new_argument = self.apply_bindings_to_argument(argument, bindings);
+                SWRLAtom::ClassAtom {
+                    predicate: class.clone(),
+                    argument: new_argument,
+                }
+            }
+            SWRLAtom::ObjectPropertyAtom { predicate: property, first_argument: subject, second_argument: object } => {
+                let new_subject = self.apply_bindings_to_argument(subject, bindings);
+                let new_object = self.apply_bindings_to_argument(object, bindings);
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: property.clone(),
+                    first_argument: new_subject,
+                    second_argument: new_object,
+                }
+            }
+            SWRLAtom::DataPropertyAtom { predicate: property, first_argument: subject, second_argument: object } => {
+                let new_subject = self.apply_bindings_to_argument(subject, bindings);
+                let new_object = self.apply_bindings_to_dargument(object, bindings);
+                SWRLAtom::DataPropertyAtom {
+                    predicate: property.clone(),
+                    first_argument: new_subject,
+                    second_argument: new_object,
+                }
+            }
+            SWRLAtom::BuiltInAtom { predicate, arguments } => {
+                let new_arguments = arguments.iter()
+                    .map(|arg| self.apply_bindings_to_dargument(arg, bindings))
+                    .collect();
+                SWRLAtom::BuiltInAtom {
+                    predicate: predicate.clone(),
+                    arguments: new_arguments,
+                }
+            }
+            SWRLAtom::SameIndividualAtom { first_argument: left, second_argument: right } => {
+                let new_left = self.apply_bindings_to_argument(left, bindings);
+                let new_right = self.apply_bindings_to_argument(right, bindings);
+                SWRLAtom::SameIndividualAtom {
+                    first_argument: new_left,
+                    second_argument: new_right,
+                }
+            }
+            SWRLAtom::DifferentIndividualsAtom { first_argument: left, second_argument: right } => {
+                let new_left = self.apply_bindings_to_argument(left, bindings);
+                let new_right = self.apply_bindings_to_argument(right, bindings);
+                SWRLAtom::DifferentIndividualsAtom {
+                    first_argument: new_left,
+                    second_argument: new_right,
+                }
+            }
+            SWRLAtom::DataRangeAtom { predicate, argument } => {
+                let new_argument = self.apply_bindings_to_dargument(argument, bindings);
+                SWRLAtom::DataRangeAtom {
+                    predicate: predicate.clone(),
+                    argument: new_argument,
+                }
+            }
+        }
+    }
+    
+    /// Apply bindings to an individual argument
+    fn apply_bindings_to_argument(
+        &self,
+        arg: &crate::swrl::SWRLIArgument,
+        bindings: &VariableBindings,
+    ) -> crate::swrl::SWRLIArgument {
+        match arg {
+            crate::swrl::SWRLIArgument::Variable(var) => {
+                if let Some(binding) = bindings.bindings.get(var) {
+                    match binding {
+                        SWRLTerm::Individual(individual) => {
+                            crate::swrl::SWRLIArgument::Individual(individual.clone())
+                        }
+                        _ => arg.clone(),
+                    }
+                } else {
+                    arg.clone()
+                }
+            }
+            _ => arg.clone(),
+        }
+    }
+    
+    /// Apply bindings to a data argument
+    fn apply_bindings_to_dargument(
+        &self,
+        arg: &crate::swrl::SWRLDArgument,
+        bindings: &VariableBindings,
+    ) -> crate::swrl::SWRLDArgument {
+        match arg {
+            crate::swrl::SWRLDArgument::Variable(var) => {
+                // For simplicity, assume data variables are not bound in this context
+                arg.clone()
+            }
+            _ => arg.clone(),
+        }
     }
 
     /// Convert SWRL argument to term

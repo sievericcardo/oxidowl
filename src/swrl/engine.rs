@@ -1984,19 +1984,81 @@ impl SWRLRuleEngine {
     
     // Helper methods for complex class expression handling
     
-    /// Simple check if an individual is in a class (simplified implementation)
+    /// Check if an individual is in a class with proper reasoning
     fn is_individual_in_class_simple(
         &self,
         individual: &crate::ontology::Individual,
         class: &ClassExpression,
         ontology: &crate::ontology::Ontology
     ) -> Result<bool> {
-        // TODO: Implement proper class membership checking
-        // For now, return a simplified check
-        match class {
-            ClassExpression::Class(_) => Ok(true), // Assume membership for atomic classes
-            _ => Ok(false), // More complex expressions not yet implemented
+        // Check explicit class assertions
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::ClassAssertion(assertion) = axiom {
+                if assertion.individual.iri() == individual.iri() {
+                    if self.class_expressions_equivalent(&assertion.class, class)? {
+                        return Ok(true);
+                    }
+                }
+            }
         }
+        
+        // Check through subclass relationships
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::ClassAssertion(assertion) = axiom {
+                if assertion.individual.iri() == individual.iri() {
+                    // Check if asserted class is a subclass of the target class
+                    if self.is_subclass_of(&assertion.class, class, ontology)? {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+    
+    /// Check if one class is a subclass of another
+    fn is_subclass_of(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+        ontology: &crate::ontology::Ontology
+    ) -> Result<bool> {
+        // Direct structural equality
+        if self.class_expressions_equivalent(subclass, superclass)? {
+            return Ok(true);
+        }
+        
+        // Check explicit subclass axioms
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::SubClassOf(axiom) = axiom {
+                if self.class_expressions_equivalent(&axiom.subclass, subclass)? &&
+                   self.class_expressions_equivalent(&axiom.superclass, superclass)? {
+                    return Ok(true);
+                }
+            }
+        }
+        
+        // Check through equivalent classes
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::EquivalentClasses(axiom) = axiom {
+                if axiom.classes.iter().any(|c| self.class_expressions_equivalent(c, subclass).unwrap_or(false)) &&
+                   axiom.classes.iter().any(|c| self.class_expressions_equivalent(c, superclass).unwrap_or(false)) {
+                    return Ok(true);
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+    
+    /// Check if two class expressions are equivalent
+    fn class_expressions_equivalent(
+        &self,
+        class1: &ClassExpression,
+        class2: &ClassExpression
+    ) -> Result<bool> {
+        Ok(class1 == class2)
     }
     
     /// Check if an individual satisfies an existential restriction

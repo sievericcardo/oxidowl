@@ -377,3 +377,26 @@ impl Default for DLClauseSet {
         Self::new()
     }
 }
+
+impl std::fmt::Display for DLClauseSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "DL Clause Set:")?;
+        writeln!(f, "  Deterministic clauses: {}", self.deterministic_clauses.len())?;
+        writeln!(f, "  Disjunctive clauses: {}", self.disjunctive_clauses.len())?;
+        writeln!(f, "  ABox facts: {}", self.abox_facts.len())?;
+        
+        for (i, clause) in self.deterministic_clauses.iter().enumerate() {
+            writeln!(f, "DeterministicClause[{}]: {}", i, clause)?;
+        }
+        
+        for (i, clause) in self.disjunctive_clauses.iter().enumerate() {
+            writeln!(f, "DisjunctiveClause[{}]: {}", i, clause)?;
+        }
+        
+        for (i, fact) in self.abox_facts.iter().enumerate() {
+            writeln!(f, "Fact[{}]: {}", i, fact)?;
+        }
+        
+        Ok(())
+    }
+}
