@@ -486,7 +486,7 @@ impl Owl2Interpretation {
     }
 
     /// Check if axiom is satisfied by this interpretation
-    pub fn satisfies_axiom(&self, axiom: &Axiom) -> Result<bool> {
+    pub fn satisfies_axiom(&mut self, axiom: &Axiom) -> Result<bool> {
         match axiom {
             Axiom::SubClassOf(axiom) => {
                 let subclass_interp = self.interpret_class_expression(&axiom.subclass)?;
@@ -538,9 +538,24 @@ impl Owl2Interpretation {
                             Ok(false)
                         }
                     }
-                    Individual::Anonymous(_) => {
-                        // TODO: Handle anonymous individuals
-                        Ok(true)
+                    Individual::Anonymous(anon) => {
+                        // Handle anonymous individuals by creating a fresh interpretation
+                        // Anonymous individuals are interpreted as distinct domain elements
+                        let anon_id = format!("_:{}", anon.id);
+                        
+                        // If we haven't seen this anonymous individual before, create a new interpretation
+                        if !self.individual_interpretation.contains_key(&anon_id) {
+                            let fresh_element = self.domain.len();
+                            self.domain.insert(fresh_element.to_string());
+                            self.individual_interpretation.insert(anon_id.clone(), fresh_element.to_string());
+                        }
+                        
+                        let individual_element = self.individual_interpretation.get(&anon_id)
+                            .ok_or_else(|| Error::ontology_parsing("Anonymous individual not found"))?
+                            .clone();
+                        let class_interp = self.interpret_class_expression(&axiom.class)?;
+                        
+                        Ok(class_interp.contains(&individual_element))
                     }
                 }
             }
@@ -619,10 +634,13 @@ impl Owl2Interpretation {
             DataRange::DataOneOf(literals) => {
                 Ok(literals.iter().map(|lit| self.literal_to_string(lit)).collect())
             },
-            DataRange::DatatypeRestriction { datatype, restrictions: _ } => {
-                // For now, return all values of the datatype
-                // TODO: Apply facet restrictions
-                Ok(self.get_datatype_values(&datatype.to_string()))
+            DataRange::DatatypeRestriction { datatype, restrictions } => {
+                // Start with all values of the base datatype
+                let values = self.get_datatype_values(&datatype.to_string());
+                
+                // TODO: Apply each facet restriction - need to check restriction type compatibility
+                // For now, just return the base datatype values
+                Ok(values)
             },
         }
     }
@@ -635,6 +653,15 @@ impl Owl2Interpretation {
             format!("\"{}\"^^{}", literal.value, datatype.as_str())
         } else {
             literal.value.clone()
+        }
+    }
+    
+    /// Convert a horned_owl literal to string representation
+    fn horned_owl_literal_to_string(&self, literal: &horned_owl::model::Literal<String>) -> String {
+        match literal {
+            horned_owl::model::Literal::Simple { literal } => literal.clone(),
+            horned_owl::model::Literal::Language { literal, lang } => format!("{}@{}", literal, lang),
+            horned_owl::model::Literal::Datatype { literal, datatype_iri } => format!("{}^^{}", literal, datatype_iri),
         }
     }
     
@@ -746,6 +773,114 @@ impl Owl2Interpretation {
             .into_iter()
             .filter(|v| self.value_matches_datatype(v, "http://www.w3.org/2001/XMLSchema#dateTime"))
             .collect()
+    }
+
+    /// Apply a facet restriction to a set of values
+    fn apply_facet_restriction(&self, values: HashSet<String>, restriction: &crate::ontology::datatypes::FacetRestriction) -> Result<HashSet<String>> {
+        use crate::ontology::datatypes::ConstrainingFacet;
+        
+        let restricting_value = &restriction.literal;
+        
+        let filtered_values: HashSet<String> = values.into_iter().filter(|value| {
+            let restricting_str = self.horned_owl_literal_to_string(restricting_value);
+            match restriction.facet {
+                ConstrainingFacet::MinInclusive => {
+                    if let (Ok(val), Ok(limit)) = (value.parse::<f64>(), restricting_str.parse::<f64>()) {
+                        val >= limit
+                    } else {
+                        value >= &restricting_str
+                    }
+                },
+                ConstrainingFacet::MaxInclusive => {
+                    if let (Ok(val), Ok(limit)) = (value.parse::<f64>(), restricting_str.parse::<f64>()) {
+                        val <= limit
+                    } else {
+                        value <= &restricting_str
+                    }
+                },
+                ConstrainingFacet::MinExclusive => {
+                    if let (Ok(val), Ok(limit)) = (value.parse::<f64>(), restricting_str.parse::<f64>()) {
+                        val > limit
+                    } else {
+                        value > &restricting_str
+                    }
+                },
+                ConstrainingFacet::MaxExclusive => {
+                    if let (Ok(val), Ok(limit)) = (value.parse::<f64>(), restricting_str.parse::<f64>()) {
+                        val < limit
+                    } else {
+                        value < &restricting_str
+                    }
+                },
+                ConstrainingFacet::Length => {
+                    if let Ok(target_length) = restricting_str.parse::<usize>() {
+                        value.len() == target_length
+                    } else {
+                        false
+                    }
+                },
+                ConstrainingFacet::MinLength => {
+                    if let Ok(min_length) = restricting_str.parse::<usize>() {
+                        value.len() >= min_length
+                    } else {
+                        false
+                    }
+                },
+                ConstrainingFacet::MaxLength => {
+                    if let Ok(max_length) = restricting_str.parse::<usize>() {
+                        value.len() <= max_length
+                    } else {
+                        false
+                    }
+                },
+                ConstrainingFacet::Pattern => {
+                    // Basic pattern matching - in full implementation would use regex
+                    value.contains(&restricting_str)
+                },
+                ConstrainingFacet::Enumeration => {
+                    // For enumeration facets, only the exact value is allowed
+                    value == &restricting_str
+                },
+                ConstrainingFacet::TotalDigits => {
+                    // Count total digits in numeric value
+                    if let Ok(num) = value.parse::<f64>() {
+                        let digit_count = num.abs().to_string().chars().filter(|c| c.is_ascii_digit()).count();
+                        if let Ok(target_digits) = restricting_str.parse::<usize>() {
+                            digit_count <= target_digits
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                },
+                ConstrainingFacet::FractionDigits => {
+                    // Count digits after decimal point
+                    if let Ok(_num) = value.parse::<f64>() {
+                        let fraction_part = value.split('.').nth(1).unwrap_or("");
+                        let fraction_digits = fraction_part.len();
+                        if let Ok(target_digits) = restricting_str.parse::<usize>() {
+                            fraction_digits <= target_digits
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                },
+                ConstrainingFacet::WhiteSpace => {
+                    // Handle whitespace normalization requirements
+                    match restricting_str.as_str() {
+                        "preserve" => true, // Preserve all whitespace
+                        "replace" => true,  // Replace tabs/newlines with spaces  
+                        "collapse" => true, // Collapse multiple spaces to single space
+                        _ => false,
+                    }
+                },
+            }
+        }).collect();
+        
+        Ok(filtered_values)
     }
 
     /// Check if a specific triple is satisfied by this interpretation

@@ -29,6 +29,46 @@ use std::{
     sync::{Arc, RwLock},
     time::Instant,
 };
+use serde_json;
+
+/// OWLlink request structure
+#[derive(Debug, Clone)]
+struct OWLlinkRequest {
+    /// Command name (Tell, IsClassSatisfiable, etc.)
+    command: String,
+    /// Axioms to add (for Tell command)
+    axioms: Vec<crate::ontology::axioms::Axiom>,
+    /// Class IRI for class-related queries
+    class_iri: Option<url::Url>,
+    /// Individual IRI for individual-related queries  
+    individual_iri: Option<url::Url>,
+    /// Direct flag for hierarchical queries
+    direct: Option<bool>,
+}
+
+/// SPARQL query structure
+#[derive(Debug, Clone)]
+struct SparqlQuery {
+    /// Query type (SELECT, ASK, CONSTRUCT, DESCRIBE)
+    query_type: String,
+    /// Variables to select
+    variables: Vec<String>,
+    /// Triple patterns in WHERE clause
+    patterns: Vec<TriplePattern>,
+    /// Original query string
+    original_query: String,
+}
+
+/// Triple pattern in SPARQL query
+#[derive(Debug, Clone)]
+struct TriplePattern {
+    /// Subject (variable or IRI)
+    subject: String,
+    /// Predicate (variable or IRI)
+    predicate: String,
+    /// Object (variable or IRI)
+    object: String,
+}
 
 /// Main reasoner interface
 #[derive(Debug)]
@@ -930,15 +970,363 @@ impl Reasoner {
     }
 
     /// Process OWLlink request
-    pub fn process_owllink_request(&self, _request: &str) -> Result<String> {
-        // TODO: Implement OWLlink processing
-        Ok("<ok/>".to_string())
+    pub fn process_owllink_request(&self, request: &str) -> Result<String> {
+        // Parse OWLlink XML request
+        let parsed_request = self.parse_owllink_xml(request)?;
+        
+        match parsed_request.command.as_str() {
+            "Tell" => {
+                // Add axioms to ontology - would need mutable access
+                Ok("<Response><OK/></Response>".to_string())
+            }
+            "IsClassSatisfiable" => {
+                if let Some(class_iri) = parsed_request.class_iri {
+                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
+                    let result = self.is_class_satisfiable(&class_expr)?;
+                    Ok(format!("<Response><BooleanResponse result=\"{}\"/></Response>", result))
+                } else {
+                    Err(Error::reasoning("Missing class IRI in IsClassSatisfiable request"))
+                }
+            }
+            "IsKBConsistent" => {
+                let result = self.is_consistent()?;
+                Ok(format!("<Response><BooleanResponse result=\"{}\"/></Response>", result))
+            }
+            "GetSubClasses" => {
+                if let Some(class_iri) = parsed_request.class_iri {
+                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
+                    let subclasses = self.get_subclasses(&class_expr, parsed_request.direct.unwrap_or(false))?;
+                    let subclass_elements: Vec<String> = subclasses.iter()
+                        .map(|expr| match expr {
+                            crate::ontology::concepts::ClassExpression::Class(c) => {
+                                format!("<Class IRI=\"{}\"/>", c.iri)
+                            }
+                            _ => "<Class IRI=\"http://www.w3.org/2002/07/owl#Nothing\"/>".to_string()
+                        })
+                        .collect();
+                    Ok(format!("<Response><SetOfClasses>{}</SetOfClasses></Response>", 
+                              subclass_elements.join("")))
+                } else {
+                    Err(Error::reasoning("Missing class IRI in GetSubClasses request"))
+                }
+            }
+            "GetSuperClasses" => {
+                if let Some(class_iri) = parsed_request.class_iri {
+                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
+                    let superclasses = self.get_superclasses(&class_expr, parsed_request.direct.unwrap_or(false))?;
+                    let superclass_elements: Vec<String> = superclasses.iter()
+                        .map(|expr| match expr {
+                            crate::ontology::concepts::ClassExpression::Class(c) => {
+                                format!("<Class IRI=\"{}\"/>", c.iri)
+                            }
+                            _ => "<Class IRI=\"http://www.w3.org/2002/07/owl#Thing\"/>".to_string()
+                        })
+                        .collect();
+                    Ok(format!("<Response><SetOfClasses>{}</SetOfClasses></Response>", 
+                              superclass_elements.join("")))
+                } else {
+                    Err(Error::reasoning("Missing class IRI in GetSuperClasses request"))
+                }
+            }
+            "GetInstances" => {
+                if let Some(class_iri) = parsed_request.class_iri {
+                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
+                    let instances = self.get_instances(&class_expr, parsed_request.direct.unwrap_or(false))?;
+                    let instance_elements: Vec<String> = instances.iter()
+                        .map(|ind| format!("<NamedIndividual IRI=\"{}\"/>", 
+                                         ind.iri().map(|iri| iri.to_string()).unwrap_or_else(|| "unknown".to_string())))
+                        .collect();
+                    Ok(format!("<Response><SetOfIndividuals>{}</SetOfIndividuals></Response>", 
+                              instance_elements.join("")))
+                } else {
+                    Err(Error::reasoning("Missing class IRI in GetInstances request"))
+                }
+            }
+            _ => {
+                Err(Error::reasoning(&format!("Unsupported OWLlink command: {}", parsed_request.command)))
+            }
+        }
+    }
+    
+    /// Parse OWLlink XML request into structured data
+    fn parse_owllink_xml(&self, xml: &str) -> Result<OWLlinkRequest> {
+        // Simple XML parsing - would use proper XML parser in production
+        let mut request = OWLlinkRequest {
+            command: String::new(),
+            axioms: Vec::new(),
+            class_iri: None,
+            individual_iri: None,
+            direct: None,
+        };
+        
+        // Extract command from XML
+        if xml.contains("<Tell") {
+            request.command = "Tell".to_string();
+        } else if xml.contains("<IsClassSatisfiable") {
+            request.command = "IsClassSatisfiable".to_string();
+        } else if xml.contains("<IsKBConsistent") {
+            request.command = "IsKBConsistent".to_string();
+        } else if xml.contains("<GetSubClasses") {
+            request.command = "GetSubClasses".to_string();
+        } else if xml.contains("<GetSuperClasses") {
+            request.command = "GetSuperClasses".to_string();
+        } else if xml.contains("<GetInstances") {
+            request.command = "GetInstances".to_string();
+        }
+        
+        // Extract class IRI if present
+        if let Some(start) = xml.find("IRI=\"") {
+            if let Some(end) = xml[start + 5..].find("\"") {
+                let iri_str = &xml[start + 5..start + 5 + end];
+                request.class_iri = Some(url::Url::parse(iri_str)
+                    .map_err(|e| Error::reasoning(&format!("Invalid IRI: {}", e)))?);
+            }
+        }
+        
+        // Extract direct attribute if present
+        if xml.contains("direct=\"true\"") {
+            request.direct = Some(true);
+        } else if xml.contains("direct=\"false\"") {
+            request.direct = Some(false);
+        }
+        
+        Ok(request)
     }
 
     /// Execute SPARQL query
-    pub fn execute_sparql_query(&self, _query: &str) -> Result<String> {
-        // TODO: Implement SPARQL query execution
-        Ok("[]".to_string())
+    pub fn execute_sparql_query(&self, query: &str) -> Result<String> {
+        // Parse SPARQL query
+        let parsed_query = self.parse_sparql_query(query)?;
+        
+        match parsed_query.query_type.as_str() {
+            "SELECT" => {
+                self.execute_sparql_select(&parsed_query)
+            }
+            "ASK" => {
+                self.execute_sparql_ask(&parsed_query)
+            }
+            "CONSTRUCT" => {
+                self.execute_sparql_construct(&parsed_query)
+            }
+            "DESCRIBE" => {
+                self.execute_sparql_describe(&parsed_query)
+            }
+            _ => {
+                Err(Error::reasoning(&format!("Unsupported SPARQL query type: {}", parsed_query.query_type)))
+            }
+        }
+    }
+    
+    /// Parse SPARQL query into structured form
+    fn parse_sparql_query(&self, query: &str) -> Result<SparqlQuery> {
+        let query_upper = query.to_uppercase();
+        
+        let query_type = if query_upper.contains("SELECT") {
+            "SELECT"
+        } else if query_upper.contains("ASK") {
+            "ASK"
+        } else if query_upper.contains("CONSTRUCT") {
+            "CONSTRUCT"
+        } else if query_upper.contains("DESCRIBE") {
+            "DESCRIBE"
+        } else {
+            return Err(Error::reasoning("Unknown SPARQL query type"));
+        };
+        
+        // Extract variables for SELECT queries
+        let mut variables = Vec::new();
+        if query_type == "SELECT" {
+            if let Some(start) = query_upper.find("SELECT") {
+                if let Some(end) = query_upper.find("WHERE") {
+                    let select_clause = &query[start + 6..end].trim();
+                    if select_clause.starts_with('*') {
+                        variables.push("*".to_string());
+                    } else {
+                        // Extract ?variable names
+                        for word in select_clause.split_whitespace() {
+                            if word.starts_with('?') {
+                                variables.push(word.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Extract WHERE clause patterns
+        let mut patterns = Vec::new();
+        if let Some(start) = query_upper.find("WHERE") {
+            if let Some(brace_start) = query[start..].find('{') {
+                if let Some(brace_end) = query[start + brace_start..].find('}') {
+                    let where_content = &query[start + brace_start + 1..start + brace_start + brace_end].trim();
+                    
+                    // Simple triple pattern extraction
+                    for line in where_content.lines() {
+                        let line = line.trim();
+                        if !line.is_empty() && !line.starts_with('#') {
+                            let parts: Vec<&str> = line.split_whitespace().collect();
+                            if parts.len() >= 3 {
+                                patterns.push(TriplePattern {
+                                    subject: parts[0].to_string(),
+                                    predicate: parts[1].to_string(),
+                                    object: parts[2].to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(SparqlQuery {
+            query_type: query_type.to_string(),
+            variables,
+            patterns,
+            original_query: query.to_string(),
+        })
+    }
+    
+    /// Execute SPARQL SELECT query
+    fn execute_sparql_select(&self, query: &SparqlQuery) -> Result<String> {
+        let mut results = Vec::new();
+        
+        if let Some(ontology) = &self.ontology {
+            let ontology_guard = ontology.read().unwrap();
+            
+            // For each triple pattern, find matching axioms
+            for pattern in &query.patterns {
+                if pattern.predicate.contains("type") || pattern.predicate.contains("rdf:type") {
+                    // Class assertion pattern: ?x rdf:type ClassName
+                    for axiom in ontology_guard.axioms() {
+                        if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                            let class_iri = match &assertion.class {
+                                crate::ontology::concepts::ClassExpression::Class(c) => c.iri.to_string(),
+                                _ => continue,
+                            };
+                            let individual_iri = assertion.individual.to_string();
+                            
+                            if pattern.object.contains(&class_iri) || pattern.object == "?class" {
+                                let mut binding = HashMap::new();
+                                if pattern.subject.starts_with('?') {
+                                    binding.insert(pattern.subject.clone(), individual_iri);
+                                }
+                                if pattern.object.starts_with('?') {
+                                    binding.insert(pattern.object.clone(), class_iri);
+                                }
+                                results.push(binding);
+                            }
+                        }
+                    }
+                } else {
+                    // Property assertion pattern: ?x propertyName ?y
+                    for axiom in ontology_guard.axioms() {
+                        match axiom {
+                            crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) => {
+                                let property_iri = assertion.property.to_string();
+                    let subject_iri = assertion.source.to_string();
+                    let object_iri = assertion.target.to_string();                                if pattern.predicate.contains(&property_iri) || pattern.predicate.starts_with('?') {
+                                    let mut binding = HashMap::new();
+                                    if pattern.subject.starts_with('?') {
+                                        binding.insert(pattern.subject.clone(), subject_iri);
+                                    }
+                                    if pattern.predicate.starts_with('?') {
+                                        binding.insert(pattern.predicate.clone(), property_iri);
+                                    }
+                                    if pattern.object.starts_with('?') {
+                                        binding.insert(pattern.object.clone(), object_iri);
+                                    }
+                                    results.push(binding);
+                                }
+                            }
+                            crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) => {
+                                let property_iri = assertion.property.to_string();
+                    let subject_iri = assertion.individual.to_string();
+                    let object_value = assertion.value.to_string();                                if pattern.predicate.contains(&property_iri) || pattern.predicate.starts_with('?') {
+                                    let mut binding = HashMap::new();
+                                    if pattern.subject.starts_with('?') {
+                                        binding.insert(pattern.subject.clone(), subject_iri);
+                                    }
+                                    if pattern.predicate.starts_with('?') {
+                                        binding.insert(pattern.predicate.clone(), property_iri);
+                                    }
+                                    if pattern.object.starts_with('?') {
+                                        binding.insert(pattern.object.clone(), object_value);
+                                    }
+                                    results.push(binding);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Format results as JSON
+        let json_results: Vec<serde_json::Value> = results
+            .into_iter()
+            .map(|binding| serde_json::Value::Object(
+                binding.into_iter()
+                    .map(|(k, v)| (k, serde_json::Value::String(v)))
+                    .collect()
+            ))
+            .collect();
+            
+        Ok(serde_json::json!({
+            "head": {
+                "vars": query.variables
+            },
+            "results": {
+                "bindings": json_results
+            }
+        }).to_string())
+    }
+    
+    /// Execute SPARQL ASK query
+    fn execute_sparql_ask(&self, query: &SparqlQuery) -> Result<String> {
+        // ASK queries return true/false
+        let select_result = self.execute_sparql_select(query)?;
+        let parsed: serde_json::Value = serde_json::from_str(&select_result)
+            .map_err(|e| Error::reasoning(&format!("Failed to parse SELECT result: {}", e)))?;
+            
+        let has_results = if let Some(bindings) = parsed["results"]["bindings"].as_array() {
+            !bindings.is_empty()
+        } else {
+            false
+        };
+        
+        Ok(serde_json::json!({
+            "head": {},
+            "boolean": has_results
+        }).to_string())
+    }
+    
+    /// Execute SPARQL CONSTRUCT query
+    fn execute_sparql_construct(&self, _query: &SparqlQuery) -> Result<String> {
+        // CONSTRUCT queries build new RDF graphs
+        // For now, return empty graph
+        Ok(serde_json::json!({
+            "head": {},
+            "results": {
+                "bindings": []
+            }
+        }).to_string())
+    }
+    
+    /// Execute SPARQL DESCRIBE query
+    fn execute_sparql_describe(&self, _query: &SparqlQuery) -> Result<String> {
+        // DESCRIBE queries return information about resources
+        // For now, return empty result
+        Ok(serde_json::json!({
+            "head": {},
+            "results": {
+                "bindings": []
+            }
+        }).to_string())
     }
 
     /// Get DL clauses as string

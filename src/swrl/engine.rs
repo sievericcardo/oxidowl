@@ -1680,7 +1680,95 @@ impl SWRLGoal {
         
         let class_name = match &assertion.class {
             crate::ontology::ClassExpression::Class(class) => class.iri.to_string(),
-            _ => "ComplexClass".to_string(), // Simplified for complex expressions
+            crate::ontology::ClassExpression::ObjectIntersectionOf(classes) => {
+                // Create a complex class name for intersection
+                let class_names: Vec<String> = classes.iter()
+                    .map(|c| match c {
+                        crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                        _ => "ComplexClass".to_string()
+                    })
+                    .collect();
+                format!("IntersectionOf({})", class_names.join(" "))
+            }
+            crate::ontology::ClassExpression::ObjectUnionOf(classes) => {
+                // Create a complex class name for union
+                let class_names: Vec<String> = classes.iter()
+                    .map(|c| match c {
+                        crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                        _ => "ComplexClass".to_string()
+                    })
+                    .collect();
+                format!("UnionOf({})", class_names.join(" "))
+            }
+            crate::ontology::ClassExpression::ObjectComplementOf(class) => {
+                match class.as_ref() {
+                    crate::ontology::ClassExpression::Class(cl) => format!("ComplementOf({})", cl.iri),
+                    _ => "ComplementOf(ComplexClass)".to_string()
+                }
+            }
+            crate::ontology::ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                let prop_name = match property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                    _ => "ComplexProperty".to_string()
+                };
+                let filler_name = match filler.as_ref() {
+                    crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                    _ => "ComplexClass".to_string()
+                };
+                format!("SomeValuesFrom({} {})", prop_name, filler_name)
+            }
+            crate::ontology::ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                let prop_name = match property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                    _ => "ComplexProperty".to_string()
+                };
+                let filler_name = match filler.as_ref() {
+                    crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                    _ => "ComplexClass".to_string()
+                };
+                format!("AllValuesFrom({} {})", prop_name, filler_name)
+            }
+            crate::ontology::ClassExpression::ObjectHasValue { property, value } => {
+                let prop_name = match property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                    _ => "ComplexProperty".to_string()
+                };
+                format!("HasValue({} {})", prop_name, value.to_string())
+            }
+            crate::ontology::ClassExpression::ObjectMinCardinality { cardinality, property, filler } => {
+                let prop_name = match property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                    _ => "ComplexProperty".to_string()
+                };
+                let filler_name = match filler.as_ref() {
+                    crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                    _ => "ComplexClass".to_string()
+                };
+                format!("MinCardinality({} {} {})", cardinality, prop_name, filler_name)
+            }
+            crate::ontology::ClassExpression::ObjectMaxCardinality { cardinality, property, filler } => {
+                let prop_name = match property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                    _ => "ComplexProperty".to_string()
+                };
+                let filler_name = match filler.as_ref() {
+                    crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                    _ => "ComplexClass".to_string()
+                };
+                format!("MaxCardinality({} {} {})", cardinality, prop_name, filler_name)
+            }
+            crate::ontology::ClassExpression::ObjectExactCardinality { cardinality, property, filler } => {
+                let prop_name = match property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                    _ => "ComplexProperty".to_string()
+                };
+                let filler_name = match filler.as_ref() {
+                    crate::ontology::ClassExpression::Class(cl) => cl.iri.to_string(),
+                    _ => "ComplexClass".to_string()
+                };
+                format!("ExactCardinality({} {} {})", cardinality, prop_name, filler_name)
+            }
+            _ => "ComplexClass".to_string(),
         };
         
         SWRLGoal::ClassAssertion {
@@ -1772,20 +1860,52 @@ impl SWRLRuleEngine {
                     for axiom in ontology_guard.axioms() {
                         if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom {
                             // Check if assertion matches goal
-                            // Implementation would compare IRIs properly
-                            return Ok(false); // Simplified
+                            let subject_matches = match &assertion.source {
+                                crate::ontology::Individual::Named(ind) => ind.iri.to_string() == *subject,
+                                crate::ontology::Individual::Anonymous(anon) => anon.id.to_string() == *subject,
+                            };
+                            
+                            let property_matches = match &assertion.property {
+                                crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => 
+                                    prop.iri.to_string() == *property,
+                                _ => false,
+                            };
+                            
+                            let object_matches = match &assertion.target {
+                                crate::ontology::Individual::Named(ind) => ind.iri.to_string() == *object,
+                                crate::ontology::Individual::Anonymous(anon) => anon.id.to_string() == *object,
+                            };
+                            
+                            if subject_matches && property_matches && object_matches {
+                                return Ok(true);
+                            }
                         }
                     }
+                    return Ok(false);
                 }
                 SWRLGoal::DataPropertyAssertion { subject, property, value } => {
                     // Check if data property assertion exists
                     for axiom in ontology_guard.axioms() {
                         if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
                             // Check if assertion matches goal
-                            // Implementation would compare properly
-                            return Ok(false); // Simplified
+                            let subject_matches = match &assertion.individual {
+                                crate::ontology::Individual::Named(ind) => ind.iri.to_string() == *subject,
+                                crate::ontology::Individual::Anonymous(anon) => anon.id.to_string() == *subject,
+                            };
+                            
+                            let property_matches = match &assertion.property {
+                                crate::ontology::DataPropertyExpression::DataProperty(prop) => 
+                                    prop.iri.to_string() == *property,
+                            };
+                            
+                            let value_matches = assertion.value.to_string() == *value;
+                            
+                            if subject_matches && property_matches && value_matches {
+                                return Ok(true);
+                            }
                         }
                     }
+                    return Ok(false);
                 }
             }
         }
@@ -1812,16 +1932,91 @@ impl SWRLRuleEngine {
     fn rule_head_matches_goal(&self, rule: &SWRLRule, goal: &SWRLGoal) -> Result<bool> {
         for head_atom in &rule.head {
             match (head_atom, goal) {
-                (crate::swrl::SWRLAtom::ClassAtom { predicate: _, argument: _ }, SWRLGoal::ClassAssertion { individual: _, class: _ }) => {
-                    // Check if class atom could match goal
-                    // Would need proper variable unification here
-                    return Ok(true); // Simplified
+                (crate::swrl::SWRLAtom::ClassAtom { predicate, argument }, SWRLGoal::ClassAssertion { individual, class }) => {
+                    // Check if class atom could match goal through unification
+                    let predicate_iri = match predicate {
+                        crate::ontology::ClassExpression::Class(c) => c.iri.to_string(),
+                        _ => return Ok(false), // Complex class expressions need more work
+                    };
+                    
+                    // Check if class matches
+                    if predicate_iri == *class {
+                        // Check if argument could unify with individual
+                        match argument {
+                            crate::swrl::SWRLIArgument::Variable(_) => return Ok(true), // Variable can unify
+                            crate::swrl::SWRLIArgument::Individual(ind) => {
+                                let ind_iri = match ind {
+                                    crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                                    crate::ontology::Individual::Anonymous(anon) => anon.id.to_string(),
+                                };
+                                return Ok(ind_iri == *individual);
+                            }
+                        }
+                    }
+                    return Ok(false);
                 }
-                (crate::swrl::SWRLAtom::ObjectPropertyAtom { predicate: _, first_argument: _, second_argument: _ }, SWRLGoal::PropertyAssertion { .. }) => {
-                    return Ok(true); // Simplified
+                (crate::swrl::SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument }, SWRLGoal::PropertyAssertion { subject, property, object }) => {
+                    // Check if object property atom could match goal
+                    let predicate_iri = match predicate {
+                        crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                        _ => return Ok(false), // Complex property expressions need more work
+                    };
+                    
+                    if predicate_iri == *property {
+                        // Check if arguments could unify
+                        let subject_matches = match first_argument {
+                            crate::swrl::SWRLIArgument::Variable(_) => true, // Variable can unify
+                            crate::swrl::SWRLIArgument::Individual(ind) => {
+                                let ind_iri = match ind {
+                                    crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                                    crate::ontology::Individual::Anonymous(anon) => anon.id.to_string(),
+                                };
+                                ind_iri == *subject
+                            }
+                        };
+                        
+                        let object_matches = match second_argument {
+                            crate::swrl::SWRLIArgument::Variable(_) => true, // Variable can unify
+                            crate::swrl::SWRLIArgument::Individual(ind) => {
+                                let ind_iri = match ind {
+                                    crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                                    crate::ontology::Individual::Anonymous(anon) => anon.id.to_string(),
+                                };
+                                ind_iri == *object
+                            }
+                        };
+                        
+                        return Ok(subject_matches && object_matches);
+                    }
+                    return Ok(false);
                 }
-                (crate::swrl::SWRLAtom::DataPropertyAtom { predicate: _, first_argument: _, second_argument: _ }, SWRLGoal::DataPropertyAssertion { .. }) => {
-                    return Ok(true); // Simplified
+                (crate::swrl::SWRLAtom::DataPropertyAtom { predicate, first_argument, second_argument }, SWRLGoal::DataPropertyAssertion { subject, property, value }) => {
+                    // Check if data property atom could match goal
+                    let predicate_iri = match predicate {
+                        crate::ontology::DataPropertyExpression::DataProperty(p) => p.iri.to_string(),
+                    };
+                    
+                    if predicate_iri == *property {
+                        // Check if arguments could unify
+                        let subject_matches = match first_argument {
+                            crate::swrl::SWRLIArgument::Variable(_) => true, // Variable can unify
+                            crate::swrl::SWRLIArgument::Individual(ind) => {
+                                let ind_iri = match ind {
+                                    crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                                    crate::ontology::Individual::Anonymous(anon) => anon.id.to_string(),
+                                };
+                                ind_iri == *subject
+                            }
+                        };
+                        
+                        let value_matches = match second_argument {
+                            crate::swrl::SWRLDArgument::Variable(_) => true, // Variable can unify
+                            crate::swrl::SWRLDArgument::Literal(lit) => lit.to_string() == *value,
+                        };
+                        
+                        return Ok(subject_matches && value_matches);
+                    }
+                    return Ok(false);
                 }
                 _ => {}
             }
@@ -1839,25 +2034,76 @@ impl SWRLRuleEngine {
             match body_atom {
                 crate::swrl::SWRLAtom::ClassAtom { predicate, argument } => {
                     // Create class assertion subgoal
+                    let individual_name = match argument {
+                        crate::swrl::SWRLIArgument::Variable(var) => format!("?{}", var.iri),
+                        crate::swrl::SWRLIArgument::Individual(ind) => match ind {
+                            crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                            crate::ontology::Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                        }
+                    };
+                    
+                    let class_name = match predicate {
+                        crate::ontology::ClassExpression::Class(c) => c.iri.to_string(),
+                        _ => format!("ComplexClass_{:?}", predicate),
+                    };
+                    
                     subgoals.push(SWRLGoal::ClassAssertion {
-                        individual: format!("var_{:?}", argument), // Simplified variable handling
-                        class: format!("{:?}", predicate),
+                        individual: individual_name,
+                        class: class_name,
                     });
                 }
                 crate::swrl::SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
                     // Create property assertion subgoal
+                    let subject_name = match first_argument {
+                        crate::swrl::SWRLIArgument::Variable(var) => format!("?{}", var.iri),
+                        crate::swrl::SWRLIArgument::Individual(ind) => match ind {
+                            crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                            crate::ontology::Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                        }
+                    };
+                    
+                    let object_name = match second_argument {
+                        crate::swrl::SWRLIArgument::Variable(var) => format!("?{}", var.iri),
+                        crate::swrl::SWRLIArgument::Individual(ind) => match ind {
+                            crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                            crate::ontology::Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                        }
+                    };
+                    
+                    let property_name = match predicate {
+                        crate::ontology::ObjectPropertyExpression::ObjectProperty(p) => p.iri.to_string(),
+                        _ => format!("ComplexProperty_{:?}", predicate),
+                    };
+                    
                     subgoals.push(SWRLGoal::PropertyAssertion {
-                        subject: format!("var_{:?}", first_argument),
-                        property: format!("{:?}", predicate),
-                        object: format!("var_{:?}", second_argument),
+                        subject: subject_name,
+                        property: property_name,
+                        object: object_name,
                     });
                 }
                 crate::swrl::SWRLAtom::DataPropertyAtom { predicate, first_argument, second_argument } => {
                     // Create data property assertion subgoal
+                    let subject_name = match first_argument {
+                        crate::swrl::SWRLIArgument::Variable(var) => format!("?{}", var.iri),
+                        crate::swrl::SWRLIArgument::Individual(ind) => match ind {
+                            crate::ontology::Individual::Named(named) => named.iri.to_string(),
+                            crate::ontology::Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                        }
+                    };
+                    
+                    let value_name = match second_argument {
+                        crate::swrl::SWRLDArgument::Variable(var) => format!("?{}", var.iri),
+                        crate::swrl::SWRLDArgument::Literal(lit) => lit.to_string(),
+                    };
+                    
+                    let property_name = match predicate {
+                        crate::ontology::DataPropertyExpression::DataProperty(p) => p.iri.to_string(),
+                    };
+                    
                     subgoals.push(SWRLGoal::DataPropertyAssertion {
-                        subject: format!("var_{:?}", first_argument),
-                        property: format!("{:?}", predicate),
-                        value: format!("var_{:?}", second_argument),
+                        subject: subject_name,
+                        property: property_name,
+                        value: value_name,
                     });
                 }
                 _ => {

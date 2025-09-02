@@ -30,6 +30,7 @@ im = "15.1"  # Immutable data structures
 smallvec = "1.15"
 ahash = "0.8"
 bitflags = "2.9"
+itertools = "0.13"
 thiserror = "2.0"
 anyhow = "1.0"
 num_cpus = "1.17"

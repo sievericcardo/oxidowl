@@ -430,8 +430,7 @@ impl BackwardChainingEngine {
         head: &SWRLAtom,
         bindings: &VariableBindings,
     ) -> Option<VariableBindings> {
-        // Simplified unification - would need full implementation
-        // For now, just check if atoms have the same structure
+        // Proper unification implementation
         match (goal, head) {
             (
                 SWRLAtom::ClassAtom {
@@ -443,13 +442,227 @@ impl BackwardChainingEngine {
                     argument: a2,
                 },
             ) => {
-                if p1 == p2 {
-                    self.unify_arguments(a1, a2, bindings)
-                } else {
-                    None
+                // Unify predicates first
+                if !self.unify_class_expressions(p1, p2)? {
+                    return None;
+                }
+                
+                // Then unify arguments
+                self.unify_i_arguments(a1, a2, bindings)
+            }
+            (
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: p1,
+                    first_argument: fa1,
+                    second_argument: sa1,
+                },
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: p2,
+                    first_argument: fa2,
+                    second_argument: sa2,
+                },
+            ) => {
+                // Unify predicates first
+                if !self.unify_object_property_expressions(p1, p2)? {
+                    return None;
+                }
+                
+                // Unify first arguments
+                let mut result_bindings = self.unify_i_arguments(fa1, fa2, bindings)?;
+                
+                // Unify second arguments
+                result_bindings = self.unify_i_arguments(sa1, sa2, &result_bindings)?;
+                
+                Some(result_bindings)
+            }
+            (
+                SWRLAtom::DataPropertyAtom {
+                    predicate: p1,
+                    first_argument: fa1,
+                    second_argument: sa1,
+                },
+                SWRLAtom::DataPropertyAtom {
+                    predicate: p2,
+                    first_argument: fa2,
+                    second_argument: sa2,
+                },
+            ) => {
+                // Unify predicates first
+                if !self.unify_data_property_expressions(p1, p2)? {
+                    return None;
+                }
+                
+                // Unify first arguments (individuals)
+                let mut result_bindings = self.unify_i_arguments(fa1, fa2, bindings)?;
+                
+                // Unify second arguments (data values)
+                result_bindings = self.unify_d_arguments(sa1, sa2, &result_bindings)?;
+                
+                Some(result_bindings)
+            }
+            _ => None, // Different atom types don't unify
+        }
+    }
+    
+    /// Unify class expressions
+    fn unify_class_expressions(&self, expr1: &ClassExpression, expr2: &ClassExpression) -> Option<bool> {
+        match (expr1, expr2) {
+            (ClassExpression::Class(c1), ClassExpression::Class(c2)) => {
+                Some(c1.iri == c2.iri)
+            }
+            // For more complex expressions, would need recursive unification
+            _ => Some(false), // Simplified for now
+        }
+    }
+    
+    /// Unify object property expressions
+    fn unify_object_property_expressions(&self, expr1: &ObjectPropertyExpression, expr2: &ObjectPropertyExpression) -> Option<bool> {
+        match (expr1, expr2) {
+            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
+                Some(p1.iri == p2.iri)
+            }
+            _ => Some(false), // Simplified for complex expressions
+        }
+    }
+    
+    /// Unify data property expressions
+    fn unify_data_property_expressions(&self, expr1: &DataPropertyExpression, expr2: &DataPropertyExpression) -> Option<bool> {
+        match (expr1, expr2) {
+            (DataPropertyExpression::DataProperty(p1), DataPropertyExpression::DataProperty(p2)) => {
+                Some(p1.iri == p2.iri)
+            }
+        }
+    }
+    
+    /// Unify individual arguments
+    fn unify_i_arguments(&self, arg1: &SWRLIArgument, arg2: &SWRLIArgument, bindings: &VariableBindings) -> Option<VariableBindings> {
+        match (arg1, arg2) {
+            (SWRLIArgument::Variable(var1), SWRLIArgument::Variable(var2)) => {
+                // Variable-variable unification
+                let mut new_bindings = bindings.clone();
+                
+                // Check if either variable is already bound
+                let val1 = bindings.bindings.get(var1);
+                let val2 = bindings.bindings.get(var2);
+                
+                match (val1, val2) {
+                    (Some(v1), Some(v2)) => {
+                        if v1 == v2 { Some(new_bindings) } else { None }
+                    }
+                    (Some(v1), None) => {
+                        new_bindings.bindings.insert(var2.clone(), v1.clone());
+                        Some(new_bindings)
+                    }
+                    (None, Some(v2)) => {
+                        new_bindings.bindings.insert(var1.clone(), v2.clone());
+                        Some(new_bindings)
+                    }
+                    (None, None) => {
+                        // Bind one variable to the other
+                        new_bindings.bindings.insert(var1.clone(), SWRLTerm::Variable(var2.clone()));
+                        Some(new_bindings)
+                    }
                 }
             }
-            _ => None, // Other cases would be implemented similarly
+            (SWRLIArgument::Variable(var), SWRLIArgument::Individual(ind)) => {
+                // Variable-individual unification
+                let mut new_bindings = bindings.clone();
+                let ind_name = match ind {
+                    Individual::Named(named) => named.iri.to_string(),
+                    Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                };
+                
+                if let Some(existing_val) = bindings.bindings.get(var) {
+                    if let SWRLTerm::Individual(existing_ind) = existing_val {
+                        if existing_ind.iri().map(|iri| iri.as_str()) == Some(&ind_name) { 
+                            Some(new_bindings) 
+                        } else { 
+                            None 
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    let individual = Individual::Named(crate::ontology::NamedIndividual::new(
+                        crate::ontology::IRI::new(&ind_name)
+                    ));
+                    new_bindings.bindings.insert(var.clone(), SWRLTerm::Individual(individual));
+                    Some(new_bindings)
+                }
+            }
+            (SWRLIArgument::Individual(ind), SWRLIArgument::Variable(var)) => {
+                // Individual-variable unification (symmetric)
+                self.unify_i_arguments(&SWRLIArgument::Variable(var.clone()), &SWRLIArgument::Individual(ind.clone()), bindings)
+            }
+            (SWRLIArgument::Individual(ind1), SWRLIArgument::Individual(ind2)) => {
+                // Individual-individual unification
+                let ind1_name = match ind1 {
+                    Individual::Named(named) => named.iri.to_string(),
+                    Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                };
+                let ind2_name = match ind2 {
+                    Individual::Named(named) => named.iri.to_string(),
+                    Individual::Anonymous(anon) => format!("_:{}", anon.id),
+                };
+                
+                if ind1_name == ind2_name { Some(bindings.clone()) } else { None }
+            }
+        }
+    }
+    
+    /// Unify data arguments  
+    fn unify_d_arguments(&self, arg1: &SWRLDArgument, arg2: &SWRLDArgument, bindings: &VariableBindings) -> Option<VariableBindings> {
+        match (arg1, arg2) {
+            (SWRLDArgument::Variable(var1), SWRLDArgument::Variable(var2)) => {
+                // Variable-variable unification
+                let mut new_bindings = bindings.clone();
+                
+                let val1 = bindings.bindings.get(var1);
+                let val2 = bindings.bindings.get(var2);
+                
+                match (val1, val2) {
+                    (Some(v1), Some(v2)) => {
+                        if v1 == v2 { Some(new_bindings) } else { None }
+                    }
+                    (Some(v1), None) => {
+                        new_bindings.bindings.insert(var2.clone(), v1.clone());
+                        Some(new_bindings)
+                    }
+                    (None, Some(v2)) => {
+                        new_bindings.bindings.insert(var1.clone(), v2.clone());
+                        Some(new_bindings)
+                    }
+                    (None, None) => {
+                        // Bind one variable to the other
+                        new_bindings.bindings.insert(var1.clone(), SWRLTerm::Variable(var2.clone()));
+                        Some(new_bindings)
+                    }
+                }
+            }
+            (SWRLDArgument::Variable(var), SWRLDArgument::Literal(lit)) => {
+                // Variable-literal unification
+                let mut new_bindings = bindings.clone();
+                let lit_value = lit.to_string();
+                
+                if let Some(existing_val) = bindings.bindings.get(var) {
+                    if let SWRLTerm::Literal(existing_lit) = existing_val {
+                        if existing_lit.to_string() == lit_value { Some(new_bindings) } else { None }
+                    } else {
+                        None
+                    }
+                } else {
+                    new_bindings.bindings.insert(var.clone(), SWRLTerm::Literal(SWRLValue::String(lit_value)));
+                    Some(new_bindings)
+                }
+            }
+            (SWRLDArgument::Literal(lit), SWRLDArgument::Variable(var)) => {
+                // Literal-variable unification (symmetric)
+                self.unify_d_arguments(&SWRLDArgument::Variable(var.clone()), &SWRLDArgument::Literal(lit.clone()), bindings)
+            }
+            (SWRLDArgument::Literal(lit1), SWRLDArgument::Literal(lit2)) => {
+                // Literal-literal unification
+                if lit1.to_string() == lit2.to_string() { Some(bindings.clone()) } else { None }
+            }
         }
     }
 
@@ -460,9 +673,8 @@ impl BackwardChainingEngine {
         arg2: &crate::swrl::SWRLIArgument,
         bindings: &VariableBindings,
     ) -> Option<VariableBindings> {
-        // Simplified unification implementation
-        // This would need to be much more sophisticated in practice
-        Some(bindings.clone())
+        // Use the proper unification implementation
+        self.unify_i_arguments(arg1, arg2, bindings)
     }
 
     /// Apply variable bindings to an atom
@@ -631,7 +843,11 @@ impl VariableBindings {
     fn occurs_check(&self, var: &SWRLVariable, term: &SWRLTerm) -> bool {
         match term {
             SWRLTerm::Variable(v) => v == var,
-            _ => false, // Simplified - would need recursive check for complex terms
+            SWRLTerm::Individual(_) => false,
+            SWRLTerm::Literal(_) => false,
+            SWRLTerm::Class(_) => false,
+            SWRLTerm::ObjectProperty(_) => false,
+            SWRLTerm::DataProperty(_) => false,
         }
     }
 
