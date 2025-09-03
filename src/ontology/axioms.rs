@@ -183,7 +183,7 @@ pub enum Axiom {
     // OWL 2 Key Axioms
     HasKey(HasKeyAxiom),
 
-    // Datatype Definition Axioms  
+    // Datatype Definition Axioms
     DatatypeDefinition(crate::ontology::datatypes::DatatypeDefinitionAxiom),
 }
 

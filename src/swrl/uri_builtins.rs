@@ -21,7 +21,10 @@ impl SWRLBuiltIn for ResolveUriBuiltIn {
         match (&args[0], &args[1], &args[2]) {
             (SWRLValue::Uri(result), SWRLValue::Uri(relative), SWRLValue::Uri(base)) => {
                 // Proper URI resolution following RFC 3986
-                let resolved = if relative.starts_with("http://") || relative.starts_with("https://") || relative.starts_with("ftp://") {
+                let resolved = if relative.starts_with("http://")
+                    || relative.starts_with("https://")
+                    || relative.starts_with("ftp://")
+                {
                     // Absolute URI
                     relative.clone()
                 } else if relative.starts_with("//") {
@@ -51,7 +54,7 @@ impl SWRLBuiltIn for ResolveUriBuiltIn {
                         format!("{}{}", base, relative)
                     }
                 } else if relative.starts_with("#") {
-                    // Fragment component  
+                    // Fragment component
                     if let Some(fragment_pos) = base.find('#') {
                         format!("{}{}", &base[..fragment_pos], relative)
                     } else {

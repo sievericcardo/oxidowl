@@ -3,7 +3,7 @@
 //! This module implements RDF simple entailment as defined in:
 //! https://www.w3.org/TR/rdf11-mt/#simple-entailment
 
-use super::{RdfGraph, RdfTerm, Triple, SemanticInterpretation};
+use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple};
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
@@ -40,7 +40,11 @@ impl RdfSimpleInterpretation {
     }
 
     /// Set property interpretation
-    pub fn set_property_interpretation(&mut self, property: String, pairs: HashSet<(String, String)>) {
+    pub fn set_property_interpretation(
+        &mut self,
+        property: String,
+        pairs: HashSet<(String, String)>,
+    ) {
         self.property_interpretation.insert(property, pairs);
     }
 
@@ -54,14 +58,20 @@ impl RdfSimpleInterpretation {
         match term {
             RdfTerm::Iri(iri) => {
                 // IRIs are interpreted as resources in the domain
-                self.resource_interpretation.get(&iri.to_string()).cloned()
+                self.resource_interpretation
+                    .get(&iri.to_string())
+                    .cloned()
                     .or_else(|| Some(iri.to_string())) // Default to self-interpretation
             }
             RdfTerm::BlankNode(id) => {
                 // Blank nodes are interpreted as resources in the domain
                 self.resource_interpretation.get(id).cloned()
             }
-            RdfTerm::Literal { value, datatype, language } => {
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+            } => {
                 // Literals are interpreted according to their datatype
                 let literal_key = if let Some(dt) = datatype {
                     format!("{}^^{}", value, dt)
@@ -70,8 +80,10 @@ impl RdfSimpleInterpretation {
                 } else {
                     value.clone()
                 };
-                
-                self.literal_interpretation.get(&literal_key).cloned()
+
+                self.literal_interpretation
+                    .get(&literal_key)
+                    .cloned()
                     .or_else(|| Some(literal_key)) // Default interpretation
             }
         }
@@ -107,7 +119,10 @@ impl Default for RdfSimpleInterpretation {
 impl SemanticInterpretation for RdfSimpleInterpretation {
     fn satisfies(&self, graph: &RdfGraph) -> bool {
         // An interpretation satisfies a graph if it satisfies all triples in the graph
-        graph.triples().iter().all(|triple| self.satisfies_triple(triple))
+        graph
+            .triples()
+            .iter()
+            .all(|triple| self.satisfies_triple(triple))
     }
 
     fn interpret_term(&self, term: &RdfTerm) -> Option<String> {
@@ -117,10 +132,13 @@ impl SemanticInterpretation for RdfSimpleInterpretation {
     fn entails(&self, premises: &RdfGraph, conclusion: &RdfGraph) -> bool {
         // Simple entailment: premises entail conclusion if every interpretation
         // that satisfies the premises also satisfies the conclusion
-        
+
         // For now, we use a simplified check: conclusion is subset of premises
         // A proper implementation would need to handle blank node renaming
-        conclusion.triples().iter().all(|triple| premises.contains_triple(triple))
+        conclusion
+            .triples()
+            .iter()
+            .all(|triple| premises.contains_triple(triple))
     }
 }
 
@@ -148,10 +166,10 @@ impl RdfSimpleEntailment {
     pub fn reason(&mut self) -> Result<()> {
         // For RDF simple entailment, no additional inferences are made
         // All entailments are already explicit in the graph
-        
+
         // Copy base graph to derived graph
         self.derived_graph = self.base_graph.clone();
-        
+
         Ok(())
     }
 
@@ -173,7 +191,7 @@ impl RdfSimpleEntailment {
         // RDF Simple Entailment: conclusion is entailed by premises if there exists
         // a mapping from blank nodes in conclusion to terms in premises such that
         // when applied, all triples in conclusion appear in premises
-        
+
         if conclusion.triples().is_empty() {
             return true; // Empty graph is entailed by any graph
         }
@@ -191,13 +209,16 @@ impl RdfSimpleEntailment {
 
         // If no blank nodes, check direct containment
         if conclusion_blanks.is_empty() {
-            return conclusion.triples().iter().all(|triple| premises.contains_triple(triple));
+            return conclusion
+                .triples()
+                .iter()
+                .all(|triple| premises.contains_triple(triple));
         }
 
         // Try to find a consistent mapping for blank nodes
         let blank_list: Vec<String> = conclusion_blanks.into_iter().collect();
         let mut mapping = HashMap::new();
-        
+
         self.find_entailment_mapping(premises, conclusion, &mut mapping, &blank_list, 0)
     }
 
@@ -216,10 +237,10 @@ impl RdfSimpleEntailment {
         }
 
         let blank = &blanks[index];
-        
+
         // Try mapping this blank node to each term that appears in premises
         let mut candidate_terms = HashSet::new();
-        
+
         for triple in premises.triples() {
             candidate_terms.insert(triple.subject.clone());
             candidate_terms.insert(triple.object.clone());
@@ -227,11 +248,11 @@ impl RdfSimpleEntailment {
 
         for candidate in candidate_terms {
             mapping.insert(blank.clone(), candidate);
-            
+
             if self.find_entailment_mapping(premises, conclusion, mapping, blanks, index + 1) {
                 return true;
             }
-            
+
             mapping.remove(blank);
         }
 
@@ -255,26 +276,43 @@ impl RdfSimpleEntailment {
     }
 
     /// Apply blank node mapping to a triple
-    fn apply_mapping_to_triple(&self, triple: &Triple, mapping: &HashMap<String, RdfTerm>) -> Triple {
+    fn apply_mapping_to_triple(
+        &self,
+        triple: &Triple,
+        mapping: &HashMap<String, RdfTerm>,
+    ) -> Triple {
         let subject = if let RdfTerm::BlankNode(ref id) = triple.subject {
-            mapping.get(id).cloned().unwrap_or_else(|| triple.subject.clone())
+            mapping
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| triple.subject.clone())
         } else {
             triple.subject.clone()
         };
 
         let predicate = if let RdfTerm::BlankNode(ref id) = triple.predicate {
-            mapping.get(id).cloned().unwrap_or_else(|| triple.predicate.clone())
+            mapping
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| triple.predicate.clone())
         } else {
             triple.predicate.clone()
         };
 
         let object = if let RdfTerm::BlankNode(ref id) = triple.object {
-            mapping.get(id).cloned().unwrap_or_else(|| triple.object.clone())
+            mapping
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| triple.object.clone())
         } else {
             triple.object.clone()
         };
 
-        Triple { subject, predicate, object }
+        Triple {
+            subject,
+            predicate,
+            object,
+        }
     }
 
     /// Check if a triple (possibly with blank nodes) matches any triple in the graph
@@ -296,9 +334,9 @@ impl RdfSimpleEntailment {
 
     /// Check if two triples are compatible (same structure, blank nodes can match anything)
     fn triples_compatible(&self, pattern: &Triple, candidate: &Triple) -> bool {
-        self.terms_compatible(&pattern.subject, &candidate.subject) &&
-        self.terms_compatible(&pattern.predicate, &candidate.predicate) &&
-        self.terms_compatible(&pattern.object, &candidate.object)
+        self.terms_compatible(&pattern.subject, &candidate.subject)
+            && self.terms_compatible(&pattern.predicate, &candidate.predicate)
+            && self.terms_compatible(&pattern.object, &candidate.object)
     }
 
     /// Check if two RDF terms are compatible for matching
@@ -374,31 +412,41 @@ mod tests {
     #[test]
     fn test_simple_interpretation() {
         let mut interp = RdfSimpleInterpretation::new();
-        
+
         // Add resources to domain
         interp.add_resource("resource1".to_string());
         interp.add_resource("resource2".to_string());
-        
+
         // Set property interpretation
         let mut prop_pairs = HashSet::new();
         prop_pairs.insert(("resource1".to_string(), "resource2".to_string()));
         interp.set_property_interpretation("http://example.org/knows".to_string(), prop_pairs);
-        
+
         // Create a triple
         let subject = RdfTerm::iri("http://example.org/person1").unwrap();
         let predicate = RdfTerm::iri("http://example.org/knows").unwrap();
         let object = RdfTerm::iri("http://example.org/person2").unwrap();
-        
-        let triple = Triple { subject, predicate, object };
-        
+
+        let triple = Triple {
+            subject,
+            predicate,
+            object,
+        };
+
         // Create graph with the triple
         let mut graph = RdfGraph::new();
         graph.add_triple(triple);
-        
+
         // Set resource interpretations
-        interp.set_resource_interpretation("http://example.org/person1".to_string(), "resource1".to_string());
-        interp.set_resource_interpretation("http://example.org/person2".to_string(), "resource2".to_string());
-        
+        interp.set_resource_interpretation(
+            "http://example.org/person1".to_string(),
+            "resource1".to_string(),
+        );
+        interp.set_resource_interpretation(
+            "http://example.org/person2".to_string(),
+            "resource2".to_string(),
+        );
+
         // Check if interpretation satisfies the graph
         assert!(interp.satisfies(&graph));
     }
@@ -407,20 +455,20 @@ mod tests {
     fn test_simple_entailment() {
         let mut premises = RdfGraph::new();
         let mut conclusion = RdfGraph::new();
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
         let object = RdfTerm::literal("object");
-        
-        let triple = Triple { 
-            subject: subject.clone(), 
-            predicate: predicate.clone(), 
-            object: object.clone() 
+
+        let triple = Triple {
+            subject: subject.clone(),
+            predicate: predicate.clone(),
+            object: object.clone(),
         };
-        
+
         premises.add_triple(triple.clone());
         conclusion.add_triple(triple);
-        
+
         let entailment = RdfSimpleEntailment::new(premises.clone());
         assert!(entailment.entails(&premises, &conclusion));
     }
@@ -429,10 +477,10 @@ mod tests {
     fn test_blank_node_mapping() {
         let mut mapping = BlankNodeMapping::new();
         mapping.add_mapping("_:b1".to_string(), "_:x1".to_string());
-        
+
         let blank_term = RdfTerm::blank_node("_:b1");
         let mapped_term = mapping.apply_to_term(&blank_term);
-        
+
         if let RdfTerm::BlankNode(id) = mapped_term {
             assert_eq!(id, "_:x1");
         } else {

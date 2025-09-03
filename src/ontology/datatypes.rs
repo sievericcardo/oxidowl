@@ -1,5 +1,5 @@
-use crate::ontology::axioms::*;
 use crate::error::OxidowlError;
+use crate::ontology::axioms::*;
 use horned_owl::model::*;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -26,7 +26,7 @@ pub enum OWL2Datatype {
     Base64Binary,
     HexBinary,
     AnyURI,
-    
+
     // Numeric datatypes derived from decimal and integer (Section 4.3)
     Integer,
     NonNegativeInteger,
@@ -41,12 +41,12 @@ pub enum OWL2Datatype {
     UnsignedInt,
     UnsignedShort,
     UnsignedByte,
-    
+
     // RDF datatypes (Section 4.5)
     XMLLiteral,
     Literal,
     PlainLiteral,
-    
+
     // OWL 2 specific datatypes (Section 4.1)
     Real,
     Rational,
@@ -75,11 +75,15 @@ impl OWL2Datatype {
             OWL2Datatype::Base64Binary => "http://www.w3.org/2001/XMLSchema#base64Binary",
             OWL2Datatype::HexBinary => "http://www.w3.org/2001/XMLSchema#hexBinary",
             OWL2Datatype::AnyURI => "http://www.w3.org/2001/XMLSchema#anyURI",
-            
+
             // Numeric datatypes
             OWL2Datatype::Integer => "http://www.w3.org/2001/XMLSchema#integer",
-            OWL2Datatype::NonNegativeInteger => "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
-            OWL2Datatype::NonPositiveInteger => "http://www.w3.org/2001/XMLSchema#nonPositiveInteger",
+            OWL2Datatype::NonNegativeInteger => {
+                "http://www.w3.org/2001/XMLSchema#nonNegativeInteger"
+            }
+            OWL2Datatype::NonPositiveInteger => {
+                "http://www.w3.org/2001/XMLSchema#nonPositiveInteger"
+            }
             OWL2Datatype::PositiveInteger => "http://www.w3.org/2001/XMLSchema#positiveInteger",
             OWL2Datatype::NegativeInteger => "http://www.w3.org/2001/XMLSchema#negativeInteger",
             OWL2Datatype::Long => "http://www.w3.org/2001/XMLSchema#long",
@@ -90,40 +94,59 @@ impl OWL2Datatype {
             OWL2Datatype::UnsignedInt => "http://www.w3.org/2001/XMLSchema#unsignedInt",
             OWL2Datatype::UnsignedShort => "http://www.w3.org/2001/XMLSchema#unsignedShort",
             OWL2Datatype::UnsignedByte => "http://www.w3.org/2001/XMLSchema#unsignedByte",
-            
+
             // RDF datatypes
             OWL2Datatype::XMLLiteral => "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral",
             OWL2Datatype::Literal => "http://www.w3.org/2000/01/rdf-schema#Literal",
             OWL2Datatype::PlainLiteral => "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
-            
+
             // OWL 2 datatypes
             OWL2Datatype::Real => "http://www.w3.org/2002/07/owl#real",
             OWL2Datatype::Rational => "http://www.w3.org/2002/07/owl#rational",
         };
-        
+
         crate::ontology::IRI::new(iri_string)
     }
 
     /// Check if this datatype is numeric
     pub fn is_numeric(&self) -> bool {
-        matches!(self,
-            OWL2Datatype::Decimal | OWL2Datatype::Float | OWL2Datatype::Double |
-            OWL2Datatype::Integer | OWL2Datatype::NonNegativeInteger | 
-            OWL2Datatype::NonPositiveInteger | OWL2Datatype::PositiveInteger |
-            OWL2Datatype::NegativeInteger | OWL2Datatype::Long | OWL2Datatype::Int |
-            OWL2Datatype::Short | OWL2Datatype::Byte | OWL2Datatype::UnsignedLong |
-            OWL2Datatype::UnsignedInt | OWL2Datatype::UnsignedShort | 
-            OWL2Datatype::UnsignedByte | OWL2Datatype::Real | OWL2Datatype::Rational
+        matches!(
+            self,
+            OWL2Datatype::Decimal
+                | OWL2Datatype::Float
+                | OWL2Datatype::Double
+                | OWL2Datatype::Integer
+                | OWL2Datatype::NonNegativeInteger
+                | OWL2Datatype::NonPositiveInteger
+                | OWL2Datatype::PositiveInteger
+                | OWL2Datatype::NegativeInteger
+                | OWL2Datatype::Long
+                | OWL2Datatype::Int
+                | OWL2Datatype::Short
+                | OWL2Datatype::Byte
+                | OWL2Datatype::UnsignedLong
+                | OWL2Datatype::UnsignedInt
+                | OWL2Datatype::UnsignedShort
+                | OWL2Datatype::UnsignedByte
+                | OWL2Datatype::Real
+                | OWL2Datatype::Rational
         )
     }
 
     /// Check if this datatype is a date/time type
     pub fn is_datetime(&self) -> bool {
-        matches!(self,
-            OWL2Datatype::DateTime | OWL2Datatype::Time | OWL2Datatype::Date |
-            OWL2Datatype::GYearMonth | OWL2Datatype::GYear | OWL2Datatype::GMonthDay |
-            OWL2Datatype::GDay | OWL2Datatype::GMonth | OWL2Datatype::Duration |
-            OWL2Datatype::DateTimeStamp
+        matches!(
+            self,
+            OWL2Datatype::DateTime
+                | OWL2Datatype::Time
+                | OWL2Datatype::Date
+                | OWL2Datatype::GYearMonth
+                | OWL2Datatype::GYear
+                | OWL2Datatype::GMonthDay
+                | OWL2Datatype::GDay
+                | OWL2Datatype::GMonth
+                | OWL2Datatype::Duration
+                | OWL2Datatype::DateTimeStamp
         )
     }
 
@@ -149,11 +172,11 @@ impl OWL2Datatype {
             OWL2Datatype::UnsignedInt => Some(OWL2Datatype::UnsignedLong),
             OWL2Datatype::UnsignedShort => Some(OWL2Datatype::UnsignedInt),
             OWL2Datatype::UnsignedByte => Some(OWL2Datatype::UnsignedShort),
-            
+
             // Real hierarchy
             OWL2Datatype::Decimal => Some(OWL2Datatype::Real),
             OWL2Datatype::Rational => Some(OWL2Datatype::Real),
-            
+
             _ => None,
         }
     }
@@ -183,8 +206,12 @@ impl FromStr for OWL2Datatype {
             "http://www.w3.org/2001/XMLSchema#hexBinary" => Ok(OWL2Datatype::HexBinary),
             "http://www.w3.org/2001/XMLSchema#anyURI" => Ok(OWL2Datatype::AnyURI),
             "http://www.w3.org/2001/XMLSchema#integer" => Ok(OWL2Datatype::Integer),
-            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger" => Ok(OWL2Datatype::NonNegativeInteger),
-            "http://www.w3.org/2001/XMLSchema#nonPositiveInteger" => Ok(OWL2Datatype::NonPositiveInteger),
+            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger" => {
+                Ok(OWL2Datatype::NonNegativeInteger)
+            }
+            "http://www.w3.org/2001/XMLSchema#nonPositiveInteger" => {
+                Ok(OWL2Datatype::NonPositiveInteger)
+            }
             "http://www.w3.org/2001/XMLSchema#positiveInteger" => Ok(OWL2Datatype::PositiveInteger),
             "http://www.w3.org/2001/XMLSchema#negativeInteger" => Ok(OWL2Datatype::NegativeInteger),
             "http://www.w3.org/2001/XMLSchema#long" => Ok(OWL2Datatype::Long),
@@ -197,10 +224,15 @@ impl FromStr for OWL2Datatype {
             "http://www.w3.org/2001/XMLSchema#unsignedByte" => Ok(OWL2Datatype::UnsignedByte),
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral" => Ok(OWL2Datatype::XMLLiteral),
             "http://www.w3.org/2000/01/rdf-schema#Literal" => Ok(OWL2Datatype::Literal),
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral" => Ok(OWL2Datatype::PlainLiteral),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral" => {
+                Ok(OWL2Datatype::PlainLiteral)
+            }
             "http://www.w3.org/2002/07/owl#real" => Ok(OWL2Datatype::Real),
             "http://www.w3.org/2002/07/owl#rational" => Ok(OWL2Datatype::Rational),
-            _ => Err(OxidowlError::InvalidDatatype(format!("Unknown datatype IRI: {}", iri))),
+            _ => Err(OxidowlError::InvalidDatatype(format!(
+                "Unknown datatype IRI: {}",
+                iri
+            ))),
         }
     }
 }
@@ -291,15 +323,18 @@ impl ConstrainingFacet {
             ConstrainingFacet::TotalDigits => "http://www.w3.org/2001/XMLSchema#totalDigits",
             ConstrainingFacet::FractionDigits => "http://www.w3.org/2001/XMLSchema#fractionDigits",
         };
-        
+
         crate::ontology::IRI::new(iri_string)
     }
 
     /// Check if this facet is applicable to the given datatype
     pub fn is_applicable_to(&self, datatype: &OWL2Datatype) -> bool {
         match self {
-            ConstrainingFacet::Length | ConstrainingFacet::MinLength | ConstrainingFacet::MaxLength => {
-                matches!(datatype, 
+            ConstrainingFacet::Length
+            | ConstrainingFacet::MinLength
+            | ConstrainingFacet::MaxLength => {
+                matches!(
+                    datatype,
                     OWL2Datatype::String | OWL2Datatype::Base64Binary | OWL2Datatype::HexBinary
                 )
             }
@@ -310,10 +345,10 @@ impl ConstrainingFacet {
             ConstrainingFacet::WhiteSpace => {
                 matches!(datatype, OWL2Datatype::String)
             }
-            ConstrainingFacet::MaxInclusive | ConstrainingFacet::MaxExclusive |
-            ConstrainingFacet::MinInclusive | ConstrainingFacet::MinExclusive => {
-                datatype.is_ordered()
-            }
+            ConstrainingFacet::MaxInclusive
+            | ConstrainingFacet::MaxExclusive
+            | ConstrainingFacet::MinInclusive
+            | ConstrainingFacet::MinExclusive => datatype.is_ordered(),
             ConstrainingFacet::TotalDigits | ConstrainingFacet::FractionDigits => {
                 datatype.is_numeric()
             }
@@ -335,7 +370,7 @@ impl DatatypeManager {
             facet_restrictions: HashMap::new(),
             datatype_hierarchy: HashMap::new(),
         };
-        
+
         manager.initialize_datatype_hierarchy();
         manager
     }
@@ -356,20 +391,42 @@ impl DatatypeManager {
     /// Get all OWL 2 datatypes
     fn all_owl2_datatypes(&self) -> Vec<OWL2Datatype> {
         vec![
-            OWL2Datatype::String, OWL2Datatype::Boolean, OWL2Datatype::Decimal,
-            OWL2Datatype::Float, OWL2Datatype::Double, OWL2Datatype::DateTime,
-            OWL2Datatype::Time, OWL2Datatype::Date, OWL2Datatype::GYearMonth,
-            OWL2Datatype::GYear, OWL2Datatype::GMonthDay, OWL2Datatype::GDay,
-            OWL2Datatype::GMonth, OWL2Datatype::Duration, OWL2Datatype::DateTimeStamp,
-            OWL2Datatype::Base64Binary, OWL2Datatype::HexBinary, OWL2Datatype::AnyURI,
-            OWL2Datatype::Integer, OWL2Datatype::NonNegativeInteger,
-            OWL2Datatype::NonPositiveInteger, OWL2Datatype::PositiveInteger,
-            OWL2Datatype::NegativeInteger, OWL2Datatype::Long, OWL2Datatype::Int,
-            OWL2Datatype::Short, OWL2Datatype::Byte, OWL2Datatype::UnsignedLong,
-            OWL2Datatype::UnsignedInt, OWL2Datatype::UnsignedShort,
-            OWL2Datatype::UnsignedByte, OWL2Datatype::XMLLiteral,
-            OWL2Datatype::Literal, OWL2Datatype::PlainLiteral,
-            OWL2Datatype::Real, OWL2Datatype::Rational,
+            OWL2Datatype::String,
+            OWL2Datatype::Boolean,
+            OWL2Datatype::Decimal,
+            OWL2Datatype::Float,
+            OWL2Datatype::Double,
+            OWL2Datatype::DateTime,
+            OWL2Datatype::Time,
+            OWL2Datatype::Date,
+            OWL2Datatype::GYearMonth,
+            OWL2Datatype::GYear,
+            OWL2Datatype::GMonthDay,
+            OWL2Datatype::GDay,
+            OWL2Datatype::GMonth,
+            OWL2Datatype::Duration,
+            OWL2Datatype::DateTimeStamp,
+            OWL2Datatype::Base64Binary,
+            OWL2Datatype::HexBinary,
+            OWL2Datatype::AnyURI,
+            OWL2Datatype::Integer,
+            OWL2Datatype::NonNegativeInteger,
+            OWL2Datatype::NonPositiveInteger,
+            OWL2Datatype::PositiveInteger,
+            OWL2Datatype::NegativeInteger,
+            OWL2Datatype::Long,
+            OWL2Datatype::Int,
+            OWL2Datatype::Short,
+            OWL2Datatype::Byte,
+            OWL2Datatype::UnsignedLong,
+            OWL2Datatype::UnsignedInt,
+            OWL2Datatype::UnsignedShort,
+            OWL2Datatype::UnsignedByte,
+            OWL2Datatype::XMLLiteral,
+            OWL2Datatype::Literal,
+            OWL2Datatype::PlainLiteral,
+            OWL2Datatype::Real,
+            OWL2Datatype::Rational,
         ]
     }
 
@@ -386,7 +443,7 @@ impl DatatypeManager {
         if OWL2Datatype::from_str(&datatype_iri.to_string()).is_ok() {
             return true;
         }
-        
+
         // Check if it's a user-defined datatype
         if let Ok(url) = datatype_iri.to_url() {
             self.datatype_definitions.contains_key(&url)
@@ -401,68 +458,81 @@ impl DatatypeManager {
             if let Ok(owl2_datatype) = OWL2Datatype::from_str(&datatype_url.to_string()) {
                 return self.validate_against_builtin_datatype(&literal.value, &owl2_datatype);
             }
-            
+
             if let Some(definition) = self.datatype_definitions.get(datatype_url) {
                 return self.validate_against_defined_datatype(literal, definition);
             }
-            
-            return Err(OxidowlError::InvalidDatatype(
-                format!("Unrecognized datatype: {}", datatype_url)
-            ));
+
+            return Err(OxidowlError::InvalidDatatype(format!(
+                "Unrecognized datatype: {}",
+                datatype_url
+            )));
         }
-        
+
         // Plain literal (no datatype)
         Ok(())
     }
 
     /// Validate a literal value against a built-in OWL 2 datatype
-    fn validate_against_builtin_datatype(&self, value: &str, datatype: &OWL2Datatype) -> Result<(), OxidowlError> {
+    fn validate_against_builtin_datatype(
+        &self,
+        value: &str,
+        datatype: &OWL2Datatype,
+    ) -> Result<(), OxidowlError> {
         match datatype {
             OWL2Datatype::Boolean => {
                 if !matches!(value, "true" | "false" | "1" | "0") {
-                    return Err(OxidowlError::InvalidLiteral(
-                        format!("Invalid boolean value: {}", value)
-                    ));
+                    return Err(OxidowlError::InvalidLiteral(format!(
+                        "Invalid boolean value: {}",
+                        value
+                    )));
                 }
             }
             OWL2Datatype::Integer => {
                 if value.parse::<i64>().is_err() {
-                    return Err(OxidowlError::InvalidLiteral(
-                        format!("Invalid integer value: {}", value)
-                    ));
+                    return Err(OxidowlError::InvalidLiteral(format!(
+                        "Invalid integer value: {}",
+                        value
+                    )));
                 }
             }
             OWL2Datatype::Decimal => {
                 if value.parse::<f64>().is_err() {
-                    return Err(OxidowlError::InvalidLiteral(
-                        format!("Invalid decimal value: {}", value)
-                    ));
+                    return Err(OxidowlError::InvalidLiteral(format!(
+                        "Invalid decimal value: {}",
+                        value
+                    )));
                 }
             }
             OWL2Datatype::Float | OWL2Datatype::Double => {
-                if value.parse::<f64>().is_err() && 
-                   !matches!(value, "INF" | "-INF" | "NaN") {
-                    return Err(OxidowlError::InvalidLiteral(
-                        format!("Invalid float/double value: {}", value)
-                    ));
+                if value.parse::<f64>().is_err() && !matches!(value, "INF" | "-INF" | "NaN") {
+                    return Err(OxidowlError::InvalidLiteral(format!(
+                        "Invalid float/double value: {}",
+                        value
+                    )));
                 }
             }
             // Add validation for other datatypes as needed
             _ => {
                 // Basic validation - just check that it's not empty for most types
                 if value.is_empty() && !matches!(datatype, OWL2Datatype::String) {
-                    return Err(OxidowlError::InvalidLiteral(
-                        format!("Empty value for datatype: {:?}", datatype)
-                    ));
+                    return Err(OxidowlError::InvalidLiteral(format!(
+                        "Empty value for datatype: {:?}",
+                        datatype
+                    )));
                 }
             }
         }
-        
+
         Ok(())
     }
 
     /// Validate a literal against a user-defined datatype
-    fn validate_against_defined_datatype(&self, _literal: &crate::ontology::Literal, _definition: &DatatypeDefinitionAxiom) -> Result<(), OxidowlError> {
+    fn validate_against_defined_datatype(
+        &self,
+        _literal: &crate::ontology::Literal,
+        _definition: &DatatypeDefinitionAxiom,
+    ) -> Result<(), OxidowlError> {
         // This would implement validation against the data range constraints
         // For now, just accept it
         Ok(())
@@ -473,17 +543,20 @@ impl DatatypeManager {
         if subtype == supertype {
             return true;
         }
-        
+
         if let Some(parent) = subtype.parent_datatype() {
             return self.is_subtype_of(&parent, supertype);
         }
-        
+
         false
     }
 
     /// Get all subtypes of a datatype
     pub fn get_subtypes(&self, datatype: &OWL2Datatype) -> HashSet<OWL2Datatype> {
-        self.datatype_hierarchy.get(datatype).cloned().unwrap_or_default()
+        self.datatype_hierarchy
+            .get(datatype)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -511,8 +584,14 @@ mod tests {
 
     #[test]
     fn test_datatype_hierarchy() {
-        assert_eq!(OWL2Datatype::Integer.parent_datatype(), Some(OWL2Datatype::Decimal));
-        assert_eq!(OWL2Datatype::Int.parent_datatype(), Some(OWL2Datatype::Long));
+        assert_eq!(
+            OWL2Datatype::Integer.parent_datatype(),
+            Some(OWL2Datatype::Decimal)
+        );
+        assert_eq!(
+            OWL2Datatype::Int.parent_datatype(),
+            Some(OWL2Datatype::Long)
+        );
         assert_eq!(OWL2Datatype::String.parent_datatype(), None);
     }
 
@@ -535,10 +614,10 @@ mod tests {
     #[test]
     fn test_datatype_manager() {
         let manager = DatatypeManager::new();
-        
+
         assert!(manager.is_recognized_datatype(&OWL2Datatype::String.iri()));
         assert!(manager.is_recognized_datatype(&OWL2Datatype::Integer.iri()));
-        
+
         assert!(manager.is_subtype_of(&OWL2Datatype::Integer, &OWL2Datatype::Decimal));
         assert!(manager.is_subtype_of(&OWL2Datatype::Int, &OWL2Datatype::Integer));
         assert!(!manager.is_subtype_of(&OWL2Datatype::String, &OWL2Datatype::Integer));
@@ -547,15 +626,39 @@ mod tests {
     #[test]
     fn test_literal_validation() {
         let manager = DatatypeManager::new();
-        
+
         // Test boolean validation
-        assert!(manager.validate_against_builtin_datatype("true", &OWL2Datatype::Boolean).is_ok());
-        assert!(manager.validate_against_builtin_datatype("false", &OWL2Datatype::Boolean).is_ok());
-        assert!(manager.validate_against_builtin_datatype("invalid", &OWL2Datatype::Boolean).is_err());
-        
+        assert!(
+            manager
+                .validate_against_builtin_datatype("true", &OWL2Datatype::Boolean)
+                .is_ok()
+        );
+        assert!(
+            manager
+                .validate_against_builtin_datatype("false", &OWL2Datatype::Boolean)
+                .is_ok()
+        );
+        assert!(
+            manager
+                .validate_against_builtin_datatype("invalid", &OWL2Datatype::Boolean)
+                .is_err()
+        );
+
         // Test integer validation
-        assert!(manager.validate_against_builtin_datatype("42", &OWL2Datatype::Integer).is_ok());
-        assert!(manager.validate_against_builtin_datatype("-123", &OWL2Datatype::Integer).is_ok());
-        assert!(manager.validate_against_builtin_datatype("not_a_number", &OWL2Datatype::Integer).is_err());
+        assert!(
+            manager
+                .validate_against_builtin_datatype("42", &OWL2Datatype::Integer)
+                .is_ok()
+        );
+        assert!(
+            manager
+                .validate_against_builtin_datatype("-123", &OWL2Datatype::Integer)
+                .is_ok()
+        );
+        assert!(
+            manager
+                .validate_against_builtin_datatype("not_a_number", &OWL2Datatype::Integer)
+                .is_err()
+        );
     }
 }

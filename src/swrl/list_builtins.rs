@@ -20,17 +20,19 @@ impl SWRLBuiltIn for ListConcatBuiltIn {
 
         // Parse input lists and concatenate them
         let mut concatenated_items = Vec::new();
-        
+
         for arg in &args[1..] {
             let items = self.parse_list_value(arg)?;
             concatenated_items.extend(items);
         }
-        
+
         // Create result list representation
         let result_list = self.create_list_value(concatenated_items)?;
-        
+
         // Check if first argument matches the result
-        Ok(SWRLValue::Boolean(self.lists_equal(&args[0], &result_list)?))
+        Ok(SWRLValue::Boolean(
+            self.lists_equal(&args[0], &result_list)?,
+        ))
     }
 
     fn name(&self) -> &str {
@@ -452,12 +454,12 @@ impl ListConcatBuiltIn {
             _ => Err(Error::reasoning("Cannot parse non-string value as list")),
         }
     }
-    
+
     /// Create a SWRL value representing a list
     fn create_list_value(&self, items: Vec<String>) -> Result<SWRLValue> {
         Ok(SWRLValue::String(items.join(",")))
     }
-    
+
     /// Check if two list values are equal
     fn lists_equal(&self, list1: &SWRLValue, list2: &SWRLValue) -> Result<bool> {
         let items1 = self.parse_list_value(list1)?;
@@ -510,11 +512,11 @@ impl ListIntersectionBuiltIn {
             _ => Err(Error::reasoning("Cannot parse non-string value as list")),
         }
     }
-    
+
     fn create_list_value(&self, items: Vec<String>) -> Result<SWRLValue> {
         Ok(SWRLValue::String(items.join(",")))
     }
-    
+
     fn lists_equal(&self, list1: &SWRLValue, list2: &SWRLValue) -> Result<bool> {
         let items1 = self.parse_list_value(list1)?;
         let items2 = self.parse_list_value(list2)?;

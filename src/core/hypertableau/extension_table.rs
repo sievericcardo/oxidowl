@@ -805,22 +805,26 @@ impl ExtensionManager {
                     }
                 }
             }
-            
+
             // Check for owl:disjointWith relations
             if let Some(disjoint_table) = self.get_table_for_arity(2) {
                 let disjoint_key = "owl:disjointWith";
-                
+
                 // Check if any class disjoint with this predicate is asserted for the same individual
                 for fact in disjoint_table.get_all_facts() {
                     if fact.len() >= 3 && fact[0] == disjoint_key {
                         if let (Some(class1), Some(class2)) = (fact.get(1), fact.get(2)) {
                             // If predicate is disjoint with class1, check if individual is in class1
                             if let Some(table) = self.get_table_for_arity(arity) {
-                                if class2 == predicate && table.has_fact(class1, args).unwrap_or(false) {
+                                if class2 == predicate
+                                    && table.has_fact(class1, args).unwrap_or(false)
+                                {
                                     return true;
                                 }
-                                // If predicate is disjoint with class2, check if individual is in class2  
-                                if class1 == predicate && table.has_fact(class2, args).unwrap_or(false) {
+                                // If predicate is disjoint with class2, check if individual is in class2
+                                if class1 == predicate
+                                    && table.has_fact(class2, args).unwrap_or(false)
+                                {
                                     return true;
                                 }
                             }
@@ -828,7 +832,7 @@ impl ExtensionManager {
                     }
                 }
             }
-            
+
             // Check for complement class relations (¬C ≡ owl:complementOf C)
             let complement_predicate = format!("owl:complementOf_{}", predicate);
             if let Some(table) = self.get_table_for_arity(arity) {
@@ -853,11 +857,11 @@ impl ExtensionManager {
     /// Get concepts known to be disjoint with the given concept
     fn get_disjoint_concepts(&self, concept: &str) -> Result<Vec<String>> {
         let mut disjoint_concepts = Vec::new();
-        
+
         // Check explicit disjoint class declarations in the binary table
         if let Some(binary_table) = self.get_table_for_arity(2) {
             let disjoint_key = "owl:disjointWith";
-            
+
             for fact in binary_table.get_all_facts() {
                 if fact.len() >= 3 && fact[0] == disjoint_key {
                     if let (Some(class1), Some(class2)) = (fact.get(1), fact.get(2)) {
@@ -869,14 +873,16 @@ impl ExtensionManager {
                     }
                 }
             }
-            
+
             // Check for AllDisjointClasses declarations
             let all_disjoint_key = "owl:AllDisjointClasses";
             for fact in binary_table.get_all_facts() {
                 if fact.len() >= 3 && fact[0] == all_disjoint_key {
                     // Parse the disjoint class list properly
                     if let Some(class_list_id) = fact.get(2) {
-                        let class_list = self.binary_extension_table.parse_rdf_list_from_extension(class_list_id)?;
+                        let class_list = self
+                            .binary_extension_table
+                            .parse_rdf_list_from_extension(class_list_id)?;
                         if class_list.contains(&concept.to_string()) {
                             // All other classes in the list are disjoint with this concept
                             for other_class in &class_list {
@@ -889,27 +895,34 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         // Add built-in disjoint concepts
         self.add_builtin_disjoint_concepts(concept, &mut disjoint_concepts);
-        
+
         Ok(disjoint_concepts)
     }
-    
+
     /// Check if a concept is in a disjoint class list
     fn is_concept_in_disjoint_list(&self, concept: &str, list_id: &str) -> bool {
         // Parse the RDF list to check for membership
-        if let Ok(list_items) = self.binary_extension_table.parse_rdf_list_from_extension(list_id) {
+        if let Ok(list_items) = self
+            .binary_extension_table
+            .parse_rdf_list_from_extension(list_id)
+        {
             list_items.contains(&concept.to_string())
         } else {
             false
         }
     }
-    
+
     /// Get other classes in the same disjoint class list
-    fn get_other_classes_in_disjoint_list(&self, exclude_concept: &str, list_id: &str) -> Vec<String> {
+    fn get_other_classes_in_disjoint_list(
+        &self,
+        exclude_concept: &str,
+        list_id: &str,
+    ) -> Vec<String> {
         let mut other_classes = Vec::new();
-        
+
         if let Some(table) = self.get_table_for_arity(2) {
             for fact in table.get_all_facts() {
                 if fact.len() >= 3 && fact[0] == "rdf:member" {
@@ -921,17 +934,17 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         other_classes
     }
-    
+
     /// Add built-in disjoint concepts for common OWL patterns
     fn add_builtin_disjoint_concepts(&self, concept: &str, disjoint_concepts: &mut Vec<String>) {
         // owl:Nothing is disjoint with everything except itself
         if concept != "owl:Nothing" {
             disjoint_concepts.push("owl:Nothing".to_string());
         }
-        
+
         // Add complement relationships
         if concept.starts_with("owl:complementOf_") {
             let base_concept = &concept[17..]; // Remove "owl:complementOf_" prefix
@@ -939,7 +952,7 @@ impl ExtensionManager {
         } else {
             disjoint_concepts.push(format!("owl:complementOf_{}", concept));
         }
-        
+
         // Add common built-in disjoint pairs
         match concept {
             "xsd:string" => {
@@ -949,14 +962,14 @@ impl ExtensionManager {
                     "xsd:boolean".to_string(),
                     "xsd:dateTime".to_string(),
                 ]);
-            },
+            }
             "xsd:integer" | "xsd:decimal" => {
                 disjoint_concepts.extend(vec![
                     "xsd:string".to_string(),
                     "xsd:boolean".to_string(),
                     "xsd:dateTime".to_string(),
                 ]);
-            },
+            }
             "xsd:boolean" => {
                 disjoint_concepts.extend(vec![
                     "xsd:string".to_string(),
@@ -964,7 +977,7 @@ impl ExtensionManager {
                     "xsd:decimal".to_string(),
                     "xsd:dateTime".to_string(),
                 ]);
-            },
+            }
             _ => {}
         }
     }
@@ -1007,7 +1020,7 @@ impl ExtensionManager {
     pub fn get_all_individuals(&self) -> Result<Vec<String>> {
         // Collect individuals from type assertions and property assertions
         let mut individuals = HashSet::new();
-        
+
         // Get individuals from type assertions (rdf:type facts)
         if let Ok(type_facts) = self.get_facts("rdf:type", &RetrievalView::Complete) {
             for fact in type_facts {
@@ -1016,21 +1029,24 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         // Get individuals from object property assertions
         if let Some(binary_table) = self.get_table_for_arity(2) {
             for fact in binary_table.get_all_facts() {
                 if fact.len() >= 3 {
                     // fact[0] is predicate, fact[1] and fact[2] are individuals
-                    if !fact[1].starts_with("owl:") && !fact[2].starts_with("owl:") &&
-                       !fact[1].starts_with("rdf:") && !fact[2].starts_with("rdf:") {
+                    if !fact[1].starts_with("owl:")
+                        && !fact[2].starts_with("owl:")
+                        && !fact[1].starts_with("rdf:")
+                        && !fact[2].starts_with("rdf:")
+                    {
                         individuals.insert(fact[1].clone());
                         individuals.insert(fact[2].clone());
                     }
                 }
             }
         }
-        
+
         // Also check explicit Individual declarations
         if let Ok(individual_facts) = self.get_facts("Individual", &RetrievalView::Complete) {
             for fact in individual_facts {
@@ -1039,14 +1055,14 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         Ok(individuals.into_iter().collect())
     }
 
     /// Get all concepts for an individual
     pub fn get_individual_concepts(&self, individual: &str) -> Result<Vec<String>> {
         let mut concepts = Vec::new();
-        
+
         // Look for type assertions (rdf:type facts)
         if let Ok(type_facts) = self.get_facts("rdf:type", &RetrievalView::Complete) {
             for fact in type_facts {
@@ -1055,7 +1071,7 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         // Look for concept assertions in unary tables
         if let Some(unary_table) = self.get_table_for_arity(1) {
             for fact in unary_table.get_all_facts() {
@@ -1065,7 +1081,7 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         Ok(concepts)
     }
 
@@ -1441,13 +1457,19 @@ impl ExtensionTable {
             .filter(|&i| !self.delta_new.contains(&i) && !self.delta_old.contains(&i))
             .collect()
     }
-    
+
     /// Check property chain recursively for any length
-    fn check_property_chain_recursive(&self, subj_id: &str, obj_id: &str, chain: &[crate::ontology::ObjectPropertyExpression], position: usize) -> bool {
+    fn check_property_chain_recursive(
+        &self,
+        subj_id: &str,
+        obj_id: &str,
+        chain: &[crate::ontology::ObjectPropertyExpression],
+        position: usize,
+    ) -> bool {
         if position >= chain.len() {
             return subj_id == obj_id; // Successfully completed the chain
         }
-        
+
         if position == chain.len() - 1 {
             // Last property in the chain - check direct connection
             if let (Ok(subj), Ok(obj)) = (subj_id.parse::<usize>(), obj_id.parse::<usize>()) {
@@ -1455,11 +1477,11 @@ impl ExtensionTable {
             }
             return false;
         }
-        
+
         // Find intermediate nodes through the current property
         let current_property = &chain[position];
         let property_name = self.property_expression_to_string(current_property);
-        
+
         // Get all objects connected by the current property from binary table
         if let Some(table) = self.get_table_for_arity(2) {
             let facts = table.get_all_facts();
@@ -1468,25 +1490,36 @@ impl ExtensionTable {
                     // Found an intermediate node
                     let intermediate_id = &fact[1];
                     // Recursively check the rest of the chain from the intermediate node
-                    if self.check_property_chain_recursive(intermediate_id, obj_id, chain, position + 1) {
+                    if self.check_property_chain_recursive(
+                        intermediate_id,
+                        obj_id,
+                        chain,
+                        position + 1,
+                    ) {
                         return true;
                     }
                 }
             }
         }
-        
+
         false
     }
-    
+
     /// Get all objects connected to a subject via a property
-    fn get_objects_for_property(&self, subj_id: usize, property: &crate::ontology::ObjectPropertyExpression) -> Vec<usize> {
+    fn get_objects_for_property(
+        &self,
+        subj_id: usize,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Vec<usize> {
         let mut objects = Vec::new();
         let property_name = self.property_expression_to_string(property);
-        
+
         if let Some(table) = self.get_table_for_arity(2) {
             for fact in table.get_all_facts() {
                 if fact.len() >= 3 && fact[0] == property_name {
-                    if let (Ok(subj), Ok(obj)) = (fact[1].parse::<usize>(), fact[2].parse::<usize>()) {
+                    if let (Ok(subj), Ok(obj)) =
+                        (fact[1].parse::<usize>(), fact[2].parse::<usize>())
+                    {
                         if subj == subj_id {
                             objects.push(obj);
                         }
@@ -1494,34 +1527,38 @@ impl ExtensionTable {
                 }
             }
         }
-        
+
         objects
     }
-    
+
     /// Convert property expression to string representation
-    fn property_expression_to_string(&self, property: &crate::ontology::ObjectPropertyExpression) -> String {
+    fn property_expression_to_string(
+        &self,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> String {
         match property {
             crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.to_string(),
             crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
                 format!("inverse({})", prop.iri)
             }
             crate::ontology::ObjectPropertyExpression::PropertyChain(chain) => {
-                let chain_strs: Vec<String> = chain.iter()
+                let chain_strs: Vec<String> = chain
+                    .iter()
                     .map(|p| self.property_expression_to_string(p))
                     .collect();
                 format!("chain({})", chain_strs.join(","))
             }
         }
     }
-    
+
     /// Parse RDF list from extension table
     fn parse_rdf_list_from_extension(&self, list_id: &str) -> Result<Vec<String>> {
         let mut items = Vec::new();
         let mut current = list_id.to_string();
-        
+
         // Follow rdf:first/rdf:rest chain
         let nil = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
-        
+
         while current != nil {
             // Find rdf:first fact for current node
             if let Some(table) = self.get_table_for_arity(2) {
@@ -1533,11 +1570,11 @@ impl ExtensionTable {
                         break;
                     }
                 }
-                
+
                 if !found_first {
                     break;
                 }
-                
+
                 // Find rdf:rest fact for current node
                 let mut found_rest = false;
                 for fact in table.get_all_facts() {
@@ -1547,39 +1584,48 @@ impl ExtensionTable {
                         break;
                     }
                 }
-                
+
                 if !found_rest {
                     break;
                 }
             }
         }
-        
+
         Ok(items)
     }
-    
+
     /// Helper method to get table for a specific arity (placeholder)
     fn get_table_for_arity(&self, _arity: usize) -> Option<&ExtensionTable> {
         // This would need to be implemented based on the actual table structure
         // For now, return self for simplification
         Some(self)
     }
-    
+
     /// Check if there's an object property fact
-    fn has_object_property_fact(&self, subj_id: usize, obj_id: usize, property: &crate::ontology::ObjectPropertyExpression) -> bool {
+    fn has_object_property_fact(
+        &self,
+        subj_id: usize,
+        obj_id: usize,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> bool {
         let property_name = self.property_expression_to_string(property);
-        
+
         for tuple_entry in &self.tuples {
-            if tuple_entry.is_active && 
-               tuple_entry.predicate == property_name &&
-               tuple_entry.tuple.len() >= 2 {
-                if let (Ok(subj), Ok(obj)) = (tuple_entry.tuple[0].parse::<usize>(), tuple_entry.tuple[1].parse::<usize>()) {
+            if tuple_entry.is_active
+                && tuple_entry.predicate == property_name
+                && tuple_entry.tuple.len() >= 2
+            {
+                if let (Ok(subj), Ok(obj)) = (
+                    tuple_entry.tuple[0].parse::<usize>(),
+                    tuple_entry.tuple[1].parse::<usize>(),
+                ) {
                     if subj == subj_id && obj == obj_id {
                         return true;
                     }
                 }
             }
         }
-        
+
         false
     }
 }

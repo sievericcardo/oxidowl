@@ -3,7 +3,7 @@
 //! This module provides a framework for creating and working with
 //! interpretations according to RDF, RDFS, and OWL 2 semantics.
 
-use super::{RdfGraph, RdfTerm, Triple, SemanticInterpretation};
+use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple};
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
@@ -70,7 +70,8 @@ impl Interpretation {
 
     /// Set interpretation for a blank node
     pub fn set_blank_node_interpretation(&mut self, blank_node: String, domain_element: String) {
-        self.blank_node_interpretation.insert(blank_node, domain_element);
+        self.blank_node_interpretation
+            .insert(blank_node, domain_element);
     }
 
     /// Get interpretation for a blank node
@@ -79,12 +80,19 @@ impl Interpretation {
     }
 
     /// Set property interpretation
-    pub fn set_property_interpretation(&mut self, property: String, relations: HashSet<(String, String)>) {
+    pub fn set_property_interpretation(
+        &mut self,
+        property: String,
+        relations: HashSet<(String, String)>,
+    ) {
         self.property_interpretation.insert(property, relations);
     }
 
     /// Get property interpretation
-    pub fn get_property_interpretation(&self, property: &str) -> Option<&HashSet<(String, String)>> {
+    pub fn get_property_interpretation(
+        &self,
+        property: &str,
+    ) -> Option<&HashSet<(String, String)>> {
         self.property_interpretation.get(property)
     }
 
@@ -138,13 +146,17 @@ impl Interpretation {
     pub fn interpret_rdf_term(&self, term: &RdfTerm) -> Option<String> {
         match term {
             RdfTerm::Iri(iri) => {
-                self.iri_interpretation.get(&iri.to_string()).cloned()
+                self.iri_interpretation
+                    .get(&iri.to_string())
+                    .cloned()
                     .or_else(|| Some(iri.to_string())) // Default to self-interpretation
             }
-            RdfTerm::BlankNode(id) => {
-                self.blank_node_interpretation.get(id).cloned()
-            }
-            RdfTerm::Literal { value, datatype, language } => {
+            RdfTerm::BlankNode(id) => self.blank_node_interpretation.get(id).cloned(),
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+            } => {
                 let literal_key = if let Some(dt) = datatype {
                     format!("{}^^{}", value, dt)
                 } else if let Some(lang) = language {
@@ -152,8 +164,10 @@ impl Interpretation {
                 } else {
                     value.clone()
                 };
-                
-                self.literal_interpretation.get(&literal_key).cloned()
+
+                self.literal_interpretation
+                    .get(&literal_key)
+                    .cloned()
                     .or_else(|| Some(literal_key)) // Default interpretation
             }
         }
@@ -218,7 +232,7 @@ impl Interpretation {
     /// Create a model-theoretic interpretation from an RDF graph
     pub fn from_rdf_graph(graph: &RdfGraph) -> Result<Self> {
         let mut interpretation = Self::new();
-        
+
         // Extract all terms from the graph
         let mut all_terms = HashSet::new();
         for triple in graph.triples() {
@@ -230,12 +244,12 @@ impl Interpretation {
         // Build domain from non-literal terms
         let mut domain = HashSet::new();
         let mut term_counter = 0;
-        
+
         for term in &all_terms {
             if !term.is_literal() {
                 let domain_element = format!("d{}", term_counter);
                 domain.insert(domain_element.clone());
-                
+
                 match term {
                     RdfTerm::Iri(iri) => {
                         interpretation.set_iri_interpretation(iri.to_string(), domain_element);
@@ -245,7 +259,7 @@ impl Interpretation {
                     }
                     _ => {}
                 }
-                
+
                 term_counter += 1;
             }
         }
@@ -275,18 +289,21 @@ impl Interpretation {
         for (iri, interpretation) in &other.iri_interpretation {
             if let Some(existing) = self.iri_interpretation.get(iri) {
                 if existing != interpretation {
-                    return Err(Error::reasoning(
-                        format!("Conflicting IRI interpretation for {}", iri)
-                    ));
+                    return Err(Error::reasoning(format!(
+                        "Conflicting IRI interpretation for {}",
+                        iri
+                    )));
                 }
             } else {
-                self.iri_interpretation.insert(iri.clone(), interpretation.clone());
+                self.iri_interpretation
+                    .insert(iri.clone(), interpretation.clone());
             }
         }
 
         // Merge blank node interpretations
         for (blank_node, interpretation) in &other.blank_node_interpretation {
-            self.blank_node_interpretation.insert(blank_node.clone(), interpretation.clone());
+            self.blank_node_interpretation
+                .insert(blank_node.clone(), interpretation.clone());
         }
 
         // Merge property interpretations
@@ -307,7 +324,8 @@ impl Interpretation {
 
         // Merge literal interpretations
         for (literal, interpretation) in &other.literal_interpretation {
-            self.literal_interpretation.insert(literal.clone(), interpretation.clone());
+            self.literal_interpretation
+                .insert(literal.clone(), interpretation.clone());
         }
 
         // Merge datatype interpretations
@@ -331,7 +349,10 @@ impl Default for Interpretation {
 impl SemanticInterpretation for Interpretation {
     fn satisfies(&self, graph: &RdfGraph) -> bool {
         // An interpretation satisfies a graph if it satisfies all triples
-        graph.triples().iter().all(|triple| self.satisfies_triple(triple))
+        graph
+            .triples()
+            .iter()
+            .all(|triple| self.satisfies_triple(triple))
     }
 
     fn interpret_term(&self, term: &RdfTerm) -> Option<String> {
@@ -371,19 +392,22 @@ impl InterpretationBuilder {
 
     /// Add an IRI interpretation
     pub fn with_iri(mut self, iri: String, domain_element: String) -> Self {
-        self.interpretation.set_iri_interpretation(iri, domain_element);
+        self.interpretation
+            .set_iri_interpretation(iri, domain_element);
         self
     }
 
     /// Add a property interpretation
     pub fn with_property(mut self, property: String, relations: HashSet<(String, String)>) -> Self {
-        self.interpretation.set_property_interpretation(property, relations);
+        self.interpretation
+            .set_property_interpretation(property, relations);
         self
     }
 
     /// Add a class interpretation
     pub fn with_class(mut self, class: String, instances: HashSet<String>) -> Self {
-        self.interpretation.set_class_interpretation(class, instances);
+        self.interpretation
+            .set_class_interpretation(class, instances);
         self
     }
 
@@ -392,10 +416,10 @@ impl InterpretationBuilder {
         // Validate the interpretation
         if !self.interpretation.is_well_formed()? {
             return Err(Error::reasoning(
-                "Interpretation is not well-formed".to_string()
+                "Interpretation is not well-formed".to_string(),
             ));
         }
-        
+
         Ok(self.interpretation)
     }
 }
@@ -413,48 +437,46 @@ impl InterpretationFactory {
     /// Create a minimal interpretation for RDF
     pub fn create_minimal_rdf_interpretation() -> Interpretation {
         let mut interpretation = Interpretation::new();
-        
+
         // Add minimal domain
         let mut domain = HashSet::new();
         domain.insert("resource1".to_string());
         interpretation.set_domain(domain);
-        
+
         interpretation
     }
 
     /// Create a standard RDFS interpretation
     pub fn create_rdfs_interpretation() -> Interpretation {
         let mut interpretation = Self::create_minimal_rdf_interpretation();
-        
+
         // Add RDFS vocabulary interpretations
         use super::vocabulary::*;
-        
+
         let mut rdfs_resource_instances = HashSet::new();
         rdfs_resource_instances.insert("resource1".to_string());
         interpretation.set_class_interpretation(RDFS_RESOURCE.to_string(), rdfs_resource_instances);
-        
+
         let rdfs_class_instances = HashSet::new();
         interpretation.set_class_interpretation(RDFS_CLASS.to_string(), rdfs_class_instances);
-        
+
         interpretation
     }
 
     /// Create a standard OWL interpretation
     pub fn create_owl_interpretation() -> Interpretation {
         let mut interpretation = Self::create_rdfs_interpretation();
-        
+
         // Add OWL vocabulary interpretations
         use super::vocabulary::*;
-        
+
         // owl:Thing contains all domain elements
-        interpretation.set_class_interpretation(
-            OWL_THING.to_string(), 
-            interpretation.domain().clone()
-        );
-        
+        interpretation
+            .set_class_interpretation(OWL_THING.to_string(), interpretation.domain().clone());
+
         // owl:Nothing is empty
         interpretation.set_class_interpretation(OWL_NOTHING.to_string(), HashSet::new());
-        
+
         interpretation
     }
 }
@@ -466,14 +488,15 @@ mod tests {
     #[test]
     fn test_interpretation_creation() {
         let mut interpretation = Interpretation::new();
-        
+
         let mut domain = HashSet::new();
         domain.insert("d1".to_string());
         domain.insert("d2".to_string());
         interpretation.set_domain(domain);
-        
-        interpretation.set_iri_interpretation("http://example.org/test".to_string(), "d1".to_string());
-        
+
+        interpretation
+            .set_iri_interpretation("http://example.org/test".to_string(), "d1".to_string());
+
         assert_eq!(interpretation.domain().len(), 2);
         assert_eq!(
             interpretation.get_iri_interpretation("http://example.org/test"),
@@ -485,39 +508,48 @@ mod tests {
     fn test_interpretation_builder() {
         let mut domain = HashSet::new();
         domain.insert("d1".to_string());
-        
+
         let interpretation = InterpretationBuilder::new()
             .with_domain(domain)
             .with_iri("http://example.org/test".to_string(), "d1".to_string())
             .build()
             .unwrap();
-        
+
         assert!(interpretation.is_well_formed().unwrap());
     }
 
     #[test]
     fn test_triple_satisfaction() {
         let mut interpretation = Interpretation::new();
-        
+
         let mut domain = HashSet::new();
         domain.insert("d1".to_string());
         domain.insert("d2".to_string());
         interpretation.set_domain(domain);
-        
-        interpretation.set_iri_interpretation("http://example.org/subject".to_string(), "d1".to_string());
-        interpretation.set_iri_interpretation("http://example.org/predicate".to_string(), "pred".to_string());
-        interpretation.set_iri_interpretation("http://example.org/object".to_string(), "d2".to_string());
-        
+
+        interpretation
+            .set_iri_interpretation("http://example.org/subject".to_string(), "d1".to_string());
+        interpretation.set_iri_interpretation(
+            "http://example.org/predicate".to_string(),
+            "pred".to_string(),
+        );
+        interpretation
+            .set_iri_interpretation("http://example.org/object".to_string(), "d2".to_string());
+
         let mut relations = HashSet::new();
         relations.insert(("d1".to_string(), "d2".to_string()));
         interpretation.set_property_interpretation("pred".to_string(), relations);
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
         let object = RdfTerm::iri("http://example.org/object").unwrap();
-        
-        let triple = Triple { subject, predicate, object };
-        
+
+        let triple = Triple {
+            subject,
+            predicate,
+            object,
+        };
+
         assert!(interpretation.satisfies_triple(&triple));
     }
 
@@ -525,11 +557,19 @@ mod tests {
     fn test_interpretation_factory() {
         let rdf_interp = InterpretationFactory::create_minimal_rdf_interpretation();
         assert!(!rdf_interp.domain().is_empty());
-        
+
         let rdfs_interp = InterpretationFactory::create_rdfs_interpretation();
-        assert!(rdfs_interp.get_class_interpretation(&super::super::vocabulary::RDFS_RESOURCE.to_string()).is_some());
-        
+        assert!(
+            rdfs_interp
+                .get_class_interpretation(&super::super::vocabulary::RDFS_RESOURCE.to_string())
+                .is_some()
+        );
+
         let owl_interp = InterpretationFactory::create_owl_interpretation();
-        assert!(owl_interp.get_class_interpretation(&super::super::vocabulary::OWL_THING.to_string()).is_some());
+        assert!(
+            owl_interp
+                .get_class_interpretation(&super::super::vocabulary::OWL_THING.to_string())
+                .is_some()
+        );
     }
 }

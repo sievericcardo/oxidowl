@@ -8,16 +8,16 @@
 
 pub mod rdf;
 // pub mod rdfs;  // Temporarily disabled due to type system mismatch after changes
-pub mod owl2;
 pub mod entailment;
 pub mod interpretation;
+pub mod owl2;
 
 // Re-export main types for convenience
 pub use rdf::{RdfSimpleEntailment, RdfSimpleInterpretation};
 // pub use rdfs::{RdfsEntailmentEngine, RdfsInterpretation};  // Temporarily disabled
-pub use owl2::{Owl2Interpretation, Owl2ReasoningEngine};
 pub use entailment::{EntailmentChecker, EntailmentRegime, Owl2RlEngine};
 pub use interpretation::{Interpretation, InterpretationBuilder, InterpretationFactory};
+pub use owl2::{Owl2Interpretation, Owl2ReasoningEngine};
 
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
@@ -49,8 +49,9 @@ pub enum RdfTerm {
 impl RdfTerm {
     /// Create an IRI term
     pub fn iri(iri: &str) -> Result<Self> {
-        Ok(RdfTerm::Iri(Url::parse(iri).map_err(|e| 
-            Error::ontology_parsing(format!("Invalid IRI: {}", e)))?))
+        Ok(RdfTerm::Iri(Url::parse(iri).map_err(|e| {
+            Error::ontology_parsing(format!("Invalid IRI: {}", e))
+        })?))
     }
 
     /// Create a blank node term
@@ -71,8 +72,10 @@ impl RdfTerm {
     pub fn typed_literal(value: &str, datatype: &str) -> Result<Self> {
         Ok(RdfTerm::Literal {
             value: value.to_string(),
-            datatype: Some(Url::parse(datatype).map_err(|e| 
-                Error::ontology_parsing(format!("Invalid datatype IRI: {}", e)))?),
+            datatype: Some(
+                Url::parse(datatype)
+                    .map_err(|e| Error::ontology_parsing(format!("Invalid datatype IRI: {}", e)))?,
+            ),
             language: None,
         })
     }
@@ -222,18 +225,18 @@ impl Default for RdfGraph {
 pub trait SemanticInterpretation {
     /// Check if interpretation satisfies the graph
     fn satisfies(&self, graph: &RdfGraph) -> bool;
-    
+
     /// Get the interpretation of a term
     fn interpret_term(&self, term: &RdfTerm) -> Option<String>;
-    
+
     /// Check entailment between graphs
     fn entails(&self, premises: &RdfGraph, conclusion: &RdfGraph) -> bool;
 }
 
 /// Standard URIs for RDF, RDFS, and OWL
 pub mod vocabulary {
-    use url::Url;
     use lazy_static::lazy_static;
+    use url::Url;
 
     lazy_static! {
         // RDF vocabulary
@@ -244,7 +247,7 @@ pub mod vocabulary {
         pub static ref RDF_REST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest").unwrap();
         pub static ref RDF_LIST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#List").unwrap();
 
-        // RDFS vocabulary  
+        // RDFS vocabulary
         pub static ref RDFS_RESOURCE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Resource").unwrap();
         pub static ref RDFS_CLASS: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Class").unwrap();
         pub static ref RDFS_SUBCLASS_OF: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap();
@@ -275,7 +278,7 @@ pub mod vocabulary {
         pub static ref OWL_EQUIVALENT_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#equivalentProperty").unwrap();
         pub static ref OWL_DISJOINT_WITH: Url = Url::parse("http://www.w3.org/2002/07/owl#disjointWith").unwrap();
         pub static ref OWL_INVERSE_OF: Url = Url::parse("http://www.w3.org/2002/07/owl#inverseOf").unwrap();
-        
+
         // XSD datatypes
         pub static ref XSD_STRING: Url = Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap();
         pub static ref XSD_BOOLEAN: Url = Url::parse("http://www.w3.org/2001/XMLSchema#boolean").unwrap();
@@ -293,7 +296,11 @@ impl std::fmt::Display for RdfTerm {
         match self {
             RdfTerm::Iri(url) => write!(f, "<{}>", url),
             RdfTerm::BlankNode(id) => write!(f, "_:{}", id),
-            RdfTerm::Literal { value, datatype, language } => {
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+            } => {
                 if let Some(lang) = language {
                     write!(f, "\"{}\"@{}", value, lang)
                 } else if let Some(dt) = datatype {
@@ -325,18 +332,22 @@ mod tests {
     #[test]
     fn test_rdf_graph_operations() {
         let mut graph = RdfGraph::new();
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
         let object = RdfTerm::literal("object");
-        
-        let triple = Triple { subject, predicate, object };
-        
+
+        let triple = Triple {
+            subject,
+            predicate,
+            object,
+        };
+
         assert!(!graph.contains_triple(&triple));
         graph.add_triple(triple.clone());
         assert!(graph.contains_triple(&triple));
         assert_eq!(graph.size(), 1);
-        
+
         graph.remove_triple(&triple);
         assert!(!graph.contains_triple(&triple));
         assert!(graph.is_empty());
@@ -345,31 +356,31 @@ mod tests {
     #[test]
     fn test_triple_pattern_matching() {
         let mut graph = RdfGraph::new();
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
         let object = RdfTerm::literal("object");
-        
-        let triple = Triple { 
-            subject: subject.clone(), 
-            predicate: predicate.clone(), 
-            object: object.clone() 
+
+        let triple = Triple {
+            subject: subject.clone(),
+            predicate: predicate.clone(),
+            object: object.clone(),
         };
-        
+
         graph.add_triple(triple);
-        
+
         // Find by subject
         let matches = graph.find_triples(Some(&subject), None, None);
         assert_eq!(matches.len(), 1);
-        
+
         // Find by predicate
         let matches = graph.find_triples(None, Some(&predicate), None);
         assert_eq!(matches.len(), 1);
-        
+
         // Find by object
         let matches = graph.find_triples(None, None, Some(&object));
         assert_eq!(matches.len(), 1);
-        
+
         // Find non-existent
         let other_subject = RdfTerm::iri("http://example.org/other").unwrap();
         let matches = graph.find_triples(Some(&other_subject), None, None);

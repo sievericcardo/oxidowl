@@ -58,17 +58,14 @@ pub mod visitor; // Visitor pattern for ontology traversal
 // Re-export main types for convenience
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
-pub use crate::import::{ImportManager, ImportDeclaration, ImportError};
+pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
 pub use crate::profiles::{
-    OWL2Profile as ProfileType, 
-    ProfileValidator, 
-    el::ELValidator, 
-    validator::OWL2ProfileValidator
+    OWL2Profile as ProfileType, ProfileValidator, el::ELValidator, validator::OWL2ProfileValidator,
 };
 pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
-pub use crate::validation::{OWL2DLValidator, ValidationReport, OWL2Profile};
+pub use crate::validation::{OWL2DLValidator, OWL2Profile, ValidationReport};
 
 // Re-export error types
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};

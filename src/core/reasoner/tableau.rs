@@ -226,7 +226,10 @@ impl TableauFactory {
     }
 
     /// Create a tableau algorithm instance based on configuration
-    pub fn create_algorithm_instance(&self, ontology: &Ontology) -> Result<TableauAlgorithmInstance> {
+    pub fn create_algorithm_instance(
+        &self,
+        ontology: &Ontology,
+    ) -> Result<TableauAlgorithmInstance> {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Traditional => {
                 let tableau = self.tableau_builder.build_for_consistency(ontology)?;

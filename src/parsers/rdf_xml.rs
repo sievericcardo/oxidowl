@@ -95,7 +95,9 @@ impl RdfXmlParser {
             // This is likely an RDF/XML document
             self.parse_rdf_xml_content(content, &mut ontology)?;
         } else {
-            return Err(Error::ParseError("Invalid RDF/XML document: missing RDF root element".to_string()));
+            return Err(Error::ParseError(
+                "Invalid RDF/XML document: missing RDF root element".to_string(),
+            ));
         }
 
         Ok(ontology)
@@ -105,22 +107,22 @@ impl RdfXmlParser {
     fn parse_rdf_xml_content(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Use basic XML parsing approach for RDF/XML structures
         // While not a full XML parser, this handles common RDF/XML patterns
-        
+
         // Parse namespace declarations
         self.extract_namespaces(content, ontology)?;
-        
+
         // Parse class declarations
         self.extract_classes(content, ontology)?;
-        
-        // Parse property declarations  
+
+        // Parse property declarations
         self.extract_properties(content, ontology)?;
-        
+
         // Parse individuals
         self.extract_individuals(content, ontology)?;
-        
+
         // Parse axioms
         self.extract_axioms(content, ontology)?;
-        
+
         Ok(())
     }
 
@@ -134,10 +136,13 @@ impl RdfXmlParser {
                 if let Some(ns_start) = line.find("xmlns:") {
                     if let Some(eq_pos) = line[ns_start..].find('=') {
                         if let Some(quote_start) = line[ns_start + eq_pos..].find('"') {
-                            if let Some(quote_end) = line[ns_start + eq_pos + quote_start + 1..].find('"') {
+                            if let Some(quote_end) =
+                                line[ns_start + eq_pos + quote_start + 1..].find('"')
+                            {
                                 let prefix = &line[ns_start + 6..ns_start + eq_pos];
-                                let uri = &line[ns_start + eq_pos + quote_start + 1..ns_start + eq_pos + quote_start + 1 + quote_end];
-                                
+                                let uri = &line[ns_start + eq_pos + quote_start + 1
+                                    ..ns_start + eq_pos + quote_start + 1 + quote_end];
+
                                 // Add to ontology prefixes if the ontology supports it
                                 // For now, we'll store this information internally
                                 log::debug!("Found namespace: {} -> {}", prefix, uri);
@@ -154,22 +159,22 @@ impl RdfXmlParser {
     fn extract_classes(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Enhanced RDF/XML class extraction with proper XML parsing
         // This follows the RDF/XML specification more closely
-        
+
         use quick_xml::{Reader, events::Event};
-        
+
         let mut reader = Reader::from_str(content);
         // reader.trim_text(true); // Removed as this method doesn't exist in current quick-xml
-        
+
         let mut buf: Vec<u8> = Vec::new();
         let mut current_element = None;
         let mut current_attributes = std::collections::HashMap::new();
-        
+
         loop {
             match reader.read_event() {
                 Ok(Event::Start(ref e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     current_element = Some(name.clone());
-                    
+
                     // Parse attributes
                     current_attributes.clear();
                     for attr in e.attributes() {
@@ -179,14 +184,14 @@ impl RdfXmlParser {
                             current_attributes.insert(key.to_string(), value.to_string());
                         }
                     }
-                    
+
                     // Check for owl:Class elements
                     if name == "owl:Class" || name.ends_with(":Class") {
                         if let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
                             self.add_class_declaration(class_iri, ontology)?;
                         }
                     }
-                    
+
                     // Check for rdf:type relationships to owl:Class
                     if name == "rdf:Description" || name.contains("Description") {
                         if let Some(subject_iri) = self.extract_resource_iri(&current_attributes) {
@@ -199,7 +204,7 @@ impl RdfXmlParser {
                 }
                 Ok(Event::Empty(ref e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    
+
                     // Parse attributes for self-closing elements
                     current_attributes.clear();
                     for attr in e.attributes() {
@@ -209,7 +214,7 @@ impl RdfXmlParser {
                             current_attributes.insert(key.to_string(), value.to_string());
                         }
                     }
-                    
+
                     // Handle self-closing owl:Class elements
                     if name == "owl:Class" || name.ends_with(":Class") {
                         if let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
@@ -231,54 +236,57 @@ impl RdfXmlParser {
             }
             buf.clear();
         }
-        
+
         Ok(())
     }
-    
+
     /// Extract resource IRI from XML attributes
-    fn extract_resource_iri(&self, attributes: &std::collections::HashMap<String, String>) -> Option<String> {
+    fn extract_resource_iri(
+        &self,
+        attributes: &std::collections::HashMap<String, String>,
+    ) -> Option<String> {
         // Check for rdf:about
         if let Some(about) = attributes.get("rdf:about") {
             return Some(self.resolve_uri(about));
         }
-        
-        // Check for rdf:ID  
+
+        // Check for rdf:ID
         if let Some(id) = attributes.get("rdf:ID") {
             return Some(self.resolve_fragment_id(id));
         }
-        
+
         // Check for rdf:nodeID for blank nodes
         if let Some(node_id) = attributes.get("rdf:nodeID") {
             return Some(format!("_:{}", node_id));
         }
-        
+
         None
     }
-    
+
     /// Check if attributes indicate this is a class
     fn has_class_type(&self, attributes: &std::collections::HashMap<String, String>) -> bool {
         // Check for rdf:type attribute pointing to owl:Class
         if let Some(type_val) = attributes.get("rdf:type") {
             return type_val == "owl:Class" || type_val.ends_with("#Class");
         }
-        
+
         false
     }
-    
+
     /// Add class declaration to ontology
     fn add_class_declaration(&self, class_iri: String, ontology: &mut Ontology) -> Result<()> {
         let iri = crate::ontology::IRI::new(&class_iri);
-        
+
         // Add declaration axiom
         let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
             id: ontology.axioms().len() as u64,
             entity: crate::ontology::axioms::Entity::Class(iri),
         };
         ontology.add_axiom(crate::ontology::axioms::Axiom::Declaration(decl_axiom));
-        
+
         Ok(())
     }
-    
+
     /// Resolve relative URI against base URI
     fn resolve_uri(&self, uri: &str) -> String {
         if uri.starts_with("http://") || uri.starts_with("https://") {
@@ -293,7 +301,7 @@ impl RdfXmlParser {
             uri.to_string()
         }
     }
-    
+
     /// Resolve fragment ID against base URI
     fn resolve_fragment_id(&self, id: &str) -> String {
         if let Some(base) = &self.config.base_uri {
@@ -310,7 +318,7 @@ impl RdfXmlParser {
             r#"<owl:ObjectProperty rdf:about="([^"]+)""#,
             r#"<owl:ObjectProperty rdf:ID="([^"]+)""#,
         ];
-        
+
         for pattern in &obj_prop_patterns {
             if let Ok(regex) = regex::Regex::new(pattern) {
                 for caps in regex.captures_iter(content) {
@@ -325,7 +333,7 @@ impl RdfXmlParser {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -336,7 +344,7 @@ impl RdfXmlParser {
             r#"<owl:NamedIndividual rdf:about="([^"]+)""#,
             r#"<([^>\s]+)\s+rdf:about="([^"]+)"[^>]*>"#,
         ];
-        
+
         for pattern in &individual_patterns {
             if let Ok(regex) = regex::Regex::new(pattern) {
                 for caps in regex.captures_iter(content) {
@@ -346,9 +354,9 @@ impl RdfXmlParser {
                         } else {
                             caps.get(2).unwrap().as_str()
                         };
-                        
+
                         let iri = crate::ontology::IRI::new(ind_iri);
-                        
+
                         let decl_axiom = crate::ontology::axioms::DeclarationAxiom {
                             id: ontology.axioms().len() as u64,
                             entity: crate::ontology::axioms::Entity::NamedIndividual(iri),
@@ -358,7 +366,7 @@ impl RdfXmlParser {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -366,10 +374,10 @@ impl RdfXmlParser {
     fn extract_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for subclass relationships
         self.extract_subclass_axioms(content, ontology)?;
-        
+
         // Look for property assertions
         self.extract_property_assertions(content, ontology)?;
-        
+
         Ok(())
     }
 
@@ -377,17 +385,20 @@ impl RdfXmlParser {
     fn extract_subclass_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for rdfs:subClassOf relationships
         let subclass_pattern = r#"<rdfs:subClassOf rdf:resource="([^"]+)""#;
-        
+
         if let Ok(regex) = regex::Regex::new(subclass_pattern) {
             for caps in regex.captures_iter(content) {
                 if let Some(superclass_iri) = caps.get(1) {
                     // We would need more context to get the subclass IRI
                     // This is a simplified extraction
-                    log::debug!("Found subclass relationship to: {}", superclass_iri.as_str());
+                    log::debug!(
+                        "Found subclass relationship to: {}",
+                        superclass_iri.as_str()
+                    );
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -544,7 +555,11 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     if !object_properties.is_empty() {
         writeln!(file, "  <!-- Object Property Declarations -->")?;
         for prop in object_properties {
-            writeln!(file, "  <owl:ObjectProperty rdf:about=\"{}\" />", prop.iri.as_str())?;
+            writeln!(
+                file,
+                "  <owl:ObjectProperty rdf:about=\"{}\" />",
+                prop.iri.as_str()
+            )?;
         }
         writeln!(file)?;
     }
@@ -552,60 +567,74 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     // Serialize data properties
     // Enhanced data property extraction and serialization
     let mut data_properties = std::collections::HashSet::new();
-    
+
     // Extract data properties from various axiom types
     for axiom in ontology.axioms() {
         match axiom {
             crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &assertion.property {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
+                    &assertion.property
+                {
                     data_properties.insert(prop.clone());
                 }
-            },
+            }
             crate::ontology::Axiom::SubDataPropertyOf(sub_prop) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(sub) = &sub_prop.sub_property {
+                if let crate::ontology::DataPropertyExpression::DataProperty(sub) =
+                    &sub_prop.sub_property
+                {
                     data_properties.insert(sub.clone());
                 }
-                if let crate::ontology::DataPropertyExpression::DataProperty(super_prop) = &sub_prop.super_property {
+                if let crate::ontology::DataPropertyExpression::DataProperty(super_prop) =
+                    &sub_prop.super_property
+                {
                     data_properties.insert(super_prop.clone());
                 }
-            },
+            }
             crate::ontology::Axiom::EquivalentDataProperties(equiv) => {
                 for prop_expr in &equiv.properties {
                     if let crate::ontology::DataPropertyExpression::DataProperty(prop) = prop_expr {
                         data_properties.insert(prop.clone());
                     }
                 }
-            },
+            }
             crate::ontology::Axiom::DisjointDataProperties(disj) => {
                 for prop_expr in &disj.properties {
                     if let crate::ontology::DataPropertyExpression::DataProperty(prop) = prop_expr {
                         data_properties.insert(prop.clone());
                     }
                 }
-            },
+            }
             crate::ontology::Axiom::FunctionalDataProperty(func) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &func.property {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &func.property
+                {
                     data_properties.insert(prop.clone());
                 }
-            },
+            }
             crate::ontology::Axiom::DataPropertyDomain(domain) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &domain.property {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
+                    &domain.property
+                {
                     data_properties.insert(prop.clone());
                 }
-            },
+            }
             crate::ontology::Axiom::DataPropertyRange(range) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &range.property {
+                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &range.property
+                {
                     data_properties.insert(prop.clone());
                 }
-            },
+            }
             _ => {}
         }
     }
-    
+
     if !data_properties.is_empty() {
         writeln!(file, "  <!-- Data Property Declarations -->")?;
         for prop in data_properties {
-            writeln!(file, "  <owl:DatatypeProperty rdf:about=\"{}\" />", prop.iri.as_str())?;
+            writeln!(
+                file,
+                "  <owl:DatatypeProperty rdf:about=\"{}\" />",
+                prop.iri.as_str()
+            )?;
         }
         writeln!(file)?;
     }
@@ -616,7 +645,11 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
         for (_, individual) in ontology.individuals() {
             match individual {
                 crate::ontology::Individual::Named(named) => {
-                    writeln!(file, "  <owl:NamedIndividual rdf:about=\"{}\" />", named.iri)?;
+                    writeln!(
+                        file,
+                        "  <owl:NamedIndividual rdf:about=\"{}\" />",
+                        named.iri
+                    )?;
                 }
                 crate::ontology::Individual::Anonymous(_) => {
                     // Anonymous individuals are typically handled within axioms
@@ -639,38 +672,69 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
 }
 
 /// Serialize an axiom to RDF/XML format
-fn serialize_axiom_to_rdf_xml<W: Write>(writer: &mut W, axiom: &crate::ontology::axioms::Axiom) -> Result<()> {
+fn serialize_axiom_to_rdf_xml<W: Write>(
+    writer: &mut W,
+    axiom: &crate::ontology::axioms::Axiom,
+) -> Result<()> {
     use crate::ontology::axioms::Axiom;
-    
+
     match axiom {
         Axiom::SubClassOf(sub_axiom) => {
-            writeln!(writer, "  <!-- SubClassOf: {} rdfs:subClassOf {} -->", 
-                    sub_axiom.subclass, sub_axiom.superclass)?;
-            writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", sub_axiom.subclass)?;
-            writeln!(writer, "    <rdfs:subClassOf rdf:resource=\"{}\" />", sub_axiom.superclass)?;
+            writeln!(
+                writer,
+                "  <!-- SubClassOf: {} rdfs:subClassOf {} -->",
+                sub_axiom.subclass, sub_axiom.superclass
+            )?;
+            writeln!(
+                writer,
+                "  <rdf:Description rdf:about=\"{}\">",
+                sub_axiom.subclass
+            )?;
+            writeln!(
+                writer,
+                "    <rdfs:subClassOf rdf:resource=\"{}\" />",
+                sub_axiom.superclass
+            )?;
             writeln!(writer, "  </rdf:Description>")?;
         }
         Axiom::ClassAssertion(class_axiom) => {
             if let crate::ontology::Individual::Named(named) = &class_axiom.individual {
-                writeln!(writer, "  <!-- ClassAssertion: {} rdf:type {} -->", 
-                        named.iri, class_axiom.class)?;
+                writeln!(
+                    writer,
+                    "  <!-- ClassAssertion: {} rdf:type {} -->",
+                    named.iri, class_axiom.class
+                )?;
                 writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", named.iri)?;
-                writeln!(writer, "    <rdf:type rdf:resource=\"{}\" />", class_axiom.class)?;
+                writeln!(
+                    writer,
+                    "    <rdf:type rdf:resource=\"{}\" />",
+                    class_axiom.class
+                )?;
                 writeln!(writer, "  </rdf:Description>")?;
             }
         }
         Axiom::ObjectPropertyAssertion(prop_axiom) => {
-            if let (crate::ontology::Individual::Named(subj), crate::ontology::Individual::Named(obj)) = 
-                (&prop_axiom.source, &prop_axiom.target) {
+            if let (
+                crate::ontology::Individual::Named(subj),
+                crate::ontology::Individual::Named(obj),
+            ) = (&prop_axiom.source, &prop_axiom.target)
+            {
                 writeln!(writer, "  <!-- ObjectPropertyAssertion -->")?;
                 writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", subj.iri)?;
-                writeln!(writer, "    <{} rdf:resource=\"{}\" />", prop_axiom.property, obj.iri)?;
+                writeln!(
+                    writer,
+                    "    <{} rdf:resource=\"{}\" />",
+                    prop_axiom.property, obj.iri
+                )?;
                 writeln!(writer, "  </rdf:Description>")?;
             }
         }
         _ => {
             // For other axiom types, add a comment for now
-            writeln!(writer, "  <!-- Axiom type not yet supported in RDF/XML serialization -->")?;
+            writeln!(
+                writer,
+                "  <!-- Axiom type not yet supported in RDF/XML serialization -->"
+            )?;
         }
     }
     Ok(())

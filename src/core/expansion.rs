@@ -862,11 +862,7 @@ impl ExpansionStrategy for BreadthFirstExpansionStrategy {
         }
     }
 
-    fn expansion_completed(
-        &mut self,
-        candidate: &ExistentialCandidate,
-        result: &ExpansionResult,
-    ) {
+    fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
         // Update depth for new individuals
         let current_depth = *self.depth_map.get(&candidate.node).unwrap_or(&0);
         for individual in &result.new_individuals {
@@ -936,11 +932,7 @@ impl ExpansionStrategy for DepthFirstExpansionStrategy {
         }
     }
 
-    fn expansion_completed(
-        &mut self,
-        candidate: &ExistentialCandidate,
-        result: &ExpansionResult,
-    ) {
+    fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
         self.expansion_path.push(candidate.node.clone());
         // Add new individuals to expansion path
         for individual in &result.new_individuals {
@@ -1063,9 +1055,10 @@ impl HeuristicExpansionStrategy {
     /// Calculate heuristic score for a candidate
     fn calculate_heuristic_score(&self, candidate: &ExistentialCandidate) -> f64 {
         let complexity = &candidate.complexity;
-        
+
         // Base complexity score
-        let complexity_score = self.complexity_weights.syntactic * f64::from(complexity.syntactic_complexity)
+        let complexity_score = self.complexity_weights.syntactic
+            * f64::from(complexity.syntactic_complexity)
             + self.complexity_weights.role_successors * f64::from(complexity.role_successors)
             + self.complexity_weights.branching_factor * f64::from(complexity.branching_factor);
 
@@ -1114,7 +1107,7 @@ impl ExpansionStrategy for HeuristicExpansionStrategy {
 
     fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
         let score = self.calculate_heuristic_score(candidate);
-        
+
         if score < 5.0 {
             ExpansionPriority::High
         } else if score < 15.0 {

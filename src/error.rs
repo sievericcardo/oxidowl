@@ -49,15 +49,15 @@ pub enum Error {
     /// Unsupported operation
     #[error("Unsupported operation: {message}")]
     Unsupported { message: String },
-    
+
     /// Invalid datatype error
     #[error("Invalid datatype: {0}")]
     InvalidDatatype(String),
-    
+
     /// Invalid literal error
     #[error("Invalid literal: {0}")]
     InvalidLiteral(String),
-    
+
     /// Parse error
     #[error("Parse error: {0}")]
     ParseError(String),
@@ -350,7 +350,7 @@ impl Error {
             | Error::AxiomNotFound => false,
             Error::DLQuery { .. } => false,
             Error::InvalidDatatype(_) => false,
-            Error::InvalidLiteral(_) => false, 
+            Error::InvalidLiteral(_) => false,
             Error::ParseError(_) => false,
         }
     }
@@ -358,6 +358,8 @@ impl Error {
 
 impl From<crate::validation::owl2_dl::ValidationError> for Error {
     fn from(err: crate::validation::owl2_dl::ValidationError) -> Self {
-        Error::Config { message: err.message }
+        Error::Config {
+            message: err.message,
+        }
     }
 }

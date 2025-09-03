@@ -901,9 +901,12 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
 
     // Write annotations
     for annotation in &ontology.annotations {
-        writeln!(file, "  Annotation({} {})", 
-                serialize_annotation_property(&annotation.property),
-                serialize_annotation_value(&annotation.value))?;
+        writeln!(
+            file,
+            "  Annotation({} {})",
+            serialize_annotation_property(&annotation.property),
+            serialize_annotation_value(&annotation.value)
+        )?;
     }
 
     // Write axioms
@@ -918,19 +921,23 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
 fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
     match axiom {
         crate::ontology::Axiom::SubClassOf(sub) => {
-            format!("SubClassOf({} {})", 
-                   serialize_class_expression(&sub.subclass),
-                   serialize_class_expression(&sub.superclass))
+            format!(
+                "SubClassOf({} {})",
+                serialize_class_expression(&sub.subclass),
+                serialize_class_expression(&sub.superclass)
+            )
         }
         crate::ontology::Axiom::ClassAssertion(ca) => {
-            format!("ClassAssertion({} {})",
-                   serialize_class_expression(&ca.class),
-                   serialize_individual(&ca.individual))
+            format!(
+                "ClassAssertion({} {})",
+                serialize_class_expression(&ca.class),
+                serialize_individual(&ca.individual)
+            )
         }
         crate::ontology::Axiom::Declaration(decl) => {
             format!("Declaration({})", serialize_entity(&decl.entity))
         }
-        _ => format!("# Unsupported axiom type: {:?}", axiom)
+        _ => format!("# Unsupported axiom type: {:?}", axiom),
     }
 }
 
@@ -938,33 +945,38 @@ fn serialize_class_expression(ce: &crate::ontology::ClassExpression) -> String {
     match ce {
         crate::ontology::ClassExpression::Class(class) => format!("<{}>", class.iri),
         crate::ontology::ClassExpression::ObjectIntersectionOf(classes) => {
-            let class_strs: Vec<String> = classes.iter()
-                .map(serialize_class_expression)
-                .collect();
+            let class_strs: Vec<String> = classes.iter().map(serialize_class_expression).collect();
             format!("ObjectIntersectionOf({})", class_strs.join(" "))
         }
         crate::ontology::ClassExpression::ObjectUnionOf(classes) => {
-            let class_strs: Vec<String> = classes.iter()
-                .map(serialize_class_expression)
-                .collect();
+            let class_strs: Vec<String> = classes.iter().map(serialize_class_expression).collect();
             format!("ObjectUnionOf({})", class_strs.join(" "))
         }
-        _ => format!("# Unsupported class expression: {:?}", ce)
+        _ => format!("# Unsupported class expression: {:?}", ce),
     }
 }
 
 fn serialize_individual(ind: &crate::ontology::Individual) -> String {
-    format!("<{}>", ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous"))
+    format!(
+        "<{}>",
+        ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous")
+    )
 }
 
 fn serialize_entity(entity: &crate::ontology::Entity) -> String {
     match entity {
         crate::ontology::Entity::Class(class) => format!("Class(<{}>)", class.as_str()),
-        crate::ontology::Entity::ObjectProperty(prop) => format!("ObjectProperty(<{}>)", prop.as_str()),
+        crate::ontology::Entity::ObjectProperty(prop) => {
+            format!("ObjectProperty(<{}>)", prop.as_str())
+        }
         crate::ontology::Entity::DataProperty(prop) => format!("DataProperty(<{}>)", prop.as_str()),
-        crate::ontology::Entity::NamedIndividual(ind) => format!("NamedIndividual(<{}>)", ind.as_str()),
+        crate::ontology::Entity::NamedIndividual(ind) => {
+            format!("NamedIndividual(<{}>)", ind.as_str())
+        }
         crate::ontology::Entity::Datatype(dt) => format!("Datatype(<{}>)", dt.as_str()),
-        crate::ontology::Entity::AnnotationProperty(ap) => format!("AnnotationProperty(<{}>)", ap.as_str()),
+        crate::ontology::Entity::AnnotationProperty(ap) => {
+            format!("AnnotationProperty(<{}>)", ap.as_str())
+        }
     }
 }
 
@@ -983,7 +995,7 @@ fn serialize_annotation_value(value: &crate::ontology::AnnotationValue) -> Strin
             } else {
                 format!("\"{}\"", lit.value)
             }
-        },
+        }
         crate::ontology::AnnotationValue::AnonymousIndividual(anon) => {
             format!("_:{}", anon.id)
         }

@@ -12,8 +12,8 @@ use crate::{
         tasks::ReasoningTaskService,
     },
     ontology::{
-        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression,
-        Ontology, OntologyRef,
+        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
+        OntologyRef,
     },
 };
 use log::{debug, info};
@@ -294,7 +294,10 @@ impl ClassificationService {
             let mut instance_classes = HashSet::new();
 
             for class in &classes {
-                if self.task_service.check_instance(individual, class, ontology, statistics)? {
+                if self
+                    .task_service
+                    .check_instance(individual, class, ontology, statistics)?
+                {
                     instance_classes.insert(class.clone());
                 }
             }
@@ -491,7 +494,10 @@ impl ClassificationService {
 
         for individual in &individuals {
             // Use tableau reasoning to check if individual is instance of concept
-            if self.task_service.check_instance(individual, concept, ontology, statistics)? {
+            if self
+                .task_service
+                .check_instance(individual, concept, ontology, statistics)?
+            {
                 instances.push(individual.clone());
             }
         }
@@ -502,10 +508,7 @@ impl ClassificationService {
     // Private helper methods
 
     /// Discover inferred classes from complex axioms (equivalent classes, union classes, etc.)
-    fn discover_inferred_classes(
-        &self,
-        _ontology: &Ontology,
-    ) -> Result<Vec<ClassExpression>> {
+    fn discover_inferred_classes(&self, _ontology: &Ontology) -> Result<Vec<ClassExpression>> {
         let inferred_classes = Vec::new();
 
         // For now, let's simplify this to avoid complex pattern matching issues
@@ -734,7 +737,7 @@ impl ClassificationService {
         // Add sophisticated property chain reasoning
         self.check_property_chain_entailment(subproperty, superproperty, ontology)
     }
-    
+
     /// Check property chain entailment for complex property relationships
     fn check_property_chain_entailment(
         &self,
@@ -747,7 +750,8 @@ impl ClassificationService {
             if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
                 // Check if the superproperty is involved in property chains
                 if &sub_axiom.super_property == superproperty {
-                    if let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property {
+                    if let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property
+                    {
                         // Check if subproperty is part of this chain or can be derived from it
                         if self.property_in_chain_or_derivable(subproperty, chain, ontology)? {
                             return Ok(true);
@@ -756,10 +760,10 @@ impl ClassificationService {
                 }
             }
         }
-        
+
         Ok(false)
     }
-    
+
     /// Check if a property is in a chain or derivable from it
     fn property_in_chain_or_derivable(
         &self,
@@ -771,19 +775,19 @@ impl ClassificationService {
         if chain.contains(property) {
             return Ok(true);
         }
-        
+
         // Check if property is equivalent to the entire chain
         if chain.len() == 1 && &chain[0] == property {
             return Ok(true);
         }
-        
+
         // Check if property is a subproperty of any property in the chain
         for chain_prop in chain {
             if self.is_subproperty_of(property, chain_prop, ontology)? {
                 return Ok(true);
             }
         }
-        
+
         Ok(false)
     }
 
@@ -839,13 +843,15 @@ impl ClassificationService {
             let mut all_types = HashSet::new();
             for t in &types {
                 all_types.insert(t.clone());
-                
+
                 // Get all superclasses of this type
                 // Convert string to ClassExpression for the call
                 let class_expr = ClassExpression::Class(crate::ontology::Class {
                     iri: crate::ontology::IRI::new(t).to_url().unwrap().into(),
                 });
-                if let Ok(supertypes) = self.get_superclasses(&class_expr, ontology, _statistics, false) {
+                if let Ok(supertypes) =
+                    self.get_superclasses(&class_expr, ontology, _statistics, false)
+                {
                     for supertype in supertypes {
                         if let ClassExpression::Class(class) = supertype {
                             all_types.insert(class.iri.to_string());
@@ -876,10 +882,14 @@ impl ClassificationService {
         // Find all object property assertions for this individual and property
         for axiom in ontology_guard.axioms() {
             if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom {
-                if let (crate::ontology::Individual::Named(subj), crate::ontology::Individual::Named(obj)) = 
-                    (&assertion.source, &assertion.target) {
+                if let (
+                    crate::ontology::Individual::Named(subj),
+                    crate::ontology::Individual::Named(obj),
+                ) = (&assertion.source, &assertion.target)
+                {
                     if subj.iri.as_str() == individual {
-                        if let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property {
+                        if let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property
+                        {
                             if prop.iri.as_str() == property {
                                 values.push(obj.iri.to_string());
                             }

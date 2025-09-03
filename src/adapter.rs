@@ -66,7 +66,7 @@ impl HornedOwlAdapter {
         // Implement basic conversion from horned-owl to oxidowl
         // Since horned-owl API is complex and we're passed a debug trait object,
         // we'll create a minimal ontology with basic structure
-        
+
         // Set a default IRI if none exists
         if oxidowl_ontology.get_iri().is_none() {
             let default_iri = crate::ontology::IRI::new("http://example.org/converted-ontology");
@@ -75,7 +75,7 @@ impl HornedOwlAdapter {
 
         // Log the conversion attempt
         log::debug!("Converting horned-owl ontology: {:?}", horned_ontology);
-        
+
         // For now, return the basic ontology structure
         // In a full implementation, this would parse the horned-owl structure
         // and convert axioms, entities, etc.
@@ -92,27 +92,30 @@ impl HornedOwlAdapter {
     {
         // Start with basic conversion
         let mut ontology = self.convert_basic_ontology::<A>(horned_ontology)?;
-        
+
         // Add basic SWRL rule support structure
         // For now, we'll ensure the ontology can handle SWRL rules
-        log::debug!("Converting ontology with SWRL support: {:?}", horned_ontology);
-        
+        log::debug!(
+            "Converting ontology with SWRL support: {:?}",
+            horned_ontology
+        );
+
         // In a full implementation, this would:
         // 1. Extract SWRL rules from horned-owl ontology
         // 2. Convert them to oxidowl SWRL representation
         // 3. Add them to the ontology
-        
+
         // For now, we add a comment indicating SWRL support was attempted
         let swrl_comment = crate::ontology::Annotation {
             property: crate::ontology::AnnotationProperty {
                 iri: crate::ontology::IRI::new("http://www.w3.org/2000/01/rdf-schema#comment"),
             },
-            value: crate::ontology::AnnotationValue::Literal(
-                crate::ontology::Literal::new("SWRL rules conversion attempted".to_string())
-            ),
+            value: crate::ontology::AnnotationValue::Literal(crate::ontology::Literal::new(
+                "SWRL rules conversion attempted".to_string(),
+            )),
         };
         ontology.annotations.push(swrl_comment);
-        
+
         Ok(ontology)
     }
 }
@@ -123,7 +126,7 @@ mod tests {
 
     // Note: These tests are commented out due to horned-owl API instability
     // They will be re-enabled when the horned-owl API becomes more stable
-    
+
     #[test]
     fn test_adapter_creation() {
         let adapter = HornedOwlAdapter::new();
@@ -134,14 +137,14 @@ mod tests {
     #[test]
     fn test_basic_conversion() {
         let mut adapter = HornedOwlAdapter::new();
-        
+
         // Create a mock debug object for testing
         let mock_ontology = "Mock horned-owl ontology";
-        
+
         // Test basic conversion
         let result = adapter.convert_basic_ontology::<String>(&mock_ontology);
         assert!(result.is_ok());
-        
+
         let ontology = result.unwrap();
         assert!(ontology.get_iri().is_some());
     }

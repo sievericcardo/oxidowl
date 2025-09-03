@@ -937,11 +937,23 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     writeln!(file, "<?xml version=\"1.0\"?>")?;
     writeln!(file, "<Ontology xmlns=\"http://www.w3.org/2002/07/owl#\"")?;
     writeln!(file, "         xml:base=\"http://www.w3.org/2002/07/owl#\"")?;
-    writeln!(file, "         xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"")?;
-    writeln!(file, "         xmlns:xml=\"http://www.w3.org/XML/1998/namespace\"")?;
-    writeln!(file, "         xmlns:xsd=\"http://www.w3.org/2001/XMLSchema#\"")?;
-    writeln!(file, "         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"")?;
-    
+    writeln!(
+        file,
+        "         xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
+    )?;
+    writeln!(
+        file,
+        "         xmlns:xml=\"http://www.w3.org/XML/1998/namespace\""
+    )?;
+    writeln!(
+        file,
+        "         xmlns:xsd=\"http://www.w3.org/2001/XMLSchema#\""
+    )?;
+    writeln!(
+        file,
+        "         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\""
+    )?;
+
     // Add ontology IRI and version IRI if present
     if let Some(onto_iri) = ontology.get_iri() {
         write!(file, "         ontologyIRI=\"{}\"", onto_iri)?;
@@ -975,27 +987,45 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
 fn serialize_axiom_xml(axiom: &Axiom) -> String {
     match axiom {
         Axiom::Declaration(decl) => {
-            format!("<Declaration>{}</Declaration>", serialize_entity_xml(&decl.entity))
+            format!(
+                "<Declaration>{}</Declaration>",
+                serialize_entity_xml(&decl.entity)
+            )
         }
         Axiom::SubClassOf(axiom) => {
-            format!("<SubClassOf>{}{}</SubClassOf>",
-                   serialize_class_expression_xml(&axiom.subclass),
-                   serialize_class_expression_xml(&axiom.superclass))
+            format!(
+                "<SubClassOf>{}{}</SubClassOf>",
+                serialize_class_expression_xml(&axiom.subclass),
+                serialize_class_expression_xml(&axiom.superclass)
+            )
         }
         Axiom::EquivalentClasses(axiom) => {
-            let classes_xml: Vec<String> = axiom.classes.iter()
+            let classes_xml: Vec<String> = axiom
+                .classes
+                .iter()
                 .map(serialize_class_expression_xml)
                 .collect();
-            format!("<EquivalentClasses>{}</EquivalentClasses>", classes_xml.join(""))
+            format!(
+                "<EquivalentClasses>{}</EquivalentClasses>",
+                classes_xml.join("")
+            )
         }
         Axiom::DisjointClasses(axiom) => {
-            let classes_xml: Vec<String> = axiom.classes.iter()
+            let classes_xml: Vec<String> = axiom
+                .classes
+                .iter()
                 .map(serialize_class_expression_xml)
                 .collect();
-            format!("<DisjointClasses>{}</DisjointClasses>", classes_xml.join(""))
+            format!(
+                "<DisjointClasses>{}</DisjointClasses>",
+                classes_xml.join("")
+            )
         }
         Axiom::DisjointUnion(axiom) => {
-            let mut result = format!("<DisjointUnion>{}", serialize_class_expression_xml(&axiom.class));
+            let mut result = format!(
+                "<DisjointUnion>{}",
+                serialize_class_expression_xml(&axiom.class)
+            );
             for disjoint_class in &axiom.disjoint_classes {
                 result.push_str(&serialize_class_expression_xml(disjoint_class));
             }
@@ -1003,114 +1033,154 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
             result
         }
         Axiom::ClassAssertion(axiom) => {
-            format!("<ClassAssertion>{}{}</ClassAssertion>",
-                   serialize_class_expression_xml(&axiom.class),
-                   serialize_individual_xml(&axiom.individual))
+            format!(
+                "<ClassAssertion>{}{}</ClassAssertion>",
+                serialize_class_expression_xml(&axiom.class),
+                serialize_individual_xml(&axiom.individual)
+            )
         }
         Axiom::ObjectPropertyAssertion(axiom) => {
-            format!("<ObjectPropertyAssertion>{}{}{}</ObjectPropertyAssertion>",
-                   match &axiom.property {
-                       crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => serialize_object_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   },
-                   serialize_individual_xml(&axiom.source),
-                   serialize_individual_xml(&axiom.target))
+            format!(
+                "<ObjectPropertyAssertion>{}{}{}</ObjectPropertyAssertion>",
+                match &axiom.property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =>
+                        serialize_object_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
+                },
+                serialize_individual_xml(&axiom.source),
+                serialize_individual_xml(&axiom.target)
+            )
         }
         Axiom::SubObjectPropertyOf(axiom) => {
-            format!("<SubObjectPropertyOf>{}{}</SubObjectPropertyOf>",
-                   match &axiom.sub_property {
-                       crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => serialize_object_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   },
-                   match &axiom.super_property {
-                       crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => serialize_object_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   })
-        }
-        Axiom::FunctionalObjectProperty(axiom) => {
-            match &axiom.property {
-                crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
-                    format!("<FunctionalObjectProperty>{}</FunctionalObjectProperty>",
-                           serialize_object_property_xml(prop))
+            format!(
+                "<SubObjectPropertyOf>{}{}</SubObjectPropertyOf>",
+                match &axiom.sub_property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =>
+                        serialize_object_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
+                },
+                match &axiom.super_property {
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =>
+                        serialize_object_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
                 }
-                _ => format!("<FunctionalObjectProperty><!-- Complex property expression --></FunctionalObjectProperty>")
-            }
+            )
         }
-        Axiom::InverseFunctionalObjectProperty(axiom) => {
-            match &axiom.property {
-                crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
-                    format!("<InverseFunctionalObjectProperty>{}</InverseFunctionalObjectProperty>",
-                           serialize_object_property_xml(prop))
-                }
-                _ => format!("<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>")
+        Axiom::FunctionalObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<FunctionalObjectProperty>{}</FunctionalObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
             }
-        }
+            _ => format!(
+                "<FunctionalObjectProperty><!-- Complex property expression --></FunctionalObjectProperty>"
+            ),
+        },
+        Axiom::InverseFunctionalObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<InverseFunctionalObjectProperty>{}</InverseFunctionalObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
+            }
+            _ => format!(
+                "<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>"
+            ),
+        },
         Axiom::DataPropertyAssertion(axiom) => {
-            format!("<DataPropertyAssertion>{}{}{}</DataPropertyAssertion>",
-                   match &axiom.property {
-                       crate::ontology::DataPropertyExpression::DataProperty(prop) => serialize_data_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   },
-                   serialize_individual_xml(&axiom.individual),
-                   serialize_literal_xml(&axiom.value))
+            format!(
+                "<DataPropertyAssertion>{}{}{}</DataPropertyAssertion>",
+                match &axiom.property {
+                    crate::ontology::DataPropertyExpression::DataProperty(prop) =>
+                        serialize_data_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
+                },
+                serialize_individual_xml(&axiom.individual),
+                serialize_literal_xml(&axiom.value)
+            )
         }
         Axiom::SubDataPropertyOf(axiom) => {
-            format!("<SubDataPropertyOf>{}{}</SubDataPropertyOf>",
-                   match &axiom.sub_property {
-                       crate::ontology::DataPropertyExpression::DataProperty(prop) => serialize_data_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   },
-                   match &axiom.super_property {
-                       crate::ontology::DataPropertyExpression::DataProperty(prop) => serialize_data_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   })
+            format!(
+                "<SubDataPropertyOf>{}{}</SubDataPropertyOf>",
+                match &axiom.sub_property {
+                    crate::ontology::DataPropertyExpression::DataProperty(prop) =>
+                        serialize_data_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
+                },
+                match &axiom.super_property {
+                    crate::ontology::DataPropertyExpression::DataProperty(prop) =>
+                        serialize_data_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
+                }
+            )
         }
         Axiom::FunctionalDataProperty(axiom) => {
-            format!("<FunctionalDataProperty>{}</FunctionalDataProperty>",
-                   match &axiom.property {
-                       crate::ontology::DataPropertyExpression::DataProperty(prop) => serialize_data_property_xml(prop),
-                       _ => "<!-- Complex property expression -->".to_string()
-                   })
+            format!(
+                "<FunctionalDataProperty>{}</FunctionalDataProperty>",
+                match &axiom.property {
+                    crate::ontology::DataPropertyExpression::DataProperty(prop) =>
+                        serialize_data_property_xml(prop),
+                    _ => "<!-- Complex property expression -->".to_string(),
+                }
+            )
         }
-        _ => format!("<!-- Unsupported axiom type: {:?} -->", axiom)
+        _ => format!("<!-- Unsupported axiom type: {:?} -->", axiom),
     }
 }
 
 fn serialize_entity_xml(entity: &crate::ontology::Entity) -> String {
     match entity {
         crate::ontology::Entity::Class(class) => format!("<Class IRI=\"{}\"/>", class.as_str()),
-        crate::ontology::Entity::ObjectProperty(prop) => format!("<ObjectProperty IRI=\"{}\"/>", prop.as_str()),
-        crate::ontology::Entity::DataProperty(prop) => format!("<DataProperty IRI=\"{}\"/>", prop.as_str()),
-        crate::ontology::Entity::NamedIndividual(ind) => format!("<NamedIndividual IRI=\"{}\"/>", ind.as_str()),
+        crate::ontology::Entity::ObjectProperty(prop) => {
+            format!("<ObjectProperty IRI=\"{}\"/>", prop.as_str())
+        }
+        crate::ontology::Entity::DataProperty(prop) => {
+            format!("<DataProperty IRI=\"{}\"/>", prop.as_str())
+        }
+        crate::ontology::Entity::NamedIndividual(ind) => {
+            format!("<NamedIndividual IRI=\"{}\"/>", ind.as_str())
+        }
         crate::ontology::Entity::Datatype(dt) => format!("<Datatype IRI=\"{}\"/>", dt.as_str()),
-        crate::ontology::Entity::AnnotationProperty(ap) => format!("<AnnotationProperty IRI=\"{}\"/>", ap.as_str()),
+        crate::ontology::Entity::AnnotationProperty(ap) => {
+            format!("<AnnotationProperty IRI=\"{}\"/>", ap.as_str())
+        }
     }
 }
 
 fn serialize_class_expression_xml(ce: &crate::ontology::ClassExpression) -> String {
     match ce {
-        crate::ontology::ClassExpression::Class(class) => format!("<Class IRI=\"{}\"/>", class.iri.as_str()),
+        crate::ontology::ClassExpression::Class(class) => {
+            format!("<Class IRI=\"{}\"/>", class.iri.as_str())
+        }
         crate::ontology::ClassExpression::ObjectIntersectionOf(classes) => {
-            let classes_xml: Vec<String> = classes.iter()
-                .map(serialize_class_expression_xml)
-                .collect();
-            format!("<ObjectIntersectionOf>{}</ObjectIntersectionOf>", classes_xml.join(""))
+            let classes_xml: Vec<String> =
+                classes.iter().map(serialize_class_expression_xml).collect();
+            format!(
+                "<ObjectIntersectionOf>{}</ObjectIntersectionOf>",
+                classes_xml.join("")
+            )
         }
         crate::ontology::ClassExpression::ObjectUnionOf(classes) => {
-            let classes_xml: Vec<String> = classes.iter()
-                .map(serialize_class_expression_xml)
-                .collect();
+            let classes_xml: Vec<String> =
+                classes.iter().map(serialize_class_expression_xml).collect();
             format!("<ObjectUnionOf>{}</ObjectUnionOf>", classes_xml.join(""))
         }
         crate::ontology::ClassExpression::ObjectComplementOf(class) => {
-            format!("<ObjectComplementOf>{}</ObjectComplementOf>", serialize_class_expression_xml(class))
+            format!(
+                "<ObjectComplementOf>{}</ObjectComplementOf>",
+                serialize_class_expression_xml(class)
+            )
         }
-        _ => format!("<!-- Unsupported class expression: {:?} -->", ce)
+        _ => format!("<!-- Unsupported class expression: {:?} -->", ce),
     }
 }
 
 fn serialize_individual_xml(ind: &crate::ontology::Individual) -> String {
-    format!("<NamedIndividual IRI=\"{}\"/>", ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous"))
+    format!(
+        "<NamedIndividual IRI=\"{}\"/>",
+        ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous")
+    )
 }
 
 fn serialize_object_property_xml(prop: &crate::ontology::ObjectProperty) -> String {
@@ -1123,7 +1193,11 @@ fn serialize_data_property_xml(prop: &crate::ontology::DataProperty) -> String {
 
 fn serialize_literal_xml(lit: &crate::ontology::Literal) -> String {
     if let Some(datatype) = &lit.datatype {
-        format!("<Literal datatypeIRI=\"{}\">{}</Literal>", datatype.as_str(), lit.value)
+        format!(
+            "<Literal datatypeIRI=\"{}\">{}</Literal>",
+            datatype.as_str(),
+            lit.value
+        )
     } else if let Some(lang) = &lit.language {
         format!("<Literal xml:lang=\"{}\">{}</Literal>", lang, lit.value)
     } else {
@@ -1135,16 +1209,25 @@ fn serialize_annotation_xml(annotation: &crate::ontology::Annotation, indent: us
     let indent_str = "  ".repeat(indent);
     match &annotation.value {
         crate::ontology::AnnotationValue::IRI(iri) => {
-            format!("{}<Annotation><AnnotationProperty IRI=\"{}\"/><IRI>{}</IRI></Annotation>",
-                   indent_str, annotation.property.iri, iri)
+            format!(
+                "{}<Annotation><AnnotationProperty IRI=\"{}\"/><IRI>{}</IRI></Annotation>",
+                indent_str, annotation.property.iri, iri
+            )
         }
         crate::ontology::AnnotationValue::Literal(lit) => {
-            format!("{}<Annotation><AnnotationProperty IRI=\"{}\"/>{}</Annotation>",
-                   indent_str, annotation.property.iri, serialize_literal_xml(lit))
+            format!(
+                "{}<Annotation><AnnotationProperty IRI=\"{}\"/>{}</Annotation>",
+                indent_str,
+                annotation.property.iri,
+                serialize_literal_xml(lit)
+            )
         }
         crate::ontology::AnnotationValue::AnonymousIndividual(_) => {
-            format!("{}<Annotation><AnnotationProperty IRI=\"{}\"/><!-- Anonymous individual annotation not fully supported --></Annotation>",
-                   indent_str, annotation.property.iri.as_str())
+            format!(
+                "{}<Annotation><AnnotationProperty IRI=\"{}\"/><!-- Anonymous individual annotation not fully supported --></Annotation>",
+                indent_str,
+                annotation.property.iri.as_str()
+            )
         }
     }
 }

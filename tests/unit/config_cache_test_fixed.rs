@@ -6,9 +6,9 @@ use oxidowl::{
     cache::{CacheConfig, CacheManager, ConceptSatisfiabilityCache},
     config::ReasonerConfig,
     ontology::{
-        Ontology, OntologyRef, ClassExpression, IRI,
+        ClassExpression, IRI, Ontology, OntologyRef,
         concepts::Class,
-        individuals::{Individual, NamedIndividual}
+        individuals::{Individual, NamedIndividual},
     },
 };
 
@@ -22,7 +22,7 @@ fn test_cache_configuration() {
 #[test]
 fn test_reasoning_cache_creation() {
     let cache = CacheManager::new(CacheConfig::default());
-    
+
     // Test cache can be created
     // CacheManager doesn't have the same API, so just test creation
     drop(cache);
@@ -31,7 +31,7 @@ fn test_reasoning_cache_creation() {
 #[test]
 fn test_cache_subsumption_operations() {
     let cache = ConceptSatisfiabilityCache::new(CacheConfig::default());
-    
+
     // Test basic cache functionality
     drop(cache);
 }
@@ -39,8 +39,8 @@ fn test_cache_subsumption_operations() {
 #[test]
 fn test_instance_cache_operations() {
     let cache = ConceptSatisfiabilityCache::new(CacheConfig::default());
-    
-    // Test basic cache functionality  
+
+    // Test basic cache functionality
     drop(cache);
 }
 

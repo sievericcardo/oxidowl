@@ -7,19 +7,19 @@
 //! providing different computational characteristics and reasoning complexity.
 
 use crate::error::OxidowlError;
-use crate::ontology::{Ontology, Axiom, ClassExpression, ObjectPropertyExpression, DataRange};
+use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
 use std::collections::HashSet;
 
+pub mod dl;
 pub mod el;
 pub mod ql;
 pub mod rl;
-pub mod dl;
 pub mod validator;
 
 /// OWL 2 Profile types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OWL2Profile {
-    /// OWL 2 EL - Existential Language 
+    /// OWL 2 EL - Existential Language
     /// Optimized for classification and instance checking
     EL,
     /// OWL 2 QL - Query Language
@@ -41,7 +41,7 @@ impl OWL2Profile {
     pub fn name(&self) -> &'static str {
         match self {
             OWL2Profile::EL => "OWL 2 EL",
-            OWL2Profile::QL => "OWL 2 QL", 
+            OWL2Profile::QL => "OWL 2 QL",
             OWL2Profile::RL => "OWL 2 RL",
             OWL2Profile::DL => "OWL 2 DL",
             OWL2Profile::Full => "OWL 2 Full",
@@ -53,7 +53,7 @@ impl OWL2Profile {
         match self {
             OWL2Profile::EL => "Existential Language - optimized for classification",
             OWL2Profile::QL => "Query Language - optimized for query answering",
-            OWL2Profile::RL => "Rule Language - optimized for rule-based reasoning", 
+            OWL2Profile::RL => "Rule Language - optimized for rule-based reasoning",
             OWL2Profile::DL => "Description Logic - full OWL 2 with decidability",
             OWL2Profile::Full => "Full OWL 2 - no computational restrictions",
         }
@@ -117,10 +117,7 @@ pub struct ProfileViolation {
 
 impl ProfileViolation {
     /// Create a new profile violation
-    pub fn new(
-        violation_type: ProfileViolationType,
-        context: impl Into<String>,
-    ) -> Self {
+    pub fn new(violation_type: ProfileViolationType, context: impl Into<String>) -> Self {
         Self {
             violation_type,
             axiom_id: None,
@@ -295,7 +292,8 @@ mod tests {
         let violation = ProfileViolation::new(
             ProfileViolationType::DisallowedClassExpression("ObjectComplementOf".to_string()),
             "Class complement not allowed in OWL 2 EL",
-        ).with_axiom_id(123);
+        )
+        .with_axiom_id(123);
 
         let display = violation.to_string();
         assert!(display.contains("Disallowed class expression"));

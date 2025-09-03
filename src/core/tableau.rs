@@ -13,10 +13,10 @@ use crate::{
         },
         dependency::{DependencySet, DependencyTracker},
         expansion::{
-            ExistentialCandidate, ExpansionContext, ExpansionPriority, ExpansionResult,
-            ExpansionStrategy, BreadthFirstExpansionStrategy, DepthFirstExpansionStrategy,
-            PriorityBasedExpansionStrategy, HeuristicExpansionStrategy, CreationOrderStrategy,
-            ComplexityStrategy,
+            BreadthFirstExpansionStrategy, ComplexityStrategy, CreationOrderStrategy,
+            DepthFirstExpansionStrategy, ExistentialCandidate, ExpansionContext, ExpansionPriority,
+            ExpansionResult, ExpansionStrategy, HeuristicExpansionStrategy,
+            PriorityBasedExpansionStrategy,
         },
     },
     ontology::{
@@ -620,11 +620,11 @@ impl Tableau {
         {
             if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
                 let node_idx = self.get_node_index(&rule_app.node)?;
-                
+
                 // Create choice points for each disjunct
                 // In a complete implementation, we would explore all branches
                 // For now, implement a systematic approach
-                
+
                 // Check if any disjunct is already satisfied
                 let node = &self.nodes[node_idx];
                 // Check if any disjunct is already satisfied in the current node
@@ -636,21 +636,21 @@ impl Tableau {
                         return Ok(());
                     }
                 }
-                
+
                 // If no disjunct is satisfied, we need to create a choice point
                 // Store the current tableau state for backtracking
                 // Note: For now, we'll skip the complex backtracking and just try the first disjunct
                 // let original_state = self.clone();
-                
+
                 // Try each disjunct in order (deterministic reasoning)
                 for (i, disjunct) in disjuncts.iter().enumerate() {
                     // For simplicity, only try the first disjunct for now
                     if i > 0 {
                         break;
                     }
-                    
+
                     let disjunct_label = ConceptLabel::from_class_expression(disjunct)?;
-                    
+
                     // Try to add this disjunct and complete the tableau
                     match self.add_concept(node_idx, disjunct_label, dependencies.clone()) {
                         Ok(_) => {
@@ -663,7 +663,10 @@ impl Tableau {
                                 }
                                 Err(_) => {
                                     // This branch failed during completion, try next disjunct
-                                    debug!("Union expansion failed with disjunct {} during completion", i);
+                                    debug!(
+                                        "Union expansion failed with disjunct {} during completion",
+                                        i
+                                    );
                                     continue;
                                 }
                             }
@@ -675,7 +678,7 @@ impl Tableau {
                         }
                     }
                 }
-                
+
                 // If we get here, all disjuncts failed
                 return Err(Error::Internal {
                     message: "All disjuncts in union lead to contradiction".to_string(),
@@ -877,15 +880,18 @@ impl Tableau {
             // Get all SubObjectPropertyOf axioms that involve property chains
             for axiom in ontology.axioms() {
                 if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
-                    if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property {
+                    if let crate::ontology::ObjectPropertyExpression::PropertyChain(chain) =
+                        &sub_axiom.sub_property
+                    {
                         property_chains.push((chain.clone(), sub_axiom.super_property.clone()));
                     }
                 }
             }
-            
+
             // Also check for transitive properties that create implicit chains
             for axiom in ontology.axioms() {
-                if let crate::ontology::axioms::Axiom::TransitiveObjectProperty(trans_axiom) = axiom {
+                if let crate::ontology::axioms::Axiom::TransitiveObjectProperty(trans_axiom) = axiom
+                {
                     transitive_properties.push(trans_axiom.property.clone());
                 }
             }
@@ -911,11 +917,11 @@ impl Tableau {
     ) -> Result<()> {
         // For each combination of edges that could form this chain
         let nodes_count = self.nodes.len();
-        
+
         for start_node in 0..nodes_count {
             self.find_and_apply_chain_from_node(start_node, chain, super_property, 0)?;
         }
-        
+
         Ok(())
     }
 
@@ -931,14 +937,16 @@ impl Tableau {
         if depth > 10 || remaining_chain.is_empty() {
             return Ok(());
         }
-        
+
         if remaining_chain.len() == 1 {
             // Last property in chain - look for edges with this property
             // and create super_property edge to the end node
             let target_property = &remaining_chain[0];
-            
+
             for edge in &self.edges.clone() {
-                if edge.from == current_node && self.role_matches_property(&edge.role, target_property)? {
+                if edge.from == current_node
+                    && self.role_matches_property(&edge.role, target_property)?
+                {
                     // Found complete chain - add super_property edge
                     self.add_inferred_property_edge(edge.from, edge.to, super_property)?;
                 }
@@ -947,15 +955,22 @@ impl Tableau {
             // More properties in chain - find intermediate nodes
             let first_property = &remaining_chain[0];
             let rest_chain = &remaining_chain[1..];
-            
+
             for edge in &self.edges.clone() {
-                if edge.from == current_node && self.role_matches_property(&edge.role, first_property)? {
+                if edge.from == current_node
+                    && self.role_matches_property(&edge.role, first_property)?
+                {
                     // Continue chain from the target node
-                    self.find_and_apply_chain_from_node(edge.to, rest_chain, super_property, depth + 1)?;
+                    self.find_and_apply_chain_from_node(
+                        edge.to,
+                        rest_chain,
+                        super_property,
+                        depth + 1,
+                    )?;
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -965,20 +980,21 @@ impl Tableau {
         property: &crate::ontology::ObjectPropertyExpression,
     ) -> Result<()> {
         let edges_copy = self.edges.clone();
-        
+
         // For each pair of edges with the same transitive property
         for edge1 in &edges_copy {
             if self.role_matches_property(&edge1.role, property)? {
                 for edge2 in &edges_copy {
-                    if edge2.from == edge1.to && 
-                       self.role_matches_property(&edge2.role, property)? {
+                    if edge2.from == edge1.to
+                        && self.role_matches_property(&edge2.role, property)?
+                    {
                         // Add transitive edge
                         self.add_inferred_property_edge(edge1.from, edge2.to, property)?;
                     }
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -991,16 +1007,17 @@ impl Tableau {
     ) -> Result<()> {
         // Check if edge already exists
         for existing_edge in &self.edges {
-            if existing_edge.from == from && 
-               existing_edge.to == to && 
-               self.role_matches_property(&existing_edge.role, property)? {
+            if existing_edge.from == from
+                && existing_edge.to == to
+                && self.role_matches_property(&existing_edge.role, property)?
+            {
                 return Ok(()); // Edge already exists
             }
         }
-        
+
         // Convert property expression to role label
         let role_label = self.property_to_role_label(property)?;
-        
+
         // Add new edge
         let new_edge = TableauEdge {
             from,
@@ -1008,10 +1025,13 @@ impl Tableau {
             role: role_label,
             dependencies: DependencySet::new(),
         };
-        
+
         self.edges.push(new_edge);
-        debug!("Added inferred property edge from {} to {} with property {:?}", from, to, property);
-        
+        debug!(
+            "Added inferred property edge from {} to {} with property {:?}",
+            from, to, property
+        );
+
         Ok(())
     }
 
@@ -1022,19 +1042,24 @@ impl Tableau {
         prop2: &crate::ontology::ObjectPropertyExpression,
     ) -> Result<bool> {
         use crate::ontology::ObjectPropertyExpression;
-        
+
         match (prop1, prop2) {
-            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
-                Ok(p1.iri == p2.iri)
-            }
-            (ObjectPropertyExpression::InverseObjectProperty(p1), ObjectPropertyExpression::InverseObjectProperty(p2)) => {
-                Ok(p1.iri == p2.iri)
-            }
-            (ObjectPropertyExpression::PropertyChain(c1), ObjectPropertyExpression::PropertyChain(c2)) => {
-                Ok(c1.len() == c2.len() && 
-                   c1.iter().zip(c2.iter()).all(|(p1, p2)| 
-                       self.property_expressions_match(p1, p2).unwrap_or(false)))
-            }
+            (
+                ObjectPropertyExpression::ObjectProperty(p1),
+                ObjectPropertyExpression::ObjectProperty(p2),
+            ) => Ok(p1.iri == p2.iri),
+            (
+                ObjectPropertyExpression::InverseObjectProperty(p1),
+                ObjectPropertyExpression::InverseObjectProperty(p2),
+            ) => Ok(p1.iri == p2.iri),
+            (
+                ObjectPropertyExpression::PropertyChain(c1),
+                ObjectPropertyExpression::PropertyChain(c2),
+            ) => Ok(c1.len() == c2.len()
+                && c1
+                    .iter()
+                    .zip(c2.iter())
+                    .all(|(p1, p2)| self.property_expressions_match(p1, p2).unwrap_or(false))),
             _ => Ok(false),
         }
     }
@@ -1046,20 +1071,16 @@ impl Tableau {
         property: &crate::ontology::ObjectPropertyExpression,
     ) -> Result<bool> {
         use crate::ontology::ObjectPropertyExpression;
-        
+
         match property {
-            ObjectPropertyExpression::ObjectProperty(prop) => {
-                match role {
-                    RoleLabel::Atomic(name) => Ok(name == &prop.iri.as_str()),
-                    _ => Ok(false),
-                }
-            }
-            ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                match role {
-                    RoleLabel::Inverse(name) => Ok(name == &prop.iri.as_str()),
-                    _ => Ok(false),
-                }
-            }
+            ObjectPropertyExpression::ObjectProperty(prop) => match role {
+                RoleLabel::Atomic(name) => Ok(name == &prop.iri.as_str()),
+                _ => Ok(false),
+            },
+            ObjectPropertyExpression::InverseObjectProperty(prop) => match role {
+                RoleLabel::Inverse(name) => Ok(name == &prop.iri.as_str()),
+                _ => Ok(false),
+            },
             ObjectPropertyExpression::PropertyChain(_) => {
                 // Property chains don't directly correspond to single role labels
                 Ok(false)
@@ -1073,7 +1094,7 @@ impl Tableau {
         property: &crate::ontology::ObjectPropertyExpression,
     ) -> Result<RoleLabel> {
         use crate::ontology::ObjectPropertyExpression;
-        
+
         match property {
             ObjectPropertyExpression::ObjectProperty(prop) => {
                 Ok(RoleLabel::Atomic(prop.iri.as_str().to_string()))
@@ -1272,7 +1293,7 @@ impl Tableau {
 
         // Enhanced subsumption checking with proper reasoning
         // Check if subclass is subsumed by superclass using available information
-        
+
         // Check if we have explicit subsumption information
         if let Some(ontology) = &self.reasoner_ontology {
             // Use ontology to check subsumption relationships
@@ -1282,40 +1303,50 @@ impl Tableau {
             //     return Ok(result.unwrap());
             // }
         }
-        
+
         // Perform structural subsumption checking
         let subclass_label = ConceptLabel::from_class_expression(subclass)?;
         let superclass_label = ConceptLabel::from_class_expression(superclass)?;
-        let structural_result = self.check_structural_subsumption(&subclass_label, &superclass_label)?;
+        let structural_result =
+            self.check_structural_subsumption(&subclass_label, &superclass_label)?;
         if structural_result.is_some() {
             return Ok(structural_result.unwrap());
         }
-        
+
         // For complex cases that require full reasoning, return false conservatively
         // This maintains soundness while potentially losing completeness
         Ok(false)
     }
-    
+
     /// Check subsumption using ontology information
-    fn check_subsumption_with_ontology(&self, concept1: &ConceptLabel, concept2: &ConceptLabel, _ontology: &crate::ontology::Ontology) -> Result<Option<bool>> {
+    fn check_subsumption_with_ontology(
+        &self,
+        concept1: &ConceptLabel,
+        concept2: &ConceptLabel,
+        _ontology: &crate::ontology::Ontology,
+    ) -> Result<Option<bool>> {
         // This would query the ontology for explicit subsumption relationships
         // For now, return None to indicate no definitive answer found
         Ok(None)
     }
-    
+
     /// Check subsumption using structural analysis
-    fn check_structural_subsumption(&self, concept1: &ConceptLabel, concept2: &ConceptLabel) -> Result<Option<bool>> {
+    fn check_structural_subsumption(
+        &self,
+        concept1: &ConceptLabel,
+        concept2: &ConceptLabel,
+    ) -> Result<Option<bool>> {
         // Basic structural subsumption rules
         match (concept1, concept2) {
             // owl:Thing subsumes everything
             (_, ConceptLabel::Atomic(name)) if name == "owl:Thing" => Ok(Some(true)),
-            
+
             // Nothing is subsumed by owl:Nothing
             (ConceptLabel::Atomic(name), _) if name == "owl:Nothing" => Ok(Some(true)),
-            
+
             // Reflexivity: C subsumes C
             (c1, c2) if c1 == c2 => Ok(Some(true)),
-            
+
             // For complex expressions, no structural match found
             _ => Ok(None),
         }
@@ -1698,41 +1729,41 @@ impl Tableau {
     fn complete_tableau(&mut self) -> Result<()> {
         let max_iterations = 1000; // Prevent infinite loops
         let mut iteration = 0;
-        
+
         while !self.is_complete() && iteration < max_iterations {
             iteration += 1;
-            
+
             // Apply completion rules in priority order
             let mut made_progress = false;
-            
+
             // 1. Apply atomic concept rules first
             for node_idx in 0..self.nodes.len() {
                 if self.apply_atomic_rules(node_idx)? {
                     made_progress = true;
                 }
             }
-            
+
             // 2. Apply intersection rules
             for node_idx in 0..self.nodes.len() {
                 if self.apply_intersection_rules(node_idx)? {
                     made_progress = true;
                 }
             }
-            
+
             // 3. Apply universal quantification rules
             for node_idx in 0..self.nodes.len() {
                 if self.apply_universal_rules(node_idx)? {
                     made_progress = true;
                 }
             }
-            
+
             // 4. Apply existential quantification rules
             for node_idx in 0..self.nodes.len() {
                 if self.apply_existential_rules(node_idx)? {
                     made_progress = true;
                 }
             }
-            
+
             // 5. Check for clashes after each iteration
             if self.clash_detector.has_clashes() {
                 self.state = TableauState::Unsatisfiable;
@@ -1740,28 +1771,30 @@ impl Tableau {
                     message: "Tableau clash detected during completion".to_string(),
                 });
             }
-            
+
             // If no progress was made and there are still pending items, we might be stuck
             if !made_progress && !self.pending_queue.is_empty() {
-                warn!("Tableau completion made no progress with {} pending items", 
-                      self.pending_queue.len());
+                warn!(
+                    "Tableau completion made no progress with {} pending items",
+                    self.pending_queue.len()
+                );
                 break;
             }
         }
-        
+
         if iteration >= max_iterations {
             return Err(Error::Internal {
                 message: "Tableau completion exceeded maximum iterations".to_string(),
             });
         }
-        
+
         if self.clash_detector.has_clashes() {
             self.state = TableauState::Unsatisfiable;
             return Err(Error::Internal {
                 message: "Tableau completion resulted in clashes".to_string(),
             });
         }
-        
+
         self.state = TableauState::Satisfiable;
         Ok(())
     }
@@ -1769,14 +1802,11 @@ impl Tableau {
     /// Apply atomic concept expansion rules to a node
     fn apply_atomic_rules(&mut self, node_idx: NodeId) -> Result<bool> {
         let mut made_changes = false;
-        
+
         // Get concepts that need to be expanded at this node
-        let concepts_to_expand: Vec<ConceptLabel> = self.nodes[node_idx]
-            .concepts
-            .iter()
-            .cloned()
-            .collect();
-            
+        let concepts_to_expand: Vec<ConceptLabel> =
+            self.nodes[node_idx].concepts.iter().cloned().collect();
+
         for concept in concepts_to_expand {
             // Check if this concept implies other concepts based on ontology axioms
             let axioms_to_process = if let Some(ontology) = &self.reasoner_ontology {
@@ -1784,13 +1814,14 @@ impl Tableau {
             } else {
                 Vec::new()
             };
-            
+
             for axiom in axioms_to_process {
                 match axiom {
                     crate::ontology::axioms::Axiom::SubClassOf(axiom) => {
                         // If the node has the subclass, it should also have the superclass
                         if self.concept_matches_expression(&concept, &axiom.subclass)? {
-                            let super_label = ConceptLabel::from_class_expression(&axiom.superclass)?;
+                            let super_label =
+                                ConceptLabel::from_class_expression(&axiom.superclass)?;
                             if !self.nodes[node_idx].concepts.contains(&super_label) {
                                 let deps = self.nodes[node_idx]
                                     .concept_dependencies
@@ -1803,44 +1834,42 @@ impl Tableau {
                         }
                     }
                     crate::ontology::axioms::Axiom::EquivalentClasses(axiom) => {
-                            // If the node has one class, it should have all equivalent classes
-                            for (i, class1) in axiom.classes.iter().enumerate() {
-                                if self.concept_matches_expression(&concept, class1)? {
-                                    for (j, class2) in axiom.classes.iter().enumerate() {
-                                        if i != j {
-                                            let equiv_label = ConceptLabel::from_class_expression(class2)?;
-                                            if !self.nodes[node_idx].concepts.contains(&equiv_label) {
-                                                let deps = self.nodes[node_idx]
-                                                    .concept_dependencies
-                                                    .get(&concept)
-                                                    .cloned()
-                                                    .unwrap_or_default();
-                                                self.add_concept(node_idx, equiv_label, deps)?;
-                                                made_changes = true;
-                                            }
+                        // If the node has one class, it should have all equivalent classes
+                        for (i, class1) in axiom.classes.iter().enumerate() {
+                            if self.concept_matches_expression(&concept, class1)? {
+                                for (j, class2) in axiom.classes.iter().enumerate() {
+                                    if i != j {
+                                        let equiv_label =
+                                            ConceptLabel::from_class_expression(class2)?;
+                                        if !self.nodes[node_idx].concepts.contains(&equiv_label) {
+                                            let deps = self.nodes[node_idx]
+                                                .concept_dependencies
+                                                .get(&concept)
+                                                .cloned()
+                                                .unwrap_or_default();
+                                            self.add_concept(node_idx, equiv_label, deps)?;
+                                            made_changes = true;
                                         }
                                     }
                                 }
                             }
                         }
-                        _ => {}
                     }
+                    _ => {}
                 }
+            }
         }
-        
+
         Ok(made_changes)
     }
 
     /// Apply intersection rules to a node
     fn apply_intersection_rules(&mut self, node_idx: NodeId) -> Result<bool> {
         let mut made_changes = false;
-        
-        let concepts_to_check: Vec<ConceptLabel> = self.nodes[node_idx]
-            .concepts
-            .iter()
-            .cloned()
-            .collect();
-            
+
+        let concepts_to_check: Vec<ConceptLabel> =
+            self.nodes[node_idx].concepts.iter().cloned().collect();
+
         for concept in concepts_to_check {
             if let ConceptLabel::Complex(ref expr) = concept {
                 // Handle complex expressions (like intersections)
@@ -1849,44 +1878,48 @@ impl Tableau {
                     let deps = self.nodes[node_idx]
                         .concept_dependencies
                         .get(&concept)
-                    .cloned()
-                    .unwrap_or_default();
-                    
-                for operand in operands {
-                    let operand_label = ConceptLabel::from_class_expression(operand)?;
-                    if !self.nodes[node_idx].concepts.contains(&operand_label) {
-                        self.add_concept(node_idx, operand_label, deps.clone())?;
-                        made_changes = true;
+                        .cloned()
+                        .unwrap_or_default();
+
+                    for operand in operands {
+                        let operand_label = ConceptLabel::from_class_expression(operand)?;
+                        if !self.nodes[node_idx].concepts.contains(&operand_label) {
+                            self.add_concept(node_idx, operand_label, deps.clone())?;
+                            made_changes = true;
+                        }
                     }
-                }
                 }
             }
         }
-        
+
         Ok(made_changes)
     }
 
     /// Apply universal quantification rules to a node
     fn apply_universal_rules(&mut self, node_idx: NodeId) -> Result<bool> {
         let mut made_changes = false;
-        
-        let concepts_to_check: Vec<ConceptLabel> = self.nodes[node_idx]
-            .concepts
-            .iter()
-            .cloned()
-            .collect();
-            
+
+        let concepts_to_check: Vec<ConceptLabel> =
+            self.nodes[node_idx].concepts.iter().cloned().collect();
+
         for concept in concepts_to_check {
-            if let ConceptLabel::Universal { role: ref property, ref filler } = concept {
+            if let ConceptLabel::Universal {
+                role: ref property,
+                ref filler,
+            } = concept
+            {
                 // For all edges with this property, add the filler to the target
-                let edges_to_process: Vec<TableauEdge> = self.edges
+                let edges_to_process: Vec<TableauEdge> = self
+                    .edges
                     .iter()
                     .filter(|edge| edge.from == node_idx && edge.role == *property)
                     .cloned()
                     .collect();
-                    
+
                 for edge in edges_to_process {
-                    if edge.to < self.nodes.len() && !self.nodes[edge.to].concepts.contains(&*filler) {
+                    if edge.to < self.nodes.len()
+                        && !self.nodes[edge.to].concepts.contains(&*filler)
+                    {
                         let deps = self.nodes[node_idx]
                             .concept_dependencies
                             .get(&concept)
@@ -1898,36 +1931,35 @@ impl Tableau {
                 }
             }
         }
-        
+
         Ok(made_changes)
     }
 
     /// Apply existential quantification rules to a node  
     fn apply_existential_rules(&mut self, node_idx: NodeId) -> Result<bool> {
         let mut made_changes = false;
-        
-        let concepts_to_check: Vec<ConceptLabel> = self.nodes[node_idx]
-            .concepts
-            .iter()
-            .cloned()
-            .collect();
-            
+
+        let concepts_to_check: Vec<ConceptLabel> =
+            self.nodes[node_idx].concepts.iter().cloned().collect();
+
         for concept in concepts_to_check {
-            if let ConceptLabel::Existential { role: ref property, ref filler } = concept {
+            if let ConceptLabel::Existential {
+                role: ref property,
+                ref filler,
+            } = concept
+            {
                 // Check if there's already a suitable edge
-                let has_suitable_edge = self.edges
-                    .iter()
-                    .any(|edge| {
-                        edge.from == node_idx 
+                let has_suitable_edge = self.edges.iter().any(|edge| {
+                    edge.from == node_idx
                         && edge.role == *property
                         && edge.to < self.nodes.len()
                         && self.nodes[edge.to].concepts.contains(&*filler)
-                    });
-                    
+                });
+
                 if !has_suitable_edge {
                     // Create a new node with the filler concept
                     let new_node_id = self.create_successor_node(node_idx)?;
-                    
+
                     // Add the property edge
                     let edge = TableauEdge {
                         from: node_idx,
@@ -1940,7 +1972,7 @@ impl Tableau {
                             .unwrap_or_default(),
                     };
                     self.edges.push(edge);
-                    
+
                     // Add the filler concept to the new node
                     let deps = self.nodes[node_idx]
                         .concept_dependencies
@@ -1952,12 +1984,16 @@ impl Tableau {
                 }
             }
         }
-        
+
         Ok(made_changes)
     }
 
     /// Check if a concept label matches a class expression
-    fn concept_matches_expression(&self, concept: &ConceptLabel, expression: &ClassExpression) -> Result<bool> {
+    fn concept_matches_expression(
+        &self,
+        concept: &ConceptLabel,
+        expression: &ClassExpression,
+    ) -> Result<bool> {
         match (concept, expression) {
             (ConceptLabel::Atomic(name), ClassExpression::Class(class)) => {
                 Ok(name == &class.iri.to_string())
@@ -1969,21 +2005,27 @@ impl Tableau {
                     Ok(false)
                 }
             }
-            _ => Ok(false) // Conservative approach for complex expressions
+            _ => Ok(false), // Conservative approach for complex expressions
         }
     }
 
     /// Helper method to find a path through a property chain
-    fn find_property_chain_path(&self, from: NodeId, to: NodeId, chain: &[crate::ontology::ObjectPropertyExpression], index: usize) -> Result<bool> {
+    fn find_property_chain_path(
+        &self,
+        from: NodeId,
+        to: NodeId,
+        chain: &[crate::ontology::ObjectPropertyExpression],
+        index: usize,
+    ) -> Result<bool> {
         if index >= chain.len() {
             return Ok(from == to);
         }
-        
+
         if index == chain.len() - 1 {
             // Last property in chain - check direct connection
             return self.has_edge_with_property(from, to, &chain[index]);
         }
-        
+
         // Find intermediate nodes
         for edge in &self.edges {
             if edge.from == from && self.role_matches_property(&edge.role, &chain[index])? {
@@ -1992,14 +2034,22 @@ impl Tableau {
                 }
             }
         }
-        
+
         Ok(false)
     }
 
     /// Check if there's an edge with a specific property between two nodes
-    fn has_edge_with_property(&self, from: NodeId, to: NodeId, property: &crate::ontology::ObjectPropertyExpression) -> Result<bool> {
+    fn has_edge_with_property(
+        &self,
+        from: NodeId,
+        to: NodeId,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) -> Result<bool> {
         for edge in &self.edges {
-            if edge.from == from && edge.to == to && self.role_matches_property(&edge.role, property)? {
+            if edge.from == from
+                && edge.to == to
+                && self.role_matches_property(&edge.role, property)?
+            {
                 return Ok(true);
             }
         }
@@ -2007,26 +2057,30 @@ impl Tableau {
     }
 
     /// Check if two property expressions match
-    fn property_matches(&self, edge_property: &crate::ontology::ObjectPropertyExpression, target_property: &crate::ontology::ObjectPropertyExpression) -> bool {
+    fn property_matches(
+        &self,
+        edge_property: &crate::ontology::ObjectPropertyExpression,
+        target_property: &crate::ontology::ObjectPropertyExpression,
+    ) -> bool {
         match (edge_property, target_property) {
-            (crate::ontology::ObjectPropertyExpression::ObjectProperty(p1), 
-             crate::ontology::ObjectPropertyExpression::ObjectProperty(p2)) => {
-                p1 == p2
-            }
-            (crate::ontology::ObjectPropertyExpression::InverseObjectProperty(inv1),
-             crate::ontology::ObjectPropertyExpression::InverseObjectProperty(inv2)) => {
-                inv1 == inv2
-            }
+            (
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(p1),
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(p2),
+            ) => p1 == p2,
+            (
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(inv1),
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(inv2),
+            ) => inv1 == inv2,
             // For inverse matching: P matches InverseOf(P)
-            (crate::ontology::ObjectPropertyExpression::ObjectProperty(p1),
-             crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p2)) => {
-                p1 == p2
-            }
-            (crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p1),
-             crate::ontology::ObjectPropertyExpression::ObjectProperty(p2)) => {
-                p1 == p2
-            }
-            _ => false
+            (
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(p1),
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p2),
+            ) => p1 == p2,
+            (
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(p1),
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(p2),
+            ) => p1 == p2,
+            _ => false,
         }
     }
 
@@ -2042,14 +2096,14 @@ impl Tableau {
             role_successors: HashMap::new(),
             status: NodeStatus::default(),
         };
-        
+
         self.nodes.push(new_node);
-        
+
         // Update parent's successor information
         if parent_id < self.nodes.len() {
             // This would be updated based on the specific property, but simplified for now
         }
-        
+
         Ok(new_id)
     }
 
@@ -2067,17 +2121,17 @@ impl Tableau {
     /// Get mutable reference to a node by its string ID (for compatibility)
     pub fn get_node_mut(&mut self, node_id: &str) -> Option<&mut TableauNode> {
         // Enhanced node lookup with multiple strategies
-        
+
         // Strategy 1: Direct index lookup for numeric IDs
         if let Ok(index) = node_id.parse::<usize>() {
             return self.nodes.get_mut(index);
         }
-        
+
         // Strategy 2: Use node ID mapping if available
         if let Some(&mapped_index) = self.node_id_mapping.get(node_id) {
             return self.nodes.get_mut(mapped_index);
         }
-        
+
         // Strategy 3: Linear search by ID (for nodes with custom IDs)
         for (index, node) in self.nodes.iter().enumerate() {
             if node.id.to_string() == node_id {
@@ -2086,7 +2140,7 @@ impl Tableau {
                 return self.nodes.get_mut(index);
             }
         }
-        
+
         // Strategy 4: Check for prefixed or formatted IDs
         let cleaned_id = node_id.trim_start_matches("node_").trim_start_matches("n");
         if let Ok(index) = cleaned_id.parse::<usize>() {
@@ -2096,7 +2150,7 @@ impl Tableau {
                 return Some(node);
             }
         }
-        
+
         // No matching node found
         None
     }
@@ -2223,24 +2277,22 @@ impl ConceptLabel {
     }
 
     /// Create expansion strategy based on configuration
-    pub fn create_expansion_strategy(config: &ReasoningConfig) -> Result<Box<dyn ExpansionStrategy>> {
+    pub fn create_expansion_strategy(
+        config: &ReasoningConfig,
+    ) -> Result<Box<dyn ExpansionStrategy>> {
         // Select expansion strategy based on configuration settings
         match config.expansion_strategy {
             crate::config::ExpansionStrategy::CreationOrder => {
                 Ok(Box::new(CreationOrderStrategy::new()))
-            },
+            }
             crate::config::ExpansionStrategy::IndividualReuse => {
                 Ok(Box::new(BreadthFirstExpansionStrategy::new()))
-            },
+            }
             crate::config::ExpansionStrategy::Priority => {
                 Ok(Box::new(PriorityBasedExpansionStrategy::new()))
-            },
-            crate::config::ExpansionStrategy::EL => {
-                Ok(Box::new(HeuristicExpansionStrategy::new()))
-            },
-            crate::config::ExpansionStrategy::Optimal => {
-                Ok(Box::new(ComplexityStrategy::new()))
-            },
+            }
+            crate::config::ExpansionStrategy::EL => Ok(Box::new(HeuristicExpansionStrategy::new())),
+            crate::config::ExpansionStrategy::Optimal => Ok(Box::new(ComplexityStrategy::new())),
         }
     }
 }

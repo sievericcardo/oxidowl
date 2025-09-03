@@ -14,9 +14,7 @@ pub use functional::{
     FunctionalParser, parse as parse_functional, parse_file as parse_functional_file,
     save_file as save_functional_file,
 };
-pub use manchester::{
-    ManchesterParser, ManchesterParserConfig,
-};
+pub use manchester::{ManchesterParser, ManchesterParserConfig};
 pub use ntriples::{
     NTriplesParser, parse as parse_ntriples, parse_file as parse_ntriples_file,
     save_file as save_ntriples_file,
@@ -117,7 +115,9 @@ impl ParserFactory {
             OntologyFormat::RdfXml => Ok(Box::new(RdfXmlParser::new())),
             OntologyFormat::Turtle => Ok(Box::new(TurtleParser::new())),
             OntologyFormat::NTriples => Ok(Box::new(NTriplesParser::new())),
-            OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(ManchesterParserConfig::default()))),
+            OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
+                ManchesterParserConfig::default(),
+            ))),
             OntologyFormat::Auto => Err(Error::ontology_parsing(
                 "Auto format should be resolved before creating parser",
             )),
@@ -197,7 +197,9 @@ impl Parser for NTriplesParser {
 impl Parser for ManchesterParser {
     fn parse(&self, input: &str) -> Result<Ontology> {
         let mut parser = self.clone();
-        parser.parse_string(input).map_err(|e| Error::ontology_parsing(&format!("Manchester parsing error: {:?}", e)))
+        parser
+            .parse_string(input)
+            .map_err(|e| Error::ontology_parsing(&format!("Manchester parsing error: {:?}", e)))
     }
 
     fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {

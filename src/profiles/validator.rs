@@ -6,12 +6,12 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::Ontology;
-use crate::profiles::{
-    OWL2Profile, ProfileValidationReport, ProfileDetectionResult, ProfileValidator
-};
 use crate::profiles::el::ELValidator;
 use crate::profiles::ql::QLValidator;
 use crate::profiles::rl::RLValidator;
+use crate::profiles::{
+    OWL2Profile, ProfileDetectionResult, ProfileValidationReport, ProfileValidator,
+};
 
 /// Main profile validator that can handle all OWL 2 profiles
 pub struct OWL2ProfileValidator {
@@ -32,9 +32,9 @@ impl OWL2ProfileValidator {
 
     /// Validate an ontology against a specific profile
     pub fn validate_profile(
-        &self, 
-        ontology: &Ontology, 
-        profile: OWL2Profile
+        &self,
+        ontology: &Ontology,
+        profile: OWL2Profile,
     ) -> Result<ProfileValidationReport, OxidowlError> {
         match profile {
             OWL2Profile::EL => self.el_validator.validate(ontology),
@@ -42,7 +42,8 @@ impl OWL2ProfileValidator {
             OWL2Profile::RL => self.rl_validator.validate(ontology),
             OWL2Profile::DL => {
                 // Use the existing OWL 2 DL validator
-                let mut dl_validator = crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
+                let mut dl_validator =
+                    crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
                 match dl_validator.validate() {
                     Ok(dl_report) => {
                         let mut report = ProfileValidationReport::new(profile);
@@ -51,7 +52,7 @@ impl OWL2ProfileValidator {
                             for error in &dl_report.errors {
                                 report.add_violation(crate::profiles::ProfileViolation::new(
                                     crate::profiles::ProfileViolationType::DisallowedAxiom(
-                                        error.error_type.to_string()
+                                        error.error_type.to_string(),
                                     ),
                                     error.message.clone(),
                                 ));
@@ -70,13 +71,16 @@ impl OWL2ProfileValidator {
     }
 
     /// Detect which profiles an ontology conforms to
-    pub fn detect_profiles(&self, ontology: &Ontology) -> Result<ProfileDetectionResult, OxidowlError> {
+    pub fn detect_profiles(
+        &self,
+        ontology: &Ontology,
+    ) -> Result<ProfileDetectionResult, OxidowlError> {
         let mut result = ProfileDetectionResult::new();
 
         // Test profiles in order from most restrictive to least restrictive
         let profiles_to_test = vec![
             OWL2Profile::EL,
-            OWL2Profile::QL, 
+            OWL2Profile::QL,
             OWL2Profile::RL,
             OWL2Profile::DL,
             OWL2Profile::Full,
@@ -92,7 +96,13 @@ impl OWL2ProfileValidator {
             result.least_restrictive = OWL2Profile::Full;
         } else {
             // Find the least restrictive conforming profile
-            for profile in [OWL2Profile::Full, OWL2Profile::DL, OWL2Profile::RL, OWL2Profile::QL, OWL2Profile::EL] {
+            for profile in [
+                OWL2Profile::Full,
+                OWL2Profile::DL,
+                OWL2Profile::RL,
+                OWL2Profile::QL,
+                OWL2Profile::EL,
+            ] {
                 if result.conforming_profiles.contains(&profile) {
                     result.least_restrictive = profile;
                     break;
@@ -121,9 +131,9 @@ impl OWL2ProfileValidator {
 
     /// Check if an ontology can be safely converted to a specific profile
     pub fn can_convert_to_profile(
-        &self, 
-        ontology: &Ontology, 
-        target_profile: OWL2Profile
+        &self,
+        ontology: &Ontology,
+        target_profile: OWL2Profile,
     ) -> Result<bool, OxidowlError> {
         let report = self.validate_profile(ontology, target_profile)?;
         Ok(report.conforms)
@@ -169,13 +179,21 @@ impl OWL2ProfileValidator {
             // Add performance suggestions
             match target_profile {
                 OWL2Profile::EL => {
-                    suggestions.push("Consider using specialized EL reasoners for optimal performance.".to_string());
+                    suggestions.push(
+                        "Consider using specialized EL reasoners for optimal performance."
+                            .to_string(),
+                    );
                 }
                 OWL2Profile::QL => {
-                    suggestions.push("Consider using query rewriting techniques for efficient querying.".to_string());
+                    suggestions.push(
+                        "Consider using query rewriting techniques for efficient querying."
+                            .to_string(),
+                    );
                 }
                 OWL2Profile::RL => {
-                    suggestions.push("Consider using rule-based reasoners for efficient inference.".to_string());
+                    suggestions.push(
+                        "Consider using rule-based reasoners for efficient inference.".to_string(),
+                    );
                 }
                 _ => {}
             }
@@ -205,7 +223,7 @@ impl GenericValidator {
 impl ProfileValidator for GenericValidator {
     fn validate(&self, _ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(self.profile);
-        
+
         match self.profile {
             OWL2Profile::Full => {
                 // OWL 2 Full allows everything
@@ -214,14 +232,15 @@ impl ProfileValidator for GenericValidator {
             _ => {
                 // For unimplemented profiles, add a violation
                 report.add_violation(crate::profiles::ProfileViolation::new(
-                    crate::profiles::ProfileViolationType::UnsupportedFeature(
-                        format!("{} validation not yet implemented", self.profile.name())
-                    ),
+                    crate::profiles::ProfileViolationType::UnsupportedFeature(format!(
+                        "{} validation not yet implemented",
+                        self.profile.name()
+                    )),
                     "Profile validation unavailable",
                 ));
             }
         }
-        
+
         Ok(report)
     }
 
@@ -229,7 +248,10 @@ impl ProfileValidator for GenericValidator {
         matches!(self.profile, OWL2Profile::Full)
     }
 
-    fn is_property_expression_allowed(&self, _expr: &crate::ontology::ObjectPropertyExpression) -> bool {
+    fn is_property_expression_allowed(
+        &self,
+        _expr: &crate::ontology::ObjectPropertyExpression,
+    ) -> bool {
         matches!(self.profile, OWL2Profile::Full)
     }
 
@@ -249,12 +271,12 @@ impl ProfileValidator for GenericValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::{Ontology, ClassExpression, IRI};
+    use crate::ontology::{ClassExpression, IRI, Ontology};
 
     #[test]
     fn test_profile_validator_creation() {
         let validator = OWL2ProfileValidator::new();
-        
+
         // Test that we can get validators for different profiles
         let _el_validator = validator.get_validator(OWL2Profile::EL);
         let _full_validator = validator.get_validator(OWL2Profile::Full);
@@ -264,8 +286,10 @@ mod tests {
     fn test_owl_full_always_passes() {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new();
-        
-        let report = validator.validate_profile(&ontology, OWL2Profile::Full).unwrap();
+
+        let report = validator
+            .validate_profile(&ontology, OWL2Profile::Full)
+            .unwrap();
         assert!(report.conforms);
         assert_eq!(report.violations.len(), 0);
     }
@@ -274,13 +298,13 @@ mod tests {
     fn test_profile_detection() {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new(); // Empty ontology should conform to all profiles
-        
+
         let result = validator.detect_profiles(&ontology).unwrap();
-        
+
         // Empty ontology should conform to all implemented profiles
         assert!(result.conforming_profiles.contains(&OWL2Profile::EL));
         assert!(result.conforming_profiles.contains(&OWL2Profile::Full));
-        
+
         // Most restrictive should be EL for empty ontology
         assert_eq!(result.most_restrictive, Some(OWL2Profile::EL));
     }
@@ -289,9 +313,9 @@ mod tests {
     fn test_profile_recommendation() {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new();
-        
+
         let recommended = validator.recommend_profile(&ontology).unwrap();
-        
+
         // For empty ontology, should recommend most restrictive (EL)
         assert_eq!(recommended, OWL2Profile::EL);
     }
@@ -300,9 +324,11 @@ mod tests {
     fn test_optimization_suggestions() {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new();
-        
-        let suggestions = validator.get_optimization_suggestions(&ontology, OWL2Profile::EL).unwrap();
-        
+
+        let suggestions = validator
+            .get_optimization_suggestions(&ontology, OWL2Profile::EL)
+            .unwrap();
+
         assert!(!suggestions.is_empty());
         assert!(suggestions[0].contains("conforms to"));
     }
@@ -311,9 +337,17 @@ mod tests {
     fn test_conversion_check() {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new();
-        
+
         // Empty ontology should be convertible to any profile
-        assert!(validator.can_convert_to_profile(&ontology, OWL2Profile::EL).unwrap());
-        assert!(validator.can_convert_to_profile(&ontology, OWL2Profile::Full).unwrap());
+        assert!(
+            validator
+                .can_convert_to_profile(&ontology, OWL2Profile::EL)
+                .unwrap()
+        );
+        assert!(
+            validator
+                .can_convert_to_profile(&ontology, OWL2Profile::Full)
+                .unwrap()
+        );
     }
 }

@@ -407,7 +407,7 @@ impl DLClauseGenerator {
         // Use the AxiomCompiler trait implementation
         AxiomCompiler::compile_axiom(self, axiom)
     }
-    
+
     /// Extract prefixes from an individual
     fn extract_prefixes_from_individual(&mut self, individual: &crate::ontology::Individual) {
         match individual {
@@ -419,9 +419,12 @@ impl DLClauseGenerator {
             }
         }
     }
-    
+
     /// Extract prefixes from an object property
-    fn extract_prefixes_from_object_property(&mut self, property: &crate::ontology::ObjectPropertyExpression) {
+    fn extract_prefixes_from_object_property(
+        &mut self,
+        property: &crate::ontology::ObjectPropertyExpression,
+    ) {
         match property {
             crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
                 self.add_prefix_from_iri(prop.iri.as_str());
@@ -436,9 +439,12 @@ impl DLClauseGenerator {
             }
         }
     }
-    
+
     /// Extract prefixes from a data property
-    fn extract_prefixes_from_data_property(&mut self, property: &crate::ontology::DataPropertyExpression) {
+    fn extract_prefixes_from_data_property(
+        &mut self,
+        property: &crate::ontology::DataPropertyExpression,
+    ) {
         match property {
             crate::ontology::DataPropertyExpression::DataProperty(prop) => {
                 self.add_prefix_from_iri(prop.iri.as_str());

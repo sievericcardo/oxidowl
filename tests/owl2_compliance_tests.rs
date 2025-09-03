@@ -1,10 +1,10 @@
 //! Integration tests for OWL 2 compliance and new features
 
 use oxidowl::{
-    ontology::{Ontology, OWL2Datatype, DatatypeManager},
+    error::OxidowlError,
+    ontology::{DatatypeManager, OWL2Datatype, Ontology},
     parsers::ManchesterParser,
     validation::{OWL2DLValidator, OWL2Profile},
-    error::OxidowlError,
 };
 
 #[test]
@@ -14,22 +14,28 @@ fn test_owl2_datatype_map() {
         OWL2Datatype::String.iri().to_string(),
         "http://www.w3.org/2001/XMLSchema#string"
     );
-    
+
     assert_eq!(
         OWL2Datatype::Integer.iri().to_string(),
         "http://www.w3.org/2001/XMLSchema#integer"
     );
-    
+
     assert_eq!(
         OWL2Datatype::Real.iri().to_string(),
         "http://www.w3.org/2002/07/owl#real"
     );
-    
+
     // Test datatype hierarchy
-    assert_eq!(OWL2Datatype::Integer.parent_datatype(), Some(OWL2Datatype::Decimal));
-    assert_eq!(OWL2Datatype::Decimal.parent_datatype(), Some(OWL2Datatype::Real));
+    assert_eq!(
+        OWL2Datatype::Integer.parent_datatype(),
+        Some(OWL2Datatype::Decimal)
+    );
+    assert_eq!(
+        OWL2Datatype::Decimal.parent_datatype(),
+        Some(OWL2Datatype::Real)
+    );
     assert_eq!(OWL2Datatype::String.parent_datatype(), None);
-    
+
     // Test datatype properties
     assert!(OWL2Datatype::Integer.is_numeric());
     assert!(OWL2Datatype::DateTime.is_datetime());
@@ -40,17 +46,17 @@ fn test_owl2_datatype_map() {
 #[test]
 fn test_datatype_manager() {
     let manager = DatatypeManager::new();
-    
+
     // Test built-in datatype recognition
     assert!(manager.is_recognized_datatype(&OWL2Datatype::String.iri()));
     assert!(manager.is_recognized_datatype(&OWL2Datatype::Integer.iri()));
     assert!(manager.is_recognized_datatype(&OWL2Datatype::Real.iri()));
-    
+
     // Test datatype hierarchy
     assert!(manager.is_subtype_of(&OWL2Datatype::Integer, &OWL2Datatype::Decimal));
     assert!(manager.is_subtype_of(&OWL2Datatype::Int, &OWL2Datatype::Integer));
     assert!(!manager.is_subtype_of(&OWL2Datatype::String, &OWL2Datatype::Integer));
-    
+
     // Test subtypes retrieval
     let integer_subtypes = manager.get_subtypes(&OWL2Datatype::Integer);
     assert!(integer_subtypes.contains(&OWL2Datatype::Long));
@@ -90,44 +96,55 @@ Individual: ex:john
 
     let mut parser = ManchesterParser::default();
     let ontology = parser.parse_string(manchester_content).unwrap();
-    
+
     // Check that basic ontology was created (simplified implementation)
     // Note: The current implementation is simplified and doesn't fully parse all Manchester syntax
     let axioms = ontology.axioms();
     assert_eq!(axioms.len(), 0); // Simplified implementation returns empty ontology
-    
+
     // Should have declarations for Person, Student, Parent, Animal, Course, hasChild, hasParent, enrolledIn, john
     // Note: Simplified implementation doesn't actually parse these
-    let declarations: Vec<_> = axioms.iter()
+    let declarations: Vec<_> = axioms
+        .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::Declaration(_)))
         .collect();
     assert_eq!(declarations.len(), 0); // Simplified implementation
-    
+
     // Should have SubClassOf axioms
-    let subclass_axioms: Vec<_> = axioms.iter()
+    let subclass_axioms: Vec<_> = axioms
+        .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::SubClassOf(_)))
         .collect();
     assert_eq!(subclass_axioms.len(), 0); // Simplified implementation
-    
+
     // Should have EquivalentClasses axiom
-    let equiv_axioms: Vec<_> = axioms.iter()
+    let equiv_axioms: Vec<_> = axioms
+        .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::EquivalentClasses(_)))
         .collect();
     assert_eq!(equiv_axioms.len(), 0); // Simplified implementation
-    
+
     // Should have property characteristic axioms
-    let functional_axioms: Vec<_> = axioms.iter()
+    let functional_axioms: Vec<_> = axioms
+        .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::FunctionalObjectProperty(_)))
         .collect();
     assert_eq!(functional_axioms.len(), 0); // Simplified implementation
-    
-    let inv_functional_axioms: Vec<_> = axioms.iter()
-        .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::InverseFunctionalObjectProperty(_)))
+
+    let inv_functional_axioms: Vec<_> = axioms
+        .iter()
+        .filter(|axiom| {
+            matches!(
+                axiom,
+                oxidowl::ontology::Axiom::InverseFunctionalObjectProperty(_)
+            )
+        })
         .collect();
     assert_eq!(inv_functional_axioms.len(), 0); // Simplified implementation
-    
+
     // Should have ClassAssertion axiom for john
-    let class_assertions: Vec<_> = axioms.iter()
+    let class_assertions: Vec<_> = axioms
+        .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::ClassAssertion(_)))
         .collect();
     assert_eq!(class_assertions.len(), 0); // Simplified implementation
@@ -136,41 +153,51 @@ Individual: ex:john
 #[test]
 fn test_manchester_class_expressions() {
     let parser = ManchesterParser::default();
-    
+
     // Test simple class
     let expr = parser.parse_class_expression("Person").unwrap();
     assert_eq!(expr, "Person");
-    
+
     // Test intersection
     let expr = parser.parse_class_expression("Person and Student").unwrap();
     assert_eq!(expr, "Person and Student");
-    
+
     // Test union
     let expr = parser.parse_class_expression("Person or Animal").unwrap();
     assert_eq!(expr, "Person or Animal");
-    
+
     // Test complement
     let expr = parser.parse_class_expression("not Person").unwrap();
     assert_eq!(expr, "not Person");
-    
+
     // Test existential restriction
-    let expr = parser.parse_class_expression("hasChild some Person").unwrap();
+    let expr = parser
+        .parse_class_expression("hasChild some Person")
+        .unwrap();
     assert_eq!(expr, "hasChild some Person");
-    
+
     // Test universal restriction
-    let expr = parser.parse_class_expression("hasChild only Person").unwrap();
+    let expr = parser
+        .parse_class_expression("hasChild only Person")
+        .unwrap();
     assert_eq!(expr, "hasChild only Person");
-    
+
     // Test minimum cardinality
-    let expr = parser.parse_cardinality_restriction("hasChild min 2 Person").unwrap();
+    let expr = parser
+        .parse_cardinality_restriction("hasChild min 2 Person")
+        .unwrap();
     assert_eq!(expr, "hasChild min 2 Person");
-    
+
     // Test exact cardinality without filler
-    let expr = parser.parse_cardinality_restriction("hasChild exactly 1").unwrap();
+    let expr = parser
+        .parse_cardinality_restriction("hasChild exactly 1")
+        .unwrap();
     assert_eq!(expr, "hasChild exactly 1");
-    
+
     // Test enumeration
-    let expr = parser.parse_class_expression("{john, mary, peter}").unwrap();
+    let expr = parser
+        .parse_class_expression("{john, mary, peter}")
+        .unwrap();
     assert_eq!(expr, "{john, mary, peter}");
 }
 
@@ -178,17 +205,17 @@ fn test_manchester_class_expressions() {
 fn test_owl2_dl_validation() -> Result<(), OxidowlError> {
     // Create a valid OWL 2 DL ontology
     let ontology = Ontology::new();
-    
+
     // Add some basic axioms that should be valid
     // This would be enhanced with actual axiom creation once the types are available
-    
+
     let mut validator = OWL2DLValidator::new(ontology);
     let report = validator.validate()?;
-    
+
     // Should be valid for basic empty ontology
     assert!(report.is_valid);
     assert_eq!(report.errors.len(), 0);
-    
+
     Ok(())
 }
 
@@ -196,20 +223,20 @@ fn test_owl2_dl_validation() -> Result<(), OxidowlError> {
 fn test_validation_error_detection() -> Result<(), OxidowlError> {
     // This test would create an ontology with OWL 2 DL violations
     // and verify that the validator detects them
-    
+
     let ontology = Ontology::new();
-    
+
     // Add axioms that violate OWL 2 DL restrictions
     // For example: non-simple property in cardinality restriction
     // This would be implemented once we have proper axiom construction
-    
+
     let mut validator = OWL2DLValidator::new(ontology);
     let report = validator.validate()?;
-    
+
     // For now, just test that validation runs without errors
     // This will be enhanced when we have proper test ontologies
     assert!(report.errors.is_empty() || !report.errors.is_empty()); // Should either pass or fail gracefully
-    
+
     Ok(())
 }
 
@@ -218,16 +245,21 @@ fn test_owl2_profile_detection() {
     // Test profile detection with different ontology constructs
     let ontology = Ontology::new();
     let mut validator = OWL2DLValidator::new(ontology);
-    
+
     let report = validator.validate().unwrap();
-    
+
     // Should detect some profile (even if just DL for empty ontology)
     assert!(report.profile.is_some());
-    
+
     // For empty ontology, should be at least OWL 2 DL compliant
     if let Some(profile) = report.profile {
-        assert!(matches!(profile, 
-            OWL2Profile::EL | OWL2Profile::QL | OWL2Profile::RL | OWL2Profile::DL | OWL2Profile::Full
+        assert!(matches!(
+            profile,
+            OWL2Profile::EL
+                | OWL2Profile::QL
+                | OWL2Profile::RL
+                | OWL2Profile::DL
+                | OWL2Profile::Full
         ));
     }
 }
@@ -236,18 +268,54 @@ fn test_owl2_profile_detection() {
 fn test_enhanced_swrl_builtins() {
     // Test that SWRL built-in registry contains expected built-ins
     let registry = oxidowl::swrl::builtins::SWRLBuiltInRegistry::new();
-    
+
     // Test basic math built-ins
-    assert!(registry.get_builtin(&oxidowl::ontology::IRI::new("http://www.w3.org/2003/11/swrlb#add")).is_some());
-    assert!(registry.get_builtin(&oxidowl::ontology::IRI::new("http://www.w3.org/2003/11/swrlb#multiply")).is_some());
-    
-    // Test string built-ins  
-    assert!(registry.get_builtin(&oxidowl::ontology::IRI::new("http://www.w3.org/2003/11/swrlb#stringConcat")).is_some());
-    assert!(registry.get_builtin(&oxidowl::ontology::IRI::new("http://www.w3.org/2003/11/swrlb#stringLength")).is_some());
-    
+    assert!(
+        registry
+            .get_builtin(&oxidowl::ontology::IRI::new(
+                "http://www.w3.org/2003/11/swrlb#add"
+            ))
+            .is_some()
+    );
+    assert!(
+        registry
+            .get_builtin(&oxidowl::ontology::IRI::new(
+                "http://www.w3.org/2003/11/swrlb#multiply"
+            ))
+            .is_some()
+    );
+
+    // Test string built-ins
+    assert!(
+        registry
+            .get_builtin(&oxidowl::ontology::IRI::new(
+                "http://www.w3.org/2003/11/swrlb#stringConcat"
+            ))
+            .is_some()
+    );
+    assert!(
+        registry
+            .get_builtin(&oxidowl::ontology::IRI::new(
+                "http://www.w3.org/2003/11/swrlb#stringLength"
+            ))
+            .is_some()
+    );
+
     // Test comparison built-ins
-    assert!(registry.get_builtin(&oxidowl::ontology::IRI::new("http://www.w3.org/2003/11/swrlb#equal")).is_some());
-    assert!(registry.get_builtin(&oxidowl::ontology::IRI::new("http://www.w3.org/2003/11/swrlb#lessThan")).is_some());
+    assert!(
+        registry
+            .get_builtin(&oxidowl::ontology::IRI::new(
+                "http://www.w3.org/2003/11/swrlb#equal"
+            ))
+            .is_some()
+    );
+    assert!(
+        registry
+            .get_builtin(&oxidowl::ontology::IRI::new(
+                "http://www.w3.org/2003/11/swrlb#lessThan"
+            ))
+            .is_some()
+    );
 }
 
 #[test]
@@ -269,11 +337,11 @@ ObjectProperty: ex:hasChild
 
     let mut parser = ManchesterParser::default();
     let ontology = parser.parse_string(manchester_content).unwrap();
-    
+
     // Validate the parsed ontology
     let mut validator = OWL2DLValidator::new(ontology);
     let report = validator.validate().unwrap();
-    
+
     // Should be valid OWL 2 DL
     assert!(report.is_valid);
     assert!(report.profile.is_some());
@@ -290,7 +358,7 @@ ObjectProperty without name:
 
     let mut parser = ManchesterParser::default();
     let result = parser.parse_string(invalid_manchester);
-    
+
     // Simplified implementation doesn't perform full validation, so it passes
     // This test verifies the parser doesn't panic on invalid input
     assert!(result.is_ok()); // Simplified implementation is lenient
@@ -299,94 +367,128 @@ ObjectProperty without name:
 #[test]
 fn test_datatype_literal_validation() {
     let manager = DatatypeManager::new();
-    
+
     // Test boolean validation
-    let bool_literal_true = oxidowl::ontology::Literal::with_datatype("true".to_string(), OWL2Datatype::Boolean.iri());
+    let bool_literal_true =
+        oxidowl::ontology::Literal::with_datatype("true".to_string(), OWL2Datatype::Boolean.iri());
     assert!(manager.validate_literal(&bool_literal_true).is_ok());
-    
-    let bool_literal_false = oxidowl::ontology::Literal::with_datatype("false".to_string(), OWL2Datatype::Boolean.iri());
+
+    let bool_literal_false =
+        oxidowl::ontology::Literal::with_datatype("false".to_string(), OWL2Datatype::Boolean.iri());
     assert!(manager.validate_literal(&bool_literal_false).is_ok());
-    
-    let bool_literal_one = oxidowl::ontology::Literal::with_datatype("1".to_string(), OWL2Datatype::Boolean.iri());
+
+    let bool_literal_one =
+        oxidowl::ontology::Literal::with_datatype("1".to_string(), OWL2Datatype::Boolean.iri());
     assert!(manager.validate_literal(&bool_literal_one).is_ok());
-    
-    let bool_literal_zero = oxidowl::ontology::Literal::with_datatype("0".to_string(), OWL2Datatype::Boolean.iri());
+
+    let bool_literal_zero =
+        oxidowl::ontology::Literal::with_datatype("0".to_string(), OWL2Datatype::Boolean.iri());
     assert!(manager.validate_literal(&bool_literal_zero).is_ok());
-    
-    let bool_literal_invalid = oxidowl::ontology::Literal::with_datatype("invalid".to_string(), OWL2Datatype::Boolean.iri());
+
+    let bool_literal_invalid = oxidowl::ontology::Literal::with_datatype(
+        "invalid".to_string(),
+        OWL2Datatype::Boolean.iri(),
+    );
     assert!(manager.validate_literal(&bool_literal_invalid).is_err());
-    
+
     // Test integer validation
-    let int_literal_valid = oxidowl::ontology::Literal::with_datatype("42".to_string(), OWL2Datatype::Integer.iri());
+    let int_literal_valid =
+        oxidowl::ontology::Literal::with_datatype("42".to_string(), OWL2Datatype::Integer.iri());
     assert!(manager.validate_literal(&int_literal_valid).is_ok());
-    
-    let int_literal_negative = oxidowl::ontology::Literal::with_datatype("-123".to_string(), OWL2Datatype::Integer.iri());
+
+    let int_literal_negative =
+        oxidowl::ontology::Literal::with_datatype("-123".to_string(), OWL2Datatype::Integer.iri());
     assert!(manager.validate_literal(&int_literal_negative).is_ok());
-    
-    let int_literal_zero = oxidowl::ontology::Literal::with_datatype("0".to_string(), OWL2Datatype::Integer.iri());
+
+    let int_literal_zero =
+        oxidowl::ontology::Literal::with_datatype("0".to_string(), OWL2Datatype::Integer.iri());
     assert!(manager.validate_literal(&int_literal_zero).is_ok());
-    
-    let int_literal_invalid = oxidowl::ontology::Literal::with_datatype("not_a_number".to_string(), OWL2Datatype::Integer.iri());
+
+    let int_literal_invalid = oxidowl::ontology::Literal::with_datatype(
+        "not_a_number".to_string(),
+        OWL2Datatype::Integer.iri(),
+    );
     assert!(manager.validate_literal(&int_literal_invalid).is_err());
-    
-    let int_literal_float = oxidowl::ontology::Literal::with_datatype("3.14".to_string(), OWL2Datatype::Integer.iri());
+
+    let int_literal_float =
+        oxidowl::ontology::Literal::with_datatype("3.14".to_string(), OWL2Datatype::Integer.iri());
     assert!(manager.validate_literal(&int_literal_float).is_err());
-    
+
     // Test decimal validation
-    let decimal_literal_valid = oxidowl::ontology::Literal::with_datatype("3.14".to_string(), OWL2Datatype::Decimal.iri());
+    let decimal_literal_valid =
+        oxidowl::ontology::Literal::with_datatype("3.14".to_string(), OWL2Datatype::Decimal.iri());
     assert!(manager.validate_literal(&decimal_literal_valid).is_ok());
-    
-    let decimal_literal_int = oxidowl::ontology::Literal::with_datatype("42".to_string(), OWL2Datatype::Decimal.iri());
+
+    let decimal_literal_int =
+        oxidowl::ontology::Literal::with_datatype("42".to_string(), OWL2Datatype::Decimal.iri());
     assert!(manager.validate_literal(&decimal_literal_int).is_ok());
-    
-    let decimal_literal_negative = oxidowl::ontology::Literal::with_datatype("-0.5".to_string(), OWL2Datatype::Decimal.iri());
+
+    let decimal_literal_negative =
+        oxidowl::ontology::Literal::with_datatype("-0.5".to_string(), OWL2Datatype::Decimal.iri());
     assert!(manager.validate_literal(&decimal_literal_negative).is_ok());
-    
-    let decimal_literal_invalid = oxidowl::ontology::Literal::with_datatype("not_a_number".to_string(), OWL2Datatype::Decimal.iri());
+
+    let decimal_literal_invalid = oxidowl::ontology::Literal::with_datatype(
+        "not_a_number".to_string(),
+        OWL2Datatype::Decimal.iri(),
+    );
     assert!(manager.validate_literal(&decimal_literal_invalid).is_err());
-    
+
     // Test float/double validation
-    let float_literal_valid = oxidowl::ontology::Literal::with_datatype("3.14".to_string(), OWL2Datatype::Float.iri());
+    let float_literal_valid =
+        oxidowl::ontology::Literal::with_datatype("3.14".to_string(), OWL2Datatype::Float.iri());
     assert!(manager.validate_literal(&float_literal_valid).is_ok());
-    
-    let float_literal_inf = oxidowl::ontology::Literal::with_datatype("INF".to_string(), OWL2Datatype::Float.iri());
+
+    let float_literal_inf =
+        oxidowl::ontology::Literal::with_datatype("INF".to_string(), OWL2Datatype::Float.iri());
     assert!(manager.validate_literal(&float_literal_inf).is_ok());
-    
-    let double_literal_neg_inf = oxidowl::ontology::Literal::with_datatype("-INF".to_string(), OWL2Datatype::Double.iri());
+
+    let double_literal_neg_inf =
+        oxidowl::ontology::Literal::with_datatype("-INF".to_string(), OWL2Datatype::Double.iri());
     assert!(manager.validate_literal(&double_literal_neg_inf).is_ok());
-    
-    let double_literal_nan = oxidowl::ontology::Literal::with_datatype("NaN".to_string(), OWL2Datatype::Double.iri());
+
+    let double_literal_nan =
+        oxidowl::ontology::Literal::with_datatype("NaN".to_string(), OWL2Datatype::Double.iri());
     assert!(manager.validate_literal(&double_literal_nan).is_ok());
 }
 
 #[test]
 fn test_complete_owl2_feature_coverage() {
     // This test verifies that oxidowl now supports the major OWL 2 features identified in the analysis
-    
+
     // 1. Test datatype support
     let datatypes = [
-        OWL2Datatype::String, OWL2Datatype::Boolean, OWL2Datatype::Integer,
-        OWL2Datatype::Decimal, OWL2Datatype::Float, OWL2Datatype::Double,
-        OWL2Datatype::DateTime, OWL2Datatype::Real, OWL2Datatype::Rational,
+        OWL2Datatype::String,
+        OWL2Datatype::Boolean,
+        OWL2Datatype::Integer,
+        OWL2Datatype::Decimal,
+        OWL2Datatype::Float,
+        OWL2Datatype::Double,
+        OWL2Datatype::DateTime,
+        OWL2Datatype::Real,
+        OWL2Datatype::Rational,
     ];
-    
+
     for datatype in &datatypes {
         assert!(!datatype.iri().to_string().is_empty());
     }
-    
+
     // 2. Test Manchester syntax support
     let parser = ManchesterParser::default();
-    assert!(parser.parse_class_expression("Person and (hasChild some Person)").is_ok());
-    
+    assert!(
+        parser
+            .parse_class_expression("Person and (hasChild some Person)")
+            .is_ok()
+    );
+
     // 3. Test validation support
     let ontology = Ontology::new();
     let validator = OWL2DLValidator::new(ontology);
     // Just verify the validator can be created and has the expected interface
     assert!(true); // Placeholder for more comprehensive validation tests
-    
+
     // 4. Test enhanced axiom support (this would be expanded with actual axiom tests)
     // The axiom types are already well-covered in the existing implementation
-    
+
     println!("OWL 2 feature coverage test completed successfully");
 }
 
@@ -394,44 +496,93 @@ fn test_complete_owl2_feature_coverage() {
 fn verify_owl2_compliance_status() -> (usize, usize) {
     // Count implemented vs missing features based on our analysis
     let implemented_features = vec![
-        "SubClassOf", "EquivalentClasses", "DisjointClasses", "DisjointUnion",
-        "SubObjectPropertyOf", "EquivalentObjectProperties", "DisjointObjectProperties",
-        "InverseObjectProperties", "ObjectPropertyDomain", "ObjectPropertyRange",
-        "FunctionalObjectProperty", "InverseFunctionalObjectProperty",
-        "ReflexiveObjectProperty", "IrreflexiveObjectProperty",
-        "SymmetricObjectProperty", "AsymmetricObjectProperty", "TransitiveObjectProperty",
-        "SubDataPropertyOf", "EquivalentDataProperties", "DisjointDataProperties",
-        "DataPropertyDomain", "DataPropertyRange", "FunctionalDataProperty",
-        "SameIndividual", "DifferentIndividuals", "ClassAssertion",
-        "ObjectPropertyAssertion", "DataPropertyAssertion",
-        "NegativeObjectPropertyAssertion", "NegativeDataPropertyAssertion",
-        "ObjectIntersectionOf", "ObjectUnionOf", "ObjectComplementOf", "ObjectOneOf",
-        "ObjectSomeValuesFrom", "ObjectAllValuesFrom", "ObjectHasValue", "ObjectHasSelf",
-        "ObjectMinCardinality", "ObjectMaxCardinality", "ObjectExactCardinality",
-        "DataSomeValuesFrom", "DataAllValuesFrom", "DataHasValue",
-        "DataMinCardinality", "DataMaxCardinality", "DataExactCardinality",
-        "BasicSWRLSupport", "TurtleParser", "OwlXmlParser", "RdfXmlParser", "NTriplesParser", "FunctionalParser",
-        "ManchesterParser", "OWL2DLValidation", "OWL2DatatypeMap", "ProfileDetection",
+        "SubClassOf",
+        "EquivalentClasses",
+        "DisjointClasses",
+        "DisjointUnion",
+        "SubObjectPropertyOf",
+        "EquivalentObjectProperties",
+        "DisjointObjectProperties",
+        "InverseObjectProperties",
+        "ObjectPropertyDomain",
+        "ObjectPropertyRange",
+        "FunctionalObjectProperty",
+        "InverseFunctionalObjectProperty",
+        "ReflexiveObjectProperty",
+        "IrreflexiveObjectProperty",
+        "SymmetricObjectProperty",
+        "AsymmetricObjectProperty",
+        "TransitiveObjectProperty",
+        "SubDataPropertyOf",
+        "EquivalentDataProperties",
+        "DisjointDataProperties",
+        "DataPropertyDomain",
+        "DataPropertyRange",
+        "FunctionalDataProperty",
+        "SameIndividual",
+        "DifferentIndividuals",
+        "ClassAssertion",
+        "ObjectPropertyAssertion",
+        "DataPropertyAssertion",
+        "NegativeObjectPropertyAssertion",
+        "NegativeDataPropertyAssertion",
+        "ObjectIntersectionOf",
+        "ObjectUnionOf",
+        "ObjectComplementOf",
+        "ObjectOneOf",
+        "ObjectSomeValuesFrom",
+        "ObjectAllValuesFrom",
+        "ObjectHasValue",
+        "ObjectHasSelf",
+        "ObjectMinCardinality",
+        "ObjectMaxCardinality",
+        "ObjectExactCardinality",
+        "DataSomeValuesFrom",
+        "DataAllValuesFrom",
+        "DataHasValue",
+        "DataMinCardinality",
+        "DataMaxCardinality",
+        "DataExactCardinality",
+        "BasicSWRLSupport",
+        "TurtleParser",
+        "OwlXmlParser",
+        "RdfXmlParser",
+        "NTriplesParser",
+        "FunctionalParser",
+        "ManchesterParser",
+        "OWL2DLValidation",
+        "OWL2DatatypeMap",
+        "ProfileDetection",
     ];
-    
+
     let missing_features = vec![
-        "CompleteSWRLBuiltins", "OWL2Profiles", "EnhancedImportSupport", 
-        "CompleteAnnotationSupport", "Metamodeling", "KeysParserSupport"
+        "CompleteSWRLBuiltins",
+        "OWL2Profiles",
+        "EnhancedImportSupport",
+        "CompleteAnnotationSupport",
+        "Metamodeling",
+        "KeysParserSupport",
     ];
-    
+
     (implemented_features.len(), missing_features.len())
 }
 
 #[test]
 fn test_implementation_completeness() {
     let (implemented, missing) = verify_owl2_compliance_status();
-    
+
     // We should have significantly more implemented than missing features
     assert!(implemented > missing * 5); // At least 5:1 ratio
-    
-    println!("Implementation status: {} implemented, {} missing", implemented, missing);
-    println!("Completion rate: {:.1}%", (implemented as f64 / (implemented + missing) as f64) * 100.0);
-    
+
+    println!(
+        "Implementation status: {} implemented, {} missing",
+        implemented, missing
+    );
+    println!(
+        "Completion rate: {:.1}%",
+        (implemented as f64 / (implemented + missing) as f64) * 100.0
+    );
+
     // Should be well over 85% complete now
     let completion_rate = (implemented as f64 / (implemented + missing) as f64) * 100.0;
     assert!(completion_rate > 85.0);

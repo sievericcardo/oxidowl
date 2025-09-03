@@ -20,7 +20,7 @@ use crate::ontology::axioms::{
     SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
 };
 use crate::ontology::{
-    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, ClassExpression, 
+    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, ClassExpression,
     DataPropertyExpression, DataRange, Individual, Literal, ObjectPropertyExpression, Ontology,
 };
 
@@ -590,10 +590,7 @@ pub trait OntologyVisitor<R = ()> {
     }
 
     // Annotation axioms
-    fn visit_annotation_assertion_axiom(
-        &mut self,
-        axiom: &AnnotationAssertionAxiom,
-    ) -> Result<()> {
+    fn visit_annotation_assertion_axiom(&mut self, axiom: &AnnotationAssertionAxiom) -> Result<()> {
         // Visit the subject, property, and value
         self.visit_annotation_subject(&axiom.subject)?;
         self.visit_annotation_property(&axiom.property)?;
@@ -649,7 +646,10 @@ pub trait OntologyVisitor<R = ()> {
         Ok(())
     }
 
-    fn visit_datatype_definition_axiom(&mut self, axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom) -> Result<()> {
+    fn visit_datatype_definition_axiom(
+        &mut self,
+        axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom,
+    ) -> Result<()> {
         // Note: The data_range field uses horned_owl types, so we can't visit it with our local visitor methods
         // In a full implementation, you'd need a separate visitor or conversion mechanism
         // For now, just visit the annotations

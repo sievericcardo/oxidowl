@@ -122,7 +122,7 @@ impl DLQueryEngine {
 
         // Extract default namespace from the ontology systematically
         // This implements proper namespace resolution according to OWL specifications
-        
+
         // First, try to get the ontology IRI from the reasoning service
         if let Ok(Some(ontology_iri)) = self.reasoning_service.get_ontology_iri() {
             let iri_string = ontology_iri.as_str();
@@ -138,7 +138,7 @@ impl DLQueryEngine {
                 return Ok(namespace);
             }
         }
-        
+
         // Try to extract from known prefixes or imported ontologies
         if let Some(prefix_map) = &self.prefix_map {
             // Look for common default prefixes
@@ -147,13 +147,13 @@ impl DLQueryEngine {
                     return Ok(namespace.clone());
                 }
             }
-            
+
             // If no explicit default, use the first declared namespace
             if let Some((_, first_namespace)) = prefix_map.iter().next() {
                 return Ok(first_namespace.clone());
             }
         }
-        
+
         // Try to extract from XML base declarations or other sources
         if let Some(xml_base) = self.extract_xml_base_from_ontology().await {
             let namespace = if xml_base.ends_with('#') || xml_base.ends_with('/') {
@@ -167,12 +167,12 @@ impl DLQueryEngine {
         // Default fallback namespace - use a more standard pattern
         Ok("http://www.semanticweb.org/ontology#".to_string())
     }
-    
+
     /// Extract XML base declaration from the ontology
     async fn extract_xml_base_from_ontology(&self) -> Option<String> {
         // This would parse the ontology document for xml:base declarations
         // Implementation depends on the ontology format and storage
-        
+
         // For now, return None to indicate no xml:base found
         // A full implementation would parse the ontology document
         None

@@ -446,7 +446,7 @@ impl BackwardChainingEngine {
                 if !self.unify_class_expressions(p1, p2)? {
                     return None;
                 }
-                
+
                 // Then unify arguments
                 self.unify_i_arguments(a1, a2, bindings)
             }
@@ -466,13 +466,13 @@ impl BackwardChainingEngine {
                 if !self.unify_object_property_expressions(p1, p2)? {
                     return None;
                 }
-                
+
                 // Unify first arguments
                 let mut result_bindings = self.unify_i_arguments(fa1, fa2, bindings)?;
-                
+
                 // Unify second arguments
                 result_bindings = self.unify_i_arguments(sa1, sa2, &result_bindings)?;
-                
+
                 Some(result_bindings)
             }
             (
@@ -491,63 +491,84 @@ impl BackwardChainingEngine {
                 if !self.unify_data_property_expressions(p1, p2)? {
                     return None;
                 }
-                
+
                 // Unify first arguments (individuals)
                 let mut result_bindings = self.unify_i_arguments(fa1, fa2, bindings)?;
-                
+
                 // Unify second arguments (data values)
                 result_bindings = self.unify_d_arguments(sa1, sa2, &result_bindings)?;
-                
+
                 Some(result_bindings)
             }
             _ => None, // Different atom types don't unify
         }
     }
-    
+
     /// Unify class expressions
-    fn unify_class_expressions(&self, expr1: &ClassExpression, expr2: &ClassExpression) -> Option<bool> {
+    fn unify_class_expressions(
+        &self,
+        expr1: &ClassExpression,
+        expr2: &ClassExpression,
+    ) -> Option<bool> {
         match (expr1, expr2) {
-            (ClassExpression::Class(c1), ClassExpression::Class(c2)) => {
-                Some(c1.iri == c2.iri)
-            }
+            (ClassExpression::Class(c1), ClassExpression::Class(c2)) => Some(c1.iri == c2.iri),
             // For more complex expressions, would need recursive unification
             _ => Some(false), // Simplified for now
         }
     }
-    
+
     /// Unify object property expressions
-    fn unify_object_property_expressions(&self, expr1: &ObjectPropertyExpression, expr2: &ObjectPropertyExpression) -> Option<bool> {
+    fn unify_object_property_expressions(
+        &self,
+        expr1: &ObjectPropertyExpression,
+        expr2: &ObjectPropertyExpression,
+    ) -> Option<bool> {
         match (expr1, expr2) {
-            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
-                Some(p1.iri == p2.iri)
-            }
+            (
+                ObjectPropertyExpression::ObjectProperty(p1),
+                ObjectPropertyExpression::ObjectProperty(p2),
+            ) => Some(p1.iri == p2.iri),
             _ => Some(false), // Simplified for complex expressions
         }
     }
-    
+
     /// Unify data property expressions
-    fn unify_data_property_expressions(&self, expr1: &DataPropertyExpression, expr2: &DataPropertyExpression) -> Option<bool> {
+    fn unify_data_property_expressions(
+        &self,
+        expr1: &DataPropertyExpression,
+        expr2: &DataPropertyExpression,
+    ) -> Option<bool> {
         match (expr1, expr2) {
-            (DataPropertyExpression::DataProperty(p1), DataPropertyExpression::DataProperty(p2)) => {
-                Some(p1.iri == p2.iri)
-            }
+            (
+                DataPropertyExpression::DataProperty(p1),
+                DataPropertyExpression::DataProperty(p2),
+            ) => Some(p1.iri == p2.iri),
         }
     }
-    
+
     /// Unify individual arguments
-    fn unify_i_arguments(&self, arg1: &SWRLIArgument, arg2: &SWRLIArgument, bindings: &VariableBindings) -> Option<VariableBindings> {
+    fn unify_i_arguments(
+        &self,
+        arg1: &SWRLIArgument,
+        arg2: &SWRLIArgument,
+        bindings: &VariableBindings,
+    ) -> Option<VariableBindings> {
         match (arg1, arg2) {
             (SWRLIArgument::Variable(var1), SWRLIArgument::Variable(var2)) => {
                 // Variable-variable unification
                 let mut new_bindings = bindings.clone();
-                
+
                 // Check if either variable is already bound
                 let val1 = bindings.bindings.get(var1);
                 let val2 = bindings.bindings.get(var2);
-                
+
                 match (val1, val2) {
                     (Some(v1), Some(v2)) => {
-                        if v1 == v2 { Some(new_bindings) } else { None }
+                        if v1 == v2 {
+                            Some(new_bindings)
+                        } else {
+                            None
+                        }
                     }
                     (Some(v1), None) => {
                         new_bindings.bindings.insert(var2.clone(), v1.clone());
@@ -559,7 +580,9 @@ impl BackwardChainingEngine {
                     }
                     (None, None) => {
                         // Bind one variable to the other
-                        new_bindings.bindings.insert(var1.clone(), SWRLTerm::Variable(var2.clone()));
+                        new_bindings
+                            .bindings
+                            .insert(var1.clone(), SWRLTerm::Variable(var2.clone()));
                         Some(new_bindings)
                     }
                 }
@@ -571,28 +594,34 @@ impl BackwardChainingEngine {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => format!("_:{}", anon.id),
                 };
-                
+
                 if let Some(existing_val) = bindings.bindings.get(var) {
                     if let SWRLTerm::Individual(existing_ind) = existing_val {
-                        if existing_ind.iri().map(|iri| iri.as_str()) == Some(&ind_name) { 
-                            Some(new_bindings) 
-                        } else { 
-                            None 
+                        if existing_ind.iri().map(|iri| iri.as_str()) == Some(&ind_name) {
+                            Some(new_bindings)
+                        } else {
+                            None
                         }
                     } else {
                         None
                     }
                 } else {
                     let individual = Individual::Named(crate::ontology::NamedIndividual::new(
-                        crate::ontology::IRI::new(&ind_name)
+                        crate::ontology::IRI::new(&ind_name),
                     ));
-                    new_bindings.bindings.insert(var.clone(), SWRLTerm::Individual(individual));
+                    new_bindings
+                        .bindings
+                        .insert(var.clone(), SWRLTerm::Individual(individual));
                     Some(new_bindings)
                 }
             }
             (SWRLIArgument::Individual(ind), SWRLIArgument::Variable(var)) => {
                 // Individual-variable unification (symmetric)
-                self.unify_i_arguments(&SWRLIArgument::Variable(var.clone()), &SWRLIArgument::Individual(ind.clone()), bindings)
+                self.unify_i_arguments(
+                    &SWRLIArgument::Variable(var.clone()),
+                    &SWRLIArgument::Individual(ind.clone()),
+                    bindings,
+                )
             }
             (SWRLIArgument::Individual(ind1), SWRLIArgument::Individual(ind2)) => {
                 // Individual-individual unification
@@ -604,25 +633,38 @@ impl BackwardChainingEngine {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => format!("_:{}", anon.id),
                 };
-                
-                if ind1_name == ind2_name { Some(bindings.clone()) } else { None }
+
+                if ind1_name == ind2_name {
+                    Some(bindings.clone())
+                } else {
+                    None
+                }
             }
         }
     }
-    
+
     /// Unify data arguments  
-    fn unify_d_arguments(&self, arg1: &SWRLDArgument, arg2: &SWRLDArgument, bindings: &VariableBindings) -> Option<VariableBindings> {
+    fn unify_d_arguments(
+        &self,
+        arg1: &SWRLDArgument,
+        arg2: &SWRLDArgument,
+        bindings: &VariableBindings,
+    ) -> Option<VariableBindings> {
         match (arg1, arg2) {
             (SWRLDArgument::Variable(var1), SWRLDArgument::Variable(var2)) => {
                 // Variable-variable unification
                 let mut new_bindings = bindings.clone();
-                
+
                 let val1 = bindings.bindings.get(var1);
                 let val2 = bindings.bindings.get(var2);
-                
+
                 match (val1, val2) {
                     (Some(v1), Some(v2)) => {
-                        if v1 == v2 { Some(new_bindings) } else { None }
+                        if v1 == v2 {
+                            Some(new_bindings)
+                        } else {
+                            None
+                        }
                     }
                     (Some(v1), None) => {
                         new_bindings.bindings.insert(var2.clone(), v1.clone());
@@ -634,7 +676,9 @@ impl BackwardChainingEngine {
                     }
                     (None, None) => {
                         // Bind one variable to the other
-                        new_bindings.bindings.insert(var1.clone(), SWRLTerm::Variable(var2.clone()));
+                        new_bindings
+                            .bindings
+                            .insert(var1.clone(), SWRLTerm::Variable(var2.clone()));
                         Some(new_bindings)
                     }
                 }
@@ -643,25 +687,39 @@ impl BackwardChainingEngine {
                 // Variable-literal unification
                 let mut new_bindings = bindings.clone();
                 let lit_value = lit.to_string();
-                
+
                 if let Some(existing_val) = bindings.bindings.get(var) {
                     if let SWRLTerm::Literal(existing_lit) = existing_val {
-                        if existing_lit.to_string() == lit_value { Some(new_bindings) } else { None }
+                        if existing_lit.to_string() == lit_value {
+                            Some(new_bindings)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 } else {
-                    new_bindings.bindings.insert(var.clone(), SWRLTerm::Literal(SWRLValue::String(lit_value)));
+                    new_bindings
+                        .bindings
+                        .insert(var.clone(), SWRLTerm::Literal(SWRLValue::String(lit_value)));
                     Some(new_bindings)
                 }
             }
             (SWRLDArgument::Literal(lit), SWRLDArgument::Variable(var)) => {
                 // Literal-variable unification (symmetric)
-                self.unify_d_arguments(&SWRLDArgument::Variable(var.clone()), &SWRLDArgument::Literal(lit.clone()), bindings)
+                self.unify_d_arguments(
+                    &SWRLDArgument::Variable(var.clone()),
+                    &SWRLDArgument::Literal(lit.clone()),
+                    bindings,
+                )
             }
             (SWRLDArgument::Literal(lit1), SWRLDArgument::Literal(lit2)) => {
                 // Literal-literal unification
-                if lit1.to_string() == lit2.to_string() { Some(bindings.clone()) } else { None }
+                if lit1.to_string() == lit2.to_string() {
+                    Some(bindings.clone())
+                } else {
+                    None
+                }
             }
         }
     }
@@ -680,14 +738,21 @@ impl BackwardChainingEngine {
     /// Apply variable bindings to an atom
     fn apply_bindings_to_atom(&self, atom: &SWRLAtom, bindings: &VariableBindings) -> SWRLAtom {
         match atom {
-            SWRLAtom::ClassAtom { predicate: class, argument } => {
+            SWRLAtom::ClassAtom {
+                predicate: class,
+                argument,
+            } => {
                 let new_argument = self.apply_bindings_to_argument(argument, bindings);
                 SWRLAtom::ClassAtom {
                     predicate: class.clone(),
                     argument: new_argument,
                 }
             }
-            SWRLAtom::ObjectPropertyAtom { predicate: property, first_argument: subject, second_argument: object } => {
+            SWRLAtom::ObjectPropertyAtom {
+                predicate: property,
+                first_argument: subject,
+                second_argument: object,
+            } => {
                 let new_subject = self.apply_bindings_to_argument(subject, bindings);
                 let new_object = self.apply_bindings_to_argument(object, bindings);
                 SWRLAtom::ObjectPropertyAtom {
@@ -696,7 +761,11 @@ impl BackwardChainingEngine {
                     second_argument: new_object,
                 }
             }
-            SWRLAtom::DataPropertyAtom { predicate: property, first_argument: subject, second_argument: object } => {
+            SWRLAtom::DataPropertyAtom {
+                predicate: property,
+                first_argument: subject,
+                second_argument: object,
+            } => {
                 let new_subject = self.apply_bindings_to_argument(subject, bindings);
                 let new_object = self.apply_bindings_to_dargument(object, bindings);
                 SWRLAtom::DataPropertyAtom {
@@ -705,8 +774,12 @@ impl BackwardChainingEngine {
                     second_argument: new_object,
                 }
             }
-            SWRLAtom::BuiltInAtom { predicate, arguments } => {
-                let new_arguments = arguments.iter()
+            SWRLAtom::BuiltInAtom {
+                predicate,
+                arguments,
+            } => {
+                let new_arguments = arguments
+                    .iter()
                     .map(|arg| self.apply_bindings_to_dargument(arg, bindings))
                     .collect();
                 SWRLAtom::BuiltInAtom {
@@ -714,7 +787,10 @@ impl BackwardChainingEngine {
                     arguments: new_arguments,
                 }
             }
-            SWRLAtom::SameIndividualAtom { first_argument: left, second_argument: right } => {
+            SWRLAtom::SameIndividualAtom {
+                first_argument: left,
+                second_argument: right,
+            } => {
                 let new_left = self.apply_bindings_to_argument(left, bindings);
                 let new_right = self.apply_bindings_to_argument(right, bindings);
                 SWRLAtom::SameIndividualAtom {
@@ -722,7 +798,10 @@ impl BackwardChainingEngine {
                     second_argument: new_right,
                 }
             }
-            SWRLAtom::DifferentIndividualsAtom { first_argument: left, second_argument: right } => {
+            SWRLAtom::DifferentIndividualsAtom {
+                first_argument: left,
+                second_argument: right,
+            } => {
                 let new_left = self.apply_bindings_to_argument(left, bindings);
                 let new_right = self.apply_bindings_to_argument(right, bindings);
                 SWRLAtom::DifferentIndividualsAtom {
@@ -730,7 +809,10 @@ impl BackwardChainingEngine {
                     second_argument: new_right,
                 }
             }
-            SWRLAtom::DataRangeAtom { predicate, argument } => {
+            SWRLAtom::DataRangeAtom {
+                predicate,
+                argument,
+            } => {
                 let new_argument = self.apply_bindings_to_dargument(argument, bindings);
                 SWRLAtom::DataRangeAtom {
                     predicate: predicate.clone(),
@@ -739,7 +821,7 @@ impl BackwardChainingEngine {
             }
         }
     }
-    
+
     /// Apply bindings to an individual argument
     fn apply_bindings_to_argument(
         &self,
@@ -762,7 +844,7 @@ impl BackwardChainingEngine {
             _ => arg.clone(),
         }
     }
-    
+
     /// Apply bindings to a data argument
     fn apply_bindings_to_dargument(
         &self,

@@ -20,16 +20,19 @@ use crate::{
         tableau::TableauState,
     },
     dl_clauses::{DLClauseGenerator, DLClauseSet},
-    ontology::{Ontology, OntologyFormat, OntologyRef, ClassExpression, Individual, ObjectPropertyExpression, DataPropertyExpression},
+    ontology::{
+        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
+        OntologyFormat, OntologyRef,
+    },
 };
 use log::{info, warn};
+use serde_json;
 use std::{
     collections::HashMap,
     path::Path,
     sync::{Arc, RwLock},
     time::Instant,
 };
-use serde_json;
 
 /// OWLlink request structure
 #[derive(Debug, Clone)]
@@ -106,17 +109,17 @@ impl Reasoner {
     pub fn new(config: crate::config::ReasonerConfig) -> Result<Self> {
         let cache_manager = Arc::new(RwLock::new(CacheManager::default()));
         let tableau_factory = TableauFactory::new(config.clone())?;
-        
+
         // Create individual tableau factories for each service
         let task_tableau_factory = TableauFactory::new(config.clone())?;
         let classification_tableau_factory = TableauFactory::new(config.clone())?;
-        
+
         let task_service = ReasoningTaskService::new(task_tableau_factory, cache_manager.clone());
         let classification_service = ClassificationService::new(
-            ReasoningTaskService::new(classification_tableau_factory, cache_manager.clone()), 
-            cache_manager.clone()
+            ReasoningTaskService::new(classification_tableau_factory, cache_manager.clone()),
+            cache_manager.clone(),
         );
-        
+
         Ok(Self {
             ontology: None,
             config: config.clone(),
@@ -137,33 +140,37 @@ impl Reasoner {
         superclass: &ClassExpression,
     ) -> Result<bool> {
         // Enhanced subsumption checking using available reasoning mechanisms
-        
+
         // Quick syntactic check
         if subclass == superclass {
             return Ok(true);
         }
-        
+
         // Check for explicit subclass declarations in the ontology
         if let Some(ontology) = &self.ontology {
             let ontology_ref = ontology.read().unwrap();
             for axiom in ontology_ref.axioms() {
                 if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
-                    if &subclass_axiom.subclass == subclass && &subclass_axiom.superclass == superclass {
+                    if &subclass_axiom.subclass == subclass
+                        && &subclass_axiom.superclass == superclass
+                    {
                         return Ok(true);
                     }
                 }
             }
-            
+
             // Check through equivalent classes
             for axiom in ontology_ref.axioms() {
                 if let crate::ontology::Axiom::EquivalentClasses(equiv_axiom) = axiom {
-                    if equiv_axiom.classes.contains(subclass) && equiv_axiom.classes.contains(superclass) {
+                    if equiv_axiom.classes.contains(subclass)
+                        && equiv_axiom.classes.contains(superclass)
+                    {
                         return Ok(true);
                     }
                 }
             }
         }
-        
+
         // Check using built-in OWL semantics
         self.check_semantic_subsumption(subclass, superclass)
     }
@@ -176,26 +183,37 @@ impl Reasoner {
     ) -> Result<bool> {
         match (subclass, superclass) {
             // Bottom is subclass of everything
-            (ClassExpression::Class(class), _) if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" => Ok(true),
-            
+            (ClassExpression::Class(class), _)
+                if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" =>
+            {
+                Ok(true)
+            }
+
             // Everything is subclass of Top
-            (_, ClassExpression::Class(class)) if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" => Ok(true),
-            
+            (_, ClassExpression::Class(class))
+                if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" =>
+            {
+                Ok(true)
+            }
+
             // Nothing is superclass of Top (except Top itself)
-            (ClassExpression::Class(subclass_class), ClassExpression::Class(superclass_class)) 
-                if subclass_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" 
-                && superclass_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" => Ok(false),
-            
+            (ClassExpression::Class(subclass_class), ClassExpression::Class(superclass_class))
+                if subclass_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing"
+                    && superclass_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" =>
+            {
+                Ok(false)
+            }
+
             // Intersection subsumption: A ⊓ B ⊑ A and A ⊓ B ⊑ B
             (ClassExpression::ObjectIntersectionOf(components), superclass) => {
                 Ok(components.contains(superclass))
-            },
-            
+            }
+
             // Union subsumption: A ⊑ A ⊔ B and B ⊑ A ⊔ B
             (subclass, ClassExpression::ObjectUnionOf(components)) => {
                 Ok(components.contains(subclass))
-            },
-            
+            }
+
             _ => Ok(false),
         }
     }
@@ -210,18 +228,20 @@ impl Reasoner {
         if let Some(ontology) = &self.ontology {
             // Use tableau-based consistency checking
             let ontology_ref = ontology.read().unwrap();
-            let mut tableau = self.tableau_factory.create_for_consistency(&*ontology_ref)?;
-            
+            let mut tableau = self
+                .tableau_factory
+                .create_for_consistency(&*ontology_ref)?;
+
             // Run the tableau algorithm
             let state = tableau.run()?;
-            
+
             // Update statistics
             let node_count = tableau.get_node_count();
             let backtrack_count = tableau.get_backtrack_count();
-            
+
             Ok(state == TableauState::Satisfiable)
         } else {
-            Ok(true)  // Empty ontology is consistent
+            Ok(true) // Empty ontology is consistent
         }
     }
 
@@ -230,13 +250,15 @@ impl Reasoner {
         if let Some(ontology) = &self.ontology {
             // Create a tableau for satisfiability checking
             let ontology_ref = ontology.read().unwrap();
-            let mut tableau = self.tableau_factory.create_for_consistency(&*ontology_ref)?;
-            
+            let mut tableau = self
+                .tableau_factory
+                .create_for_consistency(&*ontology_ref)?;
+
             // Create a test individual with the class to check
-            let test_individual = crate::ontology::Individual::named(
-                crate::ontology::IRI::new("http://example.org/test#testIndividual")
-            );
-            
+            let test_individual = crate::ontology::Individual::named(crate::ontology::IRI::new(
+                "http://example.org/test#testIndividual",
+            ));
+
             // Add the class assertion to test satisfiability
             let test_assertion = crate::ontology::ClassAssertionAxiom {
                 id: 0, // Generate a proper ID
@@ -244,38 +266,52 @@ impl Reasoner {
                 individual: test_individual,
                 annotations: Vec::new(),
             };
-            
+
             // Create a temporary ontology with the test assertion
             let mut test_ontology = ontology.read().unwrap().clone();
             test_ontology.add_axiom(crate::ontology::Axiom::ClassAssertion(test_assertion));
-            
+
             // Initialize a new tableau with the test ontology
-            let mut test_tableau = self.tableau_factory.create_for_consistency(&test_ontology)?;
-            
+            let mut test_tableau = self
+                .tableau_factory
+                .create_for_consistency(&test_ontology)?;
+
             // Run the tableau algorithm
             let state = test_tableau.run()?;
-            
+
             Ok(state == TableauState::Satisfiable)
         } else {
             // In empty ontology, all classes except owl:Nothing are satisfiable
             match class {
-                ClassExpression::Class(c) if c.iri.to_string() == "http://www.w3.org/2002/07/owl#Nothing" => Ok(false),
-                _ => Ok(true)
+                ClassExpression::Class(c)
+                    if c.iri.to_string() == "http://www.w3.org/2002/07/owl#Nothing" =>
+                {
+                    Ok(false)
+                }
+                _ => Ok(true),
             }
         }
     }
 
     /// Check if one class is subsumed by another
-    pub fn is_subsumed_by(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
+    pub fn is_subsumed_by(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+    ) -> Result<bool> {
         self.is_subclass_of(subclass, superclass)
     }
 
     /// Get superclasses of a class
-    pub fn get_superclasses(&self, class: &ClassExpression, direct: bool) -> Result<Vec<ClassExpression>> {
+    pub fn get_superclasses(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut superclasses = Vec::new();
-            
+
             // Check all class expressions in the ontology for subsumption
             for axiom in ontology.axioms() {
                 match axiom {
@@ -287,7 +323,11 @@ impl Reasoner {
                     }
                     crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
                         // For equivalent classes, all others are both sub and superclasses
-                        if equiv_axiom.classes.iter().any(|c| self.classes_equivalent(c, class).unwrap_or(false)) {
+                        if equiv_axiom
+                            .classes
+                            .iter()
+                            .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
+                        {
                             for other_class in &equiv_axiom.classes {
                                 if !self.classes_equivalent(other_class, class).unwrap_or(false) {
                                     superclasses.push(other_class.clone());
@@ -298,15 +338,15 @@ impl Reasoner {
                     _ => {}
                 }
             }
-            
+
             // Always add owl:Thing as superclass (unless the class is owl:Thing itself)
             let owl_thing = ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing")
+                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
             ));
             if !self.classes_equivalent(class, &owl_thing).unwrap_or(false) {
                 superclasses.push(owl_thing);
             }
-            
+
             if direct {
                 // Filter to only direct superclasses
                 self.filter_direct_superclasses(superclasses)
@@ -320,11 +360,15 @@ impl Reasoner {
     }
 
     /// Get subclasses of a class
-    pub fn get_subclasses(&self, class: &ClassExpression, direct: bool) -> Result<Vec<ClassExpression>> {
+    pub fn get_subclasses(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut subclasses = Vec::new();
-            
+
             // Check all class expressions in the ontology for subsumption
             for axiom in ontology.axioms() {
                 match axiom {
@@ -336,7 +380,11 @@ impl Reasoner {
                     }
                     crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
                         // For equivalent classes, all others are both sub and superclasses
-                        if equiv_axiom.classes.iter().any(|c| self.classes_equivalent(c, class).unwrap_or(false)) {
+                        if equiv_axiom
+                            .classes
+                            .iter()
+                            .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
+                        {
                             for other_class in &equiv_axiom.classes {
                                 if !self.classes_equivalent(other_class, class).unwrap_or(false) {
                                     subclasses.push(other_class.clone());
@@ -347,15 +395,18 @@ impl Reasoner {
                     _ => {}
                 }
             }
-            
+
             // Always add owl:Nothing as subclass (unless the class is owl:Nothing itself)
             let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
+                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
             ));
-            if !self.classes_equivalent(class, &owl_nothing).unwrap_or(false) {
+            if !self
+                .classes_equivalent(class, &owl_nothing)
+                .unwrap_or(false)
+            {
                 subclasses.push(owl_nothing);
             }
-            
+
             if direct {
                 // Filter to only direct subclasses
                 self.filter_direct_subclasses(subclasses)
@@ -373,11 +424,15 @@ impl Reasoner {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut equivalent_classes = Vec::new();
-            
+
             // Check explicit equivalent class axioms
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::EquivalentClasses(equiv_axiom) = axiom {
-                    if equiv_axiom.classes.iter().any(|c| self.classes_equivalent(c, class).unwrap_or(false)) {
+                    if equiv_axiom
+                        .classes
+                        .iter()
+                        .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
+                    {
                         for other_class in &equiv_axiom.classes {
                             if !self.classes_equivalent(other_class, class).unwrap_or(false) {
                                 equivalent_classes.push(other_class.clone());
@@ -386,19 +441,23 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             // Check for implicit equivalences via bidirectional subsumption
             let all_classes = self.get_all_classes_in_ontology_internal()?;
             for other_class in all_classes {
-                if !self.classes_equivalent(&other_class, class).unwrap_or(false) {
+                if !self
+                    .classes_equivalent(&other_class, class)
+                    .unwrap_or(false)
+                {
                     // Check if both A ⊑ B and B ⊑ A
-                    if self.is_subclass_of(class, &other_class)? && 
-                       self.is_subclass_of(&other_class, class)? {
+                    if self.is_subclass_of(class, &other_class)?
+                        && self.is_subclass_of(&other_class, class)?
+                    {
                         equivalent_classes.push(other_class);
                     }
                 }
             }
-            
+
             Ok(equivalent_classes)
         } else {
             Ok(Vec::new())
@@ -410,7 +469,7 @@ impl Reasoner {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut instances = Vec::new();
-            
+
             // Look for explicit class assertions
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::ClassAssertion(class_assertion) = axiom {
@@ -419,7 +478,7 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             if !direct {
                 // Also get instances of subclasses
                 let subclasses = self.get_subclasses(class, false)?;
@@ -428,11 +487,11 @@ impl Reasoner {
                     instances.extend(subclass_instances);
                 }
             }
-            
+
             // Remove duplicates
             instances.sort_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
             instances.dedup_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
-            
+
             Ok(instances)
         } else {
             Ok(Vec::new())
@@ -444,7 +503,7 @@ impl Reasoner {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut types = Vec::new();
-            
+
             // Look for explicit class assertions
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::ClassAssertion(class_assertion) = axiom {
@@ -453,7 +512,7 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             if !direct {
                 // Also add superclasses of the direct types
                 let mut all_types = types.clone();
@@ -463,11 +522,11 @@ impl Reasoner {
                 }
                 types = all_types;
             }
-            
+
             // Remove duplicates
             types.sort_by_key(|c| format!("{:?}", c));
             types.dedup_by_key(|c| format!("{:?}", c));
-            
+
             Ok(types)
         } else {
             Ok(Vec::new())
@@ -475,11 +534,15 @@ impl Reasoner {
     }
 
     /// Get object property values for an individual
-    pub fn get_object_property_values(&self, individual: &Individual, property: &ObjectPropertyExpression) -> Result<Vec<Individual>> {
+    pub fn get_object_property_values(
+        &self,
+        individual: &Individual,
+        property: &ObjectPropertyExpression,
+    ) -> Result<Vec<Individual>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut values = Vec::new();
-            
+
             // Look for explicit object property assertions
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::ObjectPropertyAssertion(prop_assertion) = axiom {
@@ -491,11 +554,11 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             // Remove duplicates
             values.sort_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
             values.dedup_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
-            
+
             Ok(values)
         } else {
             Ok(Vec::new())
@@ -503,11 +566,15 @@ impl Reasoner {
     }
 
     /// Get data property values for an individual
-    pub fn get_data_property_values(&self, individual: &Individual, property: &DataPropertyExpression) -> Result<Vec<crate::ontology::Literal>> {
+    pub fn get_data_property_values(
+        &self,
+        individual: &Individual,
+        property: &DataPropertyExpression,
+    ) -> Result<Vec<crate::ontology::Literal>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut values = Vec::new();
-            
+
             // Look for explicit data property assertions
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::DataPropertyAssertion(prop_assertion) = axiom {
@@ -519,11 +586,11 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             // Remove duplicates
             values.sort_by_key(|l| format!("{:?}", l));
             values.dedup_by_key(|l| format!("{:?}", l));
-            
+
             Ok(values)
         } else {
             Ok(Vec::new())
@@ -534,7 +601,8 @@ impl Reasoner {
     pub fn classify(&mut self) -> Result<ClassificationResult> {
         if let Some(ontology) = &self.ontology {
             let mut statistics = ReasoningStatistics::new();
-            self.classification_service.classify(ontology, &mut statistics)
+            self.classification_service
+                .classify(ontology, &mut statistics)
         } else {
             Err(Error::OntologyParsing {
                 message: "No ontology loaded for classification".into(),
@@ -546,7 +614,8 @@ impl Reasoner {
     pub fn realize(&mut self) -> Result<RealizationResult> {
         if let Some(ontology) = &self.ontology {
             let mut statistics = ReasoningStatistics::new();
-            self.classification_service.realize(ontology, &mut statistics)
+            self.classification_service
+                .realize(ontology, &mut statistics)
         } else {
             Err(Error::OntologyParsing {
                 message: "No ontology loaded for realization".into(),
@@ -555,18 +624,26 @@ impl Reasoner {
     }
 
     /// Check if an axiom is entailed by the ontology
-    pub fn check_entailment(&self, axiom: &crate::ontology::Axiom, ontology: &Arc<RwLock<crate::ontology::Ontology>>, stats: &mut ReasoningStatistics) -> Result<bool> {
+    pub fn check_entailment(
+        &self,
+        axiom: &crate::ontology::Axiom,
+        ontology: &Arc<RwLock<crate::ontology::Ontology>>,
+        stats: &mut ReasoningStatistics,
+    ) -> Result<bool> {
         self.task_service.check_entailment(axiom, ontology, stats)
     }
 
     /// Explain why an entailment holds
-    pub fn explain_entailment(&self, axiom: &crate::ontology::Axiom) -> Result<Vec<crate::ontology::Axiom>> {
+    pub fn explain_entailment(
+        &self,
+        axiom: &crate::ontology::Axiom,
+    ) -> Result<Vec<crate::ontology::Axiom>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
-            
+
             // Simple explanation: find axioms that directly support the entailment
             let mut explanation = Vec::new();
-            
+
             match axiom {
                 crate::ontology::Axiom::SubClassOf(subclass_axiom) => {
                     // Look for axioms that support this subsumption
@@ -574,22 +651,23 @@ impl Reasoner {
                         match ont_axiom {
                             crate::ontology::Axiom::SubClassOf(ont_subclass) => {
                                 // Direct support
-                                if ont_subclass.subclass == subclass_axiom.subclass &&
-                                   ont_subclass.superclass == subclass_axiom.superclass {
+                                if ont_subclass.subclass == subclass_axiom.subclass
+                                    && ont_subclass.superclass == subclass_axiom.superclass
+                                {
                                     explanation.push(ont_axiom.clone());
                                 }
                                 // Transitive support: A ⊑ B, B ⊑ C → A ⊑ C
                                 else if ont_subclass.superclass == subclass_axiom.subclass {
                                     explanation.push(ont_axiom.clone());
-                                }
-                                else if ont_subclass.subclass == subclass_axiom.superclass {
+                                } else if ont_subclass.subclass == subclass_axiom.superclass {
                                     explanation.push(ont_axiom.clone());
                                 }
                             }
                             crate::ontology::Axiom::EquivalentClasses(equiv) => {
                                 // Equivalence support
-                                if equiv.classes.contains(&subclass_axiom.subclass) ||
-                                   equiv.classes.contains(&subclass_axiom.superclass) {
+                                if equiv.classes.contains(&subclass_axiom.subclass)
+                                    || equiv.classes.contains(&subclass_axiom.superclass)
+                                {
                                     explanation.push(ont_axiom.clone());
                                 }
                             }
@@ -602,8 +680,9 @@ impl Reasoner {
                     for ont_axiom in ontology.axioms() {
                         match ont_axiom {
                             crate::ontology::Axiom::ClassAssertion(ont_assertion) => {
-                                if ont_assertion.individual == class_assertion.individual &&
-                                   ont_assertion.class == class_assertion.class {
+                                if ont_assertion.individual == class_assertion.individual
+                                    && ont_assertion.class == class_assertion.class
+                                {
                                     explanation.push(ont_axiom.clone());
                                 }
                             }
@@ -621,7 +700,7 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             Ok(explanation)
         } else {
             Ok(Vec::new())
@@ -633,7 +712,7 @@ impl Reasoner {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut explanation = Vec::new();
-            
+
             // Look for obvious inconsistencies
             for axiom in ontology.axioms() {
                 match axiom {
@@ -645,16 +724,21 @@ impl Reasoner {
                                     // Look for individuals in both classes
                                     let instances1 = self.get_instances(class1, true)?;
                                     let instances2 = self.get_instances(class2, true)?;
-                                    
+
                                     for ind1 in &instances1 {
                                         for ind2 in &instances2 {
                                             if ind1.iri() == ind2.iri() {
                                                 explanation.push(axiom.clone());
                                                 // Also add the class assertions
                                                 for ont_axiom in ontology.axioms() {
-                                                    if let crate::ontology::Axiom::ClassAssertion(assertion) = ont_axiom {
-                                                        if assertion.individual.iri() == ind1.iri() &&
-                                                           (assertion.class == *class1 || assertion.class == *class2) {
+                                                    if let crate::ontology::Axiom::ClassAssertion(
+                                                        assertion,
+                                                    ) = ont_axiom
+                                                    {
+                                                        if assertion.individual.iri() == ind1.iri()
+                                                            && (assertion.class == *class1
+                                                                || assertion.class == *class2)
+                                                        {
                                                             explanation.push(ont_axiom.clone());
                                                         }
                                                     }
@@ -678,7 +762,7 @@ impl Reasoner {
                     _ => {}
                 }
             }
-            
+
             Ok(explanation)
         } else {
             Ok(Vec::new())
@@ -690,11 +774,11 @@ impl Reasoner {
         if let Some(ontology_ref) = &mut self.ontology {
             let mut ontology = ontology_ref.write().unwrap();
             ontology.add_axiom(axiom);
-            
+
             // Clear cache since ontology has changed
             let mut cache = self.cache_manager.write().unwrap();
             cache.clear_all();
-            
+
             Ok(())
         } else {
             // Create new ontology with this axiom
@@ -712,17 +796,17 @@ impl Reasoner {
             let original_count = ontology.axioms().len();
             ontology.remove_axiom(axiom);
             let removed = ontology.axioms().len() < original_count;
-            
+
             if removed {
                 // Clear cache since ontology has changed
                 let mut cache = self.cache_manager.write().unwrap();
                 cache.clear_all();
             }
-            
+
             // Return the boolean result properly wrapped
             Ok(removed)
         } else {
-            Ok(false)  // No ontology to remove from
+            Ok(false) // No ontology to remove from
         }
     }
 
@@ -753,10 +837,11 @@ impl Reasoner {
         format: crate::ontology::OntologyFormat,
     ) -> Result<()> {
         use crate::parsers::*;
-        
+
         let file_path = path.as_ref();
-        let content = std::fs::read_to_string(file_path)
-            .map_err(|e| crate::Error::Io { message: format!("Failed to read file: {}", e) })?;
+        let content = std::fs::read_to_string(file_path).map_err(|e| crate::Error::Io {
+            message: format!("Failed to read file: {}", e),
+        })?;
 
         let ontology = match format {
             crate::ontology::OntologyFormat::Functional => {
@@ -764,7 +849,9 @@ impl Reasoner {
                 parser.parse(&content)?
             }
             crate::ontology::OntologyFormat::Manchester => {
-                let parser = manchester::ManchesterParser::new(manchester::ManchesterParserConfig::default());
+                let parser = manchester::ManchesterParser::new(
+                    manchester::ManchesterParserConfig::default(),
+                );
                 parser.parse(&content)?
             }
             crate::ontology::OntologyFormat::Turtle => {
@@ -785,10 +872,11 @@ impl Reasoner {
             }
             crate::ontology::OntologyFormat::Auto => {
                 // Try to determine format from file extension
-                let extension = file_path.extension()
+                let extension = file_path
+                    .extension()
                     .and_then(|ext| ext.to_str())
                     .unwrap_or("");
-                
+
                 match extension {
                     "owl" | "xml" => {
                         let parser = owl_xml::OwlXmlParser::new();
@@ -823,21 +911,23 @@ impl Reasoner {
     }
 
     /// Classify object properties
-    pub fn classify_object_properties(&mut self) -> Result<super::results::PropertyClassificationResult> {
+    pub fn classify_object_properties(
+        &mut self,
+    ) -> Result<super::results::PropertyClassificationResult> {
         if let Some(ontology) = &self.ontology {
             let ontology_ref = ontology.read().unwrap();
             let mut hierarchy = std::collections::HashMap::new();
-            
+
             // Extract all object properties from the ontology
             let mut object_properties = std::collections::HashSet::new();
             for axiom in ontology_ref.axioms() {
                 self.extract_object_properties_from_axiom(axiom, &mut object_properties);
             }
-            
+
             // Build hierarchy based on SubObjectPropertyOf axioms
             for property in &object_properties {
                 let mut superproperties = std::collections::HashSet::new();
-                
+
                 for axiom in ontology_ref.axioms() {
                     if let crate::ontology::Axiom::SubObjectPropertyOf(axiom) = axiom {
                         if self.object_properties_equivalent(&axiom.sub_property, property)? {
@@ -845,32 +935,38 @@ impl Reasoner {
                         }
                     }
                 }
-                
+
                 hierarchy.insert(property.clone(), superproperties);
             }
-            
+
             Ok(super::results::PropertyClassificationResult::new_object_properties(hierarchy))
         } else {
-            Ok(super::results::PropertyClassificationResult::new_object_properties(std::collections::HashMap::new()))
+            Ok(
+                super::results::PropertyClassificationResult::new_object_properties(
+                    std::collections::HashMap::new(),
+                ),
+            )
         }
     }
 
     /// Classify data properties  
-    pub fn classify_data_properties(&mut self) -> Result<super::results::PropertyClassificationResult> {
+    pub fn classify_data_properties(
+        &mut self,
+    ) -> Result<super::results::PropertyClassificationResult> {
         if let Some(ontology) = &self.ontology {
             let ontology_ref = ontology.read().unwrap();
             let mut hierarchy = std::collections::HashMap::new();
-            
+
             // Extract all data properties from the ontology
             let mut data_properties = std::collections::HashSet::new();
             for axiom in ontology_ref.axioms() {
                 self.extract_data_properties_from_axiom(axiom, &mut data_properties);
             }
-            
+
             // Build hierarchy based on SubDataPropertyOf axioms
             for property in &data_properties {
                 let mut superproperties = std::collections::HashSet::new();
-                
+
                 for axiom in ontology_ref.axioms() {
                     if let crate::ontology::Axiom::SubDataPropertyOf(axiom) = axiom {
                         if self.data_properties_equivalent(&axiom.sub_property, property)? {
@@ -878,13 +974,17 @@ impl Reasoner {
                         }
                     }
                 }
-                
+
                 hierarchy.insert(property.clone(), superproperties);
             }
-            
+
             Ok(super::results::PropertyClassificationResult::new_data_properties(hierarchy))
         } else {
-            Ok(super::results::PropertyClassificationResult::new_data_properties(std::collections::HashMap::new()))
+            Ok(
+                super::results::PropertyClassificationResult::new_data_properties(
+                    std::collections::HashMap::new(),
+                ),
+            )
         }
     }
 
@@ -893,30 +993,33 @@ impl Reasoner {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut unsatisfiable = Vec::new();
-            
+
             // Get all classes in the ontology
             let all_classes = self.get_all_classes_in_ontology_internal()?;
-            
+
             // Check each class for satisfiability
             for class in all_classes {
                 if !self.is_class_satisfiable(&class)? {
                     unsatisfiable.push(class);
                 }
             }
-            
+
             // Always include owl:Nothing if not already included
             let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
+                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
             ));
-            if !unsatisfiable.iter().any(|c| self.classes_equivalent(c, &owl_nothing).unwrap_or(false)) {
+            if !unsatisfiable
+                .iter()
+                .any(|c| self.classes_equivalent(c, &owl_nothing).unwrap_or(false))
+            {
                 unsatisfiable.push(owl_nothing);
             }
-            
+
             Ok(unsatisfiable)
         } else {
             // In empty ontology, only owl:Nothing is unsatisfiable
             Ok(vec![ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
+                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
             ))])
         }
     }
@@ -926,34 +1029,58 @@ impl Reasoner {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             let mut prefixes = std::collections::HashMap::new();
-            
+
             // Extract prefixes from ontology entities
             for axiom in ontology.axioms() {
                 self.extract_prefixes_from_axiom(axiom, &mut prefixes);
             }
-            
+
             // Add standard prefixes if not present
             if !prefixes.contains_key("rdf") {
-                prefixes.insert("rdf".to_string(), "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string());
+                prefixes.insert(
+                    "rdf".to_string(),
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+                );
             }
             if !prefixes.contains_key("rdfs") {
-                prefixes.insert("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string());
+                prefixes.insert(
+                    "rdfs".to_string(),
+                    "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+                );
             }
             if !prefixes.contains_key("owl") {
-                prefixes.insert("owl".to_string(), "http://www.w3.org/2002/07/owl#".to_string());
+                prefixes.insert(
+                    "owl".to_string(),
+                    "http://www.w3.org/2002/07/owl#".to_string(),
+                );
             }
             if !prefixes.contains_key("xsd") {
-                prefixes.insert("xsd".to_string(), "http://www.w3.org/2001/XMLSchema#".to_string());
+                prefixes.insert(
+                    "xsd".to_string(),
+                    "http://www.w3.org/2001/XMLSchema#".to_string(),
+                );
             }
-            
+
             Ok(prefixes)
         } else {
             // Return standard prefixes for empty ontology
             let mut prefixes = std::collections::HashMap::new();
-            prefixes.insert("rdf".to_string(), "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string());
-            prefixes.insert("rdfs".to_string(), "http://www.w3.org/2000/01/rdf-schema#".to_string());
-            prefixes.insert("owl".to_string(), "http://www.w3.org/2002/07/owl#".to_string());
-            prefixes.insert("xsd".to_string(), "http://www.w3.org/2001/XMLSchema#".to_string());
+            prefixes.insert(
+                "rdf".to_string(),
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+            );
+            prefixes.insert(
+                "rdfs".to_string(),
+                "http://www.w3.org/2000/01/rdf-schema#".to_string(),
+            );
+            prefixes.insert(
+                "owl".to_string(),
+                "http://www.w3.org/2002/07/owl#".to_string(),
+            );
+            prefixes.insert(
+                "xsd".to_string(),
+                "http://www.w3.org/2001/XMLSchema#".to_string(),
+            );
             Ok(prefixes)
         }
     }
@@ -973,7 +1100,7 @@ impl Reasoner {
     pub fn process_owllink_request(&self, request: &str) -> Result<String> {
         // Parse OWLlink XML request
         let parsed_request = self.parse_owllink_xml(request)?;
-        
+
         match parsed_request.command.as_str() {
             "Tell" => {
                 // Add axioms to ontology - would need mutable access
@@ -981,77 +1108,120 @@ impl Reasoner {
             }
             "IsClassSatisfiable" => {
                 if let Some(class_iri) = parsed_request.class_iri {
-                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class = crate::ontology::concepts::Class {
+                        iri: class_iri.into(),
+                    };
                     let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
                     let result = self.is_class_satisfiable(&class_expr)?;
-                    Ok(format!("<Response><BooleanResponse result=\"{}\"/></Response>", result))
+                    Ok(format!(
+                        "<Response><BooleanResponse result=\"{}\"/></Response>",
+                        result
+                    ))
                 } else {
-                    Err(Error::reasoning("Missing class IRI in IsClassSatisfiable request"))
+                    Err(Error::reasoning(
+                        "Missing class IRI in IsClassSatisfiable request",
+                    ))
                 }
             }
             "IsKBConsistent" => {
                 let result = self.is_consistent()?;
-                Ok(format!("<Response><BooleanResponse result=\"{}\"/></Response>", result))
+                Ok(format!(
+                    "<Response><BooleanResponse result=\"{}\"/></Response>",
+                    result
+                ))
             }
             "GetSubClasses" => {
                 if let Some(class_iri) = parsed_request.class_iri {
-                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class = crate::ontology::concepts::Class {
+                        iri: class_iri.into(),
+                    };
                     let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
-                    let subclasses = self.get_subclasses(&class_expr, parsed_request.direct.unwrap_or(false))?;
-                    let subclass_elements: Vec<String> = subclasses.iter()
+                    let subclasses =
+                        self.get_subclasses(&class_expr, parsed_request.direct.unwrap_or(false))?;
+                    let subclass_elements: Vec<String> = subclasses
+                        .iter()
                         .map(|expr| match expr {
                             crate::ontology::concepts::ClassExpression::Class(c) => {
                                 format!("<Class IRI=\"{}\"/>", c.iri)
                             }
-                            _ => "<Class IRI=\"http://www.w3.org/2002/07/owl#Nothing\"/>".to_string()
+                            _ => {
+                                "<Class IRI=\"http://www.w3.org/2002/07/owl#Nothing\"/>".to_string()
+                            }
                         })
                         .collect();
-                    Ok(format!("<Response><SetOfClasses>{}</SetOfClasses></Response>", 
-                              subclass_elements.join("")))
+                    Ok(format!(
+                        "<Response><SetOfClasses>{}</SetOfClasses></Response>",
+                        subclass_elements.join("")
+                    ))
                 } else {
-                    Err(Error::reasoning("Missing class IRI in GetSubClasses request"))
+                    Err(Error::reasoning(
+                        "Missing class IRI in GetSubClasses request",
+                    ))
                 }
             }
             "GetSuperClasses" => {
                 if let Some(class_iri) = parsed_request.class_iri {
-                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class = crate::ontology::concepts::Class {
+                        iri: class_iri.into(),
+                    };
                     let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
-                    let superclasses = self.get_superclasses(&class_expr, parsed_request.direct.unwrap_or(false))?;
-                    let superclass_elements: Vec<String> = superclasses.iter()
+                    let superclasses =
+                        self.get_superclasses(&class_expr, parsed_request.direct.unwrap_or(false))?;
+                    let superclass_elements: Vec<String> = superclasses
+                        .iter()
                         .map(|expr| match expr {
                             crate::ontology::concepts::ClassExpression::Class(c) => {
                                 format!("<Class IRI=\"{}\"/>", c.iri)
                             }
-                            _ => "<Class IRI=\"http://www.w3.org/2002/07/owl#Thing\"/>".to_string()
+                            _ => "<Class IRI=\"http://www.w3.org/2002/07/owl#Thing\"/>".to_string(),
                         })
                         .collect();
-                    Ok(format!("<Response><SetOfClasses>{}</SetOfClasses></Response>", 
-                              superclass_elements.join("")))
+                    Ok(format!(
+                        "<Response><SetOfClasses>{}</SetOfClasses></Response>",
+                        superclass_elements.join("")
+                    ))
                 } else {
-                    Err(Error::reasoning("Missing class IRI in GetSuperClasses request"))
+                    Err(Error::reasoning(
+                        "Missing class IRI in GetSuperClasses request",
+                    ))
                 }
             }
             "GetInstances" => {
                 if let Some(class_iri) = parsed_request.class_iri {
-                    let class = crate::ontology::concepts::Class { iri: class_iri.into() };
+                    let class = crate::ontology::concepts::Class {
+                        iri: class_iri.into(),
+                    };
                     let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
-                    let instances = self.get_instances(&class_expr, parsed_request.direct.unwrap_or(false))?;
-                    let instance_elements: Vec<String> = instances.iter()
-                        .map(|ind| format!("<NamedIndividual IRI=\"{}\"/>", 
-                                         ind.iri().map(|iri| iri.to_string()).unwrap_or_else(|| "unknown".to_string())))
+                    let instances =
+                        self.get_instances(&class_expr, parsed_request.direct.unwrap_or(false))?;
+                    let instance_elements: Vec<String> = instances
+                        .iter()
+                        .map(|ind| {
+                            format!(
+                                "<NamedIndividual IRI=\"{}\"/>",
+                                ind.iri()
+                                    .map(|iri| iri.to_string())
+                                    .unwrap_or_else(|| "unknown".to_string())
+                            )
+                        })
                         .collect();
-                    Ok(format!("<Response><SetOfIndividuals>{}</SetOfIndividuals></Response>", 
-                              instance_elements.join("")))
+                    Ok(format!(
+                        "<Response><SetOfIndividuals>{}</SetOfIndividuals></Response>",
+                        instance_elements.join("")
+                    ))
                 } else {
-                    Err(Error::reasoning("Missing class IRI in GetInstances request"))
+                    Err(Error::reasoning(
+                        "Missing class IRI in GetInstances request",
+                    ))
                 }
             }
-            _ => {
-                Err(Error::reasoning(&format!("Unsupported OWLlink command: {}", parsed_request.command)))
-            }
+            _ => Err(Error::reasoning(&format!(
+                "Unsupported OWLlink command: {}",
+                parsed_request.command
+            ))),
         }
     }
-    
+
     /// Parse OWLlink XML request into structured data
     fn parse_owllink_xml(&self, xml: &str) -> Result<OWLlinkRequest> {
         // Simple XML parsing - would use proper XML parser in production
@@ -1062,7 +1232,7 @@ impl Reasoner {
             individual_iri: None,
             direct: None,
         };
-        
+
         // Extract command from XML
         if xml.contains("<Tell") {
             request.command = "Tell".to_string();
@@ -1077,23 +1247,25 @@ impl Reasoner {
         } else if xml.contains("<GetInstances") {
             request.command = "GetInstances".to_string();
         }
-        
+
         // Extract class IRI if present
         if let Some(start) = xml.find("IRI=\"") {
             if let Some(end) = xml[start + 5..].find("\"") {
                 let iri_str = &xml[start + 5..start + 5 + end];
-                request.class_iri = Some(url::Url::parse(iri_str)
-                    .map_err(|e| Error::reasoning(&format!("Invalid IRI: {}", e)))?);
+                request.class_iri = Some(
+                    url::Url::parse(iri_str)
+                        .map_err(|e| Error::reasoning(&format!("Invalid IRI: {}", e)))?,
+                );
             }
         }
-        
+
         // Extract direct attribute if present
         if xml.contains("direct=\"true\"") {
             request.direct = Some(true);
         } else if xml.contains("direct=\"false\"") {
             request.direct = Some(false);
         }
-        
+
         Ok(request)
     }
 
@@ -1101,30 +1273,23 @@ impl Reasoner {
     pub fn execute_sparql_query(&self, query: &str) -> Result<String> {
         // Parse SPARQL query
         let parsed_query = self.parse_sparql_query(query)?;
-        
+
         match parsed_query.query_type.as_str() {
-            "SELECT" => {
-                self.execute_sparql_select(&parsed_query)
-            }
-            "ASK" => {
-                self.execute_sparql_ask(&parsed_query)
-            }
-            "CONSTRUCT" => {
-                self.execute_sparql_construct(&parsed_query)
-            }
-            "DESCRIBE" => {
-                self.execute_sparql_describe(&parsed_query)
-            }
-            _ => {
-                Err(Error::reasoning(&format!("Unsupported SPARQL query type: {}", parsed_query.query_type)))
-            }
+            "SELECT" => self.execute_sparql_select(&parsed_query),
+            "ASK" => self.execute_sparql_ask(&parsed_query),
+            "CONSTRUCT" => self.execute_sparql_construct(&parsed_query),
+            "DESCRIBE" => self.execute_sparql_describe(&parsed_query),
+            _ => Err(Error::reasoning(&format!(
+                "Unsupported SPARQL query type: {}",
+                parsed_query.query_type
+            ))),
         }
     }
-    
+
     /// Parse SPARQL query into structured form
     fn parse_sparql_query(&self, query: &str) -> Result<SparqlQuery> {
         let query_upper = query.to_uppercase();
-        
+
         let query_type = if query_upper.contains("SELECT") {
             "SELECT"
         } else if query_upper.contains("ASK") {
@@ -1136,7 +1301,7 @@ impl Reasoner {
         } else {
             return Err(Error::reasoning("Unknown SPARQL query type"));
         };
-        
+
         // Extract variables for SELECT queries
         let mut variables = Vec::new();
         if query_type == "SELECT" {
@@ -1156,14 +1321,15 @@ impl Reasoner {
                 }
             }
         }
-        
+
         // Extract WHERE clause patterns
         let mut patterns = Vec::new();
         if let Some(start) = query_upper.find("WHERE") {
             if let Some(brace_start) = query[start..].find('{') {
                 if let Some(brace_end) = query[start + brace_start..].find('}') {
-                    let where_content = &query[start + brace_start + 1..start + brace_start + brace_end].trim();
-                    
+                    let where_content =
+                        &query[start + brace_start + 1..start + brace_start + brace_end].trim();
+
                     // Simple triple pattern extraction
                     for line in where_content.lines() {
                         let line = line.trim();
@@ -1181,7 +1347,7 @@ impl Reasoner {
                 }
             }
         }
-        
+
         Ok(SparqlQuery {
             query_type: query_type.to_string(),
             variables,
@@ -1189,14 +1355,14 @@ impl Reasoner {
             original_query: query.to_string(),
         })
     }
-    
+
     /// Execute SPARQL SELECT query
     fn execute_sparql_select(&self, query: &SparqlQuery) -> Result<String> {
         let mut results = Vec::new();
-        
+
         if let Some(ontology) = &self.ontology {
             let ontology_guard = ontology.read().unwrap();
-            
+
             // For each triple pattern, find matching axioms
             for pattern in &query.patterns {
                 if pattern.predicate.contains("type") || pattern.predicate.contains("rdf:type") {
@@ -1204,11 +1370,13 @@ impl Reasoner {
                     for axiom in ontology_guard.axioms() {
                         if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
                             let class_iri = match &assertion.class {
-                                crate::ontology::concepts::ClassExpression::Class(c) => c.iri.to_string(),
+                                crate::ontology::concepts::ClassExpression::Class(c) => {
+                                    c.iri.to_string()
+                                }
                                 _ => continue,
                             };
                             let individual_iri = assertion.individual.to_string();
-                            
+
                             if pattern.object.contains(&class_iri) || pattern.object == "?class" {
                                 let mut binding = HashMap::new();
                                 if pattern.subject.starts_with('?') {
@@ -1227,8 +1395,11 @@ impl Reasoner {
                         match axiom {
                             crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) => {
                                 let property_iri = assertion.property.to_string();
-                    let subject_iri = assertion.source.to_string();
-                    let object_iri = assertion.target.to_string();                                if pattern.predicate.contains(&property_iri) || pattern.predicate.starts_with('?') {
+                                let subject_iri = assertion.source.to_string();
+                                let object_iri = assertion.target.to_string();
+                                if pattern.predicate.contains(&property_iri)
+                                    || pattern.predicate.starts_with('?')
+                                {
                                     let mut binding = HashMap::new();
                                     if pattern.subject.starts_with('?') {
                                         binding.insert(pattern.subject.clone(), subject_iri);
@@ -1244,8 +1415,11 @@ impl Reasoner {
                             }
                             crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) => {
                                 let property_iri = assertion.property.to_string();
-                    let subject_iri = assertion.individual.to_string();
-                    let object_value = assertion.value.to_string();                                if pattern.predicate.contains(&property_iri) || pattern.predicate.starts_with('?') {
+                                let subject_iri = assertion.individual.to_string();
+                                let object_value = assertion.value.to_string();
+                                if pattern.predicate.contains(&property_iri)
+                                    || pattern.predicate.starts_with('?')
+                                {
                                     let mut binding = HashMap::new();
                                     if pattern.subject.starts_with('?') {
                                         binding.insert(pattern.subject.clone(), subject_iri);
@@ -1265,17 +1439,20 @@ impl Reasoner {
                 }
             }
         }
-        
+
         // Format results as JSON
         let json_results: Vec<serde_json::Value> = results
             .into_iter()
-            .map(|binding| serde_json::Value::Object(
-                binding.into_iter()
-                    .map(|(k, v)| (k, serde_json::Value::String(v)))
-                    .collect()
-            ))
+            .map(|binding| {
+                serde_json::Value::Object(
+                    binding
+                        .into_iter()
+                        .map(|(k, v)| (k, serde_json::Value::String(v)))
+                        .collect(),
+                )
+            })
             .collect();
-            
+
         Ok(serde_json::json!({
             "head": {
                 "vars": query.variables
@@ -1283,28 +1460,30 @@ impl Reasoner {
             "results": {
                 "bindings": json_results
             }
-        }).to_string())
+        })
+        .to_string())
     }
-    
+
     /// Execute SPARQL ASK query
     fn execute_sparql_ask(&self, query: &SparqlQuery) -> Result<String> {
         // ASK queries return true/false
         let select_result = self.execute_sparql_select(query)?;
         let parsed: serde_json::Value = serde_json::from_str(&select_result)
             .map_err(|e| Error::reasoning(&format!("Failed to parse SELECT result: {}", e)))?;
-            
+
         let has_results = if let Some(bindings) = parsed["results"]["bindings"].as_array() {
             !bindings.is_empty()
         } else {
             false
         };
-        
+
         Ok(serde_json::json!({
             "head": {},
             "boolean": has_results
-        }).to_string())
+        })
+        .to_string())
     }
-    
+
     /// Execute SPARQL CONSTRUCT query
     fn execute_sparql_construct(&self, _query: &SparqlQuery) -> Result<String> {
         // CONSTRUCT queries build new RDF graphs
@@ -1314,9 +1493,10 @@ impl Reasoner {
             "results": {
                 "bindings": []
             }
-        }).to_string())
+        })
+        .to_string())
     }
-    
+
     /// Execute SPARQL DESCRIBE query
     fn execute_sparql_describe(&self, _query: &SparqlQuery) -> Result<String> {
         // DESCRIBE queries return information about resources
@@ -1326,7 +1506,8 @@ impl Reasoner {
             "results": {
                 "bindings": []
             }
-        }).to_string())
+        })
+        .to_string())
     }
 
     /// Get DL clauses as string
@@ -1334,34 +1515,49 @@ impl Reasoner {
         let clause_set = self.dump_dl_clauses()?;
         Ok(clause_set.to_string())
     }
-    
+
     // Helper methods for reasoning
-    
+
     /// Check if two classes are equivalent
-    fn classes_equivalent(&self, class1: &ClassExpression, class2: &ClassExpression) -> Result<bool> {
+    fn classes_equivalent(
+        &self,
+        class1: &ClassExpression,
+        class2: &ClassExpression,
+    ) -> Result<bool> {
         // Simple structural equality check
         Ok(class1 == class2)
     }
-    
+
     /// Check if two object properties are equivalent
-    fn object_properties_equivalent(&self, prop1: &ObjectPropertyExpression, prop2: &ObjectPropertyExpression) -> Result<bool> {
+    fn object_properties_equivalent(
+        &self,
+        prop1: &ObjectPropertyExpression,
+        prop2: &ObjectPropertyExpression,
+    ) -> Result<bool> {
         // Simple structural equality check
         Ok(prop1 == prop2)
     }
-    
+
     /// Check if two data properties are equivalent
-    fn data_properties_equivalent(&self, prop1: &DataPropertyExpression, prop2: &DataPropertyExpression) -> Result<bool> {
+    fn data_properties_equivalent(
+        &self,
+        prop1: &DataPropertyExpression,
+        prop2: &DataPropertyExpression,
+    ) -> Result<bool> {
         // Simple structural equality check
         Ok(prop1 == prop2)
     }
-    
+
     /// Filter superclasses to only direct ones (remove transitively implied ones)
-    fn filter_direct_superclasses(&self, superclasses: Vec<ClassExpression>) -> Result<Vec<ClassExpression>> {
+    fn filter_direct_superclasses(
+        &self,
+        superclasses: Vec<ClassExpression>,
+    ) -> Result<Vec<ClassExpression>> {
         let mut direct = Vec::new();
-        
+
         for superclass in &superclasses {
             let mut is_direct = true;
-            
+
             // Check if this superclass is implied by any other superclass
             for other_superclass in &superclasses {
                 if superclass != other_superclass {
@@ -1371,22 +1567,25 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             if is_direct {
                 direct.push(superclass.clone());
             }
         }
-        
+
         Ok(direct)
     }
-    
+
     /// Filter subclasses to only direct ones (remove transitively implied ones)
-    fn filter_direct_subclasses(&self, subclasses: Vec<ClassExpression>) -> Result<Vec<ClassExpression>> {
+    fn filter_direct_subclasses(
+        &self,
+        subclasses: Vec<ClassExpression>,
+    ) -> Result<Vec<ClassExpression>> {
         let mut direct = Vec::new();
-        
+
         for subclass in &subclasses {
             let mut is_direct = true;
-            
+
             // Check if this subclass is implied by any other subclass
             for other_subclass in &subclasses {
                 if subclass != other_subclass {
@@ -1396,27 +1595,31 @@ impl Reasoner {
                     }
                 }
             }
-            
+
             if is_direct {
                 direct.push(subclass.clone());
             }
         }
-        
+
         Ok(direct)
     }
-    
+
     /// Get all inferred superclasses through transitive closure
-    fn get_all_inferred_superclasses(&self, class: &ClassExpression, direct_superclasses: Vec<ClassExpression>) -> Result<Vec<ClassExpression>> {
+    fn get_all_inferred_superclasses(
+        &self,
+        class: &ClassExpression,
+        direct_superclasses: Vec<ClassExpression>,
+    ) -> Result<Vec<ClassExpression>> {
         let mut all_superclasses = direct_superclasses;
         let mut to_process = all_superclasses.clone();
         let mut processed = std::collections::HashSet::new();
-        
+
         while let Some(current) = to_process.pop() {
             if processed.contains(&format!("{:?}", current)) {
                 continue;
             }
             processed.insert(format!("{:?}", current));
-            
+
             // Get superclasses of current class (careful to avoid infinite recursion)
             if let Some(ontology_ref) = &self.ontology {
                 let ontology = ontology_ref.read().unwrap();
@@ -1424,7 +1627,10 @@ impl Reasoner {
                     if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
                         if self.classes_equivalent(&subclass_axiom.subclass, &current)? {
                             let superclass = &subclass_axiom.superclass;
-                            if !all_superclasses.iter().any(|c| self.classes_equivalent(c, superclass).unwrap_or(false)) {
+                            if !all_superclasses
+                                .iter()
+                                .any(|c| self.classes_equivalent(c, superclass).unwrap_or(false))
+                            {
                                 all_superclasses.push(superclass.clone());
                                 to_process.push(superclass.clone());
                             }
@@ -1433,22 +1639,26 @@ impl Reasoner {
                 }
             }
         }
-        
+
         Ok(all_superclasses)
     }
-    
+
     /// Get all inferred subclasses through transitive closure
-    fn get_all_inferred_subclasses(&self, class: &ClassExpression, direct_subclasses: Vec<ClassExpression>) -> Result<Vec<ClassExpression>> {
+    fn get_all_inferred_subclasses(
+        &self,
+        class: &ClassExpression,
+        direct_subclasses: Vec<ClassExpression>,
+    ) -> Result<Vec<ClassExpression>> {
         let mut all_subclasses = direct_subclasses;
         let mut to_process = all_subclasses.clone();
         let mut processed = std::collections::HashSet::new();
-        
+
         while let Some(current) = to_process.pop() {
             if processed.contains(&format!("{:?}", current)) {
                 continue;
             }
             processed.insert(format!("{:?}", current));
-            
+
             // Get subclasses of current class (careful to avoid infinite recursion)
             if let Some(ontology_ref) = &self.ontology {
                 let ontology = ontology_ref.read().unwrap();
@@ -1456,7 +1666,10 @@ impl Reasoner {
                     if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
                         if self.classes_equivalent(&subclass_axiom.superclass, &current)? {
                             let subclass = &subclass_axiom.subclass;
-                            if !all_subclasses.iter().any(|c| self.classes_equivalent(c, subclass).unwrap_or(false)) {
+                            if !all_subclasses
+                                .iter()
+                                .any(|c| self.classes_equivalent(c, subclass).unwrap_or(false))
+                            {
                                 all_subclasses.push(subclass.clone());
                                 to_process.push(subclass.clone());
                             }
@@ -1465,19 +1678,22 @@ impl Reasoner {
                 }
             }
         }
-        
+
         Ok(all_subclasses)
     }
-    
+
     /// Get all classes mentioned in the ontology
-    fn get_all_classes_in_ontology(&self, _ontology: &crate::ontology::Ontology) -> Result<Vec<ClassExpression>> {
+    fn get_all_classes_in_ontology(
+        &self,
+        _ontology: &crate::ontology::Ontology,
+    ) -> Result<Vec<ClassExpression>> {
         self.get_all_classes_in_ontology_internal()
     }
-    
+
     /// Get all classes mentioned in the ontology (internal implementation)
     fn get_all_classes_in_ontology_internal(&self) -> Result<Vec<ClassExpression>> {
         let mut classes = Vec::new();
-        
+
         if let Some(ontology_ref) = &self.ontology {
             let ontology = ontology_ref.read().unwrap();
             for axiom in ontology.axioms() {
@@ -1499,14 +1715,14 @@ impl Reasoner {
                 }
             }
         }
-        
+
         // Remove duplicates
         classes.sort_by_key(|c| format!("{:?}", c));
         classes.dedup_by_key(|c| format!("{:?}", c));
-        
+
         Ok(classes)
     }
-    
+
     /// Extract prefixes from a single axiom
     fn extract_prefixes_from_axiom(
         &self,
@@ -1538,7 +1754,7 @@ impl Reasoner {
             _ => {} // Handle other axiom types as needed
         }
     }
-    
+
     /// Extract IRI from class expression
     fn extract_iri_from_class_expression(&self, expr: &ClassExpression) -> Option<String> {
         match expr {
@@ -1546,7 +1762,7 @@ impl Reasoner {
             _ => None,
         }
     }
-    
+
     /// Extract IRI from object property expression
     fn extract_iri_from_object_property(&self, expr: &ObjectPropertyExpression) -> Option<String> {
         match expr {
@@ -1554,7 +1770,7 @@ impl Reasoner {
             _ => None,
         }
     }
-    
+
     /// Add prefix from IRI
     fn add_prefix_from_iri(
         &self,
@@ -1576,7 +1792,7 @@ impl Reasoner {
             }
         }
     }
-    
+
     /// Extract object properties from axiom
     fn extract_object_properties_from_axiom(
         &self,
@@ -1603,7 +1819,7 @@ impl Reasoner {
             _ => {} // Handle other axiom types that mention object properties
         }
     }
-    
+
     /// Extract data properties from axiom
     fn extract_data_properties_from_axiom(
         &self,
@@ -1635,7 +1851,8 @@ impl Reasoner {
     pub fn save_dl_clauses<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
         let clause_set = self.dump_dl_clauses()?;
         let content = clause_set.to_string();
-        std::fs::write(path, content)
-            .map_err(|e| Error::Io { message: format!("Failed to write DL clauses: {}", e) })
+        std::fs::write(path, content).map_err(|e| Error::Io {
+            message: format!("Failed to write DL clauses: {}", e),
+        })
     }
 }

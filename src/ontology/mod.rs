@@ -803,7 +803,8 @@ impl Ontology {
                 axioms::Axiom::NegativeDataPropertyAssertion(neg_data_assertion) => {
                     // Extract individual from negative data property assertion
                     if let Individual::Named(named) = &neg_data_assertion.individual {
-                        individuals.push((named.iri.clone(), neg_data_assertion.individual.clone()));
+                        individuals
+                            .push((named.iri.clone(), neg_data_assertion.individual.clone()));
                     }
                 }
                 axioms::Axiom::SameIndividual(same_individuals) => {

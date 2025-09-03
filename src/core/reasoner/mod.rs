@@ -28,11 +28,13 @@ pub use self::{
     core::Reasoner,
     explanation::ExplanationService,
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},
-    results::{ClassificationResult, PropertyClassificationResult, RealizationResult, ReasoningResult},
+    results::{
+        ClassificationResult, PropertyClassificationResult, RealizationResult, ReasoningResult,
+    },
     statistics::ReasoningStatistics,
     tableau::{
-        HyperTableauInterface, ReasoningTask, TableauAlgorithmInstance, TableauFactory, 
-        TableauRunner, TraditionalTableauRunner
+        HyperTableauInterface, ReasoningTask, TableauAlgorithmInstance, TableauFactory,
+        TableauRunner, TraditionalTableauRunner,
     },
     tasks::ReasoningTaskService,
 };

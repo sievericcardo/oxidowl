@@ -5,10 +5,9 @@
 //! functionality to integrate with the profile system.
 
 use crate::error::OxidowlError;
-use crate::ontology::{Ontology, Axiom, ClassExpression, ObjectPropertyExpression, DataRange};
+use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
 use crate::profiles::{
-    ProfileValidator, ProfileValidationReport, ProfileViolation, ProfileViolationType, 
-    OWL2Profile
+    OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
 };
 use crate::validation::owl2_dl::OWL2DLValidator as CoreDLValidator;
 
@@ -31,7 +30,7 @@ impl Default for DLValidator {
 impl ProfileValidator for DLValidator {
     fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(OWL2Profile::DL);
-        
+
         // Use the existing OWL 2 DL validator
         let mut dl_validator = CoreDLValidator::new(ontology.clone());
         match dl_validator.validate() {
@@ -40,21 +39,17 @@ impl ProfileValidator for DLValidator {
                     // Convert DL validation errors to profile violations
                     for error in &dl_report.errors {
                         let violation = ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(
-                                error.error_type.to_string()
-                            ),
+                            ProfileViolationType::DisallowedAxiom(error.error_type.to_string()),
                             error.message.clone(),
                         );
                         report.add_violation(violation);
                     }
                 }
-                
+
                 // Convert warnings if any
                 for warning in &dl_report.warnings {
                     let violation = ProfileViolation::new(
-                        ProfileViolationType::ComplexityViolation(
-                            warning.message.clone()
-                        ),
+                        ProfileViolationType::ComplexityViolation(warning.message.clone()),
                         "OWL 2 DL complexity warning",
                     );
                     report.add_violation(violation);
@@ -64,7 +59,7 @@ impl ProfileValidator for DLValidator {
                 return Err(e);
             }
         }
-        
+
         Ok(report)
     }
 
@@ -109,7 +104,7 @@ mod tests {
     fn test_dl_validation_with_empty_ontology() {
         let validator = DLValidator::new();
         let ontology = Ontology::new();
-        
+
         let report = validator.validate(&ontology).unwrap();
         // Empty ontology should be valid for OWL 2 DL
         assert!(report.conforms);
@@ -118,17 +113,18 @@ mod tests {
     #[test]
     fn test_dl_allows_all_constructs() {
         let validator = DLValidator::new();
-        
+
         // Test that basic constructs are allowed
-        let class_expr = crate::ontology::ClassExpression::class(
-            crate::ontology::IRI::new("http://example.org/Test")
-        );
+        let class_expr = crate::ontology::ClassExpression::class(crate::ontology::IRI::new(
+            "http://example.org/Test",
+        ));
         assert!(validator.is_class_expression_allowed(&class_expr));
-        
+
         let prop_expr = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(
-                crate::ontology::IRI::new("http://example.org/prop")
-            ).unwrap()
+            crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
+                "http://example.org/prop",
+            ))
+            .unwrap(),
         );
         assert!(validator.is_property_expression_allowed(&prop_expr));
     }

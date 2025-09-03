@@ -15,9 +15,9 @@ pub use blocking::{BlockingChecker, BlockingStrategy};
 pub use completion::{CompletionRule, RuleApplication};
 pub use dependency::{DependencySet, DependencyTracker};
 pub use expansion::{
-    ExpansionManager, ExpansionStrategy, CreationOrderStrategy, ComplexityStrategy,
-    BreadthFirstExpansionStrategy, DepthFirstExpansionStrategy, 
-    PriorityBasedExpansionStrategy, HeuristicExpansionStrategy,
+    BreadthFirstExpansionStrategy, ComplexityStrategy, CreationOrderStrategy,
+    DepthFirstExpansionStrategy, ExpansionManager, ExpansionStrategy, HeuristicExpansionStrategy,
+    PriorityBasedExpansionStrategy,
 };
 pub use reasoner::Reasoner;
 pub use tableau::{Tableau, TableauState};

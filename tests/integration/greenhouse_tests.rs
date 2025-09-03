@@ -4,9 +4,9 @@ use oxidowl::{
     config::ReasonerConfig,
     ontology::{
         ClassExpression, IRI, Ontology,
+        axioms::{self, Axiom, AxiomId, DeclarationAxiom, Entity},
         concepts::Class,
         individuals::{Individual, NamedIndividual},
-        axioms::{self, Axiom, DeclarationAxiom, Entity, AxiomId},
     },
     parsers::TurtleParser,
     query::DLQueryEngine,
@@ -18,7 +18,7 @@ use std::path::Path;
 fn create_test_ontology() -> Ontology {
     // Try to load actual greenhouse.ttl file if it exists
     let greenhouse_path = Path::new("greenhouse.ttl");
-    
+
     if greenhouse_path.exists() {
         // Attempt to load the actual greenhouse ontology
         match oxidowl::parsers::turtle::parse_file(greenhouse_path) {
@@ -32,39 +32,39 @@ fn create_test_ontology() -> Ontology {
             }
         }
     }
-    
+
     // Create a simple greenhouse-like ontology for testing
     let mut ontology = Ontology::new();
-    
+
     // Set ontology IRI
     ontology.set_ontology_iri(Some(IRI::new("http://www.example.org/greenhouse")));
-    
+
     // Add some basic greenhouse concepts
     let pump_class = Class::new(IRI::new("http://www.example.org/greenhouse#Pump"));
     let sensor_class = Class::new(IRI::new("http://www.example.org/greenhouse#Sensor"));
     let controller_class = Class::new(IRI::new("http://www.example.org/greenhouse#Controller"));
-    
+
     // Add declaration axioms (using simple incremental IDs)
     ontology.add_axiom(axioms::Axiom::Declaration(axioms::DeclarationAxiom {
         id: 1,
         entity: axioms::Entity::Class(pump_class.iri.clone()),
     }));
-    
+
     ontology.add_axiom(axioms::Axiom::Declaration(axioms::DeclarationAxiom {
         id: 2,
         entity: axioms::Entity::Class(sensor_class.iri.clone()),
     }));
-    
+
     ontology.add_axiom(axioms::Axiom::Declaration(axioms::DeclarationAxiom {
         id: 3,
         entity: axioms::Entity::Class(controller_class.iri.clone()),
     }));
-    
+
     // Add some basic individuals
     let pump1 = Individual::Named(NamedIndividual {
         iri: IRI::new("http://www.example.org/greenhouse#pump1"),
     });
-    
+
     // Add class assertion
     ontology.add_axiom(axioms::Axiom::ClassAssertion(axioms::ClassAssertionAxiom {
         id: 1,
@@ -72,7 +72,7 @@ fn create_test_ontology() -> Ontology {
         class: ClassExpression::Class(pump_class),
         annotations: Vec::new(),
     }));
-    
+
     println!("Created test greenhouse ontology with basic concepts");
     ontology
 }

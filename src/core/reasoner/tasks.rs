@@ -8,7 +8,7 @@ use crate::{
     cache::CacheManager,
     core::reasoner::{
         statistics::ReasoningStatistics,
-        tableau::{TableauFactory, TableauAlgorithmInstance, ReasoningTask},
+        tableau::{ReasoningTask, TableauAlgorithmInstance, TableauFactory},
     },
     ontology::{ClassExpression, Individual, Ontology, OntologyRef},
 };
@@ -27,10 +27,7 @@ pub struct ReasoningTaskService {
 
 impl ReasoningTaskService {
     /// Create a new reasoning task service
-    pub fn new(
-        tableau_factory: TableauFactory,
-        cache_manager: Arc<RwLock<CacheManager>>,
-    ) -> Self {
+    pub fn new(tableau_factory: TableauFactory, cache_manager: Arc<RwLock<CacheManager>>) -> Self {
         Self {
             tableau_factory,
             cache_manager,
@@ -62,7 +59,9 @@ impl ReasoningTaskService {
         let ontology_guard = ontology.read().unwrap();
 
         // Build tableau for consistency checking
-        let tableau = self.tableau_factory.create_algorithm_instance(&ontology_guard)?;
+        let tableau = self
+            .tableau_factory
+            .create_algorithm_instance(&ontology_guard)?;
 
         // Run tableau algorithm
         let result = self.run_tableau_consistency_check(tableau, statistics)?;
@@ -170,9 +169,11 @@ impl ReasoningTaskService {
         let ontology_guard = ontology.read().unwrap();
 
         // Build tableau for subsumption checking
-        let tableau = self
-            .tableau_factory
-            .create_algorithm_for_subsumption(&ontology_guard, subclass, superclass)?;
+        let tableau = self.tableau_factory.create_algorithm_for_subsumption(
+            &ontology_guard,
+            subclass,
+            superclass,
+        )?;
 
         // Run tableau algorithm
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
@@ -221,9 +222,11 @@ impl ReasoningTaskService {
         let ontology_guard = ontology.read().unwrap();
 
         // Build tableau for instance checking
-        let tableau = self
-            .tableau_factory
-            .create_for_instance_check(&ontology_guard, individual, class_expr)?;
+        let tableau = self.tableau_factory.create_for_instance_check(
+            &ontology_guard,
+            individual,
+            class_expr,
+        )?;
 
         // Run tableau algorithm
         let result = self.run_tableau_instance_check(tableau, statistics)?;
@@ -269,9 +272,11 @@ impl ReasoningTaskService {
         let subclass_str = format!("{subclass:?}");
         let superclass_str = format!("{superclass:?}");
 
-        let tableau = self
-            .tableau_factory
-            .create_algorithm_for_subsumption(&ontology_guard, &subclass_str, &superclass_str)?;
+        let tableau = self.tableau_factory.create_algorithm_for_subsumption(
+            &ontology_guard,
+            &subclass_str,
+            &superclass_str,
+        )?;
 
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
 
@@ -299,7 +304,7 @@ impl ReasoningTaskService {
         info!("Checking axiom entailment");
 
         let ontology_guard = ontology.read().unwrap();
-        
+
         let result = match axiom {
             crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
                 // Check if subclass ⊑ superclass is entailed
@@ -309,7 +314,12 @@ impl ReasoningTaskService {
             }
             crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) => {
                 // Check if individual ∈ class is entailed
-                self.check_instance(&class_assertion.individual, &class_assertion.class, ontology, statistics)?
+                self.check_instance(
+                    &class_assertion.individual,
+                    &class_assertion.class,
+                    ontology,
+                    statistics,
+                )?
             }
             _ => {
                 // For other axiom types, check if they are explicitly present

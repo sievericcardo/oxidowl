@@ -8,9 +8,7 @@
 //! - Dependency management
 
 use crate::error::OxidowlError;
-use crate::ontology::{
-    Ontology, IRI, Annotation, AnnotationValue
-};
+use crate::ontology::{Annotation, AnnotationValue, IRI, Ontology};
 use log::warn;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -292,30 +290,18 @@ impl ImportDependencyGraph {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportError {
     /// Import IRI could not be resolved
-    ResolutionFailed {
-        import_iri: IRI,
-        reason: String,
-    },
+    ResolutionFailed { import_iri: IRI, reason: String },
     /// Circular dependency detected
-    CircularDependency {
-        cycle: Vec<IRI>,
-        context: String,
-    },
+    CircularDependency { cycle: Vec<IRI>, context: String },
     /// Import depth exceeded
     DepthExceeded {
         max_depth: usize,
         current_depth: usize,
     },
     /// Parse error in imported ontology
-    ParseError {
-        import_iri: IRI,
-        error: String,
-    },
+    ParseError { import_iri: IRI, error: String },
     /// Validation error in imported ontology
-    ValidationError {
-        import_iri: IRI,
-        error: String,
-    },
+    ValidationError { import_iri: IRI, error: String },
     /// Version mismatch
     VersionMismatch {
         import_iri: IRI,
@@ -323,10 +309,7 @@ pub enum ImportError {
         actual_version: Option<IRI>,
     },
     /// I/O error
-    IoError {
-        import_iri: IRI,
-        error: String,
-    },
+    IoError { import_iri: IRI, error: String },
 }
 
 impl std::fmt::Display for ImportError {
@@ -336,12 +319,26 @@ impl std::fmt::Display for ImportError {
                 write!(f, "Failed to resolve import {}: {}", import_iri, reason)
             }
             ImportError::CircularDependency { cycle, context } => {
-                write!(f, "Circular dependency detected: {} ({})", 
-                       cycle.iter().map(|iri| iri.to_string()).collect::<Vec<_>>().join(" -> "), 
-                       context)
+                write!(
+                    f,
+                    "Circular dependency detected: {} ({})",
+                    cycle
+                        .iter()
+                        .map(|iri| iri.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" -> "),
+                    context
+                )
             }
-            ImportError::DepthExceeded { max_depth, current_depth } => {
-                write!(f, "Import depth exceeded: {} > {}", current_depth, max_depth)
+            ImportError::DepthExceeded {
+                max_depth,
+                current_depth,
+            } => {
+                write!(
+                    f,
+                    "Import depth exceeded: {} > {}",
+                    current_depth, max_depth
+                )
             }
             ImportError::ParseError { import_iri, error } => {
                 write!(f, "Parse error in import {}: {}", import_iri, error)
@@ -349,9 +346,16 @@ impl std::fmt::Display for ImportError {
             ImportError::ValidationError { import_iri, error } => {
                 write!(f, "Validation error in import {}: {}", import_iri, error)
             }
-            ImportError::VersionMismatch { import_iri, expected_version, actual_version } => {
-                write!(f, "Version mismatch for {}: expected {:?}, got {:?}", 
-                       import_iri, expected_version, actual_version)
+            ImportError::VersionMismatch {
+                import_iri,
+                expected_version,
+                actual_version,
+            } => {
+                write!(
+                    f,
+                    "Version mismatch for {}: expected {:?}, got {:?}",
+                    import_iri, expected_version, actual_version
+                )
             }
             ImportError::IoError { import_iri, error } => {
                 write!(f, "I/O error loading {}: {}", import_iri, error)
@@ -388,26 +392,33 @@ impl ImportManager {
     }
 
     /// Resolve all imports for an ontology
-    pub fn resolve_imports(&self, ontology: &mut Ontology) -> Result<Vec<ImportResolutionResult>, OxidowlError> {
+    pub fn resolve_imports(
+        &self,
+        ontology: &mut Ontology,
+    ) -> Result<Vec<ImportResolutionResult>, OxidowlError> {
         let mut results = Vec::new();
-        let ontology_iri = ontology.get_iri().cloned().unwrap_or_else(|| 
-            IRI::new("urn:unknown")
-        );
+        let ontology_iri = ontology
+            .get_iri()
+            .cloned()
+            .unwrap_or_else(|| IRI::new("urn:unknown"));
 
         // Get import declarations from ontology
         let import_declarations = self.extract_import_declarations(ontology);
 
         for import_decl in import_declarations {
             let result = self.resolve_single_import(&ontology_iri, &import_decl, 0)?;
-            
+
             if let Some(imported_ontology) = &result.ontology {
                 if self.config.merge_imports {
                     self.merge_ontology(ontology, imported_ontology)?;
                 }
-                
+
                 // Cache the resolved ontology
                 if let Ok(mut cache) = self.ontology_cache.write() {
-                    cache.insert(import_decl.imported_ontology_iri.clone(), Arc::new(imported_ontology.clone()));
+                    cache.insert(
+                        import_decl.imported_ontology_iri.clone(),
+                        Arc::new(imported_ontology.clone()),
+                    );
                 }
             }
 
@@ -420,7 +431,7 @@ impl ImportManager {
     /// Extract import declarations from ontology annotations
     fn extract_import_declarations(&self, ontology: &Ontology) -> Vec<ImportDeclaration> {
         let mut imports = Vec::new();
-        
+
         // Look for import annotations
         for annotation in &ontology.annotations {
             let property_iri = &annotation.property.iri;
@@ -489,7 +500,9 @@ impl ImportManager {
         let import_iri_str = import_decl.imported_ontology_iri.to_string();
 
         // Apply URL mappings
-        let mapped_iri = self.config.url_mappings
+        let mapped_iri = self
+            .config
+            .url_mappings
             .get(&import_iri_str)
             .unwrap_or(&import_iri_str);
 
@@ -583,7 +596,8 @@ impl ImportManager {
 
     /// Load ontology from file
     fn load_ontology_from_file(&self, path: &Path) -> Result<Ontology, OxidowlError> {
-        let extension = path.extension()
+        let extension = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .map(|s| s.to_lowercase());
 
@@ -592,42 +606,42 @@ impl ImportManager {
                 // Try OWL/XML parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
-                
+
                 crate::parsers::owl_xml::parse(&content)
             }
             Some("ttl") => {
                 // Try Turtle parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
-                
+
                 crate::parsers::turtle::parse(&content)
             }
             Some("rdf") | Some("xml") => {
                 // Try RDF/XML parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
-                
+
                 crate::parsers::rdf_xml::parse(&content)
             }
             Some("ofn") => {
                 // Try Functional Syntax parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
-                
+
                 crate::parsers::functional::parse(&content)
             }
             Some("nt") => {
                 // Try N-Triples parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
-                
+
                 crate::parsers::ntriples::parse(&content)
             }
             _ => {
                 // Unknown extension, try to detect format by content
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
-                
+
                 // Simple heuristics to detect format
                 if content.trim_start().starts_with("<?xml") {
                     if content.contains("<owl:Ontology") || content.contains("<Ontology") {
@@ -652,19 +666,23 @@ impl ImportManager {
         // Use the OWL 2 DL validator to check the imported ontology
         let mut validator = crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
         let validation_result = validator.validate()?;
-        
+
         if !validation_result.is_valid {
-            let error_messages: Vec<String> = validation_result.errors
+            let error_messages: Vec<String> = validation_result
+                .errors
                 .iter()
                 .map(|e| format!("{:?}: {}", e.error_type, e.message))
                 .collect();
-            
-            warn!("Imported ontology has validation errors: {}", error_messages.join("; "));
-            
+
+            warn!(
+                "Imported ontology has validation errors: {}",
+                error_messages.join("; ")
+            );
+
             // For now, we'll log warnings but not fail the import
             // In stricter mode, we might want to return an error
         }
-        
+
         Ok(())
     }
 
@@ -683,12 +701,12 @@ impl ImportManager {
         // Implement basic prefix handling for imports
         // Collect commonly used namespace prefixes and ensure they're available
         let mut used_namespaces = std::collections::HashSet::new();
-        
+
         // Extract namespaces from axioms
         for axiom in &source.axioms {
             collect_namespaces_from_axiom(axiom, &mut used_namespaces);
         }
-        
+
         // Log the discovered namespaces for future prefix mapping
         if !used_namespaces.is_empty() {
             log::debug!("Discovered namespaces during import: {:?}", used_namespaces);
@@ -724,15 +742,19 @@ impl ImportManager {
     /// Get import order (topological sort)
     pub fn get_import_order(&self) -> Result<Vec<IRI>, OxidowlError> {
         let graph = self.get_dependency_graph()?;
-        graph.topological_sort()
+        graph
+            .topological_sort()
             .map_err(|e| OxidowlError::invalid_input(e.to_string()))
     }
 }
 
 /// Helper function to collect namespaces from an axiom for prefix handling
-fn collect_namespaces_from_axiom(axiom: &crate::ontology::axioms::Axiom, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespaces_from_axiom(
+    axiom: &crate::ontology::axioms::Axiom,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     use crate::ontology::axioms::Axiom;
-    
+
     match axiom {
         Axiom::Declaration(decl) => {
             collect_namespace_from_iri(decl.entity.iri(), namespaces);
@@ -755,15 +777,18 @@ fn collect_namespaces_from_axiom(axiom: &crate::ontology::axioms::Axiom, namespa
 }
 
 /// Helper function to collect namespace from a class expression
-fn collect_namespaces_from_class_expression(expr: &crate::ontology::ClassExpression, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespaces_from_class_expression(
+    expr: &crate::ontology::ClassExpression,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     use crate::ontology::ClassExpression;
-    
+
     match expr {
         ClassExpression::Class(class) => {
             collect_namespace_from_iri(&class.iri, namespaces);
         }
-        ClassExpression::ObjectIntersectionOf(operands) |
-        ClassExpression::ObjectUnionOf(operands) => {
+        ClassExpression::ObjectIntersectionOf(operands)
+        | ClassExpression::ObjectUnionOf(operands) => {
             for operand in operands {
                 collect_namespaces_from_class_expression(operand, namespaces);
             }
@@ -778,9 +803,12 @@ fn collect_namespaces_from_class_expression(expr: &crate::ontology::ClassExpress
 }
 
 /// Helper function to extract namespace from an IRI
-fn collect_namespace_from_iri(iri: &crate::ontology::IRI, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespace_from_iri(
+    iri: &crate::ontology::IRI,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     let iri_str = iri.as_str();
-    
+
     // Extract namespace (everything before the last # or /)
     if let Some(pos) = iri_str.rfind('#') {
         let namespace = &iri_str[..pos + 1];
@@ -793,7 +821,7 @@ fn collect_namespace_from_iri(iri: &crate::ontology::IRI, namespaces: &mut std::
 
 fn collect_namespace_from_url(url: &url::Url, namespaces: &mut std::collections::HashSet<String>) {
     let url_str = url.as_str();
-    
+
     // Extract namespace (everything before the last # or /)
     if let Some(pos) = url_str.rfind('#') {
         let namespace = &url_str[..pos + 1];
@@ -805,9 +833,12 @@ fn collect_namespace_from_url(url: &url::Url, namespaces: &mut std::collections:
 }
 
 /// Comprehensive namespace extraction for all axiom types
-fn collect_namespaces_from_axiom_comprehensive(axiom: &crate::ontology::Axiom, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespaces_from_axiom_comprehensive(
+    axiom: &crate::ontology::Axiom,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     use crate::ontology::Axiom;
-    
+
     match axiom {
         Axiom::ObjectPropertyAssertion(prop_axiom) => {
             collect_namespaces_from_object_property_expression(&prop_axiom.property, namespaces);
@@ -862,18 +893,27 @@ fn collect_namespaces_from_axiom_comprehensive(axiom: &crate::ontology::Axiom, n
             collect_namespaces_from_class_expression(&range_axiom.range, namespaces);
         }
         Axiom::DataPropertyDomain(data_domain_axiom) => {
-            collect_namespaces_from_data_property_expression(&data_domain_axiom.property, namespaces);
+            collect_namespaces_from_data_property_expression(
+                &data_domain_axiom.property,
+                namespaces,
+            );
             collect_namespaces_from_class_expression(&data_domain_axiom.domain, namespaces);
         }
         Axiom::DataPropertyRange(data_range_axiom) => {
-            collect_namespaces_from_data_property_expression(&data_range_axiom.property, namespaces);
+            collect_namespaces_from_data_property_expression(
+                &data_range_axiom.property,
+                namespaces,
+            );
             collect_namespaces_from_data_range(&data_range_axiom.range, namespaces);
         }
         Axiom::FunctionalObjectProperty(func_axiom) => {
             collect_namespaces_from_object_property_expression(&func_axiom.property, namespaces);
         }
         Axiom::InverseFunctionalObjectProperty(inv_func_axiom) => {
-            collect_namespaces_from_object_property_expression(&inv_func_axiom.property, namespaces);
+            collect_namespaces_from_object_property_expression(
+                &inv_func_axiom.property,
+                namespaces,
+            );
         }
         Axiom::ReflexiveObjectProperty(refl_axiom) => {
             collect_namespaces_from_object_property_expression(&refl_axiom.property, namespaces);
@@ -910,9 +950,12 @@ fn collect_namespaces_from_axiom_comprehensive(axiom: &crate::ontology::Axiom, n
 }
 
 /// Helper function to collect namespaces from object property expressions
-fn collect_namespaces_from_object_property_expression(expr: &crate::ontology::ObjectPropertyExpression, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespaces_from_object_property_expression(
+    expr: &crate::ontology::ObjectPropertyExpression,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     use crate::ontology::ObjectPropertyExpression;
-    
+
     match expr {
         ObjectPropertyExpression::ObjectProperty(prop) => {
             collect_namespace_from_url(&prop.iri, namespaces);
@@ -929,9 +972,12 @@ fn collect_namespaces_from_object_property_expression(expr: &crate::ontology::Ob
 }
 
 /// Helper function to collect namespaces from data property expressions
-fn collect_namespaces_from_data_property_expression(expr: &crate::ontology::DataPropertyExpression, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespaces_from_data_property_expression(
+    expr: &crate::ontology::DataPropertyExpression,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     use crate::ontology::DataPropertyExpression;
-    
+
     match expr {
         DataPropertyExpression::DataProperty(prop) => {
             collect_namespace_from_iri(&prop.iri, namespaces);
@@ -940,9 +986,12 @@ fn collect_namespaces_from_data_property_expression(expr: &crate::ontology::Data
 }
 
 /// Helper function to collect namespaces from data ranges
-fn collect_namespaces_from_data_range(range: &crate::ontology::DataRange, namespaces: &mut std::collections::HashSet<String>) {
+fn collect_namespaces_from_data_range(
+    range: &crate::ontology::DataRange,
+    namespaces: &mut std::collections::HashSet<String>,
+) {
     use crate::ontology::DataRange;
-    
+
     match range {
         DataRange::Datatype(datatype_iri) => {
             collect_namespace_from_iri(datatype_iri, namespaces);
@@ -963,7 +1012,10 @@ fn collect_namespaces_from_data_range(range: &crate::ontology::DataRange, namesp
         DataRange::DataOneOf(_literals) => {
             // Literals don't typically have namespaces in the same way
         }
-        DataRange::DatatypeRestriction { datatype, restrictions: _ } => {
+        DataRange::DatatypeRestriction {
+            datatype,
+            restrictions: _,
+        } => {
             collect_namespace_from_iri(datatype, namespaces);
         }
     }
@@ -977,10 +1029,9 @@ mod tests {
     fn test_import_declaration() {
         let iri = IRI::new("http://example.org/ontology");
         let version_iri = IRI::new("http://example.org/ontology/v1.0");
-        
-        let import = ImportDeclaration::new(iri.clone())
-            .with_version_iri(version_iri.clone());
-        
+
+        let import = ImportDeclaration::new(iri.clone()).with_version_iri(version_iri.clone());
+
         assert_eq!(import.imported_ontology_iri, iri);
         assert_eq!(import.version_iri, Some(version_iri));
     }
@@ -988,15 +1039,15 @@ mod tests {
     #[test]
     fn test_dependency_graph() {
         let mut graph = ImportDependencyGraph::new();
-        
+
         let onto_a = IRI::new("http://example.org/A");
         let onto_b = IRI::new("http://example.org/B");
         let onto_c = IRI::new("http://example.org/C");
-        
+
         // A imports B, B imports C
         graph.add_dependency(onto_a.clone(), ImportDeclaration::new(onto_b.clone()));
         graph.add_dependency(onto_b.clone(), ImportDeclaration::new(onto_c.clone()));
-        
+
         let deps = graph.get_transitive_dependencies(&onto_a);
         assert!(deps.contains(&onto_b));
         assert!(deps.contains(&onto_c));
@@ -1006,14 +1057,14 @@ mod tests {
     #[test]
     fn test_circular_dependency_detection() {
         let mut graph = ImportDependencyGraph::new();
-        
+
         let onto_a = IRI::new("http://example.org/A");
         let onto_b = IRI::new("http://example.org/B");
-        
+
         // A imports B, B imports A (circular)
         graph.add_dependency(onto_a.clone(), ImportDeclaration::new(onto_b.clone()));
         graph.add_dependency(onto_b.clone(), ImportDeclaration::new(onto_a.clone()));
-        
+
         let cycles = graph.detect_cycles();
         assert!(!cycles.is_empty());
         assert!(cycles[0].contains(&onto_a));
@@ -1023,22 +1074,22 @@ mod tests {
     #[test]
     fn test_topological_sort() {
         let mut graph = ImportDependencyGraph::new();
-        
+
         let onto_a = IRI::new("http://example.org/A");
         let onto_b = IRI::new("http://example.org/B");
         let onto_c = IRI::new("http://example.org/C");
-        
+
         // A imports B, B imports C
         graph.add_dependency(onto_a.clone(), ImportDeclaration::new(onto_b.clone()));
         graph.add_dependency(onto_b.clone(), ImportDeclaration::new(onto_c.clone()));
-        
+
         let order = graph.topological_sort().unwrap();
-        
+
         // C should come before B, B should come before A
         let pos_a = order.iter().position(|iri| iri == &onto_a).unwrap();
         let pos_b = order.iter().position(|iri| iri == &onto_b).unwrap();
         let pos_c = order.iter().position(|iri| iri == &onto_c).unwrap();
-        
+
         assert!(pos_c < pos_b);
         assert!(pos_b < pos_a);
     }
@@ -1047,7 +1098,7 @@ mod tests {
     fn test_import_manager_creation() {
         let config = ImportManagerConfig::default();
         let manager = ImportManager::new(config);
-        
+
         // Test that manager can be created
         assert_eq!(manager.config.max_import_depth, 10);
     }
