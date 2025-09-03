@@ -196,9 +196,9 @@ impl QueryProcessor {
             request_xml: request.to_string(),
             class_expression: self.extract_class_from_owllink(request).ok(),
             kb_name: self.extract_kb_name_from_owllink(request).ok(),
-            axiom: None,           // TODO: extract from XML
-            individual: None,      // TODO: extract from XML  
-            direct: None,          // TODO: extract from XML
+            axiom: self.extract_axiom_from_owllink(request).ok(),
+            individual: self.extract_individual_from_owllink(request).ok(),  
+            direct: self.extract_direct_flag_from_owllink(request).ok(),
         })
     }
 
@@ -1091,6 +1091,91 @@ impl QueryProcessor {
         }
         
         Err(Error::reasoning("Could not extract object individual from OWLlink request"))
+    }
+    
+    /// Extract axiom from OWLlink XML request
+    fn extract_axiom_from_owllink(&self, xml: &str) -> Result<crate::ontology::Axiom> {
+        // Look for axiom elements in the XML
+        if xml.contains("SubClassOf") {
+            // Extract subclass axiom
+            if let Ok(subclass) = self.extract_class_from_owllink(xml) {
+                if let Ok(superclass) = self.extract_super_class_from_owllink(xml) {
+                    return Ok(crate::ontology::Axiom::SubClassOf(
+                        crate::ontology::axioms::SubClassOfAxiom {
+                            id: 0,
+                            subclass,
+                            superclass,
+                            annotations: vec![],
+                        }
+                    ));
+                }
+            }
+        }
+        
+        if xml.contains("ClassAssertion") {
+            // Extract class assertion
+            if let Ok(class_expr) = self.extract_class_from_owllink(xml) {
+                if let Ok(individual) = self.extract_individual_from_owllink(xml) {
+                    return Ok(crate::ontology::Axiom::ClassAssertion(
+                        crate::ontology::axioms::ClassAssertionAxiom {
+                            id: 0,
+                            class: class_expr,
+                            individual,
+                            annotations: vec![],
+                        }
+                    ));
+                }
+            }
+        }
+        
+        Err(Error::reasoning("Could not extract axiom from OWLlink request"))
+    }
+    
+    /// Extract direct flag from OWLlink XML request
+    fn extract_direct_flag_from_owllink(&self, xml: &str) -> Result<bool> {
+        // Look for direct attribute in various query elements
+        if let Some(start) = xml.find("direct=") {
+            if let Some(quote_start) = xml[start..].find('"') {
+                if let Some(quote_end) = xml[start + quote_start + 1..].find('"') {
+                    let direct_str = &xml[start + quote_start + 1..start + quote_start + 1 + quote_end];
+                    return Ok(direct_str == "true");
+                }
+            }
+        }
+        
+        // Default to false if not specified
+        Ok(false)
+    }
+    
+    /// Extract super class from OWLlink XML (for SubClassOf axioms)
+    fn extract_super_class_from_owllink(&self, xml: &str) -> Result<crate::ontology::ClassExpression> {
+        // Look for the second class element (superclass in SubClassOf)
+        let mut class_count = 0;
+        let mut search_pos = 0;
+        
+        while search_pos < xml.len() {
+            if let Some(class_pos) = xml[search_pos..].find("owl:Class") {
+                class_count += 1;
+                if class_count == 2 {
+                    // This should be the superclass
+                    let start_pos = search_pos + class_pos;
+                    if let Some(iri_start) = xml[start_pos..].find("IRI=\"") {
+                        if let Some(iri_end) = xml[start_pos + iri_start + 5..].find('"') {
+                            let iri_str = &xml[start_pos + iri_start + 5..start_pos + iri_start + 5 + iri_end];
+                            let class = crate::ontology::Class::new(
+                                crate::ontology::IRI::new(iri_str)
+                            );
+                            return Ok(crate::ontology::ClassExpression::Class(class));
+                        }
+                    }
+                }
+                search_pos += class_pos + 9;
+            } else {
+                break;
+            }
+        }
+        
+        Err(Error::reasoning("Could not extract super class from OWLlink request"))
     }
 }
 

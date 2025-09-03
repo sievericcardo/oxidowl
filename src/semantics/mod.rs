@@ -7,7 +7,7 @@
 //! - OWL 2 Direct Semantics: https://www.w3.org/TR/owl2-direct-semantics/
 
 pub mod rdf;
-// pub mod rdfs;  // Temporarily disabled due to type system mismatch
+// pub mod rdfs;  // Temporarily disabled due to type system mismatch after changes
 pub mod owl2;
 pub mod entailment;
 pub mod interpretation;

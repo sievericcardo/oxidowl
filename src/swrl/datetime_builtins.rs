@@ -7,17 +7,36 @@ use std::collections::HashMap;
 
 /// Parse a day-time duration from a string
 fn parse_day_time_duration(duration_str: &str) -> Result<chrono::Duration> {
-    // Simple parsing for PT[n]H[n]M[n]S format
+    // Parse ISO 8601 duration format PT[n]H[n]M[n]S
     let cleaned = duration_str.trim_start_matches("PT");
     
     let mut hours = 0i64;
     let mut minutes = 0i64;
     let mut seconds = 0i64;
     
-    // Simple parser - this is a simplified implementation
-    if let Some(h_pos) = cleaned.find('H') {
-        if let Ok(h) = cleaned[..h_pos].parse::<i64>() {
+    // Parse hours, minutes, and seconds with proper regex-like parsing
+    let mut remaining = cleaned;
+    
+    // Parse hours
+    if let Some(h_pos) = remaining.find('H') {
+        if let Ok(h) = remaining[..h_pos].parse::<i64>() {
             hours = h;
+            remaining = &remaining[h_pos + 1..];
+        }
+    }
+    
+    // Parse minutes  
+    if let Some(m_pos) = remaining.find('M') {
+        if let Ok(m) = remaining[..m_pos].parse::<i64>() {
+            minutes = m;
+            remaining = &remaining[m_pos + 1..];
+        }
+    }
+    
+    // Parse seconds
+    if let Some(s_pos) = remaining.find('S') {
+        if let Ok(s) = remaining[..s_pos].parse::<i64>() {
+            seconds = s;
         }
     }
     

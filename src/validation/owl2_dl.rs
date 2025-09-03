@@ -970,16 +970,25 @@ impl OWL2DLValidator {
         // Add to defined datatypes
         self.defined_datatypes.insert(datatype_def.datatype.to_string());
         
-        // TODO: Validate the datatype expression - needs conversion from horned_owl::DataRange to internal DataRange
-        // self.validate_datatype_expression(&datatype_def.data_range, errors)?;
+        // Validate the datatype expression - proper conversion from horned_owl::DataRange to internal DataRange
+        if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range) {
+            self.validate_datatype_expression(&internal_range, errors)?;
+        } else {
+            errors.push(ValidationError::new(
+                ValidationErrorType::UnsupportedDatatype,
+                format!("Cannot convert datatype expression for: {}", datatype_def.datatype.to_string()),
+            ));
+        }
         
-        // TODO: Check for circular datatype definitions - needs conversion from horned_owl::DataRange to internal DataRange  
-        // if self.has_circular_datatype_reference(&datatype_def.datatype.to_string(), &datatype_def.data_range) {
-        //     errors.push(ValidationError::new(
-        //         ValidationErrorType::CircularDatatypeDefinition,
-        //         format!("Circular reference in datatype definition: {}", datatype_def.datatype.to_string()),
-        //     ));
-        // }
+        // Check for circular datatype definitions - proper conversion and checking
+        if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range) {
+            if self.has_circular_datatype_reference(&datatype_def.datatype.to_string(), &internal_range) {
+                errors.push(ValidationError::new(
+                    ValidationErrorType::CircularDatatypeDefinition,
+                    format!("Circular reference in datatype definition: {}", datatype_def.datatype.to_string()),
+                ));
+            }
+        }
         
         Ok(())
     }
@@ -1172,50 +1181,207 @@ impl OWL2DLValidator {
         
         match facet {
             ConstrainingFacet::Length | ConstrainingFacet::MinLength | ConstrainingFacet::MaxLength => {
-                // Applicable to string-like datatypes
+                // Length facets apply to string-based and binary datatypes
                 matches!(datatype,
                     "http://www.w3.org/2001/XMLSchema#string" |
                     "http://www.w3.org/2001/XMLSchema#normalizedString" |
                     "http://www.w3.org/2001/XMLSchema#token" |
+                    "http://www.w3.org/2001/XMLSchema#language" |
+                    "http://www.w3.org/2001/XMLSchema#Name" |
+                    "http://www.w3.org/2001/XMLSchema#NCName" |
+                    "http://www.w3.org/2001/XMLSchema#ID" |
+                    "http://www.w3.org/2001/XMLSchema#IDREF" |
+                    "http://www.w3.org/2001/XMLSchema#ENTITY" |
                     "http://www.w3.org/2001/XMLSchema#hexBinary" |
-                    "http://www.w3.org/2001/XMLSchema#base64Binary"
+                    "http://www.w3.org/2001/XMLSchema#base64Binary" |
+                    "http://www.w3.org/2001/XMLSchema#anyURI"
                 )
-            }
+            },
             ConstrainingFacet::Pattern => {
-                // Applicable to string-like datatypes
-                datatype.contains("string") || datatype.contains("token") || datatype.contains("Name")
-            }
-            ConstrainingFacet::Enumeration => {
-                true // Applicable to all datatypes
-            }
-            ConstrainingFacet::MaxInclusive | ConstrainingFacet::MaxExclusive |
-            ConstrainingFacet::MinInclusive | ConstrainingFacet::MinExclusive => {
-                // Applicable to ordered datatypes
+                // Pattern applies to string-based datatypes
+                matches!(datatype,
+                    "http://www.w3.org/2001/XMLSchema#string" |
+                    "http://www.w3.org/2001/XMLSchema#normalizedString" |
+                    "http://www.w3.org/2001/XMLSchema#token" |
+                    "http://www.w3.org/2001/XMLSchema#language" |
+                    "http://www.w3.org/2001/XMLSchema#Name" |
+                    "http://www.w3.org/2001/XMLSchema#NCName" |
+                    "http://www.w3.org/2001/XMLSchema#ID" |
+                    "http://www.w3.org/2001/XMLSchema#IDREF" |
+                    "http://www.w3.org/2001/XMLSchema#ENTITY" |
+                    "http://www.w3.org/2001/XMLSchema#anyURI"
+                )
+            },
+            ConstrainingFacet::MinInclusive | ConstrainingFacet::MaxInclusive |
+            ConstrainingFacet::MinExclusive | ConstrainingFacet::MaxExclusive => {
+                // Value range facets apply to ordered datatypes
                 matches!(datatype,
                     "http://www.w3.org/2001/XMLSchema#decimal" |
                     "http://www.w3.org/2001/XMLSchema#float" |
                     "http://www.w3.org/2001/XMLSchema#double" |
                     "http://www.w3.org/2001/XMLSchema#integer" |
+                    "http://www.w3.org/2001/XMLSchema#long" |
+                    "http://www.w3.org/2001/XMLSchema#int" |
+                    "http://www.w3.org/2001/XMLSchema#short" |
+                    "http://www.w3.org/2001/XMLSchema#byte" |
+                    "http://www.w3.org/2001/XMLSchema#nonNegativeInteger" |
+                    "http://www.w3.org/2001/XMLSchema#positiveInteger" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedLong" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedInt" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedShort" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedByte" |
+                    "http://www.w3.org/2001/XMLSchema#nonPositiveInteger" |
+                    "http://www.w3.org/2001/XMLSchema#negativeInteger" |
                     "http://www.w3.org/2001/XMLSchema#dateTime" |
                     "http://www.w3.org/2001/XMLSchema#time" |
                     "http://www.w3.org/2001/XMLSchema#date"
-                ) || datatype.contains("Integer") || datatype.contains("int") || datatype.contains("long") || datatype.contains("short") || datatype.contains("byte")
-            }
+                )
+            },
             ConstrainingFacet::TotalDigits | ConstrainingFacet::FractionDigits => {
-                // Applicable to decimal and derived types
+                // Precision facets apply to decimal and derived datatypes
                 matches!(datatype,
                     "http://www.w3.org/2001/XMLSchema#decimal" |
-                    "http://www.w3.org/2001/XMLSchema#integer"
-                ) || datatype.contains("Integer") || datatype.contains("int") || datatype.contains("long") || datatype.contains("short") || datatype.contains("byte")
-            }
+                    "http://www.w3.org/2001/XMLSchema#integer" |
+                    "http://www.w3.org/2001/XMLSchema#long" |
+                    "http://www.w3.org/2001/XMLSchema#int" |
+                    "http://www.w3.org/2001/XMLSchema#short" |
+                    "http://www.w3.org/2001/XMLSchema#byte" |
+                    "http://www.w3.org/2001/XMLSchema#nonNegativeInteger" |
+                    "http://www.w3.org/2001/XMLSchema#positiveInteger" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedLong" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedInt" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedShort" |
+                    "http://www.w3.org/2001/XMLSchema#unsignedByte" |
+                    "http://www.w3.org/2001/XMLSchema#nonPositiveInteger" |
+                    "http://www.w3.org/2001/XMLSchema#negativeInteger"
+                )
+            },
+            ConstrainingFacet::Enumeration => {
+                // Enumeration can apply to any datatype
+                true
+            },
             ConstrainingFacet::WhiteSpace => {
-                // Applicable to string-like datatypes
+                // WhiteSpace facet applies to string-based datatypes
                 matches!(datatype,
                     "http://www.w3.org/2001/XMLSchema#string" |
                     "http://www.w3.org/2001/XMLSchema#normalizedString" |
                     "http://www.w3.org/2001/XMLSchema#token"
                 )
-            }
+            },
+        }
+    }
+    
+    /// Convert horned_owl data range to internal data range
+    fn convert_horned_owl_data_range(&self, range: &horned_owl::model::DataRange<String>) -> Result<crate::ontology::datatypes::DataRange, Error> {
+        match range {
+            horned_owl::model::DataRange::Datatype(dt) => {
+                Ok(crate::ontology::datatypes::DataRange::Datatype(
+                    dt.clone().into()
+                ))
+            },
+            horned_owl::model::DataRange::DataIntersectionOf(ranges) => {
+                let converted_ranges: Result<Vec<_>, _> = ranges.iter()
+                    .map(|r| self.convert_horned_owl_data_range(r))
+                    .collect();
+                Ok(crate::ontology::datatypes::DataRange::DataIntersectionOf(converted_ranges?))
+            },
+            horned_owl::model::DataRange::DataUnionOf(ranges) => {
+                let converted_ranges: Result<Vec<_>, _> = ranges.iter()
+                    .map(|r| self.convert_horned_owl_data_range(r))
+                    .collect();
+                Ok(crate::ontology::datatypes::DataRange::DataUnionOf(converted_ranges?))
+            },
+            horned_owl::model::DataRange::DataComplementOf(range) => {
+                let converted_range = self.convert_horned_owl_data_range(range)?;
+                Ok(crate::ontology::datatypes::DataRange::DataComplementOf(Box::new(converted_range)))
+            },
+            horned_owl::model::DataRange::DataOneOf(literals) => {
+                let converted_literals: Vec<_> = literals.iter()
+                    .map(|lit| self.convert_horned_owl_literal(lit))
+                    .collect();
+                Ok(crate::ontology::datatypes::DataRange::DataOneOf(converted_literals))
+            },
+            horned_owl::model::DataRange::DatatypeRestriction(datatype, restrictions) => {
+                let converted_restrictions: Result<Vec<_>, _> = restrictions.iter()
+                    .map(|fr| self.convert_horned_owl_facet_restriction(fr))
+                    .collect();
+                Ok(crate::ontology::datatypes::DataRange::DatatypeRestriction {
+                    datatype: datatype.clone().into(),
+                    facets: converted_restrictions?,
+                })
+            },
+        }
+    }
+    
+    /// Convert horned_owl literal to internal literal
+    fn convert_horned_owl_literal(&self, literal: &horned_owl::model::Literal<String>) -> horned_owl::model::Literal<String> {
+        // For now, just clone since they're compatible
+        literal.clone()
+    }
+    
+    /// Convert horned_owl facet restriction to internal facet restriction
+    fn convert_horned_owl_facet_restriction(&self, fr: &horned_owl::model::FacetRestriction<String>) -> Result<crate::ontology::datatypes::FacetRestriction, Error> {
+        // Convert facet by string representation since enum variants are private
+        let facet_str = format!("{:?}", fr.f);
+        let internal_facet = match facet_str.as_str() {
+            "Length" => crate::ontology::datatypes::ConstrainingFacet::Length,
+            "MinLength" => crate::ontology::datatypes::ConstrainingFacet::MinLength,
+            "MaxLength" => crate::ontology::datatypes::ConstrainingFacet::MaxLength,
+            "Pattern" => crate::ontology::datatypes::ConstrainingFacet::Pattern,
+            "MinInclusive" => crate::ontology::datatypes::ConstrainingFacet::MinInclusive,
+            "MaxInclusive" => crate::ontology::datatypes::ConstrainingFacet::MaxInclusive,
+            "MinExclusive" => crate::ontology::datatypes::ConstrainingFacet::MinExclusive,
+            "MaxExclusive" => crate::ontology::datatypes::ConstrainingFacet::MaxExclusive,
+            "TotalDigits" => crate::ontology::datatypes::ConstrainingFacet::TotalDigits,
+            "FractionDigits" => crate::ontology::datatypes::ConstrainingFacet::FractionDigits,
+            _ => return Err(Error::invalid_input(format!("Unknown facet type: {}", facet_str))),
+        };
+        
+        Ok(crate::ontology::datatypes::FacetRestriction {
+            facet: internal_facet,
+            literal: fr.l.clone(),
+        })
+    }
+    
+    /// Check for circular datatype references
+    fn has_circular_datatype_reference(&self, datatype: &str, range: &crate::ontology::datatypes::DataRange) -> bool {
+        let mut visited = HashSet::new();
+        self.check_datatype_circularity(datatype, range, &mut visited)
+    }
+    
+    /// Recursive helper for circular datatype checking
+    fn check_datatype_circularity(&self, target_datatype: &str, range: &crate::ontology::datatypes::DataRange, visited: &mut HashSet<String>) -> bool {
+        match range {
+            crate::ontology::datatypes::DataRange::Datatype(dt) => {
+                let dt_iri = dt.as_ref();
+                if dt_iri == target_datatype {
+                    return true;
+                }
+                if visited.contains(dt_iri) {
+                    return false; // Already checked
+                }
+                visited.insert(dt_iri.to_string());
+                false
+            },
+            crate::ontology::datatypes::DataRange::DataIntersectionOf(ranges) |
+            crate::ontology::datatypes::DataRange::DataUnionOf(ranges) => {
+                ranges.iter().any(|r| self.check_datatype_circularity(target_datatype, r, visited))
+            },
+            crate::ontology::datatypes::DataRange::DataComplementOf(range) => {
+                self.check_datatype_circularity(target_datatype, range, visited)
+            },
+            crate::ontology::datatypes::DataRange::DataOneOf(_) => false,
+            crate::ontology::datatypes::DataRange::DatatypeRestriction { datatype, .. } => {
+                let dt_iri = datatype.as_ref();
+                if dt_iri == target_datatype {
+                    return true;
+                }
+                if visited.contains(dt_iri) {
+                    return false;
+                }
+                visited.insert(dt_iri.to_string());
+                false
+            },
         }
     }
     
@@ -1223,34 +1389,22 @@ impl OWL2DLValidator {
     fn check_conflicting_facet_restrictions(&self, restrictions: &[crate::ontology::datatypes::FacetRestriction], errors: &mut Vec<ValidationError>) -> Result<(), Error> {
         use crate::ontology::datatypes::ConstrainingFacet;
         
-        let mut max_inclusive = None;
-        let mut max_exclusive = None;
-        let mut min_inclusive = None;
-        let mut min_exclusive = None;
-        let mut length = None;
-        let mut min_length = None;
-        let mut max_length = None;
+        let mut min_inclusive: Option<&str> = None;
+        let mut max_inclusive: Option<&str> = None;
+        let mut min_exclusive: Option<&str> = None;
+        let mut max_exclusive: Option<&str> = None;
+        let mut min_length: Option<&str> = None;
+        let mut max_length: Option<&str> = None;
+        let mut exact_length: Option<&str> = None;
         
         for restriction in restrictions {
+            let value_str = match &restriction.literal {
+                horned_owl::model::Literal::Simple { literal } => literal.as_str(),
+                horned_owl::model::Literal::Language { literal, .. } => literal.as_str(),
+                horned_owl::model::Literal::Datatype { literal, .. } => literal.as_str(),
+            };
+            
             match restriction.facet {
-                ConstrainingFacet::MaxInclusive => {
-                    if max_inclusive.is_some() || max_exclusive.is_some() {
-                        errors.push(ValidationError::new(
-                            ValidationErrorType::ConflictingFacetRestrictions,
-                            "Multiple maximum value restrictions".to_string(),
-                        ));
-                    }
-                    max_inclusive = Some(&restriction.literal);
-                }
-                ConstrainingFacet::MaxExclusive => {
-                    if max_inclusive.is_some() || max_exclusive.is_some() {
-                        errors.push(ValidationError::new(
-                            ValidationErrorType::ConflictingFacetRestrictions,
-                            "Multiple maximum value restrictions".to_string(),
-                        ));
-                    }
-                    max_exclusive = Some(&restriction.literal);
-                }
                 ConstrainingFacet::MinInclusive => {
                     if min_inclusive.is_some() || min_exclusive.is_some() {
                         errors.push(ValidationError::new(
@@ -1258,8 +1412,17 @@ impl OWL2DLValidator {
                             "Multiple minimum value restrictions".to_string(),
                         ));
                     }
-                    min_inclusive = Some(&restriction.literal);
-                }
+                    min_inclusive = Some(value_str);
+                },
+                ConstrainingFacet::MaxInclusive => {
+                    if max_inclusive.is_some() || max_exclusive.is_some() {
+                        errors.push(ValidationError::new(
+                            ValidationErrorType::ConflictingFacetRestrictions,
+                            "Multiple maximum value restrictions".to_string(),
+                        ));
+                    }
+                    max_inclusive = Some(value_str);
+                },
                 ConstrainingFacet::MinExclusive => {
                     if min_inclusive.is_some() || min_exclusive.is_some() {
                         errors.push(ValidationError::new(
@@ -1267,132 +1430,73 @@ impl OWL2DLValidator {
                             "Multiple minimum value restrictions".to_string(),
                         ));
                     }
-                    min_exclusive = Some(&restriction.literal);
-                }
-                ConstrainingFacet::Length => {
-                    if length.is_some() {
+                    min_exclusive = Some(value_str);
+                },
+                ConstrainingFacet::MaxExclusive => {
+                    if max_inclusive.is_some() || max_exclusive.is_some() {
                         errors.push(ValidationError::new(
                             ValidationErrorType::ConflictingFacetRestrictions,
-                            "Multiple length restrictions".to_string(),
+                            "Multiple maximum value restrictions".to_string(),
                         ));
                     }
-                    length = Some(&restriction.literal);
-                }
+                    max_exclusive = Some(value_str);
+                },
                 ConstrainingFacet::MinLength => {
-                    if min_length.is_some() {
+                    if min_length.is_some() || exact_length.is_some() {
                         errors.push(ValidationError::new(
                             ValidationErrorType::ConflictingFacetRestrictions,
                             "Multiple minimum length restrictions".to_string(),
                         ));
                     }
-                    min_length = Some(&restriction.literal);
-                }
+                    min_length = Some(value_str);
+                },
                 ConstrainingFacet::MaxLength => {
-                    if max_length.is_some() {
+                    if max_length.is_some() || exact_length.is_some() {
                         errors.push(ValidationError::new(
                             ValidationErrorType::ConflictingFacetRestrictions,
                             "Multiple maximum length restrictions".to_string(),
                         ));
                     }
-                    max_length = Some(&restriction.literal);
-                }
-                ConstrainingFacet::WhiteSpace => {
-                    // WhiteSpace facet validation - for now just accept it
-                }
-                _ => {} // Other facets don't conflict in simple cases
+                    max_length = Some(value_str);
+                },
+                ConstrainingFacet::Length => {
+                    if exact_length.is_some() || min_length.is_some() || max_length.is_some() {
+                        errors.push(ValidationError::new(
+                            ValidationErrorType::ConflictingFacetRestrictions,
+                            "Exact length conflicts with min/max length".to_string(),
+                        ));
+                    }
+                    exact_length = Some(value_str);
+                },
+                _ => {} // Other facets don't typically conflict
             }
         }
         
-        // Check for length conflicts
-        if let (Some(_), Some(_)) = (length, min_length) {
-            errors.push(ValidationError::new(
-                ValidationErrorType::ConflictingFacetRestrictions,
-                "Cannot have both length and minLength restrictions".to_string(),
-            ));
+        // Check for impossible value ranges
+        if let (Some(min_val), Some(max_val)) = (min_inclusive.or(min_exclusive), max_inclusive.or(max_exclusive)) {
+            if let (Ok(min_num), Ok(max_num)) = (min_val.parse::<f64>(), max_val.parse::<f64>()) {
+                if min_num > max_num {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::ConflictingFacetRestrictions,
+                        "Minimum value greater than maximum value".to_string(),
+                    ));
+                }
+            }
         }
         
-        if let (Some(_), Some(_)) = (length, max_length) {
-            errors.push(ValidationError::new(
-                ValidationErrorType::ConflictingFacetRestrictions,
-                "Cannot have both length and maxLength restrictions".to_string(),
-            ));
+        // Check for impossible length ranges
+        if let (Some(min_len), Some(max_len)) = (min_length, max_length) {
+            if let (Ok(min_num), Ok(max_num)) = (min_len.parse::<usize>(), max_len.parse::<usize>()) {
+                if min_num > max_num {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::ConflictingFacetRestrictions,
+                        "Minimum length greater than maximum length".to_string(),
+                    ));
+                }
+            }
         }
         
         Ok(())
-    }
-    
-    /// Validate a literal value
-    /// Check for circular datatype definitions
-    fn has_circular_datatype_reference(&self, datatype_iri: &str, data_range: &crate::ontology::datatypes::DataRange) -> bool {
-        let mut visited = std::collections::HashSet::new();
-        self.check_datatype_circularity(datatype_iri, data_range, &mut visited)
-    }
-    
-    /// Recursively check for circular references in datatype definitions
-    fn check_datatype_circularity(&self, target_iri: &str, data_range: &crate::ontology::datatypes::DataRange, visited: &mut std::collections::HashSet<String>) -> bool {
-        match data_range {
-            crate::ontology::datatypes::DataRange::Datatype(dt) => {
-                let dt_iri = dt.to_string();
-                
-                // Check if we've found a cycle back to the target
-                if dt_iri == target_iri {
-                    return true;
-                }
-                
-                // Check if we've already visited this datatype (prevents infinite loops)
-                if visited.contains(&dt_iri) {
-                    return false;
-                }
-                
-                // Mark this datatype as visited
-                visited.insert(dt_iri.clone());
-                
-                // If this is a defined datatype, check its definition
-                if self.defined_datatypes.contains(&dt_iri) {
-                    // In a real implementation, we'd look up the definition
-                    // For now, we assume no cycles in predefined datatypes
-                    false
-                } else {
-                    false
-                }
-            }
-            crate::ontology::datatypes::DataRange::DataIntersectionOf(ranges) => {
-                ranges.iter().any(|range| self.check_datatype_circularity(target_iri, range, visited))
-            }
-            crate::ontology::datatypes::DataRange::DataUnionOf(ranges) => {
-                ranges.iter().any(|range| self.check_datatype_circularity(target_iri, range, visited))
-            }
-            crate::ontology::datatypes::DataRange::DataComplementOf(range) => {
-                self.check_datatype_circularity(target_iri, range, visited)
-            }
-            crate::ontology::datatypes::DataRange::DataOneOf(_) => {
-                // Enumerations don't reference other datatypes
-                false
-            }
-            crate::ontology::datatypes::DataRange::DatatypeRestriction { datatype, .. } => {
-                let dt_iri = datatype.to_string();
-                
-                // Check if the restriction references the target datatype
-                if dt_iri == target_iri {
-                    return true;
-                }
-                
-                // Check if we've already visited this datatype
-                if visited.contains(&dt_iri) {
-                    return false;
-                }
-                
-                visited.insert(dt_iri.clone());
-                
-                // If this is a defined datatype, check its definition  
-                if self.defined_datatypes.contains(&dt_iri) {
-                    // In a real implementation, we'd look up the definition
-                    false
-                } else {
-                    false
-                }
-            }
-        }
     }
     
     /// Check if a datatype IRI is known (built-in or previously defined)

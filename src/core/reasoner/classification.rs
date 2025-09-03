@@ -731,7 +731,59 @@ impl ClassificationService {
             }
         }
 
-        // TODO: Add more sophisticated property chain reasoning
+        // Add sophisticated property chain reasoning
+        self.check_property_chain_entailment(subproperty, superproperty, ontology)
+    }
+    
+    /// Check property chain entailment for complex property relationships
+    fn check_property_chain_entailment(
+        &self,
+        subproperty: &ObjectPropertyExpression,
+        superproperty: &ObjectPropertyExpression,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Check for property chain axioms that might imply this relationship
+        for axiom in ontology.axioms() {
+            if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
+                // Check if the superproperty is involved in property chains
+                if &sub_axiom.super_property == superproperty {
+                    if let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property {
+                        // Check if subproperty is part of this chain or can be derived from it
+                        if self.property_in_chain_or_derivable(subproperty, chain, ontology)? {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+    
+    /// Check if a property is in a chain or derivable from it
+    fn property_in_chain_or_derivable(
+        &self,
+        property: &ObjectPropertyExpression,
+        chain: &[ObjectPropertyExpression],
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Direct membership in chain
+        if chain.contains(property) {
+            return Ok(true);
+        }
+        
+        // Check if property is equivalent to the entire chain
+        if chain.len() == 1 && &chain[0] == property {
+            return Ok(true);
+        }
+        
+        // Check if property is a subproperty of any property in the chain
+        for chain_prop in chain {
+            if self.is_subproperty_of(property, chain_prop, ontology)? {
+                return Ok(true);
+            }
+        }
+        
         Ok(false)
     }
 

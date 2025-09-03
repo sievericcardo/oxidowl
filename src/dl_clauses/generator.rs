@@ -263,13 +263,13 @@ impl DLClauseGenerator {
 
     /// Extract prefixes from a single axiom
     fn extract_prefixes_from_axiom(&mut self, axiom: &Axiom) {
-        // This is a simplified implementation
-        // In practice, you'd analyze all IRIs in the axiom and extract common prefixes
+        // Comprehensively analyze all IRIs in the axiom and extract common prefixes
         match axiom {
             Axiom::ClassAssertion(assertion) => {
                 if let Some(iri) = self.extract_iri_from_class_expression(&assertion.class) {
                     self.add_prefix_from_iri(&iri);
                 }
+                self.extract_prefixes_from_individual(&assertion.individual);
             }
             Axiom::SubClassOf(axiom) => {
                 if let Some(iri) = self.extract_iri_from_class_expression(&axiom.subclass) {
@@ -279,7 +279,32 @@ impl DLClauseGenerator {
                     self.add_prefix_from_iri(&iri);
                 }
             }
-            _ => {} // Handle other axiom types as needed
+            Axiom::EquivalentClasses(axiom) => {
+                for class_expr in &axiom.classes {
+                    if let Some(iri) = self.extract_iri_from_class_expression(class_expr) {
+                        self.add_prefix_from_iri(&iri);
+                    }
+                }
+            }
+            Axiom::DisjointClasses(axiom) => {
+                for class_expr in &axiom.classes {
+                    if let Some(iri) = self.extract_iri_from_class_expression(class_expr) {
+                        self.add_prefix_from_iri(&iri);
+                    }
+                }
+            }
+            Axiom::ObjectPropertyAssertion(assertion) => {
+                self.extract_prefixes_from_object_property(&assertion.property);
+                self.extract_prefixes_from_individual(&assertion.source);
+                self.extract_prefixes_from_individual(&assertion.target);
+            }
+            Axiom::DataPropertyAssertion(assertion) => {
+                self.extract_prefixes_from_data_property(&assertion.property);
+                self.extract_prefixes_from_individual(&assertion.individual);
+            }
+            _ => {
+                // Handle other axiom types as needed
+            }
         }
     }
 
@@ -381,6 +406,44 @@ impl DLClauseGenerator {
     fn compile_axiom(&mut self, axiom: &Axiom) -> Result<Vec<DLClause>> {
         // Use the AxiomCompiler trait implementation
         AxiomCompiler::compile_axiom(self, axiom)
+    }
+    
+    /// Extract prefixes from an individual
+    fn extract_prefixes_from_individual(&mut self, individual: &crate::ontology::Individual) {
+        match individual {
+            crate::ontology::Individual::Named(named) => {
+                self.add_prefix_from_iri(named.iri.as_str());
+            }
+            crate::ontology::Individual::Anonymous(_) => {
+                // Anonymous individuals don't have IRIs to extract prefixes from
+            }
+        }
+    }
+    
+    /// Extract prefixes from an object property
+    fn extract_prefixes_from_object_property(&mut self, property: &crate::ontology::ObjectPropertyExpression) {
+        match property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                self.add_prefix_from_iri(prop.iri.as_str());
+            }
+            crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                self.add_prefix_from_iri(prop.iri.as_str());
+            }
+            crate::ontology::ObjectPropertyExpression::PropertyChain(chain) => {
+                for prop_expr in chain {
+                    self.extract_prefixes_from_object_property(prop_expr);
+                }
+            }
+        }
+    }
+    
+    /// Extract prefixes from a data property
+    fn extract_prefixes_from_data_property(&mut self, property: &crate::ontology::DataPropertyExpression) {
+        match property {
+            crate::ontology::DataPropertyExpression::DataProperty(prop) => {
+                self.add_prefix_from_iri(prop.iri.as_str());
+            }
+        }
     }
 }
 

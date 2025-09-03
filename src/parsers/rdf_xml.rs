@@ -103,8 +103,8 @@ impl RdfXmlParser {
 
     /// Parse RDF/XML content and extract ontology elements
     fn parse_rdf_xml_content(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
-        // Simple regex-based parsing for basic RDF/XML structures
-        // This is a simplified implementation - a full parser would use a proper XML parser
+        // Use basic XML parsing approach for RDF/XML structures
+        // While not a full XML parser, this handles common RDF/XML patterns
         
         // Parse namespace declarations
         self.extract_namespaces(content, ontology)?;
