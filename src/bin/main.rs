@@ -700,7 +700,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             let mut hierarchy = ObjectPropertyHierarchy::new();
             
             // Add all properties from the classification result
-            for (prop_expr, _) in &hierarchy_map {
+            for prop_expr in hierarchy_map.keys() {
                 if let ObjectPropertyExpression::ObjectProperty(prop) = prop_expr {
                     hierarchy.add_property(prop.clone());
                 }
@@ -745,7 +745,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             let mut hierarchy = DataPropertyHierarchy::new();
             
             // Add all properties from the classification result
-            for (prop_expr, _) in &hierarchy_map {
+            for prop_expr in hierarchy_map.keys() {
                 if let DataPropertyExpression::DataProperty(prop) = prop_expr {
                     // Convert ontology::DataProperty to properties::DataProperty
                     let properties_prop = oxidowl::ontology::properties::DataProperty { iri: prop.iri.clone() };
@@ -850,7 +850,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if let Ok(subclasses) = reasoner.get_subclasses(&class_expr, false) {
             println!("Subclasses of {class_name}:");
             for subclass in subclasses {
-                println!("  {}", subclass);
+                println!("  {subclass}");
             }
         } else {
             println!("Could not retrieve subclasses for {class_name}");
@@ -866,7 +866,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if let Ok(superclasses) = reasoner.get_superclasses(&class_expr, false) {
             println!("Superclasses of {class_name}:");
             for superclass in superclasses {
-                println!("  {}", superclass);
+                println!("  {superclass}");
             }
         } else {
             println!("Could not retrieve superclasses for {class_name}");
@@ -882,7 +882,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
         if let Ok(equivalent_classes) = reasoner.get_equivalent_classes(&class_expr) {
             println!("Equivalent classes of {class_name}:");
             for equivalent_class in equivalent_classes {
-                println!("  {}", equivalent_class);
+                println!("  {equivalent_class}");
             }
         } else {
             println!("Could not retrieve equivalent classes for {class_name}");
@@ -1611,7 +1611,7 @@ async fn execute_owllink_file(
     info!("Processing OWLlink file: {}", input.display());
 
     let owllink_content = fs::read_to_string(&input)?;
-    let mut reasoner = Reasoner::new(config)?;
+    let reasoner = Reasoner::new(config)?;
 
     // Process OWLlink request
     let response = reasoner.process_owllink_request(&owllink_content)?;
@@ -1959,7 +1959,7 @@ async fn execute_entailment_check(
         conclusion.display()
     );
 
-    let mut reasoner = Reasoner::new(config)?;
+    let reasoner = Reasoner::new(config)?;
     let _ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // For now, we'll report that this specific entailment check is not implemented
@@ -2091,16 +2091,16 @@ fn print_property_hierarchy_pretty(
     // Enhanced property hierarchy printing
     println!("=== Property Hierarchy ===");
     
-    let has_object_props = hierarchy.object_property_hierarchy.as_ref().map(|h| !h.is_empty()).unwrap_or(false);
-    let has_data_props = hierarchy.data_property_hierarchy.as_ref().map(|h| !h.is_empty()).unwrap_or(false);
+    let has_object_props = hierarchy.object_property_hierarchy.as_ref().is_some_and(|h| !h.is_empty());
+    let has_data_props = hierarchy.data_property_hierarchy.as_ref().is_some_and(|h| !h.is_empty());
     
     if !has_object_props && !has_data_props {
         println!("No properties found in the ontology.");
         return;
     }
     
-    if let Some(object_properties) = &hierarchy.object_property_hierarchy {
-        if !object_properties.is_empty() {
+    if let Some(object_properties) = &hierarchy.object_property_hierarchy
+        && !object_properties.is_empty() {
             println!("\n--- Object Properties ---");
             for (property, superproperties) in object_properties {
                 println!("• {}", format_object_property_expression(property));
@@ -2115,10 +2115,9 @@ fn print_property_hierarchy_pretty(
                 println!();
             }
         }
-    }
     
-    if let Some(data_properties) = &hierarchy.data_property_hierarchy {
-        if !data_properties.is_empty() {
+    if let Some(data_properties) = &hierarchy.data_property_hierarchy
+        && !data_properties.is_empty() {
             println!("--- Data Properties ---");
             for (property, superproperties) in data_properties {
                 println!("• {}", format_data_property_expression(property));
@@ -2133,7 +2132,6 @@ fn print_property_hierarchy_pretty(
                 println!();
             }
         }
-    }
 }
 
 fn format_object_property_expression(expr: &oxidowl::ontology::ObjectPropertyExpression) -> String {
@@ -2142,7 +2140,7 @@ fn format_object_property_expression(expr: &oxidowl::ontology::ObjectPropertyExp
             let iri_str = prop.iri.to_string();
             if let Some(name) = iri_str.split('#').next_back() {
                 name.to_string()
-            } else if let Some(name) = iri_str.split('/').last() {
+            } else if let Some(name) = iri_str.split('/').next_back() {
                 name.to_string()
             } else {
                 iri_str
@@ -2153,7 +2151,7 @@ fn format_object_property_expression(expr: &oxidowl::ontology::ObjectPropertyExp
         }
         oxidowl::ontology::ObjectPropertyExpression::PropertyChain(chain) => {
             let chain_parts: Vec<String> = chain.iter()
-                .map(|p| format_object_property_expression(p))
+                .map(format_object_property_expression)
                 .collect();
             format!("PropertyChain({})", chain_parts.join(" ∘ "))
         }
@@ -2166,7 +2164,7 @@ fn format_data_property_expression(expr: &oxidowl::ontology::DataPropertyExpress
             let iri_str = prop.iri.to_string();
             if let Some(name) = iri_str.split('#').next_back() {
                 name.to_string()
-            } else if let Some(name) = iri_str.split('/').last() {
+            } else if let Some(name) = iri_str.split('/').next_back() {
                 name.to_string()
             } else {
                 iri_str
@@ -2209,7 +2207,7 @@ fn display_object_property_hierarchy(hierarchy: &oxidowl::ontology::properties::
     // Find top properties (those with no super properties)
     for property in hierarchy.all_properties() {
         let property_iri = oxidowl::ontology::IRI::new(property.iri.as_ref());
-        if hierarchy.get_super_properties(&property_iri).map_or(true, |supers| supers.is_empty()) {
+        if hierarchy.get_super_properties(&property_iri).is_none_or(std::collections::HashSet::is_empty) {
             let property_expr = oxidowl::ontology::ObjectPropertyExpression::ObjectProperty(property.clone());
             display_object_property_subtree(hierarchy, &property_expr, 0);
         }
@@ -2222,7 +2220,7 @@ fn display_data_property_hierarchy(hierarchy: &oxidowl::ontology::properties::Da
     // Find top properties (those with no super properties)
     for property in hierarchy.all_properties() {
         let property_iri = &property.iri;
-        if hierarchy.get_super_properties(property_iri).map_or(true, |supers| supers.is_empty()) {
+        if hierarchy.get_super_properties(property_iri).is_none_or(std::collections::HashSet::is_empty) {
             // Convert properties::DataProperty to ontology::DataProperty
             let ontology_property = oxidowl::ontology::DataProperty { iri: property.iri.clone() };
             let property_expr = oxidowl::ontology::DataPropertyExpression::DataProperty(ontology_property);
