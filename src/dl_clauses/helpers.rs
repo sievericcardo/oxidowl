@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use super::types::{DLAtom, DLClause};
+use crate::dl_clauses::types::{DLAtom, DLClause};
 
 /// Trait containing helper methods for DL clause generation
 pub trait HelperMethods {
@@ -67,6 +67,16 @@ pub trait HelperMethods {
         is_negative: bool,
     ) -> Result<DLAtom>;
 
+    /// Create HermiT-style atMost atom  
+    fn create_at_most_atom(
+        &mut self,
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom>;
+
     /// Create nominal atom for hasValue expressions
     fn create_nominal_atom(
         &mut self,
@@ -76,8 +86,8 @@ pub trait HelperMethods {
         is_negative: bool,
     ) -> Result<DLAtom>;
 
-    /// Check if a property is functional
-    fn is_functional_property(&self, property: &str) -> bool;
+    /// Get the range of a property for cardinality constraints  
+    fn get_property_range(&self, property: &str) -> Option<String>;
 
     /// Introduce a definition for a complex class expression
     fn introduce_definition(
@@ -110,6 +120,41 @@ impl HelperMethods for super::generator::DLClauseGenerator {
     fn next_definition(&mut self) -> String {
         self.definition_counter += 1;
         format!("def:{}", self.definition_counter)
+    }
+
+    fn create_at_least_atom(
+        &mut self,
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom> {
+        let predicate = format!("atLeast({},{},{})", cardinality, property, range);
+        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
+    }
+
+    fn create_at_most_atom(
+        &mut self,
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom> {
+        let predicate = format!("atMost({},{},{})", cardinality, property, range);
+        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
+    }
+
+    fn create_nominal_atom(
+        &mut self,
+        value: &str,
+        property: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom> {
+        let predicate = format!("{{{}}}", value);
+        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
     fn compile_class_expression_to_atom(
@@ -354,33 +399,10 @@ impl HelperMethods for super::generator::DLClauseGenerator {
         }
     }
 
-    fn create_at_least_atom(
-        &mut self,
-        cardinality: u32,
-        property: &str,
-        range: &str,
-        variable: &str,
-        is_negative: bool,
-    ) -> Result<DLAtom> {
-        let predicate = format!("atLeast({},{},{})", cardinality, property, range);
-        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
-    }
-
-    fn create_nominal_atom(
-        &mut self,
-        value: &str,
-        _property: &str,
-        variable: &str,
-        is_negative: bool,
-    ) -> Result<DLAtom> {
-        let predicate = format!("{{{}}}", value);
-        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
-    }
-
-    fn is_functional_property(&self, _property: &str) -> bool {
-        // This would need to check the ontology for functional property declarations
-        // For now, return false as a placeholder
-        false
+    fn get_property_range(&self, _property: &str) -> Option<String> {
+        // This would look up the range of the property in the ontology
+        // For now, return a default range
+        Some("owl:Thing".to_string())
     }
 
     fn introduce_definition(
@@ -602,5 +624,40 @@ impl super::generator::DLClauseGenerator {
                 format!("Complex_{:?}", std::mem::discriminant(expr))
             }
         }
+    }
+
+    fn create_at_least_atom(
+        &mut self,
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom> {
+        let predicate = format!("atLeast({},{},{})", cardinality, property, range);
+        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
+    }
+
+    fn create_at_most_atom(
+        &mut self,
+        cardinality: u32,
+        property: &str,
+        range: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom> {
+        let predicate = format!("atMost({},{},{})", cardinality, property, range);
+        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
+    }
+
+    fn create_nominal_atom(
+        &mut self,
+        value: &str,
+        property: &str,
+        variable: &str,
+        is_negative: bool,
+    ) -> Result<DLAtom> {
+        let predicate = format!("{{{}}}", value);
+        Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 }

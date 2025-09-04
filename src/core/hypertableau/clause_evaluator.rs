@@ -186,7 +186,7 @@ pub struct RetrievalOperation {
 #[derive(Debug)]
 pub struct GroundDisjunctionHeaderManager {
     /// Header cache
-    headers: HashMap<String, GroundDisjunctionHeader>,
+    headers: HashMap<String, u32>,
 
     /// Next header ID
     next_id: u32,
@@ -209,13 +209,13 @@ pub struct BufferSupply {
 #[derive(Debug)]
 pub struct ValuesBufferManager {
     /// Main values buffer
-    values_buffer: Vec<Option<String>>,
+    values_buffer: Vec<Option<crate::dl_clauses::Individual>>,
 
     /// Maximum variables across all clauses
     max_variables: usize,
 
     /// Variable mappings
-    variable_mappings: HashMap<String, usize>,
+    variable_mappings: HashMap<crate::dl_clauses::Variable, usize>,
 }
 
 /// Union dependency set for backtracking
@@ -1004,13 +1004,50 @@ pub struct EvaluationStatistics {
     pub optimization_enabled: bool,
 }
 
-// Placeholder implementations for helper managers
+// Enhanced implementations for hypertableau clause evaluation managers
 impl GroundDisjunctionHeaderManager {
     fn new() -> Self {
         GroundDisjunctionHeaderManager {
             headers: HashMap::new(),
             next_id: 0,
         }
+    }
+
+    /// Get or create a header for a ground disjunction
+    fn get_or_create_header(&mut self, disjunction: &GroundDisjunction) -> usize {
+        // Create a canonical representation for the disjunction
+        let mut atoms = disjunction.get_header().get_predicates().to_vec();
+        atoms.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+
+        let canonical_key = format!("{:?}", atoms);
+
+        if let Some(&existing_id) = self.headers.get(&canonical_key) {
+            existing_id as usize
+        } else {
+            let new_id = self.next_id;
+            self.headers.insert(canonical_key, new_id);
+            self.next_id += 1;
+            new_id as usize
+        }
+    }
+
+    /// Check if a header exists for the given disjunction
+    fn has_header(&self, disjunction: &GroundDisjunction) -> bool {
+        let mut atoms = disjunction.get_header().get_predicates().to_vec();
+        atoms.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        let canonical_key = format!("{:?}", atoms);
+        self.headers.contains_key(&canonical_key)
+    }
+
+    /// Get total number of managed headers
+    fn header_count(&self) -> usize {
+        self.headers.len()
+    }
+
+    /// Clear all headers
+    fn clear(&mut self) {
+        self.headers.clear();
+        self.next_id = 0;
     }
 }
 
@@ -1022,6 +1059,57 @@ impl BufferSupply {
             allocation_index: 0,
         }
     }
+
+    /// Allocate a buffer with the specified capacity
+    fn allocate_buffer(&mut self, capacity: usize) -> Vec<String> {
+        // Reuse existing buffer if available and appropriately sized
+        for (i, &size) in self.buffer_sizes.iter().enumerate() {
+            if size >= capacity && !self.buffers[i].is_empty() {
+                let buffer = std::mem::take(&mut self.buffers[i]);
+                return buffer;
+            }
+        }
+
+        // Create new buffer
+        let mut buffer = Vec::with_capacity(capacity);
+        buffer.resize(capacity, String::new());
+        buffer
+    }
+
+    /// Return a buffer to the supply for reuse
+    fn return_buffer(&mut self, mut buffer: Vec<String>) {
+        buffer.clear();
+        let capacity = buffer.capacity();
+
+        // Find appropriate slot or create new one
+        for (i, size) in self.buffer_sizes.iter().enumerate() {
+            if *size == capacity {
+                if self.buffers[i].is_empty() {
+                    self.buffers[i] = buffer;
+                    return;
+                }
+            }
+        }
+
+        // Add new buffer slot
+        self.buffers.push(buffer);
+        self.buffer_sizes.push(capacity);
+    }
+
+    /// Get statistics about buffer usage
+    fn get_statistics(&self) -> (usize, usize, usize) {
+        let total_buffers = self.buffers.len();
+        let available_buffers = self.buffers.iter().filter(|b| !b.is_empty()).count();
+        let total_capacity: usize = self.buffer_sizes.iter().sum();
+        (total_buffers, available_buffers, total_capacity)
+    }
+
+    /// Clear all buffers
+    fn clear(&mut self) {
+        self.buffers.clear();
+        self.buffer_sizes.clear();
+        self.allocation_index = 0;
+    }
 }
 
 impl ValuesBufferManager {
@@ -1031,6 +1119,121 @@ impl ValuesBufferManager {
             max_variables: 0,
             variable_mappings: HashMap::new(),
         }
+    }
+
+    /// Initialize the buffer for a specific number of variables
+    fn initialize(&mut self, variable_count: usize) {
+        self.max_variables = variable_count;
+        self.values_buffer
+            .resize(variable_count, Some(crate::dl_clauses::Individual(0)));
+        self.variable_mappings.clear();
+    }
+
+    /// Set value for a variable at specific index
+    fn set_value(
+        &mut self,
+        variable_index: usize,
+        value: crate::dl_clauses::Individual,
+    ) -> std::result::Result<(), String> {
+        if variable_index >= self.max_variables {
+            return Err(format!(
+                "Variable index {} exceeds buffer size {}",
+                variable_index, self.max_variables
+            ));
+        }
+
+        self.values_buffer[variable_index] = Some(value);
+        Ok(())
+    }
+
+    /// Get value for a variable at specific index
+    fn get_value(
+        &self,
+        variable_index: usize,
+    ) -> std::result::Result<crate::dl_clauses::Individual, String> {
+        if variable_index >= self.max_variables {
+            return Err(format!(
+                "Variable index {} exceeds buffer size {}",
+                variable_index, self.max_variables
+            ));
+        }
+
+        self.values_buffer[variable_index]
+            .ok_or_else(|| format!("No value set for variable at index {}", variable_index))
+    }
+
+    /// Create a mapping from variable to buffer index
+    fn add_variable_mapping(
+        &mut self,
+        variable: crate::dl_clauses::Variable,
+        index: usize,
+    ) -> std::result::Result<(), String> {
+        if index >= self.max_variables {
+            return Err(format!(
+                "Buffer index {} exceeds maximum {}",
+                index, self.max_variables
+            ));
+        }
+
+        self.variable_mappings.insert(variable, index);
+        Ok(())
+    }
+
+    /// Get buffer index for a variable
+    fn get_variable_index(&self, variable: &crate::dl_clauses::Variable) -> Option<usize> {
+        self.variable_mappings.get(variable).copied()
+    }
+
+    /// Set value for a variable by variable reference
+    fn set_variable_value(
+        &mut self,
+        variable: &crate::dl_clauses::Variable,
+        value: crate::dl_clauses::Individual,
+    ) -> std::result::Result<(), String> {
+        if let Some(index) = self.get_variable_index(variable) {
+            self.set_value(index, value)
+        } else {
+            Err(format!("Variable {:?} not found in mappings", variable))
+        }
+    }
+
+    /// Get value for a variable by variable reference
+    fn get_variable_value(
+        &self,
+        variable: &crate::dl_clauses::Variable,
+    ) -> std::result::Result<crate::dl_clauses::Individual, String> {
+        if let Some(index) = self.get_variable_index(variable) {
+            self.get_value(index)
+        } else {
+            Err(format!("Variable {:?} not found in mappings", variable))
+        }
+    }
+
+    /// Get current buffer state as slice
+    fn get_buffer(&self) -> &[Option<crate::dl_clauses::Individual>] {
+        &self.values_buffer[..self.max_variables]
+    }
+
+    /// Reset buffer values to default
+    fn reset(&mut self) {
+        for i in 0..self.max_variables {
+            self.values_buffer[i] = Some(crate::dl_clauses::Individual(0));
+        }
+    }
+
+    /// Clear all mappings and reset buffer
+    fn clear(&mut self) {
+        self.values_buffer.clear();
+        self.max_variables = 0;
+        self.variable_mappings.clear();
+    }
+
+    /// Get statistics about buffer usage
+    fn get_statistics(&self) -> (usize, usize, usize) {
+        let buffer_size = self.max_variables;
+        let mapped_variables = self.variable_mappings.len();
+        let buffer_capacity = self.values_buffer.capacity();
+        (buffer_size, mapped_variables, buffer_capacity)
     }
 }
 

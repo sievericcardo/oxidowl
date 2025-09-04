@@ -20,8 +20,8 @@ use crate::ontology::axioms::{
     SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
 };
 use crate::ontology::{
-    Annotation, ClassExpression, DataPropertyExpression, DataRange, Individual, Literal,
-    ObjectPropertyExpression, Ontology,
+    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, ClassExpression,
+    DataPropertyExpression, DataRange, Individual, Literal, ObjectPropertyExpression, Ontology,
 };
 
 /// Visitor trait for traversing ontology components
@@ -126,6 +126,7 @@ pub trait OntologyVisitor<R = ()> {
             }
             Axiom::Rule(rule) => self.visit_swrl_rule_axiom(rule),
             Axiom::HasKey(haskey) => self.visit_haskey_axiom(haskey),
+            Axiom::DatatypeDefinition(dt_def) => self.visit_datatype_definition_axiom(dt_def),
         }
     }
 
@@ -202,15 +203,6 @@ pub trait OntologyVisitor<R = ()> {
             } => {
                 self.visit_data_property_expression(property)?;
                 self.visit_data_range(filler)
-            }
-            // Handle annotation axiom class expressions (unusual but possible)
-            ClassExpression::AnnotationAssertion { .. }
-            | ClassExpression::SubAnnotationPropertyOf { .. }
-            | ClassExpression::AnnotationPropertyDomain { .. }
-            | ClassExpression::AnnotationPropertyRange { .. } => {
-                // These are typically axioms, not class expressions
-                // But we handle them gracefully by doing nothing
-                Ok(())
             }
         }
     }
@@ -342,25 +334,47 @@ pub trait OntologyVisitor<R = ()> {
     }
 
     // Object property axioms
-    fn visit_sub_object_property_axiom(&mut self, _axiom: &SubObjectPropertyOfAxiom) -> Result<()> {
+    fn visit_sub_object_property_axiom(&mut self, axiom: &SubObjectPropertyOfAxiom) -> Result<()> {
+        self.visit_object_property_expression(&axiom.sub_property)?;
+        self.visit_object_property_expression(&axiom.super_property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_equivalent_object_properties_axiom(
         &mut self,
-        _axiom: &EquivalentObjectPropertiesAxiom,
+        axiom: &EquivalentObjectPropertiesAxiom,
     ) -> Result<()> {
+        for property in &axiom.properties {
+            self.visit_object_property_expression(property)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_disjoint_object_properties_axiom(
         &mut self,
-        _axiom: &DisjointObjectPropertiesAxiom,
+        axiom: &DisjointObjectPropertiesAxiom,
     ) -> Result<()> {
+        for property in &axiom.properties {
+            self.visit_object_property_expression(property)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_inverse_object_properties_axiom(
         &mut self,
-        _axiom: &InverseObjectPropertiesAxiom,
+        axiom: &InverseObjectPropertiesAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property1)?;
+        self.visit_object_property_expression(&axiom.property2)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_object_property_domain_axiom(
@@ -379,61 +393,106 @@ pub trait OntologyVisitor<R = ()> {
     }
     fn visit_functional_object_property_axiom(
         &mut self,
-        _axiom: &FunctionalObjectPropertyAxiom,
+        axiom: &FunctionalObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_inverse_functional_object_property_axiom(
         &mut self,
-        _axiom: &InverseFunctionalObjectPropertyAxiom,
+        axiom: &InverseFunctionalObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_reflexive_object_property_axiom(
         &mut self,
-        _axiom: &ReflexiveObjectPropertyAxiom,
+        axiom: &ReflexiveObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_irreflexive_object_property_axiom(
         &mut self,
-        _axiom: &IrreflexiveObjectPropertyAxiom,
+        axiom: &IrreflexiveObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_symmetric_object_property_axiom(
         &mut self,
-        _axiom: &SymmetricObjectPropertyAxiom,
+        axiom: &SymmetricObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_asymmetric_object_property_axiom(
         &mut self,
-        _axiom: &AsymmetricObjectPropertyAxiom,
+        axiom: &AsymmetricObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_transitive_object_property_axiom(
         &mut self,
-        _axiom: &TransitiveObjectPropertyAxiom,
+        axiom: &TransitiveObjectPropertyAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
 
     // Data property axioms
-    fn visit_sub_data_property_axiom(&mut self, _axiom: &SubDataPropertyOfAxiom) -> Result<()> {
+    fn visit_sub_data_property_axiom(&mut self, axiom: &SubDataPropertyOfAxiom) -> Result<()> {
+        self.visit_data_property_expression(&axiom.sub_property)?;
+        self.visit_data_property_expression(&axiom.super_property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_equivalent_data_properties_axiom(
         &mut self,
-        _axiom: &EquivalentDataPropertiesAxiom,
+        axiom: &EquivalentDataPropertiesAxiom,
     ) -> Result<()> {
+        for property in &axiom.properties {
+            self.visit_data_property_expression(property)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_disjoint_data_properties_axiom(
         &mut self,
-        _axiom: &DisjointDataPropertiesAxiom,
+        axiom: &DisjointDataPropertiesAxiom,
     ) -> Result<()> {
+        for property in &axiom.properties {
+            self.visit_data_property_expression(property)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_data_property_domain_axiom(&mut self, axiom: &DataPropertyDomainAxiom) -> Result<()> {
@@ -446,19 +505,35 @@ pub trait OntologyVisitor<R = ()> {
     }
     fn visit_functional_data_property_axiom(
         &mut self,
-        _axiom: &FunctionalDataPropertyAxiom,
+        axiom: &FunctionalDataPropertyAxiom,
     ) -> Result<()> {
+        self.visit_data_property_expression(&axiom.property)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
 
     // Individual axioms
-    fn visit_same_individual_axiom(&mut self, _axiom: &SameIndividualAxiom) -> Result<()> {
+    fn visit_same_individual_axiom(&mut self, axiom: &SameIndividualAxiom) -> Result<()> {
+        for individual in &axiom.individuals {
+            self.visit_individual(individual)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_different_individuals_axiom(
         &mut self,
-        _axiom: &DifferentIndividualsAxiom,
+        axiom: &DifferentIndividualsAxiom,
     ) -> Result<()> {
+        for individual in &axiom.individuals {
+            self.visit_individual(individual)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_class_assertion_axiom(&mut self, axiom: &ClassAssertionAxiom) -> Result<()> {
@@ -467,52 +542,93 @@ pub trait OntologyVisitor<R = ()> {
     }
     fn visit_object_property_assertion_axiom(
         &mut self,
-        _axiom: &ObjectPropertyAssertionAxiom,
+        axiom: &ObjectPropertyAssertionAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        self.visit_individual(&axiom.source)?;
+        self.visit_individual(&axiom.target)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_data_property_assertion_axiom(
         &mut self,
-        _axiom: &DataPropertyAssertionAxiom,
+        axiom: &DataPropertyAssertionAxiom,
     ) -> Result<()> {
+        self.visit_data_property_expression(&axiom.property)?;
+        self.visit_individual(&axiom.individual)?;
+        self.visit_literal(&axiom.value)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_negative_object_property_assertion_axiom(
         &mut self,
-        _axiom: &NegativeObjectPropertyAssertionAxiom,
+        axiom: &NegativeObjectPropertyAssertionAxiom,
     ) -> Result<()> {
+        self.visit_object_property_expression(&axiom.property)?;
+        self.visit_individual(&axiom.source)?;
+        self.visit_individual(&axiom.target)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_negative_data_property_assertion_axiom(
         &mut self,
-        _axiom: &NegativeDataPropertyAssertionAxiom,
+        axiom: &NegativeDataPropertyAssertionAxiom,
     ) -> Result<()> {
+        self.visit_data_property_expression(&axiom.property)?;
+        self.visit_individual(&axiom.individual)?;
+        self.visit_literal(&axiom.value)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
 
     // Annotation axioms
-    fn visit_annotation_assertion_axiom(
-        &mut self,
-        _axiom: &AnnotationAssertionAxiom,
-    ) -> Result<()> {
+    fn visit_annotation_assertion_axiom(&mut self, axiom: &AnnotationAssertionAxiom) -> Result<()> {
+        // Visit the subject, property, and value
+        self.visit_annotation_subject(&axiom.subject)?;
+        self.visit_annotation_property(&axiom.property)?;
+        self.visit_annotation_value(&axiom.value)?;
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_sub_annotation_property_axiom(
         &mut self,
-        _axiom: &SubAnnotationPropertyOfAxiom,
+        axiom: &SubAnnotationPropertyOfAxiom,
     ) -> Result<()> {
+        // Visit the property IRIs
+        // Note: In a real implementation, you might want to visit the properties
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_annotation_property_domain_axiom(
         &mut self,
-        _axiom: &AnnotationPropertyDomainAxiom,
+        axiom: &AnnotationPropertyDomainAxiom,
     ) -> Result<()> {
+        // Visit the domain IRI
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
     fn visit_annotation_property_range_axiom(
         &mut self,
-        _axiom: &AnnotationPropertyRangeAxiom,
+        axiom: &AnnotationPropertyRangeAxiom,
     ) -> Result<()> {
+        // Visit the range IRI
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
         Ok(())
     }
 
@@ -523,6 +639,23 @@ pub trait OntologyVisitor<R = ()> {
         }
         for data_prop in &axiom.data_properties {
             self.visit_data_property_expression(data_prop)?;
+        }
+        for annotation in &axiom.annotations {
+            self.visit_annotation(annotation)?;
+        }
+        Ok(())
+    }
+
+    fn visit_datatype_definition_axiom(
+        &mut self,
+        axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom,
+    ) -> Result<()> {
+        // Note: The data_range field uses horned_owl types, so we can't visit it with our local visitor methods
+        // In a full implementation, you'd need a separate visitor or conversion mechanism
+        // For now, just visit the annotations
+        for annotation in &axiom.annotations {
+            // Note: These are horned_owl Annotation<String> types, not our local types
+            // In a real implementation, you'd need conversion or separate handling
         }
         Ok(())
     }
@@ -547,6 +680,15 @@ pub trait OntologyVisitor<R = ()> {
         Ok(())
     }
     fn visit_annotation(&mut self, _annotation: &Annotation) -> Result<()> {
+        Ok(())
+    }
+    fn visit_annotation_subject(&mut self, _subject: &AnnotationSubject) -> Result<()> {
+        Ok(())
+    }
+    fn visit_annotation_value(&mut self, _value: &AnnotationValue) -> Result<()> {
+        Ok(())
+    }
+    fn visit_annotation_property(&mut self, _property: &AnnotationProperty) -> Result<()> {
         Ok(())
     }
 

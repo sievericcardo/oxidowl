@@ -14,6 +14,10 @@ pub mod tableau;
 pub use blocking::{BlockingChecker, BlockingStrategy};
 pub use completion::{CompletionRule, RuleApplication};
 pub use dependency::{DependencySet, DependencyTracker};
-pub use expansion::{ExpansionManager, ExpansionStrategy};
+pub use expansion::{
+    BreadthFirstExpansionStrategy, ComplexityStrategy, CreationOrderStrategy,
+    DepthFirstExpansionStrategy, ExpansionManager, ExpansionStrategy, HeuristicExpansionStrategy,
+    PriorityBasedExpansionStrategy,
+};
 pub use reasoner::Reasoner;
 pub use tableau::{Tableau, TableauState};

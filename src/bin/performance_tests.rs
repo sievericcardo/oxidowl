@@ -252,7 +252,7 @@ async fn run_reasoning_tests(
 }
 
 async fn run_memory_tests(
-    config: BenchmarkConfig,
+    _config: BenchmarkConfig,
     include_leak_detection: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Running memory benchmarks...");

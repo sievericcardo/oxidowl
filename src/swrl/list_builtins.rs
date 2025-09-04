@@ -18,23 +18,21 @@ impl SWRLBuiltIn for ListConcatBuiltIn {
             return Err(Error::reasoning("ListConcat expects at least 2 arguments"));
         }
 
-        // For this simplified implementation, we'll represent lists as comma-separated strings
-        if let SWRLValue::String(result) = &args[0] {
-            let mut concatenated = String::new();
-            for arg in &args[1..] {
-                if let SWRLValue::String(list_str) = arg {
-                    if !concatenated.is_empty() && !list_str.is_empty() {
-                        concatenated.push(',');
-                    }
-                    concatenated.push_str(list_str);
-                }
-            }
-            Ok(SWRLValue::Boolean(*result == concatenated))
-        } else {
-            Err(Error::reasoning(
-                "ListConcat first argument must be a string",
-            ))
+        // Parse input lists and concatenate them
+        let mut concatenated_items = Vec::new();
+
+        for arg in &args[1..] {
+            let items = self.parse_list_value(arg)?;
+            concatenated_items.extend(items);
         }
+
+        // Create result list representation
+        let result_list = self.create_list_value(concatenated_items)?;
+
+        // Check if first argument matches the result
+        Ok(SWRLValue::Boolean(
+            self.lists_equal(&args[0], &result_list)?,
+        ))
     }
 
     fn name(&self) -> &str {
@@ -431,6 +429,99 @@ pub fn register_list_builtins(registry: &mut crate::swrl::builtins::SWRLBuiltInR
         IRI::new("http://www.w3.org/2003/11/swrlb#empty"),
         Box::new(EmptyBuiltIn),
     );
+}
+
+// Helper methods for list operations
+impl ListConcatBuiltIn {
+    /// Parse a SWRL value as a list of items
+    fn parse_list_value(&self, value: &SWRLValue) -> Result<Vec<String>> {
+        match value {
+            SWRLValue::String(s) => {
+                if s.is_empty() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(s.split(',').map(|s| s.trim().to_string()).collect())
+                }
+            }
+            SWRLValue::Literal(lit) => {
+                let s = &lit.value;
+                if s.is_empty() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(s.split(',').map(|s| s.trim().to_string()).collect())
+                }
+            }
+            _ => Err(Error::reasoning("Cannot parse non-string value as list")),
+        }
+    }
+
+    /// Create a SWRL value representing a list
+    fn create_list_value(&self, items: Vec<String>) -> Result<SWRLValue> {
+        Ok(SWRLValue::String(items.join(",")))
+    }
+
+    /// Check if two list values are equal
+    fn lists_equal(&self, list1: &SWRLValue, list2: &SWRLValue) -> Result<bool> {
+        let items1 = self.parse_list_value(list1)?;
+        let items2 = self.parse_list_value(list2)?;
+        Ok(items1 == items2)
+    }
+}
+
+// Similar helper implementations for other list built-ins
+impl MemberBuiltIn {
+    fn parse_list_value(&self, value: &SWRLValue) -> Result<Vec<String>> {
+        match value {
+            SWRLValue::String(s) => {
+                if s.is_empty() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(s.split(',').map(|s| s.trim().to_string()).collect())
+                }
+            }
+            _ => Err(Error::reasoning("Cannot parse non-string value as list")),
+        }
+    }
+}
+
+impl ListLengthBuiltIn {
+    fn parse_list_value(&self, value: &SWRLValue) -> Result<Vec<String>> {
+        match value {
+            SWRLValue::String(s) => {
+                if s.is_empty() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(s.split(',').map(|s| s.trim().to_string()).collect())
+                }
+            }
+            _ => Err(Error::reasoning("Cannot parse non-string value as list")),
+        }
+    }
+}
+
+impl ListIntersectionBuiltIn {
+    fn parse_list_value(&self, value: &SWRLValue) -> Result<Vec<String>> {
+        match value {
+            SWRLValue::String(s) => {
+                if s.is_empty() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(s.split(',').map(|s| s.trim().to_string()).collect())
+                }
+            }
+            _ => Err(Error::reasoning("Cannot parse non-string value as list")),
+        }
+    }
+
+    fn create_list_value(&self, items: Vec<String>) -> Result<SWRLValue> {
+        Ok(SWRLValue::String(items.join(",")))
+    }
+
+    fn lists_equal(&self, list1: &SWRLValue, list2: &SWRLValue) -> Result<bool> {
+        let items1 = self.parse_list_value(list1)?;
+        let items2 = self.parse_list_value(list2)?;
+        Ok(items1 == items2)
+    }
 }
 
 #[cfg(test)]

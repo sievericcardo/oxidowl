@@ -30,6 +30,7 @@ im = "15.1"  # Immutable data structures
 smallvec = "1.15"
 ahash = "0.8"
 bitflags = "2.9"
+itertools = "0.13"
 thiserror = "2.0"
 anyhow = "1.0"
 num_cpus = "1.17"
@@ -74,6 +75,7 @@ rio_xml = "0.8"
 regex = "1.11"
 uuid = { version = "1.17", features = ["v4"] }
 url = "2.3"
+lazy_static = "1.4"
 
 # File I/O and path handling
 tempfile = "3.5"

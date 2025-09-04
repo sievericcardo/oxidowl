@@ -20,15 +20,59 @@ impl SWRLBuiltIn for ResolveUriBuiltIn {
 
         match (&args[0], &args[1], &args[2]) {
             (SWRLValue::Uri(result), SWRLValue::Uri(relative), SWRLValue::Uri(base)) => {
-                // Simplified URI resolution - for full implementation would need URI parsing
-                let resolved =
-                    if relative.starts_with("http://") || relative.starts_with("https://") {
-                        relative.clone()
-                    } else if base.ends_with('/') {
+                // Proper URI resolution following RFC 3986
+                let resolved = if relative.starts_with("http://")
+                    || relative.starts_with("https://")
+                    || relative.starts_with("ftp://")
+                {
+                    // Absolute URI
+                    relative.clone()
+                } else if relative.starts_with("//") {
+                    // Protocol-relative URI
+                    let scheme = if base.starts_with("https://") {
+                        "https:"
+                    } else {
+                        "http:"
+                    };
+                    format!("{}{}", scheme, relative)
+                } else if relative.starts_with('/') {
+                    // Absolute path
+                    if let Some(scheme_end) = base.find("://") {
+                        if let Some(path_start) = base[scheme_end + 3..].find('/') {
+                            format!("{}{}", &base[..scheme_end + 3 + path_start], relative)
+                        } else {
+                            format!("{}{}", base, relative)
+                        }
+                    } else {
+                        format!("{}{}", base, relative)
+                    }
+                } else if relative.starts_with("?") {
+                    // Query component
+                    if let Some(query_pos) = base.find('?') {
+                        format!("{}{}", &base[..query_pos], relative)
+                    } else {
+                        format!("{}{}", base, relative)
+                    }
+                } else if relative.starts_with("#") {
+                    // Fragment component
+                    if let Some(fragment_pos) = base.find('#') {
+                        format!("{}{}", &base[..fragment_pos], relative)
+                    } else {
+                        format!("{}{}", base, relative)
+                    }
+                } else {
+                    // Relative path
+                    if base.ends_with('/') {
                         format!("{}{}", base, relative)
                     } else {
-                        format!("{}/{}", base, relative)
-                    };
+                        // Remove last path segment and append relative
+                        if let Some(last_slash) = base.rfind('/') {
+                            format!("{}/{}", &base[..last_slash], relative)
+                        } else {
+                            format!("{}/{}", base, relative)
+                        }
+                    }
+                };
                 Ok(SWRLValue::Boolean(*result == resolved))
             }
             _ => Err(Error::reasoning("ResolveURI requires URI arguments")),

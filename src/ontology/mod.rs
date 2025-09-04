@@ -7,12 +7,14 @@ use url::Url;
 
 pub mod axioms;
 pub mod concepts;
+pub mod datatypes;
 pub mod individuals;
 pub mod properties;
 
 // Re-export main types
 pub use axioms::*;
 pub use concepts::*;
+pub use datatypes::*;
 pub use individuals::*;
 pub use properties::*;
 
@@ -49,6 +51,14 @@ impl IRI {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.value
+    }
+
+    /// Create IRI from URL
+    #[must_use]
+    pub fn from_url(url: Url) -> Self {
+        Self {
+            value: url.to_string(),
+        }
     }
 }
 
@@ -442,24 +452,37 @@ impl Ontology {
                 | concepts::ClassExpression::ObjectAllValuesFrom { filler, .. } => {
                     extract_classes_from_expression(filler, classes);
                 }
-                _ => {
-                    // Handle other expression types as needed
+                concepts::ClassExpression::ObjectMinCardinality { filler, .. }
+                | concepts::ClassExpression::ObjectMaxCardinality { filler, .. }
+                | concepts::ClassExpression::ObjectExactCardinality { filler, .. } => {
+                    extract_classes_from_expression(filler, classes);
+                }
+                concepts::ClassExpression::ObjectHasValue { .. }
+                | concepts::ClassExpression::ObjectHasSelf { .. }
+                | concepts::ClassExpression::ObjectOneOf(..)
+                | concepts::ClassExpression::DataSomeValuesFrom { .. }
+                | concepts::ClassExpression::DataAllValuesFrom { .. }
+                | concepts::ClassExpression::DataMinCardinality { .. }
+                | concepts::ClassExpression::DataMaxCardinality { .. }
+                | concepts::ClassExpression::DataExactCardinality { .. }
+                | concepts::ClassExpression::DataHasValue { .. } => {
+                    // These don't contain nested class expressions
                 }
             }
         }
 
-        println!("Computing signature from {} axioms", self.axioms.len());
+        log::debug!("Computing signature from {} axioms", self.axioms.len());
 
         // Extract entities from axioms
         for axiom in &self.axioms {
             let discriminant = std::mem::discriminant(axiom);
-            println!("Processing axiom discriminant: {discriminant:?}");
+            log::debug!("Processing axiom discriminant: {discriminant:?}");
             match axiom {
                 axioms::Axiom::Declaration(decl) => {
                     match &decl.entity {
                         axioms::Entity::Class(iri) => {
                             signature.classes.push(concepts::Class { iri: iri.clone() });
-                            println!("Added class from declaration: {iri}");
+                            log::debug!("Added class from declaration: {iri}");
                         }
                         axioms::Entity::ObjectProperty(iri) => {
                             // Try to convert to URL, but continue if it fails (for relative IRIs)
@@ -488,12 +511,12 @@ impl Ontology {
                     }
                 }
                 axioms::Axiom::SubClassOf(axiom) => {
-                    println!("Processing SubClassOf axiom");
+                    log::debug!("Processing SubClassOf axiom");
                     extract_classes_from_expression(&axiom.subclass, &mut signature.classes);
                     extract_classes_from_expression(&axiom.superclass, &mut signature.classes);
                 }
                 axioms::Axiom::EquivalentClasses(axiom) => {
-                    println!(
+                    log::debug!(
                         "Processing EquivalentClasses axiom with {} classes",
                         axiom.classes.len()
                     );
@@ -502,7 +525,7 @@ impl Ontology {
                     }
                 }
                 axioms::Axiom::ClassAssertion(axiom) => {
-                    println!("Processing ClassAssertion axiom");
+                    log::debug!("Processing ClassAssertion axiom");
                     extract_classes_from_expression(&axiom.class, &mut signature.classes);
                     // Also add the individual
                     if !signature.individuals.iter().any(|i| match i {
@@ -519,15 +542,37 @@ impl Ontology {
                     }
                 }
                 axioms::Axiom::DisjointUnion(axiom) => {
-                    println!("Processing DisjointUnion axiom");
+                    log::debug!("Processing DisjointUnion axiom");
                     extract_classes_from_expression(&axiom.class, &mut signature.classes);
                     for disjoint_class in &axiom.disjoint_classes {
                         extract_classes_from_expression(disjoint_class, &mut signature.classes);
                     }
                 }
+                axioms::Axiom::DisjointClasses(axiom) => {
+                    log::debug!("Processing DisjointClasses axiom");
+                    for class_expr in &axiom.classes {
+                        extract_classes_from_expression(class_expr, &mut signature.classes);
+                    }
+                }
+                axioms::Axiom::ObjectPropertyAssertion(axiom) => {
+                    log::debug!("Processing ObjectPropertyAssertion axiom");
+                    // Add individuals but these don't typically contain classes
+                    if !signature.individuals.contains(&axiom.source) {
+                        signature.individuals.push(axiom.source.clone());
+                    }
+                    if !signature.individuals.contains(&axiom.target) {
+                        signature.individuals.push(axiom.target.clone());
+                    }
+                }
+                axioms::Axiom::DataPropertyAssertion(axiom) => {
+                    log::debug!("Processing DataPropertyAssertion axiom");
+                    if !signature.individuals.contains(&axiom.individual) {
+                        signature.individuals.push(axiom.individual.clone());
+                    }
+                }
                 // Handle other axiom types as needed
                 axiom => {
-                    println!(
+                    log::debug!(
                         "Processing other axiom type: {:?}",
                         std::mem::discriminant(axiom)
                     );
@@ -535,13 +580,13 @@ impl Ontology {
             }
         }
 
-        println!(
+        log::debug!(
             "Final signature: {} classes, {} individuals",
             signature.classes.len(),
             signature.individuals.len()
         );
         for class in &signature.classes {
-            println!("  Class: {}", class.iri);
+            log::debug!("  Class: {}", class.iri);
         }
 
         Ok(signature)
@@ -561,7 +606,7 @@ impl Ontology {
         let result = horned_owl::io::rdf::reader::read(&mut reader, config)
             .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
 
-        // Convert the horned-owl ontology to oxidowl ontology using simplified approach
+        // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
         adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)
     }
@@ -734,8 +779,52 @@ impl Ontology {
                         }
                     }
                 }
+                axioms::Axiom::ClassAssertion(class_assertion) => {
+                    // Extract individual from class assertion
+                    if let Individual::Named(named) = &class_assertion.individual {
+                        individuals.push((named.iri.clone(), class_assertion.individual.clone()));
+                    }
+                }
+                axioms::Axiom::DataPropertyAssertion(data_assertion) => {
+                    // Extract individual from data property assertion
+                    if let Individual::Named(named) = &data_assertion.individual {
+                        individuals.push((named.iri.clone(), data_assertion.individual.clone()));
+                    }
+                }
+                axioms::Axiom::NegativeObjectPropertyAssertion(neg_obj_assertion) => {
+                    // Extract individuals from negative object property assertion
+                    if let Individual::Named(named) = &neg_obj_assertion.source {
+                        individuals.push((named.iri.clone(), neg_obj_assertion.source.clone()));
+                    }
+                    if let Individual::Named(named) = &neg_obj_assertion.target {
+                        individuals.push((named.iri.clone(), neg_obj_assertion.target.clone()));
+                    }
+                }
+                axioms::Axiom::NegativeDataPropertyAssertion(neg_data_assertion) => {
+                    // Extract individual from negative data property assertion
+                    if let Individual::Named(named) = &neg_data_assertion.individual {
+                        individuals
+                            .push((named.iri.clone(), neg_data_assertion.individual.clone()));
+                    }
+                }
+                axioms::Axiom::SameIndividual(same_individuals) => {
+                    // Extract individuals from same individual axiom
+                    for individual in &same_individuals.individuals {
+                        if let Individual::Named(named) = individual {
+                            individuals.push((named.iri.clone(), individual.clone()));
+                        }
+                    }
+                }
+                axioms::Axiom::DifferentIndividuals(diff_individuals) => {
+                    // Extract individuals from different individuals axiom
+                    for individual in &diff_individuals.individuals {
+                        if let Individual::Named(named) = individual {
+                            individuals.push((named.iri.clone(), individual.clone()));
+                        }
+                    }
+                }
                 _ => {
-                    // TODO: Extract individuals from other axiom types as needed
+                    // Other axiom types don't typically contain individuals
                 }
             }
         }

@@ -145,31 +145,6 @@ pub enum ClassExpression {
 
     /// Negation of a class expression (`ObjectComplementOf`)
     ObjectComplementOf(Box<ClassExpression>),
-
-    /// Annotation assertion (`AnnotationAssertion`)
-    AnnotationAssertion {
-        property: crate::ontology::AnnotationPropertyExpression,
-        subject: crate::ontology::IRI,
-        value: crate::ontology::Literal,
-    },
-
-    /// Sub-annotation property of (`SubAnnotationPropertyOf`)
-    SubAnnotationPropertyOf {
-        sub_property: crate::ontology::AnnotationPropertyExpression,
-        super_property: crate::ontology::AnnotationPropertyExpression,
-    },
-
-    /// Annotation property domain (`AnnotationPropertyDomain`)
-    AnnotationPropertyDomain {
-        property: crate::ontology::AnnotationPropertyExpression,
-        domain: Box<ClassExpression>,
-    },
-
-    /// Annotation property range (`AnnotationPropertyRange`)
-    AnnotationPropertyRange {
-        property: crate::ontology::AnnotationPropertyExpression,
-        range: Box<ClassExpression>,
-    },
 }
 
 impl ClassExpression {
@@ -640,46 +615,6 @@ impl ClassExpression {
                 filler: filler.clone(),
             }),
 
-            ClassExpression::AnnotationAssertion {
-                property,
-                subject,
-                value,
-            } => {
-                // Annotation assertions do not simplify further
-                Ok(ClassExpression::AnnotationAssertion {
-                    property: property.clone(),
-                    subject: subject.clone(),
-                    value: value.clone(),
-                })
-            }
-
-            ClassExpression::SubAnnotationPropertyOf {
-                sub_property,
-                super_property,
-            } => {
-                // Sub-annotation property assertions do not simplify further
-                Ok(ClassExpression::SubAnnotationPropertyOf {
-                    sub_property: sub_property.clone(),
-                    super_property: super_property.clone(),
-                })
-            }
-
-            ClassExpression::AnnotationPropertyDomain { property, domain } => {
-                // Annotation property domains do not simplify further
-                Ok(ClassExpression::AnnotationPropertyDomain {
-                    property: property.clone(),
-                    domain: domain.clone(),
-                })
-            }
-
-            ClassExpression::AnnotationPropertyRange { property, range } => {
-                // Annotation property ranges do not simplify further
-                Ok(ClassExpression::AnnotationPropertyRange {
-                    property: property.clone(),
-                    range: range.clone(),
-                })
-            }
-
             _ => {
                 // Other expressions remain unchanged
                 Ok(self.clone())
@@ -869,28 +804,6 @@ impl fmt::Display for ClassExpression {
                 filler,
             } => {
                 write!(f, "={cardinality} {property}.{filler}")
-            }
-            ClassExpression::AnnotationAssertion {
-                property,
-                subject,
-                value,
-            } => {
-                write!(f, "AnnotationAssertion({property}, {subject}, {value})")
-            }
-            ClassExpression::SubAnnotationPropertyOf {
-                sub_property,
-                super_property,
-            } => {
-                write!(
-                    f,
-                    "SubAnnotationPropertyOf({sub_property}, {super_property})"
-                )
-            }
-            ClassExpression::AnnotationPropertyDomain { property, domain } => {
-                write!(f, "AnnotationPropertyDomain({property}, {domain})")
-            }
-            ClassExpression::AnnotationPropertyRange { property, range } => {
-                write!(f, "AnnotationPropertyRange({property}, {range})")
             }
         }
     }

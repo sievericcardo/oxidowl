@@ -558,6 +558,7 @@ mod tests {
             node_type: NodeType::Individual,
             blocking_info: BlockingInfo::default(),
             concept_dependencies: HashMap::new(),
+            role_successors: HashMap::new(),
             status: NodeStatus::default(),
         }
     }

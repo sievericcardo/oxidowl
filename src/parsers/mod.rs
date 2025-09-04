@@ -3,6 +3,7 @@
 //! This module contains parsers and serializers for various OWL 2 DL formats.
 
 pub mod functional;
+pub mod manchester;
 pub mod ntriples;
 pub mod owl_xml;
 pub mod rdf_xml;
@@ -13,6 +14,7 @@ pub use functional::{
     FunctionalParser, parse as parse_functional, parse_file as parse_functional_file,
     save_file as save_functional_file,
 };
+pub use manchester::{ManchesterParser, ManchesterParserConfig};
 pub use ntriples::{
     NTriplesParser, parse as parse_ntriples, parse_file as parse_ntriples_file,
     save_file as save_ntriples_file,
@@ -47,6 +49,7 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
         "ttl" => OntologyFormat::Turtle,
         "nt" => OntologyFormat::NTriples,
         "omn" | "txt" => OntologyFormat::Functional,
+        "man" => OntologyFormat::Manchester,
         _ => OntologyFormat::OwlXml, // Default fallback
     };
 
@@ -112,9 +115,9 @@ impl ParserFactory {
             OntologyFormat::RdfXml => Ok(Box::new(RdfXmlParser::new())),
             OntologyFormat::Turtle => Ok(Box::new(TurtleParser::new())),
             OntologyFormat::NTriples => Ok(Box::new(NTriplesParser::new())),
-            OntologyFormat::Manchester => Err(Error::ontology_parsing(
-                "Manchester syntax not yet implemented",
-            )),
+            OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
+                ManchesterParserConfig::default(),
+            ))),
             OntologyFormat::Auto => Err(Error::ontology_parsing(
                 "Auto format should be resolved before creating parser",
             )),
@@ -188,5 +191,20 @@ impl Parser for NTriplesParser {
 
     fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
         ntriples::parse_file(path)
+    }
+}
+
+impl Parser for ManchesterParser {
+    fn parse(&self, input: &str) -> Result<Ontology> {
+        let mut parser = self.clone();
+        parser
+            .parse_string(input)
+            .map_err(|e| Error::ontology_parsing(&format!("Manchester parsing error: {:?}", e)))
+    }
+
+    fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| Error::ontology_parsing(&format!("Failed to read file: {}", e)))?;
+        self.parse(&content)
     }
 }

@@ -806,6 +806,356 @@ impl Default for ComplexityStrategy {
     }
 }
 
+/// Breadth-first expansion strategy
+#[derive(Debug)]
+pub struct BreadthFirstExpansionStrategy {
+    /// Depth tracking for breadth-first ordering
+    depth_map: HashMap<String, u32>,
+}
+
+impl BreadthFirstExpansionStrategy {
+    /// Create a new breadth-first strategy
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            depth_map: HashMap::new(),
+        }
+    }
+}
+
+impl ExpansionStrategy for BreadthFirstExpansionStrategy {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
+        self.depth_map.clear();
+        Ok(())
+    }
+
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
+        candidates
+            .iter()
+            .min_by_key(|c| self.depth_map.get(&c.node).unwrap_or(&0))
+            .cloned()
+    }
+
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
+        existentials.sort_by_key(|e| self.depth_map.get(&e.node).unwrap_or(&0));
+    }
+
+    fn should_delay_expansion(
+        &self,
+        _candidate: &ExistentialCandidate,
+        _context: &ExpansionContext,
+    ) -> bool {
+        false
+    }
+
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
+        let depth = self.depth_map.get(&candidate.node).unwrap_or(&0);
+        if *depth < 5 {
+            ExpansionPriority::High
+        } else if *depth < 10 {
+            ExpansionPriority::Normal
+        } else {
+            ExpansionPriority::Low
+        }
+    }
+
+    fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
+        // Update depth for new individuals
+        let current_depth = *self.depth_map.get(&candidate.node).unwrap_or(&0);
+        for individual in &result.new_individuals {
+            self.depth_map.insert(individual.clone(), current_depth + 1);
+        }
+    }
+
+    fn clear(&mut self) {
+        self.depth_map.clear();
+    }
+}
+
+/// Depth-first expansion strategy
+#[derive(Debug)]
+pub struct DepthFirstExpansionStrategy {
+    /// Current expansion path
+    expansion_path: Vec<String>,
+}
+
+impl DepthFirstExpansionStrategy {
+    /// Create a new depth-first strategy
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            expansion_path: Vec::new(),
+        }
+    }
+}
+
+impl ExpansionStrategy for DepthFirstExpansionStrategy {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
+        self.expansion_path.clear();
+        Ok(())
+    }
+
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
+        // Prefer candidates from current expansion path
+        if let Some(last_node) = self.expansion_path.last() {
+            if let Some(candidate) = candidates.iter().find(|c| &c.node == last_node) {
+                return Some(candidate.clone());
+            }
+        }
+        candidates.first().cloned()
+    }
+
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
+        // Reverse order for depth-first behavior
+        existentials.reverse();
+    }
+
+    fn should_delay_expansion(
+        &self,
+        _candidate: &ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> bool {
+        context.branching_depth > 50 // Limit depth to prevent infinite expansion
+    }
+
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
+        if self.expansion_path.contains(&candidate.node) {
+            ExpansionPriority::High
+        } else {
+            ExpansionPriority::Normal
+        }
+    }
+
+    fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
+        self.expansion_path.push(candidate.node.clone());
+        // Add new individuals to expansion path
+        for individual in &result.new_individuals {
+            self.expansion_path.push(individual.clone());
+        }
+    }
+
+    fn clear(&mut self) {
+        self.expansion_path.clear();
+    }
+}
+
+/// Priority-based expansion strategy
+#[derive(Debug)]
+pub struct PriorityBasedExpansionStrategy {
+    /// Priority assignments for nodes
+    node_priorities: HashMap<String, ExpansionPriority>,
+    /// Default priority for new nodes
+    default_priority: ExpansionPriority,
+}
+
+impl PriorityBasedExpansionStrategy {
+    /// Create a new priority-based strategy
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            node_priorities: HashMap::new(),
+            default_priority: ExpansionPriority::Normal,
+        }
+    }
+
+    /// Set priority for a specific node
+    pub fn set_node_priority(&mut self, node: String, priority: ExpansionPriority) {
+        self.node_priorities.insert(node, priority);
+    }
+}
+
+impl ExpansionStrategy for PriorityBasedExpansionStrategy {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
+        Ok(())
+    }
+
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
+        candidates
+            .iter()
+            .min_by_key(|c| {
+                self.node_priorities
+                    .get(&c.node)
+                    .unwrap_or(&self.default_priority)
+            })
+            .cloned()
+    }
+
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
+        existentials.sort_by_key(|e| {
+            self.node_priorities
+                .get(&e.node)
+                .unwrap_or(&self.default_priority)
+        });
+    }
+
+    fn should_delay_expansion(
+        &self,
+        candidate: &ExistentialCandidate,
+        _context: &ExpansionContext,
+    ) -> bool {
+        matches!(
+            self.node_priorities
+                .get(&candidate.node)
+                .unwrap_or(&self.default_priority),
+            ExpansionPriority::Delayed
+        )
+    }
+
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
+        self.node_priorities
+            .get(&candidate.node)
+            .unwrap_or(&self.default_priority)
+            .clone()
+    }
+
+    fn expansion_completed(
+        &mut self,
+        _candidate: &ExistentialCandidate,
+        _result: &ExpansionResult,
+    ) {
+        // No specific action needed
+    }
+
+    fn clear(&mut self) {
+        self.node_priorities.clear();
+    }
+}
+
+/// Heuristic expansion strategy using multiple heuristics
+#[derive(Debug)]
+pub struct HeuristicExpansionStrategy {
+    /// Complexity weights
+    complexity_weights: ComplexityWeights,
+    /// Depth preference
+    depth_preference: f64,
+    /// Role preference mapping
+    role_preferences: HashMap<String, f64>,
+}
+
+impl HeuristicExpansionStrategy {
+    /// Create a new heuristic strategy
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            complexity_weights: ComplexityWeights::default(),
+            depth_preference: 0.5,
+            role_preferences: HashMap::new(),
+        }
+    }
+
+    /// Calculate heuristic score for a candidate
+    fn calculate_heuristic_score(&self, candidate: &ExistentialCandidate) -> f64 {
+        let complexity = &candidate.complexity;
+
+        // Base complexity score
+        let complexity_score = self.complexity_weights.syntactic
+            * f64::from(complexity.syntactic_complexity)
+            + self.complexity_weights.role_successors * f64::from(complexity.role_successors)
+            + self.complexity_weights.branching_factor * f64::from(complexity.branching_factor);
+
+        // Role preference adjustment
+        let role_key = format!("{:?}", candidate.role);
+        let role_adjustment = self.role_preferences.get(&role_key).unwrap_or(&1.0);
+
+        complexity_score * role_adjustment
+    }
+}
+
+impl ExpansionStrategy for HeuristicExpansionStrategy {
+    fn initialise(&mut self, _context: &ExpansionContext) -> Result<()> {
+        Ok(())
+    }
+
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
+        candidates
+            .iter()
+            .min_by(|a, b| {
+                self.calculate_heuristic_score(a)
+                    .partial_cmp(&self.calculate_heuristic_score(b))
+                    .unwrap_or(Ordering::Equal)
+            })
+            .cloned()
+    }
+
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
+        existentials.sort_by(|a, b| {
+            self.calculate_heuristic_score(a)
+                .partial_cmp(&self.calculate_heuristic_score(b))
+                .unwrap_or(Ordering::Equal)
+        });
+    }
+
+    fn should_delay_expansion(
+        &self,
+        candidate: &ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> bool {
+        self.calculate_heuristic_score(candidate) > 20.0 && context.branching_depth > 20
+    }
+
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
+        let score = self.calculate_heuristic_score(candidate);
+
+        if score < 5.0 {
+            ExpansionPriority::High
+        } else if score < 15.0 {
+            ExpansionPriority::Normal
+        } else if score < 25.0 {
+            ExpansionPriority::Low
+        } else {
+            ExpansionPriority::Delayed
+        }
+    }
+
+    fn expansion_completed(
+        &mut self,
+        _candidate: &ExistentialCandidate,
+        _result: &ExpansionResult,
+    ) {
+        // Could update heuristics based on expansion results
+    }
+
+    fn clear(&mut self) {
+        // No persistent state to clear
+    }
+}
+
+impl Default for BreadthFirstExpansionStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for DepthFirstExpansionStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for PriorityBasedExpansionStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for HeuristicExpansionStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Uuid generation for unique identifiers
 mod uuid {
     pub struct Uuid;

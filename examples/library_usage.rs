@@ -29,7 +29,11 @@ async fn main() -> Result<()> {
     );
 
     // 5. Create reasoning service for queries
-    let ontology = reasoner.get_ontology()?;
+    let ontology = reasoner
+        .get_ontology()
+        .ok_or_else(|| oxidowl::Error::OntologyParsing {
+            message: "No ontology loaded".to_string(),
+        })?;
     let ontology_data = ontology.read().unwrap().clone();
     let reasoning_service = ReasoningService::new(ontology_data.clone(), config.clone());
 
