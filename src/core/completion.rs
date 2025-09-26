@@ -49,6 +49,42 @@ pub enum CompletionRule {
     Guess,
 }
 
+/// Strategy for applying completion rules
+#[derive(Debug, Clone)]
+pub struct CompletionStrategy {
+    /// Rule priority mapping
+    pub rule_priorities: HashMap<CompletionRule, RulePriority>,
+    /// Enable/disable certain rules
+    pub enabled_rules: HashMap<CompletionRule, bool>,
+}
+
+impl Default for CompletionStrategy {
+    fn default() -> Self {
+        let mut rule_priorities = HashMap::new();
+        rule_priorities.insert(CompletionRule::And, RulePriority::High);
+        rule_priorities.insert(CompletionRule::All, RulePriority::High);
+        rule_priorities.insert(CompletionRule::Some, RulePriority::Normal);
+        rule_priorities.insert(CompletionRule::Or, RulePriority::Low);
+        rule_priorities.insert(CompletionRule::Choose, RulePriority::Low);
+        
+        let mut enabled_rules = HashMap::new();
+        for rule in [
+            CompletionRule::And, CompletionRule::Or, CompletionRule::Some,
+            CompletionRule::All, CompletionRule::AtLeast, CompletionRule::AtMost,
+            CompletionRule::Nominal, CompletionRule::Self_, CompletionRule::Choose,
+            CompletionRule::Datatype, CompletionRule::Unfold, CompletionRule::PropertyChain,
+            CompletionRule::Guess
+        ] {
+            enabled_rules.insert(rule, true);
+        }
+
+        Self {
+            rule_priorities,
+            enabled_rules,
+        }
+    }
+}
+
 impl CompletionRule {
     /// Apply the completion rule
     pub fn apply(&self, application: &RuleApplication) -> Result<Vec<RuleApplication>> {

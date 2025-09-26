@@ -101,7 +101,7 @@ pub struct TableauFactory {
 impl TableauFactory {
     pub fn new(config: ReasonerConfig) -> Result<Self> {
         Ok(Self {
-            tableau_builder: TableauBuilder::new(&config.reasoning)?,
+            tableau_builder: TableauBuilder::new(config.reasoning.clone()),
             config,
         })
     }

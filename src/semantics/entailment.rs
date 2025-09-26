@@ -398,7 +398,7 @@ impl EntailmentChecker {
 
         // Build tableau for instance checking
         let config = ReasoningConfig::default();
-        let builder = TableauBuilder::new(&config)?;
+        let builder = TableauBuilder::new(config);
 
         // Create tableau with negated class assertion (a : ¬C)
         let individual_str = individual
@@ -693,7 +693,7 @@ impl EntailmentChecker {
 
         // Build tableau for subsumption checking (A ⊑ B iff A ⊓ ¬B is unsatisfiable)
         let config = ReasoningConfig::default();
-        let builder = TableauBuilder::new(&config)?;
+        let builder = TableauBuilder::new(config);
 
         let sub_str = self.class_expression_to_string(sub)?;
         let super_str = self.class_expression_to_string(super_)?;
