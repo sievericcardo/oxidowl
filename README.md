@@ -1,6 +1,6 @@
 # Oxidowl
 
-A high-performance Description Logic reasoner for OWL 2 DL ontologies, implemented in Rust with advanced hypertableau algorithms, parallel computation, and integrated horned-owl support.
+A high-performance Description Logic reasoner for OWL 2 DL ontologies, implemented in Rust with advanced tableau algorithms, parallel computation, and integrated horned-owl support.
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Rust](https://img.shields.io/badge/rust-1.88+-orange.svg)](https://www.rust-lang.org)
@@ -10,11 +10,11 @@ A high-performance Description Logic reasoner for OWL 2 DL ontologies, implement
 
 ## Overview
 
-Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements HermiT's hypertableau algorithm with hyperresolution and ground disjunctions for efficient reasoning, while leveraging Rust's memory safety and performance characteristics.
+Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms while leveraging Rust's memory safety and performance characteristics.
 
 ### Key Features
 
-- 🚀 **High Performance**: Advanced hypertableau algorithms with parallel computation
+- 🚀 **High Performance**: Advanced tableau algorithms with parallel computation
 - 🔧 **Complete OWL 2 DL Support**: Handles SROIQV(D) description logic with DisjointUnion axioms
 - 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, classification, and instance checking
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
@@ -134,7 +134,7 @@ use oxidowl::config::{ReasonerConfig, TableauAlgorithm};
 use oxidowl::swrl::{SWRLConfig, SWRLReasoningStrategy};
 
 let config = ReasonerConfig {
-    algorithm: TableauAlgorithm::HyperTableau,
+    algorithm: TableauAlgorithm::Traditional,
     parallel_processing: true,
     max_threads: Some(8),
     timeout: Some(std::time::Duration::from_secs(300)),
@@ -162,11 +162,7 @@ let swrl_config = SWRLConfig {
 
 - **`core`** - Core reasoning engine with tableau algorithms
   - `reasoner.rs` - Main reasoner interface
-  - `tableau.rs` - Traditional tableau implementation
-  - `hypertableau/` - Advanced hypertableau algorithms
-    - `hyperresolution.rs` - Hyperresolution inference
-    - `ground_disjunction.rs` - Ground disjunction handling
-    - `extension_table.rs` - Extension table management
+  - `tableau.rs` - Tableau implementation with node and edge management
 
 - **`ontology`** - Ontology representation and management (built on horned-owl)
   - `axioms.rs` - Axiom structures and operations including DisjointUnion
@@ -195,15 +191,15 @@ let swrl_config = SWRLConfig {
 
 ### Algorithms
 
-#### HyperTableau Algorithm
+#### Tableau Algorithm
 
-Oxidowl implements HermiT's hypertableau algorithm, which combines:
+Oxidowl implements an efficient tableau algorithm that provides:
 
-- **Hyperresolution**: Efficient inference using resolution-based techniques
-- **Ground Disjunctions**: Optimized handling of disjunctive information
-- **Extension Tables**: Compact representation of concept and role assertions
-- **Dependency Tracking**: Intelligent backtracking and clause learning
-- **Advanced Blocking**: Anywhere blocking with cycle detection
+- **Systematic Expansion**: Sound and complete reasoning through node expansion
+- **Optimized Rule Application**: Smart ordering and caching of tableau rules
+- **Advanced Blocking**: Anywhere blocking with cycle detection for termination
+- **Dependency Tracking**: Intelligent backtracking and conflict resolution
+- **Memory Management**: Efficient data structures for large ontologies
 
 #### Performance Optimizations
 
@@ -460,7 +456,7 @@ This project is licensed under the BSD 3-Clause License - see the [LICENSE](LICE
 
 ## Acknowledgments
 
-- Inspired by the [HermiT](https://github.com/owlcs/hermit-reasoner/) reasoner and its hypertableau algorithms and [Konclude](https://github.com/konclude/Konclude) for its advanced reasoning techniques
+- Inspired by the [HermiT](https://github.com/owlcs/hermit-reasoner/) reasoner and [Konclude](https://github.com/konclude/Konclude) for their advanced reasoning techniques
 - Built with the Rust ecosystem's excellent crates
 - Thanks to the OWL and Semantic Web communities
 

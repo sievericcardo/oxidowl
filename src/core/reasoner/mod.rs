@@ -33,7 +33,7 @@ pub use self::{
     },
     statistics::ReasoningStatistics,
     tableau::{
-        HyperTableauInterface, ReasoningTask, TableauAlgorithmInstance, TableauFactory,
+        ReasoningTask, TableauAlgorithmInstance, TableauFactory,
         TableauRunner, TraditionalTableauRunner,
     },
     tasks::ReasoningTaskService,

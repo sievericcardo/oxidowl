@@ -60,8 +60,6 @@ pub struct ReasoningConfig {
 pub enum TableauAlgorithm {
     /// Traditional tableau algorithm
     Traditional,
-    /// `HyperTableau` algorithm (HermiT-style)
-    HyperTableau,
 }
 
 /// Blocking strategy for the tableau algorithm

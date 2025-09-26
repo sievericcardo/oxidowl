@@ -7,7 +7,6 @@ pub mod blocking;
 pub mod completion;
 pub mod dependency;
 pub mod expansion;
-pub mod hypertableau;
 pub mod reasoner;
 pub mod tableau;
 

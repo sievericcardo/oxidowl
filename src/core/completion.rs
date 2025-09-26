@@ -270,11 +270,8 @@ pub struct RuleResult {
     /// Branching points created
     pub branches: Vec<BranchInfo>,
 
-    /// Branching points for choice rules
-    pub branching_points: Vec<(
-        crate::core::hypertableau::branching::BranchingType,
-        Vec<crate::core::hypertableau::branching::BranchingChoice>,
-    )>,
+    /// Branching points for choice rules (simplified from HyperTableau)
+    pub branching_points: Vec<(String, Vec<String>)>,
 
     /// Data property assertions
     pub data_assertions: Vec<(
@@ -531,29 +528,14 @@ impl CompletionRuleSet {
         {
             // Extract disjuncts from union
             if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
-                // Create branching choices for each disjunct
+                // Create branching choices for each disjunct (simplified)
                 let mut choices = Vec::new();
                 for (index, disjunct) in disjuncts.iter().enumerate() {
-                    let individual = string_to_individual(application.node.clone());
-                    choices.push(crate::core::hypertableau::branching::BranchingChoice::new(
-                        index,
-                        format!("Disjunct {index}: {disjunct}"),
-                        disjunct.clone(),
-                        individual,
-                    ));
+                    choices.push(format!("Disjunct {index}: {disjunct}"));
                 }
 
-                // Create branching point
-                let individual = string_to_individual(application.node.clone());
-                let branching_type = crate::core::hypertableau::branching::BranchingType::GroundDisjunction {
-                    disjunction: crate::core::hypertableau::ground_disjunction::GroundDisjunction::from_class_expression(
-                        concept.clone(),
-                        individual.clone(),
-                        dependencies.clone(),
-                    )?,
-                    individual: individual.clone(),
-                };
-
+                // Create simple branching point
+                let branching_type = format!("GroundDisjunction: {concept}");
                 result.branching_points.push((branching_type, choices));
             }
         }
