@@ -12,6 +12,7 @@ use std::{
 use crate::{
     Error, Result,
     ontology::{ClassExpression, Ontology},
+    parsers::common::OntologySerializer,
 };
 
 /// Generate a unique axiom ID
@@ -878,44 +879,10 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     parse(&content)
 }
 
-/// Save ontology to Functional Syntax file
+/// Save ontology to Functional Syntax file (using common infrastructure)
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file =
-        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
-
-    // Write ontology header
-    if let Some(onto_iri) = ontology.get_iri() {
-        if let Some(version_iri) = &ontology.version_iri {
-            writeln!(file, "Ontology(<{}> <{}>", onto_iri, version_iri)?;
-        } else {
-            writeln!(file, "Ontology(<{}>", onto_iri)?;
-        }
-    } else {
-        writeln!(file, "Ontology(")?;
-    }
-
-    // Write imports
-    for import in &ontology.imports {
-        writeln!(file, "  Import(<{}>)", import)?;
-    }
-
-    // Write annotations
-    for annotation in &ontology.annotations {
-        writeln!(
-            file,
-            "  Annotation({} {})",
-            serialize_annotation_property(&annotation.property),
-            serialize_annotation_value(&annotation.value)
-        )?;
-    }
-
-    // Write axioms
-    for axiom in ontology.axioms() {
-        writeln!(file, "  {}", serialize_axiom(axiom))?;
-    }
-
-    writeln!(file, ")")?;
-    Ok(())
+    let serializer = FunctionalSyntaxSerializer::new();
+    serializer.serialize_to_file(ontology, path)
 }
 
 fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
@@ -999,5 +966,56 @@ fn serialize_annotation_value(value: &crate::ontology::AnnotationValue) -> Strin
         crate::ontology::AnnotationValue::AnonymousIndividual(anon) => {
             format!("_:{}", anon.id)
         }
+    }
+}
+
+/// Functional Syntax Serializer
+#[derive(Debug, Clone, Default)]
+pub struct FunctionalSyntaxSerializer;
+
+impl FunctionalSyntaxSerializer {
+    /// Create a new functional syntax serializer
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl OntologySerializer for FunctionalSyntaxSerializer {
+    fn serialize(&self, ontology: &Ontology) -> Result<String> {
+        let mut content = String::new();
+        
+        // Write ontology header
+        if let Some(onto_iri) = ontology.get_iri() {
+            if let Some(version_iri) = &ontology.version_iri {
+                content.push_str(&format!("Ontology(<{}> <{}>\n", onto_iri, version_iri));
+            } else {
+                content.push_str(&format!("Ontology(<{}>\n", onto_iri));
+            }
+        } else {
+            content.push_str("Ontology(\n");
+        }
+
+        // Write imports
+        for import in &ontology.imports {
+            content.push_str(&format!("  Import(<{}>)\n", import));
+        }
+
+        // Write annotations
+        for annotation in &ontology.annotations {
+            content.push_str(&format!(
+                "  Annotation({} {})\n",
+                serialize_annotation_property(&annotation.property),
+                serialize_annotation_value(&annotation.value)
+            ));
+        }
+
+        // Write axioms
+        for axiom in ontology.axioms() {
+            content.push_str(&format!("  {}\n", serialize_axiom(axiom)));
+        }
+
+        content.push_str(")\n");
+        Ok(content)
     }
 }

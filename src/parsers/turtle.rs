@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
+use super::common::OntologySerializer;
 
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {
@@ -1242,78 +1243,97 @@ pub fn parse_file_with_config<P: AsRef<Path>>(
     parser.parse_string(&content)
 }
 
-/// Save ontology to Turtle file
-pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut content = String::new();
+/// Turtle format serializer implementing the common serialization interface
+#[derive(Debug, Clone, Default)]
+pub struct TurtleSerializer;
 
-    // Add standard prefixes
-    content.push_str("@prefix : <http://example.org/> .\n");
-    content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
-    content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
-    content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
-    content.push('\n');
-
-    // Write ontology declaration
-    if let Some(iri) = ontology.get_iri() {
-        content.push_str(&format!("<{iri}> rdf:type owl:Ontology .\n\n"));
+impl TurtleSerializer {
+    /// Create a new TurtleSerializer instance
+    #[must_use]
+    pub fn new() -> Self {
+        Self
     }
+}
 
-    // Write class declarations
-    for (iri, _class) in ontology.classes() {
-        content.push_str(&format!("<{iri}> rdf:type owl:Class .\n"));
-    }
-    content.push('\n');
+impl OntologySerializer for TurtleSerializer {
+    fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        let mut content = String::new();
 
-    // Write object property declarations
-    for prop in ontology.object_properties() {
-        content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
-    }
-    content.push('\n');
+        // Add standard prefixes
+        content.push_str("@prefix : <http://example.org/> .\n");
+        content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
+        content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+        content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
+        content.push('\n');
 
-    // Write axioms (basic serialization)
-    for axiom in ontology.axioms() {
-        match axiom {
-            crate::ontology::Axiom::SubClassOf(sub) => {
-                if let (ClassExpression::Class(subclass), ClassExpression::Class(superclass)) =
-                    (&sub.subclass, &sub.superclass)
-                {
-                    content.push_str(&format!(
-                        "<{}> rdfs:subClassOf <{}> .\n",
-                        subclass.iri, superclass.iri
-                    ));
-                }
-            }
-            crate::ontology::Axiom::ClassAssertion(assertion) => {
-                if let ClassExpression::Class(class) = &assertion.class {
-                    if let Some(individual_iri) = assertion.individual.iri() {
-                        content.push_str(&format!(
-                            "<{}> rdf:type <{}> .\n",
-                            individual_iri, class.iri
-                        ));
-                    }
-                }
-            }
-            crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
-                if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
-                    &assertion.property
-                {
-                    if let (Some(source_iri), Some(target_iri)) =
-                        (assertion.source.iri(), assertion.target.iri())
+        // Write ontology declaration
+        if let Some(iri) = ontology.get_iri() {
+            content.push_str(&format!("<{iri}> rdf:type owl:Ontology .\n\n"));
+        }
+
+        // Write class declarations
+        for (iri, _class) in ontology.classes() {
+            content.push_str(&format!("<{iri}> rdf:type owl:Class .\n"));
+        }
+        content.push('\n');
+
+        // Write object property declarations
+        for prop in ontology.object_properties() {
+            content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
+        }
+        content.push('\n');
+
+        // Write axioms (basic serialization)
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(sub) => {
+                    if let (ClassExpression::Class(subclass), ClassExpression::Class(superclass)) =
+                        (&sub.subclass, &sub.superclass)
                     {
                         content.push_str(&format!(
-                            "<{}> <{}> <{}> .\n",
-                            source_iri, prop.iri, target_iri
+                            "<{}> rdfs:subClassOf <{}> .\n",
+                            subclass.iri, superclass.iri
                         ));
                     }
                 }
-            }
-            _ => {
-                // Skip complex axioms for now
+                crate::ontology::Axiom::ClassAssertion(assertion) => {
+                    if let ClassExpression::Class(class) = &assertion.class {
+                        if let Some(individual_iri) = assertion.individual.iri() {
+                            content.push_str(&format!(
+                                "<{}> rdf:type <{}> .\n",
+                                individual_iri, class.iri
+                            ));
+                        }
+                    }
+                }
+                crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
+                    if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
+                        &assertion.property
+                    {
+                        if let (Some(source_iri), Some(target_iri)) =
+                            (assertion.source.iri(), assertion.target.iri())
+                        {
+                            content.push_str(&format!(
+                                "<{}> <{}> <{}> .\n",
+                                source_iri, prop.iri, target_iri
+                            ));
+                        }
+                    }
+                }
+                _ => {
+                    // Skip complex axioms for now
+                }
             }
         }
-    }
 
-    std::fs::write(path, content).map_err(|e| Error::io(format!("Failed to write file: {e}")))
+        Ok(content)
+    }
+}
+
+/// Save ontology to Turtle file
+pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
+    let serializer = TurtleSerializer::new();
+    serializer.serialize_to_file(ontology, path)
 }
 
 #[cfg(test)]
