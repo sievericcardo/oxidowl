@@ -1177,3 +1177,47 @@ mod uuid {
         }
     }
 }
+
+/// Default expansion strategy wrapper
+#[derive(Debug)]
+pub struct DefaultExpansionStrategy {
+    inner: BreadthFirstExpansionStrategy,
+}
+
+impl Default for DefaultExpansionStrategy {
+    fn default() -> Self {
+        Self {
+            inner: BreadthFirstExpansionStrategy::new(),
+        }
+    }
+}
+
+impl ExpansionStrategy for DefaultExpansionStrategy {
+    fn initialise(&mut self, context: &ExpansionContext) -> Result<()> {
+        self.inner.initialise(context)
+    }
+
+    fn select_next_existential(&mut self, candidates: &[ExistentialCandidate]) -> Option<ExistentialCandidate> {
+        self.inner.select_next_existential(candidates)
+    }
+
+    fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
+        self.inner.order_expansions(existentials)
+    }
+
+    fn should_delay_expansion(&self, candidate: &ExistentialCandidate, context: &ExpansionContext) -> bool {
+        self.inner.should_delay_expansion(candidate, context)
+    }
+
+    fn get_expansion_priority(&self, candidate: &ExistentialCandidate) -> ExpansionPriority {
+        self.inner.get_expansion_priority(candidate)
+    }
+
+    fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
+        self.inner.expansion_completed(candidate, result)
+    }
+
+    fn clear(&mut self) {
+        self.inner.clear()
+    }
+}

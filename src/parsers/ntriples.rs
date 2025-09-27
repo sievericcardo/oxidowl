@@ -12,6 +12,7 @@ use crate::{
     Error, Result,
     ontology::{IRI, Ontology},
 };
+use super::common::OntologySerializer;
 
 /// N-Triples Parser
 #[derive(Debug, Clone)]
@@ -88,20 +89,38 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     parse(&content)
 }
 
+/// N-Triples format serializer implementing the common serialization interface
+#[derive(Debug, Clone, Default)]
+pub struct NTriplesSerializer;
+
+impl NTriplesSerializer {
+    /// Create a new NTriplesSerializer instance
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl OntologySerializer for NTriplesSerializer {
+    fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        let mut content = String::new();
+
+        for (subject, class) in ontology.classes() {
+            content.push_str(&format!("{} rdf:type {} .\n", subject, class.iri));
+        }
+
+        for (subject, individual) in ontology.individuals() {
+            if let Some(iri) = individual.iri() {
+                content.push_str(&format!("{iri} rdf:type Individual .\n"));
+            }
+        }
+
+        Ok(content)
+    }
+}
+
 /// Save ontology to N-Triples file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file =
-        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
-
-    for (subject, class) in ontology.classes() {
-        writeln!(file, "{} rdf:type {} .", subject, class.iri)?;
-    }
-
-    for (subject, individual) in ontology.individuals() {
-        if let Some(iri) = individual.iri() {
-            writeln!(file, "{iri} rdf:type Individual .")?;
-        }
-    }
-
-    Ok(())
+    let serializer = NTriplesSerializer::new();
+    serializer.serialize_to_file(ontology, path)
 }

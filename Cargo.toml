@@ -55,8 +55,6 @@ plotters = { version = "0.3", optional = true }
 parking_lot = "0.12"
 
 # Hash computation and advanced data structures
-seahash = "4.1"  # Fast hash function for signatures
-fxhash = "0.2"   # Fast hash map for performance-critical operations
 roaring = "0.11" # Compressed bitmaps for efficient set operations
 lru = "0.16"     # LRU cache for blocking candidates
 

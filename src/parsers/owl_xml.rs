@@ -9,6 +9,7 @@ use crate::{
         DeclarationAxiom, Entity, IRI, Individual, NamedIndividual, ObjectProperty,
         ObjectPropertyExpression, Ontology, axioms::DisjointUnionAxiom,
     },
+    parsers::common::OntologySerializer,
 };
 use std::{
     fs::File,
@@ -928,60 +929,71 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     parse(&content)
 }
 
+/// OWL XML serializer using common infrastructure
+pub struct OwlXmlSerializer;
+
+impl OwlXmlSerializer {
+    /// Create a new OWL XML serializer
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for OwlXmlSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OntologySerializer for OwlXmlSerializer {
+    /// Serialize an ontology to OWL XML format string
+    fn serialize(&self, ontology: &Ontology) -> Result<String> {
+        let mut output = String::new();
+        
+        // Write XML declaration and namespace declarations
+        output.push_str("<?xml version=\"1.0\"?>\n");
+        output.push_str("<Ontology xmlns=\"http://www.w3.org/2002/07/owl#\"\n");
+        output.push_str("         xml:base=\"http://www.w3.org/2002/07/owl#\"\n");
+        output.push_str("         xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
+        output.push_str("         xmlns:xml=\"http://www.w3.org/XML/1998/namespace\"\n");
+        output.push_str("         xmlns:xsd=\"http://www.w3.org/2001/XMLSchema#\"\n");
+        output.push_str("         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"\n");
+
+        // Add ontology IRI and version IRI if present
+        if let Some(onto_iri) = ontology.get_iri() {
+            output.push_str(&format!("         ontologyIRI=\"{}\"", onto_iri));
+            if let Some(version_iri) = &ontology.version_iri {
+                output.push_str(&format!("\n         versionIRI=\"{}\"", version_iri));
+            }
+            output.push_str(">\n");
+        } else {
+            output.push_str(">\n");
+        }
+
+        // Write imports
+        for import in &ontology.imports {
+            output.push_str(&format!("  <Import>{}</Import>\n", import));
+        }
+
+        // Write ontology annotations
+        for annotation in &ontology.annotations {
+            output.push_str(&format!("  {}\n", serialize_annotation_xml(annotation, 1)));
+        }
+
+        // Write axioms
+        for axiom in ontology.axioms() {
+            output.push_str(&format!("  {}\n", serialize_axiom_xml(axiom)));
+        }
+
+        output.push_str("</Ontology>\n");
+        Ok(output)
+    }
+}
+
 /// Save ontology to OWL XML file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file =
-        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
-
-    // Write XML declaration and namespace declarations
-    writeln!(file, "<?xml version=\"1.0\"?>")?;
-    writeln!(file, "<Ontology xmlns=\"http://www.w3.org/2002/07/owl#\"")?;
-    writeln!(file, "         xml:base=\"http://www.w3.org/2002/07/owl#\"")?;
-    writeln!(
-        file,
-        "         xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
-    )?;
-    writeln!(
-        file,
-        "         xmlns:xml=\"http://www.w3.org/XML/1998/namespace\""
-    )?;
-    writeln!(
-        file,
-        "         xmlns:xsd=\"http://www.w3.org/2001/XMLSchema#\""
-    )?;
-    writeln!(
-        file,
-        "         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\""
-    )?;
-
-    // Add ontology IRI and version IRI if present
-    if let Some(onto_iri) = ontology.get_iri() {
-        write!(file, "         ontologyIRI=\"{}\"", onto_iri)?;
-        if let Some(version_iri) = &ontology.version_iri {
-            write!(file, "\n         versionIRI=\"{}\"", version_iri)?;
-        }
-        writeln!(file, ">")?;
-    } else {
-        writeln!(file, ">")?;
-    }
-
-    // Write imports
-    for import in &ontology.imports {
-        writeln!(file, "  <Import>{}</Import>", import)?;
-    }
-
-    // Write ontology annotations
-    for annotation in &ontology.annotations {
-        writeln!(file, "  {}", serialize_annotation_xml(&annotation, 1))?;
-    }
-
-    // Write axioms
-    for axiom in ontology.axioms() {
-        writeln!(file, "  {}", serialize_axiom_xml(axiom))?;
-    }
-
-    writeln!(file, "</Ontology>")?;
-    Ok(())
+    let serializer = OwlXmlSerializer::new();
+    serializer.serialize_to_file(ontology, path)
 }
 
 fn serialize_axiom_xml(axiom: &Axiom) -> String {

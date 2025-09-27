@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::{Error, Result, ontology::Ontology};
+use super::common::OntologySerializer;
 
 /// Configuration for the RDF/XML parser
 #[derive(Debug, Clone)]
@@ -493,6 +494,107 @@ impl Default for RdfXmlParser {
     }
 }
 
+/// RDF/XML Serializer
+#[derive(Debug, Clone)]
+pub struct RdfXmlSerializer {
+}
+
+impl RdfXmlSerializer {
+    /// Create a new RDF/XML serializer
+    #[must_use]
+    pub fn new() -> Self {
+        Self { }
+    }
+}
+
+impl Default for RdfXmlSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OntologySerializer for RdfXmlSerializer {
+    fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        let mut result = String::new();
+        
+        // XML header and RDF root
+        result.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        result.push_str("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
+        result.push_str("         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"\n");
+        result.push_str("         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">\n");
+
+        // Ontology declaration
+        result.push_str("  <!-- Ontology Declaration -->\n");
+        let iri_str = ontology.iri.as_ref().map_or(
+            "http://example.org/ontology",
+            crate::ontology::IRI::as_str,
+        );
+        result.push_str(&format!("  <owl:Ontology rdf:about=\"{}\" />\n\n", iri_str));
+
+        // Serialize classes
+        if !ontology.classes().is_empty() {
+            result.push_str("  <!-- Class Declarations -->\n");
+            for (_, class) in ontology.classes() {
+                result.push_str(&format!("  <owl:Class rdf:about=\"{}\" />\n", class.iri.as_str()));
+            }
+            result.push_str("\n");
+        }
+
+        // Serialize object properties
+        let object_properties = ontology.object_properties();
+        if !object_properties.is_empty() {
+            result.push_str("  <!-- Object Property Declarations -->\n");
+            for prop in object_properties {
+                result.push_str(&format!("  <owl:ObjectProperty rdf:about=\"{}\" />\n", prop.iri.as_str()));
+            }
+            result.push_str("\n");
+        }
+
+        // Serialize data properties from axioms
+        let mut data_properties = std::collections::HashSet::new();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
+                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &assertion.property {
+                        data_properties.insert(prop.clone());
+                    }
+                }
+                crate::ontology::Axiom::SubDataPropertyOf(sub_prop) => {
+                    if let crate::ontology::DataPropertyExpression::DataProperty(sub) = &sub_prop.sub_property {
+                        data_properties.insert(sub.clone());
+                    }
+                    if let crate::ontology::DataPropertyExpression::DataProperty(super_prop) = &sub_prop.super_property {
+                        data_properties.insert(super_prop.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !data_properties.is_empty() {
+            result.push_str("  <!-- Data Property Declarations -->\n");
+            for prop in data_properties {
+                result.push_str(&format!("  <owl:DatatypeProperty rdf:about=\"{}\" />\n", prop.iri.as_str()));
+            }
+            result.push_str("\n");
+        }
+
+        // Serialize individuals
+        if !ontology.individuals().is_empty() {
+            result.push_str("  <!-- Individual Declarations -->\n");
+            for (_, individual) in ontology.individuals() {
+                if let crate::ontology::Individual::Named(named) = individual {
+                    result.push_str(&format!("  <owl:NamedIndividual rdf:about=\"{}\" />\n", named.iri.as_str()));
+                }
+            }
+            result.push_str("\n");
+        }
+
+        result.push_str("</rdf:RDF>\n");
+        Ok(result)
+    }
+}
+
 /// Parse RDF/XML from string content using default parser
 pub fn parse(content: &str) -> Result<Ontology> {
     let parser = RdfXmlParser::new();
@@ -514,161 +616,8 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 
 /// Save ontology to RDF/XML file
 pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
-    let mut file =
-        File::create(path).map_err(|e| Error::io(format!("Failed to create file: {e}")))?;
-
-    // Implement comprehensive serialization to RDF/XML
-    writeln!(file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")?;
-    writeln!(
-        file,
-        "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
-    )?;
-    writeln!(
-        file,
-        "         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\""
-    )?;
-    writeln!(
-        file,
-        "         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">"
-    )?;
-
-    // Serialize ontology IRI
-    writeln!(file, "  <!-- Ontology Declaration -->")?;
-    let iri_str = ontology.iri.as_ref().map_or(
-        "http://example.org/ontology",
-        super::super::ontology::IRI::as_str,
-    );
-    writeln!(file, "  <owl:Ontology rdf:about=\"{iri_str}\" />")?;
-    writeln!(file)?;
-
-    // Serialize classes
-    if !ontology.classes().is_empty() {
-        writeln!(file, "  <!-- Class Declarations -->")?;
-        for (_, class) in ontology.classes() {
-            writeln!(file, "  <owl:Class rdf:about=\"{}\" />", class.iri.as_str())?;
-        }
-        writeln!(file)?;
-    }
-
-    // Serialize object properties
-    let object_properties = ontology.object_properties();
-    if !object_properties.is_empty() {
-        writeln!(file, "  <!-- Object Property Declarations -->")?;
-        for prop in object_properties {
-            writeln!(
-                file,
-                "  <owl:ObjectProperty rdf:about=\"{}\" />",
-                prop.iri.as_str()
-            )?;
-        }
-        writeln!(file)?;
-    }
-
-    // Serialize data properties
-    // Enhanced data property extraction and serialization
-    let mut data_properties = std::collections::HashSet::new();
-
-    // Extract data properties from various axiom types
-    for axiom in ontology.axioms() {
-        match axiom {
-            crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
-                    &assertion.property
-                {
-                    data_properties.insert(prop.clone());
-                }
-            }
-            crate::ontology::Axiom::SubDataPropertyOf(sub_prop) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(sub) =
-                    &sub_prop.sub_property
-                {
-                    data_properties.insert(sub.clone());
-                }
-                if let crate::ontology::DataPropertyExpression::DataProperty(super_prop) =
-                    &sub_prop.super_property
-                {
-                    data_properties.insert(super_prop.clone());
-                }
-            }
-            crate::ontology::Axiom::EquivalentDataProperties(equiv) => {
-                for prop_expr in &equiv.properties {
-                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = prop_expr {
-                        data_properties.insert(prop.clone());
-                    }
-                }
-            }
-            crate::ontology::Axiom::DisjointDataProperties(disj) => {
-                for prop_expr in &disj.properties {
-                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = prop_expr {
-                        data_properties.insert(prop.clone());
-                    }
-                }
-            }
-            crate::ontology::Axiom::FunctionalDataProperty(func) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &func.property
-                {
-                    data_properties.insert(prop.clone());
-                }
-            }
-            crate::ontology::Axiom::DataPropertyDomain(domain) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
-                    &domain.property
-                {
-                    data_properties.insert(prop.clone());
-                }
-            }
-            crate::ontology::Axiom::DataPropertyRange(range) => {
-                if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &range.property
-                {
-                    data_properties.insert(prop.clone());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if !data_properties.is_empty() {
-        writeln!(file, "  <!-- Data Property Declarations -->")?;
-        for prop in data_properties {
-            writeln!(
-                file,
-                "  <owl:DatatypeProperty rdf:about=\"{}\" />",
-                prop.iri.as_str()
-            )?;
-        }
-        writeln!(file)?;
-    }
-
-    // Serialize individuals
-    if !ontology.individuals().is_empty() {
-        writeln!(file, "  <!-- Individual Declarations -->")?;
-        for (_, individual) in ontology.individuals() {
-            match individual {
-                crate::ontology::Individual::Named(named) => {
-                    writeln!(
-                        file,
-                        "  <owl:NamedIndividual rdf:about=\"{}\" />",
-                        named.iri
-                    )?;
-                }
-                crate::ontology::Individual::Anonymous(_) => {
-                    // Anonymous individuals are typically handled within axioms
-                }
-            }
-        }
-        writeln!(file)?;
-    }
-
-    // Serialize axioms
-    if !ontology.axioms().is_empty() {
-        writeln!(file, "  <!-- Axioms -->")?;
-        for axiom in ontology.axioms() {
-            serialize_axiom_to_rdf_xml(&mut file, axiom)?;
-        }
-    }
-
-    writeln!(file, "</rdf:RDF>")?;
-    Ok(())
+    let serializer = RdfXmlSerializer::new();
+    serializer.serialize_to_file(ontology, path.as_ref())
 }
 
 /// Serialize an axiom to RDF/XML format
@@ -685,11 +634,7 @@ fn serialize_axiom_to_rdf_xml<W: Write>(
                 "  <!-- SubClassOf: {} rdfs:subClassOf {} -->",
                 sub_axiom.subclass, sub_axiom.superclass
             )?;
-            writeln!(
-                writer,
-                "  <rdf:Description rdf:about=\"{}\">",
-                sub_axiom.subclass
-            )?;
+            writeln!(writer, "  <rdf:Description rdf:about=\"{}\">", sub_axiom.subclass)?;
             writeln!(
                 writer,
                 "    <rdfs:subClassOf rdf:resource=\"{}\" />",

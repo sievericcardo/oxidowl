@@ -2,6 +2,7 @@
 //!
 //! This module contains parsers and serializers for various OWL 2 DL formats.
 
+pub mod common;
 pub mod functional;
 pub mod manchester;
 pub mod ntriples;
@@ -10,25 +11,26 @@ pub mod rdf_xml;
 pub mod turtle;
 
 // Re-export parser structs and functions
+pub use common::{OntologySerializer, OntologyParser};
 pub use functional::{
-    FunctionalParser, parse as parse_functional, parse_file as parse_functional_file,
+    FunctionalParser, FunctionalSyntaxSerializer, parse as parse_functional, parse_file as parse_functional_file,
     save_file as save_functional_file,
 };
 pub use manchester::{ManchesterParser, ManchesterParserConfig};
 pub use ntriples::{
-    NTriplesParser, parse as parse_ntriples, parse_file as parse_ntriples_file,
+    NTriplesParser, NTriplesSerializer, parse as parse_ntriples, parse_file as parse_ntriples_file,
     save_file as save_ntriples_file,
 };
 pub use owl_xml::{
-    OwlXmlParser, parse as parse_owl_xml, parse_file as parse_owl_xml_file,
+    OwlXmlParser, OwlXmlSerializer, parse as parse_owl_xml, parse_file as parse_owl_xml_file,
     save_file as save_owl_xml_file,
 };
 pub use rdf_xml::{
-    RdfXmlParser, parse as parse_rdf_xml, parse_file as parse_rdf_xml_file,
+    RdfXmlParser, RdfXmlSerializer, parse as parse_rdf_xml, parse_file as parse_rdf_xml_file,
     save_file as save_rdf_xml_file,
 };
 pub use turtle::{
-    TurtleParser, parse as parse_turtle, parse_file as parse_turtle_file,
+    TurtleParser, TurtleSerializer, parse as parse_turtle, parse_file as parse_turtle_file,
     save_file as save_turtle_file,
 };
 

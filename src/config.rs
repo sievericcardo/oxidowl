@@ -60,8 +60,6 @@ pub struct ReasoningConfig {
 pub enum TableauAlgorithm {
     /// Traditional tableau algorithm
     Traditional,
-    /// `HyperTableau` algorithm (HermiT-style)
-    HyperTableau,
 }
 
 /// Blocking strategy for the tableau algorithm
@@ -204,6 +202,30 @@ pub struct PerformanceConfig {
     pub memory_pool_size_mb: u64,
     /// Garbage collection threshold
     pub gc_threshold: f64,
+}
+
+/// Configuration specific to tableau reasoning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableauConfig {
+    /// Maximum tableau expansion depth
+    pub max_depth: u32,
+    /// Timeout for tableau expansion
+    pub timeout: Option<Duration>,
+    /// Enable/disable blocking optimization
+    pub blocking_enabled: bool,
+    /// Enable/disable general optimizations
+    pub optimization_enabled: bool,
+}
+
+impl Default for TableauConfig {
+    fn default() -> Self {
+        Self {
+            max_depth: 100,
+            timeout: Some(Duration::from_secs(300)),
+            blocking_enabled: true,
+            optimization_enabled: true,
+        }
+    }
 }
 
 impl Default for ReasoningConfig {
