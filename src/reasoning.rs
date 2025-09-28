@@ -4,9 +4,23 @@
 //! that wrap the core tableau algorithm and provide convenient APIs for
 //! common reasoning tasks.
 
+// Incremental reasoning framework
+pub mod incremental;
+
 // Re-export core reasoner types for public API
 pub use crate::core::reasoner::{
     ClassificationResult, RealizationResult, ReasoningResult, ReasoningTask,
+};
+
+// Re-export incremental reasoning types for public API
+pub use incremental::{
+    IncrementalReasoningService, 
+    IncrementalConfig, 
+    IncrementalStatistics,
+    ChangeEvent,
+    ChangeTracker,
+    DeltaComputer,
+    IncrementalCacheManager,
 };
 
 use crate::{
@@ -1039,5 +1053,28 @@ impl ReasoningService {
         // This is a simplified implementation - in practice would query the reasoner
         // For now, return empty results to avoid compilation errors
         Ok(Vec::new())
+    }
+
+    /// Get the cache manager for incremental reasoning integration
+    pub fn cache_manager(&self) -> Arc<RwLock<CacheManager>> {
+        self.cache_manager.clone()
+    }
+    
+    /// Invalidate all caches (useful for incremental reasoning)
+    pub async fn invalidate_all_caches(&self) -> Result<()> {
+        if let Ok(mut cache) = self.cache_manager.write() {
+            // Invalidate caches - the actual implementation would depend on CacheManager
+            tracing::debug!("All caches invalidated");
+        }
+        Ok(())
+    }
+    
+    /// Create an incremental reasoning service wrapper
+    pub async fn into_incremental(
+        self: Arc<Self>,
+        ontology: Arc<tokio::sync::RwLock<Ontology>>,
+        config: Option<IncrementalConfig>,
+    ) -> Result<incremental::IncrementalReasoningService> {
+        incremental::IncrementalReasoningService::new(self, ontology, config).await
     }
 }

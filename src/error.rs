@@ -363,3 +363,11 @@ impl From<crate::validation::owl2_dl::ValidationError> for Error {
         }
     }
 }
+
+impl From<crate::query::advanced::execution::AdvancedQueryError> for Error {
+    fn from(err: crate::query::advanced::execution::AdvancedQueryError) -> Self {
+        Error::Reasoning {
+            message: err.to_string(),
+        }
+    }
+}
