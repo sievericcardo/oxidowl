@@ -613,12 +613,12 @@ mod tests {
                     ),
                     variable: QueryVariable { 
                         name: "x".to_string(), 
-                        var_type: super::conjunctive::VariableType::Individual 
+                        var_type: crate::query::advanced::conjunctive::VariableType::Individual 
                     },
                 }
             ],
-            constraints: super::conjunctive::QueryConstraints::default(),
-            metadata: super::conjunctive::QueryMetadata::default(),
+            constraints: crate::query::advanced::conjunctive::QueryConstraints::default(),
+            metadata: crate::query::advanced::conjunctive::QueryMetadata::default(),
         };
         
         let hash1 = extractor.query_hash(&query);
