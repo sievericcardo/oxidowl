@@ -63,7 +63,14 @@ pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
 pub use crate::profiles::{
     OWL2Profile as ProfileType, ProfileValidator, el::ELValidator, validator::OWL2ProfileValidator,
 };
-pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
+// Query system exports (both DL queries and advanced conjunctive queries)
+pub use crate::query::{
+    // DL Query exports for backward compatibility
+    DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryError, QueryType,
+    // Advanced Query exports - re-exported from advanced module
+    ConjunctiveQuery, QueryAtom, QueryEngine, QueryService,
+    ConjunctiveQueryResult, AdvancedQueryError,
+};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
 pub use crate::validation::{OWL2DLValidator, OWL2Profile, ValidationReport};
@@ -107,6 +114,7 @@ pub fn supports_expressivity(expressivity: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_version_info() {
@@ -132,11 +140,11 @@ mod tests {
     #[test]
     fn test_create_query_engine() -> Result<()> {
         let ontology = Ontology::new();
-        let namespace = Some("http://example.com/test#".to_string());
+        let _namespace = Some("http://example.com/test#".to_string());
         let config = ReasonerConfig::default();
 
         // Create a reasoning service from the ontology
-        let reasoning_service = ReasoningService::new(ontology.clone(), config);
+        let reasoning_service = Arc::new(ReasoningService::new(ontology.clone(), config));
         let query_engine = query::DLQueryEngine::new(reasoning_service);
 
         // Test basic functionality

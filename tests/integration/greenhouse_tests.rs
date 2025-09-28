@@ -12,7 +12,7 @@ use oxidowl::{
     query::DLQueryEngine,
     reasoning::ReasoningService,
 };
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 /// Test setup function to load a greenhouse ontology
 fn create_test_ontology() -> Ontology {
@@ -111,7 +111,7 @@ async fn test_dl_query_disjoint_union() {
     let config = ReasonerConfig::test_config();
     let reasoning_service = ReasoningService::new(ontology, config);
 
-    let _query_engine = DLQueryEngine::new(reasoning_service);
+    let _query_engine = DLQueryEngine::new(Arc::new(reasoning_service));
 
     // Test query concept without actual execution
     let _query_string = "Maintenance or Operational or Overheating or Underheating";

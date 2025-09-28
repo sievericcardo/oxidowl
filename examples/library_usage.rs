@@ -2,6 +2,7 @@
 //! This example shows the complete workflow including `DisjointUnion` axiom handling
 
 use oxidowl::{DLQueryEngine, OntologyFormat, Reasoner, ReasonerConfig, ReasoningService, Result};
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -39,7 +40,7 @@ async fn main() -> Result<()> {
 
     // 6. Create DL query engine with namespace
     let query_engine = DLQueryEngine::new_with_namespace(
-        reasoning_service.clone(),
+        Arc::new(reasoning_service.clone()),
         "http://www.smolang.org/greenhouseDT#".to_string(),
     );
 

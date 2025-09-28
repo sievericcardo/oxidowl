@@ -15,7 +15,21 @@ use crate::{
 };
 use log::debug;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::fmt;
+
+/// Errors that can occur during query processing
+#[derive(Debug, thiserror::Error)]
+pub enum QueryError {
+    #[error("Parse error: {0}")]
+    ParseError(String),
+    #[error("Reasoning error: {0}")]
+    ReasoningError(String),
+    #[error("Invalid query: {0}")]
+    InvalidQuery(String),
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
+}
 
 /// Helper function to recursively extract all individual classes from a union expression
 fn extract_union_classes(expr: &ClassExpression, result: &mut HashSet<ClassExpression>) {
@@ -36,7 +50,7 @@ fn extract_union_classes(expr: &ClassExpression, result: &mut HashSet<ClassExpre
 /// DL Query Engine for executing description logic queries
 #[derive(Debug)]
 pub struct DLQueryEngine {
-    reasoning_service: ReasoningService,
+    reasoning_service: Arc<ReasoningService>,
     default_namespace: Option<String>,
     prefix_map: Option<std::collections::HashMap<String, String>>,
 }
@@ -85,7 +99,7 @@ pub struct QueryResult {
 impl DLQueryEngine {
     /// Create a new DL query engine
     #[must_use]
-    pub fn new(reasoning_service: ReasoningService) -> Self {
+    pub fn new(reasoning_service: Arc<ReasoningService>) -> Self {
         Self {
             reasoning_service,
             default_namespace: None,
@@ -95,7 +109,7 @@ impl DLQueryEngine {
 
     /// Create a new DL query engine with a specific default namespace
     #[must_use]
-    pub fn new_with_namespace(reasoning_service: ReasoningService, namespace: String) -> Self {
+    pub fn new_with_namespace(reasoning_service: Arc<ReasoningService>, namespace: String) -> Self {
         Self {
             reasoning_service,
             default_namespace: Some(namespace),
@@ -105,7 +119,7 @@ impl DLQueryEngine {
 
     /// Create a new DL query engine with reasoning service and optional namespace
     #[must_use]
-    pub fn with_config(reasoning_service: ReasoningService, namespace: Option<String>) -> Self {
+    pub fn with_config(reasoning_service: Arc<ReasoningService>, namespace: Option<String>) -> Self {
         Self {
             reasoning_service,
             default_namespace: namespace,
