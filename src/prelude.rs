@@ -9,7 +9,7 @@ pub use crate::{Error, Result};
 // Core ontology types - most commonly used
 pub use crate::ontology::{
     ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression,
-    Ontology, OntologyRef, IRI,
+    Ontology, OntologyRef, IRI, Class, ObjectProperty, DataProperty,
 };
 
 // Axiom types
@@ -20,6 +20,15 @@ pub use crate::ontology::axioms::{
     SubObjectPropertyOfAxiom, EquivalentObjectPropertiesAxiom, DisjointObjectPropertiesAxiom,
     SubDataPropertyOfAxiom, EquivalentDataPropertiesAxiom, DisjointDataPropertiesAxiom,
     DeclarationAxiom,
+};
+
+// Query types - commonly used for query processing  
+pub use crate::query::{
+    ConjunctiveQuery, QueryAtom, QueryVariable, QueryEngine,
+    ConjunctiveQueryResult, AdvancedQueryError,
+    // Phase 2.1 Advanced Query Optimization
+    AdvancedQueryOptimizer, DLQueryFeatureExtractor,
+    PerformancePredictor, IntelligentIndexingSystem, PerformanceMonitor,
 };
 
 // Configuration

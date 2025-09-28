@@ -15,7 +15,9 @@ pub use dl_query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryErro
 // Export new advanced query capabilities
 pub use advanced::{
     ConjunctiveQuery, QueryAtom, QueryVariable, QueryEngine, QueryOptimizer,
-    ConjunctiveQueryResult, AdvancedQueryError
+    ConjunctiveQueryResult, AdvancedQueryError, AdvancedQueryOptimizer,
+    DLQueryFeatureExtractor, PerformancePredictor,
+    IntelligentIndexingSystem, PerformanceMonitor
 };
 
 use crate::ontology::Ontology;

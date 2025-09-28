@@ -70,6 +70,9 @@ pub use crate::query::{
     // Advanced Query exports - re-exported from advanced module
     ConjunctiveQuery, QueryAtom, QueryEngine, QueryService,
     ConjunctiveQueryResult, AdvancedQueryError,
+    // Phase 2.1 Advanced Optimization exports
+    AdvancedQueryOptimizer, DLQueryFeatureExtractor,
+    PerformancePredictor, IntelligentIndexingSystem, PerformanceMonitor,
 };
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
