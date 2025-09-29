@@ -1,4 +1,4 @@
-//! Phase 2.1: Advanced Query Optimization Framework
+//! Advanced Query Optimization Framework
 //!
 //! This module extends the existing query optimization with advanced features:
 //! - ML-driven cost estimation and strategy selection
