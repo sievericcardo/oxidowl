@@ -153,6 +153,14 @@ pub enum OptimizationStrategy {
 }
 
 impl QueryVariable {
+    /// Create a new variable with default Individual type (for backward compatibility)
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            var_type: VariableType::Individual,
+        }
+    }
+
     /// Create a new individual variable
     pub fn individual(name: impl Into<String>) -> Self {
         Self {

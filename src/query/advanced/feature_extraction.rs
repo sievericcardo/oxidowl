@@ -3,7 +3,7 @@
 //! This module implements sophisticated feature extractors that analyze
 //! Description Logic queries to predict their execution characteristics.
 
-use super::phase2_optimization::{QueryFeatureExtractor, QueryPerformanceDataPoint};
+use super::optimizer::{QueryFeatureExtractor, QueryPerformanceDataPoint};
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use crate::ontology::{ClassExpression, ObjectPropertyExpression};
 use std::collections::{HashMap, HashSet};

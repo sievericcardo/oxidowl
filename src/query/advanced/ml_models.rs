@@ -3,7 +3,7 @@
 //! This module implements various machine learning models for predicting
 //! query execution performance based on extracted features.
 
-use super::phase2_optimization::{PerformancePredictionModel, QueryPerformanceDataPoint, AccuracyMetrics};
+use super::optimizer::{PerformancePredictionModel, QueryPerformanceDataPoint, AccuracyMetrics};
 use std::collections::VecDeque;
 
 /// Simple linear regression model for performance prediction
