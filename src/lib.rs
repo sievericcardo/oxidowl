@@ -54,6 +54,7 @@ pub mod semantics; // RDF, RDFS, and OWL 2 semantics implementation
 pub mod swrl; // SWRL (Semantic Web Rule Language) support
 pub mod validation; // OWL 2 DL validation and profile checking
 pub mod visitor; // Visitor pattern for ontology traversal
+pub mod distributed; // Distributed query processing and cluster management
 // pub mod utils;
 
 // Re-export main types for convenience
@@ -77,6 +78,16 @@ pub use crate::query::{
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
 pub use crate::validation::{OWL2DLValidator, OWL2Profile, ValidationReport};
+
+// Re-export distributed reasoning components
+pub use crate::distributed::{
+    DistributedQueryProcessor,
+    DistributedConfig,
+    NodeConfig,
+    ClusterConfig,
+    NodeCapabilities,
+    NodeSettings,
+};
 
 // Re-export error types
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};

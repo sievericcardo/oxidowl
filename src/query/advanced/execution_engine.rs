@@ -13,6 +13,11 @@ use super::execution::{QueryEngine, ConjunctiveQueryResult, AdvancedQueryError};
 use super::cost_optimizer::{CostBasedOptimizer};
 use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
 use super::optimization::{OptimizationError};
+use super::ml_core::{
+    MLHeuristicsEngine as MLEngine, MLHeuristicsConfig as MLConfig,
+    QueryFeatures, StrategyRecommendation, QueryExecution,
+    ExecutionStrategy as MLExecutionStrategy,
+};
 use std::collections::{HashMap, HashSet, VecDeque, BTreeMap};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -23,7 +28,6 @@ use std::task::{Context, Poll};
 use serde::{Serialize, Deserialize};
 
 /// Advanced Query Execution Engine with adaptive strategies
-#[derive(Debug)]
 pub struct AdvancedExecutionEngine {
     /// Cost-based optimizer
     optimizer: Arc<Mutex<CostBasedOptimizer>>,
@@ -31,14 +35,20 @@ pub struct AdvancedExecutionEngine {
     /// Query result cache
     result_cache: Arc<RwLock<QueryResultCache>>,
     
-    /// Execution strategy selector
+    /// Execution strategy selector (legacy)
     strategy_selector: Arc<Mutex<ExecutionStrategySelector>>,
+    
+    /// ML-enhanced strategy selection engine
+    ml_engine: Arc<RwLock<MLEngine>>,
     
     /// Performance monitor
     performance_monitor: Arc<Mutex<ExecutionPerformanceMonitor>>,
     
     /// Parallel execution coordinator
     parallel_coordinator: Arc<ParallelExecutionCoordinator>,
+    
+    /// Ontology reference (for feature extraction)
+    ontology: Arc<Ontology>,
     
     /// Configuration
     config: AdvancedExecutionConfig,
@@ -836,12 +846,23 @@ impl AdvancedExecutionEngine {
             ParallelExecutionCoordinator::new(ParallelExecutionConfig::default())
         );
         
+        // Initialize ML-enhanced strategy selection engine
+        let ml_config = MLConfig::default();
+        let ml_engine = Arc::new(RwLock::new(
+            MLEngine::new(ml_config)
+                .map_err(|e| AdvancedQueryError::InternalError(
+                    format!("Failed to initialize ML engine: {}", e) 
+                ))?
+        ));
+        
         Ok(Self {
             optimizer,
             result_cache,
             strategy_selector,
+            ml_engine,
             performance_monitor,
             parallel_coordinator,
+            ontology,
             config,
         })
     }
@@ -853,6 +874,7 @@ impl AdvancedExecutionEngine {
         constraints: ExecutionConstraints,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let execution_id = ExecutionId(uuid::Uuid::new_v4().to_string());
+        let start_time = Instant::now();
         
         // Step 1: Check cache if enabled
         if self.config.enable_caching {
@@ -867,18 +889,26 @@ impl AdvancedExecutionEngine {
             optimizer.optimize_query(query)?
         };
         
-        // Step 3: Select execution strategy
-        let strategy = {
-            let mut selector = self.strategy_selector.lock().unwrap();
-            selector.select_strategy(query, &query_plan)?
+        // Step 3: ML-based strategy selection (if enabled)
+        let (strategy, ml_recommendation) = if self.config.enable_adaptive_strategies {
+            self.select_strategy_with_ml(query)?
+        } else {
+            // Fallback to legacy strategy selector
+            let strategy = {
+                let mut selector = self.strategy_selector.lock().unwrap();
+                selector.select_strategy(query, &query_plan)?
+            };
+            (strategy, None)
         };
         
-        // Step 4: Execute with monitoring
-        let result = self.execute_with_monitoring(
+        // Step 4: Execute with monitoring and fallback logic
+        let result = self.execute_with_fallback(
             execution_id.clone(),
             query,
             &strategy,
+            &ml_recommendation,
             constraints,
+            start_time,
         ).await?;
         
         // Step 5: Cache result if beneficial
@@ -886,10 +916,155 @@ impl AdvancedExecutionEngine {
             self.cache_result(query, &result).await?;
         }
         
-        // Step 6: Update performance history
+        // Step 6: Update performance history and feed back to ML engine
         self.update_performance_history(&execution_id, query, &strategy, &result).await;
         
+        if self.config.enable_adaptive_strategies {
+            self.provide_ml_feedback(query, &strategy, &result, start_time, &ml_recommendation)?;
+        }
+        
         Ok(result)
+    }
+    
+    /// Select execution strategy using ML-enhanced decision making
+    fn select_strategy_with_ml(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<(String, Option<StrategyRecommendation>), AdvancedQueryError> {
+        // Extract features from query
+        let ml_engine = self.ml_engine.read()
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to acquire ML engine lock: {}", e)
+            ))?;
+        
+        let features = ml_engine.extract_features(query, &self.ontology)
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to extract query features: {}", e)
+            ))?;
+        
+        // Get strategy recommendation
+        let recommendation = ml_engine.select_strategy(&features)
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to select strategy: {}", e)
+            ))?;
+        
+        let strategy_name = recommendation.strategy.as_str().to_string();
+        
+        Ok((strategy_name, Some(recommendation)))
+    }
+    
+    /// Execute query with fallback to alternative strategies on failure
+    async fn execute_with_fallback(
+        &self,
+        execution_id: ExecutionId,
+        query: &ConjunctiveQuery,
+        primary_strategy: &str,
+        ml_recommendation: &Option<StrategyRecommendation>,
+        constraints: ExecutionConstraints,
+        start_time: Instant,
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+        // Try primary strategy first
+        let result = self.execute_with_monitoring(
+            execution_id.clone(),
+            query,
+            primary_strategy,
+            constraints.clone(),
+        ).await;
+        
+        // If primary strategy succeeded, return result
+        if result.is_ok() {
+            return result;
+        }
+        
+        // If primary strategy failed and we have ML recommendations, try alternatives
+        if let Some(recommendation) = ml_recommendation {
+            for (alternative_strategy, confidence) in &recommendation.alternatives {
+                // Log fallback attempt
+                eprintln!(
+                    "Primary strategy '{}' failed, trying alternative '{}' (confidence: {:.2})",
+                    primary_strategy, alternative_strategy.as_str(), confidence
+                );
+                
+                let fallback_result = self.execute_with_monitoring(
+                    execution_id.clone(),
+                    query,
+                    alternative_strategy.as_str(),
+                    constraints.clone(),
+                ).await;
+                
+                if fallback_result.is_ok() {
+                    return fallback_result;
+                }
+            }
+        }
+        
+        // All strategies failed - try default strategy as last resort
+        eprintln!(
+            "All recommended strategies failed for query, falling back to default strategy"
+        );
+        
+        self.execute_with_monitoring(
+            execution_id,
+            query,
+            "default",
+            constraints,
+        ).await
+    }
+    
+    /// Provide feedback to ML engine for online learning
+    fn provide_ml_feedback(
+        &self,
+        query: &ConjunctiveQuery,
+        strategy_used: &str,
+        result: &ConjunctiveQueryResult,
+        start_time: Instant,
+        ml_recommendation: &Option<StrategyRecommendation>,
+    ) -> Result<(), AdvancedQueryError> {
+        let ml_engine = self.ml_engine.read()
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to acquire ML engine lock: {}", e)
+            ))?;
+        
+        // Extract features again (we could cache these from earlier)
+        let features = ml_engine.extract_features(query, &self.ontology)
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to extract query features: {}", e)
+            ))?;
+        
+        // Map strategy string to MLExecutionStrategy enum
+        let ml_strategy = match strategy_used {
+            "indexed_lookup" => MLExecutionStrategy::IndexedLookup,
+            "join_order" => MLExecutionStrategy::JoinOrder,
+            "materialization" => MLExecutionStrategy::Materialization,
+            "hybrid" => MLExecutionStrategy::Hybrid,
+            "backward_chaining" => MLExecutionStrategy::BackwardChaining,
+            "forward_chaining" => MLExecutionStrategy::ForwardChaining,
+            "parallel" => MLExecutionStrategy::Parallel,
+            "adaptive" => MLExecutionStrategy::Adaptive,
+            _ => MLExecutionStrategy::Default,
+        };
+        
+        // Create execution record
+        let execution = QueryExecution {
+            features,
+            actual_time: start_time.elapsed().as_secs_f64(),
+            actual_memory: result.metadata.memory_usage.peak_memory as f64 / 1_000_000.0, // Convert bytes to MB
+            strategy_used: ml_strategy,
+        };
+        
+        // Add training data for online learning
+        drop(ml_engine); // Release read lock
+        let ml_engine = self.ml_engine.write()
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to acquire ML engine write lock: {}", e)
+            ))?;
+        
+        ml_engine.add_training_data(execution)
+            .map_err(|e| AdvancedQueryError::InternalError(
+                format!("Failed to add training data: {}", e)
+            ))?;
+        
+        Ok(())
     }
     
     /// Check cache for existing result
