@@ -99,7 +99,7 @@ pub enum ExecutionStrategy {
 }
 
 /// Metadata about query plan optimization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PlanMetadata {
     /// Time spent on optimization
     pub optimization_time: f64,
@@ -478,4 +478,6 @@ pub enum OptimizationError {
     OptimizationTimeout,
     #[error("Statistics unavailable: {0}")]
     StatisticsUnavailable(String),
+    #[error("Rewriting failed: {0}")]
+    RewritingFailed(String),
 }

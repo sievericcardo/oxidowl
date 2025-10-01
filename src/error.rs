@@ -117,6 +117,18 @@ pub enum Error {
     /// Axiom not found error
     #[error("Axiom not found")]
     AxiomNotFound,
+
+    /// Import error
+    #[error("Import error: {message}")]
+    ImportError { message: String },
+
+    /// Reasoning error (alternative variant)
+    #[error("Reasoning error: {0}")]
+    ReasoningError(String),
+
+    /// Configuration error (alternative variant)
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
 }
 
 /// Specialized error for reasoner operations
@@ -260,6 +272,13 @@ impl Error {
             message: message.into(),
         }
     }
+
+    /// Create an import error
+    pub fn import_error<S: Into<String>>(message: S) -> Self {
+        Self::ImportError {
+            message: message.into(),
+        }
+    }
 }
 
 impl From<std::io::Error> for Error {
@@ -318,6 +337,9 @@ impl Error {
             Error::InvalidDatatype(_) => ErrorCategory::Input,
             Error::InvalidLiteral(_) => ErrorCategory::Input,
             Error::ParseError(_) => ErrorCategory::Input,
+            Error::ImportError { .. } => ErrorCategory::Input,
+            Error::ReasoningError(_) => ErrorCategory::Reasoning,
+            Error::ConfigurationError(_) => ErrorCategory::Config,
         }
     }
 
@@ -352,6 +374,9 @@ impl Error {
             Error::InvalidDatatype(_) => false,
             Error::InvalidLiteral(_) => false,
             Error::ParseError(_) => false,
+            Error::ImportError { .. } => false,
+            Error::ReasoningError(_) => true,
+            Error::ConfigurationError(_) => false,
         }
     }
 }

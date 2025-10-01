@@ -1103,3 +1103,7 @@ mod tests {
         assert_eq!(manager.config.max_import_depth, 10);
     }
 }
+
+// Re-export the additional resolver module
+pub mod resolver;
+pub use resolver::{ImportResolver, ImportResolverConfig, ResolvedImport, ImportedOntology};
