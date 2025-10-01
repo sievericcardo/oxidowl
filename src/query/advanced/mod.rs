@@ -24,6 +24,9 @@ pub mod industrial;
 pub mod ml_heuristics;
 pub mod performance_benchmarking;
 
+// ML-Enhanced Query Optimization
+pub mod ml_core; // ML infrastructure and models
+
 // Test modules
 #[cfg(test)]
 pub mod extended_integration_tests;
@@ -71,4 +74,15 @@ pub use ml_heuristics::{
 pub use performance_benchmarking::{
     PerformanceBenchmarkingSystem, BenchmarkingConfig, IndustrialBenchmarkReport, 
     CompetitiveAnalysisReport
+};
+
+// ML-Enhanced Query Optimization exports
+pub use ml_core::{
+    MLHeuristicsEngine as MLEngine, 
+    MLHeuristicsConfig as MLConfig,
+    QueryFeatures, 
+    QueryFeatureExtractor,
+    CostPrediction,
+    QueryExecution,
+    TrainingMetrics,
 };
