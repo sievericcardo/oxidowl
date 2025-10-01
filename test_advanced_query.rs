@@ -47,6 +47,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rewritten_queries = query_engine.rewrite_to_ql(&query)?;
     println!("Number of rewritten queries: {}", rewritten_queries.len());
     
-    println!("\n✅ Advanced Query Processing Engine is working correctly!");
+    println!("\nAdvanced Query Processing Engine is working correctly!");
     Ok(())
 }
