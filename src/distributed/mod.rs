@@ -667,7 +667,7 @@ impl DistributedQueryProcessor {
             match task.await {
                 Ok(Ok(result)) => results.push(result),
                 Ok(Err(e)) => return Err(e),
-                Err(e) => return Err(Error::from(format!("Task execution failed: {}", e))),
+                Err(e) => return Err(Error::Internal { message: format!("Task execution failed: {}", e) }),
             }
         }
         
@@ -753,7 +753,7 @@ pub enum DistributedError {
 /// Convert distributed errors to the main Error type
 impl From<DistributedError> for Error {
     fn from(err: DistributedError) -> Self {
-        Error::Other(err.to_string())
+        Error::Internal { message: err.to_string() }
     }
 }
 

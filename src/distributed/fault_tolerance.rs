@@ -106,7 +106,6 @@ pub struct RecoverySession {
     pub strategy: RecoveryStrategy,
     
     /// Session start time
-    #[serde(skip)]
     pub start_time: Instant,
     
     /// Current recovery phase
@@ -764,7 +763,6 @@ pub struct FailureDetector {
 #[derive(Debug)]
 pub struct NodeMonitor {
     pub node_id: NodeId,
-    #[serde(skip)]
     pub last_heartbeat: Instant,
     pub consecutive_failures: usize,
     pub health_history: VecDeque<HealthCheck>,
@@ -773,7 +771,6 @@ pub struct NodeMonitor {
 /// Health check record
 #[derive(Debug, Clone)]
 pub struct HealthCheck {
-    #[serde(skip)]
     pub timestamp: Instant,
     pub status: HealthStatus,
     pub response_time_ms: u64,

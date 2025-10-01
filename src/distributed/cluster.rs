@@ -660,7 +660,7 @@ impl HealthMonitor {
         // In practice, this would be a proper health check endpoint
         match tokio::net::TcpStream::connect(address).await {
             Ok(_) => Ok(()),
-            Err(e) => Err(Error::from(format!("Node ping failed: {}", e))),
+            Err(e) => Err(Error::Network { message: format!("Node ping failed: {}", e) }),
         }
     }
     

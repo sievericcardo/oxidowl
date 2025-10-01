@@ -341,7 +341,6 @@ pub struct AggregationSession {
     pub partial_results: HashMap<Uuid, PartialResult>,
     
     /// Session start time
-    #[serde(skip)]
     pub start_time: std::time::Instant,
     
     /// Result sender
@@ -594,20 +593,22 @@ impl DuplicateDetector {
     /// Compute a signature for a binding to detect duplicates
     fn compute_binding_signature(&self, binding: &QueryBinding) -> String {
         // Create a canonical string representation of the binding
-        let mut vars: Vec<_> = binding.substitution.iter().collect();
-        vars.sort_by_key(|(var, _)| var.0.clone());
+        let mut vars: Vec<_> = binding.variable_bindings.iter().collect();
+        vars.sort_by_key(|(var, _)| var.name.clone());
         
         vars.into_iter()
-            .map(|(var, term)| format!("{}={}", var.0, self.term_to_string(term)))
+            .map(|(var, value)| format!("{}={}", var.name, self.value_to_string(value)))
             .collect::<Vec<_>>()
             .join(";")
     }
     
-    /// Convert term to canonical string
-    fn term_to_string(&self, term: &Term) -> String {
-        match term {
-            Term::Variable(var) => format!("?{}", var.0),
-            Term::Individual(ind) => ind.clone(),
+    /// Convert bound value to canonical string
+    fn value_to_string(&self, value: &BoundValue) -> String {
+        match value {
+            BoundValue::Individual(ind) => format!("{:?}", ind),
+            BoundValue::Literal(lit) => format!("{:?}", lit),
+            BoundValue::Class(cls) => cls.clone(),
+            BoundValue::Property(prop) => prop.clone(),
         }
     }
 }
@@ -629,8 +630,8 @@ impl ConsistencyChecker {
         let mut variable_groups: BTreeMap<String, Vec<QueryBinding>> = BTreeMap::new();
         
         for binding in bindings {
-            for (var, _) in &binding.substitution {
-                let key = var.0.clone();
+            for (var, _) in &binding.variable_bindings {
+                let key = var.name.clone();
                 variable_groups.entry(key).or_insert_with(Vec::new).push(binding.clone());
             }
         }

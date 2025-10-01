@@ -317,7 +317,7 @@ impl QueryDistributor {
         let query_id = Uuid::new_v4();
         
         // Group atoms by concept
-        let mut concept_groups: HashMap<String, Vec<&Atom>> = HashMap::new();
+        let mut concept_groups: HashMap<String, Vec<&QueryAtom>> = HashMap::new();
         
         for atom in &query.body_atoms {
             if let Some(concept) = self.extract_concept_from_atom(atom) {
@@ -375,7 +375,7 @@ impl QueryDistributor {
         let query_id = Uuid::new_v4();
         
         // Sort atoms by complexity (simplified metric)
-        let mut atoms_with_complexity: Vec<(&Atom, f32)> = query.body_atoms.iter()
+        let mut atoms_with_complexity: Vec<(&QueryAtom, f32)> = query.body_atoms.iter()
             .map(|atom| (atom, self.calculate_atom_complexity(atom)))
             .collect();
             
@@ -482,15 +482,34 @@ impl QueryDistributor {
     }
     
     /// Extract concept from an atom (simplified)
-    fn extract_concept_from_atom(&self, atom: &Atom) -> Option<String> {
-        // Simple heuristic: use the predicate as the concept
-        Some(atom.predicate.clone())
+    fn extract_concept_from_atom(&self, atom: &QueryAtom) -> Option<String> {
+        // Simple heuristic: extract the main concept from the atom type
+        match atom {
+            QueryAtom::ClassAtom { class_expression, .. } => {
+                Some(format!("{:?}", class_expression))
+            },
+            QueryAtom::ObjectPropertyAtom { property, .. } => {
+                Some(format!("{:?}", property))
+            },
+            QueryAtom::DataPropertyAtom { property, .. } => {
+                Some(format!("{:?}", property))
+            },
+            _ => Some("unknown".to_string()),
+        }
     }
     
     /// Calculate atom complexity (simplified metric)
-    fn calculate_atom_complexity(&self, atom: &Atom) -> f32 {
-        // Simple complexity metric based on number of terms
-        atom.terms.len() as f32
+    fn calculate_atom_complexity(&self, atom: &QueryAtom) -> f32 {
+        // Simple complexity metric based on atom type
+        match atom {
+            QueryAtom::ClassAtom { .. } => 1.0,
+            QueryAtom::ObjectPropertyAtom { .. } => 2.0,
+            QueryAtom::DataPropertyAtom { .. } => 2.0,
+            QueryAtom::SameIndividualAtom { .. } => 2.0,
+            QueryAtom::DifferentIndividualsAtom { .. } => 2.0,
+            QueryAtom::ConcreteIndividualAtom { .. } => 1.0,
+            QueryAtom::ConcreteLiteralAtom { .. } => 1.0,
+        }
     }
     
     /// Calculate partition priority based on performance requirements
@@ -524,22 +543,39 @@ impl QueryDistributor {
     fn has_dependency(&self, partition1: &QueryPartition, partition2: &QueryPartition) -> bool {
         // Simplified dependency check based on shared variables
         let vars1: HashSet<_> = partition1.partition_query.body_atoms.iter()
-            .flat_map(|atom| atom.terms.iter())
-            .filter_map(|term| match term {
-                Term::Variable(var) => Some(var.clone()),
-                _ => None,
-            })
+            .flat_map(|atom| self.extract_variables_from_atom(atom))
             .collect();
             
         let vars2: HashSet<_> = partition2.partition_query.body_atoms.iter()
-            .flat_map(|atom| atom.terms.iter())
-            .filter_map(|term| match term {
-                Term::Variable(var) => Some(var.clone()),
-                _ => None,
-            })
+            .flat_map(|atom| self.extract_variables_from_atom(atom))
             .collect();
             
         !vars1.is_disjoint(&vars2)
+    }
+    
+    /// Extract all variables from an atom
+    fn extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            },
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                vec![subject.clone(), literal.clone()]
+            },
+            QueryAtom::SameIndividualAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            },
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            },
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                vec![variable.clone()]
+            },
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                vec![variable.clone()]
+            },
+        }
     }
     
     /// Get status of a distributed query
@@ -604,11 +640,7 @@ impl QueryAnalyzer {
         let atom_count = query.body_atoms.len();
         
         let variables: HashSet<_> = query.body_atoms.iter()
-            .flat_map(|atom| atom.terms.iter())
-            .filter_map(|term| match term {
-                Term::Variable(var) => Some(var.clone()),
-                _ => None,
-            })
+            .flat_map(|atom| self.extract_variables_from_atom(atom))
             .collect();
         let variable_count = variables.len();
         
@@ -631,15 +663,21 @@ impl QueryAnalyzer {
         let mut individuals = HashSet::new();
         
         for atom in &query.body_atoms {
-            concepts.insert(atom.predicate.clone());
-            
-            for term in &atom.terms {
-                match term {
-                    Term::Individual(ind) => {
-                        individuals.insert(ind.clone());
-                    }
-                    Term::Variable(_) => {} // Variables don't affect locality directly
-                }
+            // Extract concepts and properties from different atom types
+            match atom {
+                QueryAtom::ClassAtom { class_expression, .. } => {
+                    concepts.insert(format!("{:?}", class_expression));
+                },
+                QueryAtom::ObjectPropertyAtom { property, .. } => {
+                    properties.insert(format!("{:?}", property));
+                },
+                QueryAtom::DataPropertyAtom { property, .. } => {
+                    properties.insert(format!("{:?}", property));
+                },
+                QueryAtom::ConcreteIndividualAtom { individual, .. } => {
+                    individuals.insert(format!("{:?}", individual));
+                },
+                _ => {},
             }
         }
         
@@ -656,6 +694,31 @@ impl QueryAnalyzer {
         // Simplified join depth calculation
         // In practice, this would analyze variable sharing patterns
         std::cmp::min(query.body_atoms.len(), 5) // Cap at 5 for now
+    }
+    
+    /// Extract all variables from an atom
+    fn extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            },
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                vec![subject.clone(), literal.clone()]
+            },
+            QueryAtom::SameIndividualAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            },
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            },
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                vec![variable.clone()]
+            },
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                vec![variable.clone()]
+            },
+        }
     }
 }
 
@@ -720,7 +783,7 @@ impl CostEstimator {
         
         let estimated_time_ms = (atom_count * 100 + variable_count * 50) as u64;
         let estimated_memory_mb = (atom_count * 10) as u64;
-        let estimated_cpu = std::cmp::min(atom_count as f32 / 10.0, 1.0);
+        let estimated_cpu = (atom_count as f32 / 10.0).min(1.0);
         let estimated_network_kb = (atom_count * 5) as u64;
         let complexity_score = (atom_count + variable_count) as f32 / 10.0;
         
