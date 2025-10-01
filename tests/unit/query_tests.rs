@@ -3,6 +3,7 @@
 use oxidowl::{
     config::ReasonerConfig, ontology::Ontology, query::DLQueryEngine, reasoning::ReasoningService,
 };
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_query_engine_creation() {
@@ -10,7 +11,7 @@ async fn test_query_engine_creation() {
     let config = ReasonerConfig::default();
     let reasoning_service = ReasoningService::new(ontology, config);
 
-    let _query_engine = DLQueryEngine::new(reasoning_service);
+    let _query_engine = DLQueryEngine::new(Arc::new(reasoning_service));
 
     println!("DLQueryEngine created successfully");
 }
@@ -21,7 +22,7 @@ async fn test_basic_query_functionality() {
     let config = ReasonerConfig::default();
     let reasoning_service = ReasoningService::new(ontology, config);
 
-    let _query_engine = DLQueryEngine::new(reasoning_service);
+    let _query_engine = DLQueryEngine::new(Arc::new(reasoning_service));
 
     // Test basic functionality without complex operations
     println!("Basic query functionality works");

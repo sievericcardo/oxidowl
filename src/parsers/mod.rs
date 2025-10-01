@@ -11,10 +11,10 @@ pub mod rdf_xml;
 pub mod turtle;
 
 // Re-export parser structs and functions
-pub use common::{OntologySerializer, OntologyParser};
+pub use common::{OntologyParser, OntologySerializer};
 pub use functional::{
-    FunctionalParser, FunctionalSyntaxSerializer, parse as parse_functional, parse_file as parse_functional_file,
-    save_file as save_functional_file,
+    FunctionalParser, FunctionalSyntaxSerializer, parse as parse_functional,
+    parse_file as parse_functional_file, save_file as save_functional_file,
 };
 pub use manchester::{ManchesterParser, ManchesterParserConfig};
 pub use ntriples::{

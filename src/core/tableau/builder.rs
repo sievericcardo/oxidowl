@@ -4,9 +4,9 @@
 //! including root node creation and initial concept loading.
 
 use super::{
-    node::{NodeId, NodeType, TableauNode, ConceptLabel},
-    edge::{TableauEdge, PropertyInclusion},
-    state::{TableauState, TableauStatistics, ClashDetector},
+    edge::{PropertyInclusion, TableauEdge},
+    node::{ConceptLabel, NodeId, NodeType, TableauNode},
+    state::{ClashDetector, TableauState, TableauStatistics},
 };
 use crate::{
     Error, Result,
@@ -15,9 +15,9 @@ use crate::{
         blocking::BlockingChecker,
         completion::CompletionRuleSet,
         dependency::DependencyTracker,
-        expansion::{ExpansionStrategy, DefaultExpansionStrategy},
+        expansion::{DefaultExpansionStrategy, ExpansionStrategy},
     },
-    ontology::{Ontology, ClassExpression},
+    ontology::{ClassExpression, Ontology},
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -26,19 +26,19 @@ use std::collections::{HashMap, HashSet, VecDeque};
 pub struct TableauBuilder {
     /// Configuration for reasoning
     config: ReasoningConfig,
-    
+
     /// Initial concepts to add to root node
     initial_concepts: Vec<ConceptLabel>,
-    
+
     /// Property inclusions to enforce
     property_inclusions: Vec<PropertyInclusion>,
-    
+
     /// Inverse property mappings
     inverse_properties: HashMap<String, String>,
-    
+
     /// Functional properties
     functional_properties: HashSet<String>,
-    
+
     /// Transitive properties
     transitive_properties: HashSet<String>,
 }
@@ -76,7 +76,8 @@ impl TableauBuilder {
 
     /// Add an inverse property relationship
     pub fn add_inverse_property(mut self, property: String, inverse: String) -> Self {
-        self.inverse_properties.insert(property.clone(), inverse.clone());
+        self.inverse_properties
+            .insert(property.clone(), inverse.clone());
         self.inverse_properties.insert(inverse, property);
         self
     }
@@ -98,13 +99,13 @@ impl TableauBuilder {
         // Extract property axioms from ontology
         // This would analyze the ontology and extract:
         // - Functional properties
-        // - Transitive properties  
+        // - Transitive properties
         // - Inverse properties
         // - Property inclusions (SubObjectPropertyOf axioms)
-        
+
         // For now, just return self - full implementation would
         // parse all relevant axioms from the ontology
-        
+
         // Example of what this might do:
         // for axiom in ontology.axioms() {
         //     match axiom {
@@ -125,24 +126,24 @@ impl TableauBuilder {
         //         _ => {}
         //     }
         // }
-        
+
         Ok(self)
     }
 
     /// Build the tableau
     pub fn build(self) -> Result<super::Tableau> {
         let mut tableau = super::Tableau::new(self.config);
-        
+
         // Add root node
         let root_id = tableau.add_node(NodeType::Root)?;
-        
+
         // Add initial concepts to root node
         for concept in self.initial_concepts {
             tableau.add_concept_to_node(root_id, concept)?;
         }
 
         // TODO: Add property inclusions, functional properties, etc.
-        
+
         Ok(tableau)
     }
 
@@ -153,45 +154,59 @@ impl TableauBuilder {
     }
 
     /// Build a tableau for subsumption checking  
-    pub fn build_for_subsumption(&self, ontology: &Ontology, sub_str: &str, super_str: &str) -> Result<super::Tableau> {
+    pub fn build_for_subsumption(
+        &self,
+        ontology: &Ontology,
+        sub_str: &str,
+        super_str: &str,
+    ) -> Result<super::Tableau> {
         // For subsumption checking A ⊑ B, we create a tableau with A ⊓ ¬B and check for unsatisfiability
         let negated_super = format!("not({})", super_str);
         let conjunction = format!("and({}, {})", sub_str, negated_super);
         let concept_label = ConceptLabel::parse(&conjunction);
         let mut tableau = super::Tableau::from_ontology(ontology, self.config.clone())?;
-        
+
         // Add the conjunction A ⊓ ¬B to check subsumption
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
         tableau.add_concept_to_node(root_node, concept_label)?;
-        
+
         Ok(tableau)
     }
 
     /// Build a tableau for satisfiability checking of a class expression
-    pub fn build_for_satisfiability(&self, ontology: &Ontology, class_str: &str) -> Result<super::Tableau> {
+    pub fn build_for_satisfiability(
+        &self,
+        ontology: &Ontology,
+        class_str: &str,
+    ) -> Result<super::Tableau> {
         // Parse the class expression and build tableau
         let concept_label = ConceptLabel::parse(class_str);
         let mut tableau = super::Tableau::from_ontology(ontology, self.config.clone())?;
-        
+
         // Add the class expression as an initial concept to check satisfiability
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
         tableau.add_concept_to_node(root_node, concept_label)?;
-        
+
         Ok(tableau)
     }
 
     /// Build a tableau for instance checking (individual membership in class)
-    pub fn build_for_instance_check(&self, ontology: &Ontology, individual: &str, class_str: &str) -> Result<super::Tableau> {
+    pub fn build_for_instance_check(
+        &self,
+        ontology: &Ontology,
+        individual: &str,
+        class_str: &str,
+    ) -> Result<super::Tableau> {
         // For instance checking, we create a tableau with individual ∈ ¬C and check for satisfiability
         // If unsatisfiable, then individual ∈ C
         let negated_class = format!("not({})", class_str);
         let concept_label = ConceptLabel::parse(&negated_class);
         let mut tableau = super::Tableau::from_ontology(ontology, self.config.clone())?;
-        
+
         // Add the negated class assertion to check instance membership
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
         tableau.add_concept_to_node(root_node, concept_label)?;
-        
+
         Ok(tableau)
     }
 

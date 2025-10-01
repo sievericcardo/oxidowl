@@ -1197,7 +1197,10 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
         self.inner.initialise(context)
     }
 
-    fn select_next_existential(&mut self, candidates: &[ExistentialCandidate]) -> Option<ExistentialCandidate> {
+    fn select_next_existential(
+        &mut self,
+        candidates: &[ExistentialCandidate],
+    ) -> Option<ExistentialCandidate> {
         self.inner.select_next_existential(candidates)
     }
 
@@ -1205,7 +1208,11 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
         self.inner.order_expansions(existentials)
     }
 
-    fn should_delay_expansion(&self, candidate: &ExistentialCandidate, context: &ExpansionContext) -> bool {
+    fn should_delay_expansion(
+        &self,
+        candidate: &ExistentialCandidate,
+        context: &ExpansionContext,
+    ) -> bool {
         self.inner.should_delay_expansion(candidate, context)
     }
 

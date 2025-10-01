@@ -14,14 +14,30 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 
 ### Key Features
 
+#### Core Reasoning Engine
+
 - 🚀 **High Performance**: Advanced tableau algorithms with parallel computation
 - 🔧 **Complete OWL 2 DL Support**: Handles SROIQV(D) description logic with DisjointUnion axioms
 - 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, classification, and instance checking
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
-- � **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
-- �🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
+- 🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
 - ⚡ **Optimized Algorithms**: Hyperresolution, ground disjunctions, and advanced blocking strategies
 - 🦀 **Horned-OWL Integration**: Built on proven OWL parsing and modeling foundation
+
+#### Enhancements
+
+- 🎯 **EL Profile Optimization**: Polynomial-time reasoning for OWL 2 EL ontologies
+- 💡 **Comprehensive Explanations**: Justification generation, proof tracking, and laconic explanations
+- 🌐 **Multi-Protocol Server Support**: OWLlink, SPARQL endpoint, and REST API interfaces
+- 📥 **Advanced Import Resolution**: Recursive imports, cycle detection, and IRI mapping
+- 🧪 **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
+
+#### Competitive Advantages
+
+- **Performance**: EL reasoning with polynomial complexity vs exponential in full DL
+- **Ecosystem Integration**: SPARQL endpoint for Semantic Web compatibility
+- **Developer Experience**: RESTful APIs, comprehensive explanations, and detailed error reporting
+- **Standards Compliance**: OWLlink protocol support for interoperability with existing tools
 
 ## Installation
 
@@ -123,6 +139,145 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+```
+
+## Features (Latest)
+
+Oxidowl has been significantly enhanced with improvements that bring it up to competitive standards with major OWL reasoners while adding unique capabilities.
+
+### EL Profile Optimization
+
+For ontologies that conform to the OWL 2 EL profile, Oxidowl provides specialized polynomial-time reasoning:
+
+```rust
+use oxidowl::{
+    profiles::el_reasoner::{ELReasoner, CompletionConfig},
+    config::OWLProfile,
+    ontology::Ontology,
+};
+
+// Configure for EL profile optimization
+let config = CompletionConfig {
+    max_iterations: 1000,
+    enable_caching: true,
+    batch_size: 50,
+    convergence_threshold: 0.01,
+};
+
+let mut el_reasoner = ELReasoner::new(ontology, config);
+let classification = el_reasoner.classify().await?;
+
+println!("EL classification completed in polynomial time!");
+```
+
+### Comprehensive Explanation Generation
+
+Generate detailed explanations for reasoning results with multiple output formats:
+
+```rust
+use oxidowl::explanation::{
+    ExplanationService, ExplanationType, ExplanationFormat
+};
+
+let explanation_service = ExplanationService::new();
+
+// Explain why a subsumption holds
+let explanation = explanation_service
+    .explain_inference(&ontology, &inference_axiom, ExplanationType::Subsumption)
+    .await?;
+
+// Generate human-readable explanation
+let natural_language = explanation_service
+    .format_explanation(&explanation, ExplanationFormat::NaturalLanguage)
+    .await?;
+
+// Generate proof tree
+let proof_tree = explanation_service
+    .format_explanation(&explanation, ExplanationFormat::ProofTree)
+    .await?;
+
+println!("Explanation: {}", natural_language);
+println!("Proof Tree:\n{}", proof_tree);
+```
+
+### Multi-Protocol Server Support
+
+Run Oxidowl as a server with multiple protocol interfaces:
+
+```bash
+# Start with all server interfaces enabled
+cargo run --features="server,sparql,explanations" -- serve \
+    --owllink-port 8080 \
+    --sparql-port 8081 \
+    --rest-port 8082 \
+    --ontology medical-ontology.owl
+```
+
+#### SPARQL Endpoint
+
+```bash
+# Query via SPARQL (using oxigraph integration)
+curl -X POST http://localhost:8081/sparql \
+  -H "Content-Type: application/sparql-query" \
+  -d "SELECT ?class WHERE { ?class a owl:Class }"
+```
+
+#### OWLlink Protocol
+
+```xml
+<!-- OWLlink request -->
+<RequestMessage xmlns="http://www.owllink.org/owllink#">
+    <CreateKB kb="medical" />
+    <LoadOntology kb="medical">
+        <IRI>http://example.org/medical.owl</IRI>
+    </LoadOntology>
+    <IsConsistent kb="medical" />
+</RequestMessage>
+```
+
+#### REST API
+
+```bash
+# Check consistency via REST API
+curl -X GET http://localhost:8082/api/v1/consistency
+
+# Perform classification
+curl -X POST http://localhost:8082/api/v1/classify
+
+# Get explanations
+curl -X POST http://localhost:8082/api/v1/explain \
+  -H "Content-Type: application/json" \
+  -d '{"inference_type": "subsumption", "axiom": "Human ⊑ Animal"}'
+```
+
+### Advanced Import Resolution
+
+Handle complex ontology imports with sophisticated resolution:
+
+```rust
+use oxidowl::import::resolver::{ImportResolver, ImportResolverConfig};
+
+let config = ImportResolverConfig {
+    base_directories: vec![
+        PathBuf::from("./ontologies"),
+        PathBuf::from("./imports"),
+    ],
+    allow_remote: true,
+    max_depth: 10,
+};
+
+let resolver = ImportResolver::new().with_config(config);
+
+// Add IRI mappings for local resolution
+resolver.add_iri_mapping(
+    "http://purl.obolibrary.org/obo/go.owl".to_string(),
+    "./local-cache/go.owl".to_string(),
+).await?;
+
+// Load ontology with all imports resolved
+let imported_ontology = resolver
+    .load_with_imports("http://example.org/my-ontology.owl", None)
+    .await?;
 ```
 
 ### Configuration

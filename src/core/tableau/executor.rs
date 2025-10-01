@@ -4,20 +4,20 @@
 //! rule application, and completion checking.
 
 use super::{
-    node::{NodeId, ConceptLabel, RoleLabel, NodeType},
     edge::TableauEdge,
-    state::{TableauState, ClashType, Clash},
+    node::{ConceptLabel, NodeId, NodeType, RoleLabel},
+    state::{Clash, ClashType, TableauState},
 };
 use crate::{
     Error, Result,
     core::{
-        completion::{RuleApplication, CompletionRule, RulePriority, RuleContext},
+        completion::{CompletionRule, RuleApplication, RuleContext, RulePriority},
         dependency::DependencySet,
     },
-    ontology::{ClassExpression, Class, IRI},
+    ontology::{Class, ClassExpression, IRI},
 };
+use log::{debug, trace, warn};
 use std::time::Instant;
-use log::{debug, warn, trace};
 
 /// Tableau execution engine
 pub struct TableauExecutor;
@@ -114,7 +114,10 @@ impl TableauExecutor {
         }
 
         tableau.statistics.finalize();
-        debug!("Tableau expansion completed with state: {:?}", tableau.state);
+        debug!(
+            "Tableau expansion completed with state: {:?}",
+            tableau.state
+        );
 
         Ok(tableau.state)
     }
@@ -132,7 +135,10 @@ impl TableauExecutor {
 
     /// Apply a completion rule
     fn apply_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
-        trace!("Applying rule: {:?} to node: {}", rule_app.rule, rule_app.node);
+        trace!(
+            "Applying rule: {:?} to node: {}",
+            rule_app.rule, rule_app.node
+        );
 
         tableau.statistics.increment_rule_applications();
 
@@ -233,7 +239,10 @@ impl TableauExecutor {
     }
 
     /// Apply the PROPERTY CHAIN rule
-    fn apply_property_chain_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
+    fn apply_property_chain_rule(
+        tableau: &mut super::Tableau,
+        rule_app: RuleApplication,
+    ) -> Result<()> {
         // Implementation for property chain rule
         // This would handle property chain axioms
         Ok(())
@@ -260,8 +269,8 @@ impl TableauExecutor {
         // 2. All nodes are fully expanded
         // 3. No new inferences can be made
 
-        tableau.pending_queue.is_empty() && 
-        tableau.nodes.iter().all(|node| node.status.fully_expanded)
+        tableau.pending_queue.is_empty()
+            && tableau.nodes.iter().all(|node| node.status.fully_expanded)
     }
 
     /// Detect clashes in the tableau

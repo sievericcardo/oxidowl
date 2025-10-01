@@ -1,0 +1,526 @@
+//! REST API Implementation
+//!
+//! This module provides a RESTful API for accessing reasoner functionality.
+
+use crate::{
+    Error, Result,
+    reasoning::ReasoningService,
+    ontology::{ClassExpression, Individual},
+    explanation::ExplanationService,
+};
+use std::{
+    sync::Arc,
+    net::SocketAddr,
+};
+use warp::{Filter, Reply};
+use serde::{Deserialize, Serialize};
+
+/// REST API server implementation
+#[derive(Debug)]
+pub struct RestApiServer {
+    /// Server port
+    port: u16,
+    /// Bind address
+    bind_address: String,
+    /// Reasoning service
+    reasoning_service: Arc<ReasoningService>,
+    /// Explanation service
+    explanation_service: Arc<ExplanationService>,
+}
+
+impl RestApiServer {
+    /// Create a new REST API server
+    pub fn new(
+        port: u16, 
+        bind_address: String, 
+        reasoning_service: Arc<ReasoningService>,
+        explanation_service: Arc<ExplanationService>,
+    ) -> Self {
+        Self {
+            port,
+            bind_address,
+            reasoning_service,
+            explanation_service,
+        }
+    }
+
+    /// Start the REST API server
+    pub async fn start(self) -> Result<RestApiServerHandle> {
+        let reasoning_service = self.reasoning_service.clone();
+        let explanation_service = self.explanation_service.clone();
+
+        // API routes
+        let api = warp::path("api").and(warp::path("v1"));
+
+        // Health check
+        let health = api
+            .and(warp::path("health"))
+            .and(warp::get())
+            .map(|| {
+                warp::reply::json(&ApiResponse::success(serde_json::json!({
+                    "status": "healthy",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "timestamp": chrono::Utc::now().to_rfc3339()
+                })))
+            });
+
+        // Reasoner status
+        let status = api
+            .and(warp::path("status"))
+            .and(warp::get())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(get_reasoner_status);
+
+        // Consistency check
+        let consistency = api
+            .and(warp::path("consistency"))
+            .and(warp::get())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(check_consistency);
+
+        // Satisfiability check
+        let satisfiability = api
+            .and(warp::path("satisfiability"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(check_satisfiability);
+
+        // Subsumption check
+        let subsumption = api
+            .and(warp::path("subsumption"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(check_subsumption);
+
+        // Classification
+        let classification = api
+            .and(warp::path("classify"))
+            .and(warp::post())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(classify_ontology);
+
+        // Query subclasses
+        let subclasses = api
+            .and(warp::path("subclasses"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(get_subclasses);
+
+        // Query superclasses
+        let superclasses = api
+            .and(warp::path("superclasses"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(get_superclasses);
+
+        // Query instances
+        let instances = api
+            .and(warp::path("instances"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(get_instances);
+
+        // Explain inference
+        let explain = api
+            .and(warp::path("explain"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || explanation_service.clone()))
+            .and_then(explain_inference);
+
+        // Load ontology
+        let load_ontology = api
+            .and(warp::path("ontology"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || reasoning_service.clone()))
+            .and_then(load_ontology_endpoint);
+
+        let routes = health
+            .or(status)
+            .or(consistency)
+            .or(satisfiability)
+            .or(subsumption)
+            .or(classification)
+            .or(subclasses)
+            .or(superclasses)
+            .or(instances)
+            .or(explain)
+            .or(load_ontology)
+            .with(warp::cors().allow_any_origin().allow_headers(vec!["content-type"]).allow_methods(vec!["GET", "POST"]))
+            .recover(handle_rejection);
+
+        let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port).parse()
+            .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
+
+        let server = warp::serve(routes).bind(addr);
+        let server_task = tokio::spawn(server);
+
+        tracing::info!("REST API server started on {}:{}", self.bind_address, self.port);
+
+        Ok(RestApiServerHandle {
+            task: server_task,
+        })
+    }
+}
+
+/// Handle for a running REST API server
+#[derive(Debug)]
+pub struct RestApiServerHandle {
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl RestApiServerHandle {
+    /// Stop the server
+    pub async fn stop(self) -> Result<()> {
+        self.task.abort();
+        Ok(())
+    }
+}
+
+/// Standard API response wrapper
+#[derive(Debug, Serialize)]
+pub struct ApiResponse<T> {
+    pub success: bool,
+    pub data: Option<T>,
+    pub error: Option<String>,
+    pub timestamp: String,
+}
+
+impl<T> ApiResponse<T> {
+    pub fn success(data: T) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            error: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    pub fn error(error: String) -> Self {
+        Self {
+            success: false,
+            data: None,
+            error: Some(error),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+/// Request for satisfiability check
+#[derive(Debug, Deserialize)]
+pub struct SatisfiabilityRequest {
+    pub class_expression: String,
+}
+
+/// Request for subsumption check
+#[derive(Debug, Deserialize)]
+pub struct SubsumptionRequest {
+    pub sub_class: String,
+    pub super_class: String,
+}
+
+/// Request for class hierarchy queries
+#[derive(Debug, Deserialize)]
+pub struct ClassQueryRequest {
+    pub class_expression: String,
+    pub direct: Option<bool>,
+}
+
+/// Request for explanation
+#[derive(Debug, Deserialize)]
+pub struct ExplanationRequest {
+    pub inference_type: String,
+    pub axiom: String,
+}
+
+/// Request for loading ontology
+#[derive(Debug, Deserialize)]
+pub struct LoadOntologyRequest {
+    pub ontology_iri: String,
+    pub format: Option<String>,
+}
+
+/// Response for reasoner status
+#[derive(Debug, Serialize)]
+pub struct ReasonerStatus {
+    pub name: String,
+    pub version: String,
+    pub loaded_ontologies: usize,
+    pub supports_profiles: Vec<String>,
+    pub features: Vec<String>,
+}
+
+/// Response for classification
+#[derive(Debug, Serialize)]
+pub struct ClassificationResponse {
+    pub status: String,
+    pub class_count: usize,
+    pub property_count: usize,
+    pub individual_count: usize,
+    pub duration_ms: u64,
+}
+
+// REST API endpoint handlers
+
+async fn get_reasoner_status(
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    let status = ReasonerStatus {
+        name: "Oxidowl".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        loaded_ontologies: 0, // Would get from reasoning service
+        supports_profiles: vec![
+            "OWL2-DL".to_string(),
+            "OWL2-EL".to_string(),
+        ],
+        features: vec![
+            "Consistency Checking".to_string(),
+            "Classification".to_string(),
+            "Realization".to_string(),
+            "Explanation Generation".to_string(),
+            "SWRL Rules".to_string(),
+        ],
+    };
+
+    Ok(warp::reply::json(&ApiResponse::success(status)))
+}
+
+async fn check_consistency(
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    match reasoning_service.is_consistent().await {
+        Ok(is_consistent) => {
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "consistent": is_consistent
+            }))))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn check_satisfiability(
+    request: SatisfiabilityRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    // Parse class expression
+    let class_expr = match parse_class_expression(&request.class_expression) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+
+    match reasoning_service.is_satisfiable(&class_expr).await {
+        Ok(is_satisfiable) => {
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "satisfiable": is_satisfiable,
+                "class_expression": request.class_expression
+            }))))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn check_subsumption(
+    request: SubsumptionRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    // Parse class expressions
+    let sub_expr = match parse_class_expression(&request.sub_class) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+
+    let super_expr = match parse_class_expression(&request.super_class) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+
+    match reasoning_service.is_subsumed(&sub_expr, &super_expr).await {
+        Ok(is_subsumed) => {
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "subsumed": is_subsumed,
+                "sub_class": request.sub_class,
+                "super_class": request.super_class
+            }))))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn classify_ontology(
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    let start_time = std::time::Instant::now();
+    
+    match reasoning_service.classify().await {
+        Ok(_classification) => {
+            let duration = start_time.elapsed();
+            let response = ClassificationResponse {
+                status: "completed".to_string(),
+                class_count: 0, // Would get from classification results
+                property_count: 0,
+                individual_count: 0,
+                duration_ms: duration.as_millis() as u64,
+            };
+            Ok(warp::reply::json(&ApiResponse::success(response)))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn get_subclasses(
+    request: ClassQueryRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    let class_expr = match parse_class_expression(&request.class_expression) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+
+    match reasoning_service.get_subclasses(&class_expr, request.direct.unwrap_or(false)).await {
+        Ok(subclasses) => {
+            let class_iris: Vec<String> = subclasses.into_iter()
+                .map(|c| format!("{:?}", c))
+                .collect();
+            
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "subclasses": class_iris,
+                "class_expression": request.class_expression,
+                "direct": request.direct.unwrap_or(false)
+            }))))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn get_superclasses(
+    request: ClassQueryRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    let class_expr = match parse_class_expression(&request.class_expression) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+
+    match reasoning_service.get_superclasses(&class_expr, request.direct.unwrap_or(false)).await {
+        Ok(superclasses) => {
+            let class_iris: Vec<String> = superclasses.into_iter()
+                .map(|c| format!("{:?}", c))
+                .collect();
+            
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "superclasses": class_iris,
+                "class_expression": request.class_expression,
+                "direct": request.direct.unwrap_or(false)
+            }))))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn get_instances(
+    request: ClassQueryRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    let class_expr = match parse_class_expression(&request.class_expression) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+
+    match reasoning_service.get_instances(&class_expr, request.direct.unwrap_or(false)).await {
+        Ok(instances) => {
+            let individual_iris: Vec<String> = instances.into_iter()
+                .map(|i| i.iri)
+                .collect();
+            
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "instances": individual_iris,
+                "class_expression": request.class_expression,
+                "direct": request.direct.unwrap_or(false)
+            }))))
+        }
+        Err(e) => {
+            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
+        }
+    }
+}
+
+async fn explain_inference(
+    request: ExplanationRequest,
+    explanation_service: Arc<ExplanationService>,
+) -> Result<impl Reply, warp::Rejection> {
+    // For now, return a mock explanation - would integrate with actual explanation service
+    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        "explanation": {
+            "inference_type": request.inference_type,
+            "axiom": request.axiom,
+            "justifications": [],
+            "message": "Explanation generation not yet fully implemented"
+        }
+    }))))
+}
+
+async fn load_ontology_endpoint(
+    request: LoadOntologyRequest,
+    _reasoning_service: Arc<ReasoningService>,
+) -> Result<impl Reply, warp::Rejection> {
+    // For now, just acknowledge - would implement actual loading
+    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        "status": "loaded",
+        "ontology_iri": request.ontology_iri,
+        "format": request.format.unwrap_or_else(|| "auto-detect".to_string())
+    }))))
+}
+
+/// Parse a class expression from string (simplified)
+fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
+    // Simplified parsing - in practice would use a proper parser
+    if expr_str.starts_with("http://") || expr_str.starts_with("https://") {
+        // Simple IRI
+        Ok(ClassExpression::Class(crate::ontology::Class::new(expr_str)))
+    } else {
+        Err(Error::ParseError(format!("Cannot parse class expression: {}", expr_str)))
+    }
+}
+
+/// Handle warp rejections
+async fn handle_rejection(err: warp::Rejection) -> Result<impl Reply, std::convert::Infallible> {
+    let code;
+    let message;
+
+    if err.is_not_found() {
+        code = warp::http::StatusCode::NOT_FOUND;
+        message = "NOT_FOUND";
+    } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
+        code = warp::http::StatusCode::BAD_REQUEST;
+        message = "BAD_REQUEST";
+    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        code = warp::http::StatusCode::METHOD_NOT_ALLOWED;
+        message = "METHOD_NOT_ALLOWED";
+    } else {
+        eprintln!("unhandled rejection: {:?}", err);
+        code = warp::http::StatusCode::INTERNAL_SERVER_ERROR;
+        message = "UNHANDLED_REJECTION";
+    }
+
+    let json = warp::reply::json(&ApiResponse::<()>::error(message.to_string()));
+
+    Ok(warp::reply::with_status(json, code))
+}

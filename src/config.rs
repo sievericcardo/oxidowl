@@ -53,6 +53,8 @@ pub struct ReasoningConfig {
     pub dump_clauses: bool,
     /// Clause dump file path
     pub clause_dump_file: Option<String>,
+    /// Target OWL profile for optimization
+    pub target_profile: OWLProfile,
 }
 
 /// Tableau algorithm types
@@ -60,6 +62,23 @@ pub struct ReasoningConfig {
 pub enum TableauAlgorithm {
     /// Traditional tableau algorithm
     Traditional,
+    /// Profile-optimized algorithms
+    ProfileOptimized,
+}
+
+/// OWL 2 Profile types for optimization
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OWLProfile {
+    /// Full OWL 2 DL
+    DL,
+    /// OWL 2 EL (Existential Language)
+    EL,
+    /// OWL 2 QL (Query Language)
+    QL,
+    /// OWL 2 RL (Rule Language)
+    RL,
+    /// Auto-detect profile
+    Auto,
 }
 
 /// Blocking strategy for the tableau algorithm
@@ -157,6 +176,18 @@ pub struct ServerConfig {
     pub enable_cors: bool,
     /// Maximum request size in bytes
     pub max_request_size: usize,
+    /// Enable OWLlink server
+    pub enable_owllink: bool,
+    /// OWLlink server port
+    pub owllink_port: u16,
+    /// Enable SPARQL endpoint
+    pub enable_sparql: bool,
+    /// SPARQL endpoint port
+    pub sparql_port: u16,
+    /// Enable REST API
+    pub enable_rest_api: bool,
+    /// REST API port
+    pub rest_api_port: u16,
 }
 
 /// Logging configuration for the reasoner
@@ -245,6 +276,7 @@ impl Default for ReasoningConfig {
             ignore_unsupported_datatypes: false,
             dump_clauses: false,
             clause_dump_file: None,
+            target_profile: OWLProfile::Auto,
         }
     }
 }
@@ -267,6 +299,7 @@ impl Default for ReasonerConfig {
                 ignore_unsupported_datatypes: false,
                 dump_clauses: false,
                 clause_dump_file: None,
+                target_profile: OWLProfile::Auto,
             },
             cache: CacheConfig {
                 enable_satisfiability_cache: true,
@@ -284,6 +317,12 @@ impl Default for ReasonerConfig {
                 request_timeout: Duration::from_secs(30),
                 enable_cors: true,
                 max_request_size: 50 * 1024 * 1024, // 50MB
+                enable_owllink: false,
+                owllink_port: 8081,
+                enable_sparql: false,
+                sparql_port: 8082,
+                enable_rest_api: true,
+                rest_api_port: 8080,
             },
             logging: LoggingConfig {
                 level: LogLevel::Info,

@@ -984,7 +984,7 @@ impl FunctionalSyntaxSerializer {
 impl OntologySerializer for FunctionalSyntaxSerializer {
     fn serialize(&self, ontology: &Ontology) -> Result<String> {
         let mut content = String::new();
-        
+
         // Write ontology header
         if let Some(onto_iri) = ontology.get_iri() {
             if let Some(version_iri) = &ontology.version_iri {

@@ -3,8 +3,8 @@
 //! This module implements the OWL 2 RL profile rules as defined in:
 //! https://www.w3.org/TR/owl2-profiles/\#OWL_2_RL
 
-use crate::{Error, Result};
 use crate::semantics::{RdfGraph, RdfTerm, Triple};
+use crate::{Error, Result};
 
 /// OWL 2 RL Rule Engine
 ///
@@ -46,7 +46,9 @@ impl Owl2RlEngine {
         }
 
         if iterations >= MAX_ITERATIONS {
-            return Err(Error::reasoning("Rule application reached maximum iterations"));
+            return Err(Error::reasoning(
+                "Rule application reached maximum iterations",
+            ));
         }
 
         Ok(())
@@ -65,7 +67,7 @@ impl Owl2RlEngine {
     /// Apply subclass transitivity rules
     fn apply_subclass_rules(&mut self) -> Result<()> {
         let subclass_pred = RdfTerm::iri("http://www.w3.org/2000/01/rdf-schema#subClassOf")?;
-        
+
         let triples: Vec<_> = self.closure.triples.iter().cloned().collect();
         let mut new_triples = Vec::new();
 
@@ -99,7 +101,7 @@ impl Owl2RlEngine {
     /// Apply property hierarchy rules
     fn apply_property_rules(&mut self) -> Result<()> {
         let subprop_pred = RdfTerm::iri("http://www.w3.org/2000/01/rdf-schema#subPropertyOf")?;
-        
+
         let triples: Vec<_> = self.closure.triples.iter().cloned().collect();
         let mut new_triples = Vec::new();
 

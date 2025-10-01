@@ -3,6 +3,7 @@
 //! This module implements comprehensive parsing of OWL 2 ontologies from Turtle format.
 //! It handles complex turtle syntax including disjoint unions, lists, blank nodes, and multi-line statements.
 
+use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{
@@ -14,7 +15,6 @@ use crate::{
     },
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
-use super::common::OntologySerializer;
 
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {

@@ -41,10 +41,11 @@ pub mod config;
 pub mod core;
 pub mod dl_clauses; // DL clause generation and dumping
 pub mod error;
-pub mod prelude; // Common imports and type aliases for internal use
-pub mod import; // Import management and dependency resolution
+pub mod import;
+pub mod prelude; // Common imports and type aliases for internal use // Import management and dependency resolution
 // pub mod network;
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
+pub mod distributed;
 pub mod ontology;
 pub mod parsers;
 pub mod profiles; // OWL 2 profiles support and validation
@@ -53,7 +54,7 @@ pub mod reasoning;
 pub mod semantics; // RDF, RDFS, and OWL 2 semantics implementation
 pub mod swrl; // SWRL (Semantic Web Rule Language) support
 pub mod validation; // OWL 2 DL validation and profile checking
-pub mod visitor; // Visitor pattern for ontology traversal
+pub mod visitor; // Visitor pattern for ontology traversal // Distributed query processing and cluster management
 // pub mod utils;
 
 // Re-export main types for convenience
@@ -63,10 +64,38 @@ pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
 pub use crate::profiles::{
     OWL2Profile as ProfileType, ProfileValidator, el::ELValidator, validator::OWL2ProfileValidator,
 };
-pub use crate::query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryType};
+// Query system exports (both DL queries and advanced conjunctive queries)
+pub use crate::query::{
+    AdvancedQueryError,
+    // Phase 2.1 Advanced Optimization exports
+    AdvancedQueryOptimizer,
+    // Advanced Query exports - re-exported from advanced module
+    ConjunctiveQuery,
+    ConjunctiveQueryResult,
+    // DL Query exports for backward compatibility
+    DLQuery,
+    DLQueryEngine,
+    DLQueryFeatureExtractor,
+    DLQueryParser,
+    IntelligentIndexingSystem,
+    PerformanceMonitor,
+    PerformancePredictor,
+    QueryAtom,
+    QueryEngine,
+    QueryError,
+    QueryResult,
+    QueryService,
+    QueryType,
+};
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
 pub use crate::validation::{OWL2DLValidator, OWL2Profile, ValidationReport};
+
+// Re-export distributed reasoning components
+pub use crate::distributed::{
+    ClusterConfig, DistributedConfig, DistributedQueryProcessor, NodeCapabilities, NodeConfig,
+    NodeSettings,
+};
 
 // Re-export error types
 pub use crate::config::{ReasonerConfig, TableauAlgorithm};
@@ -107,6 +136,7 @@ pub fn supports_expressivity(expressivity: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_version_info() {
@@ -132,11 +162,11 @@ mod tests {
     #[test]
     fn test_create_query_engine() -> Result<()> {
         let ontology = Ontology::new();
-        let namespace = Some("http://example.com/test#".to_string());
+        let _namespace = Some("http://example.com/test#".to_string());
         let config = ReasonerConfig::default();
 
         // Create a reasoning service from the ontology
-        let reasoning_service = ReasoningService::new(ontology.clone(), config);
+        let reasoning_service = Arc::new(ReasoningService::new(ontology.clone(), config));
         let query_engine = query::DLQueryEngine::new(reasoning_service);
 
         // Test basic functionality

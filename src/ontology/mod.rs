@@ -27,7 +27,7 @@ use std::sync::{Arc, RwLock};
 pub type OntologyRef = Arc<RwLock<Ontology>>;
 
 /// IRI (Internationalized Resource Identifier) wrapper
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct IRI {
     value: String,
 }
@@ -114,13 +114,13 @@ impl ObjectPropertyExpression {
 }
 
 /// Object Property
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ObjectProperty {
     pub iri: Url,
 }
 
 /// Object property expressions (simple or complex)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ObjectPropertyExpression {
     /// Named object property
     ObjectProperty(ObjectProperty),
@@ -133,13 +133,13 @@ pub enum ObjectPropertyExpression {
 }
 
 /// Data Property
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct DataProperty {
     pub iri: IRI,
 }
 
 /// Data property expressions (simple or complex)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DataPropertyExpression {
     /// Named data property
     DataProperty(DataProperty),
@@ -175,7 +175,7 @@ impl std::fmt::Display for AnnotationPropertyExpression {
 }
 
 /// Literal value
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Literal {
     /// Lexical value
     pub value: String,
@@ -230,7 +230,7 @@ impl std::fmt::Display for Literal {
 }
 
 /// Data Range (OWL 2 Datatype expression)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DataRange {
     /// Named datatype
     Datatype(IRI),
@@ -295,7 +295,7 @@ impl std::fmt::Display for DataRange {
 }
 
 /// Facet restriction for datatype restrictions
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct FacetRestriction {
     pub facet: IRI,
     pub value: Literal,
