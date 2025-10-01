@@ -1,15 +1,15 @@
 //! Query execution engine for high-performance conjunctive query processing
-//! 
+//!
 //! This module implements the actual execution of optimized conjunctive queries
 //! using various strategies including tableau reasoning, query rewriting, and
 //! direct evaluation.
 
-use crate::ontology::{Ontology, Individual, Literal};
-use crate::reasoning::ReasoningService;
-use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable, QueryConstraints};
-use super::optimization::{QueryPlan, ExecutionStrategy, QueryOptimizer};
+use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryConstraints, QueryVariable};
+use super::optimization::{ExecutionStrategy, QueryOptimizer, QueryPlan};
 use super::rewriting::QueryRewriter;
-use serde::{Serialize, Deserialize};
+use crate::ontology::{Individual, Literal, Ontology};
+use crate::reasoning::ReasoningService;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -135,11 +135,14 @@ pub enum AdvancedQueryError {
 
 impl QueryEngine {
     /// Create a new query execution engine
-    pub fn new(ontology: Arc<Ontology>, reasoning_service: Arc<ReasoningService>) -> Result<Self, AdvancedQueryError> {
+    pub fn new(
+        ontology: Arc<Ontology>,
+        reasoning_service: Arc<ReasoningService>,
+    ) -> Result<Self, AdvancedQueryError> {
         let optimizer = QueryOptimizer::new(ontology.clone(), reasoning_service.clone());
         let rewriter = QueryRewriter::new(ontology.clone())
             .map_err(|e| AdvancedQueryError::RewritingError(e))?;
-        
+
         Ok(Self {
             ontology: ontology.clone(),
             reasoning_service,
@@ -162,7 +165,10 @@ impl QueryEngine {
     }
 
     /// Execute a conjunctive query
-    pub fn execute_query(&mut self, query: &ConjunctiveQuery) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+    pub fn execute_query(
+        &mut self,
+        query: &ConjunctiveQuery,
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let start_time = Instant::now();
 
         // Check cache first
@@ -184,15 +190,16 @@ impl QueryEngine {
         // Execute query according to plan
         let mut result = match plan.strategy {
             ExecutionStrategy::Direct => self.execute_direct(&plan.optimized_query)?,
-            ExecutionStrategy::Tableau { ref expansion_order } => {
-                self.execute_tableau(&plan.optimized_query, expansion_order)?
-            }
-            ExecutionStrategy::Rewriting { ref rewritten_queries } => {
-                self.execute_rewriting(&plan.optimized_query, rewritten_queries)?
-            }
-            ExecutionStrategy::Hybrid { ref tableau_atoms, ref rewriting_atoms } => {
-                self.execute_hybrid(&plan.optimized_query, tableau_atoms, rewriting_atoms)?
-            }
+            ExecutionStrategy::Tableau {
+                ref expansion_order,
+            } => self.execute_tableau(&plan.optimized_query, expansion_order)?,
+            ExecutionStrategy::Rewriting {
+                ref rewritten_queries,
+            } => self.execute_rewriting(&plan.optimized_query, rewritten_queries)?,
+            ExecutionStrategy::Hybrid {
+                ref tableau_atoms,
+                ref rewriting_atoms,
+            } => self.execute_hybrid(&plan.optimized_query, tableau_atoms, rewriting_atoms)?,
         };
 
         // Update metadata
@@ -210,27 +217,43 @@ impl QueryEngine {
     }
 
     /// Execute query using direct evaluation (for simple queries)
-    fn execute_direct(&mut self, query: &ConjunctiveQuery) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+    fn execute_direct(
+        &mut self,
+        query: &ConjunctiveQuery,
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let mut bindings = Vec::new();
         let mut reasoning_calls = 0;
 
         // For simple queries, we can evaluate directly
         if query.body_atoms.len() == 1 {
             match &query.body_atoms[0] {
-                QueryAtom::ClassAtom { variable, class_expression } => {
+                QueryAtom::ClassAtom {
+                    variable,
+                    class_expression,
+                } => {
                     // Find all instances of the class
-                    if let Ok(instances) = self.reasoning_service.get_instances_sync(class_expression) {
+                    if let Ok(instances) =
+                        self.reasoning_service.get_instances_sync(class_expression)
+                    {
                         reasoning_calls += 1;
                         for instance in instances {
                             let mut binding = QueryBinding::new();
-                            binding.bind_variable(variable.clone(), BoundValue::Individual(instance));
+                            binding
+                                .bind_variable(variable.clone(), BoundValue::Individual(instance));
                             bindings.push(binding);
                         }
                     }
                 }
-                QueryAtom::ObjectPropertyAtom { subject, property, object } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject,
+                    property,
+                    object,
+                } => {
                     // Find all property assertions
-                    if let Ok(assertions) = self.reasoning_service.get_object_property_assertions_sync(property) {
+                    if let Ok(assertions) = self
+                        .reasoning_service
+                        .get_object_property_assertions_sync(property)
+                    {
                         reasoning_calls += 1;
                         for (subj, obj) in assertions {
                             let mut binding = QueryBinding::new();
@@ -278,7 +301,11 @@ impl QueryEngine {
     }
 
     /// Execute query using tableau reasoning
-    fn execute_tableau(&mut self, query: &ConjunctiveQuery, expansion_order: &[QueryAtom]) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+    fn execute_tableau(
+        &mut self,
+        query: &ConjunctiveQuery,
+        expansion_order: &[QueryAtom],
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let mut bindings = Vec::new();
         let mut reasoning_calls = 0;
 
@@ -349,7 +376,11 @@ impl QueryEngine {
     }
 
     /// Execute query using OWL 2 QL rewriting
-    fn execute_rewriting(&mut self, _query: &ConjunctiveQuery, rewritten_queries: &[ConjunctiveQuery]) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+    fn execute_rewriting(
+        &mut self,
+        _query: &ConjunctiveQuery,
+        rewritten_queries: &[ConjunctiveQuery],
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let mut all_bindings = Vec::new();
         let mut total_reasoning_calls = 0;
 
@@ -391,20 +422,36 @@ impl QueryEngine {
     }
 
     /// Execute query using hybrid strategy
-    fn execute_hybrid(&mut self, query: &ConjunctiveQuery, tableau_atoms: &[QueryAtom], _rewriting_atoms: &[QueryAtom]) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+    fn execute_hybrid(
+        &mut self,
+        query: &ConjunctiveQuery,
+        tableau_atoms: &[QueryAtom],
+        _rewriting_atoms: &[QueryAtom],
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         // For now, fall back to tableau execution
         // In practice, this would intelligently combine both approaches
         self.execute_tableau(query, tableau_atoms)
     }
 
     /// Evaluate a single atom in the context of existing bindings
-    fn evaluate_atom_with_binding(&mut self, atom: &QueryAtom, binding: &QueryBinding) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
+    fn evaluate_atom_with_binding(
+        &mut self,
+        atom: &QueryAtom,
+        binding: &QueryBinding,
+    ) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
         match atom {
-            QueryAtom::ClassAtom { variable, class_expression } => {
+            QueryAtom::ClassAtom {
+                variable,
+                class_expression,
+            } => {
                 if let Some(bound_value) = binding.get_binding(variable) {
                     // Variable is already bound - check if it satisfies the class
                     if let BoundValue::Individual(individual) = bound_value {
-                        if self.reasoning_service.is_instance_of_sync(individual, class_expression).unwrap_or(false) {
+                        if self
+                            .reasoning_service
+                            .is_instance_of_sync(individual, class_expression)
+                            .unwrap_or(false)
+                        {
                             Ok(vec![QueryBinding::new()])
                         } else {
                             Ok(vec![])
@@ -414,12 +461,20 @@ impl QueryEngine {
                     }
                 } else {
                     // Variable is free - find all instances
-                    if let Ok(instances) = self.reasoning_service.get_instances_sync(class_expression) {
-                        Ok(instances.into_iter().map(|instance| {
-                            let mut new_binding = QueryBinding::new();
-                            new_binding.bind_variable(variable.clone(), BoundValue::Individual(instance));
-                            new_binding
-                        }).collect())
+                    if let Ok(instances) =
+                        self.reasoning_service.get_instances_sync(class_expression)
+                    {
+                        Ok(instances
+                            .into_iter()
+                            .map(|instance| {
+                                let mut new_binding = QueryBinding::new();
+                                new_binding.bind_variable(
+                                    variable.clone(),
+                                    BoundValue::Individual(instance),
+                                );
+                                new_binding
+                            })
+                            .collect())
                     } else {
                         Ok(vec![])
                     }
@@ -433,7 +488,11 @@ impl QueryEngine {
     }
 
     /// Apply query constraints to filter bindings
-    fn apply_constraints(&self, bindings: &[QueryBinding], _constraints: &QueryConstraints) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
+    fn apply_constraints(
+        &self,
+        bindings: &[QueryBinding],
+        _constraints: &QueryConstraints,
+    ) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
         // Simplified - in practice would apply distinct, type, and value constraints
         Ok(bindings.to_vec())
     }
@@ -441,11 +500,15 @@ impl QueryEngine {
     /// Validate that a query is well-formed and executable
     fn validate_query(&self, query: &ConjunctiveQuery) -> Result<(), AdvancedQueryError> {
         if query.body_atoms.is_empty() {
-            return Err(AdvancedQueryError::InvalidQuery("Query has no body atoms".to_string()));
+            return Err(AdvancedQueryError::InvalidQuery(
+                "Query has no body atoms".to_string(),
+            ));
         }
 
         if !query.is_well_formed() {
-            return Err(AdvancedQueryError::InvalidQuery("Query is not well-formed".to_string()));
+            return Err(AdvancedQueryError::InvalidQuery(
+                "Query is not well-formed".to_string(),
+            ));
         }
 
         Ok(())
@@ -455,20 +518,20 @@ impl QueryEngine {
     fn compute_query_hash(&self, query: &ConjunctiveQuery) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash answer variables
         for var in &query.answer_variables {
             var.hash(&mut hasher);
         }
-        
+
         // Hash body atoms
         for atom in &query.body_atoms {
             // Simple structural hash
             std::mem::discriminant(atom).hash(&mut hasher);
         }
-        
+
         hasher.finish()
     }
 
@@ -499,30 +562,34 @@ impl QueryBinding {
     /// Combine two bindings if compatible
     pub fn combine(&self, other: &QueryBinding) -> Option<QueryBinding> {
         let mut combined = self.clone();
-        
+
         for (var, value) in &other.variable_bindings {
             if let Some(existing_value) = combined.variable_bindings.get(var) {
                 if existing_value != value {
                     return None; // Incompatible bindings
                 }
             } else {
-                combined.variable_bindings.insert(var.clone(), value.clone());
+                combined
+                    .variable_bindings
+                    .insert(var.clone(), value.clone());
             }
         }
-        
+
         Some(combined)
     }
 
     /// Project binding to only include specified variables
     pub fn project(&self, variables: &[QueryVariable]) -> QueryBinding {
         let mut projected = QueryBinding::new();
-        
+
         for var in variables {
             if let Some(value) = self.variable_bindings.get(var) {
-                projected.variable_bindings.insert(var.clone(), value.clone());
+                projected
+                    .variable_bindings
+                    .insert(var.clone(), value.clone());
             }
         }
-        
+
         projected
     }
 }

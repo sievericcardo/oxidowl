@@ -1,15 +1,15 @@
 //! Query rewriting for OWL 2 QL profile optimization
-//! 
+//!
 //! This module implements the standard OWL 2 QL query rewriting algorithm
 //! that transforms conjunctive queries into unions of conjunctive queries
 //! that can be answered using database-style query evaluation.
 
-use crate::ontology::{Ontology, ClassExpression, ObjectPropertyExpression, axioms::Axiom};
-use crate::profiles::ql::QLValidator;
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
+use crate::ontology::{ClassExpression, ObjectPropertyExpression, Ontology, axioms::Axiom};
+use crate::profiles::ql::QLValidator;
+use lru::LruCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use lru::LruCache;
 
 /// Query rewriter for OWL 2 QL profile
 pub struct QueryRewriter {
@@ -61,7 +61,7 @@ impl QueryRewriter {
     pub fn new(ontology: Arc<Ontology>) -> Result<Self, RewritingError> {
         let ql_validator = QLValidator::new();
         let tbox_index = Self::build_tbox_index(&ontology)?;
-        
+
         Ok(Self {
             ontology,
             ql_validator,
@@ -77,7 +77,10 @@ impl QueryRewriter {
     }
 
     /// Rewrite a conjunctive query for OWL 2 QL
-    pub fn rewrite_for_ql(&mut self, query: &ConjunctiveQuery) -> Result<Vec<ConjunctiveQuery>, RewritingError> {
+    pub fn rewrite_for_ql(
+        &mut self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Vec<ConjunctiveQuery>, RewritingError> {
         // Check if query is already cached
         if let Some(cached) = self.rewriting_cache.get(query) {
             return Ok(cached.clone());
@@ -88,15 +91,19 @@ impl QueryRewriter {
 
         // Perform query rewriting
         let rewritten_queries = self.perform_rewriting(query)?;
-        
+
         // Cache the result
-        self.rewriting_cache.put(query.clone(), rewritten_queries.clone());
-        
+        self.rewriting_cache
+            .put(query.clone(), rewritten_queries.clone());
+
         Ok(rewritten_queries)
     }
 
     /// Perform the actual query rewriting algorithm
-    fn perform_rewriting(&self, query: &ConjunctiveQuery) -> Result<Vec<ConjunctiveQuery>, RewritingError> {
+    fn perform_rewriting(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Vec<ConjunctiveQuery>, RewritingError> {
         let mut rewritten_queries = vec![query.clone()];
         let mut work_queue = VecDeque::new();
         work_queue.push_back((query.clone(), 0));
@@ -117,11 +124,11 @@ impl QueryRewriter {
             // Try to expand each atom in the query
             for (atom_idx, atom) in current_query.body_atoms.iter().enumerate() {
                 let expansions = self.expand_atom(atom, &current_query)?;
-                
+
                 for expansion in expansions {
                     let mut new_query = current_query.clone();
                     new_query.body_atoms[atom_idx] = expansion;
-                    
+
                     // Add to results and work queue if not already present
                     let new_hash = self.compute_query_hash(&new_query);
                     if !processed.contains(&new_hash) {
@@ -136,7 +143,7 @@ impl QueryRewriter {
             for new_atom in new_atoms {
                 let mut new_query = current_query.clone();
                 new_query.body_atoms.push(new_atom);
-                
+
                 let new_hash = self.compute_query_hash(&new_query);
                 if !processed.contains(&new_hash) {
                     rewritten_queries.push(new_query.clone());
@@ -150,11 +157,18 @@ impl QueryRewriter {
     }
 
     /// Expand a single query atom using TBox axioms
-    fn expand_atom(&self, atom: &QueryAtom, _context: &ConjunctiveQuery) -> Result<Vec<QueryAtom>, RewritingError> {
+    fn expand_atom(
+        &self,
+        atom: &QueryAtom,
+        _context: &ConjunctiveQuery,
+    ) -> Result<Vec<QueryAtom>, RewritingError> {
         let mut expansions = Vec::new();
 
         match atom {
-            QueryAtom::ClassAtom { variable, class_expression } => {
+            QueryAtom::ClassAtom {
+                variable,
+                class_expression,
+            } => {
                 // Look for class inclusions: if C ⊑ D and we have D(x), add C(x)
                 if let Some(subclasses) = self.tbox_index.class_inclusions.get(class_expression) {
                     for subclass in subclasses {
@@ -180,7 +194,11 @@ impl QueryRewriter {
                 }
             }
 
-            QueryAtom::ObjectPropertyAtom { subject, property, object } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject,
+                property,
+                object,
+            } => {
                 // Look for property inclusions: if P ⊑ Q and we have Q(x,y), add P(x,y)
                 if let Some(subproperties) = self.tbox_index.property_inclusions.get(property) {
                     for subproperty in subproperties {
@@ -221,7 +239,10 @@ impl QueryRewriter {
     }
 
     /// Generate new atoms that can be added to the query based on TBox axioms
-    fn generate_new_atoms(&self, query: &ConjunctiveQuery) -> Result<Vec<QueryAtom>, RewritingError> {
+    fn generate_new_atoms(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Vec<QueryAtom>, RewritingError> {
         let mut new_atoms = Vec::new();
         let query_variables: HashSet<_> = query.get_all_variables();
 
@@ -267,14 +288,14 @@ impl QueryRewriter {
 
         for query in &queries {
             let mut is_subsumed = false;
-            
+
             for other_query in &queries {
                 if query != other_query && self.query_subsumes(other_query, query) {
                     is_subsumed = true;
                     break;
                 }
             }
-            
+
             if !is_subsumed {
                 result.push(query.clone());
             }
@@ -295,7 +316,7 @@ impl QueryRewriter {
     fn generate_fresh_variable(&self, prefix: &str) -> QueryVariable {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        
+
         let count = COUNTER.fetch_add(1, Ordering::SeqCst);
         QueryVariable::individual(format!("{}_{}", prefix, count))
     }
@@ -304,27 +325,31 @@ impl QueryRewriter {
     fn compute_query_hash(&self, query: &ConjunctiveQuery) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash answer variables
         for var in &query.answer_variables {
             var.hash(&mut hasher);
         }
-        
+
         // Hash body atoms (order-independent)
-        let mut atom_hashes: Vec<u64> = query.body_atoms.iter().map(|atom| {
-            let mut atom_hasher = DefaultHasher::new();
-            // Simple hash based on atom structure
-            std::mem::discriminant(atom).hash(&mut atom_hasher);
-            atom_hasher.finish()
-        }).collect();
+        let mut atom_hashes: Vec<u64> = query
+            .body_atoms
+            .iter()
+            .map(|atom| {
+                let mut atom_hasher = DefaultHasher::new();
+                // Simple hash based on atom structure
+                std::mem::discriminant(atom).hash(&mut atom_hasher);
+                atom_hasher.finish()
+            })
+            .collect();
         atom_hashes.sort();
-        
+
         for hash in atom_hashes {
             hash.hash(&mut hasher);
         }
-        
+
         hasher.finish()
     }
 
@@ -332,19 +357,22 @@ impl QueryRewriter {
     fn validate_ql_compatibility(&self, query: &ConjunctiveQuery) -> Result<(), RewritingError> {
         for atom in &query.body_atoms {
             match atom {
-                QueryAtom::ClassAtom { class_expression, .. } => {
+                QueryAtom::ClassAtom {
+                    class_expression, ..
+                } => {
                     if !self.is_ql_class_expression(class_expression) {
-                        return Err(RewritingError::NotQLProfile(
-                            format!("Complex class expression not allowed in QL: {}", class_expression)
-                        ));
+                        return Err(RewritingError::NotQLProfile(format!(
+                            "Complex class expression not allowed in QL: {}",
+                            class_expression
+                        )));
                     }
                 }
-                QueryAtom::ObjectPropertyAtom { .. } |
-                QueryAtom::DataPropertyAtom { .. } |
-                QueryAtom::SameIndividualAtom { .. } |
-                QueryAtom::DifferentIndividualsAtom { .. } |
-                QueryAtom::ConcreteIndividualAtom { .. } |
-                QueryAtom::ConcreteLiteralAtom { .. } => {
+                QueryAtom::ObjectPropertyAtom { .. }
+                | QueryAtom::DataPropertyAtom { .. }
+                | QueryAtom::SameIndividualAtom { .. }
+                | QueryAtom::DifferentIndividualsAtom { .. }
+                | QueryAtom::ConcreteIndividualAtom { .. }
+                | QueryAtom::ConcreteLiteralAtom { .. } => {
                     // These are allowed in QL
                 }
             }
@@ -376,25 +404,29 @@ impl QueryRewriter {
         for axiom in ontology.axioms() {
             match axiom {
                 Axiom::SubClassOf(axiom) => {
-                    index.class_inclusions
+                    index
+                        .class_inclusions
                         .entry(axiom.superclass.clone())
                         .or_insert_with(Vec::new)
                         .push(axiom.subclass.clone());
                 }
                 Axiom::SubObjectPropertyOf(axiom) => {
-                    index.property_inclusions
+                    index
+                        .property_inclusions
                         .entry(axiom.super_property.clone())
                         .or_insert_with(Vec::new)
                         .push(axiom.sub_property.clone());
                 }
                 Axiom::ObjectPropertyDomain(axiom) => {
-                    index.property_domains
+                    index
+                        .property_domains
                         .entry(axiom.property.clone())
                         .or_insert_with(Vec::new)
                         .push(axiom.domain.clone());
                 }
                 Axiom::ObjectPropertyRange(axiom) => {
-                    index.property_ranges
+                    index
+                        .property_ranges
                         .entry(axiom.property.clone())
                         .or_insert_with(Vec::new)
                         .push(axiom.range.clone());

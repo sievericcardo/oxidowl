@@ -4,18 +4,20 @@
 //! capabilities that build upon the existing foundation to deliver industry-leading
 //! performance and intelligent query processing.
 
-use crate::ontology::{Ontology, ClassExpression, ObjectPropertyExpression, Individual, Axiom};
-use crate::reasoning::ReasoningService;
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::optimization::{QueryOptimizer, QueryPlan, ExecutionStrategy, OptimizationError, PlanMetadata};
-use super::optimizer::{AdvancedQueryOptimizer, AdvancedQueryPlan, AdvancedOptimizerConfig};
-use std::collections::{HashMap, HashSet, BTreeMap, VecDeque};
+use super::optimization::{
+    ExecutionStrategy, OptimizationError, PlanMetadata, QueryOptimizer, QueryPlan,
+};
+use super::optimizer::{AdvancedOptimizerConfig, AdvancedQueryOptimizer, AdvancedQueryPlan};
+use crate::ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::reasoning::ReasoningService;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
-use serde::{Serialize, Deserialize};
 
 /// Phase 2: Cost-based Query Optimizer
-/// 
+///
 /// Implements sophisticated cost-based optimization with:
 /// - Statistical cost estimation
 /// - Join order optimization  
@@ -25,19 +27,19 @@ use serde::{Serialize, Deserialize};
 pub struct CostBasedOptimizer {
     /// Query statistics collector
     statistics: Arc<RwLock<QueryStatistics>>,
-    
+
     /// Cost model for different operations
     cost_model: Arc<CostModel>,
-    
+
     /// Join order optimizer
     join_optimizer: JoinOrderOptimizer,
-    
+
     /// Index advisor
     index_advisor: IndexAdvisor,
-    
+
     /// Query rewriter
     query_rewriter: AdvancedQueryRewriter,
-    
+
     /// Configuration
     config: CostBasedOptimizerConfig,
 }
@@ -47,25 +49,25 @@ pub struct CostBasedOptimizer {
 pub struct CostBasedOptimizerConfig {
     /// Enable cost-based join reordering
     pub enable_join_optimization: bool,
-    
+
     /// Enable automatic index recommendations
     pub enable_index_recommendations: bool,
-    
+
     /// Enable adaptive query rewriting
     pub enable_adaptive_rewriting: bool,
-    
+
     /// Maximum search depth for join optimization
     pub max_join_search_depth: usize,
-    
+
     /// Cost model sensitivity parameters
     pub cost_sensitivity: f64,
-    
+
     /// Statistics collection sampling rate
     pub statistics_sampling_rate: f64,
-    
+
     /// Query result caching enabled
     pub enable_result_caching: bool,
-    
+
     /// Cache size limit (number of cached results)
     pub cache_size_limit: usize,
 }
@@ -75,19 +77,19 @@ pub struct CostBasedOptimizerConfig {
 pub struct QueryStatistics {
     /// Execution time statistics by query pattern
     execution_times: HashMap<QueryPattern, ExecutionTimeStats>,
-    
+
     /// Memory usage statistics by query pattern
     memory_usage: HashMap<QueryPattern, MemoryUsageStats>,
-    
+
     /// Result size statistics by query pattern
     result_sizes: HashMap<QueryPattern, ResultSizeStats>,
-    
+
     /// Index usage statistics
     index_usage: HashMap<String, IndexUsageStats>,
-    
+
     /// Total queries processed
     total_queries: u64,
-    
+
     /// Last update timestamp
     last_updated: Instant,
 }
@@ -97,16 +99,16 @@ pub struct QueryStatistics {
 pub struct QueryPattern {
     /// Number of atoms in query
     pub atom_count: usize,
-    
+
     /// Number of variables in query
     pub variable_count: usize,
-    
+
     /// Number of joins in query
     pub join_count: usize,
-    
+
     /// Query complexity class
     pub complexity_class: QueryComplexityClass,
-    
+
     /// Dominant axiom types involved
     pub axiom_types: HashSet<AxiomType>,
 }
@@ -116,16 +118,16 @@ pub struct QueryPattern {
 pub enum QueryComplexityClass {
     /// Simple atomic queries
     Atomic,
-    
+
     /// Simple conjunctive queries
     SimpleConjunctive,
-    
+
     /// Complex multi-join queries
     ComplexConjunctive,
-    
+
     /// Recursive or transitive queries
     Recursive,
-    
+
     /// Highly complex queries with many variables
     HighlyComplex,
 }
@@ -207,13 +209,13 @@ pub struct IndexUsageStats {
 pub struct CostModel {
     /// Base costs for different operation types
     base_costs: HashMap<OperationType, f64>,
-    
+
     /// Scaling factors for different data sizes
     scaling_factors: HashMap<DataSizeCategory, f64>,
-    
+
     /// Index access costs
     index_costs: HashMap<IndexType, f64>,
-    
+
     /// Join operation costs
     join_costs: HashMap<JoinType, f64>,
 }
@@ -237,11 +239,11 @@ pub enum OperationType {
 /// Data size categories for cost scaling
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum DataSizeCategory {
-    Small,      // < 1K axioms
-    Medium,     // 1K - 100K axioms
-    Large,      // 100K - 1M axioms
-    VeryLarge,  // 1M - 10M axioms
-    Massive,    // > 10M axioms
+    Small,     // < 1K axioms
+    Medium,    // 1K - 100K axioms
+    Large,     // 100K - 1M axioms
+    VeryLarge, // 1M - 10M axioms
+    Massive,   // > 10M axioms
 }
 
 /// Index types for cost calculation
@@ -271,10 +273,10 @@ pub enum JoinType {
 pub struct JoinOrderOptimizer {
     /// Memoization cache for subproblems
     memo_cache: HashMap<JoinSubproblem, JoinSolution>,
-    
+
     /// Cost threshold for exhaustive search
     exhaustive_search_threshold: usize,
-    
+
     /// Heuristic strategies for large problems
     heuristics: Vec<Box<dyn JoinOrderHeuristic>>,
 }
@@ -284,7 +286,7 @@ pub struct JoinOrderOptimizer {
 pub struct JoinSubproblem {
     /// Set of relations to join
     relations: HashSet<QueryAtom>,
-    
+
     /// Available join conditions
     join_conditions: Vec<JoinCondition>,
 }
@@ -294,13 +296,13 @@ pub struct JoinSubproblem {
 pub struct JoinSolution {
     /// Optimal join order
     join_order: Vec<QueryAtom>,
-    
+
     /// Estimated cost
     estimated_cost: f64,
-    
+
     /// Estimated result size
     estimated_result_size: usize,
-    
+
     /// Join methods to use
     join_methods: Vec<JoinType>,
 }
@@ -310,13 +312,13 @@ pub struct JoinSolution {
 pub struct JoinCondition {
     /// Left side atom
     left_atom: QueryAtom,
-    
+
     /// Right side atom
     right_atom: QueryAtom,
-    
+
     /// Shared variables
     shared_variables: Vec<QueryVariable>,
-    
+
     /// Join selectivity estimate
     selectivity: f64,
 }
@@ -324,8 +326,12 @@ pub struct JoinCondition {
 /// Trait for join order heuristics
 pub trait JoinOrderHeuristic: std::fmt::Debug + Send + Sync {
     /// Generate a heuristic join order
-    fn generate_join_order(&self, problem: &JoinSubproblem, stats: &QueryStatistics) -> JoinSolution;
-    
+    fn generate_join_order(
+        &self,
+        problem: &JoinSubproblem,
+        stats: &QueryStatistics,
+    ) -> JoinSolution;
+
     /// Get heuristic name for logging
     fn name(&self) -> &str;
 }
@@ -335,13 +341,13 @@ pub trait JoinOrderHeuristic: std::fmt::Debug + Send + Sync {
 pub struct IndexAdvisor {
     /// Historical query patterns
     query_patterns: HashMap<QueryPattern, u64>,
-    
+
     /// Current index performance
     index_performance: HashMap<String, IndexPerformanceMetrics>,
-    
+
     /// Cost-benefit analysis cache
     analysis_cache: HashMap<IndexRecommendationRequest, IndexRecommendation>,
-    
+
     /// Configuration
     config: IndexAdvisorConfig,
 }
@@ -351,13 +357,13 @@ pub struct IndexAdvisor {
 pub struct IndexAdvisorConfig {
     /// Minimum query frequency for index recommendation
     pub min_query_frequency: u64,
-    
+
     /// Cost-benefit threshold for recommendations
     pub cost_benefit_threshold: f64,
-    
+
     /// Maximum number of recommended indices
     pub max_recommendations: usize,
-    
+
     /// Index maintenance cost factor
     pub maintenance_cost_factor: f64,
 }
@@ -386,22 +392,22 @@ pub struct IndexRecommendationRequest {
 pub struct IndexRecommendation {
     /// Recommended index type
     pub index_type: IndexType,
-    
+
     /// Columns/attributes to index
     pub indexed_elements: Vec<IndexedElement>,
-    
+
     /// Expected performance improvement
     pub expected_improvement: f64,
-    
+
     /// Implementation cost estimate
     pub implementation_cost: f64,
-    
+
     /// Maintenance cost estimate
     pub maintenance_cost: f64,
-    
+
     /// Confidence in recommendation
     pub confidence: f64,
-    
+
     /// Justification for recommendation
     pub justification: String,
 }
@@ -420,13 +426,13 @@ pub enum IndexedElement {
 pub struct AdvancedQueryRewriter {
     /// Rewriting rules database
     rewriting_rules: Vec<RewritingRule>,
-    
+
     /// Adaptive strategy selector
     strategy_selector: AdaptiveStrategySelector,
-    
+
     /// Rewriting history for learning
     rewriting_history: Vec<RewritingHistoryEntry>,
-    
+
     /// Performance feedback system
     feedback_system: RewritingFeedbackSystem,
 }
@@ -436,19 +442,19 @@ pub struct AdvancedQueryRewriter {
 pub struct RewritingRule {
     /// Rule identifier
     pub id: String,
-    
+
     /// Rule description
     pub description: String,
-    
+
     /// Pattern to match
     pub pattern: QueryPattern,
-    
+
     /// Rewriting function
     pub rewriter: Box<dyn QueryRewriter>,
-    
+
     /// Expected performance improvement
     pub expected_improvement: f64,
-    
+
     /// Applicability conditions
     pub conditions: Vec<ApplicabilityCondition>,
 }
@@ -456,8 +462,12 @@ pub struct RewritingRule {
 /// Trait for query rewriting functions
 pub trait QueryRewriter: std::fmt::Debug + Send + Sync {
     /// Apply rewriting to a query
-    fn rewrite(&self, query: &ConjunctiveQuery, context: &RewritingContext) -> Result<ConjunctiveQuery, RewritingError>;
-    
+    fn rewrite(
+        &self,
+        query: &ConjunctiveQuery,
+        context: &RewritingContext,
+    ) -> Result<ConjunctiveQuery, RewritingError>;
+
     /// Estimate performance impact
     fn estimate_impact(&self, query: &ConjunctiveQuery) -> f64;
 }
@@ -467,13 +477,13 @@ pub trait QueryRewriter: std::fmt::Debug + Send + Sync {
 pub struct RewritingContext {
     /// Current query statistics
     pub statistics: Arc<RwLock<QueryStatistics>>,
-    
+
     /// Available indices
     pub available_indices: Vec<String>,
-    
+
     /// Ontology information
     pub ontology: Arc<Ontology>,
-    
+
     /// Reasoning service
     pub reasoning_service: Arc<ReasoningService>,
 }
@@ -483,19 +493,19 @@ pub struct RewritingContext {
 pub enum ApplicabilityCondition {
     /// Minimum query complexity
     MinComplexity(QueryComplexityClass),
-    
+
     /// Maximum query complexity
     MaxComplexity(QueryComplexityClass),
-    
+
     /// Required axiom types present
     RequiredAxiomTypes(HashSet<AxiomType>),
-    
+
     /// Minimum expected improvement
     MinImprovement(f64),
-    
+
     /// Index availability
     IndexAvailable(String),
-    
+
     /// Custom condition
     Custom(Box<dyn ConditionEvaluator>),
 }
@@ -511,10 +521,10 @@ pub trait ConditionEvaluator: std::fmt::Debug + Send + Sync {
 pub struct AdaptiveStrategySelector {
     /// Strategy performance history
     strategy_history: HashMap<String, StrategyPerformanceHistory>,
-    
+
     /// Current strategy weights
     strategy_weights: HashMap<String, f64>,
-    
+
     /// Learning parameters
     learning_config: AdaptiveLearningConfig,
 }
@@ -555,10 +565,10 @@ pub struct RewritingHistoryEntry {
 pub struct RewritingFeedbackSystem {
     /// Feedback collection
     feedback_data: Vec<RewritingFeedback>,
-    
+
     /// Analysis results
     analysis_results: HashMap<String, FeedbackAnalysis>,
-    
+
     /// Automatic adjustment system
     auto_adjustment: AutoAdjustmentSystem,
 }
@@ -589,15 +599,18 @@ pub struct FeedbackAnalysis {
 pub enum RuleAdjustment {
     /// Adjust expected improvement estimate
     AdjustImprovement(f64),
-    
+
     /// Modify applicability conditions
     ModifyConditions(Vec<ApplicabilityCondition>),
-    
+
     /// Change rule priority
     ChangePriority(i32),
-    
+
     /// Disable rule temporarily or permanently
-    DisableRule { temporary: bool, duration: Option<Duration> },
+    DisableRule {
+        temporary: bool,
+        duration: Option<Duration>,
+    },
 }
 
 /// Automatic adjustment system for rules
@@ -605,10 +618,10 @@ pub enum RuleAdjustment {
 pub struct AutoAdjustmentSystem {
     /// Adjustment history
     adjustment_history: Vec<AutoAdjustmentEntry>,
-    
+
     /// Adjustment strategies
     strategies: Vec<Box<dyn AdjustmentStrategy>>,
-    
+
     /// Configuration
     config: AutoAdjustmentConfig,
 }
@@ -627,7 +640,7 @@ pub struct AutoAdjustmentEntry {
 pub trait AdjustmentStrategy: std::fmt::Debug + Send + Sync {
     /// Analyze feedback and suggest adjustments
     fn suggest_adjustments(&self, feedback: &[RewritingFeedback]) -> Vec<RuleAdjustment>;
-    
+
     /// Strategy name
     fn name(&self) -> &str;
 }
@@ -647,16 +660,16 @@ pub struct AutoAdjustmentConfig {
 pub enum RewritingError {
     /// Invalid query structure
     InvalidQuery(String),
-    
+
     /// Rule application failed
     RuleApplicationFailed { rule_id: String, error: String },
-    
+
     /// No applicable rules found
     NoApplicableRules,
-    
+
     /// Rewriting resulted in worse performance
     PerformanceRegression { original_cost: f64, new_cost: f64 },
-    
+
     /// System error
     SystemError(String),
 }
@@ -669,8 +682,15 @@ impl std::fmt::Display for RewritingError {
                 write!(f, "Rule '{}' failed: {}", rule_id, error)
             }
             RewritingError::NoApplicableRules => write!(f, "No applicable rewriting rules found"),
-            RewritingError::PerformanceRegression { original_cost, new_cost } => {
-                write!(f, "Rewriting resulted in performance regression: {} -> {}", original_cost, new_cost)
+            RewritingError::PerformanceRegression {
+                original_cost,
+                new_cost,
+            } => {
+                write!(
+                    f,
+                    "Rewriting resulted in performance regression: {} -> {}",
+                    original_cost, new_cost
+                )
             }
             RewritingError::SystemError(msg) => write!(f, "System error: {}", msg),
         }
@@ -690,7 +710,7 @@ impl CostBasedOptimizer {
     ) -> Self {
         let statistics = Arc::new(RwLock::new(QueryStatistics::new()));
         let cost_model = Arc::new(CostModel::default());
-        
+
         Self {
             statistics: statistics.clone(),
             cost_model: cost_model.clone(),
@@ -700,7 +720,7 @@ impl CostBasedOptimizer {
             config,
         }
     }
-    
+
     /// Optimize a query using cost-based strategies
     pub fn optimize_query(
         &mut self,
@@ -708,13 +728,13 @@ impl CostBasedOptimizer {
     ) -> Result<AdvancedQueryPlan, OptimizationError> {
         // Step 1: Analyze query pattern and collect statistics
         let pattern = self.analyze_query_pattern(query);
-        
+
         // Step 2: Generate base query plan
         let base_plan = {
             let stats = self.statistics.read().unwrap();
             self.generate_base_plan(query, &pattern, &stats)?
         };
-        
+
         // Step 3: Optimize join order if applicable
         let optimized_joins = if self.config.enable_join_optimization && pattern.join_count > 1 {
             let stats = self.statistics.read().unwrap();
@@ -722,38 +742,48 @@ impl CostBasedOptimizer {
         } else {
             base_plan.strategy.clone()
         };
-        
+
         // Step 4: Generate index recommendations
         let index_recommendations = if self.config.enable_index_recommendations {
             let stats = self.statistics.read().unwrap();
-            self.index_advisor.recommend_indices(query, &pattern, &stats)?
+            self.index_advisor
+                .recommend_indices(query, &pattern, &stats)?
         } else {
             Vec::new()
         };
-        
+
         // Step 5: Apply adaptive query rewriting
         let rewritten_query = if self.config.enable_adaptive_rewriting {
-            self.query_rewriter.rewrite_query(query, &RewritingContext {
-                statistics: self.statistics.clone(),
-                available_indices: self.get_available_indices(),
-                ontology: Arc::new(Ontology::new()), // TODO: Use actual ontology
-                reasoning_service: Arc::new(ReasoningService::new(Ontology::new(), Default::default())), // TODO: Use actual service
-            }).map_err(|e| OptimizationError::RewritingFailed(format!("{:?}", e)))?
+            self.query_rewriter
+                .rewrite_query(
+                    query,
+                    &RewritingContext {
+                        statistics: self.statistics.clone(),
+                        available_indices: self.get_available_indices(),
+                        ontology: Arc::new(Ontology::new()), // TODO: Use actual ontology
+                        reasoning_service: Arc::new(ReasoningService::new(
+                            Ontology::new(),
+                            Default::default(),
+                        )), // TODO: Use actual service
+                    },
+                )
+                .map_err(|e| OptimizationError::RewritingFailed(format!("{:?}", e)))?
         } else {
             query.clone()
         };
-        
+
         // Step 6: Estimate performance for final plan
         let stats = self.statistics.read().unwrap();
         let performance_prediction = self.estimate_performance(&rewritten_query, &pattern, &stats);
-        
+
         // Step 7: Generate optimization suggestions
-        let optimization_suggestions = self.generate_optimization_suggestions(&rewritten_query, &pattern);
-        
+        let optimization_suggestions =
+            self.generate_optimization_suggestions(&rewritten_query, &pattern);
+
         // Step 8: Calculate confidence scores
         let confidence_scores = self.calculate_confidence_scores(&pattern, &stats);
         drop(stats); // Explicitly drop to avoid borrow issues
-        
+
         Ok(AdvancedQueryPlan {
             base_plan: QueryPlan {
                 original_query: query.clone(),
@@ -764,7 +794,9 @@ impl CostBasedOptimizer {
                 metadata: PlanMetadata::default(),
             },
             predicted_performance: super::optimizer::PerformancePrediction {
-                estimated_execution_time: Duration::from_secs_f64(performance_prediction.execution_time),
+                estimated_execution_time: Duration::from_secs_f64(
+                    performance_prediction.execution_time,
+                ),
                 estimated_memory_usage: performance_prediction.memory_usage as usize,
                 estimated_result_size: query.body_atoms.len() * 100, // TODO: Better estimate
                 confidence_level: 0.9, // TODO: Calculate actual confidence
@@ -779,13 +811,13 @@ impl CostBasedOptimizer {
             },
         })
     }
-    
+
     /// Analyze query to extract pattern information
     fn analyze_query_pattern(&self, query: &ConjunctiveQuery) -> QueryPattern {
         let atom_count = query.body_atoms.len();
         let variable_count = query.answer_variables.len();
         let join_count = self.count_joins(query);
-        
+
         let complexity_class = match (atom_count, variable_count, join_count) {
             (1, _, 0) => QueryComplexityClass::Atomic,
             (2..=5, _, 1..=2) => QueryComplexityClass::SimpleConjunctive,
@@ -793,9 +825,9 @@ impl CostBasedOptimizer {
             (_, _, _) if self.has_recursive_patterns(query) => QueryComplexityClass::Recursive,
             _ => QueryComplexityClass::HighlyComplex,
         };
-        
+
         let axiom_types = self.extract_axiom_types(query);
-        
+
         QueryPattern {
             atom_count,
             variable_count,
@@ -804,24 +836,29 @@ impl CostBasedOptimizer {
             axiom_types,
         }
     }
-    
+
     // Additional helper methods would be implemented here...
     fn count_joins(&self, query: &ConjunctiveQuery) -> usize {
         // Implementation for counting joins in query
         0 // Placeholder
     }
-    
+
     fn has_recursive_patterns(&self, query: &ConjunctiveQuery) -> bool {
         // Implementation for detecting recursive patterns
         false // Placeholder
     }
-    
+
     fn extract_axiom_types(&self, query: &ConjunctiveQuery) -> HashSet<AxiomType> {
         // Implementation for extracting axiom types
         HashSet::new() // Placeholder
     }
-    
-    fn generate_base_plan(&self, query: &ConjunctiveQuery, pattern: &QueryPattern, stats: &QueryStatistics) -> Result<QueryPlan, OptimizationError> {
+
+    fn generate_base_plan(
+        &self,
+        query: &ConjunctiveQuery,
+        pattern: &QueryPattern,
+        stats: &QueryStatistics,
+    ) -> Result<QueryPlan, OptimizationError> {
         // Implementation for generating base query plan
         Ok(QueryPlan {
             original_query: query.clone(),
@@ -832,18 +869,28 @@ impl CostBasedOptimizer {
             metadata: PlanMetadata::default(),
         })
     }
-    
-    fn optimize_join_order(&self, query: &ConjunctiveQuery, pattern: &QueryPattern, stats: &QueryStatistics) -> Result<ExecutionStrategy, OptimizationError> {
+
+    fn optimize_join_order(
+        &self,
+        query: &ConjunctiveQuery,
+        pattern: &QueryPattern,
+        stats: &QueryStatistics,
+    ) -> Result<ExecutionStrategy, OptimizationError> {
         // Implementation for join order optimization
         Ok(ExecutionStrategy::Direct)
     }
-    
+
     fn get_available_indices(&self) -> Vec<String> {
         // Implementation for getting available indices
         Vec::new()
     }
-    
-    fn estimate_performance(&self, query: &ConjunctiveQuery, pattern: &QueryPattern, stats: &QueryStatistics) -> PerformancePrediction {
+
+    fn estimate_performance(
+        &self,
+        query: &ConjunctiveQuery,
+        pattern: &QueryPattern,
+        stats: &QueryStatistics,
+    ) -> PerformancePrediction {
         // Implementation for performance estimation
         PerformancePrediction {
             execution_time: 0.0,
@@ -852,13 +899,21 @@ impl CostBasedOptimizer {
             confidence: 0.5,
         }
     }
-    
-    fn generate_optimization_suggestions(&self, query: &ConjunctiveQuery, pattern: &QueryPattern) -> Vec<OptimizationSuggestion> {
+
+    fn generate_optimization_suggestions(
+        &self,
+        query: &ConjunctiveQuery,
+        pattern: &QueryPattern,
+    ) -> Vec<OptimizationSuggestion> {
         // Implementation for generating optimization suggestions
         Vec::new()
     }
-    
-    fn calculate_confidence_scores(&self, pattern: &QueryPattern, stats: &QueryStatistics) -> ConfidenceScores {
+
+    fn calculate_confidence_scores(
+        &self,
+        pattern: &QueryPattern,
+        stats: &QueryStatistics,
+    ) -> ConfidenceScores {
         // Implementation for calculating confidence scores
         ConfidenceScores {
             performance_prediction: 0.5,
@@ -964,14 +1019,14 @@ impl CostModel {
         base_costs.insert(OperationType::Filter, 0.5);
         base_costs.insert(OperationType::IndexLookup, 0.1);
         base_costs.insert(OperationType::FullScan, 100.0);
-        
+
         let mut scaling_factors = HashMap::new();
         scaling_factors.insert(DataSizeCategory::Small, 1.0);
         scaling_factors.insert(DataSizeCategory::Medium, 2.0);
         scaling_factors.insert(DataSizeCategory::Large, 5.0);
         scaling_factors.insert(DataSizeCategory::VeryLarge, 15.0);
         scaling_factors.insert(DataSizeCategory::Massive, 50.0);
-        
+
         Self {
             base_costs,
             scaling_factors,
@@ -1000,8 +1055,13 @@ impl IndexAdvisor {
             config,
         }
     }
-    
-    pub fn recommend_indices(&mut self, query: &ConjunctiveQuery, pattern: &QueryPattern, stats: &QueryStatistics) -> Result<Vec<IndexRecommendation>, OptimizationError> {
+
+    pub fn recommend_indices(
+        &mut self,
+        query: &ConjunctiveQuery,
+        pattern: &QueryPattern,
+        stats: &QueryStatistics,
+    ) -> Result<Vec<IndexRecommendation>, OptimizationError> {
         // Implementation for index recommendations
         Ok(Vec::new())
     }
@@ -1027,8 +1087,12 @@ impl AdvancedQueryRewriter {
             feedback_system: RewritingFeedbackSystem::new(),
         }
     }
-    
-    pub fn rewrite_query(&mut self, query: &ConjunctiveQuery, context: &RewritingContext) -> Result<ConjunctiveQuery, RewritingError> {
+
+    pub fn rewrite_query(
+        &mut self,
+        query: &ConjunctiveQuery,
+        context: &RewritingContext,
+    ) -> Result<ConjunctiveQuery, RewritingError> {
         // Implementation for query rewriting
         Ok(query.clone())
     }

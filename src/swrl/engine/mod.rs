@@ -12,6 +12,6 @@ pub mod matching;
 pub mod validation;
 
 pub use core::SWRLRuleEngine;
-pub use inference::{ForwardChaining, BackwardChaining, HybridReasoning};
-pub use matching::{UnificationEngine, PatternMatcher};
-pub use validation::{RuleValidator, GoalChecker};
+pub use inference::{BackwardChaining, ForwardChaining, HybridReasoning};
+pub use matching::{PatternMatcher, UnificationEngine};
+pub use validation::{GoalChecker, RuleValidator};

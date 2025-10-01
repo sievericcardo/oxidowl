@@ -1106,4 +1106,4 @@ mod tests {
 
 // Re-export the additional resolver module
 pub mod resolver;
-pub use resolver::{ImportResolver, ImportResolverConfig, ResolvedImport, ImportedOntology};
+pub use resolver::{ImportResolver, ImportResolverConfig, ImportedOntology, ResolvedImport};

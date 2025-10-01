@@ -3,28 +3,28 @@
 //! This module provides a complete tableau-based reasoning system for
 //! OWL 2 DL. The tableau is split into focused submodules for maintainability.
 
-pub mod node;
-pub mod edge;
-pub mod state;
 pub mod builder;
+pub mod edge;
 pub mod executor;
+pub mod node;
+pub mod state;
 
-pub use node::{TableauNode, ConceptLabel, RoleLabel, NodeId, NodeType, NodeStatus};
-pub use edge::{TableauEdge, PropertyInclusion};
-pub use state::{TableauState, ClashDetector, Clash, ClashType, TableauStatistics, Priority};
 pub use builder::TableauBuilder;
+pub use edge::{PropertyInclusion, TableauEdge};
 pub use executor::TableauExecutor;
+pub use node::{ConceptLabel, NodeId, NodeStatus, NodeType, RoleLabel, TableauNode};
+pub use state::{Clash, ClashDetector, ClashType, Priority, TableauState, TableauStatistics};
 
 use crate::{
     Error, Result,
+    config::{ReasoningConfig, TableauConfig},
     core::{
-        completion::{RuleApplication, CompletionRule, CompletionStrategy},
         blocking::BlockingStrategy,
-        expansion::{ExpansionStrategy, DefaultExpansionStrategy},
+        completion::{CompletionRule, CompletionStrategy, RuleApplication},
         dependency::DependencySet,
+        expansion::{DefaultExpansionStrategy, ExpansionStrategy},
     },
     ontology::Ontology,
-    config::{ReasoningConfig, TableauConfig},
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
@@ -33,43 +33,43 @@ use std::time::Duration;
 pub struct Tableau {
     /// All nodes in the tableau
     pub nodes: Vec<TableauNode>,
-    
+
     /// All edges between nodes
     pub edges: Vec<TableauEdge>,
-    
+
     /// Current state of the tableau
     pub state: TableauState,
-    
+
     /// Clash detection system
     pub clash_detector: ClashDetector,
-    
+
     /// Execution statistics
     pub statistics: TableauStatistics,
-    
+
     /// Configuration for tableau expansion
     pub config: TableauConfig,
-    
+
     /// Pending rule applications (priority queue)
     pub pending_queue: VecDeque<RuleApplication>,
-    
+
     /// Completion strategy
     pub completion_strategy: CompletionStrategy,
-    
+
     /// Blocking strategy
     pub blocking_strategy: BlockingStrategy,
-    
+
     /// Expansion strategy
     pub expansion_strategy: DefaultExpansionStrategy,
-    
+
     /// Concept cache for performance
     concept_cache: HashMap<String, ConceptLabel>,
-    
+
     /// Role cache for performance
     role_cache: HashMap<String, RoleLabel>,
-    
+
     /// Individual mapping
     individual_map: HashMap<String, NodeId>,
-    
+
     /// Backtrack stack for non-deterministic choices
     backtrack_stack: Vec<BacktrackPoint>,
 }
@@ -79,16 +79,16 @@ pub struct Tableau {
 pub struct BacktrackPoint {
     /// ID of this backtrack point
     pub id: usize,
-    
+
     /// Node where the choice was made
     pub node_id: NodeId,
-    
+
     /// The choice that was made
     pub choice: Choice,
-    
+
     /// State before the choice
     pub saved_state: SavedState,
-    
+
     /// Dependencies at this point
     pub dependencies: DependencySet,
 }
@@ -103,7 +103,7 @@ pub enum Choice {
         /// Index of chosen concept
         chosen_index: usize,
     },
-    
+
     /// At-most merging choice
     AtMostMerge {
         /// Nodes that could be merged
@@ -111,7 +111,7 @@ pub enum Choice {
         /// Chosen merge target
         chosen: NodeId,
     },
-    
+
     /// Blocking choice
     Blocking {
         /// Node being blocked
@@ -126,10 +126,10 @@ pub enum Choice {
 pub struct SavedState {
     /// Number of nodes at this point
     pub node_count: usize,
-    
+
     /// Number of edges at this point
     pub edge_count: usize,
-    
+
     /// Pending queue state
     pub pending_queue: VecDeque<RuleApplication>,
 }
@@ -250,11 +250,10 @@ impl Tableau {
     }
 
     // Legacy methods for compatibility with existing code
-    
+
     /// Check if tableau is complete
     pub fn is_complete(&self) -> bool {
-        self.pending_queue.is_empty() && 
-        self.nodes.iter().all(|node| node.status.fully_expanded)
+        self.pending_queue.is_empty() && self.nodes.iter().all(|node| node.status.fully_expanded)
     }
 
     /// Get clash detector
@@ -283,8 +282,8 @@ impl Tableau {
     }
 
     // Additional methods for compatibility
-    
-    /// Get node count 
+
+    /// Get node count
     pub fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
@@ -316,17 +315,24 @@ impl Tableau {
     /// Add an edge between nodes
     pub fn add_edge(&mut self, from: NodeId, to: NodeId, role: RoleLabel) -> Result<()> {
         if from >= self.nodes.len() || to >= self.nodes.len() {
-            return Err(Error::reasoning(format!("Invalid node id: {}", from.max(to))));
+            return Err(Error::reasoning(format!(
+                "Invalid node id: {}",
+                from.max(to)
+            )));
         }
 
         let edge = TableauEdge::new(from, to, role.clone(), DependencySet::new());
         self.edges.push(edge);
-        
+
         // Update node connections
         if let Some(from_node) = self.nodes.get_mut(from) {
             // Update role successors - we'll use the role string as key
             let role_str = role.to_string();
-            from_node.role_successors.entry(role_str).or_insert_with(HashSet::new).insert(to);
+            from_node
+                .role_successors
+                .entry(role_str)
+                .or_insert_with(HashSet::new)
+                .insert(to);
         }
         // For predecessors, we'd need a separate tracking mechanism or traverse edges
 
@@ -343,7 +349,7 @@ impl Tableau {
         if let Some(node) = self.nodes.get_mut(node_id) {
             node.concepts.insert(concept);
         }
-        
+
         Ok(())
     }
 }

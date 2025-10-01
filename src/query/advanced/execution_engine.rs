@@ -6,50 +6,49 @@
 //! - Parallel execution coordination
 //! - Real-time performance monitoring
 
-use crate::ontology::{Ontology, ClassExpression, ObjectPropertyExpression, Individual};
-use crate::reasoning::ReasoningService;
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::execution::{QueryEngine, ConjunctiveQueryResult, AdvancedQueryError};
-use super::cost_optimizer::{CostBasedOptimizer};
-use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
-use super::optimization::{OptimizationError};
+use super::cost_optimizer::CostBasedOptimizer;
+use super::execution::{AdvancedQueryError, ConjunctiveQueryResult, QueryEngine};
 use super::ml_core::{
-    MLHeuristicsEngine as MLEngine, MLHeuristicsConfig as MLConfig,
-    QueryFeatures, StrategyRecommendation, QueryExecution,
-    ExecutionStrategy as MLExecutionStrategy,
+    ExecutionStrategy as MLExecutionStrategy, MLHeuristicsConfig as MLConfig,
+    MLHeuristicsEngine as MLEngine, QueryExecution, QueryFeatures, StrategyRecommendation,
 };
-use std::collections::{HashMap, HashSet, VecDeque, BTreeMap};
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant};
-use std::hash::{Hash, Hasher};
+use super::optimization::OptimizationError;
+use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
+use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::reasoning::ReasoningService;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::future::Future;
+use std::hash::{Hash, Hasher};
 use std::pin::Pin;
+use std::sync::{Arc, Mutex, RwLock};
 use std::task::{Context, Poll};
-use serde::{Serialize, Deserialize};
+use std::time::{Duration, Instant};
 
 /// Advanced Query Execution Engine with adaptive strategies
 pub struct AdvancedExecutionEngine {
     /// Cost-based optimizer
     optimizer: Arc<Mutex<CostBasedOptimizer>>,
-    
+
     /// Query result cache
     result_cache: Arc<RwLock<QueryResultCache>>,
-    
+
     /// Execution strategy selector (legacy)
     strategy_selector: Arc<Mutex<ExecutionStrategySelector>>,
-    
+
     /// ML-enhanced strategy selection engine
     ml_engine: Arc<RwLock<MLEngine>>,
-    
+
     /// Performance monitor
     performance_monitor: Arc<Mutex<ExecutionPerformanceMonitor>>,
-    
+
     /// Parallel execution coordinator
     parallel_coordinator: Arc<ParallelExecutionCoordinator>,
-    
+
     /// Ontology reference (for feature extraction)
     ontology: Arc<Ontology>,
-    
+
     /// Configuration
     config: AdvancedExecutionConfig,
 }
@@ -59,31 +58,31 @@ pub struct AdvancedExecutionEngine {
 pub struct AdvancedExecutionConfig {
     /// Enable intelligent caching
     pub enable_caching: bool,
-    
+
     /// Cache size limit (MB)
     pub cache_size_limit_mb: usize,
-    
+
     /// Cache TTL (seconds)
     pub cache_ttl_seconds: u64,
-    
+
     /// Enable parallel execution
     pub enable_parallel_execution: bool,
-    
+
     /// Maximum parallel threads
     pub max_parallel_threads: usize,
-    
+
     /// Enable adaptive strategy selection
     pub enable_adaptive_strategies: bool,
-    
+
     /// Performance monitoring interval
     pub monitoring_interval_ms: u64,
-    
+
     /// Enable query result streaming
     pub enable_result_streaming: bool,
-    
+
     /// Streaming chunk size
     pub streaming_chunk_size: usize,
-    
+
     /// Enable execution tracing
     pub enable_execution_tracing: bool,
 }
@@ -93,16 +92,16 @@ pub struct AdvancedExecutionConfig {
 pub struct QueryResultCache {
     /// Cached results by query hash
     cache_entries: HashMap<QueryHash, CacheEntry>,
-    
+
     /// Cache access statistics
     access_stats: CacheAccessStats,
-    
+
     /// LRU eviction tracker
     lru_tracker: LruTracker,
-    
+
     /// Cache size tracking
     size_tracker: CacheSizeTracker,
-    
+
     /// Cache configuration
     config: CacheConfig,
 }
@@ -112,10 +111,10 @@ pub struct QueryResultCache {
 pub struct QueryHash {
     /// Query structure hash
     structure_hash: u64,
-    
+
     /// Parameter values hash
     parameter_hash: u64,
-    
+
     /// Ontology version hash
     ontology_version: u64,
 }
@@ -125,19 +124,19 @@ pub struct QueryHash {
 pub struct CacheEntry {
     /// Cached query result
     result: ConjunctiveQueryResult,
-    
+
     /// Cache metadata
     metadata: CacheEntryMetadata,
-    
+
     /// Entry creation time
     created_at: Instant,
-    
+
     /// Last access time
     last_accessed: Instant,
-    
+
     /// Access count
     access_count: u64,
-    
+
     /// Entry size in bytes
     size_bytes: usize,
 }
@@ -147,16 +146,16 @@ pub struct CacheEntry {
 pub struct CacheEntryMetadata {
     /// Original query
     original_query: ConjunctiveQuery,
-    
+
     /// Execution time when cached
     execution_time: Duration,
-    
+
     /// Result confidence score
     confidence_score: f64,
-    
+
     /// Invalidation triggers
     invalidation_triggers: Vec<InvalidationTrigger>,
-    
+
     /// Cache priority
     priority: CachePriority,
 }
@@ -166,16 +165,16 @@ pub struct CacheEntryMetadata {
 pub enum InvalidationTrigger {
     /// Time-based expiration
     TimeExpiry(Instant),
-    
+
     /// Ontology change detection
     OntologyChange { version: u64 },
-    
+
     /// Result confidence degradation
     ConfidenceDegradation { threshold: f64 },
-    
+
     /// Memory pressure
     MemoryPressure,
-    
+
     /// Custom trigger
     Custom(String),
 }
@@ -207,10 +206,10 @@ pub struct CacheAccessStats {
 pub struct LruTracker {
     /// Access order queue
     access_order: VecDeque<QueryHash>,
-    
+
     /// Position lookup
     position_map: HashMap<QueryHash, usize>,
-    
+
     /// Configuration
     max_entries: usize,
 }
@@ -220,13 +219,13 @@ pub struct LruTracker {
 pub struct CacheSizeTracker {
     /// Current total size in bytes
     current_size: usize,
-    
+
     /// Maximum allowed size
     max_size: usize,
-    
+
     /// Size by entry
     entry_sizes: HashMap<QueryHash, usize>,
-    
+
     /// Size categories
     size_distribution: HashMap<SizeCategory, u64>,
 }
@@ -234,10 +233,10 @@ pub struct CacheSizeTracker {
 /// Size categories for analysis
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum SizeCategory {
-    Small,      // < 1KB
-    Medium,     // 1KB - 100KB
-    Large,      // 100KB - 1MB
-    VeryLarge,  // > 1MB
+    Small,     // < 1KB
+    Medium,    // 1KB - 100KB
+    Large,     // 100KB - 1MB
+    VeryLarge, // > 1MB
 }
 
 /// Cache configuration
@@ -256,13 +255,13 @@ pub struct CacheConfig {
 pub struct ExecutionStrategySelector {
     /// Available execution strategies
     strategies: HashMap<String, Box<dyn ExecutionStrategy>>,
-    
+
     /// Strategy performance history
     performance_history: HashMap<String, StrategyPerformanceHistory>,
-    
+
     /// Strategy selection model
     selection_model: StrategySelectionModel,
-    
+
     /// Learning configuration
     learning_config: StrategyLearningConfig,
 }
@@ -270,17 +269,21 @@ pub struct ExecutionStrategySelector {
 /// Trait for execution strategies
 pub trait ExecutionStrategy: std::fmt::Debug + Send + Sync {
     /// Execute query with this strategy
-    fn execute(&self, query: &ConjunctiveQuery, context: &ExecutionContext) -> Result<ConjunctiveQueryResult, AdvancedQueryError>;
-    
+    fn execute(
+        &self,
+        query: &ConjunctiveQuery,
+        context: &ExecutionContext,
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError>;
+
     /// Estimate execution cost
     fn estimate_cost(&self, query: &ConjunctiveQuery) -> f64;
-    
+
     /// Check if strategy is applicable
     fn is_applicable(&self, query: &ConjunctiveQuery) -> bool;
-    
+
     /// Strategy name
     fn name(&self) -> &str;
-    
+
     /// Strategy description
     fn description(&self) -> &str;
 }
@@ -290,16 +293,16 @@ pub trait ExecutionStrategy: std::fmt::Debug + Send + Sync {
 pub struct ExecutionContext {
     /// Ontology reference
     pub ontology: Arc<Ontology>,
-    
+
     /// Reasoning service
     pub reasoning_service: Arc<ReasoningService>,
-    
+
     /// Available indices
     pub available_indices: Vec<String>,
-    
+
     /// Performance constraints
     pub constraints: ExecutionConstraints,
-    
+
     /// Cache reference
     pub cache: Arc<RwLock<QueryResultCache>>,
 }
@@ -309,13 +312,13 @@ pub struct ExecutionContext {
 pub struct ExecutionConstraints {
     /// Maximum execution time
     pub max_execution_time: Option<Duration>,
-    
+
     /// Maximum memory usage
     pub max_memory_usage: Option<usize>,
-    
+
     /// Required confidence level
     pub min_confidence: Option<f64>,
-    
+
     /// Priority level
     pub priority: ExecutionPriority,
 }
@@ -347,13 +350,13 @@ pub struct StrategyPerformanceHistory {
 pub struct StrategySelectionModel {
     /// Feature extractors for queries
     feature_extractors: Vec<Box<dyn QueryFeatureExtractor>>,
-    
+
     /// Strategy ranking model
     ranking_model: Box<dyn StrategyRankingModel>,
-    
+
     /// Model training data
     training_data: Vec<StrategyTrainingPoint>,
-    
+
     /// Model performance metrics
     model_metrics: ModelPerformanceMetrics,
 }
@@ -362,7 +365,7 @@ pub struct StrategySelectionModel {
 pub trait QueryFeatureExtractor: std::fmt::Debug + Send + Sync {
     /// Extract features from query
     fn extract(&self, query: &ConjunctiveQuery) -> Vec<f64>;
-    
+
     /// Feature names
     fn feature_names(&self) -> &[String];
 }
@@ -371,10 +374,10 @@ pub trait QueryFeatureExtractor: std::fmt::Debug + Send + Sync {
 pub trait StrategyRankingModel: std::fmt::Debug + Send + Sync {
     /// Rank strategies for a query
     fn rank_strategies(&self, features: &[f64], strategies: &[String]) -> Vec<(String, f64)>;
-    
+
     /// Update model with training data
     fn train(&mut self, data: &[StrategyTrainingPoint]);
-    
+
     /// Model accuracy
     fn accuracy(&self) -> f64;
 }
@@ -423,16 +426,16 @@ pub struct StrategyLearningConfig {
 pub struct ExecutionPerformanceMonitor {
     /// Current executions being tracked
     active_executions: HashMap<ExecutionId, ExecutionTrace>,
-    
+
     /// Completed execution history
     execution_history: BTreeMap<Instant, CompletedExecution>,
-    
+
     /// Performance metrics aggregation
     metrics_aggregator: PerformanceMetricsAggregator,
-    
+
     /// Anomaly detection
     anomaly_detector: ExecutionAnomalyDetector,
-    
+
     /// Real-time alerts
     alert_system: ExecutionAlertSystem,
 }
@@ -504,10 +507,10 @@ pub struct CompletedExecution {
 pub struct PerformanceMetricsAggregator {
     /// Metrics by time window
     windowed_metrics: BTreeMap<Instant, WindowedMetrics>,
-    
+
     /// Overall statistics
     overall_stats: OverallPerformanceStats,
-    
+
     /// Metrics by query pattern
     pattern_metrics: HashMap<String, PatternPerformanceMetrics>,
 }
@@ -556,13 +559,13 @@ pub struct PatternPerformanceMetrics {
 pub struct ExecutionAnomalyDetector {
     /// Baseline performance models
     baseline_models: HashMap<String, BaselinePerformanceModel>,
-    
+
     /// Anomaly detection thresholds
     thresholds: AnomalyThresholds,
-    
+
     /// Detected anomalies
     detected_anomalies: Vec<PerformanceAnomaly>,
-    
+
     /// Detection algorithms
     detection_algorithms: Vec<Box<dyn AnomalyDetectionAlgorithm>>,
 }
@@ -623,7 +626,7 @@ pub enum AnomalySeverity {
 pub trait AnomalyDetectionAlgorithm: std::fmt::Debug + Send + Sync {
     /// Detect anomalies in execution data
     fn detect(&self, executions: &[CompletedExecution]) -> Vec<PerformanceAnomaly>;
-    
+
     /// Algorithm name
     fn name(&self) -> &str;
 }
@@ -633,13 +636,13 @@ pub trait AnomalyDetectionAlgorithm: std::fmt::Debug + Send + Sync {
 pub struct ExecutionAlertSystem {
     /// Alert rules
     alert_rules: Vec<AlertRule>,
-    
+
     /// Active alerts
     active_alerts: Vec<ActiveAlert>,
-    
+
     /// Alert handlers
     alert_handlers: Vec<Box<dyn AlertHandler>>,
-    
+
     /// Alert history
     alert_history: VecDeque<AlertHistoryEntry>,
 }
@@ -661,16 +664,16 @@ pub struct AlertRule {
 pub enum AlertCondition {
     /// Execution time exceeds threshold
     ExecutionTimeExceeds(Duration),
-    
+
     /// Memory usage exceeds threshold
     MemoryUsageExceeds(usize),
-    
+
     /// Success rate below threshold
     SuccessRateBelow(f64),
-    
+
     /// Consecutive failures
     ConsecutiveFailures(u32),
-    
+
     /// Custom condition
     Custom(String),
 }
@@ -690,7 +693,7 @@ pub struct ActiveAlert {
 pub trait AlertHandler: std::fmt::Debug + Send + Sync {
     /// Handle an alert
     fn handle_alert(&self, alert: &ActiveAlert, rule: &AlertRule);
-    
+
     /// Handler name
     fn name(&self) -> &str;
 }
@@ -709,16 +712,16 @@ pub struct AlertHistoryEntry {
 pub struct ParallelExecutionCoordinator {
     /// Thread pool for parallel execution
     thread_pool: Arc<Mutex<ThreadPool>>,
-    
+
     /// Work queue
     work_queue: Arc<Mutex<VecDeque<ParallelTask>>>,
-    
+
     /// Active tasks tracking
     active_tasks: Arc<RwLock<HashMap<TaskId, TaskStatus>>>,
-    
+
     /// Resource manager
     resource_manager: Arc<Mutex<ResourceManager>>,
-    
+
     /// Configuration
     config: ParallelExecutionConfig,
 }
@@ -771,10 +774,21 @@ pub struct TaskId(pub String);
 #[derive(Debug, Clone)]
 pub enum TaskStatus {
     Queued,
-    Running { worker_id: String, started_at: Instant },
-    Completed { result: ConjunctiveQueryResult, completed_at: Instant },
-    Failed { error: String, failed_at: Instant },
-    Cancelled { cancelled_at: Instant },
+    Running {
+        worker_id: String,
+        started_at: Instant,
+    },
+    Completed {
+        result: ConjunctiveQueryResult,
+        completed_at: Instant,
+    },
+    Failed {
+        error: String,
+        failed_at: Instant,
+    },
+    Cancelled {
+        cancelled_at: Instant,
+    },
 }
 
 /// Resource manager for parallel execution
@@ -782,13 +796,13 @@ pub enum TaskStatus {
 pub struct ResourceManager {
     /// Available memory
     available_memory: usize,
-    
+
     /// Memory allocations by task
     memory_allocations: HashMap<TaskId, usize>,
-    
+
     /// CPU usage tracking
     cpu_usage: f64,
-    
+
     /// Resource limits
     limits: ResourceLimits,
 }
@@ -822,39 +836,28 @@ impl AdvancedExecutionEngine {
         reasoning_service: Arc<ReasoningService>,
         config: AdvancedExecutionConfig,
     ) -> Result<Self, AdvancedQueryError> {
-        let optimizer = Arc::new(Mutex::new(
-            CostBasedOptimizer::new(
-                ontology.clone(),
-                reasoning_service.clone(),
-                Default::default(),
-            )
+        let optimizer = Arc::new(Mutex::new(CostBasedOptimizer::new(
+            ontology.clone(),
+            reasoning_service.clone(),
+            Default::default(),
+        )));
+
+        let result_cache = Arc::new(RwLock::new(QueryResultCache::new(CacheConfig::default())));
+
+        let strategy_selector = Arc::new(Mutex::new(ExecutionStrategySelector::new()));
+
+        let performance_monitor = Arc::new(Mutex::new(ExecutionPerformanceMonitor::new()));
+
+        let parallel_coordinator = Arc::new(ParallelExecutionCoordinator::new(
+            ParallelExecutionConfig::default(),
         ));
-        
-        let result_cache = Arc::new(RwLock::new(
-            QueryResultCache::new(CacheConfig::default())
-        ));
-        
-        let strategy_selector = Arc::new(Mutex::new(
-            ExecutionStrategySelector::new()
-        ));
-        
-        let performance_monitor = Arc::new(Mutex::new(
-            ExecutionPerformanceMonitor::new()
-        ));
-        
-        let parallel_coordinator = Arc::new(
-            ParallelExecutionCoordinator::new(ParallelExecutionConfig::default())
-        );
-        
+
         // Initialize ML-enhanced strategy selection engine
         let ml_config = MLConfig::default();
-        let ml_engine = Arc::new(RwLock::new(
-            MLEngine::new(ml_config)
-                .map_err(|e| AdvancedQueryError::InternalError(
-                    format!("Failed to initialize ML engine: {}", e) 
-                ))?
-        ));
-        
+        let ml_engine = Arc::new(RwLock::new(MLEngine::new(ml_config).map_err(|e| {
+            AdvancedQueryError::InternalError(format!("Failed to initialize ML engine: {}", e))
+        })?));
+
         Ok(Self {
             optimizer,
             result_cache,
@@ -866,7 +869,7 @@ impl AdvancedExecutionEngine {
             config,
         })
     }
-    
+
     /// Execute a query with advanced optimization
     pub async fn execute_query(
         &self,
@@ -875,20 +878,20 @@ impl AdvancedExecutionEngine {
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let execution_id = ExecutionId(uuid::Uuid::new_v4().to_string());
         let start_time = Instant::now();
-        
+
         // Step 1: Check cache if enabled
         if self.config.enable_caching {
             if let Some(cached_result) = self.check_cache(query).await? {
                 return Ok(cached_result);
             }
         }
-        
+
         // Step 2: Generate optimized query plan
         let query_plan = {
             let mut optimizer = self.optimizer.lock().unwrap();
             optimizer.optimize_query(query)?
         };
-        
+
         // Step 3: ML-based strategy selection (if enabled)
         let (strategy, ml_recommendation) = if self.config.enable_adaptive_strategies {
             self.select_strategy_with_ml(query)?
@@ -900,59 +903,64 @@ impl AdvancedExecutionEngine {
             };
             (strategy, None)
         };
-        
+
         // Step 4: Execute with monitoring and fallback logic
-        let result = self.execute_with_fallback(
-            execution_id.clone(),
-            query,
-            &strategy,
-            &ml_recommendation,
-            constraints,
-            start_time,
-        ).await?;
-        
+        let result = self
+            .execute_with_fallback(
+                execution_id.clone(),
+                query,
+                &strategy,
+                &ml_recommendation,
+                constraints,
+                start_time,
+            )
+            .await?;
+
         // Step 5: Cache result if beneficial
         if self.config.enable_caching && self.should_cache_result(query, &result) {
             self.cache_result(query, &result).await?;
         }
-        
+
         // Step 6: Update performance history and feed back to ML engine
-        self.update_performance_history(&execution_id, query, &strategy, &result).await;
-        
+        self.update_performance_history(&execution_id, query, &strategy, &result)
+            .await;
+
         if self.config.enable_adaptive_strategies {
             self.provide_ml_feedback(query, &strategy, &result, start_time, &ml_recommendation)?;
         }
-        
+
         Ok(result)
     }
-    
+
     /// Select execution strategy using ML-enhanced decision making
     fn select_strategy_with_ml(
         &self,
         query: &ConjunctiveQuery,
     ) -> Result<(String, Option<StrategyRecommendation>), AdvancedQueryError> {
         // Extract features from query
-        let ml_engine = self.ml_engine.read()
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to acquire ML engine lock: {}", e)
-            ))?;
-        
-        let features = ml_engine.extract_features(query, &self.ontology)
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to extract query features: {}", e)
-            ))?;
-        
+        let ml_engine = self.ml_engine.read().map_err(|e| {
+            AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {}", e))
+        })?;
+
+        let features = ml_engine
+            .extract_features(query, &self.ontology)
+            .map_err(|e| {
+                AdvancedQueryError::InternalError(format!(
+                    "Failed to extract query features: {}",
+                    e
+                ))
+            })?;
+
         // Get strategy recommendation
-        let recommendation = ml_engine.select_strategy(&features)
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to select strategy: {}", e)
-            ))?;
-        
+        let recommendation = ml_engine.select_strategy(&features).map_err(|e| {
+            AdvancedQueryError::InternalError(format!("Failed to select strategy: {}", e))
+        })?;
+
         let strategy_name = recommendation.strategy.as_str().to_string();
-        
+
         Ok((strategy_name, Some(recommendation)))
     }
-    
+
     /// Execute query with fallback to alternative strategies on failure
     async fn execute_with_fallback(
         &self,
@@ -964,53 +972,53 @@ impl AdvancedExecutionEngine {
         start_time: Instant,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         // Try primary strategy first
-        let result = self.execute_with_monitoring(
-            execution_id.clone(),
-            query,
-            primary_strategy,
-            constraints.clone(),
-        ).await;
-        
+        let result = self
+            .execute_with_monitoring(
+                execution_id.clone(),
+                query,
+                primary_strategy,
+                constraints.clone(),
+            )
+            .await;
+
         // If primary strategy succeeded, return result
         if result.is_ok() {
             return result;
         }
-        
+
         // If primary strategy failed and we have ML recommendations, try alternatives
         if let Some(recommendation) = ml_recommendation {
             for (alternative_strategy, confidence) in &recommendation.alternatives {
                 // Log fallback attempt
                 eprintln!(
                     "Primary strategy '{}' failed, trying alternative '{}' (confidence: {:.2})",
-                    primary_strategy, alternative_strategy.as_str(), confidence
-                );
-                
-                let fallback_result = self.execute_with_monitoring(
-                    execution_id.clone(),
-                    query,
+                    primary_strategy,
                     alternative_strategy.as_str(),
-                    constraints.clone(),
-                ).await;
-                
+                    confidence
+                );
+
+                let fallback_result = self
+                    .execute_with_monitoring(
+                        execution_id.clone(),
+                        query,
+                        alternative_strategy.as_str(),
+                        constraints.clone(),
+                    )
+                    .await;
+
                 if fallback_result.is_ok() {
                     return fallback_result;
                 }
             }
         }
-        
+
         // All strategies failed - try default strategy as last resort
-        eprintln!(
-            "All recommended strategies failed for query, falling back to default strategy"
-        );
-        
-        self.execute_with_monitoring(
-            execution_id,
-            query,
-            "default",
-            constraints,
-        ).await
+        eprintln!("All recommended strategies failed for query, falling back to default strategy");
+
+        self.execute_with_monitoring(execution_id, query, "default", constraints)
+            .await
     }
-    
+
     /// Provide feedback to ML engine for online learning
     fn provide_ml_feedback(
         &self,
@@ -1020,17 +1028,20 @@ impl AdvancedExecutionEngine {
         start_time: Instant,
         ml_recommendation: &Option<StrategyRecommendation>,
     ) -> Result<(), AdvancedQueryError> {
-        let ml_engine = self.ml_engine.read()
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to acquire ML engine lock: {}", e)
-            ))?;
-        
+        let ml_engine = self.ml_engine.read().map_err(|e| {
+            AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {}", e))
+        })?;
+
         // Extract features again (we could cache these from earlier)
-        let features = ml_engine.extract_features(query, &self.ontology)
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to extract query features: {}", e)
-            ))?;
-        
+        let features = ml_engine
+            .extract_features(query, &self.ontology)
+            .map_err(|e| {
+                AdvancedQueryError::InternalError(format!(
+                    "Failed to extract query features: {}",
+                    e
+                ))
+            })?;
+
         // Map strategy string to MLExecutionStrategy enum
         let ml_strategy = match strategy_used {
             "indexed_lookup" => MLExecutionStrategy::IndexedLookup,
@@ -1043,7 +1054,7 @@ impl AdvancedExecutionEngine {
             "adaptive" => MLExecutionStrategy::Adaptive,
             _ => MLExecutionStrategy::Default,
         };
-        
+
         // Create execution record
         let execution = QueryExecution {
             features,
@@ -1051,36 +1062,40 @@ impl AdvancedExecutionEngine {
             actual_memory: result.metadata.memory_usage.peak_memory as f64 / 1_000_000.0, // Convert bytes to MB
             strategy_used: ml_strategy,
         };
-        
+
         // Add training data for online learning
         drop(ml_engine); // Release read lock
-        let ml_engine = self.ml_engine.write()
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to acquire ML engine write lock: {}", e)
-            ))?;
-        
-        ml_engine.add_training_data(execution)
-            .map_err(|e| AdvancedQueryError::InternalError(
-                format!("Failed to add training data: {}", e)
-            ))?;
-        
+        let ml_engine = self.ml_engine.write().map_err(|e| {
+            AdvancedQueryError::InternalError(format!(
+                "Failed to acquire ML engine write lock: {}",
+                e
+            ))
+        })?;
+
+        ml_engine.add_training_data(execution).map_err(|e| {
+            AdvancedQueryError::InternalError(format!("Failed to add training data: {}", e))
+        })?;
+
         Ok(())
     }
-    
+
     /// Check cache for existing result
-    async fn check_cache(&self, query: &ConjunctiveQuery) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
+    async fn check_cache(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
         let cache = self.result_cache.read().unwrap();
         let query_hash = cache.compute_query_hash(query);
-        
+
         if let Some(entry) = cache.get_entry(&query_hash) {
             if !cache.is_entry_expired(entry) {
                 return Ok(Some(entry.result.clone()));
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Execute query with comprehensive monitoring
     async fn execute_with_monitoring(
         &self,
@@ -1094,22 +1109,27 @@ impl AdvancedExecutionEngine {
             let mut monitor = self.performance_monitor.lock().unwrap();
             monitor.start_execution(&execution_id, query, strategy);
         }
-        
+
         // Execute with selected strategy
-        let result = match self.config.enable_parallel_execution && constraints.priority >= ExecutionPriority::High {
-            true => self.execute_parallel(&execution_id, query, strategy, constraints).await,
+        let result = match self.config.enable_parallel_execution
+            && constraints.priority >= ExecutionPriority::High
+        {
+            true => {
+                self.execute_parallel(&execution_id, query, strategy, constraints)
+                    .await
+            }
             false => self.execute_sequential(&execution_id, query, strategy, constraints),
         };
-        
+
         // Complete monitoring
         {
             let mut monitor = self.performance_monitor.lock().unwrap();
             monitor.complete_execution(&execution_id, &result);
         }
-        
+
         result
     }
-    
+
     /// Execute query in parallel
     async fn execute_parallel(
         &self,
@@ -1124,11 +1144,11 @@ impl AdvancedExecutionEngine {
         // 2. Distributing work across thread pool
         // 3. Coordinating results
         // 4. Handling failures and timeouts
-        
+
         // For now, delegate to sequential execution
         self.execute_sequential(execution_id, query, strategy, constraints)
     }
-    
+
     /// Execute query sequentially
     fn execute_sequential(
         &self,
@@ -1145,15 +1165,19 @@ impl AdvancedExecutionEngine {
             constraints,
             cache: self.result_cache.clone(),
         };
-        
+
         // Get strategy implementation and execute
         let selector = self.strategy_selector.lock().unwrap();
         let strategy_impl = selector.get_strategy(strategy)?;
         strategy_impl.execute(query, &context)
     }
-    
+
     /// Determine if result should be cached
-    fn should_cache_result(&self, query: &ConjunctiveQuery, result: &ConjunctiveQueryResult) -> bool {
+    fn should_cache_result(
+        &self,
+        query: &ConjunctiveQuery,
+        result: &ConjunctiveQueryResult,
+    ) -> bool {
         // Implement caching decision logic
         // Consider factors like:
         // - Query complexity
@@ -1161,17 +1185,21 @@ impl AdvancedExecutionEngine {
         // - Execution time
         // - Available cache space
         // - Query frequency
-        
+
         true // Placeholder
     }
-    
+
     /// Cache query result
-    async fn cache_result(&self, query: &ConjunctiveQuery, result: &ConjunctiveQueryResult) -> Result<(), AdvancedQueryError> {
+    async fn cache_result(
+        &self,
+        query: &ConjunctiveQuery,
+        result: &ConjunctiveQueryResult,
+    ) -> Result<(), AdvancedQueryError> {
         let mut cache = self.result_cache.write().unwrap();
         cache.insert(query, result.clone())?;
         Ok(())
     }
-    
+
     /// Update performance history with execution results
     async fn update_performance_history(
         &self,
@@ -1214,27 +1242,31 @@ impl QueryResultCache {
             config,
         }
     }
-    
+
     pub fn compute_query_hash(&self, query: &ConjunctiveQuery) -> QueryHash {
         // Implement query hashing logic
         QueryHash {
-            structure_hash: 0, // Placeholder
-            parameter_hash: 0, // Placeholder
+            structure_hash: 0,   // Placeholder
+            parameter_hash: 0,   // Placeholder
             ontology_version: 0, // Placeholder
         }
     }
-    
+
     pub fn get_entry(&self, hash: &QueryHash) -> Option<&CacheEntry> {
         self.cache_entries.get(hash)
     }
-    
+
     pub fn is_entry_expired(&self, entry: &CacheEntry) -> bool {
         // Check if entry has expired based on TTL and invalidation triggers
         let now = Instant::now();
         now.duration_since(entry.created_at) > self.config.default_ttl
     }
-    
-    pub fn insert(&mut self, query: &ConjunctiveQuery, result: ConjunctiveQueryResult) -> Result<(), AdvancedQueryError> {
+
+    pub fn insert(
+        &mut self,
+        query: &ConjunctiveQuery,
+        result: ConjunctiveQueryResult,
+    ) -> Result<(), AdvancedQueryError> {
         // Implement cache insertion with eviction if necessary
         Ok(())
     }
@@ -1298,18 +1330,27 @@ impl ExecutionStrategySelector {
             learning_config: StrategyLearningConfig::default(),
         }
     }
-    
-    pub fn select_strategy(&mut self, query: &ConjunctiveQuery, plan: &AdvancedQueryPlan) -> Result<String, AdvancedQueryError> {
+
+    pub fn select_strategy(
+        &mut self,
+        query: &ConjunctiveQuery,
+        plan: &AdvancedQueryPlan,
+    ) -> Result<String, AdvancedQueryError> {
         // Implement strategy selection logic
         Ok("default".to_string()) // Placeholder
     }
-    
+
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
         // Get strategy implementation by name
         Err(AdvancedQueryError::StrategyNotFound(name.to_string()))
     }
-    
-    pub fn update_performance_history(&mut self, strategy: &str, query: &ConjunctiveQuery, result: &ConjunctiveQueryResult) {
+
+    pub fn update_performance_history(
+        &mut self,
+        strategy: &str,
+        query: &ConjunctiveQuery,
+        result: &ConjunctiveQueryResult,
+    ) {
         // Update performance history for learning
     }
 }
@@ -1340,16 +1381,17 @@ impl DefaultRankingModel {
 impl StrategyRankingModel for DefaultRankingModel {
     fn rank_strategies(&self, features: &[f64], strategies: &[String]) -> Vec<(String, f64)> {
         // Simple ranking based on strategy name for now
-        strategies.iter()
+        strategies
+            .iter()
             .enumerate()
             .map(|(i, s)| (s.clone(), 1.0 / (i as f64 + 1.0)))
             .collect()
     }
-    
+
     fn train(&mut self, data: &[StrategyTrainingPoint]) {
         // Training implementation placeholder
     }
-    
+
     fn accuracy(&self) -> f64 {
         0.8 // Placeholder accuracy
     }
@@ -1390,8 +1432,13 @@ impl ExecutionPerformanceMonitor {
             alert_system: ExecutionAlertSystem::new(),
         }
     }
-    
-    pub fn start_execution(&mut self, execution_id: &ExecutionId, query: &ConjunctiveQuery, strategy: &str) {
+
+    pub fn start_execution(
+        &mut self,
+        execution_id: &ExecutionId,
+        query: &ConjunctiveQuery,
+        strategy: &str,
+    ) {
         // Start tracking execution
         let trace = ExecutionTrace {
             execution_id: execution_id.clone(),
@@ -1403,11 +1450,15 @@ impl ExecutionPerformanceMonitor {
             memory_usage: Vec::new(),
             intermediate_results: Vec::new(),
         };
-        
+
         self.active_executions.insert(execution_id.clone(), trace);
     }
-    
-    pub fn complete_execution(&mut self, execution_id: &ExecutionId, result: &Result<ConjunctiveQueryResult, AdvancedQueryError>) {
+
+    pub fn complete_execution(
+        &mut self,
+        execution_id: &ExecutionId,
+        result: &Result<ConjunctiveQueryResult, AdvancedQueryError>,
+    ) {
         // Complete execution tracking
         if let Some(trace) = self.active_executions.remove(execution_id) {
             let completed = CompletedExecution {
@@ -1415,13 +1466,18 @@ impl ExecutionPerformanceMonitor {
                 query: trace.query,
                 strategy: trace.strategy,
                 total_time: trace.start_time.elapsed(),
-                peak_memory: trace.memory_usage.iter().map(|(_, mem)| *mem).max().unwrap_or(0),
+                peak_memory: trace
+                    .memory_usage
+                    .iter()
+                    .map(|(_, mem)| *mem)
+                    .max()
+                    .unwrap_or(0),
                 result_size: result.as_ref().map(|r| r.bindings.len()).unwrap_or(0),
                 success: result.is_ok(),
                 error: result.as_ref().err().map(|e| e.to_string()),
                 performance_score: 1.0, // Placeholder
             };
-            
+
             self.execution_history.insert(Instant::now(), completed);
         }
     }
@@ -1525,9 +1581,9 @@ impl ResourceManager {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_per_task: 512 * 1024 * 1024, // 512 MB
+            max_memory_per_task: 512 * 1024 * 1024,   // 512 MB
             max_total_memory: 4 * 1024 * 1024 * 1024, // 4 GB
-            max_cpu_usage: 0.8, // 80%
+            max_cpu_usage: 0.8,                       // 80%
             max_concurrent_tasks: num_cpus::get(),
         }
     }
@@ -1556,12 +1612,12 @@ impl AdvancedQueryError {
 // Placeholder for uuid functionality
 mod uuid {
     pub struct Uuid;
-    
+
     impl Uuid {
         pub fn new_v4() -> Self {
             Self
         }
-        
+
         pub fn to_string(&self) -> String {
             "placeholder-uuid".to_string()
         }

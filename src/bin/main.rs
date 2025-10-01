@@ -12,7 +12,7 @@ use oxidowl::{
     ontology::properties::{DataPropertyHierarchy, ObjectPropertyHierarchy},
     ontology::{DataPropertyExpression, ObjectPropertyExpression},
 };
-use std::{fs, path::PathBuf, time::Instant, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc, time::Instant};
 use tracing::{Level, error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -1518,7 +1518,10 @@ async fn execute_dl_query(
         .read()
         .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?
         .clone();
-    let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(ontology_clone, config));
+    let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(
+        ontology_clone,
+        config,
+    ));
 
     // Create query engine with optional namespace
     let query_engine = if let Some(ns) = namespace {

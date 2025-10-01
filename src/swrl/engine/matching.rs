@@ -3,9 +3,9 @@
 //! This module implements pattern matching algorithms for SWRL atoms
 //! and unification logic for rule matching and goal resolution.
 
+use crate::Result;
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument};
-use crate::{Result};
 use log::debug;
 use std::collections::HashMap;
 
@@ -32,40 +32,89 @@ impl UnificationEngine {
     /// Check if two atoms can be unified
     pub fn atoms_unify(&mut self, atom1: &SWRLAtom, atom2: &SWRLAtom) -> Result<bool> {
         match (atom1, atom2) {
-            (SWRLAtom::ClassAtom { predicate: p1, argument: a1 }, 
-             SWRLAtom::ClassAtom { predicate: p2, argument: a2 }) => {
-                Ok(self.class_expressions_match(p1, p2) && self.arguments_unify(a1, a2))
-            }
-            (SWRLAtom::DataRangeAtom { predicate: p1, argument: a1 },
-             SWRLAtom::DataRangeAtom { predicate: p2, argument: a2 }) => {
-                Ok(self.data_ranges_match(p1, p2) && self.data_arguments_unify(a1, a2))
-            }
-            (SWRLAtom::ObjectPropertyAtom { predicate: p1, first_argument: a1, second_argument: b1 },
-             SWRLAtom::ObjectPropertyAtom { predicate: p2, first_argument: a2, second_argument: b2 }) => {
-                Ok(self.object_properties_match(p1, p2) && 
-                self.arguments_unify(a1, a2) && 
-                self.arguments_unify(b1, b2))
-            }
-            (SWRLAtom::DataPropertyAtom { predicate: p1, first_argument: a1, second_argument: b1 },
-             SWRLAtom::DataPropertyAtom { predicate: p2, first_argument: a2, second_argument: b2 }) => {
-                Ok(self.data_properties_match(p1, p2) && 
-                self.arguments_unify(a1, a2) && 
-                self.data_arguments_unify(b1, b2))
-            }
-            (SWRLAtom::SameIndividualAtom { first_argument: a1, second_argument: b1 },
-             SWRLAtom::SameIndividualAtom { first_argument: a2, second_argument: b2 }) => {
-                Ok(self.arguments_unify(a1, a2) && self.arguments_unify(b1, b2))
-            }
-            (SWRLAtom::DifferentIndividualsAtom { first_argument: a1, second_argument: b1 },
-             SWRLAtom::DifferentIndividualsAtom { first_argument: a2, second_argument: b2 }) => {
-                Ok(self.arguments_unify(a1, a2) && self.arguments_unify(b1, b2))
-            }
-            (SWRLAtom::BuiltInAtom { predicate: p1, arguments: args1 },
-             SWRLAtom::BuiltInAtom { predicate: p2, arguments: args2 }) => {
-                Ok(p1.as_str() == p2.as_str() && 
-                args1.len() == args2.len() &&
-                args1.iter().zip(args2.iter()).all(|(a1, a2)| self.data_arguments_unify(a1, a2)))
-            }
+            (
+                SWRLAtom::ClassAtom {
+                    predicate: p1,
+                    argument: a1,
+                },
+                SWRLAtom::ClassAtom {
+                    predicate: p2,
+                    argument: a2,
+                },
+            ) => Ok(self.class_expressions_match(p1, p2) && self.arguments_unify(a1, a2)),
+            (
+                SWRLAtom::DataRangeAtom {
+                    predicate: p1,
+                    argument: a1,
+                },
+                SWRLAtom::DataRangeAtom {
+                    predicate: p2,
+                    argument: a2,
+                },
+            ) => Ok(self.data_ranges_match(p1, p2) && self.data_arguments_unify(a1, a2)),
+            (
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: p1,
+                    first_argument: a1,
+                    second_argument: b1,
+                },
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: p2,
+                    first_argument: a2,
+                    second_argument: b2,
+                },
+            ) => Ok(self.object_properties_match(p1, p2)
+                && self.arguments_unify(a1, a2)
+                && self.arguments_unify(b1, b2)),
+            (
+                SWRLAtom::DataPropertyAtom {
+                    predicate: p1,
+                    first_argument: a1,
+                    second_argument: b1,
+                },
+                SWRLAtom::DataPropertyAtom {
+                    predicate: p2,
+                    first_argument: a2,
+                    second_argument: b2,
+                },
+            ) => Ok(self.data_properties_match(p1, p2)
+                && self.arguments_unify(a1, a2)
+                && self.data_arguments_unify(b1, b2)),
+            (
+                SWRLAtom::SameIndividualAtom {
+                    first_argument: a1,
+                    second_argument: b1,
+                },
+                SWRLAtom::SameIndividualAtom {
+                    first_argument: a2,
+                    second_argument: b2,
+                },
+            ) => Ok(self.arguments_unify(a1, a2) && self.arguments_unify(b1, b2)),
+            (
+                SWRLAtom::DifferentIndividualsAtom {
+                    first_argument: a1,
+                    second_argument: b1,
+                },
+                SWRLAtom::DifferentIndividualsAtom {
+                    first_argument: a2,
+                    second_argument: b2,
+                },
+            ) => Ok(self.arguments_unify(a1, a2) && self.arguments_unify(b1, b2)),
+            (
+                SWRLAtom::BuiltInAtom {
+                    predicate: p1,
+                    arguments: args1,
+                },
+                SWRLAtom::BuiltInAtom {
+                    predicate: p2,
+                    arguments: args2,
+                },
+            ) => Ok(p1.as_str() == p2.as_str()
+                && args1.len() == args2.len()
+                && args1
+                    .iter()
+                    .zip(args2.iter())
+                    .all(|(a1, a2)| self.data_arguments_unify(a1, a2))),
             _ => Ok(false), // Different atom types don't unify
         }
     }
@@ -76,18 +125,25 @@ impl UnificationEngine {
             (SWRLIArgument::Individual(ind1), SWRLIArgument::Individual(ind2)) => {
                 ind1.iri().map(|i| i.as_str()) == ind2.iri().map(|i| i.as_str())
             }
-            (SWRLIArgument::Variable(var), SWRLIArgument::Individual(ind)) => {
-                self.bind_individual_variable(var.iri.to_string(), SWRLIArgument::Individual(ind.clone()))
-            }
-            (SWRLIArgument::Individual(ind), SWRLIArgument::Variable(var)) => {
-                self.bind_individual_variable(var.iri.to_string(), SWRLIArgument::Individual(ind.clone()))
-            }
+            (SWRLIArgument::Variable(var), SWRLIArgument::Individual(ind)) => self
+                .bind_individual_variable(
+                    var.iri.to_string(),
+                    SWRLIArgument::Individual(ind.clone()),
+                ),
+            (SWRLIArgument::Individual(ind), SWRLIArgument::Variable(var)) => self
+                .bind_individual_variable(
+                    var.iri.to_string(),
+                    SWRLIArgument::Individual(ind.clone()),
+                ),
             (SWRLIArgument::Variable(var1), SWRLIArgument::Variable(var2)) => {
                 if var1.iri == var2.iri {
                     true
                 } else {
                     // For now, assume different variables can unify
-                    self.bind_individual_variable(var1.iri.to_string(), SWRLIArgument::Variable(var2.clone()))
+                    self.bind_individual_variable(
+                        var1.iri.to_string(),
+                        SWRLIArgument::Variable(var2.clone()),
+                    )
                 }
             }
         }
@@ -110,7 +166,10 @@ impl UnificationEngine {
                     true
                 } else {
                     // For now, assume different variables can unify
-                    self.bind_data_variable(var1.iri.to_string(), SWRLDArgument::Variable(var2.clone()))
+                    self.bind_data_variable(
+                        var1.iri.to_string(),
+                        SWRLDArgument::Variable(var2.clone()),
+                    )
                 }
             }
         }
@@ -151,34 +210,51 @@ impl UnificationEngine {
     /// Check if two class expressions match
     fn class_expressions_match(&self, expr1: &ClassExpression, expr2: &ClassExpression) -> bool {
         match (expr1, expr2) {
-            (ClassExpression::Class(c1), ClassExpression::Class(c2)) => c1.iri.as_str() == c2.iri.as_str(),
+            (ClassExpression::Class(c1), ClassExpression::Class(c2)) => {
+                c1.iri.as_str() == c2.iri.as_str()
+            }
             // Add more sophisticated matching for complex expressions
             _ => false,
         }
     }
 
     /// Check if two data ranges match
-    fn data_ranges_match(&self, _range1: &crate::ontology::DataRange, _range2: &crate::ontology::DataRange) -> bool {
+    fn data_ranges_match(
+        &self,
+        _range1: &crate::ontology::DataRange,
+        _range2: &crate::ontology::DataRange,
+    ) -> bool {
         // Placeholder - implement data range matching
         false
     }
 
     /// Check if two object properties match
-    fn object_properties_match(&self, prop1: &ObjectPropertyExpression, prop2: &ObjectPropertyExpression) -> bool {
+    fn object_properties_match(
+        &self,
+        prop1: &ObjectPropertyExpression,
+        prop2: &ObjectPropertyExpression,
+    ) -> bool {
         match (prop1, prop2) {
-            (ObjectPropertyExpression::ObjectProperty(p1), ObjectPropertyExpression::ObjectProperty(p2)) => {
-                p1.iri.as_str() == p2.iri.as_str()
-            }
+            (
+                ObjectPropertyExpression::ObjectProperty(p1),
+                ObjectPropertyExpression::ObjectProperty(p2),
+            ) => p1.iri.as_str() == p2.iri.as_str(),
             // Add more sophisticated matching for property expressions
             _ => false,
         }
     }
 
     /// Check if two data properties match
-    fn data_properties_match(&self, prop1: &crate::ontology::DataPropertyExpression, prop2: &crate::ontology::DataPropertyExpression) -> bool {
+    fn data_properties_match(
+        &self,
+        prop1: &crate::ontology::DataPropertyExpression,
+        prop2: &crate::ontology::DataPropertyExpression,
+    ) -> bool {
         match (prop1, prop2) {
-            (crate::ontology::DataPropertyExpression::DataProperty(p1), 
-             crate::ontology::DataPropertyExpression::DataProperty(p2)) => p1.iri.as_str() == p2.iri.as_str(),
+            (
+                crate::ontology::DataPropertyExpression::DataProperty(p1),
+                crate::ontology::DataPropertyExpression::DataProperty(p2),
+            ) => p1.iri.as_str() == p2.iri.as_str(),
             _ => false,
         }
     }
@@ -221,15 +297,23 @@ impl PatternMatcher {
     }
 
     /// Check if a goal matches a rule head
-    pub fn goal_matches_rule_head(&mut self, goal: &SWRLAtom, rule_head: &SWRLAtom) -> Result<bool> {
+    pub fn goal_matches_rule_head(
+        &mut self,
+        goal: &SWRLAtom,
+        rule_head: &SWRLAtom,
+    ) -> Result<bool> {
         self.unification_engine.reset();
         Ok(self.unification_engine.atoms_unify(goal, rule_head)?)
     }
 
     /// Find variable bindings that make atoms unify
-    pub fn find_bindings(&mut self, atom1: &SWRLAtom, atom2: &SWRLAtom) -> Result<Option<VariableBindings>> {
+    pub fn find_bindings(
+        &mut self,
+        atom1: &SWRLAtom,
+        atom2: &SWRLAtom,
+    ) -> Result<Option<VariableBindings>> {
         self.unification_engine.reset();
-        
+
         if self.unification_engine.atoms_unify(atom1, atom2)? {
             Ok(Some(VariableBindings {
                 individual_bindings: self.unification_engine.get_substitutions().clone(),

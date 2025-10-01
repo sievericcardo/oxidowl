@@ -66,14 +66,22 @@ impl Default for CompletionStrategy {
         rule_priorities.insert(CompletionRule::Some, RulePriority::Normal);
         rule_priorities.insert(CompletionRule::Or, RulePriority::Low);
         rule_priorities.insert(CompletionRule::Choose, RulePriority::Low);
-        
+
         let mut enabled_rules = HashMap::new();
         for rule in [
-            CompletionRule::And, CompletionRule::Or, CompletionRule::Some,
-            CompletionRule::All, CompletionRule::AtLeast, CompletionRule::AtMost,
-            CompletionRule::Nominal, CompletionRule::Self_, CompletionRule::Choose,
-            CompletionRule::Datatype, CompletionRule::Unfold, CompletionRule::PropertyChain,
-            CompletionRule::Guess
+            CompletionRule::And,
+            CompletionRule::Or,
+            CompletionRule::Some,
+            CompletionRule::All,
+            CompletionRule::AtLeast,
+            CompletionRule::AtMost,
+            CompletionRule::Nominal,
+            CompletionRule::Self_,
+            CompletionRule::Choose,
+            CompletionRule::Datatype,
+            CompletionRule::Unfold,
+            CompletionRule::PropertyChain,
+            CompletionRule::Guess,
         ] {
             enabled_rules.insert(rule, true);
         }

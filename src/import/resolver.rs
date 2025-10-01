@@ -54,80 +54,95 @@ impl ImportResolver {
     }
 
     /// Resolve import IRI to actual location
-    pub fn resolve_import<'a>(&'a self, import_iri: &'a str, base_iri: Option<&'a str>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ResolvedImport>> + Send + 'a>> {
+    pub fn resolve_import<'a>(
+        &'a self,
+        import_iri: &'a str,
+        base_iri: Option<&'a str>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ResolvedImport>> + Send + 'a>>
+    {
         Box::pin(async move {
-        // Check mappings first
-        {
-            let mappings = self.iri_mappings.read().await;
-            if let Some(mapped_location) = mappings.get(import_iri) {
-                return self.create_resolved_import(import_iri, mapped_location).await;
+            // Check mappings first
+            {
+                let mappings = self.iri_mappings.read().await;
+                if let Some(mapped_location) = mappings.get(import_iri) {
+                    return self
+                        .create_resolved_import(import_iri, mapped_location)
+                        .await;
+                }
             }
-        }
 
-        // Try to resolve as absolute URL
-        if let Ok(url) = Url::parse(import_iri) {
-            match url.scheme() {
-                "http" | "https" => {
-                    if self.allow_remote {
-                        return self.create_resolved_import(import_iri, import_iri).await;
-                    } else {
+            // Try to resolve as absolute URL
+            if let Ok(url) = Url::parse(import_iri) {
+                match url.scheme() {
+                    "http" | "https" => {
+                        if self.allow_remote {
+                            return self.create_resolved_import(import_iri, import_iri).await;
+                        } else {
+                            return Err(Error::import_error(format!(
+                                "Remote imports disabled: {}",
+                                import_iri
+                            )));
+                        }
+                    }
+                    "file" => {
+                        let path = url.to_file_path().map_err(|_| {
+                            Error::import_error(format!("Invalid file URL: {}", import_iri))
+                        })?;
+                        return self
+                            .create_resolved_import(import_iri, &path.to_string_lossy())
+                            .await;
+                    }
+                    _ => {
                         return Err(Error::import_error(format!(
-                            "Remote imports disabled: {}", import_iri
+                            "Unsupported URL scheme: {}",
+                            url.scheme()
                         )));
                     }
                 }
-                "file" => {
-                    let path = url.to_file_path()
-                        .map_err(|_| Error::import_error(format!("Invalid file URL: {}", import_iri)))?;
-                    return self.create_resolved_import(import_iri, &path.to_string_lossy()).await;
-                }
-                _ => {
-                    return Err(Error::import_error(format!(
-                        "Unsupported URL scheme: {}", url.scheme()
-                    )));
-                }
-            }
-        }
-
-        // Try relative resolution
-        if let Some(base) = base_iri {
-            if let Ok(base_url) = Url::parse(base) {
-                if let Ok(resolved_url) = base_url.join(import_iri) {
-                    return self.resolve_import(&resolved_url.to_string(), None).await;
-                }
-            }
-        }
-
-        // Try file system resolution
-        for base_dir in &self.base_directories {
-            let candidate_path = base_dir.join(import_iri);
-            if candidate_path.exists() {
-                return self.create_resolved_import(
-                    import_iri, 
-                    &candidate_path.to_string_lossy()
-                ).await;
             }
 
-            // Try with common extensions
-            for ext in &[".owl", ".rdf", ".ttl", ".n3"] {
-                let with_ext = candidate_path.with_extension(&ext[1..]);
-                if with_ext.exists() {
-                    return self.create_resolved_import(
-                        import_iri, 
-                        &with_ext.to_string_lossy()
-                    ).await;
+            // Try relative resolution
+            if let Some(base) = base_iri {
+                if let Ok(base_url) = Url::parse(base) {
+                    if let Ok(resolved_url) = base_url.join(import_iri) {
+                        return self.resolve_import(&resolved_url.to_string(), None).await;
+                    }
                 }
             }
-        }
 
-        Err(Error::import_error(format!(
-            "Cannot resolve import: {}", import_iri
-        )))
+            // Try file system resolution
+            for base_dir in &self.base_directories {
+                let candidate_path = base_dir.join(import_iri);
+                if candidate_path.exists() {
+                    return self
+                        .create_resolved_import(import_iri, &candidate_path.to_string_lossy())
+                        .await;
+                }
+
+                // Try with common extensions
+                for ext in &[".owl", ".rdf", ".ttl", ".n3"] {
+                    let with_ext = candidate_path.with_extension(&ext[1..]);
+                    if with_ext.exists() {
+                        return self
+                            .create_resolved_import(import_iri, &with_ext.to_string_lossy())
+                            .await;
+                    }
+                }
+            }
+
+            Err(Error::import_error(format!(
+                "Cannot resolve import: {}",
+                import_iri
+            )))
         })
     }
 
     /// Load ontology with imports
-    pub async fn load_with_imports(&self, ontology_iri: &str, max_depth: Option<usize>) -> Result<ImportedOntology> {
+    pub async fn load_with_imports(
+        &self,
+        ontology_iri: &str,
+        max_depth: Option<usize>,
+    ) -> Result<ImportedOntology> {
         let max_depth = max_depth.unwrap_or(self.max_depth);
         let mut loaded = HashSet::new();
         let mut pending = vec![(ontology_iri.to_string(), 0)];
@@ -136,7 +151,8 @@ impl ImportResolver {
         while let Some((iri, depth)) = pending.pop() {
             if depth > max_depth {
                 return Err(Error::import_error(format!(
-                    "Import depth limit exceeded: {}", max_depth
+                    "Import depth limit exceeded: {}",
+                    max_depth
                 )));
             }
 
@@ -202,9 +218,7 @@ impl ImportResolver {
         let cache = self.ontology_cache.read().await;
         CacheStats {
             cached_ontologies: cache.len(),
-            total_size_bytes: cache.values()
-                .map(|ont| ont.content.len())
-                .sum(),
+            total_size_bytes: cache.values().map(|ont| ont.content.len()).sum(),
         }
     }
 
@@ -228,16 +242,19 @@ impl ImportResolver {
 
     async fn load_content(&self, resolved: &ResolvedImport) -> Result<String> {
         match resolved.import_type {
-            ImportType::Local => {
-                tokio::fs::read_to_string(&resolved.location).await
-                    .map_err(|e| Error::import_error(format!(
-                        "Failed to read local file {}: {}", resolved.location, e
-                    )))
-            }
+            ImportType::Local => tokio::fs::read_to_string(&resolved.location)
+                .await
+                .map_err(|e| {
+                    Error::import_error(format!(
+                        "Failed to read local file {}: {}",
+                        resolved.location, e
+                    ))
+                }),
             ImportType::Remote => {
                 // For now, return error - would implement HTTP client
                 Err(Error::import_error(format!(
-                    "Remote import loading not yet implemented: {}", resolved.location
+                    "Remote import loading not yet implemented: {}",
+                    resolved.location
                 )))
             }
         }
@@ -246,7 +263,7 @@ impl ImportResolver {
     fn extract_imports(&self, content: &str) -> Result<Vec<String>> {
         // Simplified import extraction - would use proper parser
         let mut imports = Vec::new();
-        
+
         // Look for owl:imports patterns
         for line in content.lines() {
             if line.contains("owl:imports") {

@@ -10,14 +10,14 @@
 //! - [`IncrementalCacheManager`]: Manages selective cache invalidation
 //! - [`IncrementalReasoningService`]: Main service interface
 
+pub mod cache_management;
 pub mod change_tracking;
 pub mod delta_computation;
-pub mod cache_management;
 pub mod service;
 
-pub use change_tracking::{ChangeTracker, TBoxChange, ABoxChange, DependencyGraph};
-pub use delta_computation::{DeltaComputer, ReasoningDelta, QueryDelta};
 pub use cache_management::{IncrementalCacheManager, InvalidationTracker};
+pub use change_tracking::{ABoxChange, ChangeTracker, DependencyGraph, TBoxChange};
+pub use delta_computation::{DeltaComputer, QueryDelta, ReasoningDelta};
 pub use service::IncrementalReasoningService;
 
 use crate::error::{OxidowlError, Result};
@@ -40,7 +40,7 @@ impl ChangeEvent {
             ChangeEvent::ABox(change) => change.timestamp(),
         }
     }
-    
+
     /// Get a human-readable description of the change
     pub fn description(&self) -> String {
         match self {
@@ -100,7 +100,7 @@ impl IncrementalStatistics {
             self.cache_hits as f64 / (self.cache_hits + self.cache_invalidations) as f64
         }
     }
-    
+
     /// Get average time saved per incremental update
     pub fn average_time_saved_ms(&self) -> f64 {
         if self.incremental_updates == 0 {

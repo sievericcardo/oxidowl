@@ -2,17 +2,14 @@
 //!
 //! Core integration testing for ML-enhanced query execution engine
 
-use oxidowl::query::advanced::{
-    AdvancedExecutionEngine, AdvancedExecutionConfig,
-    ConjunctiveQuery, QueryAtom, QueryVariable,
-};
-use oxidowl::query::advanced::execution_engine::{
-    ExecutionConstraints, ExecutionPriority,
-};
-use oxidowl::ontology::{Ontology, ClassExpression, ObjectPropertyExpression, IRI};
-use oxidowl::ontology::concepts::Class;
-use oxidowl::reasoning::ReasoningService;
 use oxidowl::config::ReasonerConfig;
+use oxidowl::ontology::concepts::Class;
+use oxidowl::ontology::{ClassExpression, IRI, ObjectPropertyExpression, Ontology};
+use oxidowl::query::advanced::execution_engine::{ExecutionConstraints, ExecutionPriority};
+use oxidowl::query::advanced::{
+    AdvancedExecutionConfig, AdvancedExecutionEngine, ConjunctiveQuery, QueryAtom, QueryVariable,
+};
+use oxidowl::reasoning::ReasoningService;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -41,14 +38,13 @@ fn create_test_onto(name: &str, size: usize) -> Ontology {
 fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
     ConjunctiveQuery {
         answer_variables: vec![QueryVariable::new(var.to_string())],
-        body_atoms: vec![
-            QueryAtom::ClassAtom {
-                variable: QueryVariable::new(var.to_string()),
-                class_expression: ClassExpression::class(
-                    IRI::new(&format!("http://test.org/#{}", class))
-                ),
-            },
-        ],
+        body_atoms: vec![QueryAtom::ClassAtom {
+            variable: QueryVariable::new(var.to_string()),
+            class_expression: ClassExpression::class(IRI::new(&format!(
+                "http://test.org/#{}",
+                class
+            ))),
+        }],
         constraints: Default::default(),
         metadata: Default::default(),
     }
@@ -57,21 +53,17 @@ fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
 #[test]
 fn test_ml_engine_creation() {
     println!("\n=== Test: ML Engine Creation ===");
-    
+
     let ontology = create_test_onto("creation_test", 10);
     let ontology_arc = Arc::new(ontology.clone());
     let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
-    
+
     // Test with ML enabled
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
-    
-    let engine_result = AdvancedExecutionEngine::new(
-        ontology_arc,
-        reasoning,
-        config,
-    );
-    
+
+    let engine_result = AdvancedExecutionEngine::new(ontology_arc, reasoning, config);
+
     assert!(engine_result.is_ok(), "Should create ML-enabled engine");
     println!("✓ ML-enabled engine created successfully");
 }
@@ -79,36 +71,31 @@ fn test_ml_engine_creation() {
 #[test]
 fn test_ml_vs_legacy_execution() {
     println!("\n=== Test: ML vs Legacy Execution ===");
-    
+
     let ontology = create_test_onto("ml_legacy_test", 50);
-    
+
     // ML-enabled engine
     let ontology_arc1 = Arc::new(ontology.clone());
-    let reasoning1 = Arc::new(ReasoningService::new(ontology.clone(), ReasonerConfig::default()));
+    let reasoning1 = Arc::new(ReasoningService::new(
+        ontology.clone(),
+        ReasonerConfig::default(),
+    ));
     let mut config_ml = AdvancedExecutionConfig::default();
     config_ml.enable_adaptive_strategies = true;
-    
-    let engine_ml = AdvancedExecutionEngine::new(
-        ontology_arc1,
-        reasoning1,
-        config_ml,
-    );
-    
+
+    let engine_ml = AdvancedExecutionEngine::new(ontology_arc1, reasoning1, config_ml);
+
     // Legacy engine
     let ontology_arc2 = Arc::new(ontology.clone());
     let reasoning2 = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
     let mut config_legacy = AdvancedExecutionConfig::default();
     config_legacy.enable_adaptive_strategies = false;
-    
-    let engine_legacy = AdvancedExecutionEngine::new(
-        ontology_arc2,
-        reasoning2,
-        config_legacy,
-    );
-    
+
+    let engine_legacy = AdvancedExecutionEngine::new(ontology_arc2, reasoning2, config_legacy);
+
     assert!(engine_ml.is_ok(), "ML engine should be created");
     assert!(engine_legacy.is_ok(), "Legacy engine should be created");
-    
+
     println!("✓ Both ML and legacy engines created");
     println!("✓ Configuration variations work correctly");
 }
@@ -116,34 +103,31 @@ fn test_ml_vs_legacy_execution() {
 #[test]
 fn test_query_execution_basic() {
     println!("\n=== Test: Basic Query Execution ===");
-    
+
     let ontology = create_test_onto("exec_test", 30);
     let ontology_arc = Arc::new(ontology.clone());
     let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
-    
+
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
-    
-    let engine = AdvancedExecutionEngine::new(
-        ontology_arc,
-        reasoning,
-        config,
-    ).expect("Engine creation failed");
-    
+
+    let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
+        .expect("Engine creation failed");
+
     let query = simple_query("x", "TestClass");
     let constraints = default_constraints();
-    
+
     // Execute query
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(engine.execute_query(&query, constraints));
-    
+
     match result {
         Ok(query_result) => {
             println!("✓ Query executed successfully");
             println!("  Strategy: {}", query_result.metadata.strategy_used);
             println!("  Time: {:?}", query_result.metadata.execution_time);
             assert!(!query_result.metadata.strategy_used.is_empty());
-        },
+        }
         Err(e) => {
             println!("Query execution handled error: {:?}", e);
             assert!(true, "Error handling works");
@@ -154,20 +138,19 @@ fn test_query_execution_basic() {
 #[test]
 fn test_concurrent_queries() {
     println!("\n=== Test: Concurrent Query Execution ===");
-    
+
     let ontology = create_test_onto("concurrent_test", 40);
     let ontology_arc = Arc::new(ontology.clone());
     let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
-    
+
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
-    
-    let engine = Arc::new(AdvancedExecutionEngine::new(
-        ontology_arc,
-        reasoning,
-        config,
-    ).expect("Engine creation failed"));
-    
+
+    let engine = Arc::new(
+        AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
+            .expect("Engine creation failed"),
+    );
+
     // Spawn 4 threads
     let mut handles = vec![];
     for thread_id in 0..4 {
@@ -181,7 +164,7 @@ fn test_concurrent_queries() {
         });
         handles.push(handle);
     }
-    
+
     // Wait for threads
     let mut success_count = 0;
     for handle in handles {
@@ -189,7 +172,7 @@ fn test_concurrent_queries() {
             success_count += 1;
         }
     }
-    
+
     println!("✓ Concurrent execution completed");
     println!("  Success: {}/4 threads", success_count);
     assert!(true, "Concurrent execution completed without deadlocks");
@@ -198,22 +181,19 @@ fn test_concurrent_queries() {
 #[test]
 fn test_multiple_query_execution() {
     println!("\n=== Test: Multiple Query Executions ===");
-    
+
     let ontology = create_test_onto("multi_test", 60);
     let ontology_arc = Arc::new(ontology.clone());
     let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
-    
+
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
-    
-    let engine = AdvancedExecutionEngine::new(
-        ontology_arc,
-        reasoning,
-        config,
-    ).expect("Engine creation failed");
-    
+
+    let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
+        .expect("Engine creation failed");
+
     let rt = tokio::runtime::Runtime::new().unwrap();
-    
+
     // Execute 10 queries
     let mut successful = 0;
     for i in 0..10 {
@@ -224,7 +204,7 @@ fn test_multiple_query_execution() {
             successful += 1;
         }
     }
-    
+
     println!("✓ Executed 10 queries: {} successful", successful);
     assert!(true, "Multiple queries completed");
 }
@@ -232,51 +212,48 @@ fn test_multiple_query_execution() {
 #[test]
 fn test_performance_measurement() {
     println!("\n=== Test: Performance Measurement ===");
-    
+
     let ontology = create_test_onto("perf_test", 100);
     let ontology_arc = Arc::new(ontology.clone());
     let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
-    
+
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
-    
-    let engine = AdvancedExecutionEngine::new(
-        ontology_arc,
-        reasoning,
-        config,
-    ).expect("Engine creation failed");
-    
+
+    let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
+        .expect("Engine creation failed");
+
     let rt = tokio::runtime::Runtime::new().unwrap();
     let query = simple_query("x", "Entity");
     let constraints = default_constraints();
-    
+
     let start = Instant::now();
     let _ = rt.block_on(engine.execute_query(&query, constraints));
     let duration = start.elapsed();
-    
+
     println!("✓ Query execution time: {:?}", duration);
-    assert!(duration < Duration::from_secs(10), "Query should complete in reasonable time");
+    assert!(
+        duration < Duration::from_secs(10),
+        "Query should complete in reasonable time"
+    );
 }
 
 #[test]
 fn test_error_handling() {
     println!("\n=== Test: Error Handling ===");
-    
+
     let ontology = create_test_onto("error_test", 20);
     let ontology_arc = Arc::new(ontology.clone());
     let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
-    
+
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
-    
-    let engine = AdvancedExecutionEngine::new(
-        ontology_arc,
-        reasoning,
-        config,
-    ).expect("Engine creation failed");
-    
+
+    let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
+        .expect("Engine creation failed");
+
     let rt = tokio::runtime::Runtime::new().unwrap();
-    
+
     // Test with empty query
     let empty_query = ConjunctiveQuery {
         answer_variables: vec![],
@@ -284,10 +261,10 @@ fn test_error_handling() {
         constraints: Default::default(),
         metadata: Default::default(),
     };
-    
+
     let constraints = default_constraints();
     let _ = rt.block_on(engine.execute_query(&empty_query, constraints));
-    
+
     println!("✓ Error handling completed without panicking");
     assert!(true, "Engine handles errors gracefully");
 }

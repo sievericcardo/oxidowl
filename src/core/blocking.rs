@@ -543,7 +543,7 @@ impl BlockingChecker for OptimalBlocking {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::tableau::{node::BlockingInfo, NodeStatus, NodeType};
+    use crate::core::tableau::{NodeStatus, NodeType, node::BlockingInfo};
     use std::collections::HashMap;
 
     fn create_test_node(id: NodeId, concepts: Vec<&str>) -> TableauNode {

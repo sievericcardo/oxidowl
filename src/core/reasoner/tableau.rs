@@ -103,11 +103,9 @@ impl TableauFactory {
         // Convert ClassExpression to string for the current tableau builder interface
         let subclass_str = &format!("{subclass}");
         let superclass_str = &format!("{superclass}");
-        let tableau = self.tableau_builder.build_for_subsumption(
-            ontology,
-            subclass_str,
-            superclass_str,
-        )?;
+        let tableau =
+            self.tableau_builder
+                .build_for_subsumption(ontology, subclass_str, superclass_str)?;
         Ok(Box::new(TraditionalTableauRunner::new(tableau)))
     }
 
@@ -137,11 +135,9 @@ impl TableauFactory {
             .iri()
             .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
         let class_str = &format!("{class_expr}");
-        let tableau = self.tableau_builder.build_for_instance_check(
-            ontology,
-            individual_str,
-            class_str,
-        )?;
+        let tableau =
+            self.tableau_builder
+                .build_for_instance_check(ontology, individual_str, class_str)?;
         Ok(Box::new(TraditionalTableauRunner::new(tableau)))
     }
 

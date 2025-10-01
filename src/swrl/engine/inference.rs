@@ -6,7 +6,7 @@
 //! - Hybrid reasoning: combination of both strategies
 
 use crate::ontology::{Axiom, Ontology};
-use crate::swrl::{SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLRule, SWRLIArgument};
+use crate::swrl::{SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLIArgument, SWRLRule};
 use crate::{Error, Result};
 use log::{debug, info, warn};
 use std::collections::HashSet;
@@ -30,14 +30,14 @@ impl ForwardChaining {
 
     /// Execute forward chaining strategy
     pub fn execute(
-        &mut self, 
+        &mut self,
         rules: &[SWRLRule],
         known_facts: &mut Vec<SWRLAtom>,
         ontology: &Arc<Ontology>,
-        context: &mut SWRLExecutionContext
+        context: &mut SWRLExecutionContext,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
-        
+
         let mut total_inferences = Vec::new();
         let mut total_applications = 0;
         let mut iteration = 0;
@@ -53,11 +53,17 @@ impl ForwardChaining {
             for rule in rules {
                 // Try to apply the rule with current facts
                 let matches = self.find_rule_matches(rule, known_facts, context)?;
-                
+
                 for var_binding in matches {
                     // Apply rule with this binding
-                    let new_facts = self.apply_rule_with_binding(rule, &var_binding, known_facts, ontology, context)?;
-                    
+                    let new_facts = self.apply_rule_with_binding(
+                        rule,
+                        &var_binding,
+                        known_facts,
+                        ontology,
+                        context,
+                    )?;
+
                     // Add new facts
                     for new_fact in new_facts {
                         if !known_facts.contains(&new_fact) {
@@ -71,7 +77,8 @@ impl ForwardChaining {
             }
 
             // Convert SWRLAtom to Axiom for the inferences
-            let axiom_inferences: Vec<Axiom> = iteration_inferences.into_iter()
+            let axiom_inferences: Vec<Axiom> = iteration_inferences
+                .into_iter()
                 .map(|_atom| {
                     // For now, create a simple fact assertion from the atom
                     // In a more sophisticated implementation, this would convert
@@ -79,12 +86,12 @@ impl ForwardChaining {
                     Axiom::Declaration(crate::ontology::axioms::DeclarationAxiom {
                         id: 0, // Generate proper ID
                         entity: crate::ontology::axioms::Entity::NamedIndividual(
-                            crate::ontology::IRI::new("http://example.org/swrl_inferred_fact")
+                            crate::ontology::IRI::new("http://example.org/swrl_inferred_fact"),
                         ),
                     })
                 })
                 .collect();
-            
+
             total_inferences.extend(axiom_inferences);
 
             // Stop if no new inferences or max iterations reached
@@ -100,13 +107,13 @@ impl ForwardChaining {
             execution_time_us: start_time.elapsed().as_micros() as u64,
         })
     }
-    
+
     /// Find variable bindings that make the rule body match current facts
     fn find_rule_matches(
         &self,
-        _rule: &SWRLRule, 
+        _rule: &SWRLRule,
         _known_facts: &[SWRLAtom],
-        _context: &SWRLExecutionContext
+        _context: &SWRLExecutionContext,
     ) -> Result<Vec<std::collections::HashMap<String, SWRLIArgument>>> {
         // Placeholder implementation - would need actual unification logic
         Ok(Vec::new())
@@ -119,7 +126,7 @@ impl ForwardChaining {
         _binding: &std::collections::HashMap<String, SWRLIArgument>,
         _known_facts: &[SWRLAtom],
         _ontology: &Arc<Ontology>,
-        _context: &SWRLExecutionContext
+        _context: &SWRLExecutionContext,
     ) -> Result<Vec<SWRLAtom>> {
         // Placeholder implementation - would need actual rule application logic
         Ok(Vec::new())
@@ -153,10 +160,10 @@ impl BackwardChaining {
         rules: &[SWRLRule],
         known_facts: &mut Vec<SWRLAtom>,
         ontology: &Arc<Ontology>,
-        context: &mut SWRLExecutionContext
+        context: &mut SWRLExecutionContext,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
-        
+
         // For general execution, we don't have specific goals
         // This is a placeholder implementation
         Ok(SWRLExecutionResult {
@@ -177,7 +184,7 @@ impl BackwardChaining {
         goal: &SWRLAtom,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
-        
+
         let mut total_inferences = Vec::new();
         let mut total_applications = 0;
         let mut goal_stack = vec![goal.clone()];
@@ -263,17 +270,21 @@ impl HybridReasoning {
         rules: &[SWRLRule],
         known_facts: &mut Vec<SWRLAtom>,
         ontology: &Arc<Ontology>,
-        context: &mut SWRLExecutionContext
+        context: &mut SWRLExecutionContext,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
-        
+
         // Phase 1: Forward chaining to establish base facts
         info!("Hybrid reasoning - Phase 1: Forward chaining");
-        let forward_result = self.forward_engine.execute(rules, known_facts, ontology, context)?;
+        let forward_result = self
+            .forward_engine
+            .execute(rules, known_facts, ontology, context)?;
 
         // Phase 2: Backward chaining (if there are specific goals)
         info!("Hybrid reasoning - Phase 2: Backward chaining");
-        let backward_result = self.backward_engine.execute(rules, known_facts, ontology, context)?;
+        let backward_result =
+            self.backward_engine
+                .execute(rules, known_facts, ontology, context)?;
 
         // Combine results
         let mut total_inferences = forward_result.inferences;

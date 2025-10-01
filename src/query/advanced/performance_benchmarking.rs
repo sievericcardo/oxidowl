@@ -4,16 +4,18 @@
 //! and other large real-world ontologies with systematic performance validation
 //! and competitive analysis.
 
-use crate::ontology::{Ontology, ClassExpression, IRI};
-use super::optimizer::{AdvancedQueryOptimizer, AdvancedQueryPlan};
-use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable, QueryConstraints, QueryMetadata};
-use super::industrial::{IndustrialOptimizer, IndustrialClassificationResult};
+use super::conjunctive::{
+    ConjunctiveQuery, QueryAtom, QueryConstraints, QueryMetadata, QueryVariable,
+};
+use super::industrial::{IndustrialClassificationResult, IndustrialOptimizer};
 use super::ml_heuristics::{MLHeuristicsEngine, ReasoningStrategy};
-use std::collections::{HashMap, BTreeMap};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::path::Path;
-use std::fs;
+use super::optimizer::{AdvancedQueryOptimizer, AdvancedQueryPlan};
+use crate::ontology::{ClassExpression, IRI, Ontology};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::path::Path;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Query complexity levels for benchmarking
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -37,19 +39,19 @@ pub enum ComparisonResult {
 pub struct PerformanceBenchmarkingSystem {
     /// Benchmark suite manager
     benchmark_manager: BenchmarkSuiteManager,
-    
+
     /// Performance metrics collector
     metrics_collector: PerformanceMetricsCollector,
-    
+
     /// Comparison engine for competitive analysis
     comparison_engine: CompetitiveComparisonEngine,
-    
+
     /// Report generator
     report_generator: BenchmarkReportGenerator,
-    
+
     /// Regression testing framework
     regression_tester: RegressionTestingFramework,
-    
+
     /// Configuration
     config: BenchmarkingConfig,
 }
@@ -59,31 +61,31 @@ pub struct PerformanceBenchmarkingSystem {
 pub struct BenchmarkingConfig {
     /// Enable SNOMED CT benchmarks
     pub enable_snomed_benchmarks: bool,
-    
+
     /// Enable GALEN benchmarks
     pub enable_galen_benchmarks: bool,
-    
+
     /// Enable Gene Ontology benchmarks
     pub enable_go_benchmarks: bool,
-    
+
     /// Enable synthetic ontology benchmarks
     pub enable_synthetic_benchmarks: bool,
-    
+
     /// Timeout for individual benchmarks (minutes)
     pub benchmark_timeout_minutes: u64,
-    
+
     /// Number of warmup runs before measurement
     pub warmup_runs: usize,
-    
+
     /// Number of measurement runs for averaging
     pub measurement_runs: usize,
-    
+
     /// Enable memory profiling
     pub enable_memory_profiling: bool,
-    
+
     /// Enable CPU profiling
     pub enable_cpu_profiling: bool,
-    
+
     /// Output directory for benchmark results
     pub output_directory: String,
 }
@@ -116,7 +118,7 @@ impl PerformanceBenchmarkingSystem {
             config,
         }
     }
-    
+
     /// Run comprehensive benchmarks against industrial ontologies
     pub async fn run_industrial_benchmarks(
         &mut self,
@@ -125,76 +127,69 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<IndustrialBenchmarkReport, BenchmarkError> {
         println!("Starting industrial benchmarking suite...");
-        
+
         // Ensure output directory exists
         fs::create_dir_all(&self.config.output_directory)
             .map_err(|e| BenchmarkError::IOError(e.to_string()))?;
-        
+
         let benchmark_start = Instant::now();
         let mut benchmark_results = Vec::new();
-        
+
         // SNOMED CT Benchmarks
         if self.config.enable_snomed_benchmarks {
             println!("Running SNOMED CT benchmarks...");
-            let snomed_results = self.benchmark_snomed_ct(
-                optimizer,
-                industrial_optimizer,
-                ml_heuristics,
-            ).await?;
+            let snomed_results = self
+                .benchmark_snomed_ct(optimizer, industrial_optimizer, ml_heuristics)
+                .await?;
             benchmark_results.push(snomed_results);
         }
-        
+
         // GALEN Benchmarks
         if self.config.enable_galen_benchmarks {
             println!("Running GALEN benchmarks...");
-            let galen_results = self.benchmark_galen(
-                optimizer,
-                industrial_optimizer,
-                ml_heuristics,
-            ).await?;
+            let galen_results = self
+                .benchmark_galen(optimizer, industrial_optimizer, ml_heuristics)
+                .await?;
             benchmark_results.push(galen_results);
         }
-        
+
         // Gene Ontology Benchmarks
         if self.config.enable_go_benchmarks {
             println!("Running Gene Ontology benchmarks...");
-            let go_results = self.benchmark_gene_ontology(
-                optimizer,
-                industrial_optimizer,
-                ml_heuristics,
-            ).await?;
+            let go_results = self
+                .benchmark_gene_ontology(optimizer, industrial_optimizer, ml_heuristics)
+                .await?;
             benchmark_results.push(go_results);
         }
-        
+
         // Large Synthetic Ontology Benchmarks
         if self.config.enable_synthetic_benchmarks {
             println!("Running synthetic ontology benchmarks...");
-            let synthetic_results = self.benchmark_large_synthetic(
-                optimizer,
-                industrial_optimizer,
-                ml_heuristics,
-            ).await?;
+            let synthetic_results = self
+                .benchmark_large_synthetic(optimizer, industrial_optimizer, ml_heuristics)
+                .await?;
             benchmark_results.push(synthetic_results);
         }
-        
+
         // Generate comprehensive report
-        let report = self.report_generator.generate_industrial_report(
-            benchmark_results,
-            benchmark_start.elapsed(),
-        )?;
-        
+        let report = self
+            .report_generator
+            .generate_industrial_report(benchmark_results, benchmark_start.elapsed())?;
+
         // Run regression tests
         self.regression_tester.validate_against_baselines(&report)?;
-        
+
         // Save report to file
         self.save_benchmark_report(&report)?;
-        
-        println!("Industrial benchmarking completed in {:.2} seconds", 
-                 benchmark_start.elapsed().as_secs_f64());
-        
+
+        println!(
+            "Industrial benchmarking completed in {:.2} seconds",
+            benchmark_start.elapsed().as_secs_f64()
+        );
+
         Ok(report)
     }
-    
+
     /// Run synthetic benchmarks for testing and validation
     pub async fn run_synthetic_benchmarks(
         &mut self,
@@ -204,31 +199,37 @@ impl PerformanceBenchmarkingSystem {
     ) -> Result<IndustrialBenchmarkReport, BenchmarkError> {
         // For testing purposes, run a simplified version of industrial benchmarks
         println!("Running synthetic benchmarks...");
-        
+
         // Create synthetic test data
         let mut results = Vec::new();
-        
+
         // Synthetic Small Ontology Test
-        let small_ontology = self.benchmark_manager.create_synthetic_ontology("Small", 1000)?;
-        let small_queries = self.benchmark_manager.generate_synthetic_queries(&small_ontology, 10)?;
-        
-        let small_result = self.benchmark_synthetic_ontology(
-            "Synthetic-Small",
-            &small_ontology,
-            &small_queries,
-            optimizer,
-        ).await?;
+        let small_ontology = self
+            .benchmark_manager
+            .create_synthetic_ontology("Small", 1000)?;
+        let small_queries = self
+            .benchmark_manager
+            .generate_synthetic_queries(&small_ontology, 10)?;
+
+        let small_result = self
+            .benchmark_synthetic_ontology(
+                "Synthetic-Small",
+                &small_ontology,
+                &small_queries,
+                optimizer,
+            )
+            .await?;
         results.push(small_result);
-        
+
         // Generate report
         let report = self.report_generator.generate_industrial_report(
             results,
-            Duration::from_secs(1),  // Placeholder duration
+            Duration::from_secs(1), // Placeholder duration
         )?;
-        
+
         Ok(report)
     }
-    
+
     /// Run competitive analysis against baseline results  
     pub fn run_competitive_analysis(
         &mut self,
@@ -236,7 +237,7 @@ impl PerformanceBenchmarkingSystem {
     ) -> Result<CompetitiveAnalysisReport, BenchmarkError> {
         self.generate_competitive_analysis(benchmark_results)
     }
-    
+
     /// Benchmark a synthetic ontology for testing
     async fn benchmark_synthetic_ontology(
         &mut self,
@@ -246,23 +247,27 @@ impl PerformanceBenchmarkingSystem {
         optimizer: &mut AdvancedQueryOptimizer,
     ) -> Result<OntologyBenchmarkResult, BenchmarkError> {
         println!("Benchmarking synthetic ontology: {}", name);
-        
+
         let benchmark_start = Instant::now();
-        
+
         // Classification benchmark
         let classification_start = Instant::now();
         // Placeholder for classification - in a real implementation, this would use ML classification
-        let _classification_result: Result<Vec<(String, String)>, BenchmarkError> = Ok(vec![("placeholder".to_string(), "classification".to_string())]);
+        let _classification_result: Result<Vec<(String, String)>, BenchmarkError> = Ok(vec![(
+            "placeholder".to_string(),
+            "classification".to_string(),
+        )]);
         let classification_time = classification_start.elapsed();
-        
+
         // Query benchmarks
         let mut query_results = Vec::new();
         for (query_id, query) in queries {
             let query_start = Instant::now();
-            let query_result = optimizer.optimize_advanced(query)
-                .map_err(|e| BenchmarkError::SystemError(format!("Query optimization failed: {:?}", e)))?;
+            let query_result = optimizer.optimize_advanced(query).map_err(|e| {
+                BenchmarkError::SystemError(format!("Query optimization failed: {:?}", e))
+            })?;
             let query_time = query_start.elapsed();
-            
+
             query_results.push(QueryBenchmarkResult {
                 query_id: query_id.clone(),
                 query_complexity: 1.0, // Simple placeholder
@@ -275,7 +280,7 @@ impl PerformanceBenchmarkingSystem {
                 measurements: Vec::new(),
             });
         }
-        
+
         Ok(OntologyBenchmarkResult {
             ontology_name: name.to_string(),
             ontology_info: OntologyInfo {
@@ -304,7 +309,7 @@ impl PerformanceBenchmarkingSystem {
             benchmark_timestamp: std::time::SystemTime::now(),
         })
     }
-    
+
     /// Benchmark against SNOMED CT (>300k concepts)
     async fn benchmark_snomed_ct(
         &mut self,
@@ -313,43 +318,40 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<OntologyBenchmarkResult, BenchmarkError> {
         println!("Loading SNOMED CT benchmark suite...");
-        
+
         // Load SNOMED CT ontology (or representative subset)
         let snomed_ontology = self.benchmark_manager.load_snomed_ct_benchmark()?;
         let benchmark_queries = self.benchmark_manager.get_snomed_ct_queries()?;
-        
+
         let mut query_results = Vec::new();
         let benchmark_start = Instant::now();
-        
+
         // Classification benchmark
         println!("Running SNOMED CT classification benchmark...");
-        let classification_metrics = self.benchmark_classification(
-            &snomed_ontology,
-            optimizer,
-            industrial_optimizer,
-        ).await?;
-        
+        let classification_metrics = self
+            .benchmark_classification(&snomed_ontology, optimizer, industrial_optimizer)
+            .await?;
+
         // Query benchmarks
-        println!("Running {} SNOMED CT query benchmarks...", benchmark_queries.len());
+        println!(
+            "Running {} SNOMED CT query benchmarks...",
+            benchmark_queries.len()
+        );
         for (i, (query_id, query)) in benchmark_queries.iter().enumerate() {
             if i % 10 == 0 {
                 println!("  Progress: {}/{}", i + 1, benchmark_queries.len());
             }
-            
-            let query_metrics = self.benchmark_query(
-                query_id,
-                query,
-                &snomed_ontology,
-                optimizer,
-                ml_heuristics,
-            ).await?;
-            
+
+            let query_metrics = self
+                .benchmark_query(query_id, query, &snomed_ontology, optimizer, ml_heuristics)
+                .await?;
+
             query_results.push(query_metrics);
         }
-        
+
         // Collect system metrics
         let system_metrics = self.metrics_collector.collect_system_metrics();
-        
+
         Ok(OntologyBenchmarkResult {
             ontology_name: "SNOMED CT".to_string(),
             ontology_info: OntologyInfo {
@@ -366,7 +368,7 @@ impl PerformanceBenchmarkingSystem {
             benchmark_timestamp: SystemTime::now(),
         })
     }
-    
+
     /// Benchmark against GALEN medical ontology
     async fn benchmark_galen(
         &mut self,
@@ -375,34 +377,28 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<OntologyBenchmarkResult, BenchmarkError> {
         println!("Loading GALEN benchmark suite...");
-        
+
         let galen_ontology = self.benchmark_manager.load_galen_benchmark()?;
         let benchmark_queries = self.benchmark_manager.get_galen_queries()?;
-        
+
         let benchmark_start = Instant::now();
-        
+
         // Classification benchmark
-        let classification_metrics = self.benchmark_classification(
-            &galen_ontology,
-            optimizer,
-            industrial_optimizer,
-        ).await?;
-        
+        let classification_metrics = self
+            .benchmark_classification(&galen_ontology, optimizer, industrial_optimizer)
+            .await?;
+
         // Query benchmarks
         let mut query_results = Vec::new();
         for (query_id, query) in benchmark_queries.iter() {
-            let query_metrics = self.benchmark_query(
-                query_id,
-                query,
-                &galen_ontology,
-                optimizer,
-                ml_heuristics,
-            ).await?;
+            let query_metrics = self
+                .benchmark_query(query_id, query, &galen_ontology, optimizer, ml_heuristics)
+                .await?;
             query_results.push(query_metrics);
         }
-        
+
         let system_metrics = self.metrics_collector.collect_system_metrics();
-        
+
         Ok(OntologyBenchmarkResult {
             ontology_name: "GALEN".to_string(),
             ontology_info: OntologyInfo {
@@ -419,7 +415,7 @@ impl PerformanceBenchmarkingSystem {
             benchmark_timestamp: SystemTime::now(),
         })
     }
-    
+
     /// Benchmark against Gene Ontology
     async fn benchmark_gene_ontology(
         &mut self,
@@ -428,34 +424,28 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<OntologyBenchmarkResult, BenchmarkError> {
         println!("Loading Gene Ontology benchmark suite...");
-        
+
         let go_ontology = self.benchmark_manager.load_gene_ontology_benchmark()?;
         let benchmark_queries = self.benchmark_manager.get_gene_ontology_queries()?;
-        
+
         let benchmark_start = Instant::now();
-        
+
         // Classification benchmark
-        let classification_metrics = self.benchmark_classification(
-            &go_ontology,
-            optimizer,
-            industrial_optimizer,
-        ).await?;
-        
+        let classification_metrics = self
+            .benchmark_classification(&go_ontology, optimizer, industrial_optimizer)
+            .await?;
+
         // Query benchmarks
         let mut query_results = Vec::new();
         for (query_id, query) in benchmark_queries.iter() {
-            let query_metrics = self.benchmark_query(
-                query_id,
-                query,
-                &go_ontology,
-                optimizer,
-                ml_heuristics,
-            ).await?;
+            let query_metrics = self
+                .benchmark_query(query_id, query, &go_ontology, optimizer, ml_heuristics)
+                .await?;
             query_results.push(query_metrics);
         }
-        
+
         let system_metrics = self.metrics_collector.collect_system_metrics();
-        
+
         Ok(OntologyBenchmarkResult {
             ontology_name: "Gene Ontology".to_string(),
             ontology_info: OntologyInfo {
@@ -472,7 +462,7 @@ impl PerformanceBenchmarkingSystem {
             benchmark_timestamp: SystemTime::now(),
         })
     }
-    
+
     /// Benchmark against large synthetic ontologies
     async fn benchmark_large_synthetic(
         &mut self,
@@ -481,34 +471,38 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<OntologyBenchmarkResult, BenchmarkError> {
         println!("Generating large synthetic ontology...");
-        
-        let synthetic_ontology = self.benchmark_manager.generate_large_synthetic_ontology(100_000)?;
-        let benchmark_queries = self.benchmark_manager.generate_synthetic_queries(&synthetic_ontology, 50)?;
-        
+
+        let synthetic_ontology = self
+            .benchmark_manager
+            .generate_large_synthetic_ontology(100_000)?;
+        let benchmark_queries = self
+            .benchmark_manager
+            .generate_synthetic_queries(&synthetic_ontology, 50)?;
+
         let benchmark_start = Instant::now();
-        
+
         // Classification benchmark
-        let classification_metrics = self.benchmark_classification(
-            &synthetic_ontology,
-            optimizer,
-            industrial_optimizer,
-        ).await?;
-        
+        let classification_metrics = self
+            .benchmark_classification(&synthetic_ontology, optimizer, industrial_optimizer)
+            .await?;
+
         // Query benchmarks
         let mut query_results = Vec::new();
         for (i, (query_id, query)) in benchmark_queries.iter().enumerate() {
-            let query_metrics = self.benchmark_query(
-                query_id,
-                query,
-                &synthetic_ontology,
-                optimizer,
-                ml_heuristics,
-            ).await?;
+            let query_metrics = self
+                .benchmark_query(
+                    query_id,
+                    query,
+                    &synthetic_ontology,
+                    optimizer,
+                    ml_heuristics,
+                )
+                .await?;
             query_results.push(query_metrics);
         }
-        
+
         let system_metrics = self.metrics_collector.collect_system_metrics();
-        
+
         Ok(OntologyBenchmarkResult {
             ontology_name: "Large Synthetic".to_string(),
             ontology_info: OntologyInfo {
@@ -525,7 +519,7 @@ impl PerformanceBenchmarkingSystem {
             benchmark_timestamp: SystemTime::now(),
         })
     }
-    
+
     /// Benchmark classification performance
     async fn benchmark_classification(
         &mut self,
@@ -534,42 +528,49 @@ impl PerformanceBenchmarkingSystem {
         industrial_optimizer: &mut IndustrialOptimizer,
     ) -> Result<ClassificationMetrics, BenchmarkError> {
         println!("  Benchmarking classification...");
-        
+
         let mut measurements = Vec::new();
-        
+
         // Warmup runs
         for i in 0..self.config.warmup_runs {
             println!("    Warmup run {}/{}", i + 1, self.config.warmup_runs);
-            let _ = self.run_classification_benchmark(ontology, optimizer, industrial_optimizer).await?;
+            let _ = self
+                .run_classification_benchmark(ontology, optimizer, industrial_optimizer)
+                .await?;
         }
-        
+
         // Measurement runs
         for i in 0..self.config.measurement_runs {
-            println!("    Measurement run {}/{}", i + 1, self.config.measurement_runs);
-            let metrics = self.run_classification_benchmark(ontology, optimizer, industrial_optimizer).await?;
+            println!(
+                "    Measurement run {}/{}",
+                i + 1,
+                self.config.measurement_runs
+            );
+            let metrics = self
+                .run_classification_benchmark(ontology, optimizer, industrial_optimizer)
+                .await?;
             measurements.push(metrics);
         }
-        
+
         // Calculate statistics
-        let execution_times: Vec<f64> = measurements.iter()
+        let execution_times: Vec<f64> = measurements
+            .iter()
             .map(|m| m.execution_time.as_secs_f64())
             .collect();
-        
-        let memory_usages: Vec<f64> = measurements.iter()
-            .map(|m| m.peak_memory_mb)
-            .collect();
-        
+
+        let memory_usages: Vec<f64> = measurements.iter().map(|m| m.peak_memory_mb).collect();
+
         Ok(ClassificationMetrics {
             classification_time: Duration::from_secs_f64(
-                execution_times.iter().sum::<f64>() / execution_times.len() as f64
+                execution_times.iter().sum::<f64>() / execution_times.len() as f64,
             ),
             memory_usage: memory_usages.iter().sum::<f64>() / memory_usages.len() as f64,
             cpu_utilization: 75.0, // Placeholder
-            cache_hit_rate: 0.8, // Placeholder
+            cache_hit_rate: 0.8,   // Placeholder
             expansion_rounds: measurements.len(),
         })
     }
-    
+
     /// Run single classification benchmark
     async fn run_classification_benchmark(
         &mut self,
@@ -579,46 +580,42 @@ impl PerformanceBenchmarkingSystem {
     ) -> Result<SingleClassificationMeasurement, BenchmarkError> {
         let start_time = Instant::now();
         let start_memory = self.metrics_collector.get_memory_usage();
-        
+
         // Run classification with timeout
         let result = tokio::time::timeout(
             Duration::from_secs(self.config.benchmark_timeout_minutes * 60),
             async {
                 industrial_optimizer.optimize_large_ontology_classification(ontology, optimizer)
-            }
-        ).await;
-        
+            },
+        )
+        .await;
+
         let execution_time = start_time.elapsed();
-        let peak_memory_mb = (self.metrics_collector.get_memory_usage() - start_memory) / 1_048_576.0;
-        
+        let peak_memory_mb =
+            (self.metrics_collector.get_memory_usage() - start_memory) / 1_048_576.0;
+
         match result {
-            Ok(Ok(_classification_result)) => {
-                Ok(SingleClassificationMeasurement {
-                    execution_time,
-                    peak_memory_mb,
-                    success: true,
-                    error_message: None,
-                })
-            },
-            Ok(Err(e)) => {
-                Ok(SingleClassificationMeasurement {
-                    execution_time,
-                    peak_memory_mb,
-                    success: false,
-                    error_message: Some(format!("Classification error: {:?}", e)),
-                })
-            },
-            Err(_) => {
-                Ok(SingleClassificationMeasurement {
-                    execution_time: Duration::from_secs(self.config.benchmark_timeout_minutes * 60),
-                    peak_memory_mb,
-                    success: false,
-                    error_message: Some("Timeout".to_string()),
-                })
-            },
+            Ok(Ok(_classification_result)) => Ok(SingleClassificationMeasurement {
+                execution_time,
+                peak_memory_mb,
+                success: true,
+                error_message: None,
+            }),
+            Ok(Err(e)) => Ok(SingleClassificationMeasurement {
+                execution_time,
+                peak_memory_mb,
+                success: false,
+                error_message: Some(format!("Classification error: {:?}", e)),
+            }),
+            Err(_) => Ok(SingleClassificationMeasurement {
+                execution_time: Duration::from_secs(self.config.benchmark_timeout_minutes * 60),
+                peak_memory_mb,
+                success: false,
+                error_message: Some("Timeout".to_string()),
+            }),
         }
     }
-    
+
     /// Benchmark individual query performance
     async fn benchmark_query(
         &mut self,
@@ -629,44 +626,53 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<QueryBenchmarkResult, BenchmarkError> {
         let mut measurements = Vec::new();
-        
+
         // Warmup runs
         for _ in 0..self.config.warmup_runs {
-            let _ = self.run_query_benchmark(query, ontology, optimizer, ml_heuristics).await?;
+            let _ = self
+                .run_query_benchmark(query, ontology, optimizer, ml_heuristics)
+                .await?;
         }
-        
+
         // Measurement runs
         for _ in 0..self.config.measurement_runs {
-            let metrics = self.run_query_benchmark(query, ontology, optimizer, ml_heuristics).await?;
+            let metrics = self
+                .run_query_benchmark(query, ontology, optimizer, ml_heuristics)
+                .await?;
             measurements.push(metrics);
         }
-        
+
         // Calculate statistics
-        let execution_times: Vec<f64> = measurements.iter()
+        let execution_times: Vec<f64> = measurements
+            .iter()
             .map(|m| m.execution_time.as_secs_f64())
             .collect();
-        
+
         Ok(QueryBenchmarkResult {
             query_id: query_id.to_string(),
             query_complexity: self.calculate_query_complexity(query),
             average_execution_time: Duration::from_secs_f64(
-                execution_times.iter().sum::<f64>() / execution_times.len() as f64
+                execution_times.iter().sum::<f64>() / execution_times.len() as f64,
             ),
             min_execution_time: Duration::from_secs_f64(
-                execution_times.iter().fold(f64::INFINITY, |a, &b| a.min(b))
+                execution_times.iter().fold(f64::INFINITY, |a, &b| a.min(b)),
             ),
             max_execution_time: Duration::from_secs_f64(
-                execution_times.iter().fold(0.0, |a, &b| a.max(b))
+                execution_times.iter().fold(0.0, |a, &b| a.max(b)),
             ),
-            success_rate: measurements.iter().filter(|m| m.success).count() as f64 / measurements.len() as f64,
-            average_result_size: measurements.iter().map(|m| m.result_size).sum::<usize>() / measurements.len(),
-            optimization_effectiveness: measurements.iter()
+            success_rate: measurements.iter().filter(|m| m.success).count() as f64
+                / measurements.len() as f64,
+            average_result_size: measurements.iter().map(|m| m.result_size).sum::<usize>()
+                / measurements.len(),
+            optimization_effectiveness: measurements
+                .iter()
                 .map(|m| m.optimization_effectiveness)
-                .sum::<f64>() / measurements.len() as f64,
+                .sum::<f64>()
+                / measurements.len() as f64,
             measurements,
         })
     }
-    
+
     /// Run single query benchmark
     async fn run_query_benchmark(
         &mut self,
@@ -676,66 +682,64 @@ impl PerformanceBenchmarkingSystem {
         ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<SingleQueryMeasurement, BenchmarkError> {
         let start_time = Instant::now();
-        
+
         // Select reasoning strategy using ML heuristics
-        let strategy = ml_heuristics.select_reasoning_strategy(query, ontology)
+        let strategy = ml_heuristics
+            .select_reasoning_strategy(query, ontology)
             .unwrap_or(ReasoningStrategy::StandardTableau);
-        
+
         // Run query optimization with timeout
         let result = tokio::time::timeout(
             Duration::from_secs(60), // 1 minute timeout for queries
-            async {
-                optimizer.optimize_advanced(query)
-            }
-        ).await;
-        
+            async { optimizer.optimize_advanced(query) },
+        )
+        .await;
+
         let execution_time = start_time.elapsed();
-        
+
         match result {
-            Ok(Ok(query_plan)) => {
-                Ok(SingleQueryMeasurement {
-                    execution_time,
-                    success: true,
-                    result_size: query_plan.predicted_performance.estimated_result_size,
-                    optimization_effectiveness: query_plan.confidence_scores.overall_confidence,
-                    strategy_used: strategy,
-                    error_message: None,
-                })
-            },
-            Ok(Err(e)) => {
-                Ok(SingleQueryMeasurement {
-                    execution_time,
-                    success: false,
-                    result_size: 0,
-                    optimization_effectiveness: 0.0,
-                    strategy_used: strategy,
-                    error_message: Some(format!("Query error: {:?}", e)),
-                })
-            },
-            Err(_) => {
-                Ok(SingleQueryMeasurement {
-                    execution_time: Duration::from_secs(60),
-                    success: false,
-                    result_size: 0,
-                    optimization_effectiveness: 0.0,
-                    strategy_used: strategy,
-                    error_message: Some("Timeout".to_string()),
-                })
-            },
+            Ok(Ok(query_plan)) => Ok(SingleQueryMeasurement {
+                execution_time,
+                success: true,
+                result_size: query_plan.predicted_performance.estimated_result_size,
+                optimization_effectiveness: query_plan.confidence_scores.overall_confidence,
+                strategy_used: strategy,
+                error_message: None,
+            }),
+            Ok(Err(e)) => Ok(SingleQueryMeasurement {
+                execution_time,
+                success: false,
+                result_size: 0,
+                optimization_effectiveness: 0.0,
+                strategy_used: strategy,
+                error_message: Some(format!("Query error: {:?}", e)),
+            }),
+            Err(_) => Ok(SingleQueryMeasurement {
+                execution_time: Duration::from_secs(60),
+                success: false,
+                result_size: 0,
+                optimization_effectiveness: 0.0,
+                strategy_used: strategy,
+                error_message: Some("Timeout".to_string()),
+            }),
         }
     }
-    
+
     /// Generate competitive comparison report
     pub fn generate_competitive_analysis(
         &mut self,
         benchmark_results: &IndustrialBenchmarkReport,
     ) -> Result<CompetitiveAnalysisReport, BenchmarkError> {
         // Compare against known baselines from literature
-        let baseline_comparisons = self.comparison_engine.compare_against_baselines(benchmark_results)?;
-        
+        let baseline_comparisons = self
+            .comparison_engine
+            .compare_against_baselines(benchmark_results)?;
+
         // Generate improvement recommendations
-        let recommendations = self.comparison_engine.generate_improvement_recommendations(benchmark_results)?;
-        
+        let recommendations = self
+            .comparison_engine
+            .generate_improvement_recommendations(benchmark_results)?;
+
         Ok(CompetitiveAnalysisReport {
             baseline_comparisons,
             performance_rankings: self.calculate_performance_rankings(benchmark_results)?,
@@ -745,73 +749,86 @@ impl PerformanceBenchmarkingSystem {
             market_position_analysis: self.analyze_market_position(benchmark_results)?,
         })
     }
-    
+
     /// Save benchmark report to file
-    fn save_benchmark_report(&self, report: &IndustrialBenchmarkReport) -> Result<(), BenchmarkError> {
-        let timestamp = report.system_info.benchmark_timestamp
+    fn save_benchmark_report(
+        &self,
+        report: &IndustrialBenchmarkReport,
+    ) -> Result<(), BenchmarkError> {
+        let timestamp = report
+            .system_info
+            .benchmark_timestamp
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
-        let filename = format!("{}/industrial_benchmark_report_{}.json", 
-                              self.config.output_directory, timestamp);
-        
+
+        let filename = format!(
+            "{}/industrial_benchmark_report_{}.json",
+            self.config.output_directory, timestamp
+        );
+
         let json_content = serde_json::to_string_pretty(report)
             .map_err(|e| BenchmarkError::SerializationError(e.to_string()))?;
-        
-        fs::write(filename, json_content)
-            .map_err(|e| BenchmarkError::IOError(e.to_string()))?;
-        
-        println!("Benchmark report saved to: {}", self.config.output_directory);
-        
+
+        fs::write(filename, json_content).map_err(|e| BenchmarkError::IOError(e.to_string()))?;
+
+        println!(
+            "Benchmark report saved to: {}",
+            self.config.output_directory
+        );
+
         Ok(())
     }
-    
+
     // Helper methods
     fn estimate_ontology_complexity(&self, ontology: &Ontology) -> f64 {
         let concept_count = ontology.classes().len() as f64;
         let property_count = ontology.object_properties().len() as f64;
         let axiom_count = ontology.axioms().len() as f64;
-        
+
         (concept_count * property_count.ln() * axiom_count.ln()) / 1000.0
     }
-    
+
     fn calculate_query_complexity(&self, query: &ConjunctiveQuery) -> f64 {
         let atom_count = query.body_atoms.len() as f64;
         let variable_count = self.count_unique_variables(query) as f64;
-        
+
         atom_count * variable_count
     }
-    
+
     fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
         // Placeholder implementation
         query.answer_variables.len()
     }
-    
+
     fn calculate_stddev(&self, values: &[f64]) -> f64 {
         if values.is_empty() {
             return 0.0;
         }
-        
+
         let mean = values.iter().sum::<f64>() / values.len() as f64;
-        let variance = values.iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f64>() / values.len() as f64;
-        
+        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
+
         variance.sqrt()
     }
-    
-    fn calculate_performance_rankings(&self, _report: &IndustrialBenchmarkReport) -> Result<PerformanceRankings, BenchmarkError> {
+
+    fn calculate_performance_rankings(
+        &self,
+        _report: &IndustrialBenchmarkReport,
+    ) -> Result<PerformanceRankings, BenchmarkError> {
         Ok(PerformanceRankings {
-            classification_ranking: 2, // Example: 2nd place
+            classification_ranking: 2,    // Example: 2nd place
             query_performance_ranking: 1, // Example: 1st place
             memory_efficiency_ranking: 3,
             overall_ranking: 2,
             ranking_out_of: 10, // Total reasoners compared
         })
     }
-    
-    fn analyze_market_position(&self, _report: &IndustrialBenchmarkReport) -> Result<MarketPositionAnalysis, BenchmarkError> {
+
+    fn analyze_market_position(
+        &self,
+        _report: &IndustrialBenchmarkReport,
+    ) -> Result<MarketPositionAnalysis, BenchmarkError> {
         Ok(MarketPositionAnalysis {
             strengths: vec![
                 "Excellent memory safety".to_string(),
@@ -975,11 +992,11 @@ pub struct BaselineComparison {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ComparisonSignificance {
-    MajorImprovement,      // >50% better
-    MinorImprovement,      // 10-50% better  
-    Comparable,            // Within 10%
-    MinorRegression,       // 10-50% worse
-    MajorRegression,       // >50% worse
+    MajorImprovement, // >50% better
+    MinorImprovement, // 10-50% better
+    Comparable,       // Within 10%
+    MinorRegression,  // 10-50% worse
+    MajorRegression,  // >50% worse
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1067,85 +1084,112 @@ pub struct BenchmarkSuiteManager {
 
 impl BenchmarkSuiteManager {
     fn new(config: &BenchmarkingConfig) -> Self {
-        Self { config: config.clone() }
+        Self {
+            config: config.clone(),
+        }
     }
-    
+
     fn load_snomed_ct_benchmark(&self) -> Result<Ontology, BenchmarkError> {
         // Placeholder: Load SNOMED CT subset or mock data
         println!("Loading SNOMED CT benchmark data...");
         self.create_mock_large_ontology(300_000, "SNOMED CT")
     }
-    
+
     fn load_galen_benchmark(&self) -> Result<Ontology, BenchmarkError> {
         // Placeholder: Load GALEN or mock data
         println!("Loading GALEN benchmark data...");
         self.create_mock_large_ontology(10_000, "GALEN")
     }
-    
+
     fn load_gene_ontology_benchmark(&self) -> Result<Ontology, BenchmarkError> {
         // Placeholder: Load Gene Ontology or mock data
         println!("Loading Gene Ontology benchmark data...");
         self.create_mock_large_ontology(50_000, "Gene Ontology")
     }
-    
-    fn generate_large_synthetic_ontology(&self, concept_count: usize) -> Result<Ontology, BenchmarkError> {
-        println!("Generating synthetic ontology with {} concepts...", concept_count);
+
+    fn generate_large_synthetic_ontology(
+        &self,
+        concept_count: usize,
+    ) -> Result<Ontology, BenchmarkError> {
+        println!(
+            "Generating synthetic ontology with {} concepts...",
+            concept_count
+        );
         self.create_mock_large_ontology(concept_count, "Synthetic")
     }
-    
-    fn create_mock_large_ontology(&self, _concept_count: usize, _name: &str) -> Result<Ontology, BenchmarkError> {
+
+    fn create_mock_large_ontology(
+        &self,
+        _concept_count: usize,
+        _name: &str,
+    ) -> Result<Ontology, BenchmarkError> {
         // Placeholder: Create mock ontology
         // In a real implementation, this would create or load actual ontology data
         let mut ontology = Ontology::new();
         ontology.iri = Some(IRI::new("http://example.org/test"));
         Ok(ontology)
     }
-    
+
     fn get_snomed_ct_queries(&self) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
         self.generate_benchmark_queries(50)
     }
-    
+
     fn get_galen_queries(&self) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
         self.generate_benchmark_queries(20)
     }
-    
+
     fn get_gene_ontology_queries(&self) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
         self.generate_benchmark_queries(30)
     }
-    
-    fn generate_benchmark_queries(&self, count: usize) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
+
+    fn generate_benchmark_queries(
+        &self,
+        count: usize,
+    ) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
         let mut queries = Vec::new();
-        
+
         for i in 0..count {
             let query_id = format!("query_{}", i);
             let query = ConjunctiveQuery {
                 answer_variables: vec![QueryVariable::individual("x")],
-                body_atoms: vec![
-                    QueryAtom::ClassAtom {
-                        variable: QueryVariable::individual("x"),
-                        class_expression: ClassExpression::class(IRI::new(&format!("http://example.org/Class{}", i))),
-                    }
-                ],
+                body_atoms: vec![QueryAtom::ClassAtom {
+                    variable: QueryVariable::individual("x"),
+                    class_expression: ClassExpression::class(IRI::new(&format!(
+                        "http://example.org/Class{}",
+                        i
+                    ))),
+                }],
                 constraints: QueryConstraints::default(),
                 metadata: QueryMetadata::default(),
             };
             queries.push((query_id, query));
         }
-        
+
         Ok(queries)
     }
-    
+
     /// Create synthetic ontology for testing
-    fn create_synthetic_ontology(&self, name: &str, concept_count: usize) -> Result<Ontology, BenchmarkError> {
-        println!("Creating synthetic ontology '{}' with {} concepts", name, concept_count);
+    fn create_synthetic_ontology(
+        &self,
+        name: &str,
+        concept_count: usize,
+    ) -> Result<Ontology, BenchmarkError> {
+        println!(
+            "Creating synthetic ontology '{}' with {} concepts",
+            name, concept_count
+        );
         self.create_mock_large_ontology(concept_count, name)
     }
-    
+
     /// Generate synthetic queries for an ontology
-    fn generate_synthetic_queries(&self, ontology: &Ontology, query_count: usize) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
+    fn generate_synthetic_queries(
+        &self,
+        ontology: &Ontology,
+        query_count: usize,
+    ) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
         println!("Generating {} synthetic queries", query_count);
         let mut queries = Vec::new();
-        
+
         for i in 0..query_count {
             let query = ConjunctiveQuery {
                 answer_variables: vec![QueryVariable::new(format!("x{}", i))],
@@ -1155,7 +1199,7 @@ impl BenchmarkSuiteManager {
             };
             queries.push((format!("synthetic_query_{}", i), query));
         }
-        
+
         Ok(queries)
     }
 }
@@ -1173,12 +1217,12 @@ impl PerformanceMetricsCollector {
             enable_cpu_profiling: config.enable_cpu_profiling,
         }
     }
-    
+
     fn get_memory_usage(&self) -> f64 {
         // Placeholder: Get actual memory usage
         1024.0 * 1024.0 * 512.0 // 512 MB
     }
-    
+
     fn collect_system_metrics(&self) -> SystemMetrics {
         SystemMetrics {
             memory_peak: 1024.0 * 1024.0 * 512.0, // 512 MB
@@ -1194,9 +1238,14 @@ impl PerformanceMetricsCollector {
 pub struct CompetitiveComparisonEngine;
 
 impl CompetitiveComparisonEngine {
-    fn new() -> Self { Self }
-    
-    fn compare_against_baselines(&self, _report: &IndustrialBenchmarkReport) -> Result<Vec<BaselineComparison>, BenchmarkError> {
+    fn new() -> Self {
+        Self
+    }
+
+    fn compare_against_baselines(
+        &self,
+        _report: &IndustrialBenchmarkReport,
+    ) -> Result<Vec<BaselineComparison>, BenchmarkError> {
         Ok(vec![
             BaselineComparison {
                 competitor_name: "HermiT".to_string(),
@@ -1216,8 +1265,11 @@ impl CompetitiveComparisonEngine {
             },
         ])
     }
-    
-    fn generate_improvement_recommendations(&self, _report: &IndustrialBenchmarkReport) -> Result<ImprovementRecommendations, BenchmarkError> {
+
+    fn generate_improvement_recommendations(
+        &self,
+        _report: &IndustrialBenchmarkReport,
+    ) -> Result<ImprovementRecommendations, BenchmarkError> {
         Ok(ImprovementRecommendations {
             improvement_areas: vec![
                 "Query optimization for complex joins".to_string(),
@@ -1254,7 +1306,7 @@ impl BenchmarkReportGenerator {
             output_directory: config.output_directory.clone(),
         }
     }
-    
+
     fn generate_industrial_report(
         &self,
         ontology_results: Vec<OntologyBenchmarkResult>,
@@ -1269,11 +1321,11 @@ impl BenchmarkReportGenerator {
             benchmark_timestamp: SystemTime::now(),
             benchmark_duration: total_duration,
         };
-        
+
         let aggregate_metrics = self.calculate_aggregate_metrics(&ontology_results, total_duration);
         let performance_trends = self.calculate_performance_trends(&ontology_results);
         let regression_test_results = self.generate_regression_results();
-        
+
         Ok(IndustrialBenchmarkReport {
             system_info,
             ontology_results,
@@ -1283,7 +1335,7 @@ impl BenchmarkReportGenerator {
             competitive_analysis: None, // Will be filled separately
         })
     }
-    
+
     fn calculate_aggregate_metrics(
         &self,
         results: &[OntologyBenchmarkResult],
@@ -1291,26 +1343,33 @@ impl BenchmarkReportGenerator {
     ) -> AggregateMetrics {
         let total_queries: usize = results.iter().map(|r| r.query_results.len()).sum();
         let avg_classification_time = Duration::from_secs_f64(
-            results.iter()
+            results
+                .iter()
                 .map(|r| r.classification_metrics.classification_time.as_secs_f64())
-                .sum::<f64>() / results.len() as f64
+                .sum::<f64>()
+                / results.len() as f64,
         );
-        
+
         let avg_query_time = Duration::from_secs_f64(
-            results.iter()
+            results
+                .iter()
                 .flat_map(|r| &r.query_results)
                 .map(|q| q.average_execution_time.as_secs_f64())
-                .sum::<f64>() / total_queries as f64
+                .sum::<f64>()
+                / total_queries as f64,
         );
-        
-        let overall_success_rate = results.iter()
+
+        let overall_success_rate = results
+            .iter()
             .map(|r| r.classification_metrics.cache_hit_rate) // Using cache_hit_rate as proxy for success
-            .sum::<f64>() / results.len() as f64;
-        
-        let peak_memory = results.iter()
+            .sum::<f64>()
+            / results.len() as f64;
+
+        let peak_memory = results
+            .iter()
             .map(|r| r.classification_metrics.memory_usage)
             .fold(0.0, f64::max);
-        
+
         AggregateMetrics {
             total_ontologies_tested: results.len(),
             total_queries_tested: total_queries,
@@ -1321,8 +1380,11 @@ impl BenchmarkReportGenerator {
             total_benchmark_time: total_duration,
         }
     }
-    
-    fn calculate_performance_trends(&self, _results: &[OntologyBenchmarkResult]) -> PerformanceTrends {
+
+    fn calculate_performance_trends(
+        &self,
+        _results: &[OntologyBenchmarkResult],
+    ) -> PerformanceTrends {
         // Placeholder implementation
         PerformanceTrends {
             classification_time_trend: vec![60.0, 55.0, 50.0, 45.0],
@@ -1331,7 +1393,7 @@ impl BenchmarkReportGenerator {
             success_rate_trend: vec![0.85, 0.88, 0.92, 0.95],
         }
     }
-    
+
     fn generate_regression_results(&self) -> RegressionTestResults {
         RegressionTestResults {
             baseline_comparison: BaselineComparison {
@@ -1343,14 +1405,12 @@ impl BenchmarkReportGenerator {
                 significance: ComparisonSignificance::MinorImprovement,
             },
             performance_regressions: Vec::new(),
-            performance_improvements: vec![
-                PerformanceImprovement {
-                    metric_name: "Classification Time".to_string(),
-                    previous_value: 60.0,
-                    current_value: 45.0,
-                    improvement_percentage: 25.0,
-                }
-            ],
+            performance_improvements: vec![PerformanceImprovement {
+                metric_name: "Classification Time".to_string(),
+                previous_value: 60.0,
+                current_value: 45.0,
+                improvement_percentage: 25.0,
+            }],
             overall_regression_status: RegressionStatus::NoRegressions,
         }
     }
@@ -1360,9 +1420,14 @@ impl BenchmarkReportGenerator {
 pub struct RegressionTestingFramework;
 
 impl RegressionTestingFramework {
-    fn new() -> Self { Self }
-    
-    fn validate_against_baselines(&self, _report: &IndustrialBenchmarkReport) -> Result<(), BenchmarkError> {
+    fn new() -> Self {
+        Self
+    }
+
+    fn validate_against_baselines(
+        &self,
+        _report: &IndustrialBenchmarkReport,
+    ) -> Result<(), BenchmarkError> {
         // Placeholder: Validate against historical baselines
         println!("Validating against regression baselines...");
         Ok(())

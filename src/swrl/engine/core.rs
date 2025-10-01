@@ -16,8 +16,8 @@ use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
-use super::inference::{ForwardChaining, BackwardChaining, HybridReasoning};
-use super::validation::{RuleValidator, GoalChecker};
+use super::inference::{BackwardChaining, ForwardChaining, HybridReasoning};
+use super::validation::{GoalChecker, RuleValidator};
 
 /// SWRL Rule Engine
 ///
@@ -66,10 +66,10 @@ pub struct SWRLRuleEngine {
 
     /// Goal checking engine
     pub(super) goal_checker: GoalChecker,
-    
+
     /// Cached rules from ontology
     pub(super) rules: Vec<SWRLRule>,
-    
+
     /// Current execution context
     pub(super) context: SWRLExecutionContext,
 }
@@ -162,7 +162,7 @@ impl SWRLRuleEngine {
                         &self.rules,
                         &mut known_facts,
                         &temp_ontology,
-                        &mut self.context
+                        &mut self.context,
                     );
                     self.forward_chaining = forward_chaining;
                     result
@@ -181,7 +181,7 @@ impl SWRLRuleEngine {
                         &self.rules,
                         &mut known_facts,
                         &temp_ontology,
-                        &mut self.context
+                        &mut self.context,
                     );
                     self.backward_chaining = backward_chaining;
                     result
@@ -200,7 +200,7 @@ impl SWRLRuleEngine {
                         &self.rules,
                         &mut known_facts,
                         &temp_ontology,
-                        &mut self.context
+                        &mut self.context,
                     );
                     self.hybrid_reasoning = hybrid_reasoning;
                     result
@@ -236,7 +236,7 @@ impl SWRLRuleEngine {
                 &mut known_facts,
                 &temp_ontology,
                 &mut self.context,
-                goal
+                goal,
             );
             self.backward_chaining = backward_chaining;
             result

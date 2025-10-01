@@ -6,12 +6,12 @@
 //! - Advanced indexing strategies for SROIQV(D) constructs
 //! - Real-time performance monitoring and optimization
 
-use crate::ontology::{Ontology, ClassExpression, ObjectPropertyExpression, Individual};
-use crate::reasoning::ReasoningService;
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::optimization::{QueryOptimizer, QueryPlan, ExecutionStrategy, OptimizationError};
-use super::ml_models::{LinearRegressionModel, NeuralNetworkModel, EnsembleModel};
-use std::collections::{HashMap, HashSet, BTreeMap};
+use super::ml_models::{EnsembleModel, LinearRegressionModel, NeuralNetworkModel};
+use super::optimization::{ExecutionStrategy, OptimizationError, QueryOptimizer, QueryPlan};
+use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::reasoning::ReasoningService;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -19,16 +19,16 @@ use std::time::{Duration, Instant};
 pub struct AdvancedQueryOptimizer {
     /// Base optimizer for backward compatibility
     base_optimizer: QueryOptimizer,
-    
+
     /// ML-based performance predictor
     performance_predictor: Arc<Mutex<PerformancePredictor>>,
-    
+
     /// Intelligent indexing system
     indexing_system: Arc<Mutex<IntelligentIndexingSystem>>,
-    
+
     /// Performance monitoring system
     performance_monitor: Arc<Mutex<PerformanceMonitor>>,
-    
+
     /// Configuration for advanced features
     config: AdvancedOptimizerConfig,
 }
@@ -38,28 +38,28 @@ pub struct AdvancedQueryOptimizer {
 pub struct AdvancedOptimizerConfig {
     /// Enable ML-driven optimization
     pub enable_ml_optimization: bool,
-    
+
     /// Enable adaptive query planning
     pub enable_adaptive_planning: bool,
-    
+
     /// Enable intelligent indexing
     pub enable_intelligent_indexing: bool,
-    
+
     /// Enable real-time performance monitoring
     pub enable_performance_monitoring: bool,
-    
+
     /// Learning rate for ML models
     pub learning_rate: f64,
-    
+
     /// Maximum training iterations for ML models
     pub max_training_iterations: usize,
-    
+
     /// Performance history window size
     pub performance_window_size: usize,
-    
+
     /// Index rebuilding threshold
     pub index_rebuild_threshold: f64,
-    
+
     /// Enable query result caching
     pub enable_query_caching: bool,
 }
@@ -69,13 +69,13 @@ pub struct AdvancedOptimizerConfig {
 pub struct PerformancePredictor {
     /// Query feature extractors
     feature_extractors: Vec<Box<dyn QueryFeatureExtractor>>,
-    
+
     /// Performance prediction models
     models: HashMap<String, Box<dyn PerformancePredictionModel>>,
-    
+
     /// Training data for continuous learning
     training_data: Vec<QueryPerformanceDataPoint>,
-    
+
     /// Model accuracy metrics
     accuracy_metrics: HashMap<String, AccuracyMetrics>,
 }
@@ -85,19 +85,19 @@ pub struct PerformancePredictor {
 pub struct IntelligentIndexingSystem {
     /// Concept indices for class expressions
     concept_indices: HashMap<ClassExpression, ConceptIndex>,
-    
+
     /// Role indices for object properties
     role_indices: HashMap<ObjectPropertyExpression, RoleIndex>,
-    
+
     /// Individual indices for ABox queries
     individual_indices: HashMap<Individual, IndividualIndex>,
-    
+
     /// Composite indices for complex queries
     composite_indices: Vec<CompositeIndex>,
-    
+
     /// Index usage statistics
     usage_statistics: IndexUsageStatistics,
-    
+
     /// Automatic index maintenance system
     maintenance_system: IndexMaintenanceSystem,
 }
@@ -107,13 +107,13 @@ pub struct IntelligentIndexingSystem {
 pub struct PerformanceMonitor {
     /// Query execution history
     execution_history: BTreeMap<Instant, QueryExecutionRecord>,
-    
+
     /// Performance metrics aggregation
     metrics_aggregator: PerformanceMetricsAggregator,
-    
+
     /// Anomaly detection system
     anomaly_detector: AnomalyDetector,
-    
+
     /// Performance alerts system
     alerts_system: PerformanceAlertsSystem,
 }
@@ -123,16 +123,16 @@ pub struct PerformanceMonitor {
 pub struct AdvancedQueryPlan {
     /// Base query plan
     pub base_plan: QueryPlan,
-    
+
     /// ML-based performance prediction
     pub predicted_performance: PerformancePrediction,
-    
+
     /// Recommended indices for this query
     pub recommended_indices: Vec<IndexRecommendation>,
-    
+
     /// Adaptive optimization suggestions
     pub optimization_suggestions: Vec<OptimizationSuggestion>,
-    
+
     /// Confidence scores for various predictions
     pub confidence_scores: ConfidenceScores,
 }
@@ -143,7 +143,7 @@ pub struct AdvancedQueryPlan {
 pub trait QueryFeatureExtractor: std::fmt::Debug + Send + Sync {
     /// Extract numerical features from a query
     fn extract_features(&self, query: &ConjunctiveQuery) -> Vec<f64>;
-    
+
     /// Get feature names for interpretability
     fn feature_names(&self) -> Vec<String>;
 }
@@ -152,13 +152,13 @@ pub trait QueryFeatureExtractor: std::fmt::Debug + Send + Sync {
 pub trait PerformancePredictionModel: std::fmt::Debug + Send + Sync {
     /// Predict execution time for a query
     fn predict_execution_time(&self, features: &[f64]) -> f64;
-    
+
     /// Predict memory usage for a query
     fn predict_memory_usage(&self, features: &[f64]) -> f64;
-    
+
     /// Update model with new training data
     fn train(&mut self, training_data: &[QueryPerformanceDataPoint]);
-    
+
     /// Get model accuracy metrics
     fn get_accuracy(&self) -> AccuracyMetrics;
 }
@@ -189,13 +189,13 @@ pub struct AccuracyMetrics {
 pub struct ConceptIndex {
     /// Index type and structure
     pub index_type: ConceptIndexType,
-    
+
     /// Indexed class expressions
     pub indexed_concepts: HashSet<ClassExpression>,
-    
+
     /// Performance statistics
     pub performance_stats: IndexPerformanceStats,
-    
+
     /// Last update timestamp
     pub last_updated: Instant,
 }
@@ -205,16 +205,16 @@ pub struct ConceptIndex {
 pub enum ConceptIndexType {
     /// Simple class hierarchy index
     Hierarchy,
-    
+
     /// Existential restriction index
     ExistentialRestrictions,
-    
+
     /// Universal restriction index
     UniversalRestrictions,
-    
+
     /// Cardinality restriction index
     CardinalityRestrictions,
-    
+
     /// Composite concept index
     Composite { sub_indices: Vec<ConceptIndexType> },
 }
@@ -224,13 +224,13 @@ pub enum ConceptIndexType {
 pub struct RoleIndex {
     /// Index type and structure
     pub index_type: RoleIndexType,
-    
+
     /// Indexed object properties
     pub indexed_roles: HashSet<ObjectPropertyExpression>,
-    
+
     /// Performance statistics
     pub performance_stats: IndexPerformanceStats,
-    
+
     /// Last update timestamp
     pub last_updated: Instant,
 }
@@ -240,16 +240,16 @@ pub struct RoleIndex {
 pub enum RoleIndexType {
     /// Simple object property hierarchy index
     Hierarchy,
-    
+
     /// Inverse property index
     Inverse,
-    
+
     /// Functional property index
     Functional,
-    
+
     /// Transitive property index
     Transitive,
-    
+
     /// Role composition index
     Composition,
 }
@@ -259,13 +259,13 @@ pub enum RoleIndexType {
 pub struct IndividualIndex {
     /// Index type and structure
     pub index_type: IndividualIndexType,
-    
+
     /// Indexed individuals
     pub indexed_individuals: HashSet<Individual>,
-    
+
     /// Performance statistics
     pub performance_stats: IndexPerformanceStats,
-    
+
     /// Last update timestamp
     pub last_updated: Instant,
 }
@@ -275,13 +275,13 @@ pub struct IndividualIndex {
 pub enum IndividualIndexType {
     /// Class membership index
     ClassMembership,
-    
+
     /// Property assertion index
     PropertyAssertions,
-    
+
     /// Same/different individuals index
     Identity,
-    
+
     /// Data property values index
     DataPropertyValues,
 }
@@ -291,13 +291,13 @@ pub enum IndividualIndexType {
 pub struct CompositeIndex {
     /// Component indices
     pub component_indices: Vec<ComponentIndex>,
-    
+
     /// Index effectiveness score
     pub effectiveness_score: f64,
-    
+
     /// Queries that benefit from this index
     pub benefiting_queries: Vec<u64>, // Query hashes
-    
+
     /// Performance improvement metrics
     pub improvement_metrics: IndexImprovementMetrics,
 }
@@ -329,13 +329,13 @@ pub struct QueryExecutionRecord {
 pub struct PerformanceMetricsAggregator {
     /// Execution time statistics
     pub execution_time_stats: TimeSeriesStats,
-    
+
     /// Memory usage statistics
     pub memory_usage_stats: MemoryUsageStats,
-    
+
     /// Query throughput metrics
     pub throughput_metrics: ThroughputMetrics,
-    
+
     /// Index effectiveness metrics
     pub index_effectiveness: IndexEffectivenessMetrics,
 }
@@ -345,10 +345,10 @@ pub struct PerformanceMetricsAggregator {
 pub struct AnomalyDetector {
     /// Baseline performance models
     baseline_models: HashMap<String, BaselineModel>,
-    
+
     /// Anomaly detection thresholds
     detection_thresholds: AnomalyThresholds,
-    
+
     /// Recent anomalies detected
     detected_anomalies: Vec<PerformanceAnomaly>,
 }
@@ -358,10 +358,10 @@ pub struct AnomalyDetector {
 pub struct PerformanceAlertsSystem {
     /// Alert rules and conditions
     alert_rules: Vec<AlertRule>,
-    
+
     /// Active alerts
     active_alerts: Vec<PerformanceAlert>,
-    
+
     /// Alert history
     alert_history: Vec<PerformanceAlert>,
 }
@@ -596,7 +596,7 @@ impl AdvancedQueryOptimizer {
         config: AdvancedOptimizerConfig,
     ) -> Self {
         let base_optimizer = QueryOptimizer::new(ontology, reasoning_service);
-        
+
         Self {
             base_optimizer,
             performance_predictor: Arc::new(Mutex::new(PerformancePredictor::new())),
@@ -605,12 +605,15 @@ impl AdvancedQueryOptimizer {
             config,
         }
     }
-    
+
     /// Optimize a query using advanced ML-driven strategies
-    pub fn optimize_advanced(&mut self, query: &ConjunctiveQuery) -> Result<AdvancedQueryPlan, OptimizationError> {
+    pub fn optimize_advanced(
+        &mut self,
+        query: &ConjunctiveQuery,
+    ) -> Result<AdvancedQueryPlan, OptimizationError> {
         // Start with base optimization
         let base_plan = self.base_optimizer.optimize(query)?;
-        
+
         // Apply advanced optimizations if enabled
         let mut advanced_plan = AdvancedQueryPlan {
             base_plan,
@@ -629,42 +632,52 @@ impl AdvancedQueryOptimizer {
                 overall_confidence: 0.8,
             },
         };
-        
+
         // Apply ML-based performance prediction
         if self.config.enable_ml_optimization {
             advanced_plan.predicted_performance = self.predict_performance(query)?;
         }
-        
+
         // Generate index recommendations
         if self.config.enable_intelligent_indexing {
             advanced_plan.recommended_indices = self.recommend_indices(query)?;
         }
-        
+
         // Generate optimization suggestions
         advanced_plan.optimization_suggestions = self.generate_optimization_suggestions(query)?;
-        
+
         Ok(advanced_plan)
     }
-    
+
     /// Predict query performance using ML models
-    fn predict_performance(&self, query: &ConjunctiveQuery) -> Result<PerformancePrediction, OptimizationError> {
+    fn predict_performance(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<PerformancePrediction, OptimizationError> {
         // Placeholder implementation - will be enhanced with actual ML models
         Ok(PerformancePrediction {
-            estimated_execution_time: Duration::from_millis(50 + query.body_atoms.len() as u64 * 10),
+            estimated_execution_time: Duration::from_millis(
+                50 + query.body_atoms.len() as u64 * 10,
+            ),
             estimated_memory_usage: 1024 * 1024 + query.body_atoms.len() * 1024,
             estimated_result_size: 50,
             confidence_level: 0.75,
         })
     }
-    
+
     /// Recommend indices for optimal query performance
-    fn recommend_indices(&self, query: &ConjunctiveQuery) -> Result<Vec<IndexRecommendation>, OptimizationError> {
+    fn recommend_indices(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Vec<IndexRecommendation>, OptimizationError> {
         let mut recommendations = Vec::new();
-        
+
         // Analyze query atoms and recommend appropriate indices
         for atom in &query.body_atoms {
             match atom {
-                QueryAtom::ClassAtom { class_expression, .. } => {
+                QueryAtom::ClassAtom {
+                    class_expression, ..
+                } => {
                     recommendations.push(IndexRecommendation {
                         index_type: "ConceptIndex".to_string(),
                         expected_improvement: 0.3,
@@ -683,14 +696,17 @@ impl AdvancedQueryOptimizer {
                 _ => {}
             }
         }
-        
+
         Ok(recommendations)
     }
-    
+
     /// Generate optimization suggestions for the query
-    fn generate_optimization_suggestions(&self, query: &ConjunctiveQuery) -> Result<Vec<OptimizationSuggestion>, OptimizationError> {
+    fn generate_optimization_suggestions(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Vec<OptimizationSuggestion>, OptimizationError> {
         let mut suggestions = Vec::new();
-        
+
         // Analyze query structure and suggest optimizations
         if query.body_atoms.len() > 3 {
             suggestions.push(OptimizationSuggestion {
@@ -700,7 +716,7 @@ impl AdvancedQueryOptimizer {
                 description: "Consider reordering joins based on selectivity".to_string(),
             });
         }
-        
+
         if self.has_complex_class_expressions(query) {
             suggestions.push(OptimizationSuggestion {
                 suggestion_type: OptimizationType::QueryRewriting,
@@ -709,25 +725,33 @@ impl AdvancedQueryOptimizer {
                 description: "Complex class expressions could benefit from rewriting".to_string(),
             });
         }
-        
+
         Ok(suggestions)
     }
-    
+
     /// Check if query contains complex class expressions
     fn has_complex_class_expressions(&self, query: &ConjunctiveQuery) -> bool {
         query.body_atoms.iter().any(|atom| {
-            matches!(atom, QueryAtom::ClassAtom { 
-                class_expression: ClassExpression::ObjectSomeValuesFrom { .. } |
-                                 ClassExpression::ObjectAllValuesFrom { .. } |
-                                 ClassExpression::ObjectIntersectionOf(_) |
-                                 ClassExpression::ObjectUnionOf(_), 
-                .. 
-            })
+            matches!(
+                atom,
+                QueryAtom::ClassAtom {
+                    class_expression: ClassExpression::ObjectSomeValuesFrom { .. }
+                        | ClassExpression::ObjectAllValuesFrom { .. }
+                        | ClassExpression::ObjectIntersectionOf(_)
+                        | ClassExpression::ObjectUnionOf(_),
+                    ..
+                }
+            )
         })
     }
-    
+
     /// Record query execution results for learning
-    pub fn record_execution(&mut self, query_hash: u64, execution_time: Duration, memory_used: usize) {
+    pub fn record_execution(
+        &mut self,
+        query_hash: u64,
+        execution_time: Duration,
+        memory_used: usize,
+    ) {
         if self.config.enable_performance_monitoring {
             if let Ok(mut monitor) = self.performance_monitor.lock() {
                 monitor.record_execution(query_hash, execution_time, memory_used);
@@ -817,7 +841,7 @@ impl PerformanceMonitor {
             },
         }
     }
-    
+
     fn record_execution(&mut self, query_hash: u64, execution_time: Duration, memory_used: usize) {
         let record = QueryExecutionRecord {
             query_hash,
@@ -828,27 +852,30 @@ impl PerformanceMonitor {
             indices_used: Vec::new(),
             error_occurred: None,
         };
-        
+
         self.execution_history.insert(Instant::now(), record);
-        
+
         // Keep only recent history within the configured window
         // This would be implemented with proper time-based cleanup
     }
 
     /// Perform advanced classification using ML-enhanced reasoning
-    pub fn classify_advanced(&mut self, ontology: &Ontology) -> Result<Vec<(String, String)>, OptimizationError> {
+    pub fn classify_advanced(
+        &mut self,
+        ontology: &Ontology,
+    ) -> Result<Vec<(String, String)>, OptimizationError> {
         // Placeholder implementation for advanced classification
         // In a real implementation, this would use the ML models and advanced reasoning
         let mut results = Vec::new();
-        
+
         // For now, return a simple classification result
         for class in ontology.classes() {
             results.push((
                 class.1.iri.to_string(),
-                "owl:Thing".to_string() // Placeholder parent class
+                "owl:Thing".to_string(), // Placeholder parent class
             ));
         }
-        
+
         Ok(results)
     }
 }
@@ -857,7 +884,7 @@ impl PerformanceMonitor {
 mod tests {
     use super::*;
     use crate::ontology::{Class, IRI};
-    
+
     #[test]
     fn test_advanced_optimizer_creation() {
         // This test would require proper setup with actual ontology and reasoning service
@@ -866,7 +893,7 @@ mod tests {
         assert!(config.enable_ml_optimization);
         assert!(config.enable_intelligent_indexing);
     }
-    
+
     #[test]
     fn test_performance_prediction() {
         let config = AdvancedOptimizerConfig::default();

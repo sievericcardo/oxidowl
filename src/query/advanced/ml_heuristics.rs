@@ -4,17 +4,17 @@
 //! selection and performance optimization, targeting 40-60% reduction in reasoning
 //! times through learned optimization patterns.
 
-use crate::ontology::{Ontology, ClassExpression, ObjectPropertyExpression, Individual, IRI};
-use super::optimizer::{
-    QueryFeatureExtractor, PerformancePredictionModel, QueryPerformanceDataPoint, AccuracyMetrics
-};
-use super::ml_models::{EnsembleModel, LinearRegressionModel, NeuralNetworkModel};
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
+use super::ml_models::{EnsembleModel, LinearRegressionModel, NeuralNetworkModel};
+use super::optimizer::{
+    AccuracyMetrics, PerformancePredictionModel, QueryFeatureExtractor, QueryPerformanceDataPoint,
+};
+use crate::ontology::{ClassExpression, IRI, Individual, ObjectPropertyExpression, Ontology};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::hash::{Hash, Hasher};
-use serde::{Serialize, Deserialize};
 
 /// Expansion order item for tableau reasoning
 #[derive(Debug, Clone, PartialEq)]
@@ -34,19 +34,19 @@ pub enum ExpansionOrderItem {
 pub struct MLHeuristicsEngine {
     /// Strategy selection model
     strategy_selector: StrategySelectionModel,
-    
+
     /// Expansion order predictor
     expansion_predictor: ExpansionOrderPredictor,
-    
+
     /// Query complexity analyzer
     complexity_analyzer: QueryComplexityAnalyzer,
-    
+
     /// Performance pattern learner
     pattern_learner: PerformancePatternLearner,
-    
+
     /// Heuristics performance tracker
     heuristics_tracker: HeuristicsPerformanceTracker,
-    
+
     /// Configuration for ML heuristics
     config: MLHeuristicsConfig,
 }
@@ -56,25 +56,25 @@ pub struct MLHeuristicsEngine {
 pub struct MLHeuristicsConfig {
     /// Enable strategy selection using ML
     pub enable_strategy_selection: bool,
-    
+
     /// Enable expansion order prediction
     pub enable_expansion_prediction: bool,
-    
+
     /// Enable pattern-based learning
     pub enable_pattern_learning: bool,
-    
+
     /// Minimum confidence threshold for ML predictions
     pub min_prediction_confidence: f64,
-    
+
     /// Learning rate for continuous improvement
     pub learning_rate: f64,
-    
+
     /// Size of training data window
     pub training_window_size: usize,
-    
+
     /// Frequency of model retraining (in sessions)
     pub retraining_frequency: usize,
-    
+
     /// Enable performance tracking
     pub enable_performance_tracking: bool,
 }
@@ -105,7 +105,7 @@ impl MLHeuristicsEngine {
             config,
         }
     }
-    
+
     /// Select optimal reasoning strategy using ML
     pub fn select_reasoning_strategy(
         &mut self,
@@ -115,31 +115,37 @@ impl MLHeuristicsEngine {
         if !self.config.enable_strategy_selection {
             return Ok(ReasoningStrategy::StandardTableau);
         }
-        
+
         // Extract comprehensive features
-        let query_features = self.complexity_analyzer.extract_query_features(query, ontology)?;
-        let ontology_features = self.complexity_analyzer.extract_ontology_features(ontology)?;
+        let query_features = self
+            .complexity_analyzer
+            .extract_query_features(query, ontology)?;
+        let ontology_features = self
+            .complexity_analyzer
+            .extract_ontology_features(ontology)?;
         let combined_features = [query_features, ontology_features].concat();
-        
+
         // Get ML prediction
-        let prediction_result = self.strategy_selector.predict_strategy(&combined_features)?;
-        
+        let prediction_result = self
+            .strategy_selector
+            .predict_strategy(&combined_features)?;
+
         // Validate prediction confidence
         if prediction_result.confidence < self.config.min_prediction_confidence {
             // Fall back to heuristic selection
             return Ok(self.heuristic_strategy_selection(query, ontology));
         }
-        
+
         // Track prediction for learning
         self.heuristics_tracker.track_strategy_selection(
             combined_features,
             prediction_result.strategy.clone(),
             prediction_result.confidence,
         );
-        
+
         Ok(prediction_result.strategy)
     }
-    
+
     /// Predict optimal expansion order for tableau reasoning
     pub fn predict_expansion_order(
         &mut self,
@@ -149,38 +155,38 @@ impl MLHeuristicsEngine {
         if !self.config.enable_expansion_prediction {
             return Ok(self.heuristic_expansion_order(tableau_nodes));
         }
-        
+
         let mut expansion_priorities = Vec::new();
-        
+
         for node in tableau_nodes {
             // Extract node-specific features
             let node_features = self.extract_node_features(node, ontology)?;
-            
+
             // Predict expansion priority
             let priority_result = self.expansion_predictor.predict_priority(&node_features)?;
-            
+
             expansion_priorities.push(NodeExpansionPriority {
                 node_id: node.id,
                 priority_score: priority_result.priority,
                 confidence: priority_result.confidence,
                 reasoning: format!(
                     "ML prediction: priority {:.3}, confidence {:.3}",
-                    priority_result.priority,
-                    priority_result.confidence
+                    priority_result.priority, priority_result.confidence
                 ),
                 ml_features: node_features,
             });
         }
-        
+
         // Sort by predicted priority (higher is better)
-        expansion_priorities.sort_by(|a, b| 
-            b.priority_score.partial_cmp(&a.priority_score)
+        expansion_priorities.sort_by(|a, b| {
+            b.priority_score
+                .partial_cmp(&a.priority_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
-        );
-        
+        });
+
         Ok(expansion_priorities)
     }
-    
+
     /// Learn from reasoning performance to improve heuristics
     pub fn learn_from_performance(
         &mut self,
@@ -189,22 +195,24 @@ impl MLHeuristicsEngine {
         if !self.config.enable_pattern_learning {
             return Ok(LearningResult::disabled());
         }
-        
+
         // Update strategy selection model
-        let strategy_improvement = self.strategy_selector
+        let strategy_improvement = self
+            .strategy_selector
             .update_from_session(reasoning_session)?;
-        
-        // Update expansion order model  
-        let expansion_improvement = self.expansion_predictor
+
+        // Update expansion order model
+        let expansion_improvement = self
+            .expansion_predictor
             .update_from_session(reasoning_session)?;
-        
+
         // Learn patterns
-        let pattern_learning = self.pattern_learner
-            .learn_patterns(reasoning_session)?;
-        
+        let pattern_learning = self.pattern_learner.learn_patterns(reasoning_session)?;
+
         // Update performance tracking
-        self.heuristics_tracker.record_session_performance(reasoning_session);
-        
+        self.heuristics_tracker
+            .record_session_performance(reasoning_session);
+
         Ok(LearningResult {
             strategy_model_improvement: strategy_improvement,
             expansion_model_improvement: expansion_improvement,
@@ -213,16 +221,17 @@ impl MLHeuristicsEngine {
             learning_session_count: self.heuristics_tracker.get_session_count(),
         })
     }
-    
+
     /// Get optimization recommendations based on learned patterns
     pub fn get_pattern_based_recommendations(
         &self,
         query: &ConjunctiveQuery,
         ontology: &Ontology,
     ) -> Result<Vec<PatternBasedRecommendation>, MLError> {
-        self.pattern_learner.get_pattern_based_recommendations(query, ontology)
+        self.pattern_learner
+            .get_pattern_based_recommendations(query, ontology)
     }
-    
+
     /// Generate comprehensive heuristics report
     pub fn generate_heuristics_report(&self) -> HeuristicsPerformanceReport {
         HeuristicsPerformanceReport {
@@ -234,9 +243,9 @@ impl MLHeuristicsEngine {
             confidence_trends: self.heuristics_tracker.get_confidence_trends(),
         }
     }
-    
+
     // ===== Private Helper Methods =====
-    
+
     fn heuristic_strategy_selection(
         &self,
         query: &ConjunctiveQuery,
@@ -245,7 +254,7 @@ impl MLHeuristicsEngine {
         // Fallback heuristic strategy selection
         let query_complexity = self.estimate_query_complexity(query);
         let ontology_size = ontology.classes().len();
-        
+
         if query_complexity > 10.0 && ontology_size > 50_000 {
             ReasoningStrategy::ModularReasoning
         } else if query_complexity > 5.0 {
@@ -254,86 +263,97 @@ impl MLHeuristicsEngine {
             ReasoningStrategy::StandardTableau
         }
     }
-    
-    fn heuristic_expansion_order(&self, tableau_nodes: &[TableauNode]) -> Vec<NodeExpansionPriority> {
+
+    fn heuristic_expansion_order(
+        &self,
+        tableau_nodes: &[TableauNode],
+    ) -> Vec<NodeExpansionPriority> {
         // Fallback heuristic expansion ordering
-        tableau_nodes.iter().enumerate().map(|(i, node)| {
-            NodeExpansionPriority {
-                node_id: node.id,
-                priority_score: 1.0 / (i + 1) as f64, // Simple decreasing priority
-                confidence: 0.5, // Low confidence for heuristic
-                reasoning: "Heuristic ordering".to_string(),
-                ml_features: Vec::new(),
-            }
-        }).collect()
+        tableau_nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| {
+                NodeExpansionPriority {
+                    node_id: node.id,
+                    priority_score: 1.0 / (i + 1) as f64, // Simple decreasing priority
+                    confidence: 0.5,                      // Low confidence for heuristic
+                    reasoning: "Heuristic ordering".to_string(),
+                    ml_features: Vec::new(),
+                }
+            })
+            .collect()
     }
-    
+
     fn extract_node_features(
         &self,
         node: &TableauNode,
         ontology: &Ontology,
     ) -> Result<Vec<f64>, MLError> {
         let mut features = Vec::new();
-        
+
         // Basic node features
         features.push(node.concept_labels.len() as f64);
         features.push(node.individual_labels.len() as f64);
         features.push(node.role_edges.len() as f64);
         features.push(if node.is_blocked { 1.0 } else { 0.0 });
         features.push(node.depth as f64);
-        
+
         // Concept complexity features
         for concept in &node.concept_labels {
             features.push(self.estimate_concept_complexity(concept));
         }
-        
+
         // Pad to fixed size
         while features.len() < 20 {
             features.push(0.0);
         }
         features.truncate(20);
-        
+
         Ok(features)
     }
-    
+
     fn estimate_query_complexity(&self, query: &ConjunctiveQuery) -> f64 {
         let atom_count = query.body_atoms.len() as f64;
         let variable_count = self.count_unique_variables(query) as f64;
-        
+
         atom_count * variable_count.ln()
     }
-    
+
     fn estimate_concept_complexity(&self, _concept: &ClassExpression) -> f64 {
         // Placeholder complexity estimation
         1.0
     }
-    
+
     fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
         let mut variables = HashSet::new();
         for atom in &query.body_atoms {
             match atom {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.clone());
-                },
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                }
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(object.clone());
-                },
-                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                }
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(literal.clone());
-                },
+                }
                 _ => {}
             }
         }
         variables.len()
     }
-    
+
     fn calculate_confidence_improvement(&self) -> f64 {
         // Calculate overall confidence improvement
         let strategy_confidence = self.strategy_selector.get_confidence();
         let expansion_confidence = self.expansion_predictor.get_confidence();
-        
+
         (strategy_confidence + expansion_confidence) / 2.0
     }
 }
@@ -345,19 +365,19 @@ impl MLHeuristicsEngine {
 pub struct StrategySelectionModel {
     /// Ensemble of ML models for strategy prediction
     ensemble: EnsembleModel,
-    
+
     /// Strategy performance history
     strategy_performance: HashMap<ReasoningStrategy, PerformanceHistory>,
-    
+
     /// Feature importance tracker
     feature_importance: FeatureImportanceTracker,
-    
+
     /// Training data buffer
     training_buffer: VecDeque<StrategyTrainingPoint>,
-    
+
     /// Model configuration
     config: MLHeuristicsConfig,
-    
+
     /// Session counter for retraining
     session_count: usize,
 }
@@ -373,27 +393,27 @@ impl StrategySelectionModel {
             session_count: 0,
         }
     }
-    
+
     fn predict_strategy(&mut self, features: &[f64]) -> Result<StrategyPredictionResult, MLError> {
         // Get ensemble prediction
         let prediction = self.ensemble.predict_execution_time(features);
-        
+
         // Map prediction to strategy
         let strategy = self.map_prediction_to_strategy(prediction);
-        
+
         // Estimate confidence based on model accuracy and feature importance
         let confidence = self.calculate_prediction_confidence(features, &strategy);
-        
+
         Ok(StrategyPredictionResult {
             strategy,
             confidence,
             prediction_value: prediction,
         })
     }
-    
+
     fn update_from_session(&mut self, session: &ReasoningSession) -> Result<f64, MLError> {
         self.session_count += 1;
-        
+
         // Add training point
         let training_point = StrategyTrainingPoint {
             features: session.query_features.clone(),
@@ -401,32 +421,33 @@ impl StrategySelectionModel {
             performance_score: self.calculate_performance_score(session),
             timestamp: session.start_time,
         };
-        
+
         self.training_buffer.push_back(training_point);
-        
+
         // Maintain buffer size
         if self.training_buffer.len() > self.config.training_window_size {
             self.training_buffer.pop_front();
         }
-        
+
         // Retrain if enough sessions have passed
         if self.session_count % self.config.retraining_frequency == 0 {
             self.retrain_model()?;
         }
-        
+
         // Update performance history
         self.update_strategy_performance(session);
-        
+
         Ok(self.ensemble.get_accuracy().correlation_coefficient)
     }
-    
+
     fn retrain_model(&mut self) -> Result<(), MLError> {
         if self.training_buffer.is_empty() {
             return Ok(());
         }
-        
+
         // Convert training points to format expected by ensemble
-        let training_data: Vec<QueryPerformanceDataPoint> = self.training_buffer
+        let training_data: Vec<QueryPerformanceDataPoint> = self
+            .training_buffer
             .iter()
             .map(|point| QueryPerformanceDataPoint {
                 query_features: point.features.clone(),
@@ -436,15 +457,18 @@ impl StrategySelectionModel {
                 timestamp: point.timestamp,
             })
             .collect();
-        
+
         // Retrain ensemble
         self.ensemble.train(&training_data);
-        
-        println!("Retrained strategy selection model with {} data points", training_data.len());
-        
+
+        println!(
+            "Retrained strategy selection model with {} data points",
+            training_data.len()
+        );
+
         Ok(())
     }
-    
+
     fn map_prediction_to_strategy(&self, prediction: f64) -> ReasoningStrategy {
         // Map continuous prediction to discrete strategy
         match prediction {
@@ -458,48 +482,54 @@ impl StrategySelectionModel {
             ]),
         }
     }
-    
-    fn calculate_prediction_confidence(&self, features: &[f64], strategy: &ReasoningStrategy) -> f64 {
+
+    fn calculate_prediction_confidence(
+        &self,
+        features: &[f64],
+        strategy: &ReasoningStrategy,
+    ) -> f64 {
         // Base confidence from model accuracy
         let model_confidence = self.ensemble.get_accuracy().correlation_coefficient;
-        
+
         // Adjust based on strategy performance history
-        let strategy_confidence = self.strategy_performance
+        let strategy_confidence = self
+            .strategy_performance
             .get(strategy)
             .map(|hist| hist.average_confidence)
             .unwrap_or(0.5);
-        
+
         // Combine confidences
         (model_confidence + strategy_confidence) / 2.0
     }
-    
+
     fn calculate_performance_score(&self, session: &ReasoningSession) -> f64 {
         // Higher score for better performance (lower time, higher success rate)
         if !session.success {
             return 0.1; // Low score for failed sessions
         }
-        
+
         // Normalize execution time to score (1/time with some scaling)
         let time_score = 1000.0 / (session.execution_time.as_millis() as f64 + 1.0);
-        
+
         // Memory efficiency score
         let memory_score = 1000000.0 / (session.memory_used as f64 + 1.0);
-        
+
         (time_score + memory_score) / 2.0
     }
-    
+
     fn update_strategy_performance(&mut self, session: &ReasoningSession) {
-        let performance = self.strategy_performance
+        let performance = self
+            .strategy_performance
             .entry(session.strategy_used.clone())
             .or_insert_with(PerformanceHistory::new);
-        
+
         performance.add_session(session);
     }
-    
+
     fn get_accuracy(&self) -> f64 {
         self.ensemble.get_accuracy().correlation_coefficient
     }
-    
+
     fn get_confidence(&self) -> f64 {
         self.ensemble.get_accuracy().correlation_coefficient
     }
@@ -512,19 +542,19 @@ impl StrategySelectionModel {
 pub struct ExpansionOrderPredictor {
     /// Neural network for node priority prediction
     neural_network: NeuralNetworkModel,
-    
+
     /// Historical expansion success rates
     expansion_history: ExpansionHistoryTracker,
-    
+
     /// Node feature extractor
     node_feature_extractor: NodeFeatureExtractor,
-    
+
     /// Training data buffer
     training_buffer: VecDeque<ExpansionTrainingPoint>,
-    
+
     /// Configuration
     config: MLHeuristicsConfig,
-    
+
     /// Session counter
     session_count: usize,
 }
@@ -540,60 +570,66 @@ impl ExpansionOrderPredictor {
             session_count: 0,
         }
     }
-    
-    fn predict_priority(&mut self, node_features: &[f64]) -> Result<PriorityPredictionResult, MLError> {
+
+    fn predict_priority(
+        &mut self,
+        node_features: &[f64],
+    ) -> Result<PriorityPredictionResult, MLError> {
         // Use neural network to predict expansion success/time
         let prediction = self.neural_network.predict_execution_time(node_features);
-        
+
         // Convert to priority (higher priority for better predicted performance)
         let priority = 1.0 / (1.0 + prediction);
-        
+
         // Estimate confidence
         let confidence = self.neural_network.get_accuracy().correlation_coefficient;
-        
+
         Ok(PriorityPredictionResult {
             priority,
             confidence,
             raw_prediction: prediction,
         })
     }
-    
+
     fn update_from_session(&mut self, session: &ReasoningSession) -> Result<f64, MLError> {
         self.session_count += 1;
-        
+
         // Process expansion sequence
         for expansion in &session.expansion_sequence {
-            let features = self.node_feature_extractor.extract_features(&expansion.node)?;
-            
+            let features = self
+                .node_feature_extractor
+                .extract_features(&expansion.node)?;
+
             let training_point = ExpansionTrainingPoint {
                 features,
                 success_score: if expansion.led_to_solution { 1.0 } else { 0.1 },
                 time_penalty: expansion.time_taken.as_secs_f64(),
                 timestamp: expansion.timestamp,
             };
-            
+
             self.training_buffer.push_back(training_point);
         }
-        
+
         // Maintain buffer size
         while self.training_buffer.len() > self.config.training_window_size {
             self.training_buffer.pop_front();
         }
-        
+
         // Retrain periodically
         if self.session_count % self.config.retraining_frequency == 0 {
             self.retrain_model()?;
         }
-        
+
         Ok(self.neural_network.get_accuracy().correlation_coefficient)
     }
-    
+
     fn retrain_model(&mut self) -> Result<(), MLError> {
         if self.training_buffer.is_empty() {
             return Ok(());
         }
-        
-        let training_data: Vec<QueryPerformanceDataPoint> = self.training_buffer
+
+        let training_data: Vec<QueryPerformanceDataPoint> = self
+            .training_buffer
             .iter()
             .map(|point| QueryPerformanceDataPoint {
                 query_features: point.features.clone(),
@@ -603,18 +639,21 @@ impl ExpansionOrderPredictor {
                 timestamp: point.timestamp,
             })
             .collect();
-        
+
         self.neural_network.train(&training_data);
-        
-        println!("Retrained expansion predictor with {} data points", training_data.len());
-        
+
+        println!(
+            "Retrained expansion predictor with {} data points",
+            training_data.len()
+        );
+
         Ok(())
     }
-    
+
     fn get_accuracy(&self) -> f64 {
         self.neural_network.get_accuracy().correlation_coefficient
     }
-    
+
     fn get_confidence(&self) -> f64 {
         self.neural_network.get_accuracy().correlation_coefficient
     }
@@ -627,16 +666,16 @@ impl ExpansionOrderPredictor {
 pub struct PerformancePatternLearner {
     /// Query pattern database
     pattern_database: QueryPatternDatabase,
-    
+
     /// Ontology pattern recognizer
     ontology_patterns: OntologyPatternRecognizer,
-    
+
     /// Performance correlation analyzer
     correlation_analyzer: PerformanceCorrelationAnalyzer,
-    
+
     /// Pattern effectiveness tracker
     effectiveness_tracker: PatternEffectivenessTracker,
-    
+
     /// Configuration
     config: MLHeuristicsConfig,
 }
@@ -651,14 +690,19 @@ impl PerformancePatternLearner {
             config: config.clone(),
         }
     }
-    
-    fn learn_patterns(&mut self, session: &ReasoningSession) -> Result<PatternLearningResult, MLError> {
+
+    fn learn_patterns(
+        &mut self,
+        session: &ReasoningSession,
+    ) -> Result<PatternLearningResult, MLError> {
         // Detect query patterns
         let query_patterns = self.pattern_database.detect_patterns(&session.query)?;
-        
+
         // Detect ontology patterns
-        let ontology_patterns = self.ontology_patterns.detect_patterns(&session.ontology_features)?;
-        
+        let ontology_patterns = self
+            .ontology_patterns
+            .detect_patterns(&session.ontology_features)?;
+
         // Analyze performance correlations
         let correlations = self.correlation_analyzer.analyze_correlations(
             &query_patterns,
@@ -666,7 +710,7 @@ impl PerformancePatternLearner {
             session.execution_time,
             session.memory_used,
         )?;
-        
+
         // Update pattern effectiveness
         let effectiveness_updates = self.effectiveness_tracker.update_effectiveness(
             &query_patterns,
@@ -674,7 +718,7 @@ impl PerformancePatternLearner {
             session.success,
             session.execution_time,
         )?;
-        
+
         Ok(PatternLearningResult {
             query_patterns_detected: query_patterns.len(),
             ontology_patterns_detected: ontology_patterns.len(),
@@ -683,7 +727,7 @@ impl PerformancePatternLearner {
             new_patterns_count: correlations.new_patterns_discovered,
         })
     }
-    
+
     fn get_pattern_based_recommendations(
         &self,
         query: &ConjunctiveQuery,
@@ -691,18 +735,21 @@ impl PerformancePatternLearner {
     ) -> Result<Vec<PatternBasedRecommendation>, MLError> {
         // Detect current patterns
         let query_patterns = self.pattern_database.detect_patterns(query)?;
-        
+
         let ontology_features = vec![
             ontology.classes().len() as f64,
             ontology.object_properties().len() as f64,
         ];
         let ontology_patterns = self.ontology_patterns.detect_patterns(&ontology_features)?;
-        
+
         let mut recommendations = Vec::new();
-        
+
         // Generate recommendations based on effective patterns
         for pattern in &query_patterns {
-            if let Some(optimizations) = self.effectiveness_tracker.get_effective_optimizations(pattern) {
+            if let Some(optimizations) = self
+                .effectiveness_tracker
+                .get_effective_optimizations(pattern)
+            {
                 for optimization in optimizations {
                     recommendations.push(PatternBasedRecommendation {
                         pattern_type: PatternType::Query(pattern.clone()),
@@ -714,20 +761,21 @@ impl PerformancePatternLearner {
                 }
             }
         }
-        
+
         // Sort by expected improvement
-        recommendations.sort_by(|a, b| 
-            b.expected_improvement.partial_cmp(&a.expected_improvement)
+        recommendations.sort_by(|a, b| {
+            b.expected_improvement
+                .partial_cmp(&a.expected_improvement)
                 .unwrap_or(std::cmp::Ordering::Equal)
-        );
-        
+        });
+
         Ok(recommendations)
     }
-    
+
     fn get_learning_stats(&self) -> PatternLearningStats {
         PatternLearningStats {
-            total_patterns_learned: self.pattern_database.get_pattern_count() +
-                                  self.ontology_patterns.get_pattern_count(),
+            total_patterns_learned: self.pattern_database.get_pattern_count()
+                + self.ontology_patterns.get_pattern_count(),
             query_patterns: self.pattern_database.get_pattern_count(),
             ontology_patterns: self.ontology_patterns.get_pattern_count(),
             effective_optimizations: self.effectiveness_tracker.get_optimization_count(),
@@ -862,18 +910,21 @@ impl PerformanceHistory {
             success_rate: 0.0,
         }
     }
-    
+
     fn add_session(&mut self, session: &ReasoningSession) {
         self.sessions.push(SessionSummary {
             execution_time: session.execution_time,
             memory_used: session.memory_used,
             success: session.success,
         });
-        
+
         // Update metrics
-        self.success_rate = self.sessions.iter()
+        self.success_rate = self
+            .sessions
+            .iter()
             .map(|s| if s.success { 1.0 } else { 0.0 })
-            .sum::<f64>() / self.sessions.len() as f64;
+            .sum::<f64>()
+            / self.sessions.len() as f64;
     }
 }
 
@@ -985,7 +1036,9 @@ pub enum MLError {
 impl std::fmt::Display for MLError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MLError::FeatureExtractionFailed(msg) => write!(f, "Feature extraction failed: {}", msg),
+            MLError::FeatureExtractionFailed(msg) => {
+                write!(f, "Feature extraction failed: {}", msg)
+            }
             MLError::ModelPredictionFailed(msg) => write!(f, "Model prediction failed: {}", msg),
             MLError::TrainingDataInsufficient => write!(f, "Insufficient training data"),
             MLError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
@@ -1001,8 +1054,14 @@ impl std::error::Error for MLError {}
 #[derive(Debug)]
 struct QueryComplexityAnalyzer;
 impl QueryComplexityAnalyzer {
-    fn new() -> Self { Self }
-    fn extract_query_features(&self, _query: &ConjunctiveQuery, _ontology: &Ontology) -> Result<Vec<f64>, MLError> {
+    fn new() -> Self {
+        Self
+    }
+    fn extract_query_features(
+        &self,
+        _query: &ConjunctiveQuery,
+        _ontology: &Ontology,
+    ) -> Result<Vec<f64>, MLError> {
         Ok(vec![1.0, 2.0, 3.0]) // Placeholder
     }
     fn extract_ontology_features(&self, ontology: &Ontology) -> Result<Vec<f64>, MLError> {
@@ -1018,10 +1077,22 @@ struct HeuristicsPerformanceTracker {
     session_count: usize,
 }
 impl HeuristicsPerformanceTracker {
-    fn new() -> Self { Self { session_count: 0 } }
-    fn track_strategy_selection(&mut self, _features: Vec<f64>, _strategy: ReasoningStrategy, _confidence: f64) {}
-    fn record_session_performance(&mut self, _session: &ReasoningSession) { self.session_count += 1; }
-    fn get_session_count(&self) -> usize { self.session_count }
+    fn new() -> Self {
+        Self { session_count: 0 }
+    }
+    fn track_strategy_selection(
+        &mut self,
+        _features: Vec<f64>,
+        _strategy: ReasoningStrategy,
+        _confidence: f64,
+    ) {
+    }
+    fn record_session_performance(&mut self, _session: &ReasoningSession) {
+        self.session_count += 1;
+    }
+    fn get_session_count(&self) -> usize {
+        self.session_count
+    }
     fn calculate_improvements(&self) -> PerformanceImprovements {
         PerformanceImprovements {
             average_time_reduction: 0.4,
@@ -1041,19 +1112,25 @@ impl HeuristicsPerformanceTracker {
 #[derive(Debug)]
 struct FeatureImportanceTracker;
 impl FeatureImportanceTracker {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
 }
 
 #[derive(Debug)]
 struct ExpansionHistoryTracker;
 impl ExpansionHistoryTracker {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
 }
 
 #[derive(Debug)]
 struct NodeFeatureExtractor;
 impl NodeFeatureExtractor {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     fn extract_features(&self, node: &TableauNode) -> Result<Vec<f64>, MLError> {
         Ok(vec![
             node.concept_labels.len() as f64,
@@ -1067,7 +1144,9 @@ impl NodeFeatureExtractor {
 #[derive(Debug)]
 struct QueryPatternDatabase;
 impl QueryPatternDatabase {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     fn detect_patterns(&self, _query: &ConjunctiveQuery) -> Result<Vec<QueryPattern>, MLError> {
         Ok(vec![QueryPattern {
             pattern_id: "simple_query".to_string(),
@@ -1077,13 +1156,17 @@ impl QueryPatternDatabase {
             common_structures: vec!["chain".to_string()],
         }])
     }
-    fn get_pattern_count(&self) -> usize { 5 }
+    fn get_pattern_count(&self) -> usize {
+        5
+    }
 }
 
 #[derive(Debug)]
 struct OntologyPatternRecognizer;
 impl OntologyPatternRecognizer {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     fn detect_patterns(&self, _features: &[f64]) -> Result<Vec<OntologyPattern>, MLError> {
         Ok(vec![OntologyPattern {
             pattern_id: "medium_ontology".to_string(),
@@ -1093,17 +1176,32 @@ impl OntologyPatternRecognizer {
             expressivity_features: vec!["ALC".to_string()],
         }])
     }
-    fn get_pattern_count(&self) -> usize { 3 }
+    fn get_pattern_count(&self) -> usize {
+        3
+    }
 }
 
 #[derive(Debug)]
 struct PerformanceCorrelationAnalyzer;
 impl PerformanceCorrelationAnalyzer {
-    fn new() -> Self { Self }
-    fn analyze_correlations(&self, _query_patterns: &[QueryPattern], _ontology_patterns: &[OntologyPattern], _time: Duration, _memory: usize) -> Result<CorrelationResult, MLError> {
-        Ok(CorrelationResult { new_correlations: 1, new_patterns_discovered: 0 })
+    fn new() -> Self {
+        Self
     }
-    fn get_average_correlation(&self) -> f64 { 0.75 }
+    fn analyze_correlations(
+        &self,
+        _query_patterns: &[QueryPattern],
+        _ontology_patterns: &[OntologyPattern],
+        _time: Duration,
+        _memory: usize,
+    ) -> Result<CorrelationResult, MLError> {
+        Ok(CorrelationResult {
+            new_correlations: 1,
+            new_patterns_discovered: 0,
+        })
+    }
+    fn get_average_correlation(&self) -> f64 {
+        0.75
+    }
 }
 
 #[derive(Debug)]
@@ -1115,11 +1213,22 @@ struct CorrelationResult {
 #[derive(Debug)]
 struct PatternEffectivenessTracker;
 impl PatternEffectivenessTracker {
-    fn new() -> Self { Self }
-    fn update_effectiveness(&self, _query_patterns: &[QueryPattern], _ontology_patterns: &[OntologyPattern], _success: bool, _time: Duration) -> Result<usize, MLError> {
+    fn new() -> Self {
+        Self
+    }
+    fn update_effectiveness(
+        &self,
+        _query_patterns: &[QueryPattern],
+        _ontology_patterns: &[OntologyPattern],
+        _success: bool,
+        _time: Duration,
+    ) -> Result<usize, MLError> {
         Ok(1)
     }
-    fn get_effective_optimizations(&self, _pattern: &QueryPattern) -> Option<Vec<OptimizationStrategy>> {
+    fn get_effective_optimizations(
+        &self,
+        _pattern: &QueryPattern,
+    ) -> Option<Vec<OptimizationStrategy>> {
         Some(vec![OptimizationStrategy {
             strategy_name: "index_optimization".to_string(),
             average_improvement: 0.3,
@@ -1128,5 +1237,7 @@ impl PatternEffectivenessTracker {
             implementation_complexity: 0.4,
         }])
     }
-    fn get_optimization_count(&self) -> usize { 12 }
+    fn get_optimization_count(&self) -> usize {
+        12
+    }
 }

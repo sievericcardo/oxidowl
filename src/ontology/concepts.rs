@@ -3,8 +3,8 @@
 //! This module implements OWL 2 DL class expressions and concept representation
 //! following the OWL 2 specification structure.
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use serde::{Serialize, Deserialize};
 
 /// Identifier for concepts
 pub type ConceptId = u64;

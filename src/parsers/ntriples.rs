@@ -8,11 +8,11 @@ use std::{
     path::Path,
 };
 
+use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{IRI, Ontology},
 };
-use super::common::OntologySerializer;
 
 /// N-Triples Parser
 #[derive(Debug, Clone)]

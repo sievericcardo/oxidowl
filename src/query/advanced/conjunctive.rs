@@ -1,13 +1,12 @@
 //! Conjunctive query data structures and types
-//! 
+//!
 //! This module defines the core types for representing and processing
 //! conjunctive queries over OWL 2 DL ontologies.
 
 use crate::ontology::{
-    ClassExpression, ObjectPropertyExpression, DataPropertyExpression, 
-    Individual, Literal, IRI
+    ClassExpression, DataPropertyExpression, IRI, Individual, Literal, ObjectPropertyExpression,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -244,36 +243,40 @@ impl ConjunctiveQuery {
     /// Get all variables appearing in the query
     pub fn get_all_variables(&self) -> HashSet<QueryVariable> {
         let mut variables = HashSet::new();
-        
+
         // Add answer variables
         variables.extend(self.answer_variables.iter().cloned());
-        
+
         // Add variables from body atoms
         for atom in &self.body_atoms {
             match atom {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.clone());
                 }
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(object.clone());
                 }
-                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(literal.clone());
                 }
-                QueryAtom::SameIndividualAtom { left, right } |
-                QueryAtom::DifferentIndividualsAtom { left, right } => {
+                QueryAtom::SameIndividualAtom { left, right }
+                | QueryAtom::DifferentIndividualsAtom { left, right } => {
                     variables.insert(left.clone());
                     variables.insert(right.clone());
                 }
-                QueryAtom::ConcreteIndividualAtom { variable, .. } |
-                QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                QueryAtom::ConcreteIndividualAtom { variable, .. }
+                | QueryAtom::ConcreteLiteralAtom { variable, .. } => {
                     variables.insert(variable.clone());
                 }
             }
         }
-        
+
         variables
     }
 
@@ -281,90 +284,102 @@ impl ConjunctiveQuery {
     pub fn is_well_formed(&self) -> bool {
         // Check that all answer variables appear in the body
         let body_variables = self.get_body_variables();
-        self.answer_variables.iter().all(|var| body_variables.contains(var))
+        self.answer_variables
+            .iter()
+            .all(|var| body_variables.contains(var))
     }
 
     /// Get variables that appear only in the query body
     pub fn get_body_variables(&self) -> HashSet<QueryVariable> {
         let mut variables = HashSet::new();
-        
+
         for atom in &self.body_atoms {
             match atom {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.clone());
                 }
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(object.clone());
                 }
-                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(literal.clone());
                 }
-                QueryAtom::SameIndividualAtom { left, right } |
-                QueryAtom::DifferentIndividualsAtom { left, right } => {
+                QueryAtom::SameIndividualAtom { left, right }
+                | QueryAtom::DifferentIndividualsAtom { left, right } => {
                     variables.insert(left.clone());
                     variables.insert(right.clone());
                 }
-                QueryAtom::ConcreteIndividualAtom { variable, .. } |
-                QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                QueryAtom::ConcreteIndividualAtom { variable, .. }
+                | QueryAtom::ConcreteLiteralAtom { variable, .. } => {
                     variables.insert(variable.clone());
                 }
             }
         }
-        
+
         variables
     }
 
     /// Get the complexity score of this query (higher = more complex)
     pub fn complexity_score(&self) -> u32 {
         let mut score = 0;
-        
+
         // Base score from number of atoms
         score += self.body_atoms.len() as u32;
-        
+
         // Additional score for complex class expressions
         for atom in &self.body_atoms {
-            if let QueryAtom::ClassAtom { class_expression, .. } = atom {
+            if let QueryAtom::ClassAtom {
+                class_expression, ..
+            } = atom
+            {
                 score += Self::class_expression_complexity(class_expression);
             }
         }
-        
+
         // Score for constraints
         score += self.constraints.distinct_variables.len() as u32;
         score += self.constraints.type_constraints.len() as u32;
         score += self.constraints.value_constraints.len() as u32;
-        
+
         score
     }
 
     fn class_expression_complexity(expr: &ClassExpression) -> u32 {
         match expr {
             ClassExpression::Class(_) => 1,
-            ClassExpression::ObjectIntersectionOf(exprs) |
-            ClassExpression::ObjectUnionOf(exprs) => {
-                1 + exprs.iter().map(Self::class_expression_complexity).sum::<u32>()
+            ClassExpression::ObjectIntersectionOf(exprs)
+            | ClassExpression::ObjectUnionOf(exprs) => {
+                1 + exprs
+                    .iter()
+                    .map(Self::class_expression_complexity)
+                    .sum::<u32>()
             }
             ClassExpression::ObjectComplementOf(expr) => {
                 2 + Self::class_expression_complexity(expr)
             }
-            ClassExpression::ObjectSomeValuesFrom { filler, .. } |
-            ClassExpression::ObjectAllValuesFrom { filler, .. } => {
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. } => {
                 2 + Self::class_expression_complexity(filler)
             }
             ClassExpression::ObjectHasValue { .. } => 2,
             ClassExpression::ObjectHasSelf { .. } => 2,
-            ClassExpression::ObjectMinCardinality { filler, .. } |
-            ClassExpression::ObjectMaxCardinality { filler, .. } |
-            ClassExpression::ObjectExactCardinality { filler, .. } => {
+            ClassExpression::ObjectMinCardinality { filler, .. }
+            | ClassExpression::ObjectMaxCardinality { filler, .. }
+            | ClassExpression::ObjectExactCardinality { filler, .. } => {
                 3 + Self::class_expression_complexity(filler.as_ref())
             }
-            ClassExpression::DataSomeValuesFrom { .. } |
-            ClassExpression::DataAllValuesFrom { .. } => 2,
+            ClassExpression::DataSomeValuesFrom { .. }
+            | ClassExpression::DataAllValuesFrom { .. } => 2,
             ClassExpression::DataHasValue { .. } => 2,
-            ClassExpression::DataMinCardinality { .. } |
-            ClassExpression::DataMaxCardinality { .. } |
-            ClassExpression::DataExactCardinality { .. } => 3,
+            ClassExpression::DataMinCardinality { .. }
+            | ClassExpression::DataMaxCardinality { .. }
+            | ClassExpression::DataExactCardinality { .. } => 3,
             ClassExpression::ObjectOneOf(_) => 2,
         }
     }
@@ -385,13 +400,24 @@ impl fmt::Display for QueryVariable {
 impl fmt::Display for QueryAtom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            QueryAtom::ClassAtom { variable, class_expression } => {
+            QueryAtom::ClassAtom {
+                variable,
+                class_expression,
+            } => {
                 write!(f, "{}({})", class_expression, variable)
             }
-            QueryAtom::ObjectPropertyAtom { subject, property, object } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject,
+                property,
+                object,
+            } => {
                 write!(f, "{}({}, {})", property, subject, object)
             }
-            QueryAtom::DataPropertyAtom { subject, property, literal } => {
+            QueryAtom::DataPropertyAtom {
+                subject,
+                property,
+                literal,
+            } => {
                 write!(f, "{}({}, {})", property, subject, literal)
             }
             QueryAtom::SameIndividualAtom { left, right } => {
@@ -400,7 +426,10 @@ impl fmt::Display for QueryAtom {
             QueryAtom::DifferentIndividualsAtom { left, right } => {
                 write!(f, "{} ≠ {}", left, right)
             }
-            QueryAtom::ConcreteIndividualAtom { variable, individual } => {
+            QueryAtom::ConcreteIndividualAtom {
+                variable,
+                individual,
+            } => {
                 write!(f, "{} = {}", variable, individual)
             }
             QueryAtom::ConcreteLiteralAtom { variable, literal } => {
@@ -413,23 +442,27 @@ impl fmt::Display for QueryAtom {
 impl fmt::Display for ConjunctiveQuery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SELECT ")?;
-        
+
         if self.answer_variables.is_empty() {
             write!(f, "*")?;
         } else {
             for (i, var) in self.answer_variables.iter().enumerate() {
-                if i > 0 { write!(f, ", ")?; }
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
                 write!(f, "{}", var)?;
             }
         }
-        
+
         write!(f, " WHERE {{ ")?;
-        
+
         for (i, atom) in self.body_atoms.iter().enumerate() {
-            if i > 0 { write!(f, " . ")?; }
+            if i > 0 {
+                write!(f, " . ")?;
+            }
             write!(f, "{}", atom)?;
         }
-        
+
         write!(f, " }}")
     }
 }

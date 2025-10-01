@@ -14,13 +14,8 @@ pub use crate::core::reasoner::{
 
 // Re-export incremental reasoning types for public API
 pub use incremental::{
-    IncrementalReasoningService, 
-    IncrementalConfig, 
-    IncrementalStatistics,
-    ChangeEvent,
-    ChangeTracker,
-    DeltaComputer,
-    IncrementalCacheManager,
+    ChangeEvent, ChangeTracker, DeltaComputer, IncrementalCacheManager, IncrementalConfig,
+    IncrementalReasoningService, IncrementalStatistics,
 };
 
 use crate::{
@@ -1042,14 +1037,21 @@ impl ReasoningService {
     }
 
     /// Synchronous version of is_instance_of for use in advanced query processing  
-    pub fn is_instance_of_sync(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
+    pub fn is_instance_of_sync(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> Result<bool> {
         let reasoner = self.reasoner.read().unwrap();
         // For now, return false as a placeholder - needs proper implementation
         Ok(false)
     }
 
     /// Get object property assertions (for advanced query processing)
-    pub fn get_object_property_assertions_sync(&self, property: &ObjectPropertyExpression) -> Result<Vec<(Individual, Individual)>> {
+    pub fn get_object_property_assertions_sync(
+        &self,
+        property: &ObjectPropertyExpression,
+    ) -> Result<Vec<(Individual, Individual)>> {
         // This is a simplified implementation - in practice would query the reasoner
         // For now, return empty results to avoid compilation errors
         Ok(Vec::new())
@@ -1059,7 +1061,7 @@ impl ReasoningService {
     pub fn cache_manager(&self) -> Arc<RwLock<CacheManager>> {
         self.cache_manager.clone()
     }
-    
+
     /// Invalidate all caches (useful for incremental reasoning)
     pub async fn invalidate_all_caches(&self) -> Result<()> {
         if let Ok(mut cache) = self.cache_manager.write() {
@@ -1068,7 +1070,7 @@ impl ReasoningService {
         }
         Ok(())
     }
-    
+
     /// Create an incremental reasoning service wrapper
     pub async fn into_incremental(
         self: Arc<Self>,

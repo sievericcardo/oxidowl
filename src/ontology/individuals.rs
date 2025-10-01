@@ -4,9 +4,9 @@
 //! following the OWL 2 specification structure.
 
 use crate::Error;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use serde::{Serialize, Deserialize};
 
 /// Identifiers for OWL 2 DL individuals.
 pub type IndividualId = u64;

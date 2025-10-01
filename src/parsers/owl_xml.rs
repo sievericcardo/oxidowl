@@ -949,7 +949,7 @@ impl OntologySerializer for OwlXmlSerializer {
     /// Serialize an ontology to OWL XML format string
     fn serialize(&self, ontology: &Ontology) -> Result<String> {
         let mut output = String::new();
-        
+
         // Write XML declaration and namespace declarations
         output.push_str("<?xml version=\"1.0\"?>\n");
         output.push_str("<Ontology xmlns=\"http://www.w3.org/2002/07/owl#\"\n");

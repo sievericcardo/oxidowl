@@ -1,5 +1,5 @@
 //! Advanced query processing module
-//! 
+//!
 //! This module implements high-performance conjunctive query answering with:
 //! - SPARQL-like query capabilities
 //! - OWL 2 QL query rewriting optimization
@@ -8,12 +8,12 @@
 //! - Industrial-strength optimizations and ML-enhanced heuristics
 
 pub mod conjunctive;
-pub mod rewriting;
-pub mod optimization;
 pub mod execution;
-pub mod optimizer; // Advanced optimizer
 pub mod feature_extraction;
 pub mod ml_models;
+pub mod optimization;
+pub mod optimizer; // Advanced optimizer
+pub mod rewriting;
 
 // Core advanced components (using existing enhanced modules)
 pub mod cost_optimizer; // Enhanced with cost-based optimization
@@ -42,47 +42,40 @@ pub mod extended_integration_tests;
 // pub mod integration_tests;
 
 pub use conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-pub use rewriting::QueryRewriter;
-pub use optimization::QueryOptimizer;
-pub use execution::{QueryEngine, ConjunctiveQueryResult, AdvancedQueryError};
-pub use optimizer::{
-    AdvancedQueryOptimizer, AdvancedQueryPlan, AdvancedOptimizerConfig,
-    PerformancePredictor, IntelligentIndexingSystem, PerformanceMonitor
-};
+pub use execution::{AdvancedQueryError, ConjunctiveQueryResult, QueryEngine};
 pub use feature_extraction::{DLQueryFeatureExtractor, FeatureExtractionConfig};
-pub use ml_models::{LinearRegressionModel, NeuralNetworkModel, EnsembleModel};
+pub use ml_models::{EnsembleModel, LinearRegressionModel, NeuralNetworkModel};
+pub use optimization::QueryOptimizer;
+pub use optimizer::{
+    AdvancedOptimizerConfig, AdvancedQueryOptimizer, AdvancedQueryPlan, IntelligentIndexingSystem,
+    PerformanceMonitor, PerformancePredictor,
+};
+pub use rewriting::QueryRewriter;
 
 // Advanced exports from enhanced modules
 pub use cost_optimizer::{
-    CostBasedOptimizer, CostBasedOptimizerConfig, QueryStatistics, CostModel, 
-    JoinOrderOptimizer, IndexAdvisor, AdvancedQueryRewriter
+    AdvancedQueryRewriter, CostBasedOptimizer, CostBasedOptimizerConfig, CostModel, IndexAdvisor,
+    JoinOrderOptimizer, QueryStatistics,
 };
 pub use execution_engine::{
-    AdvancedExecutionEngine, AdvancedExecutionConfig, QueryResultCache,
-    ExecutionStrategySelector, ExecutionPerformanceMonitor, ParallelExecutionCoordinator,
-    ExecutionConstraints, ExecutionPriority, ExecutionId, CacheConfig, ParallelExecutionConfig
+    AdvancedExecutionConfig, AdvancedExecutionEngine, CacheConfig, ExecutionConstraints,
+    ExecutionId, ExecutionPerformanceMonitor, ExecutionPriority, ExecutionStrategySelector,
+    ParallelExecutionConfig, ParallelExecutionCoordinator, QueryResultCache,
 };
 
 // Industrial-strength exports
 pub use industrial::{
-    IndustrialOptimizer, LargeOntologyConfig, IndustrialClassificationResult,
-    LargeScaleStrategy, IndustrialQueryOptimizer
+    IndustrialClassificationResult, IndustrialOptimizer, IndustrialQueryOptimizer,
+    LargeOntologyConfig, LargeScaleStrategy,
 };
-pub use ml_heuristics::{
-    MLHeuristicsEngine, MLHeuristicsConfig, ReasoningStrategy, MLError
-};
+pub use ml_heuristics::{MLError, MLHeuristicsConfig, MLHeuristicsEngine, ReasoningStrategy};
 pub use performance_benchmarking::{
-    PerformanceBenchmarkingSystem, BenchmarkingConfig, IndustrialBenchmarkReport, 
-    CompetitiveAnalysisReport
+    BenchmarkingConfig, CompetitiveAnalysisReport, IndustrialBenchmarkReport,
+    PerformanceBenchmarkingSystem,
 };
 
 // ML-Enhanced Query Optimization exports
 pub use ml_core::{
-    MLHeuristicsEngine as MLEngine, 
-    MLHeuristicsConfig as MLConfig,
-    QueryFeatures, 
-    QueryFeatureExtractor,
-    CostPrediction,
-    QueryExecution,
-    TrainingMetrics,
+    CostPrediction, MLHeuristicsConfig as MLConfig, MLHeuristicsEngine as MLEngine, QueryExecution,
+    QueryFeatureExtractor, QueryFeatures, TrainingMetrics,
 };

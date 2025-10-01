@@ -245,16 +245,24 @@ impl ConceptLabel {
             ConceptLabel::Atomic(name) => name.clone(),
             ConceptLabel::NegatedAtomic(name) => format!("!{}", name),
             ConceptLabel::Intersection(concepts) => {
-                format!("({})", concepts.iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" ⊓ "))
+                format!(
+                    "({})",
+                    concepts
+                        .iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ⊓ ")
+                )
             }
             ConceptLabel::Union(concepts) => {
-                format!("({})", concepts.iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" ⊔ "))
+                format!(
+                    "({})",
+                    concepts
+                        .iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ⊔ ")
+                )
             }
             ConceptLabel::Existential { role, filler } => {
                 format!("∃{}.{}", role.to_string(), filler.to_string())
@@ -262,14 +270,22 @@ impl ConceptLabel {
             ConceptLabel::Universal { role, filler } => {
                 format!("∀{}.{}", role.to_string(), filler.to_string())
             }
-            ConceptLabel::AtLeast { cardinality, role, filler } => {
+            ConceptLabel::AtLeast {
+                cardinality,
+                role,
+                filler,
+            } => {
                 if let Some(f) = filler {
                     format!("≥{}{}.{}", cardinality, role.to_string(), f.to_string())
                 } else {
                     format!("≥{}{}", cardinality, role.to_string())
                 }
             }
-            ConceptLabel::AtMost { cardinality, role, filler } => {
+            ConceptLabel::AtMost {
+                cardinality,
+                role,
+                filler,
+            } => {
                 if let Some(f) = filler {
                     format!("≤{}{}.{}", cardinality, role.to_string(), f.to_string())
                 } else {
@@ -290,7 +306,7 @@ impl RoleLabel {
     /// Parse a role from string representation
     pub fn parse(role_str: &str) -> Self {
         if role_str.starts_with("inv(") && role_str.ends_with(')') {
-            let inner = &role_str[4..role_str.len()-1];
+            let inner = &role_str[4..role_str.len() - 1];
             RoleLabel::Inverse(inner.to_string())
         } else {
             RoleLabel::Atomic(role_str.to_string())
@@ -302,12 +318,11 @@ impl RoleLabel {
         match self {
             RoleLabel::Atomic(name) => name.clone(),
             RoleLabel::Inverse(name) => format!("inv({})", name),
-            RoleLabel::Chain(roles) => {
-                roles.iter()
-                    .map(|r| r.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" ∘ ")
-            }
+            RoleLabel::Chain(roles) => roles
+                .iter()
+                .map(|r| r.to_string())
+                .collect::<Vec<_>>()
+                .join(" ∘ "),
             RoleLabel::Complex(expr) => expr.clone(),
         }
     }
@@ -333,7 +348,11 @@ impl TableauNode {
     }
 
     /// Add a concept with dependency information
-    pub fn add_concept_with_dependency(&mut self, concept: ConceptLabel, dependency: DependencySet) {
+    pub fn add_concept_with_dependency(
+        &mut self,
+        concept: ConceptLabel,
+        dependency: DependencySet,
+    ) {
         self.concepts.insert(concept.clone());
         self.concept_dependencies.insert(concept, dependency);
     }

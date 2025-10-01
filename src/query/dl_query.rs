@@ -15,8 +15,8 @@ use crate::{
 };
 use log::debug;
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::fmt;
+use std::sync::Arc;
 
 /// Errors that can occur during query processing
 #[derive(Debug, thiserror::Error)]
@@ -119,7 +119,10 @@ impl DLQueryEngine {
 
     /// Create a new DL query engine with reasoning service and optional namespace
     #[must_use]
-    pub fn with_config(reasoning_service: Arc<ReasoningService>, namespace: Option<String>) -> Self {
+    pub fn with_config(
+        reasoning_service: Arc<ReasoningService>,
+        namespace: Option<String>,
+    ) -> Self {
         Self {
             reasoning_service,
             default_namespace: namespace,

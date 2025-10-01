@@ -1,23 +1,22 @@
 //! Query processing module for OWL 2 DL ontologies
-//! 
+//!
 //! This module provides comprehensive query capabilities including:
 //! - DL queries with Manchester syntax
 //! - Advanced conjunctive queries with SPARQL-like capabilities  
 //! - OWL 2 QL query rewriting and optimization
 //! - High-performance query execution
 
-pub mod dl_query;
 pub mod advanced;
+pub mod dl_query;
 
 // Re-export main query interfaces for backward compatibility
-pub use dl_query::{DLQuery, DLQueryEngine, DLQueryParser, QueryResult, QueryError, QueryType};
+pub use dl_query::{DLQuery, DLQueryEngine, DLQueryParser, QueryError, QueryResult, QueryType};
 
 // Export new advanced query capabilities
 pub use advanced::{
-    ConjunctiveQuery, QueryAtom, QueryVariable, QueryEngine, QueryOptimizer,
-    ConjunctiveQueryResult, AdvancedQueryError, AdvancedQueryOptimizer,
-    DLQueryFeatureExtractor, PerformancePredictor,
-    IntelligentIndexingSystem, PerformanceMonitor
+    AdvancedQueryError, AdvancedQueryOptimizer, ConjunctiveQuery, ConjunctiveQueryResult,
+    DLQueryFeatureExtractor, IntelligentIndexingSystem, PerformanceMonitor, PerformancePredictor,
+    QueryAtom, QueryEngine, QueryOptimizer, QueryVariable,
 };
 
 use crate::ontology::Ontology;
@@ -32,7 +31,10 @@ pub struct QueryService {
 
 impl QueryService {
     /// Create a new query service
-    pub fn new(ontology: Arc<Ontology>, reasoning_service: Arc<ReasoningService>) -> Result<Self, AdvancedQueryError> {
+    pub fn new(
+        ontology: Arc<Ontology>,
+        reasoning_service: Arc<ReasoningService>,
+    ) -> Result<Self, AdvancedQueryError> {
         Ok(Self {
             dl_engine: DLQueryEngine::new(reasoning_service.clone()),
             advanced_engine: QueryEngine::new(ontology, reasoning_service.clone())?,
@@ -40,12 +42,18 @@ impl QueryService {
     }
 
     /// Execute a DL query with Manchester syntax
-    pub async fn execute_dl_query(&mut self, query: &str) -> std::result::Result<QueryResult, crate::Error> {
+    pub async fn execute_dl_query(
+        &mut self,
+        query: &str,
+    ) -> std::result::Result<QueryResult, crate::Error> {
         self.dl_engine.execute_query(query).await
     }
 
     /// Execute an advanced conjunctive query
-    pub fn execute_conjunctive_query(&mut self, query: &ConjunctiveQuery) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
+    pub fn execute_conjunctive_query(
+        &mut self,
+        query: &ConjunctiveQuery,
+    ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         self.advanced_engine.execute_query(query)
     }
 
