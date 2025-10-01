@@ -6,7 +6,7 @@
 use crate::prelude::*;
 use crate::distributed::{NodeId, DistributedError};
 use crate::distributed::cluster::{ClusterManager, NodeInfo, NodeStatus};
-use crate::query::{ConjunctiveQuery, Variable, Term, Atom};
+use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryVariable, QueryAtom};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -14,7 +14,7 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 /// Represents a distributed query that has been partitioned for parallel execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DistributedQuery {
     /// Original query identifier
     pub query_id: Uuid,
@@ -32,6 +32,7 @@ pub struct DistributedQuery {
     pub metadata: QueryMetadata,
     
     /// Distribution timestamp
+    #[serde(skip)]
     pub created_at: std::time::Instant,
 }
 
@@ -336,9 +337,10 @@ impl QueryDistributor {
             
             // Create partition query with atoms for this concept
             let partition_query = ConjunctiveQuery {
-                head_vars: query.head_vars.clone(),
+                answer_variables: query.answer_variables.clone(),
                 body_atoms: atoms.into_iter().cloned().collect(),
-                body_literals: Vec::new(), // Simplified for now
+                constraints: query.constraints.clone(),
+                metadata: query.metadata.clone(),
             };
             
             let estimated_cost = {
@@ -390,9 +392,10 @@ impl QueryDistributor {
             let assigned_node = available_nodes[i % available_nodes.len()].id;
             
             let partition_query = ConjunctiveQuery {
-                head_vars: query.head_vars.clone(),
+                answer_variables: query.answer_variables.clone(),
                 body_atoms: chunk.iter().map(|(atom, _)| (*atom).clone()).collect(),
-                body_literals: Vec::new(),
+                constraints: query.constraints.clone(),
+                metadata: query.metadata.clone(),
             };
             
             let estimated_cost = {
@@ -434,9 +437,10 @@ impl QueryDistributor {
             let assigned_node = available_nodes[i % available_nodes.len()].id;
             
             let partition_query = ConjunctiveQuery {
-                head_vars: query.head_vars.clone(),
+                answer_variables: query.answer_variables.clone(),
                 body_atoms: chunk.to_vec(),
-                body_literals: Vec::new(),
+                constraints: query.constraints.clone(),
+                metadata: query.metadata.clone(),
             };
             
             let estimated_cost = {
@@ -712,7 +716,7 @@ impl CostEstimator {
                               _metadata: &QueryMetadata) -> Result<ExecutionCost> {
         // Simplified cost estimation based on query size
         let atom_count = query.body_atoms.len();
-        let variable_count = query.head_vars.len();
+        let variable_count = query.answer_variables.len();
         
         let estimated_time_ms = (atom_count * 100 + variable_count * 50) as u64;
         let estimated_memory_mb = (atom_count * 10) as u64;

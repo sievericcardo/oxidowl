@@ -27,6 +27,7 @@ pub struct DistributedLock {
     pub holder: Option<NodeId>,
     
     /// Lock acquisition timestamp
+    #[serde(skip)]
     pub acquired_at: std::time::Instant,
     
     /// Lock timeout duration

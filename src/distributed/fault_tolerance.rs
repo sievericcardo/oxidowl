@@ -106,6 +106,7 @@ pub struct RecoverySession {
     pub strategy: RecoveryStrategy,
     
     /// Session start time
+    #[serde(skip)]
     pub start_time: Instant,
     
     /// Current recovery phase
@@ -135,7 +136,7 @@ pub enum RecoveryType {
 }
 
 /// Component failure information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ComponentFailure {
     /// Component identifier
     pub component_id: String,
@@ -165,9 +166,10 @@ pub enum ComponentType {
 }
 
 /// Detailed failure information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FailureDetails {
     /// Failure timestamp
+    #[serde(skip)]
     pub timestamp: Instant,
     
     /// Error message
@@ -565,7 +567,7 @@ impl FaultTolerance {
         use crate::distributed::result_aggregation::{
             PartialResult, PartialResultStatus, PartialResultMetadata, PerformanceMetrics
         };
-        use crate::query::QueryBinding;
+        use crate::query::advanced::execution::QueryBinding;
         
         // Simulate execution time
         sleep(Duration::from_millis(100)).await;
@@ -762,6 +764,7 @@ pub struct FailureDetector {
 #[derive(Debug)]
 pub struct NodeMonitor {
     pub node_id: NodeId,
+    #[serde(skip)]
     pub last_heartbeat: Instant,
     pub consecutive_failures: usize,
     pub health_history: VecDeque<HealthCheck>,
@@ -770,6 +773,7 @@ pub struct NodeMonitor {
 /// Health check record
 #[derive(Debug, Clone)]
 pub struct HealthCheck {
+    #[serde(skip)]
     pub timestamp: Instant,
     pub status: HealthStatus,
     pub response_time_ms: u64,
@@ -966,9 +970,10 @@ pub struct CheckpointManager {
 }
 
 /// Checkpoint data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Checkpoint {
     pub id: Uuid,
+    #[serde(skip)]
     pub timestamp: Instant,
     pub description: String,
     pub system_state: Vec<u8>, // Serialized state

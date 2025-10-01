@@ -13,7 +13,7 @@ use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
 /// Information about a cluster node
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeInfo {
     /// Unique node identifier
     pub id: NodeId,
@@ -31,6 +31,7 @@ pub struct NodeInfo {
     pub metadata: HashMap<String, String>,
     
     /// Last seen timestamp
+    #[serde(skip)]
     pub last_seen: Instant,
     
     /// Node version information
@@ -60,7 +61,7 @@ pub enum NodeStatus {
 }
 
 /// Node health information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeHealth {
     /// Node identifier
     pub node_id: NodeId,
@@ -81,6 +82,7 @@ pub struct NodeHealth {
     pub active_queries: usize,
     
     /// Last health check timestamp
+    #[serde(skip)]
     pub last_check: Instant,
     
     /// Health metrics history
@@ -104,9 +106,10 @@ pub enum HealthStatus {
 }
 
 /// Historical health metric
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HealthMetric {
     /// Timestamp of the metric
+    #[serde(skip)]
     pub timestamp: Instant,
     
     /// Metric type
@@ -128,7 +131,7 @@ pub enum HealthMetricType {
 }
 
 /// Overall cluster state
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ClusterState {
     /// Cluster identifier
     pub cluster_id: String,
@@ -146,6 +149,7 @@ pub struct ClusterState {
     pub statistics: ClusterStatistics,
     
     /// Last update timestamp
+    #[serde(skip)]
     pub last_updated: Instant,
 }
 

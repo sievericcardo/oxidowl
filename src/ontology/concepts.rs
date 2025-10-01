@@ -4,12 +4,13 @@
 //! following the OWL 2 specification structure.
 
 use std::collections::{HashMap, HashSet};
+use serde::{Serialize, Deserialize};
 
 /// Identifier for concepts
 pub type ConceptId = u64;
 
 /// Named OWL classes
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Class {
     pub iri: crate::ontology::IRI,
 }
@@ -46,7 +47,7 @@ impl Class {
 }
 
 /// OWL 2 DL Class expressions
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ClassExpression {
     /// Named class
     Class(Class),

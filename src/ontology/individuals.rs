@@ -6,12 +6,13 @@
 use crate::Error;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use serde::{Serialize, Deserialize};
 
 /// Identifiers for OWL 2 DL individuals.
 pub type IndividualId = u64;
 
 /// Represents an OWL 2 DL individual.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Individual {
     /// Named individual identifier.
     Named(NamedIndividual),
@@ -21,14 +22,14 @@ pub enum Individual {
 }
 
 /// Represents a named OWL 2 DL individual with an IRI
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NamedIndividual {
     /// IRI of the named individual.
     pub iri: crate::ontology::IRI,
 }
 
 /// Represents an anonymous OWL 2 DL individual.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AnonymousIndividual {
     pub id: String,
 }

@@ -9,6 +9,7 @@ use crate::reasoning::ReasoningService;
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable, QueryConstraints};
 use super::optimization::{QueryPlan, ExecutionStrategy, QueryOptimizer};
 use super::rewriting::QueryRewriter;
+use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -54,25 +55,26 @@ struct CacheStatistics {
 }
 
 /// Result of executing a conjunctive query
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConjunctiveQueryResult {
     /// Query bindings (solutions)
     pub bindings: Vec<QueryBinding>,
     /// Query execution metadata
+    #[serde(skip)]
     pub metadata: ExecutionMetadata,
     /// Whether the result set is complete or truncated
     pub complete: bool,
 }
 
 /// A single binding (solution) for a conjunctive query
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QueryBinding {
     /// Variable bindings: variable -> bound value
     pub variable_bindings: HashMap<QueryVariable, BoundValue>,
 }
 
 /// A value that a query variable can be bound to
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BoundValue {
     /// Individual IRI
     Individual(Individual),
@@ -85,7 +87,7 @@ pub enum BoundValue {
 }
 
 /// Metadata about query execution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ExecutionMetadata {
     /// Total execution time
     pub execution_time: Duration,

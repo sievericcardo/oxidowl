@@ -6,7 +6,9 @@
 use crate::prelude::*;
 use crate::distributed::{NodeId, DistributedError};
 use crate::distributed::query_distribution::{QueryPartition, PartitionStatus};
-use crate::query::{Variable, Term, Individual, Substitution, QueryBinding};
+use crate::query::advanced::conjunctive::QueryVariable;
+use crate::query::advanced::execution::{QueryBinding, BoundValue, ConjunctiveQueryResult};
+use crate::ontology::Individual;
 use std::collections::{HashMap, HashSet, BTreeMap};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc, Mutex};
@@ -14,7 +16,7 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 /// Partial result from a single query partition execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PartialResult {
     /// Partition identifier that produced this result
     pub partition_id: Uuid,
@@ -32,6 +34,7 @@ pub struct PartialResult {
     pub status: PartialResultStatus,
     
     /// Timestamp when result was produced
+    #[serde(skip)]
     pub timestamp: std::time::Instant,
 }
 
@@ -99,7 +102,7 @@ pub struct PerformanceMetrics {
 }
 
 /// Final aggregated result from all partitions
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AggregatedResult {
     /// Query identifier
     pub query_id: Uuid,
@@ -114,6 +117,7 @@ pub struct AggregatedResult {
     pub quality: ResultQuality,
     
     /// Timestamp when aggregation completed
+    #[serde(skip)]
     pub completion_time: std::time::Instant,
 }
 
@@ -337,6 +341,7 @@ pub struct AggregationSession {
     pub partial_results: HashMap<Uuid, PartialResult>,
     
     /// Session start time
+    #[serde(skip)]
     pub start_time: std::time::Instant,
     
     /// Result sender

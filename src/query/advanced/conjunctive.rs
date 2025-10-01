@@ -7,18 +7,19 @@ use crate::ontology::{
     ClassExpression, ObjectPropertyExpression, DataPropertyExpression, 
     Individual, Literal, IRI
 };
+use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// A variable in a conjunctive query
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct QueryVariable {
     pub name: String,
     pub var_type: VariableType,
 }
 
 /// Types of variables that can appear in queries
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum VariableType {
     /// Individual variable (can be bound to named individuals)
     Individual,
@@ -33,7 +34,7 @@ pub enum VariableType {
 }
 
 /// An atom in a conjunctive query
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum QueryAtom {
     /// Class atom: C(x) where C is a class expression and x is an individual variable
     ClassAtom {
@@ -75,7 +76,7 @@ pub enum QueryAtom {
 }
 
 /// A conjunctive query
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConjunctiveQuery {
     /// Variables appearing in the query head (answer variables)
     pub answer_variables: Vec<QueryVariable>,
@@ -88,7 +89,7 @@ pub struct ConjunctiveQuery {
 }
 
 /// Constraints and filters applied to query variables
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryConstraints {
     /// Variables that must be distinct (stored as Vec of pairs for Hash compatibility)
     pub distinct_variables: Vec<Vec<QueryVariable>>,
@@ -99,7 +100,7 @@ pub struct QueryConstraints {
 }
 
 /// Constraints on literal values
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ValueConstraint {
     /// Exact value match
     ExactValue(Literal),
@@ -114,7 +115,7 @@ pub enum ValueConstraint {
 }
 
 /// Query metadata and execution hints
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryMetadata {
     /// Query name or identifier
     pub name: Option<String>,
@@ -127,7 +128,7 @@ pub struct QueryMetadata {
 }
 
 /// Hints for query optimization
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OptimizationHints {
     /// Prefer specific optimization strategy
     pub strategy: Option<OptimizationStrategy>,
@@ -140,7 +141,7 @@ pub struct OptimizationHints {
 }
 
 /// Query optimization strategies
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OptimizationStrategy {
     /// Standard tableau-based reasoning
     Tableau,
