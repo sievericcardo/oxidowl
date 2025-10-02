@@ -452,7 +452,61 @@ impl TurtleParser {
                     i, e
                 ))
             })?;
-            // Try to resolve the object token, but be more defensive about complex structures
+            
+            // Check if the object is a complex structure (blank node, list, etc.) that we should skip
+            if i + 1 < tokens.len() {
+                match &tokens[i + 1] {
+                    Token::LeftBracket | Token::LeftParen => {
+                        // Skip complex structures (blank nodes, lists)
+                        let mut depth = 1;
+                        let is_bracket = matches!(tokens[i + 1], Token::LeftBracket);
+                        i += 2; // Move past predicate and opening bracket/paren
+                        
+                        while i < tokens.len() && depth > 0 {
+                            match tokens[i] {
+                                Token::LeftBracket if is_bracket => depth += 1,
+                                Token::RightBracket if is_bracket => depth -= 1,
+                                Token::LeftParen if !is_bracket => depth += 1,
+                                Token::RightParen if !is_bracket => depth -= 1,
+                                _ => {}
+                            }
+                            i += 1;
+                        }
+                        // Skip to next predicate-object pair or end of statement
+                        while i < tokens.len() && !matches!(tokens[i], Token::Semicolon | Token::Period) {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    Token::Literal(_) => {
+                        // Skip literals for now - they represent datatype property assertions
+                        // which should be handled by a more sophisticated parser
+                        i += 2; // Skip predicate and literal
+                        
+                        // Check if there's a type annotation (^^datatype)
+                        if i < tokens.len() {
+                            match &tokens[i] {
+                                Token::Keyword(kw) if kw.starts_with("^^") => {
+                                    i += 1; // Skip the type annotation
+                                }
+                                Token::PrefixedName(prefix, _) if prefix.starts_with("^^") => {
+                                    i += 1; // Skip the type annotation
+                                }
+                                _ => {}
+                            }
+                        }
+                        
+                        // Move to next predicate-object pair
+                        while i < tokens.len() && matches!(tokens[i], Token::Comma) {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    _ => {} // Continue with normal processing
+                }
+            }
+            
+            // Try to resolve the object token for simple objects
             let object = match self.resolve_token(&tokens[i + 1], state) {
                 Ok(obj) => obj,
                 Err(e) => {
