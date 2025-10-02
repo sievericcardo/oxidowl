@@ -7,12 +7,14 @@
 //! - `tasks`: Basic reasoning operations (consistency, satisfiability, subsumption)
 //! - `classification`: Complex operations (classification, realization)
 //! - `tableau`: Tableau algorithm integration and factories
+//! - `consistency`: Pre-consistency checking for fast inconsistency detection
 //! - `queries`: SPARQL and OWLlink query processing
 //! - `explanation`: Explanation services for reasoning results
 //! - `statistics`: Performance metrics and statistics
 //! - `results`: Result types for various reasoning operations
 
 pub mod classification;
+pub mod consistency;
 pub mod core;
 pub mod explanation;
 pub mod queries;
@@ -25,6 +27,7 @@ pub mod tasks;
 // This allows existing code to continue using the same import paths
 pub use self::{
     classification::ClassificationService,
+    consistency::PreConsistencyChecker,
     core::Reasoner,
     explanation::ExplanationService,
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},

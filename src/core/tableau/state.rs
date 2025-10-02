@@ -87,6 +87,17 @@ pub enum ClashType {
         individual: String,
         nodes: Vec<NodeId>,
     },
+    
+    /// DL Clause violation detected during tableau expansion
+    /// This indicates a clause from the ontology was violated by the tableau state
+    ClauseViolation {
+        /// The ID of the violated clause
+        clause_id: String,
+        /// The node where the violation was detected
+        node: NodeId,
+        /// Description of the violation
+        description: String,
+    },
 }
 
 /// Statistics about tableau construction and expansion
