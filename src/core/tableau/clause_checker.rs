@@ -103,9 +103,30 @@ impl ClauseChecker {
             
             log::trace!("Clause body satisfied for clause: {}", clause.id);
             
-            // Body satisfied - head should be present or derivable
-            // For now, we just log this (head concepts will be added by expansion rules)
-            // In a complete implementation, we might add the head concepts here
+            // Body satisfied - check if head is also satisfied
+            let head_satisfied = clause.head.iter().all(|head_atom| {
+                self.matches_atom(node, head_atom)
+            });
+            
+            if !head_satisfied {
+                // Violation: body satisfied but head not satisfied
+                log::warn!("Deterministic clause violated at node {}: body satisfied but head not satisfied", node.id);
+                
+                let violating_concepts: Vec<String> = clause.body
+                    .iter()
+                    .map(|atom| atom.predicate.clone())
+                    .collect();
+                
+                return Some(ClauseViolation {
+                    clause: clause.clone(),
+                    violating_concepts,
+                    explanation: format!(
+                        "Deterministic clause violated: body satisfied but head not satisfied for clause {}",
+                        clause.id
+                    ),
+                    node_id: node.id,
+                });
+            }
         }
         
         None
@@ -139,7 +160,7 @@ impl ClauseChecker {
                 clause: clause.clone(),
                 violating_concepts,
                 explanation: format!(
-                    "Negative clause violated: all body atoms {} are satisfied, deriving contradiction",
+                    "negative clause violated: all body atoms {} are satisfied, deriving ⊥ (contradiction)",
                     clause.body.iter()
                         .map(|a| format!("{}({})", a.predicate, a.arguments.join(", ")))
                         .collect::<Vec<_>>()
