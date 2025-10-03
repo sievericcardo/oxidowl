@@ -8,7 +8,31 @@ use crate::dl_clauses::{DLClause, DLClauseSet, DLAtom};
 use crate::core::tableau::node::{TableauNode, ConceptLabel};
 use crate::core::tableau::equivalence::{ConceptId, EquivalenceClosure};
 use crate::core::tableau::disjointness::DisjointnessMap;
+use crate::core::tableau::clause_index::ClauseIndex;
 use std::collections::{HashMap, HashSet};
+
+/// Configuration for clause checking optimizations
+#[derive(Debug, Clone)]
+pub struct ClauseCheckerConfig {
+    /// Enable clause indexing for faster lookup
+    pub enable_indexing: bool,
+    
+    /// Enable incremental checking (not yet implemented)
+    pub enable_incremental: bool,
+    
+    /// Enable clause absorption (not yet implemented)
+    pub enable_absorption: bool,
+}
+
+impl Default for ClauseCheckerConfig {
+    fn default() -> Self {
+        Self {
+            enable_indexing: true,  // Enabled by default
+            enable_incremental: false,
+            enable_absorption: false,
+        }
+    }
+}
 
 /// Checks DL clauses during tableau expansion
 pub struct ClauseChecker {
@@ -20,6 +44,12 @@ pub struct ClauseChecker {
     
     /// Disjointness map for reasoning about disjoint concepts
     disjointness_map: Option<DisjointnessMap>,
+    
+    /// Clause index for fast predicate-based lookup (optional optimization)
+    clause_index: Option<ClauseIndex>,
+    
+    /// Configuration for optimizations
+    config: ClauseCheckerConfig,
 }
 
 /// Represents a clause violation detected during checking
@@ -41,10 +71,23 @@ pub struct ClauseViolation {
 impl ClauseChecker {
     /// Create a new clause checker
     pub fn new(clauses: DLClauseSet) -> Self {
+        Self::with_config(clauses, ClauseCheckerConfig::default())
+    }
+    
+    /// Create clause checker with custom configuration
+    pub fn with_config(clauses: DLClauseSet, config: ClauseCheckerConfig) -> Self {
+        let clause_index = if config.enable_indexing {
+            Some(ClauseIndex::from_clause_set(&clauses))
+        } else {
+            None
+        };
+        
         Self {
             clauses,
             equivalence_closure: None,
             disjointness_map: None,
+            clause_index,
+            config,
         }
     }
     
@@ -54,10 +97,41 @@ impl ClauseChecker {
         equivalence_closure: EquivalenceClosure,
         disjointness_map: DisjointnessMap,
     ) -> Self {
+        let config = ClauseCheckerConfig::default();
+        let clause_index = if config.enable_indexing {
+            Some(ClauseIndex::from_clause_set(&clauses))
+        } else {
+            None
+        };
+        
         Self {
             clauses,
             equivalence_closure: Some(equivalence_closure),
             disjointness_map: Some(disjointness_map),
+            clause_index,
+            config,
+        }
+    }
+    
+    /// Create clause checker with full configuration options
+    pub fn with_full_config(
+        clauses: DLClauseSet,
+        equivalence_closure: Option<EquivalenceClosure>,
+        disjointness_map: Option<DisjointnessMap>,
+        config: ClauseCheckerConfig,
+    ) -> Self {
+        let clause_index = if config.enable_indexing {
+            Some(ClauseIndex::from_clause_set(&clauses))
+        } else {
+            None
+        };
+        
+        Self {
+            clauses,
+            equivalence_closure,
+            disjointness_map,
+            clause_index,
+            config,
         }
     }
     
@@ -90,7 +164,50 @@ impl ClauseChecker {
     /// For clauses like: C(x) ← A1(x), A2(x), ..., An(x)
     /// If all body atoms are satisfied, head should be derivable
     fn check_deterministic_clauses(&self, node: &TableauNode) -> Option<ClauseViolation> {
-        for clause in &self.clauses.deterministic_clauses {
+        // Get the clauses to check (either from index or all clauses)
+        let clauses_to_check: Vec<&DLClause> = if let Some(index) = &self.clause_index {
+            // Use index to get candidate clauses based on node's atomic concepts
+            let predicates: Vec<String> = node.concepts
+                .iter()
+                .filter_map(|c| match c {
+                    ConceptLabel::Atomic(name) => Some(name.clone()),
+                    _ => None,
+                })
+                .collect();
+            
+            if !predicates.is_empty() {
+                let mut candidates = index.get_candidate_clause_refs(&predicates);
+                
+                // IMPORTANT: Also include clauses with empty bodies (they always apply!)
+                for clause in index.deterministic_clauses() {
+                    if clause.body.is_empty() && clause.head.is_empty() == false {
+                        if !candidates.iter().any(|c| c.id == clause.id) {
+                            candidates.push(clause);
+                        }
+                    }
+                }
+                
+                candidates
+            } else {
+                // No atomic concepts, but still check clauses with empty bodies
+                index.deterministic_clauses()
+                    .iter()
+                    .filter(|c| c.body.is_empty())
+                    .collect()
+            }
+        } else {
+            // No index - check all clauses (O(n) approach)
+            self.clauses.deterministic_clauses.iter().collect()
+        };
+        
+        log::trace!(
+            "Checking {} deterministic clauses (out of {} total) for node {}",
+            clauses_to_check.len(),
+            self.clauses.deterministic_clauses.len(),
+            node.id
+        );
+        
+        for clause in clauses_to_check {
             // Skip if empty head (handled by negative clause checking)
             if clause.head.is_empty() {
                 continue;
@@ -137,12 +254,25 @@ impl ClauseChecker {
     /// For clauses like: ⊥ ← A1(x), A2(x), ..., An(x)
     /// If all body atoms are satisfied, we have inconsistency
     fn check_negative_clauses(&self, node: &TableauNode) -> Option<ClauseViolation> {
-        for clause in &self.clauses.deterministic_clauses {
-            // Only process clauses with empty head (deriving contradiction)
-            if !clause.head.is_empty() {
-                continue;
-            }
-            
+        // Get negative clauses (either from index or filter manually)
+        let negative_clauses: Vec<&DLClause> = if let Some(index) = &self.clause_index {
+            // Use index to get negative clauses directly
+            index.get_negative_clauses()
+        } else {
+            // No index - filter manually
+            self.clauses.deterministic_clauses
+                .iter()
+                .filter(|c| c.head.is_empty())
+                .collect()
+        };
+        
+        log::trace!(
+            "Checking {} negative clauses for node {}",
+            negative_clauses.len(),
+            node.id
+        );
+        
+        for clause in negative_clauses {
             // Check if body is satisfied
             if !self.matches_body(node, &clause.body) {
                 continue;
@@ -270,6 +400,21 @@ impl ClauseChecker {
     pub fn has_clauses(&self) -> bool {
         !self.clauses.deterministic_clauses.is_empty() 
             || !self.clauses.disjunctive_clauses.is_empty()
+    }
+    
+    /// Get the configuration
+    pub fn config(&self) -> &ClauseCheckerConfig {
+        &self.config
+    }
+    
+    /// Get the clause index (if enabled)
+    pub fn clause_index(&self) -> Option<&ClauseIndex> {
+        self.clause_index.as_ref()
+    }
+    
+    /// Check if indexing is enabled
+    pub fn is_indexing_enabled(&self) -> bool {
+        self.clause_index.is_some()
     }
 }
 
