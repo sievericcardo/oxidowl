@@ -9,6 +9,9 @@ use crate::core::tableau::node::{TableauNode, ConceptLabel};
 use crate::core::tableau::equivalence::{ConceptId, EquivalenceClosure};
 use crate::core::tableau::disjointness::DisjointnessMap;
 use crate::core::tableau::clause_index::ClauseIndex;
+use crate::core::tableau::incremental_checker::{
+    CachedCheckResult, ChangeTracker, CheckResultCache, NodeFingerprint,
+};
 use std::collections::{HashMap, HashSet};
 
 /// Configuration for clause checking optimizations
@@ -17,8 +20,11 @@ pub struct ClauseCheckerConfig {
     /// Enable clause indexing for faster lookup
     pub enable_indexing: bool,
     
-    /// Enable incremental checking (not yet implemented)
+    /// Enable incremental checking with LRU cache
     pub enable_incremental: bool,
+    
+    /// Cache capacity for incremental checking (number of entries)
+    pub cache_capacity: usize,
     
     /// Enable clause absorption (not yet implemented)
     pub enable_absorption: bool,
@@ -27,8 +33,9 @@ pub struct ClauseCheckerConfig {
 impl Default for ClauseCheckerConfig {
     fn default() -> Self {
         Self {
-            enable_indexing: true,  // Enabled by default
-            enable_incremental: false,
+            enable_indexing: true,      // Enabled by default
+            enable_incremental: false,  // Will be enabled after testing
+            cache_capacity: 10_000,     // 10K entries ≈ 880 KB
             enable_absorption: false,
         }
     }
@@ -47,6 +54,12 @@ pub struct ClauseChecker {
     
     /// Clause index for fast predicate-based lookup (optional optimization)
     clause_index: Option<ClauseIndex>,
+    
+    /// Check result cache for incremental checking (optional optimization)
+    check_cache: Option<CheckResultCache>,
+    
+    /// Change tracker for cache invalidation (optional optimization)
+    change_tracker: Option<ChangeTracker>,
     
     /// Configuration for optimizations
     config: ClauseCheckerConfig,
@@ -82,11 +95,25 @@ impl ClauseChecker {
             None
         };
         
+        let check_cache = if config.enable_incremental {
+            Some(CheckResultCache::new(config.cache_capacity))
+        } else {
+            None
+        };
+        
+        let change_tracker = if config.enable_incremental {
+            Some(ChangeTracker::new())
+        } else {
+            None
+        };
+        
         Self {
             clauses,
             equivalence_closure: None,
             disjointness_map: None,
             clause_index,
+            check_cache,
+            change_tracker,
             config,
         }
     }
@@ -104,11 +131,25 @@ impl ClauseChecker {
             None
         };
         
+        let check_cache = if config.enable_incremental {
+            Some(CheckResultCache::new(config.cache_capacity))
+        } else {
+            None
+        };
+        
+        let change_tracker = if config.enable_incremental {
+            Some(ChangeTracker::new())
+        } else {
+            None
+        };
+        
         Self {
             clauses,
             equivalence_closure: Some(equivalence_closure),
             disjointness_map: Some(disjointness_map),
             clause_index,
+            check_cache,
+            change_tracker,
             config,
         }
     }
@@ -126,11 +167,25 @@ impl ClauseChecker {
             None
         };
         
+        let check_cache = if config.enable_incremental {
+            Some(CheckResultCache::new(config.cache_capacity))
+        } else {
+            None
+        };
+        
+        let change_tracker = if config.enable_incremental {
+            Some(ChangeTracker::new())
+        } else {
+            None
+        };
+        
         Self {
             clauses,
             equivalence_closure,
             disjointness_map,
             clause_index,
+            check_cache,
+            change_tracker,
             config,
         }
     }
@@ -415,6 +470,43 @@ impl ClauseChecker {
     /// Check if indexing is enabled
     pub fn is_indexing_enabled(&self) -> bool {
         self.clause_index.is_some()
+    }
+    
+    /// Get the check result cache (if enabled)
+    pub fn check_cache(&self) -> Option<&CheckResultCache> {
+        self.check_cache.as_ref()
+    }
+    
+    /// Get mutable check result cache (if enabled)
+    pub fn check_cache_mut(&mut self) -> Option<&mut CheckResultCache> {
+        self.check_cache.as_mut()
+    }
+    
+    /// Check if incremental checking is enabled
+    pub fn is_incremental_enabled(&self) -> bool {
+        self.check_cache.is_some()
+    }
+    
+    /// Mark a node as changed (for cache invalidation)
+    ///
+    /// Call this when a node's concepts or roles change to invalidate
+    /// cached results for that node.
+    pub fn mark_node_changed(&mut self, node_id: usize) {
+        if let Some(tracker) = &mut self.change_tracker {
+            tracker.mark_changed(node_id);
+        }
+    }
+    
+    /// Clear all cached check results
+    ///
+    /// Useful when ontology changes or for debugging.
+    pub fn clear_cache(&mut self) {
+        if let Some(cache) = &mut self.check_cache {
+            cache.clear();
+        }
+        if let Some(tracker) = &mut self.change_tracker {
+            tracker.clear();
+        }
     }
 }
 

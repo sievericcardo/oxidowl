@@ -6,6 +6,7 @@
 pub mod builder;
 pub mod clause_checker;
 pub mod clause_index;
+pub mod incremental_checker;
 pub mod edge;
 pub mod equivalence;
 pub mod disjointness;
@@ -16,6 +17,9 @@ pub mod state;
 pub use builder::TableauBuilder;
 pub use clause_checker::{ClauseChecker, ClauseCheckerConfig, ClauseViolation};
 pub use clause_index::{ClauseIndex, IndexStatistics};
+pub use incremental_checker::{
+    CachedCheckResult, CacheStatistics, ChangeTracker, CheckResultCache, NodeFingerprint,
+};
 pub use edge::{PropertyInclusion, TableauEdge};
 pub use equivalence::{ConceptId, EquivalenceClosure};
 pub use disjointness::DisjointnessMap;
