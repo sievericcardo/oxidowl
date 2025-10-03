@@ -275,7 +275,7 @@ impl TableauExecutor {
     /// that only become apparent during reasoning (e.g., derived concept combinations)
     fn check_clause_violations(tableau: &mut super::Tableau) -> Result<()> {
         // Only perform clause checking if a ClauseChecker is available
-        if let Some(ref checker) = tableau.clause_checker {
+        if let Some(ref mut checker) = tableau.clause_checker {
             // Check all nodes for clause violations
             for node in &tableau.nodes {
                 if let Some(violation) = checker.check_node(node) {

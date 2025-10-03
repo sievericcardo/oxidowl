@@ -193,8 +193,47 @@ impl ClauseChecker {
     /// Check if a node violates any clauses
     /// 
     /// Returns the first violation found, or None if no violations
-    pub fn check_node(&self, node: &TableauNode) -> Option<ClauseViolation> {
+    /// 
+    /// This method uses caching when incremental checking is enabled.
+    /// For immutable checking (without cache updates), use `check_node_immutable()`.
+    pub fn check_node(&mut self, node: &TableauNode) -> Option<ClauseViolation> {
         log::trace!("Checking node {} for clause violations", node.id);
+        
+        // Compute fingerprint for caching
+        let fingerprint = if self.config.enable_incremental {
+            Some(NodeFingerprint::from_node(node))
+        } else {
+            None
+        };
+        
+        // Check deterministic clauses (Horn clauses)
+        if let Some(violation) = self.check_deterministic_clauses_cached(node, fingerprint) {
+            return Some(violation);
+        }
+        
+        // Check negative clauses (⊥ in head - these indicate inconsistency)
+        if let Some(violation) = self.check_negative_clauses_cached(node, fingerprint) {
+            return Some(violation);
+        }
+        
+        // Check disjointness constraints (no caching yet)
+        if let Some(violation) = self.check_disjointness_violations(node) {
+            return Some(violation);
+        }
+        
+        // Record this check for change tracking
+        if let (Some(tracker), Some(fp)) = (&mut self.change_tracker, fingerprint) {
+            tracker.record_check(node.id, fp);
+        }
+        
+        None
+    }
+    
+    /// Check node immutably (without cache updates)
+    /// 
+    /// Use this when you need immutable access or don't want to update cache.
+    pub fn check_node_immutable(&self, node: &TableauNode) -> Option<ClauseViolation> {
+        log::trace!("Checking node {} for clause violations (immutable)", node.id);
         
         // Check deterministic clauses (Horn clauses)
         if let Some(violation) = self.check_deterministic_clauses(node) {
@@ -351,6 +390,269 @@ impl ClauseChecker {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
+                node_id: node.id,
+            });
+        }
+        
+        None
+    }
+    
+    /// Check deterministic clauses with caching
+    /// 
+    /// This is the cached version of check_deterministic_clauses that uses
+    /// the incremental cache to avoid redundant checks.
+    fn check_deterministic_clauses_cached(
+        &mut self, 
+        node: &TableauNode,
+        fingerprint: Option<NodeFingerprint>
+    ) -> Option<ClauseViolation> {
+        // If no cache or no fingerprint, fall back to regular checking
+        if self.check_cache.is_none() || fingerprint.is_none() {
+            return self.check_deterministic_clauses(node);
+        }
+        
+        let fp = fingerprint.unwrap();
+        
+        // Get clauses to check
+        let clauses_to_check: Vec<DLClause> = if let Some(index) = &self.clause_index {
+            let predicates: Vec<String> = node.concepts
+                .iter()
+                .filter_map(|c| match c {
+                    ConceptLabel::Atomic(name) => Some(name.clone()),
+                    _ => None,
+                })
+                .collect();
+            
+            if !predicates.is_empty() {
+                let mut candidates = index.get_candidate_clause_refs(&predicates)
+                    .into_iter()
+                    .map(|c| c.clone())
+                    .collect::<Vec<_>>();
+                
+                // Include clauses with empty bodies
+                for clause in index.deterministic_clauses() {
+                    if clause.body.is_empty() && !clause.head.is_empty() {
+                        if !candidates.iter().any(|c| c.id == clause.id) {
+                            candidates.push(clause.clone());
+                        }
+                    }
+                }
+                
+                candidates
+            } else {
+                index.deterministic_clauses()
+                    .iter()
+                    .filter(|c| c.body.is_empty())
+                    .map(|c| c.clone())
+                    .collect()
+            }
+        } else {
+            self.clauses.deterministic_clauses.clone()
+        };
+        
+        // Get clause ID to usize mapping (use hash of clause id string)
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        for clause in &clauses_to_check {
+            // Skip empty heads
+            if clause.head.is_empty() {
+                continue;
+            }
+            
+            // Compute clause ID hash
+            let mut hasher = DefaultHasher::new();
+            clause.id.hash(&mut hasher);
+            let clause_id_hash = hasher.finish() as usize;
+            
+            // Check cache first (separate scope to release borrow)
+            let cached_result = if let Some(cache) = &mut self.check_cache {
+                cache.get(fp, clause_id_hash).cloned()
+            } else {
+                None
+            };
+            
+            if let Some(cached_result) = cached_result {
+                // Cache hit!
+                match cached_result {
+                    CachedCheckResult::NoViolation => {
+                        // No violation cached - continue to next clause
+                        continue;
+                    }
+                    CachedCheckResult::Violation { clause_id, description } => {
+                        // Violation cached - reconstruct and return
+                        log::trace!("Cache hit: violation for clause {} at node {}", clause_id, node.id);
+                        
+                        let violating_concepts: Vec<String> = clause.body
+                            .iter()
+                            .map(|atom| atom.predicate.clone())
+                            .collect();
+                        
+                        return Some(ClauseViolation {
+                            clause: clause.clone(),
+                            violating_concepts,
+                            explanation: description.clone(),
+                            node_id: node.id,
+                        });
+                    }
+                    CachedCheckResult::DisjunctSelected { .. } => {
+                        // Not applicable for deterministic clauses
+                        continue;
+                    }
+                }
+            }
+            
+            // Cache miss - do actual check
+            if !self.matches_body(node, &clause.body) {
+                // Body not satisfied - cache and continue
+                if let Some(cache) = &mut self.check_cache {
+                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
+                }
+                continue;
+            }
+            
+            let head_satisfied = clause.head.iter().all(|head_atom| {
+                self.matches_atom(node, head_atom)
+            });
+            
+            if !head_satisfied {
+                // Violation found - cache and return
+                let description = format!(
+                    "Deterministic clause violated: body satisfied but head not satisfied for clause {}",
+                    clause.id
+                );
+                
+                if let Some(cache) = &mut self.check_cache {
+                    cache.put(fp, clause_id_hash, CachedCheckResult::Violation {
+                        clause_id: clause_id_hash,
+                        description: description.clone(),
+                    });
+                }
+                
+                let violating_concepts: Vec<String> = clause.body
+                    .iter()
+                    .map(|atom| atom.predicate.clone())
+                    .collect();
+                
+                return Some(ClauseViolation {
+                    clause: clause.clone(),
+                    violating_concepts,
+                    explanation: description,
+                    node_id: node.id,
+                });
+            } else {
+                // No violation - cache this
+                if let Some(cache) = &mut self.check_cache {
+                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Check negative clauses with caching
+    fn check_negative_clauses_cached(
+        &mut self,
+        node: &TableauNode,
+        fingerprint: Option<NodeFingerprint>
+    ) -> Option<ClauseViolation> {
+        // If no cache or no fingerprint, fall back to regular checking
+        if self.check_cache.is_none() || fingerprint.is_none() {
+            return self.check_negative_clauses(node);
+        }
+        
+        let fp = fingerprint.unwrap();
+        
+        // Get negative clauses (clone to avoid borrow issues)
+        let negative_clauses: Vec<DLClause> = if let Some(index) = &self.clause_index {
+            index.get_negative_clauses()
+                .into_iter()
+                .map(|c| c.clone())
+                .collect()
+        } else {
+            self.clauses.deterministic_clauses
+                .iter()
+                .filter(|c| c.head.is_empty())
+                .map(|c| c.clone())
+                .collect()
+        };
+        
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        for clause in &negative_clauses {
+            // Compute clause ID hash
+            let mut hasher = DefaultHasher::new();
+            clause.id.hash(&mut hasher);
+            let clause_id_hash = hasher.finish() as usize;
+            
+            // Check cache (separate scope)
+            let cached_result = if let Some(cache) = &mut self.check_cache {
+                cache.get(fp, clause_id_hash).cloned()
+            } else {
+                None
+            };
+            
+            if let Some(cached_result) = cached_result {
+                match cached_result {
+                    CachedCheckResult::NoViolation => {
+                        continue;
+                    }
+                    CachedCheckResult::Violation { clause_id, description } => {
+                        log::trace!("Cache hit: negative clause violation for {} at node {}", clause_id, node.id);
+                        
+                        let violating_concepts: Vec<String> = clause.body
+                            .iter()
+                            .map(|atom| atom.predicate.clone())
+                            .collect();
+                        
+                        return Some(ClauseViolation {
+                            clause: clause.clone(),
+                            violating_concepts,
+                            explanation: description.clone(),
+                            node_id: node.id,
+                        });
+                    }
+                    CachedCheckResult::DisjunctSelected { .. } => {
+                        continue;
+                    }
+                }
+            }
+            
+            // Cache miss - do actual check
+            if !self.matches_body(node, &clause.body) {
+                if let Some(cache) = &mut self.check_cache {
+                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
+                }
+                continue;
+            }
+            
+            // Body satisfied - violation!
+            let description = format!(
+                "negative clause violated: all body atoms {} are satisfied, deriving ⊥ (contradiction)",
+                clause.body.iter()
+                    .map(|a| format!("{}({})", a.predicate, a.arguments.join(", ")))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            
+            if let Some(cache) = &mut self.check_cache {
+                cache.put(fp, clause_id_hash, CachedCheckResult::Violation {
+                    clause_id: clause_id_hash,
+                    description: description.clone(),
+                });
+            }
+            
+            let violating_concepts: Vec<String> = clause.body
+                .iter()
+                .map(|atom| atom.predicate.clone())
+                .collect();
+            
+            return Some(ClauseViolation {
+                clause: clause.clone(),
+                violating_concepts,
+                explanation: description,
                 node_id: node.id,
             });
         }
