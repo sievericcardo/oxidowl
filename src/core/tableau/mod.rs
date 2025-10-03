@@ -3,6 +3,7 @@
 //! This module provides a complete tableau-based reasoning system for
 //! OWL 2 DL. The tableau is split into focused submodules for maintainability.
 
+pub mod absorption;
 pub mod builder;
 pub mod clause_checker;
 pub mod clause_index;
@@ -14,6 +15,7 @@ pub mod executor;
 pub mod node;
 pub mod state;
 
+pub use absorption::{AbsorbablePattern, AbsorptionStats, ClauseAbsorber};
 pub use builder::TableauBuilder;
 pub use clause_checker::{ClauseChecker, ClauseCheckerConfig, ClauseViolation};
 pub use clause_index::{ClauseIndex, IndexStatistics};
