@@ -462,7 +462,9 @@ mod tests {
     use crate::ontology::ClassExpression;
 
     fn concept_label(name: &str) -> ClassExpression {
-        ClassExpression::Class(name.to_string())
+        ClassExpression::Class(crate::ontology::Class {
+            iri: crate::ontology::IRI::new(name),
+        })
     }
 
     fn make_clause(body: Vec<DLAtom>, head: Vec<DLAtom>, id: &str) -> DLClause {

@@ -224,7 +224,7 @@ pub enum DataLossRisk {
 }
 
 /// User impact assessment
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UserImpact {
     None,
     PerformanceDegradation,

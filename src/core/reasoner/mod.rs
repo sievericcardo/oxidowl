@@ -17,6 +17,7 @@ pub mod classification;
 pub mod consistency;
 pub mod core;
 pub mod explanation;
+pub mod hypertableau_adapter;
 pub mod queries;
 pub mod results;
 pub mod statistics;
@@ -30,6 +31,7 @@ pub use self::{
     consistency::PreConsistencyChecker,
     core::Reasoner,
     explanation::ExplanationService,
+    hypertableau_adapter::HypertableauRunner,
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},
     results::{
         ClassificationResult, PropertyClassificationResult, RealizationResult, ReasoningResult,

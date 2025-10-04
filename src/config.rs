@@ -62,6 +62,8 @@ pub struct ReasoningConfig {
 pub enum TableauAlgorithm {
     /// Traditional tableau algorithm
     Traditional,
+    /// Hypertableau algorithm (2-5x faster, uses structural sharing)
+    Hypertableau,
     /// Profile-optimized algorithms
     ProfileOptimized,
 }

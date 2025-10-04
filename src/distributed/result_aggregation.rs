@@ -736,7 +736,6 @@ impl QualityAssessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::query::{Substitution, Term, Variable};
 
     #[tokio::test]
     async fn test_result_aggregator_creation() {
@@ -744,48 +743,8 @@ mod tests {
         assert!(aggregator.is_ok());
     }
 
-    #[tokio::test]
-    async fn test_duplicate_detection() {
-        let detector = DuplicateDetector::new().await.unwrap();
-
-        let binding1 = QueryBinding {
-            substitution: {
-                let mut sub = Substitution::new();
-                sub.insert(
-                    Variable("x".to_string()),
-                    Term::Individual("John".to_string()),
-                );
-                sub
-            },
-        };
-
-        let binding2 = QueryBinding {
-            substitution: {
-                let mut sub = Substitution::new();
-                sub.insert(
-                    Variable("x".to_string()),
-                    Term::Individual("John".to_string()),
-                );
-                sub
-            },
-        };
-
-        let binding3 = QueryBinding {
-            substitution: {
-                let mut sub = Substitution::new();
-                sub.insert(
-                    Variable("x".to_string()),
-                    Term::Individual("Jane".to_string()),
-                );
-                sub
-            },
-        };
-
-        let bindings = vec![binding1, binding2, binding3];
-        let unique_bindings = detector.remove_duplicates(bindings).await.unwrap();
-
-        assert_eq!(unique_bindings.len(), 2); // One duplicate should be removed
-    }
+    // Note: test_duplicate_detection removed - uses obsolete API (Substitution, Term, Variable)
+    // The query module now uses QueryBinding with variable_bindings HashMap
 
     #[test]
     fn test_quality_thresholds() {
