@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using tableau algorithms with parallel computation"
 license = "BSD-3-Clause"
@@ -132,6 +132,10 @@ path = "examples/dl_query_example.rs"
 
 [[bench]]
 name = "reasoning_benchmark"
+harness = false
+
+[[bench]]
+name = "hypertableau_benchmark"
 harness = false
 
 [profile.release]

@@ -422,6 +422,12 @@ impl TurtleParser {
             return Ok(());
         }
 
+        // Check if the statement starts with a blank node (anonymous subject)
+        // These are complex structures we don't fully parse yet, so skip them
+        if matches!(tokens[0], Token::LeftBracket) {
+            return Ok(());
+        }
+
         // First token should be the subject
         let subject = self.resolve_token(&tokens[0], state).map_err(|e| {
             Error::ontology_parsing(format!("Failed to resolve subject token: {}", e))
@@ -429,10 +435,13 @@ impl TurtleParser {
 
         // Process predicate-object pairs separated by semicolons
         let mut i = 1;
+        let mut current_predicate: Option<String> = None;
+        
         while i < tokens.len() {
-            // Skip semicolons
+            // Skip semicolons (mark end of predicate-object list, reset current predicate)
             if matches!(tokens[i], Token::Semicolon) {
                 i += 1;
+                current_predicate = None;
                 continue;
             }
 
@@ -446,19 +455,82 @@ impl TurtleParser {
                 break;
             }
 
-            let predicate = self.resolve_token(&tokens[i], state).map_err(|e| {
-                Error::ontology_parsing(format!(
-                    "Failed to resolve predicate token at index {}: {}",
-                    i, e
-                ))
-            })?;
-            // Try to resolve the object token, but be more defensive about complex structures
-            let object = match self.resolve_token(&tokens[i + 1], state) {
+            // If we don't have a current predicate, this token should be a predicate
+            // If we have a current predicate and see a comma, skip it and continue with same predicate
+            if matches!(tokens[i], Token::Comma) {
+                i += 1;
+                // Continue with the same predicate for the next object
+                continue;
+            }
+
+            let predicate = if let Some(ref pred) = current_predicate {
+                // Reuse the current predicate for comma-separated objects
+                pred.clone()
+            } else {
+                // Parse new predicate
+                let pred = self.resolve_token(&tokens[i], state).map_err(|e| {
+                    Error::ontology_parsing(format!(
+                        "Failed to resolve predicate token at index {}: {}",
+                        i, e
+                    ))
+                })?;
+                i += 1; // Move past the predicate
+                current_predicate = Some(pred.clone());
+                pred
+            };
+            
+            // Check if the object is a complex structure (blank node, list, etc.) that we should skip
+            if i < tokens.len() {
+                match &tokens[i] {
+                    Token::LeftBracket | Token::LeftParen => {
+                        // Skip complex structures (blank nodes, lists)
+                        let mut depth = 1;
+                        let is_bracket = matches!(tokens[i], Token::LeftBracket);
+                        i += 1; // Move past opening bracket/paren
+                        
+                        while i < tokens.len() && depth > 0 {
+                            match tokens[i] {
+                                Token::LeftBracket if is_bracket => depth += 1,
+                                Token::RightBracket if is_bracket => depth -= 1,
+                                Token::LeftParen if !is_bracket => depth += 1,
+                                Token::RightParen if !is_bracket => depth -= 1,
+                                _ => {}
+                            }
+                            i += 1;
+                        }
+                        // After closing bracket/paren, continue to check for comma or semicolon
+                        continue;
+                    }
+                    Token::Literal(_) => {
+                        // Skip literals for now - they represent datatype property assertions
+                        // which should be handled by a more sophisticated parser
+                        i += 1; // Skip literal
+                        
+                        // Check if there's a type annotation (^^datatype)
+                        if i < tokens.len() {
+                            match &tokens[i] {
+                                Token::Keyword(kw) if kw.starts_with("^^") => {
+                                    i += 1; // Skip the type annotation
+                                }
+                                Token::PrefixedName(prefix, _) if prefix.starts_with("^^") => {
+                                    i += 1; // Skip the type annotation
+                                }
+                                _ => {}
+                            }
+                        }
+                        continue;
+                    }
+                    _ => {} // Continue with normal processing
+                }
+            }
+            
+            // Try to resolve the object token for simple objects
+            let object = match self.resolve_token(&tokens[i], state) {
                 Ok(obj) => obj,
                 Err(e) => {
                     eprintln!(
                         "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
-                        i + 1,
+                        i,
                         e
                     );
                     // Skip to next statement
@@ -466,6 +538,7 @@ impl TurtleParser {
                     {
                         i += 1;
                     }
+                    current_predicate = None;
                     continue;
                 }
             };
@@ -473,10 +546,12 @@ impl TurtleParser {
             // Process this triple
             self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), object)?;
 
-            // Move to next predicate-object pair
-            i += 2;
+            // Move to next object or predicate
+            i += 1;
 
             // Handle comma-separated objects for the same predicate
+            // (Note: this is now mostly handled by the top-level comma check,
+            //  but we keep this for additional complex cases)
             while i < tokens.len() && matches!(tokens[i], Token::Comma) {
                 i += 1; // Skip comma
                 if i < tokens.len() && !matches!(tokens[i], Token::Semicolon | Token::Period) {
@@ -513,6 +588,11 @@ impl TurtleParser {
                         }
                     }
                 }
+            }
+            
+            // Reset current predicate if we hit a semicolon or period
+            if i < tokens.len() && matches!(tokens[i], Token::Semicolon | Token::Period) {
+                current_predicate = None;
             }
         }
 

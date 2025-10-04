@@ -226,8 +226,24 @@ impl Reasoner {
     /// Check if the ontology is consistent
     pub fn is_consistent(&self) -> Result<bool> {
         if let Some(ontology) = &self.ontology {
-            // Use tableau-based consistency checking
             let ontology_ref = ontology.read().unwrap();
+            
+            // PHASE 1: Pre-consistency check (fast detection of certain inconsistencies)
+            log::info!("Running pre-consistency check");
+            let mut pre_checker = crate::core::reasoner::PreConsistencyChecker::new(&*ontology_ref)?;
+            
+            // If pre-check detects inconsistency, return early
+            match pre_checker.check() {
+                Err(_) => {
+                    log::info!("Pre-consistency check detected inconsistency");
+                    return Ok(false);
+                }
+                Ok(_) => {
+                    log::info!("Pre-consistency check passed, proceeding to tableau");
+                }
+            }
+            
+            // PHASE 2: Tableau-based consistency checking (if pre-check passed)
             let mut tableau = self
                 .tableau_factory
                 .create_for_consistency(&*ontology_ref)?;

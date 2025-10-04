@@ -89,8 +89,18 @@ impl TableauFactory {
 
     /// Create a tableau runner for consistency checking
     pub fn create_for_consistency(&self, ontology: &Ontology) -> Result<Box<dyn TableauRunner>> {
-        let tableau = self.tableau_builder.build_for_consistency(ontology)?;
-        Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Hypertableau => {
+                log::info!("Creating hypertableau runner for consistency checking");
+                let runner = super::hypertableau_adapter::HypertableauRunner::for_consistency(ontology)?;
+                Ok(Box::new(runner))
+            }
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+                log::info!("Creating traditional tableau runner for consistency checking");
+                let tableau = self.tableau_builder.build_for_consistency(ontology)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
     }
 
     /// Create a tableau runner for subsumption checking
@@ -100,13 +110,25 @@ impl TableauFactory {
         subclass: &ClassExpression,
         superclass: &ClassExpression,
     ) -> Result<Box<dyn TableauRunner>> {
-        // Convert ClassExpression to string for the current tableau builder interface
-        let subclass_str = &format!("{subclass}");
-        let superclass_str = &format!("{superclass}");
-        let tableau =
-            self.tableau_builder
-                .build_for_subsumption(ontology, subclass_str, superclass_str)?;
-        Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Hypertableau => {
+                log::info!("Creating hypertableau runner for subsumption checking");
+                let runner = super::hypertableau_adapter::HypertableauRunner::for_subsumption(
+                    ontology, subclass, superclass
+                )?;
+                Ok(Box::new(runner))
+            }
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+                log::info!("Creating traditional tableau runner for subsumption checking");
+                // Convert ClassExpression to string for the current tableau builder interface
+                let subclass_str = &format!("{subclass}");
+                let superclass_str = &format!("{superclass}");
+                let tableau =
+                    self.tableau_builder
+                        .build_for_subsumption(ontology, subclass_str, superclass_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
     }
 
     /// Create a tableau runner for satisfiability checking
@@ -115,12 +137,24 @@ impl TableauFactory {
         ontology: &Ontology,
         class_expr: &ClassExpression,
     ) -> Result<Box<dyn TableauRunner>> {
-        // Convert ClassExpression to string for the current tableau builder interface
-        let class_str = &format!("{class_expr}");
-        let tableau = self
-            .tableau_builder
-            .build_for_satisfiability(ontology, class_str)?;
-        Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+        match self.config.reasoning.tableau_algorithm {
+            TableauAlgorithm::Hypertableau => {
+                log::info!("Creating hypertableau runner for satisfiability checking");
+                let runner = super::hypertableau_adapter::HypertableauRunner::for_satisfiability(
+                    ontology, class_expr
+                )?;
+                Ok(Box::new(runner))
+            }
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+                log::info!("Creating traditional tableau runner for satisfiability checking");
+                // Convert ClassExpression to string for the current tableau builder interface
+                let class_str = &format!("{class_expr}");
+                let tableau = self
+                    .tableau_builder
+                    .build_for_satisfiability(ontology, class_str)?;
+                Ok(Box::new(TraditionalTableauRunner::new(tableau)))
+            }
+        }
     }
 
     /// Create a tableau runner for instance checking
