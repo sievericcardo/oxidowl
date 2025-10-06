@@ -542,13 +542,11 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
         match child.tag_name().name() {
             "ObjectProperty" => {
                 if let Some(iri) = child.attribute("IRI") {
-                    if let Ok(url) = url::Url::parse(iri) {
-                        object_properties.push(
-                            crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                                crate::ontology::ObjectProperty { iri: url },
-                            ),
-                        );
-                    }
+                    object_properties.push(
+                        crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty { iri: IRI::new(iri) },
+                        ),
+                    );
                 }
             }
             "DataProperty" => {
@@ -858,7 +856,7 @@ fn parse_object_property_expression(element: &roxmltree::Node) -> Result<ObjectP
         "ObjectProperty" => {
             if let Some(iri) = element.attribute("IRI") {
                 Ok(ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                    iri: IRI::new(iri).to_url()?,
+                    iri: IRI::new(iri),
                 }))
             } else {
                 Err(Error::io(
@@ -879,7 +877,7 @@ fn parse_object_property_expression(element: &roxmltree::Node) -> Result<ObjectP
             // Parse the child as ObjectProperty, not ObjectPropertyExpression
             if let Some(iri) = children[0].attribute("IRI") {
                 let property = ObjectProperty {
-                    iri: IRI::new(iri).to_url()?,
+                    iri: IRI::new(iri),
                 };
                 Ok(ObjectPropertyExpression::InverseObjectProperty(property))
             } else {

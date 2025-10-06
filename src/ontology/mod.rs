@@ -104,7 +104,7 @@ impl std::fmt::Display for ObjectPropertyExpression {
 impl ObjectPropertyExpression {
     /// Get the IRI if this is a simple object property
     #[must_use]
-    pub fn iri(&self) -> Option<&url::Url> {
+    pub fn iri(&self) -> Option<&IRI> {
         match self {
             ObjectPropertyExpression::ObjectProperty(prop) => Some(&prop.iri),
             ObjectPropertyExpression::InverseObjectProperty(prop) => Some(&prop.iri),
@@ -116,7 +116,7 @@ impl ObjectPropertyExpression {
 /// Object Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ObjectProperty {
-    pub iri: Url,
+    pub iri: IRI,
 }
 
 /// Object property expressions (simple or complex)
@@ -485,12 +485,9 @@ impl Ontology {
                             log::debug!("Added class from declaration: {iri}");
                         }
                         axioms::Entity::ObjectProperty(iri) => {
-                            // Try to convert to URL, but continue if it fails (for relative IRIs)
-                            if let Ok(url) = iri.to_url() {
-                                signature
-                                    .object_properties
-                                    .push(ObjectProperty { iri: url });
-                            }
+                            signature
+                                .object_properties
+                                .push(ObjectProperty { iri: iri.clone() });
                         }
                         axioms::Entity::DataProperty(iri) => {
                             signature
@@ -840,11 +837,8 @@ impl Ontology {
         for axiom in &self.axioms {
             if let axioms::Axiom::Declaration(decl) = axiom {
                 if let axioms::Entity::ObjectProperty(iri) = &decl.entity {
-                    // Need to convert IRI to URL for ObjectProperty
-                    if let Ok(url) = iri.to_url() {
-                        let property = ObjectProperty { iri: url };
-                        properties.push(property);
-                    }
+                    let property = ObjectProperty { iri: iri.clone() };
+                    properties.push(property);
                 }
             }
         }

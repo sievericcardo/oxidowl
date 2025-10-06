@@ -279,9 +279,9 @@ impl HelperMethods for super::generator::DLClauseGenerator {
 
     fn object_property_expression_to_string(&self, expr: &ObjectPropertyExpression) -> String {
         match expr {
-            ObjectPropertyExpression::ObjectProperty(prop) => self.url_to_string(&prop.iri),
+            ObjectPropertyExpression::ObjectProperty(prop) => self.iri_to_string(&prop.iri),
             ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                format!("inv({})", self.url_to_string(&prop.iri))
+                format!("inv({})", self.iri_to_string(&prop.iri))
             }
             ObjectPropertyExpression::PropertyChain(chain) => {
                 let chain_parts: Vec<String> = chain
