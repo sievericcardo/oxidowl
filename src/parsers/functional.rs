@@ -328,9 +328,7 @@ impl FunctionalParser {
                             if position < tokens.len() {
                                 let iri = self.expand_iri(&tokens[position], prefixes)?;
                                 let property = crate::ontology::ObjectProperty {
-                                    iri: url::Url::parse(&iri).map_err(|e| {
-                                        Error::ontology_parsing(format!("Invalid IRI: {e}"))
-                                    })?,
+                                    iri: crate::ontology::IRI::new(&iri),
                                 };
                                 ontology.add_object_property(property);
                                 position += 1;
@@ -964,19 +962,14 @@ impl FunctionalParser {
                 let obj_iri = self.expand_iri(&tokens[position + 2], prefixes)?;
 
                 let property = crate::ontology::ObjectProperty {
-                    iri: url::Url::parse(&prop_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?,
+                    iri: crate::ontology::IRI::new(&prop_iri),
                 };
                 let subject =
                     crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
-                        iri: url::Url::parse(&subj_iri)
-                            .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
-                            .into(), // Convert URL to IRI
+                        iri: crate::ontology::IRI::new(&subj_iri),
                     });
                 let object = crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
-                    iri: url::Url::parse(&obj_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
-                        .into(), // Convert URL to IRI
+                    iri: crate::ontology::IRI::new(&obj_iri),
                 });
 
                 let axiom = crate::ontology::ObjectPropertyAssertionAxiom {

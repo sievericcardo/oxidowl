@@ -719,8 +719,8 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                             super_prop_expr
                         {
                             hierarchy.add_property(super_prop.clone());
-                            let prop_iri = oxidowl::ontology::IRI::new(prop.iri.as_ref());
-                            let super_iri = oxidowl::ontology::IRI::new(super_prop.iri.as_ref());
+                            let prop_iri = prop.iri.clone();
+                            let super_iri = super_prop.iri.clone();
                             hierarchy.add_sub_property(&super_iri, &prop_iri);
                         }
                     }
@@ -2240,7 +2240,7 @@ fn display_object_property_hierarchy(
     println!("Top Object Properties:");
     // Find top properties (those with no super properties)
     for property in hierarchy.all_properties() {
-        let property_iri = oxidowl::ontology::IRI::new(property.iri.as_ref());
+        let property_iri = property.iri.clone();
         if hierarchy
             .get_super_properties(&property_iri)
             .is_none_or(std::collections::HashSet::is_empty)
@@ -2290,12 +2290,12 @@ fn display_object_property_subtree(
 
     // Extract IRI from property expression to get sub-properties
     if let oxidowl::ontology::ObjectPropertyExpression::ObjectProperty(obj_prop) = property {
-        let property_iri = oxidowl::ontology::IRI::new(obj_prop.iri.as_ref());
+        let property_iri = obj_prop.iri.clone();
         if let Some(sub_props) = hierarchy.get_sub_properties(&property_iri) {
             for sub_prop_iri in sub_props {
                 // Convert IRI back to ObjectPropertyExpression for recursion
                 if let Some(sub_obj_prop) = hierarchy.all_properties().find(|p| {
-                    let p_iri = oxidowl::ontology::IRI::new(p.iri.as_ref());
+                    let p_iri = p.iri.clone();
                     &p_iri == sub_prop_iri
                 }) {
                     let sub_expr = oxidowl::ontology::ObjectPropertyExpression::ObjectProperty(

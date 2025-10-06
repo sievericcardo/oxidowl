@@ -992,10 +992,10 @@ impl TurtleParser {
 
                 // Create SubClassOf axiom
                 let subclass = ClassExpression::Class(Class {
-                    iri: IRI::new(&subject_uri).to_url()?.into(),
+                    iri: IRI::new(&subject_uri),
                 });
                 let superclass = ClassExpression::Class(Class {
-                    iri: IRI::new(&object_uri).to_url()?.into(),
+                    iri: IRI::new(&object_uri),
                 });
 
                 let axiom = SubClassOfAxiom {

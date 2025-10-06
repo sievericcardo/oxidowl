@@ -958,10 +958,10 @@ fn collect_namespaces_from_object_property_expression(
 
     match expr {
         ObjectPropertyExpression::ObjectProperty(prop) => {
-            collect_namespace_from_url(&prop.iri, namespaces);
+            collect_namespace_from_iri(&prop.iri, namespaces);
         }
         ObjectPropertyExpression::InverseObjectProperty(prop) => {
-            collect_namespace_from_url(&prop.iri, namespaces);
+            collect_namespace_from_iri(&prop.iri, namespaces);
         }
         ObjectPropertyExpression::PropertyChain(chain) => {
             for prop in chain {

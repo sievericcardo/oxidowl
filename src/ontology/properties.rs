@@ -29,7 +29,7 @@ pub enum Role {
 impl ObjectProperty {
     /// Create a new Object Property
     pub fn new(iri: crate::ontology::IRI) -> Result<Self> {
-        Ok(Self { iri: iri.to_url()? })
+        Ok(Self { iri })
     }
 
     /// Create the top object property (owl:topObjectProperty)
@@ -433,7 +433,7 @@ impl ObjectPropertyHierarchy {
 
     /// Add an object property to the hierarchy
     pub fn add_property(&mut self, property: ObjectProperty) -> &ObjectProperty {
-        let iri = crate::ontology::IRI::new(property.iri.as_ref());
+        let iri = property.iri.clone();
         self.properties.entry(iri.clone()).or_insert_with(|| {
             self.characteristics
                 .insert(iri.clone(), ObjectPropertyCharacteristics::new());
