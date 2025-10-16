@@ -5,13 +5,11 @@
 
 use oxidowl::{
     core::tableau::{
-        ClauseChecker,
-        node::{TableauNode, ConceptLabel, NodeType},
-        EquivalenceClosure,
-        DisjointnessMap,
+        ClauseChecker, DisjointnessMap, EquivalenceClosure,
+        node::{ConceptLabel, NodeType, TableauNode},
     },
-    dl_clauses::{DLClause, DLClauseSet, DLAtom},
-    ontology::{Ontology, Axiom, ClassExpression, Class, IRI},
+    dl_clauses::{DLAtom, DLClause, DLClauseSet},
+    ontology::{Axiom, Class, ClassExpression, IRI, Ontology},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -147,7 +145,7 @@ fn test_deterministic_clause_violation() {
     // Create clause: A(x) ∧ B(x) → C(x)
     let clause = create_deterministic_clause("clause1", vec!["A", "B"], vec!["C"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Create node with A and B but not C
     let node = create_node_with_concepts(0, vec!["A", "B"]);
@@ -162,7 +160,8 @@ fn test_deterministic_clause_violation() {
     let v = violation.unwrap();
     assert_eq!(v.clause.id, "clause1");
     assert!(
-        v.explanation.contains("body satisfied but head not satisfied"),
+        v.explanation
+            .contains("body satisfied but head not satisfied"),
         "Explanation should mention unsatisfied head"
     );
 }
@@ -172,7 +171,7 @@ fn test_deterministic_clause_satisfied() {
     // Create clause: A(x) ∧ B(x) → C(x)
     let clause = create_deterministic_clause("clause1", vec!["A", "B"], vec!["C"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Create node with A, B, and C
     let node = create_node_with_concepts(0, vec!["A", "B", "C"]);
@@ -190,7 +189,7 @@ fn test_body_not_satisfied() {
     // Create clause: A(x) ∧ B(x) → C(x)
     let clause = create_deterministic_clause("clause1", vec!["A", "B"], vec!["C"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Create node with only A (missing B)
     let node = create_node_with_concepts(0, vec!["A"]);
@@ -212,7 +211,7 @@ fn test_negative_clause_violation() {
     // Create clause: A(x) ∧ B(x) → ⊥
     let clause = create_negative_clause("clause_neg", vec!["A", "B"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Create node with both A and B
     let node = create_node_with_concepts(0, vec!["A", "B"]);
@@ -237,7 +236,7 @@ fn test_no_contradiction_when_body_incomplete() {
     // Create clause: A(x) ∧ B(x) → ⊥
     let clause = create_negative_clause("clause_neg", vec!["A", "B"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Create node with only A
     let node = create_node_with_concepts(0, vec!["A"]);
@@ -266,13 +265,10 @@ fn test_direct_disjointness_violation() {
 
     // Create empty clause set (we're testing disjointness checking)
     let clause_set = create_test_clause_set(vec![]);
-    let checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
+    let mut checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
 
     // Create node with both Plant and Animal (using same IRIs as axioms)
-    let node = create_node_with_concepts(
-        0,
-        vec!["Plant", "Animal"],
-    );
+    let node = create_node_with_concepts(0, vec!["Plant", "Animal"]);
 
     // Check for violation
     let violation = checker.check_node(&node);
@@ -293,7 +289,7 @@ fn test_no_disjointness_when_concepts_compatible() {
     let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).unwrap();
 
     let clause_set = create_test_clause_set(vec![]);
-    let checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
+    let mut checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
 
     // Create node with only Plant (using same IRI as axioms)
     let node = create_node_with_concepts(0, vec!["Plant"]);
@@ -316,7 +312,7 @@ fn test_multiple_clauses_first_violates() {
     let clause1 = create_deterministic_clause("c1", vec!["A", "B"], vec!["C"]);
     let clause2 = create_deterministic_clause("c2", vec!["D", "E"], vec!["F"]);
     let clause_set = create_test_clause_set(vec![clause1, clause2]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Node violates first clause
     let node = create_node_with_concepts(0, vec!["A", "B"]); // Missing C
@@ -332,7 +328,7 @@ fn test_multiple_clauses_second_violates() {
     let clause1 = create_deterministic_clause("c1", vec!["A", "B"], vec!["C"]);
     let clause2 = create_deterministic_clause("c2", vec!["D", "E"], vec!["F"]);
     let clause_set = create_test_clause_set(vec![clause1, clause2]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Node satisfies first clause but violates second
     let node = create_node_with_concepts(0, vec!["A", "B", "C", "D", "E"]); // Missing F
@@ -348,13 +344,16 @@ fn test_multiple_clauses_all_satisfied() {
     let clause1 = create_deterministic_clause("c1", vec!["A", "B"], vec!["C"]);
     let clause2 = create_deterministic_clause("c2", vec!["D", "E"], vec!["F"]);
     let clause_set = create_test_clause_set(vec![clause1, clause2]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Node satisfies both clauses
     let node = create_node_with_concepts(0, vec!["A", "B", "C", "D", "E", "F"]);
 
     let violation = checker.check_node(&node);
-    assert!(violation.is_none(), "Should not detect violation when all clauses satisfied");
+    assert!(
+        violation.is_none(),
+        "Should not detect violation when all clauses satisfied"
+    );
 }
 
 // ============================================================================
@@ -364,7 +363,7 @@ fn test_multiple_clauses_all_satisfied() {
 #[test]
 fn test_empty_clause_set() {
     let clause_set = create_test_clause_set(vec![]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     let node = create_node_with_concepts(0, vec!["A", "B", "C"]);
 
@@ -379,7 +378,7 @@ fn test_empty_clause_set() {
 fn test_empty_node() {
     let clause = create_deterministic_clause("c1", vec!["A", "B"], vec!["C"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Empty node
     let node = create_node_with_concepts(0, vec![]);
@@ -407,7 +406,7 @@ fn test_clause_with_empty_body() {
     };
 
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Node without C
     let node = create_node_with_concepts(0, vec!["A", "B"]);
@@ -439,7 +438,7 @@ fn test_performance_many_clauses() {
         .collect();
 
     let clause_set = create_test_clause_set(clauses);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     // Node with just A (no clauses apply)
     let node = create_node_with_concepts(0, vec!["A"]);
@@ -469,7 +468,7 @@ fn test_performance_large_node() {
     // Single simple clause
     let clause = create_deterministic_clause("c1", vec!["Concept0", "Concept1"], vec!["Result"]);
     let clause_set = create_test_clause_set(vec![clause]);
-    let checker = ClauseChecker::new(clause_set);
+    let mut checker = ClauseChecker::new(clause_set);
 
     let start = Instant::now();
     let _violation = checker.check_node(&node);

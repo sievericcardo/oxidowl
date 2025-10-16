@@ -69,7 +69,7 @@ impl NodeSignature {
             outgoing_hash: 0,
         }
     }
-    
+
     /// Add a concept to the signature
     pub fn add_concept(&mut self, concept: String) {
         if !self.concepts.contains(&concept) {
@@ -77,17 +77,20 @@ impl NodeSignature {
             self.concepts.sort(); // Keep sorted for consistent comparison
         }
     }
-    
+
     /// Add a complex concept expression
     pub fn add_complex_concept(&mut self, expr: ClassExpression) {
         self.complex_concepts.push(expr);
     }
-    
+
     /// Check if this signature subsumes another
     pub fn subsumes(&self, other: &NodeSignature) -> bool {
         // Check if all concepts in other are in self
         other.concepts.iter().all(|c| self.concepts.contains(c))
-            && other.complex_concepts.iter().all(|c| self.complex_concepts.contains(c))
+            && other
+                .complex_concepts
+                .iter()
+                .all(|c| self.complex_concepts.contains(c))
     }
 }
 
@@ -115,31 +118,31 @@ impl Default for NodeSignature {
 pub struct HyperNode {
     /// Unique node identifier
     pub id: NodeId,
-    
+
     /// Concept labels on this node
     pub labels: HashSet<String>,
-    
+
     /// Complex concept expressions
     pub complex_labels: Vec<ClassExpression>,
-    
+
     /// Parent node (if any)
     pub parent: Option<NodeId>,
-    
+
     /// Node this was merged into (if merged)
     pub merged_into: Option<NodeId>,
-    
+
     /// Signature for equivalence checking
     pub signature: NodeSignature,
-    
+
     /// Whether this node is blocked
     pub is_blocked: bool,
-    
+
     /// Blocking node (if blocked)
     pub blocked_by: Option<NodeId>,
-    
+
     /// Whether this node represents a nominal (named individual)
     pub is_nominal: bool,
-    
+
     /// Individual name (if nominal)
     pub individual: Option<String>,
 }
@@ -161,7 +164,7 @@ impl HyperNode {
             individual: None,
         }
     }
-    
+
     /// Create a new hypernode with a specific ID (for testing)
     pub fn with_id(id: NodeId) -> Self {
         Self {
@@ -177,41 +180,41 @@ impl HyperNode {
             individual: None,
         }
     }
-    
+
     /// Add a concept label to this node
     pub fn add_label(&mut self, label: String) {
         self.labels.insert(label.clone());
         self.signature.add_concept(label);
     }
-    
+
     /// Add a complex concept expression
     pub fn add_complex_label(&mut self, expr: ClassExpression) {
         self.complex_labels.push(expr.clone());
         self.signature.add_complex_concept(expr);
     }
-    
+
     /// Check if node has a specific label
     pub fn has_label(&self, label: &str) -> bool {
         self.labels.contains(label)
     }
-    
+
     /// Mark this node as blocked by another
     pub fn block(&mut self, blocker: NodeId) {
         self.is_blocked = true;
         self.blocked_by = Some(blocker);
     }
-    
+
     /// Unblock this node
     pub fn unblock(&mut self) {
         self.is_blocked = false;
         self.blocked_by = None;
     }
-    
+
     /// Mark this node as merged into another
     pub fn merge_into(&mut self, target: NodeId) {
         self.merged_into = Some(target);
     }
-    
+
     /// Check if this node is active (not merged)
     pub fn is_active(&self) -> bool {
         self.merged_into.is_none()
@@ -229,16 +232,16 @@ impl Default for HyperNode {
 pub struct HyperEdge {
     /// Role name
     pub role: String,
-    
+
     /// Source node
     pub from: NodeId,
-    
+
     /// Target node
     pub to: NodeId,
-    
+
     /// Edge type
     pub edge_type: EdgeType,
-    
+
     /// Whether this edge is active (not invalidated by merging)
     pub is_active: bool,
 }
@@ -254,17 +257,17 @@ impl HyperEdge {
             is_active: true,
         }
     }
-    
+
     /// Create a generating edge
     pub fn generating(role: String, from: NodeId, to: NodeId) -> Self {
         Self::new(role, from, to, EdgeType::Generating)
     }
-    
+
     /// Create a non-generating edge
     pub fn non_generating(role: String, from: NodeId, to: NodeId) -> Self {
         Self::new(role, from, to, EdgeType::NonGenerating)
     }
-    
+
     /// Deactivate this edge (due to merging)
     pub fn deactivate(&mut self) {
         self.is_active = false;
@@ -276,19 +279,19 @@ impl HyperEdge {
 pub struct Hypergraph {
     /// All nodes in the hypergraph
     nodes: HashMap<NodeId, HyperNode>,
-    
+
     /// All edges in the hypergraph (public for expansion access)
     pub edges: Vec<HyperEdge>,
-    
+
     /// Index: node signature -> node IDs
     signature_index: HashMap<NodeSignature, Vec<NodeId>>,
-    
+
     /// Index: source node -> outgoing edges
     outgoing: HashMap<NodeId, Vec<usize>>,
-    
+
     /// Index: target node -> incoming edges
     incoming: HashMap<NodeId, Vec<usize>>,
-    
+
     /// Root node (start of reasoning)
     root: Option<NodeId>,
 }
@@ -305,68 +308,68 @@ impl Hypergraph {
             root: None,
         }
     }
-    
+
     /// Add a node to the hypergraph
     pub fn add_node(&mut self, node: HyperNode) -> NodeId {
         let id = node.id;
         let signature = node.signature.clone();
-        
+
         // Add to signature index
         self.signature_index
             .entry(signature)
             .or_insert_with(Vec::new)
             .push(id);
-        
+
         // Add node
         self.nodes.insert(id, node);
-        
+
         // Set as root if first node
         if self.root.is_none() {
             self.root = Some(id);
         }
-        
+
         id
     }
-    
+
     /// Get a node by ID
     pub fn get_node(&self, id: NodeId) -> Option<&HyperNode> {
         self.nodes.get(&id)
     }
-    
+
     /// Get a mutable reference to a node
     pub fn get_node_mut(&mut self, id: NodeId) -> Option<&mut HyperNode> {
         self.nodes.get_mut(&id)
     }
-    
+
     /// Add an edge to the hypergraph
     pub fn add_edge(&mut self, edge: HyperEdge) -> usize {
         let edge_id = self.edges.len();
         let from = edge.from;
         let to = edge.to;
-        
+
         // Add edge
         self.edges.push(edge);
-        
+
         // Update outgoing index
         self.outgoing
             .entry(from)
             .or_insert_with(Vec::new)
             .push(edge_id);
-        
+
         // Update incoming index
         self.incoming
             .entry(to)
             .or_insert_with(Vec::new)
             .push(edge_id);
-        
+
         edge_id
     }
-    
+
     /// Get an edge by index
     pub fn get_edge(&self, edge_id: usize) -> Option<&HyperEdge> {
         self.edges.get(edge_id)
     }
-    
+
     /// Get outgoing edges from a node
     pub fn get_outgoing_edges(&self, node_id: NodeId) -> Vec<&HyperEdge> {
         self.outgoing
@@ -380,7 +383,7 @@ impl Hypergraph {
             })
             .unwrap_or_default()
     }
-    
+
     /// Get incoming edges to a node
     pub fn get_incoming_edges(&self, node_id: NodeId) -> Vec<&HyperEdge> {
         self.incoming
@@ -394,7 +397,7 @@ impl Hypergraph {
             })
             .unwrap_or_default()
     }
-    
+
     /// Find nodes with a given signature
     pub fn find_by_signature(&self, signature: &NodeSignature) -> Vec<NodeId> {
         self.signature_index
@@ -402,14 +405,12 @@ impl Hypergraph {
             .map(|node_ids| {
                 node_ids
                     .iter()
-                    .filter_map(|&id| {
-                        self.nodes.get(&id).filter(|n| n.is_active()).map(|_| id)
-                    })
+                    .filter_map(|&id| self.nodes.get(&id).filter(|n| n.is_active()).map(|_| id))
                     .collect()
             })
             .unwrap_or_default()
     }
-    
+
     /// Find nodes that subsume the given node by ID
     pub fn find_subsumers(&self, node_id: NodeId) -> Vec<NodeId> {
         if let Some(node) = self.nodes.get(&node_id) {
@@ -423,42 +424,45 @@ impl Hypergraph {
             Vec::new()
         }
     }
-    
+
     /// Get the root node
     pub fn root(&self) -> Option<&HyperNode> {
         self.root.and_then(|id| self.nodes.get(&id))
     }
-    
+
     /// Get all active nodes as IDs
     pub fn active_nodes(&self) -> impl Iterator<Item = NodeId> + '_ {
-        self.nodes.iter().filter(|(_, n)| n.is_active()).map(|(&id, _)| id)
+        self.nodes
+            .iter()
+            .filter(|(_, n)| n.is_active())
+            .map(|(&id, _)| id)
     }
-    
+
     /// Get all active edges
     pub fn active_edges(&self) -> Vec<&HyperEdge> {
         self.edges.iter().filter(|e| e.is_active).collect()
     }
-    
+
     /// Get the number of nodes
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
-    
+
     /// Get the number of active nodes
     pub fn active_node_count(&self) -> usize {
         self.nodes.values().filter(|n| n.is_active()).count()
     }
-    
+
     /// Get the number of edges
     pub fn edge_count(&self) -> usize {
         self.edges.len()
     }
-    
+
     /// Get the number of active edges
     pub fn active_edge_count(&self) -> usize {
         self.edges.iter().filter(|e| e.is_active).count()
     }
-    
+
     /// Clear the hypergraph
     pub fn clear(&mut self) {
         self.nodes.clear();
@@ -479,7 +483,7 @@ impl Default for Hypergraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_create_node() {
         let node = HyperNode::new();
@@ -487,7 +491,7 @@ mod tests {
         assert!(node.is_active());
         assert!(!node.is_blocked);
     }
-    
+
     #[test]
     fn test_add_label() {
         let mut node = HyperNode::new();
@@ -495,31 +499,31 @@ mod tests {
         assert!(node.has_label("Person"));
         assert!(node.signature.concepts.contains(&"Person".to_string()));
     }
-    
+
     #[test]
     fn test_node_blocking() {
         let mut node = HyperNode::new();
         assert!(!node.is_blocked);
-        
+
         node.block(42);
         assert!(node.is_blocked);
         assert_eq!(node.blocked_by, Some(42));
-        
+
         node.unblock();
         assert!(!node.is_blocked);
         assert_eq!(node.blocked_by, None);
     }
-    
+
     #[test]
     fn test_node_merging() {
         let mut node = HyperNode::new();
         assert!(node.is_active());
-        
+
         node.merge_into(99);
         assert!(!node.is_active());
         assert_eq!(node.merged_into, Some(99));
     }
-    
+
     #[test]
     fn test_create_hypergraph() {
         let graph = Hypergraph::new();
@@ -527,114 +531,114 @@ mod tests {
         assert_eq!(graph.edge_count(), 0);
         assert!(graph.root().is_none());
     }
-    
+
     #[test]
     fn test_add_node_to_graph() {
         let mut graph = Hypergraph::new();
         let mut node = HyperNode::new();
         node.add_label("Person".to_string());
-        
+
         let id = graph.add_node(node);
         assert_eq!(graph.node_count(), 1);
         assert_eq!(graph.root().unwrap().id, id);
     }
-    
+
     #[test]
     fn test_add_edge() {
         let mut graph = Hypergraph::new();
         let node1 = HyperNode::new();
         let node2 = HyperNode::new();
-        
+
         let id1 = graph.add_node(node1);
         let id2 = graph.add_node(node2);
-        
+
         let edge = HyperEdge::generating("knows".to_string(), id1, id2);
         let edge_id = graph.add_edge(edge);
-        
+
         assert_eq!(graph.edge_count(), 1);
         assert_eq!(graph.get_edge(edge_id).unwrap().role, "knows");
     }
-    
+
     #[test]
     fn test_outgoing_edges() {
         let mut graph = Hypergraph::new();
         let node1 = HyperNode::new();
         let node2 = HyperNode::new();
         let node3 = HyperNode::new();
-        
+
         let id1 = graph.add_node(node1);
         let id2 = graph.add_node(node2);
         let id3 = graph.add_node(node3);
-        
+
         graph.add_edge(HyperEdge::generating("knows".to_string(), id1, id2));
         graph.add_edge(HyperEdge::generating("likes".to_string(), id1, id3));
-        
+
         let outgoing = graph.get_outgoing_edges(id1);
         assert_eq!(outgoing.len(), 2);
     }
-    
+
     #[test]
     fn test_incoming_edges() {
         let mut graph = Hypergraph::new();
         let node1 = HyperNode::new();
         let node2 = HyperNode::new();
         let node3 = HyperNode::new();
-        
+
         let id1 = graph.add_node(node1);
         let id2 = graph.add_node(node2);
         let id3 = graph.add_node(node3);
-        
+
         graph.add_edge(HyperEdge::generating("knows".to_string(), id1, id3));
         graph.add_edge(HyperEdge::generating("likes".to_string(), id2, id3));
-        
+
         let incoming = graph.get_incoming_edges(id3);
         assert_eq!(incoming.len(), 2);
     }
-    
+
     #[test]
     fn test_signature_matching() {
         let mut sig1 = NodeSignature::new();
         sig1.add_concept("Person".to_string());
         sig1.add_concept("Adult".to_string());
-        
+
         let mut sig2 = NodeSignature::new();
         sig2.add_concept("Person".to_string());
-        
+
         assert!(sig1.subsumes(&sig2));
         assert!(!sig2.subsumes(&sig1));
     }
-    
+
     #[test]
     fn test_find_by_signature() {
         let mut graph = Hypergraph::new();
         let mut node1 = HyperNode::new();
         node1.add_label("Person".to_string());
-        
+
         let mut node2 = HyperNode::new();
         node2.add_label("Person".to_string());
-        
+
         graph.add_node(node1.clone());
         graph.add_node(node2);
-        
+
         let results = graph.find_by_signature(&node1.signature);
         assert_eq!(results.len(), 2);
     }
-    
+
     #[test]
     fn test_active_nodes_filter() {
         let mut graph = Hypergraph::new();
         let mut node1 = HyperNode::new();
         let node2 = HyperNode::new();
-        
+
         let id1 = graph.add_node(node1.clone());
         let id2 = graph.add_node(node2);
-        
+
         assert_eq!(graph.active_node_count(), 2);
-        
+
         // Merge node1 into node2
         node1.merge_into(id2);
         graph.nodes.insert(id1, node1);
-        
+
         assert_eq!(graph.active_node_count(), 1);
     }
 }

@@ -6,12 +6,12 @@
 //! - Behavior with varying axiom complexity
 //! - Memory usage patterns
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use oxidowl::{
     config::{ReasonerConfig, TableauAlgorithm},
     ontology::{
-        axioms::{Axiom, DisjointClassesAxiom, EquivalentClassesAxiom, SubClassOfAxiom},
         Class, ClassExpression, IRI, Ontology,
+        axioms::{Axiom, DisjointClassesAxiom, EquivalentClassesAxiom, SubClassOfAxiom},
     },
     reasoning::ReasoningService,
 };
@@ -188,39 +188,31 @@ fn bench_linear_hierarchy(c: &mut Criterion) {
     for size in [10, 50, 100, 200].iter() {
         let ontology = create_linear_hierarchy(*size);
 
-        group.bench_with_input(
-            BenchmarkId::new("traditional", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("hypertableau", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
     }
 
     group.finish();
@@ -280,39 +272,31 @@ fn bench_complex_expressions(c: &mut Criterion) {
     for size in [10, 20, 50, 100].iter() {
         let ontology = create_complex_expressions(*size);
 
-        group.bench_with_input(
-            BenchmarkId::new("traditional", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("hypertableau", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
     }
 
     group.finish();
@@ -325,39 +309,31 @@ fn bench_equivalent_classes(c: &mut Criterion) {
     for size in [10, 50, 100].iter() {
         let ontology = create_equivalent_classes(*size);
 
-        group.bench_with_input(
-            BenchmarkId::new("traditional", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("hypertableau", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
     }
 
     group.finish();
@@ -370,39 +346,31 @@ fn bench_disjoint_classes(c: &mut Criterion) {
     for size in [10, 50, 100].iter() {
         let ontology = create_disjoint_classes(*size);
 
-        group.bench_with_input(
-            BenchmarkId::new("traditional", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("hypertableau", size),
-            size,
-            |b, _size| {
-                b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let mut config = ReasonerConfig::default();
-                        config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
-                        let result = reasoner.is_consistent().await;
-                        black_box(result)
-                    })
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
+            b.iter(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let mut config = ReasonerConfig::default();
+                    config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
+                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let result = reasoner.is_consistent().await;
+                    black_box(result)
+                })
+            });
+        });
     }
 
     group.finish();

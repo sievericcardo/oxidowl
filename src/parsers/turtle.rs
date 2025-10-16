@@ -436,7 +436,7 @@ impl TurtleParser {
         // Process predicate-object pairs separated by semicolons
         let mut i = 1;
         let mut current_predicate: Option<String> = None;
-        
+
         while i < tokens.len() {
             // Skip semicolons (mark end of predicate-object list, reset current predicate)
             if matches!(tokens[i], Token::Semicolon) {
@@ -478,7 +478,7 @@ impl TurtleParser {
                 current_predicate = Some(pred.clone());
                 pred
             };
-            
+
             // Check if the object is a complex structure (blank node, list, etc.) that we should skip
             if i < tokens.len() {
                 match &tokens[i] {
@@ -487,7 +487,7 @@ impl TurtleParser {
                         let mut depth = 1;
                         let is_bracket = matches!(tokens[i], Token::LeftBracket);
                         i += 1; // Move past opening bracket/paren
-                        
+
                         while i < tokens.len() && depth > 0 {
                             match tokens[i] {
                                 Token::LeftBracket if is_bracket => depth += 1,
@@ -505,7 +505,7 @@ impl TurtleParser {
                         // Skip literals for now - they represent datatype property assertions
                         // which should be handled by a more sophisticated parser
                         i += 1; // Skip literal
-                        
+
                         // Check if there's a type annotation (^^datatype)
                         if i < tokens.len() {
                             match &tokens[i] {
@@ -523,15 +523,14 @@ impl TurtleParser {
                     _ => {} // Continue with normal processing
                 }
             }
-            
+
             // Try to resolve the object token for simple objects
             let object = match self.resolve_token(&tokens[i], state) {
                 Ok(obj) => obj,
                 Err(e) => {
                     eprintln!(
                         "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
-                        i,
-                        e
+                        i, e
                     );
                     // Skip to next statement
                     while i < tokens.len() && !matches!(tokens[i], Token::Period | Token::Semicolon)
@@ -589,7 +588,7 @@ impl TurtleParser {
                     }
                 }
             }
-            
+
             // Reset current predicate if we hit a semicolon or period
             if i < tokens.len() && matches!(tokens[i], Token::Semicolon | Token::Period) {
                 current_predicate = None;

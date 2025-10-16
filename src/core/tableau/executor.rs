@@ -95,7 +95,7 @@ impl TableauExecutor {
                 tableau.state = TableauState::Unsatisfiable;
                 break;
             }
-            
+
             // Phase 2: Check for DL clause violations during expansion
             // This catches inconsistencies that only appear during reasoning
             Self::check_clause_violations(tableau)?;
@@ -269,7 +269,7 @@ impl TableauExecutor {
         // This would use the blocking strategy to update node blocking status
         Ok(())
     }
-    
+
     /// Phase 2: Check for DL clause violations after tableau expansion
     /// This method checks all tableau nodes against the DL clauses to detect violations
     /// that only become apparent during reasoning (e.g., derived concept combinations)
@@ -281,7 +281,7 @@ impl TableauExecutor {
                 if let Some(violation) = checker.check_node(node) {
                     let clause_id = violation.clause.id.clone();
                     let explanation = violation.explanation.clone();
-                    
+
                     // Found a clause violation - create a clash
                     let clash = Clash {
                         clash_type: ClashType::ClauseViolation {
@@ -296,17 +296,17 @@ impl TableauExecutor {
                             node.id, explanation
                         ),
                     };
-                    
+
                     // Add the clash to the detector
                     tableau.clash_detector.add_clash(clash);
                     tableau.statistics.clashes_detected += 1;
                     tableau.state = TableauState::Unsatisfiable;
-                    
+
                     debug!(
                         "Detected clause violation at node {}: Clause {}, {}",
                         node.id, clause_id, explanation
                     );
-                    
+
                     // Early exit on first violation for efficiency
                     return Ok(());
                 }

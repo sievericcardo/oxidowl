@@ -49,10 +49,7 @@ pub enum AbsorbablePattern {
     },
 
     /// Role range constraint: ∀R.A (all role fillers have concept)
-    RoleRange {
-        role: String,
-        range_concept: String,
-    },
+    RoleRange { role: String, range_concept: String },
 
     /// Conjunction to single concept: A(x) ∧ B(x) → C(x)
     ConjunctionImplication {
@@ -61,9 +58,7 @@ pub enum AbsorbablePattern {
     },
 
     /// Disjointness (handled separately by disjointness map)
-    Disjointness {
-        concepts: Vec<String>,
-    },
+    Disjointness { concepts: Vec<String> },
 }
 
 /// Statistics about the absorption process
@@ -102,15 +97,18 @@ impl AbsorptionStats {
         output.push_str(&format!("Total clauses: {}\n", self.total_clauses));
         output.push_str(&format!("Absorbed: {}\n", self.absorbed_count));
         output.push_str(&format!("Remaining: {}\n", self.remaining_count));
-        output.push_str(&format!("Absorption rate: {:.1}%\n", self.absorption_rate * 100.0));
-        
+        output.push_str(&format!(
+            "Absorption rate: {:.1}%\n",
+            self.absorption_rate * 100.0
+        ));
+
         if !self.pattern_counts.is_empty() {
             output.push_str("\nPattern breakdown:\n");
             for (pattern, count) in &self.pattern_counts {
                 output.push_str(&format!("  {}: {}\n", pattern, count));
             }
         }
-        
+
         output
     }
 }
@@ -174,7 +172,9 @@ impl ClauseAbsorber {
         }
 
         // Disjunctive clauses cannot be absorbed (require branching)
-        absorber.remaining_clauses.extend(clause_set.disjunctive_clauses.clone());
+        absorber
+            .remaining_clauses
+            .extend(clause_set.disjunctive_clauses.clone());
         absorber.stats.total_clauses += clause_set.disjunctive_clauses.len();
         absorber.stats.remaining_count += clause_set.disjunctive_clauses.len();
 
@@ -293,7 +293,7 @@ impl ClauseAbsorber {
         let head_atom = &clause.head[0];
         if head_atom.arguments.len() == 1 {
             let head_var = &head_atom.arguments[0];
-            
+
             // Find role assertion in body
             for body_atom in &clause.body {
                 if body_atom.arguments.len() == 2 {
@@ -402,7 +402,11 @@ impl ClauseAbsorber {
             AbsorbablePattern::Disjointness { .. } => "Disjointness",
         };
 
-        *self.stats.pattern_counts.entry(pattern_name.to_string()).or_insert(0) += 1;
+        *self
+            .stats
+            .pattern_counts
+            .entry(pattern_name.to_string())
+            .or_insert(0) += 1;
     }
 
     /// Get clauses that could not be absorbed (must be checked dynamically)
@@ -503,7 +507,10 @@ mod tests {
         assert_eq!(absorber.absorbed_patterns().len(), 1);
 
         match &absorber.absorbed_patterns()[0] {
-            AbsorbablePattern::ConceptImplication { from_concept, to_concept } => {
+            AbsorbablePattern::ConceptImplication {
+                from_concept,
+                to_concept,
+            } => {
                 assert_eq!(from_concept, "A");
                 assert_eq!(to_concept, "B");
             }
@@ -531,14 +538,22 @@ mod tests {
         assert_eq!(absorber.stats().absorbed_count, 1);
 
         match &absorber.absorbed_patterns()[0] {
-            AbsorbablePattern::RoleDomain { role, domain_concept } => {
+            AbsorbablePattern::RoleDomain {
+                role,
+                domain_concept,
+            } => {
                 assert_eq!(role, "R");
                 assert_eq!(domain_concept, "A");
             }
             _ => panic!("Expected RoleDomain pattern"),
         }
 
-        assert!(absorber.get_role_domain_concepts("R").unwrap().contains("A"));
+        assert!(
+            absorber
+                .get_role_domain_concepts("R")
+                .unwrap()
+                .contains("A")
+        );
     }
 
     #[test]
@@ -561,7 +576,10 @@ mod tests {
         assert_eq!(absorber.stats().absorbed_count, 1);
 
         match &absorber.absorbed_patterns()[0] {
-            AbsorbablePattern::ConjunctionImplication { from_concepts, to_concept } => {
+            AbsorbablePattern::ConjunctionImplication {
+                from_concepts,
+                to_concept,
+            } => {
                 assert_eq!(from_concepts.len(), 2);
                 assert!(from_concepts.contains(&"A".to_string()));
                 assert!(from_concepts.contains(&"B".to_string()));
@@ -654,8 +672,12 @@ mod tests {
         let absorber = ClauseAbsorber::absorb(&clause_set);
 
         assert_eq!(absorber.stats().total_clauses, 3);
-        assert_eq!(absorber.stats().absorbed_count, 2);
-        assert_eq!(absorber.stats().remaining_count, 1);
-        assert!((absorber.stats().absorption_rate - 0.666).abs() < 0.01);
+        // All three clauses are absorbable:
+        // c1: A(x) → B(x) - concept implication
+        // c2: C(x) → D(x) - concept implication
+        // c3: E(x) ∧ R(x,y) → F(y) - role range pattern
+        assert_eq!(absorber.stats().absorbed_count, 3);
+        assert_eq!(absorber.stats().remaining_count, 0);
+        assert!((absorber.stats().absorption_rate - 1.0).abs() < 0.01);
     }
 }
