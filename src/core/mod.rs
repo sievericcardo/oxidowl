@@ -20,8 +20,8 @@ pub use expansion::{
     PriorityBasedExpansionStrategy,
 };
 pub use hypergraph::{
-    Hypergraph, HyperNode, HyperEdge, NodeId, EdgeType, NodeSignature,
-    expansion::{HypertableauExpansion, ExpansionState, ExpansionStatistics},
+    EdgeType, HyperEdge, HyperNode, Hypergraph, NodeId, NodeSignature,
+    expansion::{ExpansionState, ExpansionStatistics, HypertableauExpansion},
 };
 pub use reasoner::Reasoner;
 pub use tableau::{Tableau, TableauState};

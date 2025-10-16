@@ -876,9 +876,7 @@ fn parse_object_property_expression(element: &roxmltree::Node) -> Result<ObjectP
             }
             // Parse the child as ObjectProperty, not ObjectPropertyExpression
             if let Some(iri) = children[0].attribute("IRI") {
-                let property = ObjectProperty {
-                    iri: IRI::new(iri),
-                };
+                let property = ObjectProperty { iri: IRI::new(iri) };
                 Ok(ObjectPropertyExpression::InverseObjectProperty(property))
             } else {
                 Err(Error::io(

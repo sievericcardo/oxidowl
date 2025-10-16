@@ -92,7 +92,8 @@ impl TableauFactory {
         match self.config.reasoning.tableau_algorithm {
             TableauAlgorithm::Hypertableau => {
                 log::info!("Creating hypertableau runner for consistency checking");
-                let runner = super::hypertableau_adapter::HypertableauRunner::for_consistency(ontology)?;
+                let runner =
+                    super::hypertableau_adapter::HypertableauRunner::for_consistency(ontology)?;
                 Ok(Box::new(runner))
             }
             TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
@@ -114,7 +115,7 @@ impl TableauFactory {
             TableauAlgorithm::Hypertableau => {
                 log::info!("Creating hypertableau runner for subsumption checking");
                 let runner = super::hypertableau_adapter::HypertableauRunner::for_subsumption(
-                    ontology, subclass, superclass
+                    ontology, subclass, superclass,
                 )?;
                 Ok(Box::new(runner))
             }
@@ -123,9 +124,11 @@ impl TableauFactory {
                 // Convert ClassExpression to string for the current tableau builder interface
                 let subclass_str = &format!("{subclass}");
                 let superclass_str = &format!("{superclass}");
-                let tableau =
-                    self.tableau_builder
-                        .build_for_subsumption(ontology, subclass_str, superclass_str)?;
+                let tableau = self.tableau_builder.build_for_subsumption(
+                    ontology,
+                    subclass_str,
+                    superclass_str,
+                )?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
             }
         }
@@ -141,7 +144,7 @@ impl TableauFactory {
             TableauAlgorithm::Hypertableau => {
                 log::info!("Creating hypertableau runner for satisfiability checking");
                 let runner = super::hypertableau_adapter::HypertableauRunner::for_satisfiability(
-                    ontology, class_expr
+                    ontology, class_expr,
                 )?;
                 Ok(Box::new(runner))
             }

@@ -5,13 +5,11 @@
 
 use oxidowl::{
     core::tableau::{
-        ClauseChecker,
-        node::{TableauNode, ConceptLabel, NodeType},
-        EquivalenceClosure,
-        DisjointnessMap,
+        ClauseChecker, DisjointnessMap, EquivalenceClosure,
+        node::{ConceptLabel, NodeType, TableauNode},
     },
-    dl_clauses::{DLClause, DLClauseSet, DLAtom},
-    ontology::{Ontology, Axiom, ClassExpression, Class, IRI},
+    dl_clauses::{DLAtom, DLClause, DLClauseSet},
+    ontology::{Axiom, Class, ClassExpression, IRI, Ontology},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -162,7 +160,8 @@ fn test_deterministic_clause_violation() {
     let v = violation.unwrap();
     assert_eq!(v.clause.id, "clause1");
     assert!(
-        v.explanation.contains("body satisfied but head not satisfied"),
+        v.explanation
+            .contains("body satisfied but head not satisfied"),
         "Explanation should mention unsatisfied head"
     );
 }
@@ -269,10 +268,7 @@ fn test_direct_disjointness_violation() {
     let mut checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
 
     // Create node with both Plant and Animal (using same IRIs as axioms)
-    let node = create_node_with_concepts(
-        0,
-        vec!["Plant", "Animal"],
-    );
+    let node = create_node_with_concepts(0, vec!["Plant", "Animal"]);
 
     // Check for violation
     let violation = checker.check_node(&node);
@@ -354,7 +350,10 @@ fn test_multiple_clauses_all_satisfied() {
     let node = create_node_with_concepts(0, vec!["A", "B", "C", "D", "E", "F"]);
 
     let violation = checker.check_node(&node);
-    assert!(violation.is_none(), "Should not detect violation when all clauses satisfied");
+    assert!(
+        violation.is_none(),
+        "Should not detect violation when all clauses satisfied"
+    );
 }
 
 // ============================================================================

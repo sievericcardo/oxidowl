@@ -220,7 +220,11 @@ impl CheckResultCache {
     ///
     /// - Time: O(1)
     /// - Side effects: Updates LRU order
-    pub fn get(&mut self, fingerprint: NodeFingerprint, clause_id: usize) -> Option<&CachedCheckResult> {
+    pub fn get(
+        &mut self,
+        fingerprint: NodeFingerprint,
+        clause_id: usize,
+    ) -> Option<&CachedCheckResult> {
         let key = CacheKey::new(fingerprint, clause_id);
         match self.cache.get(&key) {
             Some(result) => {
@@ -242,14 +246,19 @@ impl CheckResultCache {
     ///
     /// - Time: O(1)
     /// - Side effects: May evict old entry
-    pub fn put(&mut self, fingerprint: NodeFingerprint, clause_id: usize, result: CachedCheckResult) {
+    pub fn put(
+        &mut self,
+        fingerprint: NodeFingerprint,
+        clause_id: usize,
+        result: CachedCheckResult,
+    ) {
         let key = CacheKey::new(fingerprint, clause_id);
-        
+
         // Track evictions when cache is full
         if self.cache.len() == self.cache.cap().get() {
             self.evictions += 1;
         }
-        
+
         self.cache.put(key, result);
     }
 
@@ -443,7 +452,8 @@ mod tests {
     fn create_test_node(id: NodeId, concepts: Vec<&str>) -> TableauNode {
         let mut node = TableauNode::new(id, NodeType::Individual);
         for concept in concepts {
-            node.concepts.insert(ConceptLabel::Atomic(concept.to_string()));
+            node.concepts
+                .insert(ConceptLabel::Atomic(concept.to_string()));
         }
         node
     }
@@ -469,22 +479,32 @@ mod tests {
         let fp2 = NodeFingerprint::from_node(&node2);
 
         // Different concepts should produce different fingerprints (with high probability)
-        assert_ne!(fp1, fp2, "Different concepts should produce different fingerprints");
+        assert_ne!(
+            fp1, fp2,
+            "Different concepts should produce different fingerprints"
+        );
     }
 
     #[test]
     fn test_fingerprint_with_roles() {
         let mut node1 = create_test_node(0, vec!["Person"]);
-        node1.role_successors.insert("knows".to_string(), vec![1, 2].into_iter().collect());
+        node1
+            .role_successors
+            .insert("knows".to_string(), vec![1, 2].into_iter().collect());
 
         let mut node2 = create_test_node(0, vec!["Person"]);
-        node2.role_successors.insert("knows".to_string(), vec![2, 1].into_iter().collect()); // Different order
+        node2
+            .role_successors
+            .insert("knows".to_string(), vec![2, 1].into_iter().collect()); // Different order
 
         let fp1 = NodeFingerprint::from_node(&node1);
         let fp2 = NodeFingerprint::from_node(&node2);
 
         // Same role successors (sorted) should produce same fingerprint
-        assert_eq!(fp1, fp2, "Role successor order shouldn't affect fingerprint");
+        assert_eq!(
+            fp1, fp2,
+            "Role successor order shouldn't affect fingerprint"
+        );
     }
 
     #[test]
@@ -516,13 +536,20 @@ mod tests {
 
         // Cache results for different clauses on same node
         cache.put(fingerprint, 1, CachedCheckResult::NoViolation);
-        cache.put(fingerprint, 2, CachedCheckResult::Violation {
-            clause_id: 2,
-            description: "Test violation".to_string(),
-        });
+        cache.put(
+            fingerprint,
+            2,
+            CachedCheckResult::Violation {
+                clause_id: 2,
+                description: "Test violation".to_string(),
+            },
+        );
 
         // Should be independent
-        assert_eq!(cache.get(fingerprint, 1), Some(&CachedCheckResult::NoViolation));
+        assert_eq!(
+            cache.get(fingerprint, 1),
+            Some(&CachedCheckResult::NoViolation)
+        );
         match cache.get(fingerprint, 2) {
             Some(CachedCheckResult::Violation { clause_id, .. }) => {
                 assert_eq!(*clause_id, 2);
@@ -680,7 +707,7 @@ mod tests {
         // Add entries and hit them
         cache.put(fp, 1, CachedCheckResult::NoViolation);
         cache.put(fp, 2, CachedCheckResult::NoViolation);
-        
+
         for _ in 0..10 {
             cache.get(fp, 1); // Hit
             cache.get(fp, 2); // Hit

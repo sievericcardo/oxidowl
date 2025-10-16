@@ -718,7 +718,9 @@ impl CostPredictionModel {
 }
 
 /// Execution strategy types for query processing
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, bincode::Encode, bincode::Decode,
+)]
 pub enum ExecutionStrategy {
     /// Use indexes for efficient lookups
     IndexedLookup,
@@ -785,7 +787,9 @@ pub enum QueryPattern {
 }
 
 /// Scalability characteristics
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, bincode::Encode, bincode::Decode,
+)]
 pub enum ScalabilityClass {
     Constant,     // O(1)
     Logarithmic,  // O(log n)
@@ -1299,8 +1303,10 @@ impl ModelStorage {
 
     pub fn save_strategy_selector(&self, model: &StrategySelectionModel) -> Result<(), Error> {
         let path = self.storage_dir.join("strategy_selector.bin");
-        let data = bincode::encode_to_vec(model, bincode::config::standard()).map_err(|e| Error::Internal {
-            message: format!("Failed to serialize model: {}", e),
+        let data = bincode::encode_to_vec(model, bincode::config::standard()).map_err(|e| {
+            Error::Internal {
+                message: format!("Failed to serialize model: {}", e),
+            }
         })?;
 
         std::fs::write(path, data).map_err(|e| Error::Internal {
@@ -1316,9 +1322,12 @@ impl ModelStorage {
             message: format!("Failed to read model: {}", e),
         })?;
 
-        let (model, _) = bincode::decode_from_slice(&data, bincode::config::standard()).map_err(|e| Error::Internal {
-            message: format!("Failed to deserialize model: {}", e),
-        })?;
+        let (model, _) =
+            bincode::decode_from_slice(&data, bincode::config::standard()).map_err(|e| {
+                Error::Internal {
+                    message: format!("Failed to deserialize model: {}", e),
+                }
+            })?;
         Ok(model)
     }
 }
