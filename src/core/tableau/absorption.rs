@@ -654,8 +654,12 @@ mod tests {
         let absorber = ClauseAbsorber::absorb(&clause_set);
 
         assert_eq!(absorber.stats().total_clauses, 3);
-        assert_eq!(absorber.stats().absorbed_count, 2);
-        assert_eq!(absorber.stats().remaining_count, 1);
-        assert!((absorber.stats().absorption_rate - 0.666).abs() < 0.01);
+        // All three clauses are absorbable:
+        // c1: A(x) → B(x) - concept implication
+        // c2: C(x) → D(x) - concept implication  
+        // c3: E(x) ∧ R(x,y) → F(y) - role range pattern
+        assert_eq!(absorber.stats().absorbed_count, 3);
+        assert_eq!(absorber.stats().remaining_count, 0);
+        assert!((absorber.stats().absorption_rate - 1.0).abs() < 0.01);
     }
 }

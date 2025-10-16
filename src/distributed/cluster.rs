@@ -903,6 +903,7 @@ mod tests {
         assert_eq!(state.health.healthy_nodes, 4);
         assert_eq!(state.health.unhealthy_nodes, 1);
         assert_eq!(state.health.total_nodes, 5);
-        assert_eq!(state.health.status, ClusterHealthStatus::Healthy);
+        // With 4/5 nodes active (80%), the cluster is Degraded (requires 90% for Healthy)
+        assert_eq!(state.health.status, ClusterHealthStatus::Degraded);
     }
 }
