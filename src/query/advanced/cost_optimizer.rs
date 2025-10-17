@@ -9,7 +9,7 @@ use super::optimization::{
     ExecutionStrategy, OptimizationError, PlanMetadata, QueryOptimizer, QueryPlan,
 };
 use super::optimizer::{AdvancedOptimizerConfig, AdvancedQueryOptimizer, AdvancedQueryPlan};
-use crate::ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::ontology::{Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -95,7 +95,7 @@ pub struct QueryStatistics {
 }
 
 /// Query pattern for statistical analysis
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct QueryPattern {
     /// Number of atoms in query
     pub atom_count: usize,
@@ -109,8 +109,8 @@ pub struct QueryPattern {
     /// Query complexity class
     pub complexity_class: QueryComplexityClass,
 
-    /// Dominant axiom types involved
-    pub axiom_types: HashSet<AxiomType>,
+    /// Dominant axiom types involved (stored as Vec for Hash compatibility)
+    pub axiom_types: Vec<AxiomType>,
 }
 
 /// Query complexity classification
@@ -152,6 +152,7 @@ pub enum AxiomType {
     ClassAssertion,
     ObjectPropertyAssertion,
     NegativeObjectPropertyAssertion,
+    DataPropertyAssertion,
     SameIndividual,
     DifferentIndividuals,
 }
@@ -754,20 +755,9 @@ impl CostBasedOptimizer {
 
         // Step 5: Apply adaptive query rewriting
         let rewritten_query = if self.config.enable_adaptive_rewriting {
-            self.query_rewriter
-                .rewrite_query(
-                    query,
-                    &RewritingContext {
-                        statistics: self.statistics.clone(),
-                        available_indices: self.get_available_indices(),
-                        ontology: Arc::new(Ontology::new()), // TODO: Use actual ontology
-                        reasoning_service: Arc::new(ReasoningService::new(
-                            Ontology::new(),
-                            Default::default(),
-                        )), // TODO: Use actual service
-                    },
-                )
-                .map_err(|e| OptimizationError::RewritingFailed(format!("{:?}", e)))?
+            // For rewriting, we would need access to actual ontology and reasoning service
+            // For now, skip rewriting if not provided - would need to be passed from caller
+            query.clone()
         } else {
             query.clone()
         };
@@ -782,15 +772,20 @@ impl CostBasedOptimizer {
 
         // Step 8: Calculate confidence scores
         let confidence_scores = self.calculate_confidence_scores(&pattern, &stats);
+        
+        // Step 9: Get estimates that need stats
+        let estimated_result_size = self.estimate_result_size(&rewritten_query, &stats);
+        let overall_confidence = self.calculate_overall_confidence(&pattern, &stats);
+        
         drop(stats); // Explicitly drop to avoid borrow issues
 
         Ok(AdvancedQueryPlan {
             base_plan: QueryPlan {
                 original_query: query.clone(),
-                optimized_query: rewritten_query,
+                optimized_query: rewritten_query.clone(),
                 strategy: optimized_joins,
                 estimated_cost: performance_prediction.execution_time,
-                join_order: vec![], // TODO: Add actual join order
+                join_order: self.compute_join_order(&rewritten_query),
                 metadata: PlanMetadata::default(),
             },
             predicted_performance: super::optimizer::PerformancePrediction {
@@ -798,18 +793,310 @@ impl CostBasedOptimizer {
                     performance_prediction.execution_time,
                 ),
                 estimated_memory_usage: performance_prediction.memory_usage as usize,
-                estimated_result_size: query.body_atoms.len() * 100, // TODO: Better estimate
-                confidence_level: 0.9, // TODO: Calculate actual confidence
+                estimated_result_size,
+                confidence_level: overall_confidence,
             },
-            recommended_indices: vec![], // TODO: Convert index recommendations
-            optimization_suggestions: vec![], // TODO: Convert optimization suggestions
+            recommended_indices: self.get_index_recommendations(&rewritten_query, &pattern),
+            optimization_suggestions: self.get_optimization_suggestions(&rewritten_query, &pattern),
             confidence_scores: super::optimizer::ConfidenceScores {
-                execution_time_confidence: 0.9,
-                memory_usage_confidence: 0.85,
-                optimization_strategy_confidence: 0.8,
-                overall_confidence: 0.85,
+                execution_time_confidence: confidence_scores.performance_prediction,
+                memory_usage_confidence: confidence_scores.index_recommendations,
+                optimization_strategy_confidence: confidence_scores.optimization_suggestions,
+                overall_confidence: confidence_scores.overall,
             },
         })
+    }
+
+    /// Compute optimal join order for query
+    fn compute_join_order(&self, query: &ConjunctiveQuery) -> Vec<usize> {
+        let atoms = &query.body_atoms;
+        if atoms.len() <= 1 {
+            return vec![];
+        }
+
+        // Build join graph showing which atoms share variables
+        let mut join_graph: HashMap<usize, Vec<(usize, Vec<QueryVariable>)>> = HashMap::new();
+        
+        for (i, atom_i) in atoms.iter().enumerate() {
+            for (j, atom_j) in atoms.iter().enumerate() {
+                if i < j {
+                    let shared_vars = self.find_shared_variables(atom_i, atom_j);
+                    if !shared_vars.is_empty() {
+                        join_graph.entry(i).or_insert_with(Vec::new).push((j, shared_vars.clone()));
+                        join_graph.entry(j).or_insert_with(Vec::new).push((i, shared_vars));
+                    }
+                }
+            }
+        }
+
+        // Use greedy heuristic: start with smallest estimated atom, add most selective joins
+        let mut ordered_indices = Vec::new();
+        let mut remaining: HashSet<usize> = (0..atoms.len()).collect();
+        
+        // Find atom with smallest estimated cardinality
+        let start_idx = (0..atoms.len())
+            .min_by_key(|&i| self.estimate_atom_cardinality(&atoms[i]))
+            .unwrap_or(0);
+        
+        ordered_indices.push(start_idx);
+        remaining.remove(&start_idx);
+
+        // Greedily add atoms with highest selectivity to current set
+        while !remaining.is_empty() {
+            let mut best_next = None;
+            let mut best_selectivity = f64::MAX;
+
+            for &candidate in &remaining {
+                // Check if candidate joins with any atom in current set
+                let mut max_selectivity = 0.0_f64;
+                for &existing in &ordered_indices {
+                    if let Some(neighbors) = join_graph.get(&existing) {
+                        for (neighbor, shared_vars) in neighbors {
+                            if *neighbor == candidate {
+                                let selectivity = self.estimate_join_selectivity(
+                                    &atoms[existing],
+                                    &atoms[candidate],
+                                    shared_vars,
+                                );
+                                max_selectivity = max_selectivity.max(selectivity);
+                            }
+                        }
+                    }
+                }
+
+                // Lower selectivity is better (fewer results)
+                if max_selectivity > 0.0 && max_selectivity < best_selectivity {
+                    best_selectivity = max_selectivity;
+                    best_next = Some(candidate);
+                }
+            }
+
+            // Add best candidate or any remaining if no join found
+            if let Some(next_idx) = best_next {
+                ordered_indices.push(next_idx);
+                remaining.remove(&next_idx);
+            } else if let Some(&any_remaining) = remaining.iter().next() {
+                ordered_indices.push(any_remaining);
+                remaining.remove(&any_remaining);
+            }
+        }
+
+        // Return indices directly
+        ordered_indices
+    }
+
+    /// Find variables shared between two atoms
+    fn find_shared_variables(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> Vec<QueryVariable> {
+        let vars1 = self.extract_variables(atom1);
+        let vars2 = self.extract_variables(atom2);
+        
+        vars1
+            .into_iter()
+            .filter(|v| vars2.contains(v))
+            .collect()
+    }
+
+    /// Extract all variables from an atom
+    fn extract_variables(&self, atom: &QueryAtom) -> HashSet<QueryVariable> {
+        let mut vars = HashSet::new();
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => {
+                vars.insert(variable.clone());
+            }
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vars.insert(subject.clone());
+                vars.insert(object.clone());
+            }
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                vars.insert(subject.clone());
+                vars.insert(literal.clone());
+            }
+            _ => {}
+        }
+        vars
+    }
+
+    /// Estimate cardinality of a single atom
+    fn estimate_atom_cardinality(&self, atom: &QueryAtom) -> usize {
+        match atom {
+            QueryAtom::ClassAtom { .. } => 1000, // Classes typically have many instances
+            QueryAtom::ObjectPropertyAtom { .. } => 500, // Properties somewhat selective
+            QueryAtom::DataPropertyAtom { .. } => 500,
+            _ => 100,
+        }
+    }
+
+    /// Estimate join selectivity between two atoms
+    fn estimate_join_selectivity(
+        &self,
+        atom1: &QueryAtom,
+        atom2: &QueryAtom,
+        _shared_vars: &[QueryVariable],
+    ) -> f64 {
+        // Simple heuristic: properties are more selective than classes
+        let card1 = self.estimate_atom_cardinality(atom1) as f64;
+        let card2 = self.estimate_atom_cardinality(atom2) as f64;
+        
+        // Selectivity = expected result size / cartesian product size
+        let expected_result = (card1 * card2).sqrt(); // Geometric mean heuristic
+        expected_result / (card1 * card2)
+    }
+
+    /// Describe an atom in readable form
+    fn describe_atom(&self, atom: &QueryAtom) -> String {
+        match atom {
+            QueryAtom::ClassAtom { class_expression, variable } => {
+                format!("{}(?{})", self.describe_class_expr(class_expression), variable.name)
+            }
+            QueryAtom::ObjectPropertyAtom { property, subject, object } => {
+                format!("{}(?{}, ?{})", self.describe_prop_expr(property), subject.name, object.name)
+            }
+            QueryAtom::DataPropertyAtom { property, subject, .. } => {
+                format!("{}(?{}, ...)", self.describe_data_prop(property), subject.name)
+            }
+            _ => "UnknownAtom".to_string(),
+        }
+    }
+
+    fn describe_class_expr(&self, expr: &ClassExpression) -> String {
+        match expr {
+            ClassExpression::Class(c) => c.iri.as_str().split('#').last().unwrap_or("Class").to_string(),
+            _ => "ComplexClass".to_string(),
+        }
+    }
+
+    fn describe_prop_expr(&self, expr: &ObjectPropertyExpression) -> String {
+        match expr {
+            ObjectPropertyExpression::ObjectProperty(p) => {
+                p.iri.as_str().split('#').last().unwrap_or("Property").to_string()
+            }
+            _ => "ComplexProperty".to_string(),
+        }
+    }
+
+    fn describe_data_prop(&self, expr: &DataPropertyExpression) -> String {
+        format!("{:?}", expr) // Simplified
+    }
+
+    /// Estimate result size for query
+    fn estimate_result_size(&self, query: &ConjunctiveQuery, stats: &QueryStatistics) -> usize {
+        // Look for similar queries in statistics
+        let pattern = self.analyze_query_pattern(query);
+        
+        if let Some(result_stats) = stats.result_sizes.get(&pattern) {
+            result_stats.mean_size as usize
+        } else {
+            // Heuristic: base size * reduction per atom
+            let base_size = 1000;
+            let reduction_factor = 0.6_f64; // Each atom reduces by ~40%
+            let atoms = query.body_atoms.len() as u32;
+            (base_size as f64 * reduction_factor.powi(atoms as i32)) as usize
+        }
+    }
+
+    /// Calculate overall confidence based on statistics
+    fn calculate_overall_confidence(&self, pattern: &QueryPattern, stats: &QueryStatistics) -> f64 {
+        // Check if we have sufficient data for this pattern
+        let sample_size = stats.execution_times
+            .get(pattern)
+            .map(|s| s.sample_count)
+            .unwrap_or(0);
+        
+        // Confidence increases with sample size (logarithmic)
+        if sample_size == 0 {
+            0.5 // Low confidence with no data
+        } else if sample_size < 10 {
+            0.6 + (sample_size as f64 * 0.03)
+        } else if sample_size < 100 {
+            0.8 + ((sample_size as f64).ln() / 50.0)
+        } else {
+            0.95 // High confidence with many samples
+        }
+    }
+
+    /// Get index recommendations for query
+    fn get_index_recommendations(&self, query: &ConjunctiveQuery, _pattern: &QueryPattern) -> Vec<super::optimizer::IndexRecommendation> {
+        let mut recommendations = Vec::new();
+        
+        // Recommend indices for frequently accessed properties
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ObjectPropertyAtom { property, .. } => {
+                    if let ObjectPropertyExpression::ObjectProperty(_prop) = property {
+                        recommendations.push(super::optimizer::IndexRecommendation {
+                            index_type: "Hash".to_string(),
+                            expected_improvement: 2.5,
+                            creation_cost: 1.0,
+                            maintenance_cost: 1.2,
+                        });
+                    }
+                }
+                QueryAtom::ClassAtom { class_expression, .. } => {
+                    if let ClassExpression::Class(_class) = class_expression {
+                        recommendations.push(super::optimizer::IndexRecommendation {
+                            index_type: "BTree".to_string(),
+                            expected_improvement: 1.8,
+                            creation_cost: 0.8,
+                            maintenance_cost: 1.0,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // Limit to top 3 recommendations
+        recommendations.truncate(3);
+        recommendations
+    }
+
+    /// Get optimization suggestions for query
+    fn get_optimization_suggestions(&self, query: &ConjunctiveQuery, pattern: &QueryPattern) -> Vec<super::optimizer::OptimizationSuggestion> {
+        let mut suggestions = Vec::new();
+        
+        // Suggest query simplification for complex queries
+        if pattern.atom_count > 10 {
+            suggestions.push(super::optimizer::OptimizationSuggestion {
+                suggestion_type: super::optimizer::OptimizationType::QueryRewriting,
+                description: "Consider breaking complex query into smaller sub-queries".to_string(),
+                expected_improvement: 1.5,
+                implementation_complexity: 0.6,
+            });
+        }
+        
+        // Suggest materialization for repeated patterns
+        if self.has_repeated_patterns(query) {
+            suggestions.push(super::optimizer::OptimizationSuggestion {
+                suggestion_type: super::optimizer::OptimizationType::CachingStrategy,
+                description: "Materialize commonly queried pattern".to_string(),
+                expected_improvement: 3.0,
+                implementation_complexity: 0.8,
+            });
+        }
+        
+        // Suggest adding indices if none recommended yet
+        if query.body_atoms.len() > 3 {
+            suggestions.push(super::optimizer::OptimizationSuggestion {
+                suggestion_type: super::optimizer::OptimizationType::IndexCreation,
+                description: "Add indices for frequently joined properties".to_string(),
+                expected_improvement: 2.0,
+                implementation_complexity: 0.3,
+            });
+        }
+        
+        suggestions
+    }
+
+    /// Check if query has repeated patterns
+    fn has_repeated_patterns(&self, query: &ConjunctiveQuery) -> bool {
+        let mut pattern_counts: HashMap<String, usize> = HashMap::new();
+        
+        for atom in &query.body_atoms {
+            let pattern = self.describe_atom(atom);
+            *pattern_counts.entry(pattern).or_insert(0) += 1;
+        }
+        
+        pattern_counts.values().any(|&count| count > 1)
     }
 
     /// Analyze query to extract pattern information
@@ -848,9 +1135,26 @@ impl CostBasedOptimizer {
         false // Placeholder
     }
 
-    fn extract_axiom_types(&self, query: &ConjunctiveQuery) -> HashSet<AxiomType> {
+    fn extract_axiom_types(&self, query: &ConjunctiveQuery) -> Vec<AxiomType> {
         // Implementation for extracting axiom types
-        HashSet::new() // Placeholder
+        let mut types = HashSet::new();
+        
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { .. } => {
+                    types.insert(AxiomType::SubClassOf);
+                }
+                QueryAtom::ObjectPropertyAtom { .. } => {
+                    types.insert(AxiomType::SubObjectPropertyOf);
+                }
+                QueryAtom::DataPropertyAtom { .. } => {
+                    types.insert(AxiomType::DataPropertyAssertion);
+                }
+                _ => {}
+            }
+        }
+        
+        types.into_iter().collect()
     }
 
     fn generate_base_plan(
@@ -914,12 +1218,41 @@ impl CostBasedOptimizer {
         pattern: &QueryPattern,
         stats: &QueryStatistics,
     ) -> ConfidenceScores {
-        // Implementation for calculating confidence scores
+        // Calculate confidence based on historical data
+        let sample_count = stats.execution_times
+            .get(pattern)
+            .map(|s| s.sample_count)
+            .unwrap_or(0);
+        
+        // Execution time confidence: higher with more samples
+        let execution_time = if sample_count == 0 {
+            0.5_f64
+        } else if sample_count < 10 {
+            0.6 + (sample_count as f64 * 0.03)
+        } else {
+            0.9_f64.min(0.7 + (sample_count as f64).ln() / 20.0)
+        };
+        
+        // Memory usage confidence: slightly lower than execution time
+        let memory_usage = execution_time * 0.9;
+        
+        // Strategy confidence: based on pattern complexity
+        let strategy = match pattern.complexity_class {
+            QueryComplexityClass::Atomic => 0.95,
+            QueryComplexityClass::SimpleConjunctive => 0.85,
+            QueryComplexityClass::ComplexConjunctive => 0.75,
+            QueryComplexityClass::Recursive => 0.60,
+            QueryComplexityClass::HighlyComplex => 0.50,
+        };
+        
+        // Overall is weighted average
+        let overall = (execution_time * 0.4 + memory_usage * 0.3 + strategy * 0.3);
+        
         ConfidenceScores {
-            performance_prediction: 0.5,
-            index_recommendations: 0.5,
-            optimization_suggestions: 0.5,
-            overall: 0.5,
+            performance_prediction: execution_time,
+            index_recommendations: 0.8, // Moderate confidence in index recommendations
+            optimization_suggestions: strategy,
+            overall,
         }
     }
 }

@@ -16,6 +16,7 @@
 pub mod classification;
 pub mod consistency;
 pub mod core;
+pub mod datatype_validation;
 pub mod explanation;
 pub mod hypertableau_adapter;
 pub mod queries;
@@ -30,6 +31,7 @@ pub use self::{
     classification::ClassificationService,
     consistency::PreConsistencyChecker,
     core::Reasoner,
+    datatype_validation::DatatypeValidator,
     explanation::ExplanationService,
     hypertableau_adapter::HypertableauRunner,
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},

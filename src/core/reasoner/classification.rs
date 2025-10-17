@@ -7,6 +7,7 @@ use crate::{
     Error, Result,
     cache::CacheManager,
     core::reasoner::{
+        datatype_validation::DatatypeValidator,
         results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
         statistics::ReasoningStatistics,
         tasks::ReasoningTaskService,
@@ -28,6 +29,7 @@ use std::{
 pub struct ClassificationService {
     task_service: ReasoningTaskService,
     cache_manager: Arc<RwLock<CacheManager>>,
+    datatype_validator: DatatypeValidator,
 }
 
 impl ClassificationService {
@@ -39,6 +41,7 @@ impl ClassificationService {
         Self {
             task_service,
             cache_manager,
+            datatype_validator: DatatypeValidator::new(),
         }
     }
 
@@ -1022,10 +1025,24 @@ impl ClassificationService {
         data_range: &crate::ontology::DataRange,
     ) -> Result<bool> {
         match data_range {
-            crate::ontology::DataRange::Datatype(_iri) => {
-                // Basic datatype check - for now, accept all
-                // TODO: Check if literal's datatype matches the specified datatype
-                Ok(true)
+            crate::ontology::DataRange::Datatype(datatype_iri) => {
+                // Validate that literal's datatype matches the specified datatype
+                let literal_datatype_url = literal.datatype.as_ref();
+                
+                // First check: validate the literal conforms to its declared type
+                if !self.datatype_validator.validate_literal(literal)? {
+                    return Ok(false);
+                }
+                
+                // Second check: verify datatype compatibility if literal has a datatype
+                if let Some(lit_dt_url) = literal_datatype_url {
+                    let lit_dt_iri = IRI::from(lit_dt_url.clone());
+                    Ok(self.datatype_validator.datatypes_compatible(&lit_dt_iri, datatype_iri))
+                } else {
+                    // No datatype means xsd:string, check if compatible with string
+                    let xsd_string = IRI::new("http://www.w3.org/2001/XMLSchema#string");
+                    Ok(self.datatype_validator.datatypes_compatible(&xsd_string, datatype_iri))
+                }
             }
             crate::ontology::DataRange::DatatypeRestriction { datatype: _, restrictions } => {
                 // Check facet restrictions
