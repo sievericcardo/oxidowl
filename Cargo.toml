@@ -17,7 +17,7 @@ name = "oxidowl"
 path = "src/bin/main.rs"
 
 [[bin]]
-name = "run_performance_tests"
+name = "performance_tests"
 path = "src/bin/performance_tests.rs"
 
 [dependencies]
