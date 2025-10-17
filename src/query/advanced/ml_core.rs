@@ -493,9 +493,43 @@ impl QueryFeatureExtractor {
     }
 
     fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
-        // Simplified - just check if they could potentially share variables
-        // In a real implementation, extract and compare actual variables
-        true // Placeholder
+        let vars1 = self.extract_atom_variables(atom1);
+        let vars2 = self.extract_atom_variables(atom2);
+        
+        // Check if any variables are shared
+        vars1.iter().any(|v| vars2.contains(v))
+    }
+    
+    fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<String> {
+        let mut vars = Vec::new();
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => {
+                vars.push(variable.name.clone());
+            }
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vars.push(subject.name.clone());
+                vars.push(object.name.clone());
+            }
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                vars.push(subject.name.clone());
+                vars.push(literal.name.clone());
+            }
+            QueryAtom::SameIndividualAtom { left, right } => {
+                vars.push(left.name.clone());
+                vars.push(right.name.clone());
+            }
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vars.push(left.name.clone());
+                vars.push(right.name.clone());
+            }
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                vars.push(variable.name.clone());
+            }
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                vars.push(variable.name.clone());
+            }
+        }
+        vars
     }
 
     fn count_atom_types(&self, query: &ConjunctiveQuery) -> (f32, f32) {
@@ -515,9 +549,63 @@ impl QueryFeatureExtractor {
         (class_atoms as f32, property_atoms as f32)
     }
 
-    fn estimate_ontology_depth(&self, _ontology: &Ontology) -> f32 {
-        // Placeholder - would need to traverse class hierarchy
-        5.0
+    fn estimate_ontology_depth(&self, ontology: &Ontology) -> f32 {
+        use std::collections::{HashSet, VecDeque};
+        use crate::ontology::ClassExpression;
+        
+        let classes = ontology.classes();
+        if classes.is_empty() {
+            return 1.0;
+        }
+        
+        let mut total_depth = 0;
+        let mut count = 0;
+        
+        // Calculate depth for each class
+        for (_iri, class) in classes {
+            let depth = self.calculate_class_depth(&class, ontology);
+            total_depth += depth;
+            count += 1;
+        }
+        
+        if count > 0 {
+            (total_depth as f32 / count as f32).max(1.0)
+        } else {
+            1.0
+        }
+    }
+    
+    fn calculate_class_depth(&self, class: &crate::ontology::Class, ontology: &Ontology) -> usize {
+        use std::collections::{HashSet, VecDeque};
+        
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back((class.iri.clone(), 0));
+        visited.insert(class.iri.clone());
+        
+        let mut max_depth = 0;
+        
+        while let Some((current_iri, depth)) = queue.pop_front() {
+            max_depth = max_depth.max(depth);
+            
+            // Find SubClassOf axioms where current_iri is the subclass
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom {
+                    if let crate::ontology::ClassExpression::Class(sub_class) = &sub_class_axiom.subclass {
+                        if sub_class.iri == current_iri {
+                            // Found a superclass
+                            if let crate::ontology::ClassExpression::Class(sup_class) = &sub_class_axiom.superclass {
+                                if visited.insert(sup_class.iri.clone()) {
+                                    queue.push_back((sup_class.iri.clone(), depth + 1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        max_depth
     }
 
     fn get_similar_query_time(&self, query_hash: u64) -> Result<f32, Error> {
@@ -539,35 +627,240 @@ impl QueryFeatureExtractor {
         }
     }
 
-    fn estimate_cache_hit_probability(&self, _query: &ConjunctiveQuery) -> f32 {
-        // Placeholder - would check actual cache statistics
-        0.5
+    fn estimate_cache_hit_probability(&self, query: &ConjunctiveQuery) -> f32 {
+        // Estimate based on query hash and history
+        let query_hash = self.calculate_query_hash(query);
+        
+        let history = match self.query_history.read() {
+            Ok(h) => h,
+            Err(_) => return 0.5, // Default if lock fails
+        };
+        
+        // Count how many times similar queries appeared
+        let similar_count = history
+            .iter()
+            .filter(|(hash, _)| *hash == query_hash)
+            .count();
+        
+        // More appearances = higher cache hit probability
+        if similar_count == 0 {
+            0.1 // Low probability for new queries
+        } else if similar_count < 5 {
+            0.5 // Medium probability
+        } else {
+            0.9 // High probability for frequently seen queries
+        }
     }
-
+    
     fn get_available_memory(&self) -> f32 {
-        // Placeholder - would use system metrics
-        8192.0 // 8GB in MB
+        #[cfg(target_os = "linux")]
+        {
+            use std::fs;
+            if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
+                for line in meminfo.lines() {
+                    if line.starts_with("MemAvailable:") {
+                        if let Some(value) = line.split_whitespace().nth(1) {
+                            if let Ok(kb) = value.parse::<f32>() {
+                                return kb / 1024.0; // Convert KB to MB
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            if let Ok(output) = Command::new("sysctl").arg("-n").arg("hw.memsize").output() {
+                if let Ok(size_str) = String::from_utf8(output.stdout) {
+                    if let Ok(bytes) = size_str.trim().parse::<f64>() {
+                        // Get free memory percentage (rough estimate)
+                        return (bytes / 1024.0 / 1024.0 * 0.5) as f32; // Assume 50% available
+                    }
+                }
+            }
+        }
+        
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, we'd use GlobalMemoryStatusEx via winapi
+            // For now, use a reasonable default
+        }
+        
+        // Fallback: conservative estimate
+        4096.0 // 4GB in MB
     }
 
     fn get_cpu_utilization(&self) -> f32 {
-        // Placeholder - would use system metrics
-        0.3 // 30% utilization
+        #[cfg(target_os = "linux")]
+        {
+            use std::fs;
+            if let Ok(loadavg) = fs::read_to_string("/proc/loadavg") {
+                if let Some(load) = loadavg.split_whitespace().next() {
+                    if let Ok(load_val) = load.parse::<f32>() {
+                        // Normalize by number of CPUs
+                        if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+                            let cpu_count = cpuinfo.lines()
+                                .filter(|l| l.starts_with("processor"))
+                                .count() as f32;
+                            if cpu_count > 0.0 {
+                                return (load_val / cpu_count).min(1.0);
+                            }
+                        }
+                        return load_val.min(1.0);
+                    }
+                }
+            }
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            // Get load average on macOS
+            if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output() {
+                if let Ok(load_str) = String::from_utf8(output.stdout) {
+                    // Parse "{  1.5 2.0 2.5 }" format
+                    let parts: Vec<&str> = load_str.trim_matches(|c| c == '{' || c == '}')
+                        .split_whitespace()
+                        .collect();
+                    if !parts.is_empty() {
+                        if let Ok(load) = parts[0].parse::<f32>() {
+                            // Normalize by CPU count
+                            if let Ok(cpu_output) = Command::new("sysctl").arg("-n").arg("hw.ncpu").output() {
+                                if let Ok(cpu_str) = String::from_utf8(cpu_output.stdout) {
+                                    if let Ok(cpu_count) = cpu_str.trim().parse::<f32>() {
+                                        return (load / cpu_count).min(1.0);
+                                    }
+                                }
+                            }
+                            return load.min(1.0);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fallback: moderate utilization
+        0.4 // 40% utilization
     }
 
     fn calculate_complexity_score(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> f32 {
         let atom_count = query.body_atoms.len() as f32;
-        let ontology_size = ontology.axioms().len() as f32;
-
-        // Simple complexity heuristic
-        (atom_count * ontology_size.ln()).sqrt()
+        let variable_count = self.count_unique_variables(query) as f32;
+        
+        // Get ontology size metrics
+        let class_count = ontology.classes().len() as f32;
+        let object_property_count = ontology.object_properties().len() as f32;
+        
+        // Count data properties from declarations
+        let data_property_count = ontology.axioms().iter()
+            .filter(|axiom| {
+                if let crate::ontology::Axiom::Declaration(decl) = axiom {
+                    matches!(decl.entity, crate::ontology::axioms::Entity::DataProperty(_))
+                } else {
+                    false
+                }
+            })
+            .count() as f32;
+        
+        let property_count = object_property_count + data_property_count;
+        let axiom_count = ontology.axioms().len() as f32;
+        let individual_count = ontology.individuals().len() as f32;
+        
+        // Calculate average class hierarchy depth
+        let avg_depth = self.estimate_ontology_depth(ontology);
+        
+        // Query complexity component
+        let query_complexity = atom_count * variable_count.sqrt();
+        
+        // Ontology complexity component
+        let ontology_complexity = 
+            (class_count + property_count + 1.0).ln() * avg_depth +
+            (axiom_count + 1.0).ln() * 0.5 +
+            (individual_count + 1.0).ln() * 0.3;
+        
+        // Combined complexity score
+        (query_complexity * ontology_complexity).sqrt()
+    }
+    
+    fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
+        use std::collections::HashSet;
+        
+        let mut variables = HashSet::new();
+        
+        for atom in &query.body_atoms {
+            let atom_vars = self.extract_atom_variables(atom);
+            variables.extend(atom_vars);
+        }
+        
+        variables.len()
     }
 
     fn estimate_selectivity(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> f32 {
-        // Placeholder - would use actual statistics
-        let base_selectivity = 1.0 / (query.body_atoms.len() as f32 + 1.0);
-        let ontology_factor = 1.0 / (ontology.axioms().len() as f32 + 1.0).ln();
-
-        base_selectivity * ontology_factor
+        let atom_count = query.body_atoms.len() as f32;
+        if atom_count == 0.0 {
+            return 1.0;
+        }
+        
+        let individual_count = ontology.individuals().len() as f32;
+        let class_count = ontology.classes().len() as f32;
+        
+        // Calculate selectivity based on query structure
+        let mut total_selectivity = 1.0;
+        
+        for atom in &query.body_atoms {
+            let atom_selectivity = match atom {
+                QueryAtom::ClassAtom { class_expression, .. } => {
+                    // Class atoms: estimate based on class hierarchy
+                    if class_count > 0.0 {
+                        1.0 / (class_count + 1.0)
+                    } else {
+                        0.5
+                    }
+                }
+                QueryAtom::ObjectPropertyAtom { .. } => {
+                    // Property atoms are typically more selective
+                    if individual_count > 0.0 {
+                        1.0 / (individual_count.sqrt() + 1.0)
+                    } else {
+                        0.1
+                    }
+                }
+                QueryAtom::DataPropertyAtom { .. } => {
+                    // Data properties are quite selective
+                    0.1
+                }
+                QueryAtom::SameIndividualAtom { .. } => {
+                    // Very selective
+                    0.01
+                }
+                QueryAtom::DifferentIndividualsAtom { .. } => {
+                    // Less selective (excludes one)
+                    0.99
+                }
+                QueryAtom::ConcreteIndividualAtom { .. } => {
+                    // Concrete individuals are very selective
+                    if individual_count > 0.0 {
+                        1.0 / individual_count
+                    } else {
+                        0.01
+                    }
+                }
+                QueryAtom::ConcreteLiteralAtom { .. } => {
+                    // Concrete literals are very selective
+                    0.01
+                }
+            };
+            
+            total_selectivity *= atom_selectivity;
+        }
+        
+        // Adjust for joins (shared variables increase selectivity)
+        let join_count = self.count_joins(query);
+        let join_factor = (1.0 + join_count as f32).ln();
+        
+        total_selectivity * join_factor
     }
 
     pub fn record_execution(&self, query_hash: u64, execution_time: f32) -> Result<(), Error> {
@@ -1288,16 +1581,64 @@ impl ModelStorage {
     }
 
     #[cfg(feature = "ml")]
-    pub fn save_cost_predictor(&self, _model: &CostPredictionModel) -> Result<(), Error> {
-        // Placeholder - would serialize model weights
+    pub fn save_cost_predictor(&self, model: &CostPredictionModel) -> Result<(), Error> {
+        let path = self.storage_dir.join("cost_predictor.bin");
+        
+        // Save model metadata
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+            
+        let metadata = serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "feature_dimension": model.feature_dimension(),
+            "saved_at_timestamp": timestamp,
+        });
+        
+        let metadata_path = path.with_extension("meta.json");
+        let metadata_json = serde_json::to_string_pretty(&metadata).map_err(|e| {
+            Error::Internal {
+                message: format!("Failed to serialize metadata: {}", e),
+            }
+        })?;
+        
+        std::fs::write(metadata_path, metadata_json).map_err(|e| Error::Internal {
+            message: format!("Failed to write metadata: {}", e),
+        })?;
+        
+        // Note: Actual model weight serialization would require implementing
+        // Serialize/Deserialize for Candle tensors, which is complex.
+        // For now, we save the metadata to indicate model was saved.
+        
         Ok(())
     }
 
     #[cfg(feature = "ml")]
     pub fn load_cost_predictor(&self) -> Result<CostPredictionModel, Error> {
-        // Placeholder - would deserialize model weights
+        let metadata_path = self.storage_dir.join("cost_predictor.bin.meta.json");
+        
+        if !metadata_path.exists() {
+            return Err(Error::Internal {
+                message: "No saved model found".to_string(),
+            });
+        }
+        
+        // Load metadata
+        let metadata_json = std::fs::read_to_string(metadata_path).map_err(|e| Error::Internal {
+            message: format!("Failed to read metadata: {}", e),
+        })?;
+        
+        let _metadata: serde_json::Value = serde_json::from_str(&metadata_json).map_err(|e| {
+            Error::Internal {
+                message: format!("Failed to parse metadata: {}", e),
+            }
+        })?;
+        
+        // Note: Would need to load actual model weights here
+        // For now, return an error indicating full implementation pending
         Err(Error::Internal {
-            message: "No saved model found".to_string(),
+            message: "Model weight loading requires Candle serialization (pending implementation)".to_string(),
         })
     }
 

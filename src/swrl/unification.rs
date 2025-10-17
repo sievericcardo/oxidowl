@@ -363,19 +363,18 @@ impl UnificationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::axioms::{ClassExpression, Individual, ObjectProperty};
-    use crate::ontology::{Class, IRI};
+    use crate::ontology::{Class, ClassExpression, Individual, IRI, ObjectProperty};
 
     fn make_variable(name: &str) -> SWRLVariable {
         SWRLVariable {
-            iri: name.to_string(),
+            iri: IRI::new(&format!("http://example.org/var/{}", name)),
         }
     }
 
     fn make_individual(name: &str) -> Individual {
-        Individual {
+        Individual::Named(crate::ontology::NamedIndividual {
             iri: IRI::new(&format!("http://example.org/{}", name)),
-        }
+        })
     }
 
     #[test]
@@ -426,7 +425,8 @@ mod tests {
 
         if let Some(bindings) = result.bindings() {
             assert_eq!(bindings.len(), 1);
-            assert_eq!(bindings.get("x"), Some(&ind));
+            let var_iri = IRI::new("http://example.org/var/x");
+            assert_eq!(bindings.get(&var_iri), Some(&ind));
         }
     }
 
