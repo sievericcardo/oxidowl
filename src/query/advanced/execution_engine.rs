@@ -16,6 +16,7 @@ use super::ml_core::{
 use super::optimization::OptimizationError;
 use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::performance::{QueryProfiler, QueryTiming};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -438,6 +439,9 @@ pub struct ExecutionPerformanceMonitor {
 
     /// Real-time alerts
     alert_system: ExecutionAlertSystem,
+
+    /// Query profiler for detailed timing
+    query_profiler: Arc<QueryProfiler>,
 }
 
 /// Unique identifier for query executions
@@ -455,6 +459,16 @@ pub struct ExecutionTrace {
     pub current_stage: Option<String>,
     pub memory_usage: Vec<(Instant, usize)>,
     pub intermediate_results: Vec<IntermediateResult>,
+    
+    // Detailed timing breakdown
+    pub atom_evaluation_start: Option<Instant>,
+    pub atom_evaluation_duration: Duration,
+    pub join_start: Option<Instant>,
+    pub join_duration: Duration,
+    pub materialization_start: Option<Instant>,
+    pub materialization_duration: Duration,
+    pub atoms_evaluated: usize,
+    pub joins_performed: usize,
 }
 
 /// Execution stage information
@@ -1430,6 +1444,7 @@ impl ExecutionPerformanceMonitor {
             metrics_aggregator: PerformanceMetricsAggregator::new(),
             anomaly_detector: ExecutionAnomalyDetector::new(),
             alert_system: ExecutionAlertSystem::new(),
+            query_profiler: Arc::new(QueryProfiler::new(1000)),
         }
     }
 
@@ -1449,6 +1464,14 @@ impl ExecutionPerformanceMonitor {
             current_stage: None,
             memory_usage: Vec::new(),
             intermediate_results: Vec::new(),
+            atom_evaluation_start: None,
+            atom_evaluation_duration: Duration::from_secs(0),
+            join_start: None,
+            join_duration: Duration::from_secs(0),
+            materialization_start: None,
+            materialization_duration: Duration::from_secs(0),
+            atoms_evaluated: 0,
+            joins_performed: 0,
         };
 
         self.active_executions.insert(execution_id.clone(), trace);
@@ -1461,18 +1484,33 @@ impl ExecutionPerformanceMonitor {
     ) {
         // Complete execution tracking
         if let Some(trace) = self.active_executions.remove(execution_id) {
+            let total_duration = trace.start_time.elapsed();
+            let result_size = result.as_ref().map(|r| r.bindings.len()).unwrap_or(0);
+
+            // Record detailed timing in profiler
+            let timing = QueryTiming::new(
+                total_duration,
+                trace.atom_evaluation_duration,
+                trace.join_duration,
+                trace.materialization_duration,
+                trace.atoms_evaluated,
+                trace.joins_performed,
+                result_size,
+            );
+            self.query_profiler.record(timing);
+
             let completed = CompletedExecution {
                 execution_id: execution_id.clone(),
                 query: trace.query,
                 strategy: trace.strategy,
-                total_time: trace.start_time.elapsed(),
+                total_time: total_duration,
                 peak_memory: trace
                     .memory_usage
                     .iter()
                     .map(|(_, mem)| *mem)
                     .max()
                     .unwrap_or(0),
-                result_size: result.as_ref().map(|r| r.bindings.len()).unwrap_or(0),
+                result_size,
                 success: result.is_ok(),
                 error: result.as_ref().err().map(|e| e.to_string()),
                 performance_score: 1.0, // Placeholder
@@ -1480,6 +1518,61 @@ impl ExecutionPerformanceMonitor {
 
             self.execution_history.insert(Instant::now(), completed);
         }
+    }
+
+    /// Start atom evaluation phase
+    pub fn start_atom_evaluation(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            trace.atom_evaluation_start = Some(Instant::now());
+        }
+    }
+
+    /// Complete atom evaluation phase
+    pub fn complete_atom_evaluation(&mut self, execution_id: &ExecutionId, atoms_count: usize) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            if let Some(start) = trace.atom_evaluation_start {
+                trace.atom_evaluation_duration = start.elapsed();
+                trace.atoms_evaluated = atoms_count;
+            }
+        }
+    }
+
+    /// Start join phase
+    pub fn start_join_phase(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            trace.join_start = Some(Instant::now());
+        }
+    }
+
+    /// Complete join phase
+    pub fn complete_join_phase(&mut self, execution_id: &ExecutionId, joins_count: usize) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            if let Some(start) = trace.join_start {
+                trace.join_duration = start.elapsed();
+                trace.joins_performed = joins_count;
+            }
+        }
+    }
+
+    /// Start materialization phase
+    pub fn start_materialization(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            trace.materialization_start = Some(Instant::now());
+        }
+    }
+
+    /// Complete materialization phase
+    pub fn complete_materialization(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            if let Some(start) = trace.materialization_start {
+                trace.materialization_duration = start.elapsed();
+            }
+        }
+    }
+
+    /// Get query profiler for accessing profiling statistics
+    pub fn query_profiler(&self) -> Arc<QueryProfiler> {
+        self.query_profiler.clone()
     }
 }
 

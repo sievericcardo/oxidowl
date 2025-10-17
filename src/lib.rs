@@ -42,6 +42,7 @@ pub mod core;
 pub mod dl_clauses; // DL clause generation and dumping
 pub mod error;
 pub mod import;
+pub mod performance; // Performance monitoring and profiling
 pub mod prelude; // Common imports and type aliases for internal use // Import management and dependency resolution
 // pub mod network;
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
