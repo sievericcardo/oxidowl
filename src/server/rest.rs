@@ -158,8 +158,15 @@ impl RestApiServer {
         let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port).parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
-        let server = warp::serve(routes).bind(addr);
-        let server_task = tokio::spawn(server);
+        let (_addr, server_fut) = warp::serve(routes).bind_with_graceful_shutdown(
+            addr,
+            async {
+                // Will be cancelled when task is aborted
+                futures::future::pending::<()>().await
+            }
+        );
+        
+        let server_task = tokio::spawn(server_fut);
 
         tracing::info!("REST API server started on {}:{}", self.bind_address, self.port);
 
@@ -344,7 +351,7 @@ async fn check_subsumption(
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     };
 
-    match reasoning_service.is_subsumed(&sub_expr, &super_expr).await {
+    match reasoning_service.is_subsumed_by(&sub_expr, &super_expr).await {
         Ok(is_subsumed) => {
             Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
                 "subsumed": is_subsumed,

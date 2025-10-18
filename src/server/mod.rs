@@ -4,8 +4,15 @@
 //! SPARQL endpoint, and REST API for reasoning services.
 
 pub mod owllink;
+#[cfg(feature = "sparql")]
 pub mod sparql;
 pub mod rest;
+
+// Re-export main types for convenience
+pub use rest::RestApiServer;
+pub use owllink::OWLlinkServer;
+#[cfg(feature = "sparql")]
+pub use sparql::SparqlServer;
 
 use crate::{
     Error, Result,
@@ -48,6 +55,7 @@ impl ServerManager {
             self.servers.push(ServerHandle::OWLlink(handle));
         }
 
+        #[cfg(feature = "sparql")]
         if self.config.enable_sparql {
             let sparql_server = sparql::SparqlServer::new(
                 self.config.sparql_port,
@@ -101,6 +109,7 @@ pub enum ServerHandle {
     /// OWLlink server handle
     OWLlink(owllink::OWLlinkServerHandle),
     /// SPARQL server handle
+    #[cfg(feature = "sparql")]
     Sparql(sparql::SparqlServerHandle),
     /// REST server handle
     Rest(rest::RestApiServerHandle),
@@ -111,6 +120,7 @@ impl ServerHandle {
     pub async fn stop(self) -> Result<()> {
         match self {
             ServerHandle::OWLlink(handle) => handle.stop().await,
+            #[cfg(feature = "sparql")]
             ServerHandle::Sparql(handle) => handle.stop().await,
             ServerHandle::Rest(handle) => handle.stop().await,
         }

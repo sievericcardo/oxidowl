@@ -295,20 +295,20 @@ pub enum InferenceRule {
 /// Justification computer for finding minimal axiom sets
 #[derive(Debug)]
 pub struct JustificationComputer {
-    cache: HashMap<String, Vec<Axiom>>,
+    cache: std::cell::RefCell<HashMap<String, Vec<Axiom>>>,
 }
 
 impl JustificationComputer {
     /// Create a new justification computer
     pub fn new() -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: std::cell::RefCell::new(HashMap::new()),
         }
     }
 
     /// Compute justification for a subsumption
     pub fn compute_subsumption_justification(
-        &mut self,
+        &self,
         subclass: &ClassExpression,
         superclass: &ClassExpression,
         ontology_axioms: &[Axiom],
@@ -320,14 +320,14 @@ impl JustificationComputer {
     }
 
     /// Compute justification for inconsistency
-    pub fn compute_inconsistency_justification(&mut self, ontology_axioms: &[Axiom]) -> Result<Vec<Axiom>> {
+    pub fn compute_inconsistency_justification(&self, ontology_axioms: &[Axiom]) -> Result<Vec<Axiom>> {
         // Simplified implementation - return all axioms for now
         Ok(ontology_axioms.to_vec())
     }
 
     /// Compute justification for unsatisfiability
     pub fn compute_unsatisfiability_justification(
-        &mut self,
+        &self,
         class: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Vec<Axiom>> {

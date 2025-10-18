@@ -37,6 +37,7 @@
 //! ```
 
 pub mod cache;
+pub mod cache_strategies; // Advanced cache eviction strategies (LRU, LFU)
 pub mod config;
 pub mod core;
 pub mod dl_clauses; // DL clause generation and dumping
@@ -56,6 +57,14 @@ pub mod semantics; // RDF, RDFS, and OWL 2 semantics implementation
 pub mod swrl; // SWRL (Semantic Web Rule Language) support
 pub mod validation; // OWL 2 DL validation and profile checking
 pub mod visitor; // Visitor pattern for ontology traversal // Distributed query processing and cluster management
+
+// Server interfaces (REST API, OWLlink, SPARQL)
+#[cfg(feature = "server")]
+pub mod server;
+
+// Export explanation service (used by server)
+pub mod explanation;
+
 // pub mod utils;
 
 // Re-export main types for convenience

@@ -66,8 +66,15 @@ impl OWLlinkServer {
         let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port).parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
-        let server = warp::serve(routes).bind(addr);
-        let server_task = tokio::spawn(server);
+        let (_addr, server_fut) = warp::serve(routes).bind_with_graceful_shutdown(
+            addr,
+            async {
+                // Will be cancelled when task is aborted
+                futures::future::pending::<()>().await
+            }
+        );
+        
+        let server_task = tokio::spawn(server_fut);
 
         tracing::info!("OWLlink server started on {}:{}", self.bind_address, self.port);
 
