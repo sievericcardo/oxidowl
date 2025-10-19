@@ -68,6 +68,18 @@ impl Default for MLHeuristicsConfig {
     }
 }
 
+/// Query structural fingerprint for similarity matching
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QueryFingerprint {
+    num_atoms: usize,
+    num_variables: usize,
+    num_class_atoms: usize,
+    num_property_atoms: usize,
+    num_data_atoms: usize,
+    has_cycles: bool,
+    max_join_width: usize,
+}
+
 /// Main ML heuristics engine
 pub struct MLHeuristicsEngine {
     /// Neural network for cost prediction
@@ -613,18 +625,134 @@ impl QueryFeatureExtractor {
             message: format!("Failed to read query history: {}", e),
         })?;
 
-        // Find similar queries (simplified - just look for exact match)
-        let similar_times: Vec<f32> = history
-            .iter()
-            .filter(|(hash, _)| *hash == query_hash)
-            .map(|(_, time)| *time)
-            .collect();
+        // Find structurally similar queries using fingerprinting
+        let mut similar_times: Vec<(f32, f32)> = Vec::new(); // (time, similarity_score)
+        
+        for (hist_hash, hist_time) in history.iter() {
+            // Calculate structural similarity between query hashes
+            let similarity = self.calculate_hash_similarity(query_hash, *hist_hash);
+            
+            // Only consider queries with similarity above threshold
+            if similarity > 0.7 {
+                similar_times.push((*hist_time, similarity));
+            }
+        }
 
         if similar_times.is_empty() {
             Ok(1.0) // Default 1 second for unknown queries
         } else {
-            Ok(similar_times.iter().sum::<f32>() / similar_times.len() as f32)
+            // Weighted average based on similarity scores
+            let total_weight: f32 = similar_times.iter().map(|(_, sim)| sim).sum();
+            let weighted_sum: f32 = similar_times.iter().map(|(time, sim)| time * sim).sum();
+            Ok(weighted_sum / total_weight)
         }
+    }
+
+    /// Calculate structural similarity between two query hashes
+    /// Returns a value between 0.0 (completely different) and 1.0 (identical)
+    fn calculate_hash_similarity(&self, hash1: u64, hash2: u64) -> f32 {
+        if hash1 == hash2 {
+            return 1.0;
+        }
+        
+        // Use Hamming distance on hash bits
+        let xor = hash1 ^ hash2;
+        let different_bits = xor.count_ones();
+        
+        // Similarity decreases with number of different bits
+        let max_bits = 64.0;
+        let similarity = 1.0 - (different_bits as f32 / max_bits);
+        
+        similarity
+    }
+
+    /// Calculate query fingerprint based on structure
+    fn calculate_query_fingerprint(&self, query: &ConjunctiveQuery) -> QueryFingerprint {
+        QueryFingerprint {
+            num_atoms: query.body_atoms.len(),
+            num_variables: query.answer_variables.len(),
+            num_class_atoms: query.body_atoms.iter()
+                .filter(|a| matches!(a, QueryAtom::ClassAtom { .. }))
+                .count(),
+            num_property_atoms: query.body_atoms.iter()
+                .filter(|a| matches!(a, QueryAtom::ObjectPropertyAtom { .. }))
+                .count(),
+            num_data_atoms: query.body_atoms.iter()
+                .filter(|a| matches!(a, QueryAtom::DataPropertyAtom { .. }))
+                .count(),
+            has_cycles: self.detect_query_cycles(query),
+            max_join_width: self.calculate_max_join_width(query),
+        }
+    }
+
+    /// Detect cycles in query structure
+    fn detect_query_cycles(&self, query: &ConjunctiveQuery) -> bool {
+        // Build a graph of variable dependencies
+        let mut graph: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        
+        for atom in &query.body_atoms {
+            if let QueryAtom::ObjectPropertyAtom { subject, object, .. } = atom {
+                graph.entry(subject.name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(object.name.clone());
+            }
+        }
+        
+        // Simple cycle detection: if any variable appears more than once in a path
+        for start in graph.keys() {
+            let mut visited = std::collections::HashSet::new();
+            if self.dfs_has_cycle(start, &graph, &mut visited, &mut std::collections::HashSet::new()) {
+                return true;
+            }
+        }
+        
+        false
+    }
+
+    /// DFS cycle detection helper
+    fn dfs_has_cycle(
+        &self,
+        node: &str,
+        graph: &std::collections::HashMap<String, Vec<String>>,
+        visited: &mut std::collections::HashSet<String>,
+        rec_stack: &mut std::collections::HashSet<String>,
+    ) -> bool {
+        if rec_stack.contains(node) {
+            return true;
+        }
+        if visited.contains(node) {
+            return false;
+        }
+        
+        visited.insert(node.to_string());
+        rec_stack.insert(node.to_string());
+        
+        if let Some(neighbors) = graph.get(node) {
+            for neighbor in neighbors {
+                if self.dfs_has_cycle(neighbor, graph, visited, rec_stack) {
+                    return true;
+                }
+            }
+        }
+        
+        rec_stack.remove(node);
+        false
+    }
+
+    /// Calculate maximum join width (max variables in any atom)
+    fn calculate_max_join_width(&self, query: &ConjunctiveQuery) -> usize {
+        query.body_atoms.iter()
+            .map(|atom| match atom {
+                QueryAtom::ClassAtom { .. } => 1,
+                QueryAtom::ObjectPropertyAtom { .. } => 2,
+                QueryAtom::DataPropertyAtom { .. } => 2,
+                QueryAtom::SameIndividualAtom { .. } => 2,
+                QueryAtom::DifferentIndividualsAtom { .. } => 2,
+                QueryAtom::ConcreteIndividualAtom { .. } => 1,
+                QueryAtom::ConcreteLiteralAtom { .. } => 1,
+            })
+            .max()
+            .unwrap_or(0)
     }
 
     fn estimate_cache_hit_probability(&self, query: &ConjunctiveQuery) -> f32 {

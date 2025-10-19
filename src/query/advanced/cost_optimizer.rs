@@ -975,7 +975,11 @@ impl CostBasedOptimizer {
     }
 
     fn describe_data_prop(&self, expr: &DataPropertyExpression) -> String {
-        format!("{:?}", expr) // Simplified
+        match expr {
+            DataPropertyExpression::DataProperty(p) => {
+                p.iri.as_str().split('#').last().unwrap_or("DataProperty").to_string()
+            }
+        }
     }
 
     /// Estimate result size for query
@@ -1126,13 +1130,118 @@ impl CostBasedOptimizer {
 
     // Additional helper methods would be implemented here...
     fn count_joins(&self, query: &ConjunctiveQuery) -> usize {
-        // Implementation for counting joins in query
-        0 // Placeholder
+        // Count join points by finding shared variables between atoms
+        let mut join_count = 0;
+        let atoms = &query.body_atoms;
+        
+        for i in 0..atoms.len() {
+            for j in (i + 1)..atoms.len() {
+                if self.atoms_share_variable(&atoms[i], &atoms[j]) {
+                    join_count += 1;
+                }
+            }
+        }
+        
+        join_count
+    }
+
+    /// Check if two query atoms share any variables
+    fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
+        let vars1 = self.extract_variables_from_atom(atom1);
+        let vars2 = self.extract_variables_from_atom(atom2);
+        
+        vars1.iter().any(|v| vars2.contains(v))
+    }
+
+    /// Extract all variables from a query atom
+    fn extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            },
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                // literal is also a QueryVariable in conjunctive queries
+                vec![subject.clone(), literal.clone()]
+            },
+            QueryAtom::SameIndividualAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            },
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            },
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                vec![variable.clone()]
+            },
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                vec![variable.clone()]
+            },
+        }
     }
 
     fn has_recursive_patterns(&self, query: &ConjunctiveQuery) -> bool {
-        // Implementation for detecting recursive patterns
-        false // Placeholder
+        // Check for transitive closure patterns or cyclic variable dependencies
+        
+        // Build a dependency graph of variables
+        let mut graph: HashMap<QueryVariable, Vec<QueryVariable>> = HashMap::new();
+        
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                    graph.entry(subject.clone())
+                        .or_insert_with(Vec::new)
+                        .push(object.clone());
+                },
+                QueryAtom::DataPropertyAtom { subject, .. } => {
+                    // Data properties create endpoints, not recursive patterns
+                    graph.entry(subject.clone()).or_insert_with(Vec::new);
+                },
+                _ => {}
+            }
+        }
+        
+        // Check for cycles using DFS
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        
+        for start_var in graph.keys() {
+            if self.has_cycle_dfs(start_var, &graph, &mut visited, &mut rec_stack) {
+                return true;
+            }
+        }
+        
+        false
+    }
+
+    /// DFS helper to detect cycles in variable dependency graph
+    fn has_cycle_dfs(
+        &self,
+        var: &QueryVariable,
+        graph: &HashMap<QueryVariable, Vec<QueryVariable>>,
+        visited: &mut HashSet<QueryVariable>,
+        rec_stack: &mut HashSet<QueryVariable>,
+    ) -> bool {
+        if rec_stack.contains(var) {
+            return true; // Found a cycle
+        }
+        
+        if visited.contains(var) {
+            return false; // Already processed
+        }
+        
+        visited.insert(var.clone());
+        rec_stack.insert(var.clone());
+        
+        if let Some(neighbors) = graph.get(var) {
+            for neighbor in neighbors {
+                if self.has_cycle_dfs(neighbor, graph, visited, rec_stack) {
+                    return true;
+                }
+            }
+        }
+        
+        rec_stack.remove(var);
+        false
     }
 
     fn extract_axiom_types(&self, query: &ConjunctiveQuery) -> Vec<AxiomType> {

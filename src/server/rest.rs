@@ -496,15 +496,11 @@ async fn load_ontology_endpoint(
     }))))
 }
 
-/// Parse a class expression from string (simplified)
+/// Parse a class expression from string using Manchester Syntax
 fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
-    // Simplified parsing - in practice would use a proper parser
-    if expr_str.starts_with("http://") || expr_str.starts_with("https://") {
-        // Simple IRI
-        Ok(ClassExpression::Class(crate::ontology::Class::new(expr_str)))
-    } else {
-        Err(Error::ParseError(format!("Cannot parse class expression: {}", expr_str)))
-    }
+    let parser = crate::parsers::manchester::ManchesterParser::default();
+    parser.parse_class_expression(expr_str)
+        .map_err(|e| Error::ParseError(format!("Manchester syntax error: {}", e)))
 }
 
 /// Handle warp rejections

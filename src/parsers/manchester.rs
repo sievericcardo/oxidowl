@@ -99,11 +99,155 @@ impl ManchesterParser {
         self.resolve_iri(name.trim())
     }
 
-    /// Basic class expression parsing (simplified)
-    pub fn parse_class_expression(&self, expr: &str) -> Result<String, OxidowlError> {
-        // For now, just return the expression as a string
-        // This avoids namespace conflicts while maintaining the interface
-        Ok(expr.trim().to_string())
+    /// Parse a Manchester syntax class expression into ClassExpression
+    pub fn parse_class_expression(&self, expr: &str) -> Result<crate::ontology::ClassExpression, OxidowlError> {
+        let expr = expr.trim();
+        self.parse_class_expr_internal(expr)
+    }
+
+    /// Internal recursive parser for class expressions
+    fn parse_class_expr_internal(&self, expr: &str) -> Result<crate::ontology::ClassExpression, OxidowlError> {
+        let expr = expr.trim();
+
+        // Handle parentheses
+        if expr.starts_with('(') && expr.ends_with(')') {
+            return self.parse_class_expr_internal(&expr[1..expr.len()-1]);
+        }
+
+        // Handle "not" (ObjectComplementOf)
+        if expr.starts_with("not ") {
+            let inner = self.parse_class_expr_internal(&expr[4..])?;
+            return Ok(crate::ontology::ClassExpression::ObjectComplementOf(Box::new(inner)));
+        }
+
+        // Handle "and" (ObjectIntersectionOf)
+        if let Some(and_pos) = self.find_top_level_operator(expr, " and ") {
+            let left = self.parse_class_expr_internal(&expr[..and_pos])?;
+            let right = self.parse_class_expr_internal(&expr[and_pos + 5..])?;
+            return Ok(crate::ontology::ClassExpression::ObjectIntersectionOf(vec![left, right]));
+        }
+
+        // Handle "or" (ObjectUnionOf)
+        if let Some(or_pos) = self.find_top_level_operator(expr, " or ") {
+            let left = self.parse_class_expr_internal(&expr[..or_pos])?;
+            let right = self.parse_class_expr_internal(&expr[or_pos + 4..])?;
+            return Ok(crate::ontology::ClassExpression::ObjectUnionOf(vec![left, right]));
+        }
+
+        // Handle property restrictions
+        if let Some(some_pos) = self.find_top_level_operator(expr, " some ") {
+            let property_str = &expr[..some_pos];
+            let filler_str = &expr[some_pos + 6..];
+            let property = self.parse_property_expression(property_str)?;
+            let filler = self.parse_class_expr_internal(filler_str)?;
+            return Ok(crate::ontology::ClassExpression::ObjectSomeValuesFrom {
+                property,
+                filler: Box::new(filler),
+            });
+        }
+
+        if let Some(only_pos) = self.find_top_level_operator(expr, " only ") {
+            let property_str = &expr[..only_pos];
+            let filler_str = &expr[only_pos + 6..];
+            let property = self.parse_property_expression(property_str)?;
+            let filler = self.parse_class_expr_internal(filler_str)?;
+            return Ok(crate::ontology::ClassExpression::ObjectAllValuesFrom {
+                property,
+                filler: Box::new(filler),
+            });
+        }
+
+        // Handle exact cardinality: "R exactly 3 C"
+        if let Some(exactly_pos) = self.find_top_level_operator(expr, " exactly ") {
+            let property_str = &expr[..exactly_pos];
+            let rest = &expr[exactly_pos + 9..];
+            if let Some(space_pos) = rest.find(' ') {
+                let card_str = &rest[..space_pos];
+                let filler_str = &rest[space_pos + 1..];
+                if let Ok(cardinality) = card_str.parse::<u32>() {
+                    let property = self.parse_property_expression(property_str)?;
+                    let filler = self.parse_class_expr_internal(filler_str)?;
+                    return Ok(crate::ontology::ClassExpression::ObjectExactCardinality {
+                        property,
+                        cardinality,
+                        filler: Box::new(filler),
+                    });
+                }
+            }
+        }
+
+        // Handle min cardinality: "R min 2 C"
+        if let Some(min_pos) = self.find_top_level_operator(expr, " min ") {
+            let property_str = &expr[..min_pos];
+            let rest = &expr[min_pos + 5..];
+            if let Some(space_pos) = rest.find(' ') {
+                let card_str = &rest[..space_pos];
+                let filler_str = &rest[space_pos + 1..];
+                if let Ok(cardinality) = card_str.parse::<u32>() {
+                    let property = self.parse_property_expression(property_str)?;
+                    let filler = self.parse_class_expr_internal(filler_str)?;
+                    return Ok(crate::ontology::ClassExpression::ObjectMinCardinality {
+                        property,
+                        cardinality,
+                        filler: Box::new(filler),
+                    });
+                }
+            }
+        }
+
+        // Handle max cardinality: "R max 5 C"
+        if let Some(max_pos) = self.find_top_level_operator(expr, " max ") {
+            let property_str = &expr[..max_pos];
+            let rest = &expr[max_pos + 5..];
+            if let Some(space_pos) = rest.find(' ') {
+                let card_str = &rest[..space_pos];
+                let filler_str = &rest[space_pos + 1..];
+                if let Ok(cardinality) = card_str.parse::<u32>() {
+                    let property = self.parse_property_expression(property_str)?;
+                    let filler = self.parse_class_expr_internal(filler_str)?;
+                    return Ok(crate::ontology::ClassExpression::ObjectMaxCardinality {
+                        property,
+                        cardinality,
+                        filler: Box::new(filler),
+                    });
+                }
+            }
+        }
+
+        // Default: treat as a simple class name
+        let iri = self.resolve_iri(expr)?;
+        Ok(crate::ontology::ClassExpression::Class(crate::ontology::Class::new(iri)))
+    }
+
+    /// Find the position of an operator at the top level (not inside parentheses)
+    fn find_top_level_operator(&self, expr: &str, operator: &str) -> Option<usize> {
+        let mut depth = 0;
+        let chars: Vec<char> = expr.chars().collect();
+        let op_chars: Vec<char> = operator.chars().collect();
+        
+        for i in 0..chars.len() {
+            if chars[i] == '(' {
+                depth += 1;
+            } else if chars[i] == ')' {
+                depth -= 1;
+            } else if depth == 0 {
+                // Check if operator matches at this position
+                if i + op_chars.len() <= chars.len() {
+                    let slice: String = chars[i..i + op_chars.len()].iter().collect();
+                    if slice == operator {
+                        return Some(i);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Parse property expression (currently just object properties)
+    fn parse_property_expression(&self, expr: &str) -> Result<crate::ontology::ObjectPropertyExpression, OxidowlError> {
+        let iri = self.resolve_iri(expr.trim())?;
+        let object_property = crate::ontology::ObjectProperty { iri };
+        Ok(crate::ontology::ObjectPropertyExpression::ObjectProperty(object_property))
     }
 
     /// Parse cardinality restriction (proper implementation)
@@ -191,7 +335,24 @@ mod tests {
 
         // Test simple class
         let expr = parser.parse_class_expression("Person").unwrap();
-        assert_eq!(expr, "Person");
+        match expr {
+            crate::ontology::ClassExpression::Class(_) => {},
+            _ => panic!("Expected Class variant"),
+        }
+
+        // Test intersection
+        let expr = parser.parse_class_expression("Person and Student").unwrap();
+        match expr {
+            crate::ontology::ClassExpression::ObjectIntersectionOf(_) => {},
+            _ => panic!("Expected ObjectIntersectionOf variant"),
+        }
+
+        // Test some restriction
+        let expr = parser.parse_class_expression("hasChild some Person").unwrap();
+        match expr {
+            crate::ontology::ClassExpression::ObjectSomeValuesFrom { .. } => {},
+            _ => panic!("Expected ObjectSomeValuesFrom variant"),
+        }
     }
 
     #[test]

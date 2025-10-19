@@ -19,6 +19,7 @@ use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ont
 use crate::performance::{QueryProfiler, QueryTiming};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::hash::{Hash, Hasher};
@@ -1100,7 +1101,7 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
     ) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
         let cache = self.result_cache.read().unwrap();
-        let query_hash = cache.compute_query_hash(query);
+        let query_hash = cache.compute_query_hash(query, &self.ontology);
 
         if let Some(entry) = cache.get_entry(&query_hash) {
             if !cache.is_entry_expired(entry) {
@@ -1211,7 +1212,7 @@ impl AdvancedExecutionEngine {
         result: &ConjunctiveQueryResult,
     ) -> Result<(), AdvancedQueryError> {
         let mut cache = self.result_cache.write().unwrap();
-        cache.insert(query, result.clone())?;
+        cache.insert(query, result.clone(), &self.ontology)?;
         Ok(())
     }
 
@@ -1258,12 +1259,70 @@ impl QueryResultCache {
         }
     }
 
-    pub fn compute_query_hash(&self, query: &ConjunctiveQuery) -> QueryHash {
-        // Implement query hashing logic
+    pub fn compute_query_hash(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> QueryHash {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        // Hash the query structure
+        let mut structure_hasher = DefaultHasher::new();
+        
+        // Hash answer variables
+        for var in &query.answer_variables {
+            var.hash(&mut structure_hasher);
+        }
+        
+        // Hash body atoms
+        for atom in &query.body_atoms {
+            atom.hash(&mut structure_hasher);
+        }
+        
+        // Hash constraints
+        query.constraints.hash(&mut structure_hasher);
+        
+        let structure_hash = structure_hasher.finish();
+
+        // Hash parameter values (the specific IRIs, literals, etc.)
+        let mut parameter_hasher = DefaultHasher::new();
+        
+        // Hash specific values in atoms
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, class_expression } => {
+                    variable.hash(&mut parameter_hasher);
+                    // Hash the class expression string representation
+                    format!("{:?}", class_expression).hash(&mut parameter_hasher);
+                }
+                QueryAtom::PropertyAtom { variable, property, filler } => {
+                    variable.hash(&mut parameter_hasher);
+                    format!("{:?}", property).hash(&mut parameter_hasher);
+                    filler.hash(&mut parameter_hasher);
+                }
+                QueryAtom::DataPropertyAtom { variable, property, value } => {
+                    variable.hash(&mut parameter_hasher);
+                    format!("{:?}", property).hash(&mut parameter_hasher);
+                    format!("{:?}", value).hash(&mut parameter_hasher);
+                }
+                QueryAtom::SameIndividualAtom { left, right } => {
+                    left.hash(&mut parameter_hasher);
+                    right.hash(&mut parameter_hasher);
+                }
+                QueryAtom::DifferentIndividualsAtom { left, right } => {
+                    left.hash(&mut parameter_hasher);
+                    right.hash(&mut parameter_hasher);
+                }
+            }
+        }
+        
+        let parameter_hash = parameter_hasher.finish();
+
+        // Use ontology's next_id as a version indicator
+        // This will change whenever the ontology is modified
+        let ontology_version = ontology.next_id;
+
         QueryHash {
-            structure_hash: 0,   // Placeholder
-            parameter_hash: 0,   // Placeholder
-            ontology_version: 0, // Placeholder
+            structure_hash,
+            parameter_hash,
+            ontology_version,
         }
     }
 
@@ -1281,8 +1340,57 @@ impl QueryResultCache {
         &mut self,
         query: &ConjunctiveQuery,
         result: ConjunctiveQueryResult,
+        ontology: &Ontology,
     ) -> Result<(), AdvancedQueryError> {
-        // Implement cache insertion with eviction if necessary
+        let query_hash = self.compute_query_hash(query, ontology);
+        
+        // Estimate entry size (simplified)
+        let entry_size = std::mem::size_of::<ConjunctiveQueryResult>() 
+            + result.bindings.len() * std::mem::size_of::<HashMap<QueryVariable, Individual>>();
+
+        // Check if we need to evict entries
+        while self.cache_entries.len() >= self.config.max_entries 
+            || self.size_tracker.current_size + entry_size > self.config.max_size_bytes {
+            
+            // Evict least recently used entry
+            if let Some(lru_hash) = self.lru_tracker.get_lru() {
+                if let Some(removed_entry) = self.cache_entries.remove(&lru_hash) {
+                    self.size_tracker.current_size -= removed_entry.size_bytes;
+                    self.access_stats.evictions += 1;
+                    self.lru_tracker.remove(&lru_hash);
+                }
+            } else {
+                break; // No more entries to evict
+            }
+        }
+
+        // Create cache entry with proper metadata
+        let now = Instant::now();
+        let ttl = Duration::from_secs(self.config.ttl_seconds);
+        let entry = CacheEntry {
+            result,
+            metadata: CacheEntryMetadata {
+                original_query: query.clone(),
+                execution_time: Duration::from_millis(0), // Will be set by caller if needed
+                confidence_score: 1.0,
+                invalidation_triggers: vec![
+                    InvalidationTrigger::TimeExpiry(now + ttl),
+                    InvalidationTrigger::OntologyChange { version: ontology.next_id },
+                ],
+                priority: CachePriority::Normal,
+            },
+            created_at: now,
+            last_accessed: now,
+            access_count: 0,
+            size_bytes: entry_size,
+        };
+
+        // Insert new entry
+        self.cache_entries.insert(query_hash.clone(), entry);
+        self.size_tracker.current_size += entry_size;
+        self.lru_tracker.insert(query_hash);
+        self.access_stats.total_memory_usage = self.size_tracker.current_size;
+
         Ok(())
     }
 }
@@ -1321,6 +1429,49 @@ impl LruTracker {
             access_order: VecDeque::new(),
             position_map: HashMap::new(),
             max_entries,
+        }
+    }
+
+    /// Insert a new entry into the LRU tracker
+    pub fn insert(&mut self, hash: QueryHash) {
+        // Remove if already exists to update position
+        self.remove(&hash);
+        
+        // Add to front (most recently used)
+        self.access_order.push_front(hash.clone());
+        self.position_map.insert(hash, 0);
+        
+        // Update positions
+        self.update_positions();
+    }
+
+    /// Mark an entry as accessed (move to front)
+    pub fn access(&mut self, hash: &QueryHash) {
+        if self.position_map.contains_key(hash) {
+            self.remove(hash);
+            self.access_order.push_front(hash.clone());
+            self.position_map.insert(hash.clone(), 0);
+            self.update_positions();
+        }
+    }
+
+    /// Get the least recently used entry
+    pub fn get_lru(&self) -> Option<QueryHash> {
+        self.access_order.back().cloned()
+    }
+
+    /// Remove an entry from tracking
+    pub fn remove(&mut self, hash: &QueryHash) {
+        if let Some(pos) = self.position_map.remove(hash) {
+            self.access_order.retain(|h| h != hash);
+            self.update_positions();
+        }
+    }
+
+    /// Update position map after changes
+    fn update_positions(&mut self) {
+        for (idx, hash) in self.access_order.iter().enumerate() {
+            self.position_map.insert(hash.clone(), idx);
         }
     }
 }
