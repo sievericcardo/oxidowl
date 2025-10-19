@@ -26,6 +26,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 /// Advanced Query Execution Engine with adaptive strategies
 pub struct AdvancedExecutionEngine {
@@ -890,7 +891,7 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
         constraints: ExecutionConstraints,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        let execution_id = ExecutionId(uuid::Uuid::new_v4().to_string());
+        let execution_id = ExecutionId(Uuid::new_v4().to_string());
         let start_time = Instant::now();
 
         // Step 1: Check cache if enabled
@@ -1662,8 +1663,18 @@ impl ThreadPool {
 
 impl ResourceManager {
     pub fn new() -> Self {
+        use crate::performance::MemoryTracker;
+        
+        // Query actual system available memory, fallback to 1GB if unavailable
+        let available_memory = MemoryTracker::query_system_available_memory();
+        let available_memory = if available_memory > 0 {
+            available_memory
+        } else {
+            1024 * 1024 * 1024 // 1 GB fallback
+        };
+        
         Self {
-            available_memory: 1024 * 1024 * 1024, // 1 GB placeholder
+            available_memory,
             memory_allocations: HashMap::new(),
             cpu_usage: 0.0,
             limits: ResourceLimits::default(),
@@ -1699,27 +1710,5 @@ impl Default for ParallelExecutionConfig {
 impl AdvancedQueryError {
     pub fn StrategyNotFound(strategy: String) -> Self {
         AdvancedQueryError::InternalError(format!("Execution strategy not found: {}", strategy))
-    }
-}
-
-// Placeholder for uuid functionality
-mod uuid {
-    pub struct Uuid;
-
-    impl Uuid {
-        pub fn new_v4() -> Self {
-            Self
-        }
-
-        pub fn to_string(&self) -> String {
-            "placeholder-uuid".to_string()
-        }
-    }
-}
-
-// Placeholder for num_cpus functionality
-mod num_cpus {
-    pub fn get() -> usize {
-        4 // Default to 4 cores
     }
 }

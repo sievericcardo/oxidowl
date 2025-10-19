@@ -124,8 +124,23 @@ impl MemoryTracker {
 
     #[cfg(target_os = "windows")]
     fn get_heap_allocated() -> usize {
-        // On Windows, we'd use GetProcessMemoryInfo from psapi.h
-        // For now, return 0 as a placeholder
+        use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
+        use windows::Win32::System::Threading::GetCurrentProcess;
+        
+        unsafe {
+            let process = GetCurrentProcess();
+            let mut pmc: PROCESS_MEMORY_COUNTERS_EX = std::mem::zeroed();
+            pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+            
+            if GetProcessMemoryInfo(
+                process,
+                &mut pmc as *mut _ as *mut _,
+                std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+            ).is_ok() {
+                return pmc.WorkingSetSize;
+            }
+        }
+        
         0
     }
 
@@ -188,8 +203,17 @@ impl MemoryTracker {
 
     #[cfg(target_os = "windows")]
     fn get_system_available_memory() -> usize {
-        // On Windows, we'd use GlobalMemoryStatusEx
-        // For now, return 0 as a placeholder
+        use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        
+        unsafe {
+            let mut mem_status: MEMORYSTATUSEX = std::mem::zeroed();
+            mem_status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+            
+            if GlobalMemoryStatusEx(&mut mem_status).is_ok() {
+                return mem_status.ullAvailPhys as usize;
+            }
+        }
+        
         0
     }
 
@@ -227,6 +251,14 @@ impl MemoryTracker {
             peak_cache_mb: cache_sizes.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
             system_available_mb: snapshots.last().map(|s| s.system_available_mb()).unwrap_or(0.0),
         }
+    }
+
+    /// Get system available memory in bytes (public helper)
+    /// 
+    /// Returns the amount of available system memory. Falls back to 1GB if unavailable.
+    #[must_use]
+    pub fn query_system_available_memory() -> usize {
+        Self::get_system_available_memory()
     }
 
     /// Clear all snapshots
