@@ -180,7 +180,7 @@ impl Default for ExplanationService {
 }
 
 /// Complete explanation for a reasoning result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Explanation {
     /// The conclusion being explained
     pub conclusion: ExplanationConclusion,
@@ -229,7 +229,7 @@ pub enum ExplanationType {
 }
 
 /// Proof tree structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ProofTree {
     /// Root node of the proof tree
     pub root: ProofNode,
@@ -238,7 +238,7 @@ pub struct ProofTree {
 }
 
 /// Individual node in a proof tree
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ProofNode {
     /// Unique identifier for this node
     pub id: usize,
@@ -356,16 +356,16 @@ impl JustificationComputer {
         
         // Check direct SubClassOf axioms
         for axiom in axioms {
-            if let Axiom::SubClassOf(sub, sup) = axiom {
-                if sub == subclass && sup == superclass {
+            if let Axiom::SubClassOf(axiom_data) = axiom {
+                if &axiom_data.subclass == subclass && &axiom_data.superclass == superclass {
                     return true;
                 }
                 
                 // Check transitivity: if subclass -> intermediate and intermediate -> superclass
-                if sub == subclass {
+                if &axiom_data.subclass == subclass {
                     for other_axiom in axioms {
-                        if let Axiom::SubClassOf(sub2, sup2) = other_axiom {
-                            if sub2 == sup && sup2 == superclass {
+                        if let Axiom::SubClassOf(other_data) = other_axiom {
+                            if &other_data.subclass == &axiom_data.superclass && &other_data.superclass == superclass {
                                 return true;
                             }
                         }
@@ -374,8 +374,8 @@ impl JustificationComputer {
             }
             
             // Check EquivalentClasses
-            if let Axiom::EquivalentClasses(classes) = axiom {
-                if classes.contains(subclass) && classes.contains(superclass) {
+            if let Axiom::EquivalentClasses(axiom_data) = axiom {
+                if axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass) {
                     return true;
                 }
             }
@@ -420,13 +420,13 @@ impl JustificationComputer {
         
         // Check for disjoint classes being asserted equivalent
         for axiom in axioms {
-            if let Axiom::EquivalentClasses(equiv_classes) = axiom {
+            if let Axiom::EquivalentClasses(equiv_data) = axiom {
                 for other_axiom in axioms {
-                    if let Axiom::DisjointClasses(disj_classes) = other_axiom {
+                    if let Axiom::DisjointClasses(disj_data) = other_axiom {
                         // If any two classes are both equivalent and disjoint, it's inconsistent
-                        for c1 in equiv_classes {
-                            for c2 in equiv_classes {
-                                if c1 != c2 && disj_classes.contains(c1) && disj_classes.contains(c2) {
+                        for c1 in &equiv_data.classes {
+                            for c2 in &equiv_data.classes {
+                                if c1 != c2 && disj_data.classes.contains(c1) && disj_data.classes.contains(c2) {
                                     return true;
                                 }
                             }
@@ -438,9 +438,9 @@ impl JustificationComputer {
         
         // Check for class being subclass of its complement
         for axiom in axioms {
-            if let Axiom::SubClassOf(sub, sup) = axiom {
-                if let ClassExpression::ObjectComplementOf(inner) = sup {
-                    if sub == inner.as_ref() {
+            if let Axiom::SubClassOf(axiom_data) = axiom {
+                if let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass {
+                    if &axiom_data.subclass == inner.as_ref() {
                         return true;
                     }
                 }
@@ -487,30 +487,31 @@ impl JustificationComputer {
     fn axiom_mentions_class(&self, axiom: &Axiom, class: &ClassExpression) -> bool {
         // Comprehensive check that recursively inspects class expressions
         match axiom {
-            Axiom::SubClassOf(sub, sup) => {
-                self.class_expr_mentions(sub, class) || self.class_expr_mentions(sup, class)
+            Axiom::SubClassOf(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.subclass, class) || 
+                self.class_expr_mentions(&axiom_data.superclass, class)
             },
-            Axiom::EquivalentClasses(classes) => {
-                classes.iter().any(|c| self.class_expr_mentions(c, class))
+            Axiom::EquivalentClasses(axiom_data) => {
+                axiom_data.classes.iter().any(|c| self.class_expr_mentions(c, class))
             },
-            Axiom::DisjointClasses(classes) => {
-                classes.iter().any(|c| self.class_expr_mentions(c, class))
+            Axiom::DisjointClasses(axiom_data) => {
+                axiom_data.classes.iter().any(|c| self.class_expr_mentions(c, class))
             },
-            Axiom::DisjointUnion(lhs, rhs_classes) => {
-                self.class_expr_mentions(lhs, class) || 
-                rhs_classes.iter().any(|c| self.class_expr_mentions(c, class))
+            Axiom::DisjointUnion(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.class, class) || 
+                axiom_data.disjoint_classes.iter().any(|c| self.class_expr_mentions(c, class))
             },
-            Axiom::ClassAssertion(ce, _individual) => {
-                self.class_expr_mentions(ce, class)
+            Axiom::ClassAssertion(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.class, class)
             },
-            Axiom::ObjectPropertyDomain(_, domain) => {
-                self.class_expr_mentions(domain, class)
+            Axiom::ObjectPropertyDomain(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.domain, class)
             },
-            Axiom::ObjectPropertyRange(_, range) => {
-                self.class_expr_mentions(range, class)
+            Axiom::ObjectPropertyRange(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.range, class)
             },
-            Axiom::DataPropertyDomain(_, domain) => {
-                self.class_expr_mentions(domain, class)
+            Axiom::DataPropertyDomain(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.domain, class)
             },
             _ => false,
         }
@@ -694,7 +695,20 @@ impl ExplanationFormatter {
     }
 
     fn format_json(&self, explanation: &Explanation) -> String {
-        serde_json::to_string_pretty(explanation).unwrap_or_default()
+        // Since Explanation doesn't implement Serialize (due to Axiom),
+        // we create a simplified JSON representation
+        let conclusion_str = format!("{:?}", explanation.conclusion);
+        let justification_str = explanation.justification
+            .iter()
+            .map(|axiom| format!("{:?}", axiom))
+            .collect::<Vec<_>>()
+            .join(", ");
+        
+        format!(r#"{{"conclusion": "{}", "justification": [{}], "explanation_type": "{:?}", "confidence": {}}}"#,
+                conclusion_str.replace('"', r#"\""#),
+                justification_str,
+                explanation.explanation_type,
+                explanation.confidence)
     }
 
     fn format_manchester(&self, explanation: &Explanation) -> String {

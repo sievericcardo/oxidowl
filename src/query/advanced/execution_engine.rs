@@ -1292,8 +1292,10 @@ impl QueryResultCache {
             atom.hash(&mut structure_hasher);
         }
         
-        // Hash constraints
-        query.constraints.hash(&mut structure_hasher);
+        // Hash constraints (simplified - hash constraint counts)
+        query.constraints.distinct_variables.len().hash(&mut structure_hasher);
+        query.constraints.type_constraints.len().hash(&mut structure_hasher);
+        query.constraints.value_constraints.len().hash(&mut structure_hasher);
         
         let structure_hash = structure_hasher.finish();
 
@@ -1308,15 +1310,15 @@ impl QueryResultCache {
                     // Hash the class expression string representation
                     format!("{:?}", class_expression).hash(&mut parameter_hasher);
                 }
-                QueryAtom::PropertyAtom { variable, property, filler } => {
-                    variable.hash(&mut parameter_hasher);
+                QueryAtom::ObjectPropertyAtom { subject, property, object } => {
+                    subject.hash(&mut parameter_hasher);
                     format!("{:?}", property).hash(&mut parameter_hasher);
-                    filler.hash(&mut parameter_hasher);
+                    object.hash(&mut parameter_hasher);
                 }
-                QueryAtom::DataPropertyAtom { variable, property, value } => {
-                    variable.hash(&mut parameter_hasher);
+                QueryAtom::DataPropertyAtom { subject, property, literal } => {
+                    subject.hash(&mut parameter_hasher);
                     format!("{:?}", property).hash(&mut parameter_hasher);
-                    format!("{:?}", value).hash(&mut parameter_hasher);
+                    format!("{:?}", literal).hash(&mut parameter_hasher);
                 }
                 QueryAtom::SameIndividualAtom { left, right } => {
                     left.hash(&mut parameter_hasher);
@@ -1326,14 +1328,22 @@ impl QueryResultCache {
                     left.hash(&mut parameter_hasher);
                     right.hash(&mut parameter_hasher);
                 }
+                QueryAtom::ConcreteIndividualAtom { variable, individual } => {
+                    variable.hash(&mut parameter_hasher);
+                    format!("{:?}", individual).hash(&mut parameter_hasher);
+                }
+                QueryAtom::ConcreteLiteralAtom { variable, literal } => {
+                    variable.hash(&mut parameter_hasher);
+                    format!("{:?}", literal).hash(&mut parameter_hasher);
+                }
             }
         }
         
         let parameter_hash = parameter_hasher.finish();
 
-        // Use ontology's next_id as a version indicator
-        // This will change whenever the ontology is modified
-        let ontology_version = ontology.next_id;
+        // Use ontology's axiom count as a version indicator
+        // This will change whenever axioms are added/removed
+        let ontology_version = ontology.axioms.len() as u64;
 
         QueryHash {
             structure_hash,
@@ -1382,7 +1392,7 @@ impl QueryResultCache {
 
         // Create cache entry with proper metadata
         let now = Instant::now();
-        let ttl = Duration::from_secs(self.config.ttl_seconds);
+        let ttl = self.config.default_ttl;
         let entry = CacheEntry {
             result,
             metadata: CacheEntryMetadata {
@@ -1391,7 +1401,7 @@ impl QueryResultCache {
                 confidence_score: 1.0,
                 invalidation_triggers: vec![
                     InvalidationTrigger::TimeExpiry(now + ttl),
-                    InvalidationTrigger::OntologyChange { version: ontology.next_id },
+                    InvalidationTrigger::OntologyChange { version: ontology.axioms.len() as u64 },
                 ],
                 priority: CachePriority::Normal,
             },
