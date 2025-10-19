@@ -16,8 +16,10 @@ use super::ml_core::{
 use super::optimization::OptimizationError;
 use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::performance::{QueryProfiler, QueryTiming};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::hash::{Hash, Hasher};
@@ -25,6 +27,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 /// Advanced Query Execution Engine with adaptive strategies
 pub struct AdvancedExecutionEngine {
@@ -332,6 +335,22 @@ pub enum ExecutionPriority {
     Urgent,
 }
 
+/// Features extracted from query for strategy selection
+#[derive(Debug, Clone)]
+struct StrategyQueryFeatures {
+    num_atoms: usize,
+    num_variables: usize,
+    num_answer_vars: usize,
+    num_class_atoms: usize,
+    num_property_atoms: usize,
+    num_data_atoms: usize,
+    join_complexity: f64,
+    has_cycles: bool,
+    selectivity: f64,
+    predicted_time: f64,
+    predicted_memory: f64,
+}
+
 /// Performance history for strategies
 #[derive(Debug, Clone)]
 pub struct StrategyPerformanceHistory {
@@ -438,6 +457,9 @@ pub struct ExecutionPerformanceMonitor {
 
     /// Real-time alerts
     alert_system: ExecutionAlertSystem,
+
+    /// Query profiler for detailed timing
+    query_profiler: Arc<QueryProfiler>,
 }
 
 /// Unique identifier for query executions
@@ -455,6 +477,16 @@ pub struct ExecutionTrace {
     pub current_stage: Option<String>,
     pub memory_usage: Vec<(Instant, usize)>,
     pub intermediate_results: Vec<IntermediateResult>,
+    
+    // Detailed timing breakdown
+    pub atom_evaluation_start: Option<Instant>,
+    pub atom_evaluation_duration: Duration,
+    pub join_start: Option<Instant>,
+    pub join_duration: Duration,
+    pub materialization_start: Option<Instant>,
+    pub materialization_duration: Duration,
+    pub atoms_evaluated: usize,
+    pub joins_performed: usize,
 }
 
 /// Execution stage information
@@ -876,7 +908,7 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
         constraints: ExecutionConstraints,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        let execution_id = ExecutionId(uuid::Uuid::new_v4().to_string());
+        let execution_id = ExecutionId(Uuid::new_v4().to_string());
         let start_time = Instant::now();
 
         // Step 1: Check cache if enabled
@@ -1085,7 +1117,7 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
     ) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
         let cache = self.result_cache.read().unwrap();
-        let query_hash = cache.compute_query_hash(query);
+        let query_hash = cache.compute_query_hash(query, &self.ontology);
 
         if let Some(entry) = cache.get_entry(&query_hash) {
             if !cache.is_entry_expired(entry) {
@@ -1196,7 +1228,7 @@ impl AdvancedExecutionEngine {
         result: &ConjunctiveQueryResult,
     ) -> Result<(), AdvancedQueryError> {
         let mut cache = self.result_cache.write().unwrap();
-        cache.insert(query, result.clone())?;
+        cache.insert(query, result.clone(), &self.ontology)?;
         Ok(())
     }
 
@@ -1243,12 +1275,80 @@ impl QueryResultCache {
         }
     }
 
-    pub fn compute_query_hash(&self, query: &ConjunctiveQuery) -> QueryHash {
-        // Implement query hashing logic
+    pub fn compute_query_hash(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> QueryHash {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        // Hash the query structure
+        let mut structure_hasher = DefaultHasher::new();
+        
+        // Hash answer variables
+        for var in &query.answer_variables {
+            var.hash(&mut structure_hasher);
+        }
+        
+        // Hash body atoms
+        for atom in &query.body_atoms {
+            atom.hash(&mut structure_hasher);
+        }
+        
+        // Hash constraints (simplified - hash constraint counts)
+        query.constraints.distinct_variables.len().hash(&mut structure_hasher);
+        query.constraints.type_constraints.len().hash(&mut structure_hasher);
+        query.constraints.value_constraints.len().hash(&mut structure_hasher);
+        
+        let structure_hash = structure_hasher.finish();
+
+        // Hash parameter values (the specific IRIs, literals, etc.)
+        let mut parameter_hasher = DefaultHasher::new();
+        
+        // Hash specific values in atoms
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, class_expression } => {
+                    variable.hash(&mut parameter_hasher);
+                    // Hash the class expression string representation
+                    format!("{:?}", class_expression).hash(&mut parameter_hasher);
+                }
+                QueryAtom::ObjectPropertyAtom { subject, property, object } => {
+                    subject.hash(&mut parameter_hasher);
+                    format!("{:?}", property).hash(&mut parameter_hasher);
+                    object.hash(&mut parameter_hasher);
+                }
+                QueryAtom::DataPropertyAtom { subject, property, literal } => {
+                    subject.hash(&mut parameter_hasher);
+                    format!("{:?}", property).hash(&mut parameter_hasher);
+                    format!("{:?}", literal).hash(&mut parameter_hasher);
+                }
+                QueryAtom::SameIndividualAtom { left, right } => {
+                    left.hash(&mut parameter_hasher);
+                    right.hash(&mut parameter_hasher);
+                }
+                QueryAtom::DifferentIndividualsAtom { left, right } => {
+                    left.hash(&mut parameter_hasher);
+                    right.hash(&mut parameter_hasher);
+                }
+                QueryAtom::ConcreteIndividualAtom { variable, individual } => {
+                    variable.hash(&mut parameter_hasher);
+                    format!("{:?}", individual).hash(&mut parameter_hasher);
+                }
+                QueryAtom::ConcreteLiteralAtom { variable, literal } => {
+                    variable.hash(&mut parameter_hasher);
+                    format!("{:?}", literal).hash(&mut parameter_hasher);
+                }
+            }
+        }
+        
+        let parameter_hash = parameter_hasher.finish();
+
+        // Use ontology's axiom count as a version indicator
+        // This will change whenever axioms are added/removed
+        let ontology_version = ontology.axioms.len() as u64;
+
         QueryHash {
-            structure_hash: 0,   // Placeholder
-            parameter_hash: 0,   // Placeholder
-            ontology_version: 0, // Placeholder
+            structure_hash,
+            parameter_hash,
+            ontology_version,
         }
     }
 
@@ -1266,8 +1366,57 @@ impl QueryResultCache {
         &mut self,
         query: &ConjunctiveQuery,
         result: ConjunctiveQueryResult,
+        ontology: &Ontology,
     ) -> Result<(), AdvancedQueryError> {
-        // Implement cache insertion with eviction if necessary
+        let query_hash = self.compute_query_hash(query, ontology);
+        
+        // Estimate entry size (simplified)
+        let entry_size = std::mem::size_of::<ConjunctiveQueryResult>() 
+            + result.bindings.len() * std::mem::size_of::<HashMap<QueryVariable, Individual>>();
+
+        // Check if we need to evict entries
+        while self.cache_entries.len() >= self.config.max_entries 
+            || self.size_tracker.current_size + entry_size > self.config.max_size_bytes {
+            
+            // Evict least recently used entry
+            if let Some(lru_hash) = self.lru_tracker.get_lru() {
+                if let Some(removed_entry) = self.cache_entries.remove(&lru_hash) {
+                    self.size_tracker.current_size -= removed_entry.size_bytes;
+                    self.access_stats.evictions += 1;
+                    self.lru_tracker.remove(&lru_hash);
+                }
+            } else {
+                break; // No more entries to evict
+            }
+        }
+
+        // Create cache entry with proper metadata
+        let now = Instant::now();
+        let ttl = self.config.default_ttl;
+        let entry = CacheEntry {
+            result,
+            metadata: CacheEntryMetadata {
+                original_query: query.clone(),
+                execution_time: Duration::from_millis(0), // Will be set by caller if needed
+                confidence_score: 1.0,
+                invalidation_triggers: vec![
+                    InvalidationTrigger::TimeExpiry(now + ttl),
+                    InvalidationTrigger::OntologyChange { version: ontology.axioms.len() as u64 },
+                ],
+                priority: CachePriority::Normal,
+            },
+            created_at: now,
+            last_accessed: now,
+            access_count: 0,
+            size_bytes: entry_size,
+        };
+
+        // Insert new entry
+        self.cache_entries.insert(query_hash.clone(), entry);
+        self.size_tracker.current_size += entry_size;
+        self.lru_tracker.insert(query_hash);
+        self.access_stats.total_memory_usage = self.size_tracker.current_size;
+
         Ok(())
     }
 }
@@ -1308,6 +1457,49 @@ impl LruTracker {
             max_entries,
         }
     }
+
+    /// Insert a new entry into the LRU tracker
+    pub fn insert(&mut self, hash: QueryHash) {
+        // Remove if already exists to update position
+        self.remove(&hash);
+        
+        // Add to front (most recently used)
+        self.access_order.push_front(hash.clone());
+        self.position_map.insert(hash, 0);
+        
+        // Update positions
+        self.update_positions();
+    }
+
+    /// Mark an entry as accessed (move to front)
+    pub fn access(&mut self, hash: &QueryHash) {
+        if self.position_map.contains_key(hash) {
+            self.remove(hash);
+            self.access_order.push_front(hash.clone());
+            self.position_map.insert(hash.clone(), 0);
+            self.update_positions();
+        }
+    }
+
+    /// Get the least recently used entry
+    pub fn get_lru(&self) -> Option<QueryHash> {
+        self.access_order.back().cloned()
+    }
+
+    /// Remove an entry from tracking
+    pub fn remove(&mut self, hash: &QueryHash) {
+        if let Some(pos) = self.position_map.remove(hash) {
+            self.access_order.retain(|h| h != hash);
+            self.update_positions();
+        }
+    }
+
+    /// Update position map after changes
+    fn update_positions(&mut self) {
+        for (idx, hash) in self.access_order.iter().enumerate() {
+            self.position_map.insert(hash.clone(), idx);
+        }
+    }
 }
 
 impl CacheSizeTracker {
@@ -1336,8 +1528,255 @@ impl ExecutionStrategySelector {
         query: &ConjunctiveQuery,
         plan: &AdvancedQueryPlan,
     ) -> Result<String, AdvancedQueryError> {
-        // Implement strategy selection logic
-        Ok("default".to_string()) // Placeholder
+        // Extract query features for decision making
+        let features = self.extract_query_features(query, plan);
+        
+        // Use rule-based model to select strategy
+        let strategy = self.apply_selection_rules(&features);
+        
+        // Update selection history
+        self.performance_history
+            .entry(strategy.clone())
+            .or_insert_with(|| StrategyPerformanceHistory {
+                executions: 0,
+                successes: 0,
+                failures: 0,
+                average_execution_time: Duration::from_secs(0),
+                average_memory_usage: 0,
+                success_rate: 0.0,
+                confidence_scores: Vec::new(),
+                last_used: Instant::now(),
+            });
+        
+        Ok(strategy)
+    }
+    
+    /// Extract features from query and plan for strategy selection
+    fn extract_query_features(
+        &self,
+        query: &ConjunctiveQuery,
+        plan: &AdvancedQueryPlan,
+    ) -> StrategyQueryFeatures {
+        let num_atoms = query.body_atoms.len();
+        let num_variables = self.count_distinct_variables(query);
+        let num_answer_vars = query.answer_variables.len();
+        
+        // Count different atom types
+        let mut num_class_atoms = 0;
+        let mut num_property_atoms = 0;
+        let mut num_data_atoms = 0;
+        
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { .. } => num_class_atoms += 1,
+                QueryAtom::ObjectPropertyAtom { .. } => num_property_atoms += 1,
+                QueryAtom::DataPropertyAtom { .. } => num_data_atoms += 1,
+                _ => {}
+            }
+        }
+        
+        // Estimate complexity
+        let join_complexity = self.estimate_join_complexity(query);
+        let has_cycles = self.detect_query_cycles(query);
+        let selectivity = 0.5; // Default selectivity if not available in plan
+        
+        StrategyQueryFeatures {
+            num_atoms,
+            num_variables,
+            num_answer_vars,
+            num_class_atoms,
+            num_property_atoms,
+            num_data_atoms,
+            join_complexity,
+            has_cycles,
+            selectivity,
+            predicted_time: plan.predicted_performance.estimated_execution_time.as_secs_f64(),
+            predicted_memory: plan.predicted_performance.estimated_memory_usage as f64,
+        }
+    }
+    
+    /// Apply rule-based strategy selection
+    fn apply_selection_rules(&self, features: &StrategyQueryFeatures) -> String {
+        // Rule 1: Simple queries with few atoms - use direct strategy
+        if features.num_atoms <= 3 && !features.has_cycles {
+            return "direct".to_string();
+        }
+        
+        // Rule 2: Queries with many joins - use join-optimized strategy
+        if features.join_complexity > 5.0 {
+            return "join_optimized".to_string();
+        }
+        
+        // Rule 3: Queries with cycles - use specialized cycle handler
+        if features.has_cycles {
+            return "cycle_aware".to_string();
+        }
+        
+        // Rule 4: Low selectivity queries - use filtering strategy
+        if features.selectivity < 0.1 {
+            return "filter_first".to_string();
+        }
+        
+        // Rule 5: High memory prediction - use streaming strategy
+        if features.predicted_memory > 1_000_000_000.0 {
+            return "streaming".to_string();
+        }
+        
+        // Rule 6: Many answer variables - use projection optimization
+        if features.num_answer_vars > features.num_variables / 2 {
+            return "projection_optimized".to_string();
+        }
+        
+        // Rule 7: Data property heavy queries - use data-optimized strategy
+        if features.num_data_atoms > features.num_class_atoms {
+            return "data_optimized".to_string();
+        }
+        
+        // Default strategy for balanced queries
+        "balanced".to_string()
+    }
+    
+    /// Count distinct variables in query
+    fn count_distinct_variables(&self, query: &ConjunctiveQuery) -> usize {
+        let mut variables = HashSet::new();
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, .. } => {
+                    variables.insert(variable.clone());
+                }
+                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                    variables.insert(subject.clone());
+                    variables.insert(object.clone());
+                }
+                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                    variables.insert(subject.clone());
+                    variables.insert(literal.clone());
+                }
+                QueryAtom::SameIndividualAtom { left, right } => {
+                    variables.insert(left.clone());
+                    variables.insert(right.clone());
+                }
+                QueryAtom::DifferentIndividualsAtom { left, right } => {
+                    variables.insert(left.clone());
+                    variables.insert(right.clone());
+                }
+                QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                    variables.insert(variable.clone());
+                }
+                QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                    variables.insert(variable.clone());
+                }
+            }
+        }
+        variables.len()
+    }
+    
+    /// Estimate join complexity based on shared variables
+    fn estimate_join_complexity(&self, query: &ConjunctiveQuery) -> f64 {
+        let n = query.body_atoms.len();
+        if n <= 1 {
+            return 0.0;
+        }
+        
+        let mut join_count = 0;
+        for i in 0..n {
+            for j in (i + 1)..n {
+                if self.atoms_share_variable(&query.body_atoms[i], &query.body_atoms[j]) {
+                    join_count += 1;
+                }
+            }
+        }
+        
+        // Normalize by maximum possible joins
+        let max_joins = (n * (n - 1)) / 2;
+        (join_count as f64 / max_joins as f64) * 10.0
+    }
+    
+    /// Check if two atoms share a variable
+    fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
+        let vars1 = self.extract_atom_variables(atom1);
+        let vars2 = self.extract_atom_variables(atom2);
+        
+        for v1 in &vars1 {
+            for v2 in &vars2 {
+                if v1 == v2 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    
+    /// Extract all variables from an atom
+    fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            }
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                vec![subject.clone(), literal.clone()]
+            }
+            QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
+        }
+    }
+    
+    /// Detect cycles in query dependency graph
+    fn detect_query_cycles(&self, query: &ConjunctiveQuery) -> bool {
+        // Build adjacency list for variable dependencies
+        let mut graph: HashMap<QueryVariable, Vec<QueryVariable>> = HashMap::new();
+        
+        for atom in &query.body_atoms {
+            if let QueryAtom::ObjectPropertyAtom { subject, object, .. } = atom {
+                graph.entry(subject.clone())
+                    .or_insert_with(Vec::new)
+                    .push(object.clone());
+            }
+        }
+        
+        // DFS cycle detection
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        
+        for var in graph.keys() {
+            if !visited.contains(var) {
+                if self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack) {
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    /// DFS helper for cycle detection
+    fn has_cycle_dfs(
+        &self,
+        node: &QueryVariable,
+        graph: &HashMap<QueryVariable, Vec<QueryVariable>>,
+        visited: &mut HashSet<QueryVariable>,
+        rec_stack: &mut HashSet<QueryVariable>,
+    ) -> bool {
+        visited.insert(node.clone());
+        rec_stack.insert(node.clone());
+        
+        if let Some(neighbors) = graph.get(node) {
+            for neighbor in neighbors {
+                if !visited.contains(neighbor) {
+                    if self.has_cycle_dfs(neighbor, graph, visited, rec_stack) {
+                        return true;
+                    }
+                } else if rec_stack.contains(neighbor) {
+                    return true;
+                }
+            }
+        }
+        
+        rec_stack.remove(node);
+        false
     }
 
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
@@ -1430,6 +1869,7 @@ impl ExecutionPerformanceMonitor {
             metrics_aggregator: PerformanceMetricsAggregator::new(),
             anomaly_detector: ExecutionAnomalyDetector::new(),
             alert_system: ExecutionAlertSystem::new(),
+            query_profiler: Arc::new(QueryProfiler::new(1000)),
         }
     }
 
@@ -1449,6 +1889,14 @@ impl ExecutionPerformanceMonitor {
             current_stage: None,
             memory_usage: Vec::new(),
             intermediate_results: Vec::new(),
+            atom_evaluation_start: None,
+            atom_evaluation_duration: Duration::from_secs(0),
+            join_start: None,
+            join_duration: Duration::from_secs(0),
+            materialization_start: None,
+            materialization_duration: Duration::from_secs(0),
+            atoms_evaluated: 0,
+            joins_performed: 0,
         };
 
         self.active_executions.insert(execution_id.clone(), trace);
@@ -1461,18 +1909,33 @@ impl ExecutionPerformanceMonitor {
     ) {
         // Complete execution tracking
         if let Some(trace) = self.active_executions.remove(execution_id) {
+            let total_duration = trace.start_time.elapsed();
+            let result_size = result.as_ref().map(|r| r.bindings.len()).unwrap_or(0);
+
+            // Record detailed timing in profiler
+            let timing = QueryTiming::new(
+                total_duration,
+                trace.atom_evaluation_duration,
+                trace.join_duration,
+                trace.materialization_duration,
+                trace.atoms_evaluated,
+                trace.joins_performed,
+                result_size,
+            );
+            self.query_profiler.record(timing);
+
             let completed = CompletedExecution {
                 execution_id: execution_id.clone(),
                 query: trace.query,
                 strategy: trace.strategy,
-                total_time: trace.start_time.elapsed(),
+                total_time: total_duration,
                 peak_memory: trace
                     .memory_usage
                     .iter()
                     .map(|(_, mem)| *mem)
                     .max()
                     .unwrap_or(0),
-                result_size: result.as_ref().map(|r| r.bindings.len()).unwrap_or(0),
+                result_size,
                 success: result.is_ok(),
                 error: result.as_ref().err().map(|e| e.to_string()),
                 performance_score: 1.0, // Placeholder
@@ -1480,6 +1943,61 @@ impl ExecutionPerformanceMonitor {
 
             self.execution_history.insert(Instant::now(), completed);
         }
+    }
+
+    /// Start atom evaluation phase
+    pub fn start_atom_evaluation(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            trace.atom_evaluation_start = Some(Instant::now());
+        }
+    }
+
+    /// Complete atom evaluation phase
+    pub fn complete_atom_evaluation(&mut self, execution_id: &ExecutionId, atoms_count: usize) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            if let Some(start) = trace.atom_evaluation_start {
+                trace.atom_evaluation_duration = start.elapsed();
+                trace.atoms_evaluated = atoms_count;
+            }
+        }
+    }
+
+    /// Start join phase
+    pub fn start_join_phase(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            trace.join_start = Some(Instant::now());
+        }
+    }
+
+    /// Complete join phase
+    pub fn complete_join_phase(&mut self, execution_id: &ExecutionId, joins_count: usize) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            if let Some(start) = trace.join_start {
+                trace.join_duration = start.elapsed();
+                trace.joins_performed = joins_count;
+            }
+        }
+    }
+
+    /// Start materialization phase
+    pub fn start_materialization(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            trace.materialization_start = Some(Instant::now());
+        }
+    }
+
+    /// Complete materialization phase
+    pub fn complete_materialization(&mut self, execution_id: &ExecutionId) {
+        if let Some(trace) = self.active_executions.get_mut(execution_id) {
+            if let Some(start) = trace.materialization_start {
+                trace.materialization_duration = start.elapsed();
+            }
+        }
+    }
+
+    /// Get query profiler for accessing profiling statistics
+    pub fn query_profiler(&self) -> Arc<QueryProfiler> {
+        self.query_profiler.clone()
     }
 }
 
@@ -1569,8 +2087,18 @@ impl ThreadPool {
 
 impl ResourceManager {
     pub fn new() -> Self {
+        use crate::performance::MemoryTracker;
+        
+        // Query actual system available memory, fallback to 1GB if unavailable
+        let available_memory = MemoryTracker::query_system_available_memory();
+        let available_memory = if available_memory > 0 {
+            available_memory
+        } else {
+            1024 * 1024 * 1024 // 1 GB fallback
+        };
+        
         Self {
-            available_memory: 1024 * 1024 * 1024, // 1 GB placeholder
+            available_memory,
             memory_allocations: HashMap::new(),
             cpu_usage: 0.0,
             limits: ResourceLimits::default(),
@@ -1606,27 +2134,5 @@ impl Default for ParallelExecutionConfig {
 impl AdvancedQueryError {
     pub fn StrategyNotFound(strategy: String) -> Self {
         AdvancedQueryError::InternalError(format!("Execution strategy not found: {}", strategy))
-    }
-}
-
-// Placeholder for uuid functionality
-mod uuid {
-    pub struct Uuid;
-
-    impl Uuid {
-        pub fn new_v4() -> Self {
-            Self
-        }
-
-        pub fn to_string(&self) -> String {
-            "placeholder-uuid".to_string()
-        }
-    }
-}
-
-// Placeholder for num_cpus functionality
-mod num_cpus {
-    pub fn get() -> usize {
-        4 // Default to 4 cores
     }
 }

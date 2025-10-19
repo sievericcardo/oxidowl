@@ -6,6 +6,7 @@
 
 use crate::{
     ontology::{ClassExpression, Individual, Ontology, OntologyRef},
+    performance::MemoryTracker,
     reasoning::{ClassificationResult, RealizationResult},
 };
 
@@ -21,6 +22,14 @@ pub struct CacheEntry<T> {
     pub value: T,
     pub timestamp: Instant,
     pub hit_count: u64,
+}
+
+/// Internal cache statistics tracking
+#[derive(Debug, Clone, Default)]
+struct CacheMetrics {
+    hits: u64,
+    misses: u64,
+    evictions: u64,
 }
 
 impl<T> CacheEntry<T> {
@@ -72,6 +81,7 @@ impl Default for CacheConfig {
 pub struct ConceptSatisfiabilityCache {
     cache: Arc<RwLock<HashMap<ClassExpression, CacheEntry<bool>>>>,
     config: CacheConfig,
+    metrics: Arc<RwLock<CacheMetrics>>,
 }
 
 impl ConceptSatisfiabilityCache {
@@ -80,6 +90,7 @@ impl ConceptSatisfiabilityCache {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
             config,
+            metrics: Arc::new(RwLock::new(CacheMetrics::default())),
         }
     }
 
@@ -93,13 +104,16 @@ impl ConceptSatisfiabilityCache {
         if let Some(entry) = cache.get_mut(expression) {
             if entry.is_expired(self.config.ttl) {
                 cache.remove(expression); // Remove expired entry
+                self.metrics.write().unwrap().misses += 1;
                 None
             } else {
                 entry.hit(); // Increment hit count
+                self.metrics.write().unwrap().hits += 1;
                 Some(entry.value)
             }
         } else {
             // If not found, we can return None
+            self.metrics.write().unwrap().misses += 1;
             None
         }
     }
@@ -122,11 +136,18 @@ impl ConceptSatisfiabilityCache {
         if let Some((key, _)) = cache.iter().min_by_key(|(_, entry)| entry.timestamp) {
             let key_to_remove = key.clone();
             cache.remove(&key_to_remove);
+            self.metrics.write().unwrap().evictions += 1;
         }
     }
 
     pub fn clear(&self) {
         self.cache.write().unwrap().clear();
+        *self.metrics.write().unwrap() = CacheMetrics::default();
+    }
+
+    #[must_use]
+    pub fn get_metrics(&self) -> CacheMetrics {
+        self.metrics.read().unwrap().clone()
     }
 
     #[must_use]
@@ -154,6 +175,7 @@ impl ConceptSatisfiabilityCache {
 pub struct CacheManager {
     concept_cache: ConceptSatisfiabilityCache,
     config: CacheConfig,
+    memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
 impl CacheManager {
@@ -162,7 +184,26 @@ impl CacheManager {
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             config,
+            memory_tracker: None,
         }
+    }
+
+    /// Create a new cache manager with memory tracking
+    #[must_use]
+    pub fn with_memory_tracking(config: CacheConfig, memory_tracker: Arc<MemoryTracker>) -> Self {
+        Self {
+            concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
+            config,
+            memory_tracker: Some(memory_tracker),
+        }
+    }
+
+    /// Get estimated cache memory usage in bytes
+    #[must_use]
+    pub fn estimated_memory_usage(&self) -> usize {
+        // Rough estimate: each cache entry is approximately 100 bytes
+        // (ClassExpression + CacheEntry overhead)
+        self.concept_cache.size() * 100
     }
 
     /// Clear all caches
@@ -297,9 +338,21 @@ impl CacheManager {
     /// Get cache statistics
     #[must_use]
     pub fn get_stats(&self) -> CacheStats {
+        let metrics = self.concept_cache.get_metrics();
+        let total_accesses = metrics.hits + metrics.misses;
+        let hit_rate = if total_accesses > 0 {
+            metrics.hits as f64 / total_accesses as f64
+        } else {
+            0.0
+        };
+
         CacheStats {
             concept_cache_size: self.concept_cache.size(),
-            concept_cache_hit_rate: self.concept_cache.hit_rate(),
+            concept_cache_hit_rate: hit_rate,
+            total_memory_bytes: self.estimated_memory_usage(),
+            hit_count: metrics.hits,
+            miss_count: metrics.misses,
+            eviction_count: metrics.evictions,
         }
     }
 
@@ -321,4 +374,8 @@ impl Default for CacheManager {
 pub struct CacheStats {
     pub concept_cache_size: usize,
     pub concept_cache_hit_rate: f64,
+    pub total_memory_bytes: usize,
+    pub hit_count: u64,
+    pub miss_count: u64,
+    pub eviction_count: u64,
 }

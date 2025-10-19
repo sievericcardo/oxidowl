@@ -484,34 +484,33 @@ impl Reasoner {
     /// Get instances of a class
     pub fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<Vec<Individual>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
-            let mut instances = Vec::new();
-
-            // Look for explicit class assertions
-            for axiom in ontology.axioms() {
-                if let crate::ontology::Axiom::ClassAssertion(class_assertion) = axiom {
-                    if self.classes_equivalent(&class_assertion.class, class)? {
-                        instances.push(class_assertion.individual.clone());
-                    }
-                }
-            }
-
-            if !direct {
-                // Also get instances of subclasses
-                let subclasses = self.get_subclasses(class, false)?;
-                for subclass in subclasses {
-                    let subclass_instances = self.get_instances(&subclass, true)?;
-                    instances.extend(subclass_instances);
-                }
-            }
-
-            // Remove duplicates
-            instances.sort_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
-            instances.dedup_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
-
+            // Use the classification service to properly handle datatype reasoning
+            let mut statistics = ReasoningStatistics::new();
+            let instances = self
+                .classification_service
+                .get_instances(class, ontology_ref, &mut statistics, direct)?;
+            
             Ok(instances)
         } else {
             Ok(Vec::new())
+        }
+    }
+
+    /// Check if an individual is an instance of a class expression
+    pub fn is_instance_of(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> Result<bool> {
+        if let Some(ontology_ref) = &self.ontology {
+            let ontology = ontology_ref.read().unwrap();
+            self.classification_service.check_instance_with_datatype_reasoning(
+                individual,
+                class,
+                &ontology,
+            )
+        } else {
+            Ok(false)
         }
     }
 

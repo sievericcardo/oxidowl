@@ -66,8 +66,15 @@ impl OWLlinkServer {
         let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port).parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
-        let server = warp::serve(routes).bind(addr);
-        let server_task = tokio::spawn(server);
+        let (_addr, server_fut) = warp::serve(routes).bind_with_graceful_shutdown(
+            addr,
+            async {
+                // Will be cancelled when task is aborted
+                futures::future::pending::<()>().await
+            }
+        );
+        
+        let server_task = tokio::spawn(server_fut);
 
         tracing::info!("OWLlink server started on {}:{}", self.bind_address, self.port);
 
@@ -401,15 +408,11 @@ async fn process_owllink_request(
     })
 }
 
-/// Parse a class expression from string (simplified)
+/// Parse a class expression from string using Manchester Syntax
 fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
-    // Simplified parsing - in practice would use a proper parser
-    if expr_str.starts_with("http://") || expr_str.starts_with("https://") {
-        // Simple IRI
-        Ok(ClassExpression::Class(crate::ontology::Class::new(expr_str)))
-    } else {
-        Err(Error::ParseError(format!("Cannot parse class expression: {}", expr_str)))
-    }
+    let parser = crate::parsers::manchester::ManchesterParser::default();
+    parser.parse_class_expression(expr_str)
+        .map_err(|e| Error::ParseError(format!("Manchester syntax error: {}", e)))
 }
 
 /// OWLlink error for warp rejection

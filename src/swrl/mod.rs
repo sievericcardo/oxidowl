@@ -21,6 +21,7 @@ pub mod parser;
 pub mod regex_builtins;
 pub mod string_builtins;
 pub mod temporal;
+pub mod unification;
 pub mod uri_builtins;
 pub mod validation;
 
@@ -37,6 +38,7 @@ pub use engine::SWRLRuleEngine;
 pub use integration::{SWRLFeatureRegistry, SWRLFeatureStatistics, ValidationResult};
 pub use interpreter::SWRLInterpreter;
 pub use parser::{NamespaceManager, ParseError, SWRLParser};
+pub use unification::{Bindings, UnificationEngine, UnificationResult};
 pub use validation::{
     SWRLValidator, ValidationIssue, ValidationResult as ValidationResultBase, ValidationWarning,
 };

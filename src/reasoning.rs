@@ -1043,8 +1043,7 @@ impl ReasoningService {
         class: &ClassExpression,
     ) -> Result<bool> {
         let reasoner = self.reasoner.read().unwrap();
-        // For now, return false as a placeholder - needs proper implementation
-        Ok(false)
+        reasoner.is_instance_of(individual, class)
     }
 
     /// Get object property assertions (for advanced query processing)

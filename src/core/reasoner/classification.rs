@@ -7,12 +7,13 @@ use crate::{
     Error, Result,
     cache::CacheManager,
     core::reasoner::{
+        datatype_validation::DatatypeValidator,
         results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
         statistics::ReasoningStatistics,
         tasks::ReasoningTaskService,
     },
     ontology::{
-        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
+        ClassExpression, DataPropertyExpression, Individual, IRI, ObjectPropertyExpression, Ontology,
         OntologyRef,
     },
 };
@@ -28,6 +29,7 @@ use std::{
 pub struct ClassificationService {
     task_service: ReasoningTaskService,
     cache_manager: Arc<RwLock<CacheManager>>,
+    datatype_validator: DatatypeValidator,
 }
 
 impl ClassificationService {
@@ -39,6 +41,7 @@ impl ClassificationService {
         Self {
             task_service,
             cache_manager,
+            datatype_validator: DatatypeValidator::new(),
         }
     }
 
@@ -294,10 +297,25 @@ impl ClassificationService {
             let mut instance_classes = HashSet::new();
 
             for class in &classes {
-                if self
-                    .task_service
-                    .check_instance(individual, class, ontology, statistics)?
-                {
+                let mut is_instance = false;
+                
+                // Try direct datatype reasoning first
+                if let Ok(true) = self.check_instance_with_datatype_reasoning(
+                    individual,
+                    class,
+                    &ontology_guard,
+                ) {
+                    is_instance = true;
+                }
+                
+                // If not determined by datatype reasoning, use tableau
+                if !is_instance {
+                    is_instance = self
+                        .task_service
+                        .check_instance(individual, class, ontology, statistics)?;
+                }
+                
+                if is_instance {
                     instance_classes.insert(class.clone());
                 }
             }
@@ -493,11 +511,29 @@ impl ClassificationService {
         let mut instances = Vec::new();
 
         for individual in &individuals {
-            // Use tableau reasoning to check if individual is instance of concept
-            if self
-                .task_service
-                .check_instance(individual, concept, ontology, statistics)?
+            // First, try datatype reasoning for certain class expressions
+            let mut is_instance = false;
+            
+            // Try direct datatype reasoning first
             {
+                let ontology_guard = ontology.read().unwrap();
+                if let Ok(true) = self.check_instance_with_datatype_reasoning(
+                    individual,
+                    concept,
+                    &ontology_guard,
+                ) {
+                    is_instance = true;
+                }
+            }
+            
+            // If not determined by datatype reasoning, use tableau
+            if !is_instance {
+                is_instance = self
+                    .task_service
+                    .check_instance(individual, concept, ontology, statistics)?;
+            }
+            
+            if is_instance {
                 instances.push(individual.clone());
             }
         }
@@ -934,4 +970,395 @@ impl ClassificationService {
         values.sort();
         Ok(values)
     }
+
+    /// Check if an individual satisfies a datatype restriction based on its data property values
+    /// This is a helper for proper datatype reasoning
+    fn check_datatype_restriction_satisfaction(
+        &self,
+        individual: &Individual,
+        property: &DataPropertyExpression,
+        data_range: &crate::ontology::DataRange,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Get all data property values for this individual and property
+        let individual_iri = individual.iri().map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+        
+        let mut has_matching_value = false;
+        
+        for axiom in ontology.axioms() {
+            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
+                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
+                    if subj.iri.as_str() == individual_iri {
+                        // Check if this is the right property
+                        if self.data_properties_match(property, &assertion.property) {
+                            // Check if the value satisfies the data range
+                            if self.literal_satisfies_data_range(&assertion.value, data_range)? {
+                                has_matching_value = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(has_matching_value)
+    }
+    
+    /// Check if two data properties match
+    fn data_properties_match(
+        &self,
+        prop1: &DataPropertyExpression,
+        prop2: &DataPropertyExpression,
+    ) -> bool {
+        match (prop1, prop2) {
+            (DataPropertyExpression::DataProperty(p1), DataPropertyExpression::DataProperty(p2)) => {
+                p1.iri == p2.iri
+            }
+        }
+    }
+    
+    /// Check if a literal value satisfies a data range (with facet restrictions)
+    fn literal_satisfies_data_range(
+        &self,
+        literal: &crate::ontology::Literal,
+        data_range: &crate::ontology::DataRange,
+    ) -> Result<bool> {
+        match data_range {
+            crate::ontology::DataRange::Datatype(datatype_iri) => {
+                // Validate that literal's datatype matches the specified datatype
+                let literal_datatype_url = literal.datatype.as_ref();
+                
+                // First check: validate the literal conforms to its declared type
+                if !self.datatype_validator.validate_literal(literal)? {
+                    return Ok(false);
+                }
+                
+                // Second check: verify datatype compatibility if literal has a datatype
+                if let Some(lit_dt_url) = literal_datatype_url {
+                    let lit_dt_iri = IRI::from(lit_dt_url.clone());
+                    Ok(self.datatype_validator.datatypes_compatible(&lit_dt_iri, datatype_iri))
+                } else {
+                    // No datatype means xsd:string, check if compatible with string
+                    let xsd_string = IRI::new("http://www.w3.org/2001/XMLSchema#string");
+                    Ok(self.datatype_validator.datatypes_compatible(&xsd_string, datatype_iri))
+                }
+            }
+            crate::ontology::DataRange::DatatypeRestriction { datatype: _, restrictions } => {
+                // Check facet restrictions
+                for restriction in restrictions {
+                    if !self.check_facet_restriction(literal, restriction)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            crate::ontology::DataRange::DataIntersectionOf(ranges) => {
+                // Must satisfy all ranges
+                for range in ranges {
+                    if !self.literal_satisfies_data_range(literal, range)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            crate::ontology::DataRange::DataUnionOf(ranges) => {
+                // Must satisfy at least one range
+                for range in ranges {
+                    if self.literal_satisfies_data_range(literal, range)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            crate::ontology::DataRange::DataComplementOf(range) => {
+                // Must NOT satisfy the range
+                Ok(!self.literal_satisfies_data_range(literal, range)?)
+            }
+            crate::ontology::DataRange::DataOneOf(literals) => {
+                // Must be one of the specified literals
+                // literals here are crate::ontology::Literal
+                Ok(literals.iter().any(|owl_lit| {
+                    owl_lit.value == literal.value
+                }))
+            }
+        }
+    }
+    
+    /// Check if a literal satisfies a single facet restriction
+    fn check_facet_restriction(
+        &self,
+        literal: &crate::ontology::Literal,
+        restriction: &crate::ontology::FacetRestriction,
+    ) -> Result<bool> {
+        let facet_iri = restriction.facet.as_str();
+        
+        match facet_iri {
+            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a >= b)
+            }
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a <= b)
+            }
+            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a > b)
+            }
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a < b)
+            }
+            _ => {
+                // For unknown facet types, conservatively return true
+                Ok(true)
+            }
+        }
+    }
+    
+    /// Compare two numeric values with a comparison function
+    fn compare_numeric_values<F>(&self, value1: &str, value2: &str, comparator: F) -> Result<bool>
+    where
+        F: Fn(f64, f64) -> bool,
+    {
+        // Try to parse both values as f64
+        match (value1.parse::<f64>(), value2.parse::<f64>()) {
+            (Ok(v1), Ok(v2)) => Ok(comparator(v1, v2)),
+            _ => {
+                // If parsing fails, we can't perform the comparison
+                // Conservatively return false for safety
+                Ok(false)
+            }
+        }
+    }
+    
+    /// Enhanced instance checking that also checks datatype restrictions
+    /// This checks if an individual satisfies a class expression based on data property values
+    pub fn check_instance_with_datatype_reasoning(
+        &self,
+        individual: &Individual,
+        class_expr: &ClassExpression,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Handle specific class expression types that we can check directly
+        match class_expr {
+            ClassExpression::Class(cls) => {
+                // Strategy 1: Check if individual is directly asserted to be in this class
+                if self.check_explicit_class_assertion(individual, cls, ontology)? {
+                    return Ok(true);
+                }
+                
+                // Strategy 2: Check if individual is asserted to be in a subclass of this class
+                // Get all asserted types of the individual
+                let individual_iri = individual.iri().map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+                let mut asserted_classes = Vec::new();
+                
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                        if let crate::ontology::Individual::Named(subj) = &assertion.individual {
+                            if subj.iri.as_str() == individual_iri {
+                                if let ClassExpression::Class(asserted_cls) = &assertion.class {
+                                    asserted_classes.push(asserted_cls.iri.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check if any of the asserted classes is a subclass of the target class
+                for asserted_class_iri in &asserted_classes {
+                    if self.is_subclass_of_iri(asserted_class_iri, &cls.iri, ontology)? {
+                        return Ok(true);
+                    }
+                }
+                
+                // Strategy 3: Check if there's an EquivalentClasses axiom that defines this class
+                // with a complex expression we can evaluate
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                        // Check if our class is in the equivalent classes
+                        let our_class_in_equiv = equiv_axiom.classes.iter().any(|c| {
+                            if let ClassExpression::Class(eq_cls) = c {
+                                eq_cls.iri == cls.iri
+                            } else {
+                                false
+                            }
+                        });
+                        
+                        if our_class_in_equiv {
+                            // Check all the other equivalent class expressions
+                            for equiv_class in &equiv_axiom.classes {
+                                if let ClassExpression::Class(eq_cls) = equiv_class {
+                                    // Skip the class itself
+                                    if eq_cls.iri == cls.iri {
+                                        continue;
+                                    }
+                                    // Skip owl:Class which appears due to parsing artifacts
+                                    if eq_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Class" {
+                                        continue;
+                                    }
+                                }
+                                
+                                // Try to match against this equivalent expression
+                                // Only handle complex expressions, not other named classes
+                                match equiv_class {
+                                    ClassExpression::ObjectIntersectionOf(_) |
+                                    ClassExpression::DataSomeValuesFrom { .. } |
+                                    ClassExpression::DataHasValue { .. } => {
+                                        if self.check_complex_expression(individual, equiv_class, ontology)? {
+                                            return Ok(true);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Strategy 4: Check if the individual satisfies a class that is a subclass of target
+                // For example, if individual is ThirstyBasil and we're checking ThirstyPlant,
+                // and ThirstyBasil subClassOf ThirstyPlant, then it should return true
+                // We need to check all classes that are subclasses of the target
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                        if let ClassExpression::Class(superclass) = &subclass_axiom.superclass {
+                            if superclass.iri == cls.iri {
+                                // Found a subclass of our target class
+                                // Check if individual is an instance of this subclass
+                                if self.check_instance_with_datatype_reasoning(individual, &subclass_axiom.subclass, ontology)? {
+                                    return Ok(true);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Couldn't determine membership
+                Ok(false)
+            }
+            // For complex expressions, delegate to specialized handler
+            _ => self.check_complex_expression(individual, class_expr, ontology)
+        }
+    }
+    
+    /// Check complex class expressions (non-named classes) directly
+    fn check_complex_expression(
+        &self,
+        individual: &Individual,
+        class_expr: &ClassExpression,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        match class_expr {
+            ClassExpression::ObjectIntersectionOf(operands) => {
+                // Check all operands - must all be true
+                for operand in operands {
+                    let result = match operand {
+                        // Handle named classes in intersections
+                        ClassExpression::Class(cls) => {
+                            // Check if individual is explicitly asserted to be in this class
+                            self.check_explicit_class_assertion(individual, cls, ontology)?
+                        }
+                        // Recursively check complex expressions
+                        _ => {
+                            self.check_complex_expression(individual, operand, ontology)?
+                        }
+                    };
+                    
+                    if !result {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                // Check if individual has a data property value that satisfies the restriction
+                self.check_datatype_restriction_satisfaction(individual, property, filler, ontology)
+            }
+            ClassExpression::DataHasValue { property, value } => {
+                // Check if individual has this specific data property value
+                let individual_iri = individual.iri().map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+                
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
+                        if let crate::ontology::Individual::Named(subj) = &assertion.individual {
+                            if subj.iri.as_str() == individual_iri {
+                                if self.data_properties_match(property, &assertion.property) {
+                                    if assertion.value.value == value.value {
+                                        return Ok(true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(false)
+            }
+            _ => {
+                // For other class expressions (including named classes reached here),
+                // we can't do direct checking
+                Ok(false)
+            }
+        }
+    }
+    
+    /// Check if an individual is explicitly asserted to be in a named class
+    fn check_explicit_class_assertion(
+        &self,
+        individual: &Individual,
+        class: &crate::ontology::Class,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        let individual_iri = individual.iri().map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+        
+        for axiom in ontology.axioms() {
+            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
+                    if subj.iri.as_str() == individual_iri {
+                        if let ClassExpression::Class(asserted_class) = &assertion.class {
+                            if asserted_class.iri == class.iri {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+    
+    /// Check if one class (by IRI) is a subclass of another class (by IRI)
+    /// This includes transitive subclass relationships
+    fn is_subclass_of_iri(
+        &self,
+        subclass_iri: &IRI,
+        superclass_iri: &IRI,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Direct equality
+        if subclass_iri == superclass_iri {
+            return Ok(true);
+        }
+        
+        // Check for direct SubClassOf axiom
+        for axiom in ontology.axioms() {
+            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                if let ClassExpression::Class(sub) = &subclass_axiom.subclass {
+                    if let ClassExpression::Class(sup) = &subclass_axiom.superclass {
+                        if sub.iri == *subclass_iri && sup.iri == *superclass_iri {
+                            return Ok(true);
+                        }
+                        
+                        // Transitive check: if subclass_iri -> intermediate -> superclass_iri
+                        if sub.iri == *subclass_iri {
+                            // Check if this intermediate class is a subclass of the target
+                            if self.is_subclass_of_iri(&sup.iri, superclass_iri, ontology)? {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(false)
+    }
 }
+

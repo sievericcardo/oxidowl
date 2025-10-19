@@ -180,7 +180,7 @@ impl Default for ExplanationService {
 }
 
 /// Complete explanation for a reasoning result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Explanation {
     /// The conclusion being explained
     pub conclusion: ExplanationConclusion,
@@ -229,7 +229,7 @@ pub enum ExplanationType {
 }
 
 /// Proof tree structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ProofTree {
     /// Root node of the proof tree
     pub root: ProofNode,
@@ -238,7 +238,7 @@ pub struct ProofTree {
 }
 
 /// Individual node in a proof tree
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ProofNode {
     /// Unique identifier for this node
     pub id: usize,
@@ -295,39 +295,166 @@ pub enum InferenceRule {
 /// Justification computer for finding minimal axiom sets
 #[derive(Debug)]
 pub struct JustificationComputer {
-    cache: HashMap<String, Vec<Axiom>>,
+    cache: std::cell::RefCell<HashMap<String, Vec<Axiom>>>,
 }
 
 impl JustificationComputer {
     /// Create a new justification computer
     pub fn new() -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: std::cell::RefCell::new(HashMap::new()),
         }
     }
 
     /// Compute justification for a subsumption
     pub fn compute_subsumption_justification(
-        &mut self,
+        &self,
         subclass: &ClassExpression,
         superclass: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Vec<Axiom>> {
-        // For now, return all relevant axioms
-        // In a full implementation, this would use algorithms like hitting set tree
+        // Implement MUS (Minimal Unsatisfiable Subset) using a deletion-based algorithm
+        // Start with all relevant axioms and remove one at a time to check minimality
+        
         let relevant_axioms = self.find_relevant_axioms(subclass, superclass, ontology_axioms);
-        Ok(relevant_axioms)
+        
+        if relevant_axioms.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Try to minimize the axiom set
+        let mut minimal_set = relevant_axioms.clone();
+        let mut index = 0;
+        
+        while index < minimal_set.len() {
+            // Try removing axiom at index
+            let removed = minimal_set.remove(index);
+            
+            // Check if entailment still holds without this axiom
+            if self.still_entails_without(&minimal_set, subclass, superclass) {
+                // Can remove this axiom - it's not essential
+                // Don't increment index, check next axiom at same position
+            } else {
+                // Need this axiom - put it back and move to next
+                minimal_set.insert(index, removed);
+                index += 1;
+            }
+        }
+        
+        Ok(minimal_set)
+    }
+
+    /// Check if entailment still holds with a subset of axioms (simplified check)
+    fn still_entails_without(
+        &self,
+        axioms: &[Axiom],
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+    ) -> bool {
+        // Simplified entailment check
+        // In practice, this would use a proper reasoner
+        
+        // Check direct SubClassOf axioms
+        for axiom in axioms {
+            if let Axiom::SubClassOf(axiom_data) = axiom {
+                if &axiom_data.subclass == subclass && &axiom_data.superclass == superclass {
+                    return true;
+                }
+                
+                // Check transitivity: if subclass -> intermediate and intermediate -> superclass
+                if &axiom_data.subclass == subclass {
+                    for other_axiom in axioms {
+                        if let Axiom::SubClassOf(other_data) = other_axiom {
+                            if &other_data.subclass == &axiom_data.superclass && &other_data.superclass == superclass {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Check EquivalentClasses
+            if let Axiom::EquivalentClasses(axiom_data) = axiom {
+                if axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass) {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
 
     /// Compute justification for inconsistency
-    pub fn compute_inconsistency_justification(&mut self, ontology_axioms: &[Axiom]) -> Result<Vec<Axiom>> {
-        // Simplified implementation - return all axioms for now
-        Ok(ontology_axioms.to_vec())
+    pub fn compute_inconsistency_justification(&self, ontology_axioms: &[Axiom]) -> Result<Vec<Axiom>> {
+        // Find a minimal subset of axioms that causes inconsistency
+        // This uses a deletion-based algorithm similar to MUS
+        
+        if ontology_axioms.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut minimal_set = ontology_axioms.to_vec();
+        let mut index = 0;
+        
+        while index < minimal_set.len() {
+            // Try removing axiom at index
+            let removed = minimal_set.remove(index);
+            
+            // Check if the subset is still inconsistent
+            if self.is_inconsistent(&minimal_set) {
+                // Still inconsistent without this axiom - can remove it
+                // Don't increment index
+            } else {
+                // Need this axiom - put it back and move to next
+                minimal_set.insert(index, removed);
+                index += 1;
+            }
+        }
+        
+        Ok(minimal_set)
+    }
+
+    /// Simplified check for inconsistency (placeholder for proper reasoner check)
+    fn is_inconsistent(&self, axioms: &[Axiom]) -> bool {
+        // Check for obvious contradictions
+        
+        // Check for disjoint classes being asserted equivalent
+        for axiom in axioms {
+            if let Axiom::EquivalentClasses(equiv_data) = axiom {
+                for other_axiom in axioms {
+                    if let Axiom::DisjointClasses(disj_data) = other_axiom {
+                        // If any two classes are both equivalent and disjoint, it's inconsistent
+                        for c1 in &equiv_data.classes {
+                            for c2 in &equiv_data.classes {
+                                if c1 != c2 && disj_data.classes.contains(c1) && disj_data.classes.contains(c2) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for class being subclass of its complement
+        for axiom in axioms {
+            if let Axiom::SubClassOf(axiom_data) = axiom {
+                if let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass {
+                    if &axiom_data.subclass == inner.as_ref() {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        // Without a full reasoner, we can't determine all inconsistencies
+        // Return false as conservative default
+        false
     }
 
     /// Compute justification for unsatisfiability
     pub fn compute_unsatisfiability_justification(
-        &mut self,
+        &self,
         class: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Vec<Axiom>> {
@@ -358,12 +485,76 @@ impl JustificationComputer {
     }
 
     fn axiom_mentions_class(&self, axiom: &Axiom, class: &ClassExpression) -> bool {
-        // Simplified check - in practice this would be more sophisticated
+        // Comprehensive check that recursively inspects class expressions
         match axiom {
-            Axiom::SubClassOf(sub, sup) => sub == class || sup == class,
-            Axiom::EquivalentClasses(classes) => classes.contains(class),
-            Axiom::DisjointClasses(classes) => classes.contains(class),
+            Axiom::SubClassOf(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.subclass, class) || 
+                self.class_expr_mentions(&axiom_data.superclass, class)
+            },
+            Axiom::EquivalentClasses(axiom_data) => {
+                axiom_data.classes.iter().any(|c| self.class_expr_mentions(c, class))
+            },
+            Axiom::DisjointClasses(axiom_data) => {
+                axiom_data.classes.iter().any(|c| self.class_expr_mentions(c, class))
+            },
+            Axiom::DisjointUnion(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.class, class) || 
+                axiom_data.disjoint_classes.iter().any(|c| self.class_expr_mentions(c, class))
+            },
+            Axiom::ClassAssertion(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.class, class)
+            },
+            Axiom::ObjectPropertyDomain(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.domain, class)
+            },
+            Axiom::ObjectPropertyRange(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.range, class)
+            },
+            Axiom::DataPropertyDomain(axiom_data) => {
+                self.class_expr_mentions(&axiom_data.domain, class)
+            },
             _ => false,
+        }
+    }
+
+    /// Check if a class expression mentions a specific class (recursively)
+    fn class_expr_mentions(&self, expr: &ClassExpression, target: &ClassExpression) -> bool {
+        if expr == target {
+            return true;
+        }
+
+        match expr {
+            ClassExpression::Class(_) => expr == target,
+            
+            ClassExpression::ObjectIntersectionOf(exprs) |
+            ClassExpression::ObjectUnionOf(exprs) => {
+                exprs.iter().any(|e| self.class_expr_mentions(e, target))
+            },
+            
+            ClassExpression::ObjectComplementOf(inner) => {
+                self.class_expr_mentions(inner, target)
+            },
+            
+            ClassExpression::ObjectSomeValuesFrom { filler, .. } |
+            ClassExpression::ObjectAllValuesFrom { filler, .. } => {
+                self.class_expr_mentions(filler, target)
+            },
+            
+            ClassExpression::ObjectMinCardinality { filler, .. } |
+            ClassExpression::ObjectMaxCardinality { filler, .. } |
+            ClassExpression::ObjectExactCardinality { filler, .. } => {
+                self.class_expr_mentions(filler, target)
+            },
+            
+            ClassExpression::ObjectOneOf(_) |
+            ClassExpression::ObjectHasValue { .. } |
+            ClassExpression::ObjectHasSelf { .. } |
+            ClassExpression::DataSomeValuesFrom { .. } |
+            ClassExpression::DataAllValuesFrom { .. } |
+            ClassExpression::DataHasValue { .. } |
+            ClassExpression::DataMinCardinality { .. } |
+            ClassExpression::DataMaxCardinality { .. } |
+            ClassExpression::DataExactCardinality { .. } => false,
         }
     }
 }
@@ -504,7 +695,20 @@ impl ExplanationFormatter {
     }
 
     fn format_json(&self, explanation: &Explanation) -> String {
-        serde_json::to_string_pretty(explanation).unwrap_or_default()
+        // Since Explanation doesn't implement Serialize (due to Axiom),
+        // we create a simplified JSON representation
+        let conclusion_str = format!("{:?}", explanation.conclusion);
+        let justification_str = explanation.justification
+            .iter()
+            .map(|axiom| format!("{:?}", axiom))
+            .collect::<Vec<_>>()
+            .join(", ");
+        
+        format!(r#"{{"conclusion": "{}", "justification": [{}], "explanation_type": "{:?}", "confidence": {}}}"#,
+                conclusion_str.replace('"', r#"\""#),
+                justification_str,
+                explanation.explanation_type,
+                explanation.confidence)
     }
 
     fn format_manchester(&self, explanation: &Explanation) -> String {

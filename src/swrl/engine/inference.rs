@@ -6,7 +6,10 @@
 //! - Hybrid reasoning: combination of both strategies
 
 use crate::ontology::{Axiom, Ontology};
-use crate::swrl::{SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLIArgument, SWRLRule};
+use crate::swrl::{
+    Bindings, SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLIArgument, SWRLRule,
+    UnificationEngine,
+};
 use crate::{Error, Result};
 use log::{debug, info, warn};
 use std::collections::HashSet;
@@ -18,6 +21,8 @@ use std::time::Instant;
 pub struct ForwardChaining {
     /// Maximum iterations to prevent infinite loops
     max_iterations: usize,
+    /// Unification engine
+    unification_engine: UnificationEngine,
 }
 
 impl ForwardChaining {
@@ -25,6 +30,7 @@ impl ForwardChaining {
     pub fn new() -> Self {
         Self {
             max_iterations: 1000,
+            unification_engine: UnificationEngine::new(),
         }
     }
 
@@ -111,25 +117,68 @@ impl ForwardChaining {
     /// Find variable bindings that make the rule body match current facts
     fn find_rule_matches(
         &self,
-        _rule: &SWRLRule,
-        _known_facts: &[SWRLAtom],
+        rule: &SWRLRule,
+        known_facts: &[SWRLAtom],
         _context: &SWRLExecutionContext,
-    ) -> Result<Vec<std::collections::HashMap<String, SWRLIArgument>>> {
-        // Placeholder implementation - would need actual unification logic
-        Ok(Vec::new())
+    ) -> Result<Vec<Bindings>> {
+        // Start with an empty binding
+        let mut all_bindings = vec![Bindings::new()];
+
+        // For each atom in the rule body, find bindings that satisfy it
+        for body_atom in &rule.body {
+            let mut next_bindings = Vec::new();
+
+            // Try to extend each existing binding
+            for existing_binding in &all_bindings {
+                // Apply existing bindings to the body atom
+                let bound_atom = self.unification_engine.apply_bindings(body_atom, existing_binding);
+
+                // Find all facts that unify with this atom
+                let matching_bindings = self.unification_engine.match_atom_with_facts(&bound_atom, known_facts);
+
+                // Compose with existing bindings
+                for new_binding in matching_bindings {
+                    if let Some(composed) = self.unification_engine.compose_bindings(existing_binding, &new_binding) {
+                        next_bindings.push(composed);
+                    }
+                }
+            }
+
+            // If no bindings found for this atom, the rule cannot fire
+            if next_bindings.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            all_bindings = next_bindings;
+        }
+
+        debug!("Found {} complete binding(s) for rule", all_bindings.len());
+        Ok(all_bindings)
     }
 
     /// Apply a rule with specific variable bindings to generate new facts
     fn apply_rule_with_binding(
         &self,
-        _rule: &SWRLRule,
-        _binding: &std::collections::HashMap<String, SWRLIArgument>,
-        _known_facts: &[SWRLAtom],
+        rule: &SWRLRule,
+        binding: &Bindings,
+        known_facts: &[SWRLAtom],
         _ontology: &Arc<Ontology>,
         _context: &SWRLExecutionContext,
     ) -> Result<Vec<SWRLAtom>> {
-        // Placeholder implementation - would need actual rule application logic
-        Ok(Vec::new())
+        let mut new_facts = Vec::new();
+
+        // Apply bindings to each atom in the rule head
+        for head_atom in &rule.head {
+            let bound_atom = self.unification_engine.apply_bindings(head_atom, binding);
+
+            // Check if this is a new fact (not already known)
+            if !known_facts.contains(&bound_atom) {
+                debug!("Generated new fact from rule: {:?}", bound_atom);
+                new_facts.push(bound_atom);
+            }
+        }
+
+        Ok(new_facts)
     }
 }
 
@@ -144,6 +193,8 @@ impl Default for ForwardChaining {
 pub struct BackwardChaining {
     /// Maximum goal depth
     max_goal_depth: usize,
+    /// Unification engine
+    unification_engine: UnificationEngine,
 }
 
 impl BackwardChaining {
@@ -151,6 +202,7 @@ impl BackwardChaining {
     pub fn new() -> Self {
         Self {
             max_goal_depth: 100,
+            unification_engine: UnificationEngine::new(),
         }
     }
 
@@ -230,14 +282,26 @@ impl BackwardChaining {
     }
 
     /// Check if a goal is satisfied by current facts
-    fn is_goal_satisfied(&self, _goal: &SWRLAtom, _known_facts: &[SWRLAtom]) -> Result<bool> {
-        // Placeholder implementation
+    fn is_goal_satisfied(&self, goal: &SWRLAtom, known_facts: &[SWRLAtom]) -> Result<bool> {
+        // Try to unify the goal with any known fact
+        for fact in known_facts {
+            let result = self.unification_engine.unify_atoms(goal, fact);
+            if result.is_success() {
+                return Ok(true);
+            }
+        }
         Ok(false)
     }
 
     /// Check if a rule can prove a given goal
-    fn can_rule_prove_goal(&self, _rule: &SWRLRule, _goal: &SWRLAtom) -> bool {
-        // Placeholder implementation - would need actual unification
+    fn can_rule_prove_goal(&self, rule: &SWRLRule, goal: &SWRLAtom) -> bool {
+        // Check if any atom in the rule head can unify with the goal
+        for head_atom in &rule.head {
+            let result = self.unification_engine.unify_atoms(head_atom, goal);
+            if result.is_success() {
+                return true;
+            }
+        }
         false
     }
 }
