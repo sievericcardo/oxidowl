@@ -14,7 +14,7 @@ use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(feature = "ml")]
 use candle_core::{Device, Tensor};
@@ -490,26 +490,93 @@ impl QueryFeatureExtractor {
     }
 
     fn count_joins(&self, query: &ConjunctiveQuery) -> usize {
-        // Simplified join counting - count shared variables between atoms
-        let mut join_count = 0;
-
-        for i in 0..query.body_atoms.len() {
-            for j in (i + 1)..query.body_atoms.len() {
-                if self.atoms_share_variable(&query.body_atoms[i], &query.body_atoms[j]) {
-                    join_count += 1;
+        // Graph-based join counting with pattern analysis
+        // Build a join graph where nodes are atoms and edges are joins
+        let n = query.body_atoms.len();
+        if n <= 1 {
+            return 0;
+        }
+        
+        // Build adjacency list for join graph
+        let mut join_graph: Vec<Vec<usize>> = vec![Vec::new(); n];
+        let mut join_variables: Vec<Vec<String>> = vec![Vec::new(); n];
+        
+        for i in 0..n {
+            for j in (i + 1)..n {
+                if let Some(shared_vars) = self.get_shared_variables(&query.body_atoms[i], &query.body_atoms[j]) {
+                    if !shared_vars.is_empty() {
+                        join_graph[i].push(j);
+                        join_graph[j].push(i);
+                        join_variables[i].extend(shared_vars.clone());
+                        join_variables[j].extend(shared_vars);
+                    }
                 }
             }
         }
-
-        join_count
+        
+        // Count actual joins considering graph structure
+        let mut total_joins = 0;
+        let mut visited = vec![false; n];
+        
+        // Use DFS to find connected components and count joins within each
+        for start in 0..n {
+            if !visited[start] {
+                total_joins += self.count_joins_in_component(&join_graph, &mut visited, start);
+            }
+        }
+        
+        total_joins
     }
-
-    fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
+    
+    fn count_joins_in_component(
+        &self,
+        graph: &[Vec<usize>],
+        visited: &mut [bool],
+        start: usize,
+    ) -> usize {
+        let mut stack = vec![start];
+        let mut component_size = 0;
+        let mut join_count = 0;
+        
+        while let Some(node) = stack.pop() {
+            if visited[node] {
+                continue;
+            }
+            
+            visited[node] = true;
+            component_size += 1;
+            join_count += graph[node].len();
+            
+            for &neighbor in &graph[node] {
+                if !visited[neighbor] {
+                    stack.push(neighbor);
+                }
+            }
+        }
+        
+        // Each edge was counted twice (once from each endpoint)
+        // In a connected component of size n, minimum joins = n-1 (tree)
+        // Our count gives 2 * actual_edges, so divide by 2
+        join_count / 2
+    }
+    
+    fn get_shared_variables(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> Option<Vec<String>> {
         let vars1 = self.extract_atom_variables(atom1);
         let vars2 = self.extract_atom_variables(atom2);
         
-        // Check if any variables are shared
-        vars1.iter().any(|v| vars2.contains(v))
+        let shared: Vec<String> = vars1.into_iter()
+            .filter(|v| vars2.contains(v))
+            .collect();
+        
+        if shared.is_empty() {
+            None
+        } else {
+            Some(shared)
+        }
+    }
+
+    fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
+        self.get_shared_variables(atom1, atom2).is_some()
     }
     
     fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<String> {
@@ -1126,15 +1193,177 @@ impl CostPredictionModel {
         samples: &[TrainingSample],
         learning_rate: f64,
     ) -> Result<TrainingMetrics, Error> {
-        // Placeholder training implementation
-        // In full implementation would use SGD/Adam optimizer
+        if samples.is_empty() {
+            return Err(Error::Internal {
+                message: "No training samples provided".to_string(),
+            });
+        }
+
+        let start_time = Instant::now();
+        let epochs = 50;
+        let batch_size = 32.min(samples.len());
+        
+        let mut total_loss = 0.0;
+        let mut epoch_losses = Vec::new();
+        
+        for epoch in 0..epochs {
+            let mut epoch_loss = 0.0;
+            let mut batch_count = 0;
+            
+            // Mini-batch training
+            for batch_start in (0..samples.len()).step_by(batch_size) {
+                let batch_end = (batch_start + batch_size).min(samples.len());
+                let batch = &samples[batch_start..batch_end];
+                
+                // Prepare batch tensors
+                let mut batch_features = Vec::new();
+                let mut batch_targets = Vec::new();
+                
+                for sample in batch {
+                    batch_features.extend(sample.features.to_vector());
+                    batch_targets.push(sample.actual_cost as f32);
+                }
+                
+                let input = Tensor::from_vec(
+                    batch_features,
+                    &[batch.len(), 18],
+                    &self.device,
+                ).map_err(|e| Error::Internal {
+                    message: format!("Failed to create input tensor: {}", e),
+                })?;
+                
+                let target = Tensor::from_vec(
+                    batch_targets.clone(),
+                    &[batch.len(), 1],
+                    &self.device,
+                ).map_err(|e| Error::Internal {
+                    message: format!("Failed to create target tensor: {}", e),
+                })?;
+                
+                // Forward pass
+                let x = self.layer1.forward(&input)
+                    .map_err(|e| Error::Internal {
+                        message: format!("Layer1 forward failed: {}", e),
+                    })?
+                    .relu()
+                    .map_err(|e| Error::Internal {
+                        message: format!("ReLU failed: {}", e),
+                    })?;
+                
+                let x = self.layer2.forward(&x)
+                    .map_err(|e| Error::Internal {
+                        message: format!("Layer2 forward failed: {}", e),
+                    })?
+                    .relu()
+                    .map_err(|e| Error::Internal {
+                        message: format!("ReLU failed: {}", e),
+                    })?;
+                
+                let x = self.layer3.forward(&x)
+                    .map_err(|e| Error::Internal {
+                        message: format!("Layer3 forward failed: {}", e),
+                    })?
+                    .relu()
+                    .map_err(|e| Error::Internal {
+                        message: format!("ReLU failed: {}", e),
+                    })?;
+                
+                let output = self.output.forward(&x)
+                    .map_err(|e| Error::Internal {
+                        message: format!("Output forward failed: {}", e),
+                    })?;
+                
+                // Compute MSE loss
+                let diff = output.sub(&target).map_err(|e| Error::Internal {
+                    message: format!("Failed to compute difference: {}", e),
+                })?;
+                
+                let loss = diff.sqr()
+                    .map_err(|e| Error::Internal {
+                        message: format!("Failed to compute squared error: {}", e),
+                    })?
+                    .mean_all()
+                    .map_err(|e| Error::Internal {
+                        message: format!("Failed to compute mean: {}", e),
+                    })?;
+                
+                // Backward pass
+                let grads = loss.backward().map_err(|e| Error::Internal {
+                    message: format!("Backward pass failed: {}", e),
+                })?;
+                
+                // Update parameters using SGD
+                for (name, var) in self.varmap.all_vars() {
+                    if let Some(grad) = grads.get(&var) {
+                        let updated = var.sub(&(grad * learning_rate))
+                            .map_err(|e| Error::Internal {
+                                message: format!("Parameter update failed for {}: {}", name, e),
+                            })?;
+                        self.varmap.set_var(&name, &updated).map_err(|e| Error::Internal {
+                            message: format!("Failed to set variable {}: {}", name, e),
+                        })?;
+                    }
+                }
+                
+                let loss_val = loss.to_scalar::<f32>().map_err(|e| Error::Internal {
+                    message: format!("Failed to extract loss value: {}", e),
+                })? as f64;
+                
+                epoch_loss += loss_val;
+                batch_count += 1;
+            }
+            
+            epoch_loss /= batch_count as f64;
+            epoch_losses.push(epoch_loss);
+            total_loss += epoch_loss;
+        }
+        
+        let training_time = start_time.elapsed();
+        let avg_loss = total_loss / epochs as f64;
+        
+        // Compute final metrics on all samples
+        let (mae, rmse, r2) = self.compute_metrics(samples)?;
+        
         Ok(TrainingMetrics {
-            r2_score: 0.85,
-            mae: 0.15,
-            rmse: 0.20,
-            training_time: Duration::from_secs(60),
+            r2_score: r2,
+            mae,
+            rmse,
+            training_time,
             samples_trained: samples.len(),
         })
+    }
+    
+    /// Compute evaluation metrics on samples
+    fn compute_metrics(&self, samples: &[TrainingSample]) -> Result<(f64, f64, f64), Error> {
+        let mut errors = Vec::new();
+        let mut actuals = Vec::new();
+        let mut predictions = Vec::new();
+        
+        for sample in samples {
+            let pred = self.predict(&sample.features)?;
+            let actual = sample.actual_cost;
+            
+            errors.push((pred.execution_time - actual).abs());
+            actuals.push(actual);
+            predictions.push(pred.execution_time);
+        }
+        
+        // MAE
+        let mae = errors.iter().sum::<f64>() / errors.len() as f64;
+        
+        // RMSE
+        let mse = errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64;
+        let rmse = mse.sqrt();
+        
+        // R² score
+        let actual_mean = actuals.iter().sum::<f64>() / actuals.len() as f64;
+        let ss_tot: f64 = actuals.iter().map(|a| (a - actual_mean).powi(2)).sum();
+        let ss_res: f64 = actuals.iter().zip(predictions.iter())
+            .map(|(a, p)| (a - p).powi(2))
+            .sum();
+        let r2 = 1.0 - (ss_res / ss_tot);
+        
+        Ok((mae, rmse, r2))
     }
 }
 

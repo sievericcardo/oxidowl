@@ -335,6 +335,22 @@ pub enum ExecutionPriority {
     Urgent,
 }
 
+/// Features extracted from query for strategy selection
+#[derive(Debug, Clone)]
+struct StrategyQueryFeatures {
+    num_atoms: usize,
+    num_variables: usize,
+    num_answer_vars: usize,
+    num_class_atoms: usize,
+    num_property_atoms: usize,
+    num_data_atoms: usize,
+    join_complexity: f64,
+    has_cycles: bool,
+    selectivity: f64,
+    predicted_time: f64,
+    predicted_memory: f64,
+}
+
 /// Performance history for strategies
 #[derive(Debug, Clone)]
 pub struct StrategyPerformanceHistory {
@@ -1502,8 +1518,255 @@ impl ExecutionStrategySelector {
         query: &ConjunctiveQuery,
         plan: &AdvancedQueryPlan,
     ) -> Result<String, AdvancedQueryError> {
-        // Implement strategy selection logic
-        Ok("default".to_string()) // Placeholder
+        // Extract query features for decision making
+        let features = self.extract_query_features(query, plan);
+        
+        // Use rule-based model to select strategy
+        let strategy = self.apply_selection_rules(&features);
+        
+        // Update selection history
+        self.performance_history
+            .entry(strategy.clone())
+            .or_insert_with(|| StrategyPerformanceHistory {
+                executions: 0,
+                successes: 0,
+                failures: 0,
+                average_execution_time: Duration::from_secs(0),
+                average_memory_usage: 0,
+                success_rate: 0.0,
+                confidence_scores: Vec::new(),
+                last_used: Instant::now(),
+            });
+        
+        Ok(strategy)
+    }
+    
+    /// Extract features from query and plan for strategy selection
+    fn extract_query_features(
+        &self,
+        query: &ConjunctiveQuery,
+        plan: &AdvancedQueryPlan,
+    ) -> StrategyQueryFeatures {
+        let num_atoms = query.body_atoms.len();
+        let num_variables = self.count_distinct_variables(query);
+        let num_answer_vars = query.answer_variables.len();
+        
+        // Count different atom types
+        let mut num_class_atoms = 0;
+        let mut num_property_atoms = 0;
+        let mut num_data_atoms = 0;
+        
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { .. } => num_class_atoms += 1,
+                QueryAtom::ObjectPropertyAtom { .. } => num_property_atoms += 1,
+                QueryAtom::DataPropertyAtom { .. } => num_data_atoms += 1,
+                _ => {}
+            }
+        }
+        
+        // Estimate complexity
+        let join_complexity = self.estimate_join_complexity(query);
+        let has_cycles = self.detect_query_cycles(query);
+        let selectivity = 0.5; // Default selectivity if not available in plan
+        
+        StrategyQueryFeatures {
+            num_atoms,
+            num_variables,
+            num_answer_vars,
+            num_class_atoms,
+            num_property_atoms,
+            num_data_atoms,
+            join_complexity,
+            has_cycles,
+            selectivity,
+            predicted_time: plan.predicted_performance.estimated_execution_time.as_secs_f64(),
+            predicted_memory: plan.predicted_performance.estimated_memory_usage as f64,
+        }
+    }
+    
+    /// Apply rule-based strategy selection
+    fn apply_selection_rules(&self, features: &StrategyQueryFeatures) -> String {
+        // Rule 1: Simple queries with few atoms - use direct strategy
+        if features.num_atoms <= 3 && !features.has_cycles {
+            return "direct".to_string();
+        }
+        
+        // Rule 2: Queries with many joins - use join-optimized strategy
+        if features.join_complexity > 5.0 {
+            return "join_optimized".to_string();
+        }
+        
+        // Rule 3: Queries with cycles - use specialized cycle handler
+        if features.has_cycles {
+            return "cycle_aware".to_string();
+        }
+        
+        // Rule 4: Low selectivity queries - use filtering strategy
+        if features.selectivity < 0.1 {
+            return "filter_first".to_string();
+        }
+        
+        // Rule 5: High memory prediction - use streaming strategy
+        if features.predicted_memory > 1_000_000_000.0 {
+            return "streaming".to_string();
+        }
+        
+        // Rule 6: Many answer variables - use projection optimization
+        if features.num_answer_vars > features.num_variables / 2 {
+            return "projection_optimized".to_string();
+        }
+        
+        // Rule 7: Data property heavy queries - use data-optimized strategy
+        if features.num_data_atoms > features.num_class_atoms {
+            return "data_optimized".to_string();
+        }
+        
+        // Default strategy for balanced queries
+        "balanced".to_string()
+    }
+    
+    /// Count distinct variables in query
+    fn count_distinct_variables(&self, query: &ConjunctiveQuery) -> usize {
+        let mut variables = HashSet::new();
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, .. } => {
+                    variables.insert(variable.clone());
+                }
+                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                    variables.insert(subject.clone());
+                    variables.insert(object.clone());
+                }
+                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                    variables.insert(subject.clone());
+                    variables.insert(literal.clone());
+                }
+                QueryAtom::SameIndividualAtom { left, right } => {
+                    variables.insert(left.clone());
+                    variables.insert(right.clone());
+                }
+                QueryAtom::DifferentIndividualsAtom { left, right } => {
+                    variables.insert(left.clone());
+                    variables.insert(right.clone());
+                }
+                QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                    variables.insert(variable.clone());
+                }
+                QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                    variables.insert(variable.clone());
+                }
+            }
+        }
+        variables.len()
+    }
+    
+    /// Estimate join complexity based on shared variables
+    fn estimate_join_complexity(&self, query: &ConjunctiveQuery) -> f64 {
+        let n = query.body_atoms.len();
+        if n <= 1 {
+            return 0.0;
+        }
+        
+        let mut join_count = 0;
+        for i in 0..n {
+            for j in (i + 1)..n {
+                if self.atoms_share_variable(&query.body_atoms[i], &query.body_atoms[j]) {
+                    join_count += 1;
+                }
+            }
+        }
+        
+        // Normalize by maximum possible joins
+        let max_joins = (n * (n - 1)) / 2;
+        (join_count as f64 / max_joins as f64) * 10.0
+    }
+    
+    /// Check if two atoms share a variable
+    fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
+        let vars1 = self.extract_atom_variables(atom1);
+        let vars2 = self.extract_atom_variables(atom2);
+        
+        for v1 in &vars1 {
+            for v2 in &vars2 {
+                if v1 == v2 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    
+    /// Extract all variables from an atom
+    fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            }
+            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                vec![subject.clone(), literal.clone()]
+            }
+            QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
+        }
+    }
+    
+    /// Detect cycles in query dependency graph
+    fn detect_query_cycles(&self, query: &ConjunctiveQuery) -> bool {
+        // Build adjacency list for variable dependencies
+        let mut graph: HashMap<QueryVariable, Vec<QueryVariable>> = HashMap::new();
+        
+        for atom in &query.body_atoms {
+            if let QueryAtom::ObjectPropertyAtom { subject, object, .. } = atom {
+                graph.entry(subject.clone())
+                    .or_insert_with(Vec::new)
+                    .push(object.clone());
+            }
+        }
+        
+        // DFS cycle detection
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        
+        for var in graph.keys() {
+            if !visited.contains(var) {
+                if self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack) {
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    /// DFS helper for cycle detection
+    fn has_cycle_dfs(
+        &self,
+        node: &QueryVariable,
+        graph: &HashMap<QueryVariable, Vec<QueryVariable>>,
+        visited: &mut HashSet<QueryVariable>,
+        rec_stack: &mut HashSet<QueryVariable>,
+    ) -> bool {
+        visited.insert(node.clone());
+        rec_stack.insert(node.clone());
+        
+        if let Some(neighbors) = graph.get(node) {
+            for neighbor in neighbors {
+                if !visited.contains(neighbor) {
+                    if self.has_cycle_dfs(neighbor, graph, visited, rec_stack) {
+                        return true;
+                    }
+                } else if rec_stack.contains(neighbor) {
+                    return true;
+                }
+            }
+        }
+        
+        rec_stack.remove(node);
+        false
     }
 
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {

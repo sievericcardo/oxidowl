@@ -89,6 +89,13 @@ pub enum ActivationFunction {
     Linear,
 }
 
+/// Gradients for a single layer during backpropagation
+#[derive(Debug)]
+struct LayerGradients {
+    weight_gradients: Vec<f64>,
+    bias_gradients: Vec<f64>,
+}
+
 impl LinearRegressionModel {
     /// Create a new linear regression model
     pub fn new(feature_count: usize) -> Self {
@@ -315,27 +322,121 @@ impl NeuralNetworkModel {
         current_output
     }
 
-    /// Simple training using backpropagation (simplified implementation)
+    /// Train network using backpropagation with proper gradient computation
     fn train_network(&mut self, data: &[QueryPerformanceDataPoint]) {
-        // This is a simplified implementation
-        // In practice, you'd want a more sophisticated neural network library
+        if data.is_empty() {
+            return;
+        }
 
-        for _ in 0..100 {
-            // Training iterations
-            for point in data {
-                let prediction = self.forward(&point.query_features);
-
-                // Simple gradient descent update (highly simplified)
-                // This is just a placeholder for proper backpropagation
-                let exec_error = prediction[0] - point.execution_time;
-                let memory_error = prediction[1] - point.memory_usage;
-
-                // Update would happen here with proper gradient computation
-                // For now, we just update accuracy metrics
+        let epochs = 100;
+        let batch_size = 32.min(data.len());
+        
+        for _ in 0..epochs {
+            // Mini-batch gradient descent
+            for batch_start in (0..data.len()).step_by(batch_size) {
+                let batch_end = (batch_start + batch_size).min(data.len());
+                let batch = &data[batch_start..batch_end];
+                
+                // Accumulate gradients for batch
+                let mut layer_gradients: Vec<LayerGradients> = self.layers
+                    .iter()
+                    .map(|layer| LayerGradients {
+                        weight_gradients: vec![0.0; layer.weights.len()],
+                        bias_gradients: vec![0.0; layer.biases.len()],
+                    })
+                    .collect();
+                
+                for point in batch {
+                    // Forward pass with activation storage
+                    let activations = self.forward_with_activations(&point.query_features);
+                    
+                    // Compute output error
+                    let output = activations.last().unwrap();
+                    let target = vec![point.execution_time, point.memory_usage];
+                    let mut delta: Vec<f64> = output
+                        .iter()
+                        .zip(target.iter())
+                        .map(|(o, t)| o - t)
+                        .collect();
+                    
+                    // Backward pass through layers
+                    for i in (0..self.layers.len()).rev() {
+                        let layer = &self.layers[i];
+                        let input = if i == 0 {
+                            &point.query_features
+                        } else {
+                            &activations[i - 1]
+                        };
+                        
+                        // Compute gradients for this layer
+                        for j in 0..layer.output_size {
+                            for k in 0..layer.input_size {
+                                let weight_idx = j * layer.input_size + k;
+                                layer_gradients[i].weight_gradients[weight_idx] += delta[j] * input[k];
+                            }
+                            layer_gradients[i].bias_gradients[j] += delta[j];
+                        }
+                        
+                        // Propagate error to previous layer
+                        if i > 0 {
+                            let mut new_delta = vec![0.0; layer.input_size];
+                            for j in 0..layer.input_size {
+                                for k in 0..layer.output_size {
+                                    let weight_idx = k * layer.input_size + j;
+                                    new_delta[j] += delta[k] * layer.weights[weight_idx];
+                                }
+                                // Apply activation derivative
+                                new_delta[j] *= self.activation_derivative(activations[i - 1][j], &self.layers[i - 1].activation);
+                            }
+                            delta = new_delta;
+                        }
+                    }
+                }
+                
+                // Update weights using accumulated gradients
+                let batch_size_f64 = batch.len() as f64;
+                for (i, gradients) in layer_gradients.iter().enumerate() {
+                    let layer = &mut self.layers[i];
+                    for j in 0..layer.weights.len() {
+                        layer.weights[j] -= self.learning_rate * gradients.weight_gradients[j] / batch_size_f64;
+                    }
+                    for j in 0..layer.biases.len() {
+                        layer.biases[j] -= self.learning_rate * gradients.bias_gradients[j] / batch_size_f64;
+                    }
+                }
             }
         }
 
         self.update_accuracy_metrics(data);
+    }
+    
+    /// Forward pass that stores activations for backpropagation
+    fn forward_with_activations(&self, input: &[f64]) -> Vec<Vec<f64>> {
+        let mut activations = Vec::new();
+        let mut current_output = input.to_vec();
+        
+        for layer in &self.layers {
+            current_output = layer.forward(&current_output);
+            activations.push(current_output.clone());
+        }
+        
+        activations
+    }
+    
+    /// Compute derivative of activation function
+    fn activation_derivative(&self, x: f64, activation: &ActivationFunction) -> f64 {
+        match activation {
+            ActivationFunction::ReLU => if x > 0.0 { 1.0 } else { 0.0 },
+            ActivationFunction::Sigmoid => {
+                let sig = 1.0 / (1.0 + (-x).exp());
+                sig * (1.0 - sig)
+            }
+            ActivationFunction::Tanh => {
+                let tanh = x.tanh();
+                1.0 - tanh * tanh
+            }
+            ActivationFunction::Linear => 1.0,
+        }
     }
 
     /// Update accuracy metrics
