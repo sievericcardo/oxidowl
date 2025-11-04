@@ -91,6 +91,48 @@ impl SyntaxValidator {
 
             // Validate literals in the line
             self.validate_turtle_literals(trimmed, line_num + 1)?;
+            
+            // Validate numeric literals (bare numbers without quotes)
+            // Check for invalid patterns like 3..14 (double dot)
+            let words: Vec<&str> = trimmed.split_whitespace().collect();
+            for word in words {
+                let clean = word.trim_end_matches(&['.', ',', ';'][..]);
+                // Check for double dots in numeric-looking tokens
+                if clean.contains("..") {
+                    // This looks like an invalid numeric literal
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid numeric literal '{}' (contains consecutive dots)",
+                        line_num + 1,
+                        clean
+                    )));
+                }
+            }
+            
+            // Validate prefixed names - local part shouldn't start with '.'
+            // Pattern: prefix:localpart
+            for word in trimmed.split_whitespace() {
+                let clean = word.trim_end_matches(&['.', ',', ';', ')', ']'][..]).trim_start_matches(&['(', '['][..]);
+                if let Some(colon_pos) = clean.find(':') {
+                    // Skip IRIs in angle brackets
+                    if clean.starts_with('<') {
+                        continue;
+                    }
+                    // Skip HTTP/HTTPS URIs
+                    if clean.contains("://") {
+                        continue;
+                    }
+                    
+                    let local_part = &clean[colon_pos + 1..];
+                    // Local part shouldn't start with '.'
+                    if local_part.starts_with('.') {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Invalid prefixed name '{}' - local part cannot start with '.'",
+                            line_num + 1,
+                            clean
+                        )));
+                    }
+                }
+            }
 
             // Core validation: check for proper triple termination
             // A triple looks like: subject predicate object .
@@ -705,8 +747,32 @@ impl SyntaxValidator {
                     continue;
                 }
                 
-                // Skip indented lines - they're part of class/property definitions
+                // For indented lines with colons, validate they use known keywords
                 if line.starts_with(' ') || line.starts_with('\t') {
+                    // Indented lines are part of class/property definitions
+                    // But they should still use valid keywords if they have colons
+                    let indented_keywords = [
+                        "EquivalentTo:", "SubClassOf:", "DisjointWith:", "DisjointUnionOf:",
+                        "HasKey:", "Types:", "Facts:", "SameAs:", "DifferentFrom:",
+                        "SubPropertyOf:", "EquivalentProperties:", "DisjointProperties:",
+                        "InverseOf:", "Domain:", "Range:", "Characteristics:", "SubPropertyChain:",
+                        "Annotations:",
+                    ];
+                    
+                    let is_valid_indented = indented_keywords.iter()
+                        .any(|&kw| potential_keyword.starts_with(kw));
+                    
+                    if !is_valid_indented {
+                        // Check if it looks like a keyword (starts with uppercase)
+                        let keyword_text = potential_keyword.trim_end_matches(':').trim();
+                        if keyword_text.chars().next().unwrap_or(' ').is_uppercase() {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid indented Manchester keyword: '{}'",
+                                line_num + 1,
+                                potential_keyword.trim()
+                            )));
+                        }
+                    }
                     continue;
                 }
                 
@@ -786,6 +852,14 @@ impl SyntaxValidator {
                 if after_first_keyword.contains("SubClassOf:") {
                     return Err(Error::ontology_parsing(format!(
                         "Line {}: Invalid Manchester syntax - 'SubClassOf:' should be on a separate indented line",
+                        line_num + 1
+                    )));
+                }
+                
+                // Check for EquivalentTo on same line as Class:
+                if after_first_keyword.contains("EquivalentTo:") || after_first_keyword.contains("EquivalentTo ") {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid Manchester syntax - 'EquivalentTo' should be on a separate indented line",
                         line_num + 1
                     )));
                 }
@@ -997,11 +1071,45 @@ impl SyntaxValidator {
             }
             
             // For bracketed rules, basic validation
-            if has_brackets && !trimmed[1..trimmed.len()-1].contains("->") && !trimmed[1..trimmed.len()-1].contains(":-") {
-                return Err(Error::ontology_parsing(format!(
-                    "Line {}: Bracketed SWRL rule must contain '->' or ':-'",
-                    line_num + 1
-                )));
+            if has_brackets {
+                let inner = &trimmed[1..trimmed.len()-1];
+                
+                // Check if it contains arrow
+                if !inner.contains("->") && !inner.contains(":-") {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Bracketed SWRL rule must contain '->' or ':-'",
+                        line_num + 1
+                    )));
+                }
+                
+                // Check for rule name format: [ruleName: body -> head]
+                // If there's text before the first '(' and it contains a space or letter,
+                // it should have a colon after the rule name
+                let arrow_pos = inner.find("->").or_else(|| inner.find(":-"));
+                if let Some(arrow_idx) = arrow_pos {
+                    let before_arrow = &inner[..arrow_idx];
+                    
+                    // Find the first atom start (opening paren)
+                    if let Some(first_paren) = before_arrow.find('(') {
+                        let potential_rule_name = before_arrow[..first_paren].trim();
+                        
+                        // If there's text before the first atom, it's a rule name
+                        if !potential_rule_name.is_empty() {
+                            // Rule name should be followed by ':'
+                            if !potential_rule_name.ends_with(':') {
+                                // Check if it looks like a rule name (alphanumeric)
+                                if potential_rule_name.chars().any(|c| c.is_alphanumeric()) {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: SWRL rule name '{}' must be followed by ':' (e.g., '{}:')",
+                                        line_num + 1,
+                                        potential_rule_name,
+                                        potential_rule_name
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
