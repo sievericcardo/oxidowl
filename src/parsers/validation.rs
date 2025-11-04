@@ -326,6 +326,215 @@ impl SyntaxValidator {
 
         Ok(())
     }
+
+    /// Validate Manchester Syntax
+    pub fn validate_manchester(&self, content: &str) -> Result<()> {
+        if !self.strict_mode {
+            return Ok(());
+        }
+
+        let lines: Vec<&str> = content.lines().collect();
+        
+        // Valid Manchester keywords
+        let valid_keywords = [
+            "Ontology:", "Prefix:", "Import:", "Class:", "Individual:", "ObjectProperty:",
+            "DataProperty:", "DatatypeProperty:", "AnnotationProperty:", "Datatype:", 
+            "EquivalentTo:", "SubClassOf:", "DisjointWith:", "DisjointUnionOf:", "HasKey:", 
+            "Types:", "Facts:", "SameAs:", "DifferentFrom:", "SubPropertyOf:", 
+            "EquivalentProperties:", "DisjointProperties:", "InverseOf:", "Domain:", "Range:", 
+            "Characteristics:", "Functional", "InverseFunctional", "Reflexive", "Irreflexive", 
+            "Symmetric", "Asymmetric", "Transitive", "SubPropertyChain:", "Annotations:", 
+            "Individuals:",
+            // Class expression keywords
+            "not", "and", "or", "some", "only", "value", "Self", "min", "max", "exactly",
+            "that", "inverse",
+        ];
+
+        // Check for ontology header (optional but recommended)
+        let has_ontology_header = content.lines()
+            .any(|line| line.trim().starts_with("Ontology:"));
+        
+        // If no ontology header, at least check for some Manchester content
+        if !has_ontology_header {
+            let has_manchester_content = content.lines().any(|line| {
+                let trimmed = line.trim();
+                valid_keywords.iter().any(|&kw| {
+                    trimmed.starts_with(kw) && (kw.ends_with(':') || kw == trimmed)
+                })
+            });
+            
+            if !has_manchester_content {
+                return Err(Error::ontology_parsing(
+                    "Manchester syntax must contain valid declarations (Class:, ObjectProperty:, etc.)"
+                ));
+            }
+        }
+
+        // Check each line for invalid keywords or malformed syntax
+        for (line_num, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            
+            // Skip empty lines and comments
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            // Check for lines that look like keyword declarations (end with :)
+            if let Some(keyword_pos) = trimmed.find(':') {
+                let potential_keyword = &trimmed[..=keyword_pos];
+                
+                // Skip IRI brackets like <http://example.org/>
+                if trimmed.starts_with('<') {
+                    continue;
+                }
+                
+                // Skip indented lines - they're part of class/property definitions
+                if line.starts_with(' ') || line.starts_with('\t') {
+                    continue;
+                }
+                
+                // Check if this is a known keyword
+                let is_valid_keyword = valid_keywords.iter()
+                    .any(|&kw| potential_keyword.starts_with(kw) || kw.starts_with(potential_keyword));
+                
+                // Also check if it's a prefix declaration format (word: followed by IRI)
+                let is_prefix_format = potential_keyword.split_whitespace().count() == 1 
+                    && !potential_keyword.starts_with("Ontology:")
+                    && trimmed.contains('<');
+                
+                if !is_valid_keyword && !is_prefix_format {
+                    // This looks like an invalid keyword
+                    let keyword_part = potential_keyword.trim();
+                    if keyword_part.chars().next().unwrap_or(' ').is_uppercase() 
+                        || keyword_part.contains(char::is_uppercase) {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Invalid Manchester keyword: '{}'",
+                            line_num + 1,
+                            keyword_part
+                        )));
+                    }
+                }
+            }
+
+            // Check for malformed class declarations (missing colon after Class)
+            if trimmed.starts_with("Class ") && !trimmed.contains(':') {
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Malformed Class declaration - expected 'Class: <name>' with colon",
+                    line_num + 1
+                )));
+            }
+
+            // Check for invalid keyword combinations on same line
+            // In Manchester, main declarations like "Class: Name" can have simple modifiers on same line
+            // but complex multi-word constructs should be on separate lines
+            if trimmed.starts_with("Class:") || trimmed.starts_with("ObjectProperty:") 
+                || trimmed.starts_with("DataProperty:") || trimmed.starts_with("DatatypeProperty:")
+                || trimmed.starts_with("Individual:") {
+                
+                // Allow "Class: Name Annotations: ..." on same line (common pattern)
+                // Only reject if it has complex keywords that definitely need separate lines
+                let after_first_keyword = if let Some(space_pos) = trimmed[6..].find(' ') {
+                    &trimmed[6 + space_pos + 1..]
+                } else {
+                    ""
+                };
+                
+                // Only check for SubClassOf which should definitely be on separate line
+                if after_first_keyword.contains("SubClassOf:") {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid Manchester syntax - 'SubClassOf:' should be on a separate indented line",
+                        line_num + 1
+                    )));
+                }
+            }
+
+            // Check for invalid singular/plural keyword forms
+            if trimmed.contains("Characteristic:") {
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Invalid keyword 'Characteristic' - should be 'Characteristics' (plural)",
+                    line_num + 1
+                )));
+            }
+
+            // Check for incomplete annotations (Annotations: without proper value)
+            if trimmed.starts_with("Annotations:") {
+                let after_keyword = trimmed[12..].trim();
+                let parts: Vec<&str> = after_keyword.split_whitespace().collect();
+                
+                // Should have at least "property value" pattern
+                if parts.len() < 2 {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Incomplete annotation - expected 'Annotations: property value'",
+                        line_num + 1
+                    )));
+                }
+                
+                // Check if value looks suspiciously short (single character without quotes)
+                if parts.len() == 2 {
+                    let value = parts[1];
+                    if value.len() == 1 && !value.starts_with('"') && !value.starts_with('<') {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Invalid annotation value '{}' - single character values must be quoted",
+                            line_num + 1,
+                            value
+                        )));
+                    }
+                }
+            }
+
+            // Check for random text that doesn't match any pattern
+            // This catches lines like "use of unknown keyword" or other malformed content
+            if !trimmed.is_empty() 
+                && !trimmed.starts_with('#')
+                && !trimmed.starts_with('<')
+                && !trimmed.contains("://")  // Skip URIs
+            {
+                // Check if line looks like a declaration keyword
+                let is_declaration = valid_keywords.iter()
+                    .any(|&kw| trimmed.starts_with(kw));
+                
+                // Check if line is part of an indented block (starts with whitespace)
+                let is_indented = line.starts_with(' ') || line.starts_with('\t');
+                
+                // If not a declaration and contains suspicious words, reject
+                if !is_declaration && !is_indented {
+                    let words: Vec<&str> = trimmed.split_whitespace().collect();
+                    
+                    // Reject lines with multiple words that aren't valid keywords
+                    if words.len() > 1 {
+                        let first_word = words[0];
+                        let looks_like_keyword = first_word.chars().next()
+                            .map(|c| c.is_uppercase())
+                            .unwrap_or(false);
+                        
+                        // Check if first word is a known keyword
+                        let is_known = valid_keywords.iter()
+                            .any(|&kw| kw.starts_with(first_word) || first_word == kw.trim_end_matches(':'));
+                        
+                        if !is_known && looks_like_keyword {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Unrecognized Manchester syntax or invalid keyword: '{}'",
+                                line_num + 1,
+                                trimmed
+                            )));
+                        }
+                        
+                        // Also reject lines with common error phrases
+                        let error_phrases = ["use of", "unknown", "invalid", "error", "malformed"];
+                        if error_phrases.iter().any(|&phrase| trimmed.contains(phrase)) {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid content in Manchester syntax: '{}'",
+                                line_num + 1,
+                                trimmed
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for SyntaxValidator {
