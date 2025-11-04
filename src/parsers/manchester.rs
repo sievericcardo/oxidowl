@@ -65,8 +65,9 @@ impl ManchesterParser {
 
     /// Parse Manchester Syntax from string
     pub fn parse_string(&mut self, content: &str) -> Result<Ontology, OxidowlError> {
-        // Validate Manchester syntax before parsing
-        let validator = super::validation::SyntaxValidator::new();
+        // Note: Using lenient validation for Manchester syntax to allow simplified parsing
+        // Strict validation can be enabled separately if needed
+        let validator = super::validation::SyntaxValidator::lenient();
         validator.validate_manchester(content)
             .map_err(|e| OxidowlError::ParseError(format!("Manchester validation failed: {}", e)))?;
 

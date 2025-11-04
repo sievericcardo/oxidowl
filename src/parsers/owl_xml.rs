@@ -177,6 +177,12 @@ pub fn parse(content: &str) -> Result<Ontology> {
                     ontology.add_axiom(axiom);
                 }
             }
+            "DisjointClasses" => {
+                println!("DEBUG: Found DisjointClasses in XML");
+                if let Ok(axiom) = parse_disjoint_classes(&child, base_iri.as_ref()) {
+                    ontology.add_axiom(axiom);
+                }
+            }
             "ClassAssertion" => {
                 if let Ok(axiom) = parse_class_assertion(&child, base_iri.as_ref()) {
                     ontology.add_axiom(axiom);
@@ -192,8 +198,20 @@ pub fn parse(content: &str) -> Result<Ontology> {
                     ontology.add_axiom(axiom);
                 }
             }
+            "SubDataPropertyOf" => {
+                println!("DEBUG: Found SubDataPropertyOf in XML");
+                if let Ok(axiom) = parse_sub_data_property_of(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
             "FunctionalObjectProperty" => {
                 if let Ok(axiom) = parse_functional_object_property(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "InverseFunctionalObjectProperty" => {
+                println!("DEBUG: Found InverseFunctionalObjectProperty in XML");
+                if let Ok(axiom) = parse_inverse_functional_object_property(&child) {
                     ontology.add_axiom(axiom);
                 }
             }
@@ -392,6 +410,33 @@ fn parse_equivalent_classes(
     ))
 }
 
+/// Parse a `DisjointClasses` element
+fn parse_disjoint_classes(
+    element: &roxmltree::Node,
+    base_iri: Option<&url::Url>,
+) -> Result<Axiom> {
+    let mut class_expressions = Vec::new();
+
+    for child in element.children().filter(roxmltree::Node::is_element) {
+        let expr = parse_class_expression(&child, base_iri)?;
+        class_expressions.push(expr);
+    }
+
+    if class_expressions.len() < 2 {
+        return Err(Error::io(
+            "DisjointClasses must have at least 2 classes".to_string(),
+        ));
+    }
+
+    Ok(Axiom::DisjointClasses(
+        crate::ontology::DisjointClassesAxiom {
+            id: generate_axiom_id(),
+            classes: class_expressions,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
 /// Parse a `DisjointUnion` element
 fn parse_disjoint_union(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let children: Vec<_> = element
@@ -501,6 +546,31 @@ fn parse_sub_object_property_of(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
+/// Parse a `SubDataPropertyOf` element
+fn parse_sub_data_property_of(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 2 {
+        return Err(Error::io(
+            "SubDataPropertyOf must have exactly 2 children".to_string(),
+        ));
+    }
+
+    let sub_property = parse_data_property_expression(&children[0])?;
+    let super_property = parse_data_property_expression(&children[1])?;
+
+    Ok(Axiom::SubDataPropertyOf(
+        crate::ontology::SubDataPropertyOfAxiom {
+            id: generate_axiom_id(),
+            sub_property,
+            super_property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
 /// Parse a `FunctionalObjectProperty` element
 fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
@@ -517,6 +587,29 @@ fn parse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> 
 
     Ok(Axiom::FunctionalObjectProperty(
         crate::ontology::FunctionalObjectPropertyAxiom {
+            id: generate_axiom_id(),
+            property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse an `InverseFunctionalObjectProperty` element
+fn parse_inverse_functional_object_property(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    if children.len() != 1 {
+        return Err(Error::io(
+            "InverseFunctionalObjectProperty must have exactly 1 child".to_string(),
+        ));
+    }
+
+    let property = parse_object_property_expression(&children[0])?;
+
+    Ok(Axiom::InverseFunctionalObjectProperty(
+        crate::ontology::InverseFunctionalObjectPropertyAxiom {
             id: generate_axiom_id(),
             property,
             annotations: Vec::new(),

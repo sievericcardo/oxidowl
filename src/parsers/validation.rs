@@ -94,16 +94,39 @@ impl SyntaxValidator {
 
             // Core validation: check for proper triple termination
             // A triple looks like: subject predicate object .
-            // Where "a" is shorthand for rdf:type
+            // Semicolon (;) means same subject, new predicate-object pair
+            // Comma (,) means same subject and predicate, new object
+            // Dot (.) terminates the statement completely
+            
+            // Skip validation for lines that are clearly continuations:
+            // - Indented lines (spaces or tabs at start)
+            // - Lines starting with collection syntax ) but not starting a new statement
+            let is_indented = line.starts_with(' ') || line.starts_with('\t');
+            let is_list_closing = trimmed.starts_with(')');
+            
+            if is_indented || is_list_closing {
+                // These are continuations, don't validate statement termination
+                continue;
+            }
             
             // If previous line expected termination
-            if expecting_end {
-                // Check if this line starts with proper punctuation
-                if !trimmed.starts_with('.') && !trimmed.starts_with(';') && !trimmed.starts_with(',') {
+            if expecting_end && previous_was_object {
+                // After a triple without proper termination, the next line must:
+                // 1. Start with punctuation (. ; ,) OR
+                // 2. Be a continuation (prefixed name starting with colon after whitespace)
+                let is_punctuation_line = trimmed.starts_with('.') || trimmed.starts_with(';') || trimmed.starts_with(',');
+                
+                // Check if this is truly a NEW statement (starts at column 0 and looks like a subject)
+                // A new statement would typically start with a prefix:name or <IRI> pattern
+                let looks_like_new_statement = !is_punctuation_line && 
+                    (trimmed.starts_with('<') || 
+                     (trimmed.contains(':') && trimmed.split_whitespace().next().unwrap_or("").contains(':')));
+                
+                if looks_like_new_statement {
                     // This is a new statement but previous wasn't terminated
                     return Err(Error::ontology_parsing(format!(
                         "Line {}: Previous statement not properly terminated (missing . ; or ,)",
-                        line_num
+                        line_num + 1
                     )));
                 }
             }
@@ -111,7 +134,7 @@ impl SyntaxValidator {
             // Detect potential triple pattern: subject predicate object
             // Simple heuristic: contains " a " or has IRI/prefix followed by predicate
             let has_triple_pattern = trimmed.contains(" a ") || 
-                                     (trimmed.contains(':') && trimmed.split_whitespace().count() >= 3) ||
+                                     (trimmed.contains(':') && trimmed.split_whitespace().count() >= 2) ||
                                      (trimmed.starts_with('<') && trimmed.split_whitespace().count() >= 3);
             
             if has_triple_pattern {
@@ -541,6 +564,19 @@ impl SyntaxValidator {
             }
         }
 
+        // Check for common typos in keywords
+        let common_typos = [
+            ("Clas:", "Class:"),
+            ("Calss:", "Class:"),
+            ("Classs:", "Class:"),
+            ("Clase:", "Class:"),
+            ("SubClassOF:", "SubClassOf:"),
+            ("subClassOf:", "SubClassOf:"),  // lowercase
+            ("equivalentTo:", "EquivalentTo:"),  // lowercase
+            ("DomainProperty:", "Domain:"),
+            ("RangeProperty:", "Range:"),
+        ];
+
         // Check each line for invalid keywords or malformed syntax
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
@@ -548,6 +584,18 @@ impl SyntaxValidator {
             // Skip empty lines and comments
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
+            }
+
+            // Check for common typos
+            for (typo, correct) in &common_typos {
+                if trimmed.starts_with(typo) {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Keyword typo '{}' - did you mean '{}'?",
+                        line_num + 1,
+                        typo,
+                        correct
+                    )));
+                }
             }
 
             // Check for lines that look like keyword declarations (end with :)
@@ -561,6 +609,11 @@ impl SyntaxValidator {
                 
                 // Skip indented lines - they're part of class/property definitions
                 if line.starts_with(' ') || line.starts_with('\t') {
+                    continue;
+                }
+                
+                // Allow "Annotations: ... on ..." pattern for annotation-on-axioms
+                if trimmed.starts_with("Annotations:") {
                     continue;
                 }
                 
@@ -592,6 +645,27 @@ impl SyntaxValidator {
                 return Err(Error::ontology_parsing(format!(
                     "Line {}: Malformed Class declaration - expected 'Class: <name>' with colon",
                     line_num + 1
+                )));
+            }
+
+            // Check for invalid class expression syntax (simple patterns)
+            if trimmed.contains(" and and ") || trimmed.contains(" or or ") || trimmed.contains(" not not ") {
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Invalid class expression - duplicate logical operators",
+                    line_num + 1
+                )));
+            }
+
+            // Check for unmatched parentheses on this line
+            let open_parens = trimmed.matches('(').count();
+            let close_parens = trimmed.matches(')').count();
+            if open_parens != close_parens && !trimmed.ends_with(',') {
+                // Allow multi-line expressions if line ends with comma
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Unmatched parentheses (found {} opening, {} closing)",
+                    line_num + 1,
+                    open_parens,
+                    close_parens
                 )));
             }
 
