@@ -167,6 +167,10 @@ pub fn parse(content: &str) -> Result<Ontology> {
 impl TurtleParser {
     /// Parse Turtle content into an ontology with enhanced OWL construct support
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
+        // Validate syntax before parsing
+        let validator = super::validation::SyntaxValidator::new();
+        validator.validate_turtle(content)?;
+
         let mut ontology = Ontology::new();
         let mut state = ParseState {
             prefixes: HashMap::new(),

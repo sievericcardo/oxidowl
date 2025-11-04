@@ -84,6 +84,10 @@ impl RdfXmlParser {
 
     /// Parse RDF/XML content into an ontology
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
+        // Validate RDF/XML syntax before parsing
+        let validator = super::validation::SyntaxValidator::new();
+        validator.validate_rdf_xml(content)?;
+
         // Basic XML validation if enabled
         if self.config.validate_xml {
             self.validate_xml_structure(content)?;

@@ -126,6 +126,10 @@ impl Default for OwlXmlParser {
 
 /// Parse OWL XML from string content
 pub fn parse(content: &str) -> Result<Ontology> {
+    // Validate syntax before parsing
+    let validator = super::validation::SyntaxValidator::new();
+    validator.validate_owl_xml(content)?;
+
     // Basic OWL XML parser implementation
     let doc = roxmltree::Document::parse(content)
         .map_err(|e| Error::io(format!("Failed to parse XML: {e}")))?;

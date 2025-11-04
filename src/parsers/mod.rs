@@ -9,6 +9,7 @@ pub mod ntriples;
 pub mod owl_xml;
 pub mod rdf_xml;
 pub mod turtle;
+pub mod validation;
 
 // Re-export parser structs and functions
 pub use common::{OntologyParser, OntologySerializer};
@@ -33,6 +34,7 @@ pub use turtle::{
     TurtleParser, TurtleSerializer, parse as parse_turtle, parse_file as parse_turtle_file,
     save_file as save_turtle_file,
 };
+pub use validation::SyntaxValidator;
 
 use crate::{
     Error, Result,

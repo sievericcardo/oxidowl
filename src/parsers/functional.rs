@@ -51,6 +51,10 @@ pub fn parse(content: &str) -> Result<Ontology> {
 impl FunctionalParser {
     /// Parse Functional Syntax content into an ontology
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
+        // Validate syntax before parsing
+        let validator = super::validation::SyntaxValidator::new();
+        validator.validate_functional(content)?;
+
         let mut ontology = Ontology::new();
         let mut prefixes = std::collections::HashMap::<String, String>::new();
         let mut base_iri: Option<String> = None;
