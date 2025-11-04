@@ -50,23 +50,38 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
     
     let trimmed = content.trim();
     
-    // Check for Functional syntax
-    if trimmed.starts_with("Ontology(") || trimmed.starts_with("Prefix(") {
+    // Check for Functional syntax - more patterns
+    // Functional syntax uses parentheses and specific keywords
+    if trimmed.starts_with("Ontology(") 
+        || trimmed.starts_with("Prefix(")
+        || trimmed.starts_with("Import(")
+        || content.contains("Declaration(")
+        || content.contains("SubClassOf(")
+        || (trimmed.starts_with("Import(") && content.contains("Ontology(")) {
         return Ok(OntologyFormat::Functional);
     }
     
-    // Check for Manchester syntax
+    // Check for Manchester syntax - expanded patterns
+    // Manchester uses colons after keywords
     if trimmed.starts_with("Prefix:") 
         || trimmed.starts_with("Ontology:") 
         || trimmed.starts_with("Class:")
         || trimmed.starts_with("ObjectProperty:")
         || trimmed.starts_with("DataProperty:")
-        || trimmed.starts_with("Individual:") {
+        || trimmed.starts_with("Individual:")
+        || trimmed.starts_with("Import:")
+        || content.contains("\nClass:")
+        || content.contains("\nObjectProperty:")
+        || content.contains("\nDataProperty:") {
         return Ok(OntologyFormat::Manchester);
     }
     
     // Check for Turtle syntax
-    if trimmed.starts_with("@prefix") || trimmed.starts_with("@base") {
+    // Turtle uses @prefix and @base directives
+    if trimmed.starts_with("@prefix") 
+        || trimmed.starts_with("@base")
+        || (content.contains("@prefix") && content.contains("<http"))
+        || (content.contains("rdf:type") && content.contains("owl:")) {
         return Ok(OntologyFormat::Turtle);
     }
     
@@ -76,7 +91,7 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
         // Check for OWL/XML elements
         let owl_xml_elements = ["<Ontology", "<Declaration", "<Class", "<ObjectProperty", 
                                  "<DataProperty", "<AnnotationProperty", "<Individual",
-                                 "owl:Ontology"];
+                                 "owl:Ontology", "<Import"];
         if owl_xml_elements.iter().any(|&elem| content.contains(elem)) {
             return Ok(OntologyFormat::OwlXml);
         }
@@ -86,6 +101,26 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
         }
         // Default to OWL/XML for XML files (safer than RDF/XML)
         return Ok(OntologyFormat::OwlXml);
+    }
+    
+    // For .txt files or unknown content, try heuristics
+    // Look for common OWL patterns to guess the format
+    
+    // Check if it looks like Functional syntax (has parentheses and OWL keywords)
+    let functional_keywords = ["Declaration", "SubClassOf", "EquivalentClasses", "DisjointClasses"];
+    if functional_keywords.iter().any(|&kw| content.contains(kw)) && content.contains('(') {
+        return Ok(OntologyFormat::Functional);
+    }
+    
+    // Check if it looks like Manchester (colon-based declarations)
+    let manchester_keywords = ["Class:", "ObjectProperty:", "DataProperty:", "SubClassOf:", "EquivalentTo:"];
+    if manchester_keywords.iter().any(|&kw| content.contains(kw)) {
+        return Ok(OntologyFormat::Manchester);
+    }
+    
+    // Check if it looks like Turtle (prefix declarations and triples)
+    if content.contains("@prefix") || (content.contains(':') && content.contains('.')) {
+        return Ok(OntologyFormat::Turtle);
     }
     
     // Default to Functional syntax for unknown content

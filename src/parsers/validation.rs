@@ -418,6 +418,11 @@ impl SyntaxValidator {
             ));
         }
 
+        // If this looks like SWRL content, validate it as SWRL
+        if is_swrl {
+            return self.validate_swrl(content);
+        }
+
         Ok(())
     }
 
@@ -775,6 +780,135 @@ impl SyntaxValidator {
                         }
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate SWRL rule syntax
+    pub fn validate_swrl(&self, content: &str) -> Result<()> {
+        if !self.strict_mode {
+            return Ok(());
+        }
+
+        let lines: Vec<&str> = content.lines().collect();
+        
+        for (line_num, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            
+            // Skip empty lines and comments
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            // SWRL rules have the pattern: body -> head or body :- head
+            // Also support [ruleName: body -> head]
+            
+            // Check for basic SWRL structure
+            let has_arrow = trimmed.contains("->") || trimmed.contains(":-");
+            let has_brackets = trimmed.starts_with('[') && trimmed.ends_with(']');
+            
+            if !has_arrow && !has_brackets && !trimmed.starts_with("Ontology(") && !trimmed.starts_with("Prefix(") {
+                // This doesn't look like valid SWRL syntax
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Invalid SWRL syntax - expected rule with '->' or ':-' or bracketed rule name",
+                    line_num + 1
+                )));
+            }
+            
+            // If it has an arrow, validate basic structure
+            if has_arrow {
+                let arrow = if trimmed.contains("->") { "->" } else { ":-" };
+                let parts: Vec<&str> = trimmed.split(arrow).collect();
+                
+                if parts.len() != 2 {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid SWRL rule - expected format 'body {} head'",
+                        line_num + 1,
+                        arrow
+                    )));
+                }
+                
+                let body = parts[0].trim();
+                let head = parts[1].trim();
+                
+                // Check that body and head are not empty
+                if body.is_empty() {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: SWRL rule has empty body",
+                        line_num + 1
+                    )));
+                }
+                
+                if head.is_empty() {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: SWRL rule has empty head",
+                        line_num + 1
+                    )));
+                }
+                
+                // Validate atoms in body (should have parentheses for atoms)
+                if !body.contains('(') || !body.contains(')') {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: SWRL rule body must contain atoms with parentheses",
+                        line_num + 1
+                    )));
+                }
+                
+                // Check for balanced parentheses in body
+                let body_open = body.matches('(').count();
+                let body_close = body.matches(')').count();
+                if body_open != body_close {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Unbalanced parentheses in SWRL rule body ({} open, {} close)",
+                        line_num + 1,
+                        body_open,
+                        body_close
+                    )));
+                }
+                
+                // Validate atoms in head
+                if !head.contains('(') || !head.contains(')') {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: SWRL rule head must contain atoms with parentheses",
+                        line_num + 1
+                    )));
+                }
+                
+                // Check for balanced parentheses in head
+                let head_open = head.matches('(').count();
+                let head_close = head.matches(')').count();
+                if head_open != head_close {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Unbalanced parentheses in SWRL rule head ({} open, {} close)",
+                        line_num + 1,
+                        head_open,
+                        head_close
+                    )));
+                }
+                
+                // Check for variables (should start with ?)
+                // SWRL variables typically use ?var syntax
+                let has_variables = body.contains('?') || head.contains('?');
+                if !has_variables {
+                    // This might be okay for ground rules, but warn if suspicious
+                    // Only flag as error if it looks malformed
+                    if body.contains("var") || head.contains("var") {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: SWRL variables should use '?' prefix (e.g., ?var not var)",
+                            line_num + 1
+                        )));
+                    }
+                }
+            }
+            
+            // For bracketed rules, basic validation
+            if has_brackets && !trimmed[1..trimmed.len()-1].contains("->") && !trimmed[1..trimmed.len()-1].contains(":-") {
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Bracketed SWRL rule must contain '->' or ':-'",
+                    line_num + 1
+                )));
             }
         }
 

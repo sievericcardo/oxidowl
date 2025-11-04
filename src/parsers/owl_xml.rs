@@ -198,9 +198,29 @@ pub fn parse(content: &str) -> Result<Ontology> {
                     ontology.add_axiom(axiom);
                 }
             }
+            "EquivalentObjectProperties" => {
+                if let Ok(axiom) = parse_equivalent_object_properties(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "DisjointObjectProperties" => {
+                if let Ok(axiom) = parse_disjoint_object_properties(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
             "SubDataPropertyOf" => {
                 println!("DEBUG: Found SubDataPropertyOf in XML");
                 if let Ok(axiom) = parse_sub_data_property_of(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "EquivalentDataProperties" => {
+                if let Ok(axiom) = parse_equivalent_data_properties(&child) {
+                    ontology.add_axiom(axiom);
+                }
+            }
+            "DisjointDataProperties" => {
+                if let Ok(axiom) = parse_disjoint_data_properties(&child) {
                     ontology.add_axiom(axiom);
                 }
             }
@@ -566,6 +586,114 @@ fn parse_sub_data_property_of(element: &roxmltree::Node) -> Result<Axiom> {
             id: generate_axiom_id(),
             sub_property,
             super_property,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse an `EquivalentObjectProperties` element
+fn parse_equivalent_object_properties(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    
+    if children.len() < 2 {
+        return Err(Error::io(
+            "EquivalentObjectProperties must have at least 2 children".to_string(),
+        ));
+    }
+
+    let mut properties = Vec::new();
+    for child in children {
+        properties.push(parse_object_property_expression(&child)?);
+    }
+
+    Ok(Axiom::EquivalentObjectProperties(
+        crate::ontology::EquivalentObjectPropertiesAxiom {
+            id: generate_axiom_id(),
+            properties,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `DisjointObjectProperties` element
+fn parse_disjoint_object_properties(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    
+    if children.len() < 2 {
+        return Err(Error::io(
+            "DisjointObjectProperties must have at least 2 children".to_string(),
+        ));
+    }
+
+    let mut properties = Vec::new();
+    for child in children {
+        properties.push(parse_object_property_expression(&child)?);
+    }
+
+    Ok(Axiom::DisjointObjectProperties(
+        crate::ontology::DisjointObjectPropertiesAxiom {
+            id: generate_axiom_id(),
+            properties,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse an `EquivalentDataProperties` element
+fn parse_equivalent_data_properties(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    
+    if children.len() < 2 {
+        return Err(Error::io(
+            "EquivalentDataProperties must have at least 2 children".to_string(),
+        ));
+    }
+
+    let mut properties = Vec::new();
+    for child in children {
+        properties.push(parse_data_property_expression(&child)?);
+    }
+
+    Ok(Axiom::EquivalentDataProperties(
+        crate::ontology::EquivalentDataPropertiesAxiom {
+            id: generate_axiom_id(),
+            properties,
+            annotations: Vec::new(),
+        },
+    ))
+}
+
+/// Parse a `DisjointDataProperties` element
+fn parse_disjoint_data_properties(element: &roxmltree::Node) -> Result<Axiom> {
+    let children: Vec<_> = element
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    
+    if children.len() < 2 {
+        return Err(Error::io(
+            "DisjointDataProperties must have at least 2 children".to_string(),
+        ));
+    }
+
+    let mut properties = Vec::new();
+    for child in children {
+        properties.push(parse_data_property_expression(&child)?);
+    }
+
+    Ok(Axiom::DisjointDataProperties(
+        crate::ontology::DisjointDataPropertiesAxiom {
+            id: generate_axiom_id(),
+            properties,
             annotations: Vec::new(),
         },
     ))
