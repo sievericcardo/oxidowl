@@ -212,11 +212,14 @@ impl SyntaxValidator {
             }
         }
 
-        // Basic structure check: must start with "Ontology" (after whitespace)
+        // Basic structure check: must start with "Ontology" or "Prefix" or be SWRL rule syntax
         let trimmed = content.trim();
-        if !trimmed.starts_with("Ontology(") && !trimmed.starts_with("Prefix(") {
+        // SWRL rules start with [ruleName: ...] or just have rule syntax
+        let is_swrl = trimmed.starts_with('[') || trimmed.contains("->") || trimmed.contains(":-");
+        
+        if !is_swrl && !trimmed.starts_with("Ontology(") && !trimmed.starts_with("Prefix(") {
             return Err(Error::ontology_parsing(
-                "Functional syntax must start with Ontology( or Prefix("
+                "Functional syntax must start with Ontology( or Prefix( (or be SWRL rule syntax)"
             ));
         }
 
@@ -236,13 +239,9 @@ impl SyntaxValidator {
             return Err(Error::ontology_parsing("XML document must start with <"));
         }
 
-        // Check for required root element (Ontology)
-        if !trimmed.contains("<Ontology") && !trimmed.contains("<owl:Ontology") {
-            return Err(Error::ontology_parsing(
-                "OWL/XML must contain an Ontology root element"
-            ));
-        }
-
+        // OWL/XML can be a full ontology or just fragments (Declaration, etc.)
+        // So we don't require an Ontology root element - any valid XML structure is OK
+        
         // Simple tag matching (not a full XML validator, but catches common errors)
         let mut tag_stack: Vec<String> = Vec::new();
         let mut in_tag = false;

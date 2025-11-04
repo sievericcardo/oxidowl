@@ -73,12 +73,18 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
     // Check for XML-based formats
     if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
         // Try to determine which XML type
-        if content.contains("owl:Ontology") || content.contains("<Ontology") {
+        // Check for OWL/XML elements
+        let owl_xml_elements = ["<Ontology", "<Declaration", "<Class", "<ObjectProperty", 
+                                 "<DataProperty", "<AnnotationProperty", "<Individual",
+                                 "owl:Ontology"];
+        if owl_xml_elements.iter().any(|&elem| content.contains(elem)) {
             return Ok(OntologyFormat::OwlXml);
-        } else if content.contains("rdf:RDF") {
+        }
+        // Check for RDF/XML
+        if content.contains("rdf:RDF") || content.contains("<rdf:RDF") {
             return Ok(OntologyFormat::RdfXml);
         }
-        // Default to OWL/XML for XML files
+        // Default to OWL/XML for XML files (safer than RDF/XML)
         return Ok(OntologyFormat::OwlXml);
     }
     
