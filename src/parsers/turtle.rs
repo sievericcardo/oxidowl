@@ -416,8 +416,408 @@ impl TurtleParser {
         Ok(())
     }
 
-    /// Parse statements with semicolon-separated predicates
+    /// Parse semicolon statement with support for blank nodes and collections
     fn parse_semicolon_statement(
+        &self,
+        tokens: &[Token],
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
+        if tokens.is_empty() {
+            return Ok(());
+        }
+
+        // Check if the statement starts with a blank node (anonymous subject)
+        let subject = if matches!(tokens[0], Token::LeftBracket) {
+            // Generate a blank node ID for anonymous blank node
+            state.blank_node_counter += 1;
+            format!("_:b{}", state.blank_node_counter)
+        } else {
+            // Regular subject
+            self.resolve_token(&tokens[0], state).map_err(|e| {
+                Error::ontology_parsing(format!("Failed to resolve subject token: {}", e))
+            })?
+        };
+
+        // If it was a blank node, skip to find where it closes
+        let mut start_index = if matches!(tokens[0], Token::LeftBracket) {
+            let mut depth = 1;
+            let mut i = 1;
+            while i < tokens.len() && depth > 0 {
+                match tokens[i] {
+                    Token::LeftBracket => depth += 1,
+                    Token::RightBracket => depth -= 1,
+                    _ => {}
+                }
+                if depth > 0 {
+                    i += 1;
+                }
+            }
+            // Process the content inside the blank node
+            if i > 1 {
+                let blank_node_tokens = &tokens[1..i];
+                self.parse_blank_node_content(blank_node_tokens, ontology, state, &subject)?;
+            }
+            i + 1 // Continue after the blank node
+        } else {
+            1 // Start after the regular subject
+        };
+
+        // Process predicate-object pairs separated by semicolons
+        let mut current_predicate: Option<String> = None;
+
+        while start_index < tokens.len() {
+            // Skip semicolons (mark end of predicate-object list, reset current predicate)
+            if matches!(tokens[start_index], Token::Semicolon) {
+                start_index += 1;
+                current_predicate = None;
+                continue;
+            }
+
+            // Skip periods (end of statement)
+            if matches!(tokens[start_index], Token::Period) {
+                break;
+            }
+
+            // We need at least predicate and object
+            if start_index + 1 >= tokens.len() {
+                break;
+            }
+
+            // If we don't have a current predicate, this token should be a predicate
+            // If we have a current predicate and see a comma, skip it and continue with same predicate
+            if matches!(tokens[start_index], Token::Comma) {
+                start_index += 1;
+                // Continue with the same predicate for the next object
+                continue;
+            }
+
+            let predicate = if let Some(ref pred) = current_predicate {
+                // Reuse the current predicate for comma-separated objects
+                pred.clone()
+            } else {
+                // Parse new predicate
+                let pred = self.resolve_token(&tokens[start_index], state).map_err(|e| {
+                    Error::ontology_parsing(format!(
+                        "Failed to resolve predicate token at index {}: {}",
+                        start_index, e
+                    ))
+                })?;
+                start_index += 1; // Move past the predicate
+                current_predicate = Some(pred.clone());
+                pred
+            };
+
+            // Check if the object is a complex structure (blank node, list, etc.)
+            if start_index < tokens.len() {
+                match &tokens[start_index] {
+                    Token::LeftBracket => {
+                        // Parse blank node as object
+                        let mut depth = 1;
+                        start_index += 1; // Move past opening bracket
+                        let blank_start = start_index;
+
+                        while start_index < tokens.len() && depth > 0 {
+                            match tokens[start_index] {
+                                Token::LeftBracket => depth += 1,
+                                Token::RightBracket => depth -= 1,
+                                _ => {}
+                            }
+                            start_index += 1;
+                        }
+
+                        // Create a blank node for this anonymous object
+                        state.blank_node_counter += 1;
+                        let blank_node_id = format!("_:b{}", state.blank_node_counter);
+
+                        // Parse the content of the blank node
+                        if start_index > blank_start {
+                            let blank_tokens = &tokens[blank_start..start_index - 1];
+                            self.parse_blank_node_content(blank_tokens, ontology, state, &blank_node_id)?;
+                        }
+
+                        // Create triple with blank node as object
+                        self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), blank_node_id)?;
+                        continue;
+                    }
+                    Token::LeftParen => {
+                        // Parse RDF collection ()
+                        let mut depth = 1;
+                        start_index += 1; // Move past opening paren
+                        let collection_start = start_index;
+
+                        while start_index < tokens.len() && depth > 0 {
+                            match tokens[start_index] {
+                                Token::LeftParen => depth += 1,
+                                Token::RightParen => depth -= 1,
+                                _ => {}
+                            }
+                            start_index += 1;
+                        }
+
+                        // Create RDF list from collection
+                        if start_index > collection_start {
+                            let collection_tokens = &tokens[collection_start..start_index - 1];
+                            let list_id = self.parse_collection(collection_tokens, ontology, state)?;
+
+                            // Create triple with list as object
+                            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), list_id)?;
+                        }
+                        continue;
+                    }
+                    Token::Literal(lit_value) => {
+                        // Handle literal values as data property assertions
+                        let literal_value = lit_value.clone();
+                        start_index += 1; // Move past literal
+
+                        // Check if there's a type annotation (^^datatype)
+                        let datatype = if start_index < tokens.len() {
+                            let next_token = &tokens[start_index];
+                            match next_token {
+                                Token::Keyword(kw) if kw.starts_with("^^") => {
+                                    // Extract datatype IRI
+                                    let dt_str = kw[2..].to_string();
+                                    start_index += 1; // Skip the type annotation
+                                    
+                                    // Resolve prefix if needed
+                                    let resolved_dt = if dt_str.contains(':') && !dt_str.starts_with("http") {
+                                        if let Some(colon_pos) = dt_str.find(':') {
+                                            let prefix = &dt_str[..colon_pos];
+                                            let local = &dt_str[colon_pos + 1..];
+                                            if let Some(base) = state.prefixes.get(prefix) {
+                                                format!("{}{}", base, local)
+                                            } else {
+                                                dt_str
+                                            }
+                                        } else {
+                                            dt_str
+                                        }
+                                    } else {
+                                        dt_str
+                                    };
+                                    
+                                    let dt_iri = IRI::new(&resolved_dt);
+                                    dt_iri.to_url().ok()
+                                }
+                                _ => None
+                            }
+                        } else {
+                            None
+                        };
+                        
+                        // Create DataPropertyAssertion
+                        let subject_ind = Individual::Named(NamedIndividual {
+                            iri: IRI::new(&subject),
+                        });
+                        let data_property = DataProperty {
+                            iri: IRI::new(&predicate),
+                        };
+                        let literal = Literal {
+                            value: self.decode_escape_sequences(&literal_value.trim_matches('"')),
+                            language: None,
+                            datatype,
+                        };
+                        
+                        let axiom = DataPropertyAssertionAxiom {
+                            id: generate_axiom_id(),
+                            property: crate::ontology::DataPropertyExpression::DataProperty(data_property),
+                            individual: subject_ind,
+                            value: literal,
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                        continue;
+                    }
+                    _ => {} // Continue with normal processing
+                }
+            }
+
+            // Try to resolve the object token for simple objects
+            let object = match self.resolve_token(&tokens[start_index], state) {
+                Ok(obj) => obj,
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
+                        start_index, e
+                    );
+                    // Skip to next statement
+                    while start_index < tokens.len() && !matches!(tokens[start_index], Token::Period | Token::Semicolon)
+                    {
+                        start_index += 1;
+                    }
+                    current_predicate = None;
+                    continue;
+                }
+            };
+
+            // Process this triple
+            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), object)?;
+
+            // Move to next object or predicate
+            start_index += 1;
+
+            // Handle comma-separated objects for the same predicate
+            while start_index < tokens.len() && matches!(tokens[start_index], Token::Comma) {
+                start_index += 1; // Skip comma
+                if start_index < tokens.len() && !matches!(tokens[start_index], Token::Semicolon | Token::Period) {
+                    // Skip complex objects like blank nodes that start with [
+                    if matches!(tokens[start_index], Token::LeftBracket) {
+                        // Skip to the end of the blank node
+                        let mut bracket_depth = 1;
+                        start_index += 1;
+                        while start_index < tokens.len() && bracket_depth > 0 {
+                            match tokens[start_index] {
+                                Token::LeftBracket => bracket_depth += 1,
+                                Token::RightBracket => bracket_depth -= 1,
+                                _ => {}
+                            }
+                            start_index += 1;
+                        }
+                        continue;
+                    }
+
+                    // Only process simple objects
+                    match self.resolve_token(&tokens[start_index], state) {
+                        Ok(next_object) => {
+                            self.process_enhanced_triple(
+                                ontology,
+                                subject.clone(),
+                                predicate.clone(),
+                                next_object,
+                            )?;
+                            start_index += 1;
+                        }
+                        Err(_) => {
+                            // Skip problematic tokens instead of failing
+                            start_index += 1;
+                        }
+                    }
+                }
+            }
+
+            // Reset current predicate if we hit a semicolon or period
+            if start_index < tokens.len() && matches!(tokens[start_index], Token::Semicolon | Token::Period) {
+                current_predicate = None;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse the content of a blank node (between [ ])
+    fn parse_blank_node_content(
+        &self,
+        tokens: &[Token],
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+        blank_node_id: &str,
+    ) -> Result<()> {
+        // Parse predicate-object pairs within the blank node
+        let mut i = 0;
+        let mut current_predicate: Option<String> = None;
+
+        while i < tokens.len() {
+            if matches!(tokens[i], Token::Semicolon) {
+                i += 1;
+                current_predicate = None;
+                continue;
+            }
+
+            if matches!(tokens[i], Token::Comma) {
+                i += 1;
+                continue;
+            }
+
+            // Get predicate
+            let predicate = if let Some(ref pred) = current_predicate {
+                pred.clone()
+            } else if i < tokens.len() {
+                let pred = self.resolve_token(&tokens[i], state)?;
+                i += 1;
+                current_predicate = Some(pred.clone());
+                pred
+            } else {
+                break;
+            };
+
+            // Get object
+            if i < tokens.len() {
+                let object = self.resolve_token(&tokens[i], state)?;
+                i += 1;
+
+                // Create triple
+                self.process_enhanced_triple(ontology, blank_node_id.to_string(), predicate, object)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse an RDF collection () into a linked list structure
+    fn parse_collection(
+        &self,
+        tokens: &[Token],
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<String> {
+        if tokens.is_empty() {
+            // Empty collection is rdf:nil
+            return Ok("http://www.w3.org/1999/02/22-rdf-syntax-ns#nil".to_string());
+        }
+
+        // Parse items in the collection
+        let mut items = Vec::new();
+        for token in tokens {
+            if matches!(token, Token::Comma) {
+                continue; // Skip commas
+            }
+            items.push(self.resolve_token(token, state)?);
+        }
+
+        // Create linked list structure using rdf:first and rdf:rest
+        let rdf_first = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+        let rdf_rest = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+        let rdf_nil = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+
+        let mut current_list_node = format!("_:list{}", state.blank_node_counter);
+        state.blank_node_counter += 1;
+        let first_node = current_list_node.clone();
+
+        for (idx, item) in items.iter().enumerate() {
+            // Add rdf:first triple
+            self.process_enhanced_triple(
+                ontology,
+                current_list_node.clone(),
+                rdf_first.to_string(),
+                item.clone(),
+            )?;
+
+            // Add rdf:rest triple
+            let rest_value = if idx == items.len() - 1 {
+                // Last item points to rdf:nil
+                rdf_nil.to_string()
+            } else {
+                // Create next list node
+                let next_node = format!("_:list{}", state.blank_node_counter);
+                state.blank_node_counter += 1;
+                next_node
+            };
+
+            self.process_enhanced_triple(
+                ontology,
+                current_list_node.clone(),
+                rdf_rest.to_string(),
+                rest_value.clone(),
+            )?;
+
+            current_list_node = rest_value;
+        }
+
+        Ok(first_node)
+    }
+
+    /// Parse statements with semicolon-separated predicates (OLD VERSION - REPLACED ABOVE)
+    fn parse_semicolon_statement_old(
         &self,
         tokens: &[Token],
         ontology: &mut Ontology,
@@ -1454,7 +1854,7 @@ impl TurtleParser {
     /// Resolve token to URI string
     fn resolve_token(&self, token: &Token, state: &ParseState) -> Result<String> {
         match token {
-            Token::IRI(iri) => Ok(iri.clone()),
+            Token::IRI(iri) => Ok(self.decode_escape_sequences(iri)),
             Token::PrefixedName(prefix, local) => {
                 self.expand_prefixed_name(&format!("{prefix}:{local}"), state)
             }
@@ -1466,9 +1866,101 @@ impl TurtleParser {
                     Ok(keyword.clone())
                 }
             }
-            Token::BlankNode(id) => Ok(format!("_:{id}")),
+            Token::BlankNode(id) => {
+                // Handle blank nodes properly
+                if id.starts_with("_:") {
+                    Ok(id.clone())
+                } else {
+                    Ok(format!("_:{id}"))
+                }
+            }
+            Token::Literal(lit) => {
+                // Decode escape sequences in literals
+                Ok(self.decode_escape_sequences(lit))
+            }
             _ => Err(Error::ontology_parsing("Cannot resolve token to URI")),
         }
+    }
+
+    /// Decode escape sequences in strings
+    fn decode_escape_sequences(&self, input: &str) -> String {
+        let mut result = String::new();
+        let mut chars = input.chars().peekable();
+        
+        while let Some(ch) = chars.next() {
+            if ch == '\\' {
+                if let Some(&next_ch) = chars.peek() {
+                    match next_ch {
+                        'n' => {
+                            result.push('\n');
+                            chars.next();
+                        }
+                        't' => {
+                            result.push('\t');
+                            chars.next();
+                        }
+                        'r' => {
+                            result.push('\r');
+                            chars.next();
+                        }
+                        '\\' => {
+                            result.push('\\');
+                            chars.next();
+                        }
+                        '"' => {
+                            result.push('"');
+                            chars.next();
+                        }
+                        'u' => {
+                            // Unicode escape \uXXXX
+                            chars.next(); // consume 'u'
+                            let hex: String = chars.by_ref().take(4).collect();
+                            if hex.len() == 4 {
+                                if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                                    if let Some(unicode_char) = char::from_u32(code) {
+                                        result.push(unicode_char);
+                                        continue;
+                                    }
+                                }
+                            }
+                            // If parsing failed, keep the escape sequence
+                            result.push('\\');
+                            result.push('u');
+                            result.push_str(&hex);
+                        }
+                        'U' => {
+                            // Unicode escape \UXXXXXXXX
+                            chars.next(); // consume 'U'
+                            let hex: String = chars.by_ref().take(8).collect();
+                            if hex.len() == 8 {
+                                if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                                    if let Some(unicode_char) = char::from_u32(code) {
+                                        result.push(unicode_char);
+                                        continue;
+                                    }
+                                }
+                            }
+                            // If parsing failed, keep the escape sequence
+                            result.push('\\');
+                            result.push('U');
+                            result.push_str(&hex);
+                        }
+                        _ => {
+                            // Unknown escape, keep as-is
+                            result.push(ch);
+                            result.push(next_ch);
+                            chars.next();
+                        }
+                    }
+                } else {
+                    result.push(ch);
+                }
+            } else {
+                result.push(ch);
+            }
+        }
+        
+        result
     }
 
     /// Enhanced URI expansion with proper prefix handling

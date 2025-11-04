@@ -89,6 +89,9 @@ impl SyntaxValidator {
                 }
             }
 
+            // Validate literals in the line
+            self.validate_turtle_literals(trimmed, line_num + 1)?;
+
             // Core validation: check for proper triple termination
             // A triple looks like: subject predicate object .
             // Where "a" is shorthand for rdf:type
@@ -134,6 +137,175 @@ impl SyntaxValidator {
             ));
         }
 
+        Ok(())
+    }
+
+    /// Validate Turtle literals for malformed syntax
+    fn validate_turtle_literals(&self, line: &str, line_num: usize) -> Result<()> {
+        let mut chars = line.chars().peekable();
+        let mut in_iri = false;
+        
+        while let Some(ch) = chars.next() {
+            match ch {
+                '<' => in_iri = true,
+                '>' => in_iri = false,
+                '"' if !in_iri => {
+                    // Found start of literal
+                    let mut literal_value = String::new();
+                    let mut has_datatype = false;
+                    let mut has_language = false;
+                    
+                    // Collect literal content
+                    while let Some(&next_ch) = chars.peek() {
+                        if next_ch == '"' {
+                            chars.next(); // consume closing quote
+                            break;
+                        }
+                        if next_ch == '\\' {
+                            chars.next(); // consume backslash
+                            if let Some(&escaped) = chars.peek() {
+                                chars.next(); // consume escaped char
+                                literal_value.push('\\');
+                                literal_value.push(escaped);
+                            }
+                        } else {
+                            literal_value.push(next_ch);
+                            chars.next();
+                        }
+                    }
+                    
+                    // Check for datatype annotation (^^xsd:integer)
+                    if let Some(&'^') = chars.peek() {
+                        chars.next();
+                        if let Some(&'^') = chars.peek() {
+                            chars.next();
+                            has_datatype = true;
+                            
+                            // Extract datatype IRI
+                            let mut datatype = String::new();
+                            while let Some(&dt_ch) = chars.peek() {
+                                if dt_ch.is_whitespace() || dt_ch == '.' || dt_ch == ';' || dt_ch == ',' {
+                                    break;
+                                }
+                                datatype.push(dt_ch);
+                                chars.next();
+                            }
+                            
+                            // Validate numeric literals with datatype
+                            if datatype.ends_with("integer") || datatype.ends_with("int") || datatype.ends_with("long") {
+                                // Check if literal_value is a valid integer
+                                let clean_value = literal_value.trim();
+                                if clean_value.is_empty() {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Empty integer literal",
+                                        line_num
+                                    )));
+                                }
+                                // Check for invalid characters in integer
+                                let start_idx = if clean_value.starts_with('+') || clean_value.starts_with('-') { 1 } else { 0 };
+                                if !clean_value[start_idx..].chars().all(|c| c.is_ascii_digit()) {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Invalid integer literal: \"{}\"^^{}",
+                                        line_num, clean_value, datatype
+                                    )));
+                                }
+                            } else if datatype.ends_with("double") || datatype.ends_with("float") || datatype.ends_with("decimal") {
+                                // Check if literal_value is a valid decimal number
+                                let clean_value = literal_value.trim();
+                                if clean_value.is_empty() {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Empty numeric literal",
+                                        line_num
+                                    )));
+                                }
+                                // Allow digits, optional sign, optional decimal point, optional exponent
+                                let mut has_dot = false;
+                                let mut has_exp = false;
+                                let mut chars_iter = clean_value.chars();
+                                
+                                // Optional leading sign
+                                if let Some(first) = chars_iter.next() {
+                                    if first != '+' && first != '-' && !first.is_ascii_digit() && first != '.' {
+                                        return Err(Error::ontology_parsing(format!(
+                                            "Line {}: Invalid numeric literal: \"{}\"^^{}",
+                                            line_num, clean_value, datatype
+                                        )));
+                                    }
+                                    if first == '.' {
+                                        has_dot = true;
+                                    }
+                                }
+                                
+                                for ch in chars_iter {
+                                    match ch {
+                                        '0'..='9' => {},
+                                        '.' if !has_dot && !has_exp => has_dot = true,
+                                        'e' | 'E' if !has_exp => {
+                                            has_exp = true;
+                                            // Next char can be +, -, or digit
+                                        },
+                                        '+' | '-' if has_exp => {}, // Sign after exponent
+                                        _ => {
+                                            return Err(Error::ontology_parsing(format!(
+                                                "Line {}: Invalid numeric literal: \"{}\"^^{} (invalid character '{}')",
+                                                line_num, clean_value, datatype, ch
+                                            )));
+                                        }
+                                    }
+                                }
+                            } else if datatype.ends_with("boolean") {
+                                // Check if literal_value is "true" or "false"
+                                let clean_value = literal_value.trim();
+                                if clean_value != "true" && clean_value != "false" {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Invalid boolean literal: \"{}\"^^{} (must be 'true' or 'false')",
+                                        line_num, clean_value, datatype
+                                    )));
+                                }
+                            }
+                        }
+                    } else if let Some(&'@') = chars.peek() {
+                        // Language tag
+                        chars.next();
+                        has_language = true;
+                        
+                        // Extract language tag
+                        let mut lang_tag = String::new();
+                        while let Some(&lang_ch) = chars.peek() {
+                            if lang_ch.is_whitespace() || lang_ch == '.' || lang_ch == ';' || lang_ch == ',' {
+                                break;
+                            }
+                            lang_tag.push(lang_ch);
+                            chars.next();
+                        }
+                        
+                        // Validate language tag format (basic check: should be letters and hyphens)
+                        if lang_tag.is_empty() {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Empty language tag",
+                                line_num
+                            )));
+                        }
+                        if !lang_tag.chars().all(|c| c.is_alphabetic() || c == '-') {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid language tag: @{} (must contain only letters and hyphens)",
+                                line_num, lang_tag
+                            )));
+                        }
+                    }
+                    
+                    // Check for literals with both language tag and datatype (invalid)
+                    if has_language && has_datatype {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Literal cannot have both language tag and datatype",
+                            line_num
+                        )));
+                    }
+                }
+                _ => {}
+            }
+        }
+        
         Ok(())
     }
 
