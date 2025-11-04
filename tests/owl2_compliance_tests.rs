@@ -350,7 +350,7 @@ ObjectProperty: ex:hasChild
 
 #[test]
 fn test_enhanced_parser_error_handling() {
-    // Test that parsers handle malformed input gracefully
+    // Test that parsers handle malformed input gracefully with strict validation
     let invalid_manchester = r#"
 Invalid: syntax here
 Class: 
@@ -360,9 +360,8 @@ ObjectProperty without name:
     let mut parser = ManchesterParser::default();
     let result = parser.parse_string(invalid_manchester);
 
-    // Simplified implementation doesn't perform full validation, so it passes
-    // This test verifies the parser doesn't panic on invalid input
-    assert!(result.is_ok()); // Simplified implementation is lenient
+    // With strict validation enabled, invalid Manchester syntax should be rejected
+    assert!(result.is_err(), "Parser should reject invalid Manchester syntax with strict validation");
 }
 
 #[test]

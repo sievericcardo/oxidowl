@@ -188,8 +188,73 @@ impl SyntaxValidator {
                             chars.next(); // consume backslash
                             if let Some(&escaped) = chars.peek() {
                                 chars.next(); // consume escaped char
-                                literal_value.push('\\');
-                                literal_value.push(escaped);
+                                
+                                // Validate escape sequences
+                                match escaped {
+                                    't' | 'n' | 'r' | '\\' | '"' | '\'' => {
+                                        // Valid single-char escapes
+                                        literal_value.push('\\');
+                                        literal_value.push(escaped);
+                                    }
+                                    'u' => {
+                                        // Unicode escape: \uXXXX (4 hex digits)
+                                        literal_value.push('\\');
+                                        literal_value.push('u');
+                                        for _ in 0..4 {
+                                            if let Some(&hex_ch) = chars.peek() {
+                                                if !hex_ch.is_ascii_hexdigit() {
+                                                    return Err(Error::ontology_parsing(format!(
+                                                        "Line {}: Invalid \\u escape sequence - expected 4 hex digits",
+                                                        line_num
+                                                    )));
+                                                }
+                                                literal_value.push(hex_ch);
+                                                chars.next();
+                                            } else {
+                                                return Err(Error::ontology_parsing(format!(
+                                                    "Line {}: Incomplete \\u escape sequence",
+                                                    line_num
+                                                )));
+                                            }
+                                        }
+                                    }
+                                    'U' => {
+                                        // Unicode escape: \UXXXXXXXX (8 hex digits)
+                                        literal_value.push('\\');
+                                        literal_value.push('U');
+                                        for _ in 0..8 {
+                                            if let Some(&hex_ch) = chars.peek() {
+                                                if !hex_ch.is_ascii_hexdigit() {
+                                                    return Err(Error::ontology_parsing(format!(
+                                                        "Line {}: Invalid \\U escape sequence - expected 8 hex digits",
+                                                        line_num
+                                                    )));
+                                                }
+                                                literal_value.push(hex_ch);
+                                                chars.next();
+                                            } else {
+                                                return Err(Error::ontology_parsing(format!(
+                                                    "Line {}: Incomplete \\U escape sequence",
+                                                    line_num
+                                                )));
+                                            }
+                                        }
+                                    }
+                                    'x' => {
+                                        // Hex escape: \xXX (2 hex digits) - NOT standard Turtle!
+                                        return Err(Error::ontology_parsing(format!(
+                                            "Line {}: Invalid escape sequence \\x (not valid in Turtle)",
+                                            line_num
+                                        )));
+                                    }
+                                    _ => {
+                                        // Invalid escape character
+                                        return Err(Error::ontology_parsing(format!(
+                                            "Line {}: Invalid escape sequence \\{} (valid escapes: \\t \\n \\r \\\\ \\\" \\' \\uXXXX \\UXXXXXXXX)",
+                                            line_num, escaped
+                                        )));
+                                    }
+                                }
                             }
                         } else {
                             literal_value.push(next_ch);
@@ -309,6 +374,14 @@ impl SyntaxValidator {
                                 line_num
                             )));
                         }
+                        // Language tag must start with a letter (not a dash)
+                        if lang_tag.starts_with('-') {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid language tag: @{} (cannot start with '-')",
+                                line_num, lang_tag
+                            )));
+                        }
+                        // Language tag must contain only letters and hyphens
                         if !lang_tag.chars().all(|c| c.is_alphabetic() || c == '-') {
                             return Err(Error::ontology_parsing(format!(
                                 "Line {}: Invalid language tag: @{} (must contain only letters and hyphens)",
@@ -580,6 +653,13 @@ impl SyntaxValidator {
             ("equivalentTo:", "EquivalentTo:"),  // lowercase
             ("DomainProperty:", "Domain:"),
             ("RangeProperty:", "Range:"),
+            ("Characteristic:", "Characteristics:"),  // singular vs plural
+        ];
+        
+        // Check for keywords without colons
+        let keywords_requiring_colons = [
+            "Class", "Individual", "ObjectProperty", "DataProperty", 
+            "AnnotationProperty", "Datatype"
         ];
 
         // Check each line for invalid keywords or malformed syntax
@@ -599,6 +679,19 @@ impl SyntaxValidator {
                         line_num + 1,
                         typo,
                         correct
+                    )));
+                }
+            }
+            
+            // Check for keywords without colons (e.g., "Class Person" instead of "Class: Person")
+            for keyword in &keywords_requiring_colons {
+                let pattern = format!("{} ", keyword);
+                if trimmed.starts_with(&pattern) && !trimmed.starts_with(&format!("{}:", keyword)) {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Missing colon after keyword '{}' - should be '{}:'",
+                        line_num + 1,
+                        keyword,
+                        keyword
                     )));
                 }
             }
