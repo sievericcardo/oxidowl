@@ -893,10 +893,20 @@ impl Reasoner {
                     .and_then(|ext| ext.to_str())
                     .unwrap_or("");
 
-                match extension {
-                    "owl" | "xml" => {
+                match extension.to_lowercase().as_str() {
+                    "owl" | "owx" => {
                         let parser = owl_xml::OwlXmlParser::new();
                         parser.parse(&content)?
+                    }
+                    "xml" | "rdf" => {
+                        // Try to detect XML type from content
+                        if content.trim_start().starts_with("<?xml") || content.contains("owl:Ontology") || content.contains("<Ontology") {
+                            let parser = owl_xml::OwlXmlParser::new();
+                            parser.parse(&content)?
+                        } else {
+                            let parser = rdf_xml::RdfXmlParser::new();
+                            parser.parse(&content)?
+                        }
                     }
                     "ttl" => {
                         let parser = turtle::TurtleParser::new();
@@ -906,13 +916,44 @@ impl Reasoner {
                         let parser = functional::FunctionalParser::new();
                         parser.parse(&content)?
                     }
-                    "rdf" => {
-                        let parser = rdf_xml::RdfXmlParser::new();
+                    "omn" | "man" => {
+                        let parser = manchester::ManchesterParser::new(
+                            manchester::ManchesterParserConfig::default(),
+                        );
+                        parser.parse(&content)?
+                    }
+                    "swrl" => {
+                        // SWRL uses functional-like syntax
+                        let parser = functional::FunctionalParser::new();
                         parser.parse(&content)?
                     }
                     "nt" => {
                         let parser = ntriples::NTriplesParser::new();
                         parser.parse(&content)?
+                    }
+                    "txt" => {
+                        // Content-based detection for .txt files
+                        let trimmed = content.trim();
+                        if trimmed.starts_with("Ontology(") || trimmed.starts_with("Prefix(") {
+                            let parser = functional::FunctionalParser::new();
+                            parser.parse(&content)?
+                        } else if trimmed.starts_with("Prefix:") || trimmed.starts_with("Ontology:") 
+                                || trimmed.starts_with("Class:") {
+                            let parser = manchester::ManchesterParser::new(
+                                manchester::ManchesterParserConfig::default(),
+                            );
+                            parser.parse(&content)?
+                        } else if trimmed.starts_with("@prefix") || trimmed.starts_with("@base") {
+                            let parser = turtle::TurtleParser::new();
+                            parser.parse(&content)?
+                        } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
+                            let parser = owl_xml::OwlXmlParser::new();
+                            parser.parse(&content)?
+                        } else {
+                            // Default to functional
+                            let parser = functional::FunctionalParser::new();
+                            parser.parse(&content)?
+                        }
                     }
                     _ => {
                         // Default to OWL/XML

@@ -40,6 +40,50 @@ use crate::{
 };
 use std::path::Path;
 
+/// Detect format from file content for ambiguous cases
+fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat> {
+    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
+        Error::io(format!("Failed to read file for format detection: {}", e))
+    })?;
+    
+    let trimmed = content.trim();
+    
+    // Check for Functional syntax
+    if trimmed.starts_with("Ontology(") || trimmed.starts_with("Prefix(") {
+        return Ok(OntologyFormat::Functional);
+    }
+    
+    // Check for Manchester syntax
+    if trimmed.starts_with("Prefix:") 
+        || trimmed.starts_with("Ontology:") 
+        || trimmed.starts_with("Class:")
+        || trimmed.starts_with("ObjectProperty:")
+        || trimmed.starts_with("DataProperty:")
+        || trimmed.starts_with("Individual:") {
+        return Ok(OntologyFormat::Manchester);
+    }
+    
+    // Check for Turtle syntax
+    if trimmed.starts_with("@prefix") || trimmed.starts_with("@base") {
+        return Ok(OntologyFormat::Turtle);
+    }
+    
+    // Check for XML-based formats
+    if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
+        // Try to determine which XML type
+        if content.contains("owl:Ontology") || content.contains("<Ontology") {
+            return Ok(OntologyFormat::OwlXml);
+        } else if content.contains("rdf:RDF") {
+            return Ok(OntologyFormat::RdfXml);
+        }
+        // Default to OWL/XML for XML files
+        return Ok(OntologyFormat::OwlXml);
+    }
+    
+    // Default to Functional syntax for unknown content
+    Ok(OntologyFormat::Functional)
+}
+
 /// Auto-detect format and parse file
 pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let path = path.as_ref();
@@ -47,11 +91,15 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 
     let format = match extension.to_lowercase().as_str() {
         "owl" | "owx" => OntologyFormat::OwlXml,
-        "rdf" | "xml" => OntologyFormat::RdfXml,
+        "rdf" => OntologyFormat::RdfXml,
+        "xml" => detect_format_from_content(path)?, // XML could be OWL/XML or RDF/XML
         "ttl" => OntologyFormat::Turtle,
         "nt" => OntologyFormat::NTriples,
-        "omn" | "txt" => OntologyFormat::Functional,
+        "ofn" => OntologyFormat::Functional,
+        "omn" => OntologyFormat::Manchester,
         "man" => OntologyFormat::Manchester,
+        "swrl" => OntologyFormat::Functional, // SWRL uses functional-like syntax
+        "txt" => detect_format_from_content(path)?, // Could be any format
         _ => OntologyFormat::OwlXml, // Default fallback
     };
 
@@ -61,9 +109,14 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
         OntologyFormat::RdfXml => rdf_xml::parse_file(path),
         OntologyFormat::Turtle => turtle::parse_file(path),
         OntologyFormat::NTriples => ntriples::parse_file(path),
-        OntologyFormat::Manchester => Err(Error::ontology_parsing(
-            "Manchester syntax not yet implemented",
-        )),
+        OntologyFormat::Manchester => {
+            // Use Manchester parser
+            let content = std::fs::read_to_string(path).map_err(|e| {
+                Error::io(format!("Failed to read Manchester file: {}", e))
+            })?;
+            let parser = ManchesterParser::new(ManchesterParserConfig::default());
+            parser.parse(&content)
+        }
         OntologyFormat::Auto => Err(Error::ontology_parsing(
             "Auto format should have been resolved",
         )),
@@ -85,7 +138,7 @@ pub fn save_file<P: AsRef<Path>>(
         OntologyFormat::Turtle => turtle::save_file(ontology, path),
         OntologyFormat::NTriples => ntriples::save_file(ontology, path),
         OntologyFormat::Manchester => Err(Error::ontology_parsing(
-            "Manchester syntax not yet implemented",
+            "Manchester syntax serialization not yet implemented",
         )),
         OntologyFormat::Auto => {
             // Auto-detect from file extension
@@ -96,7 +149,9 @@ pub fn save_file<P: AsRef<Path>>(
                 "rdf" | "xml" => OntologyFormat::RdfXml,
                 "ttl" => OntologyFormat::Turtle,
                 "nt" => OntologyFormat::NTriples,
-                "omn" | "txt" => OntologyFormat::Functional,
+                "ofn" => OntologyFormat::Functional,
+                "omn" | "man" => OntologyFormat::Manchester,
+                "txt" => OntologyFormat::Functional, // Default .txt to Functional
                 _ => OntologyFormat::OwlXml, // Default fallback
             };
 

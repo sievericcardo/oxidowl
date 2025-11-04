@@ -53,13 +53,14 @@ impl FunctionalParser {
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
         let mut ontology = Ontology::new();
         let mut prefixes = std::collections::HashMap::<String, String>::new();
+        let mut base_iri: Option<String> = None;
 
         // Tokenize the content
         let tokens = self.tokenize(content)?;
         let mut position = 0;
 
         while position < tokens.len() {
-            position = self.parse_statement(&tokens, position, &mut ontology, &mut prefixes)?;
+            position = self.parse_statement(&tokens, position, &mut ontology, &mut prefixes, &mut base_iri)?;
         }
 
         Ok(ontology)
@@ -126,6 +127,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &mut std::collections::HashMap<String, String>,
+        base_iri: &mut Option<String>,
     ) -> Result<usize> {
         if position >= tokens.len() {
             return Ok(position);
@@ -136,19 +138,19 @@ impl FunctionalParser {
                 position = self.parse_prefix(tokens, position, prefixes)?;
             }
             "Ontology" => {
-                position = self.parse_ontology_declaration(tokens, position, ontology, prefixes)?;
+                position = self.parse_ontology_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
             "Declaration" => {
-                position = self.parse_declaration(tokens, position, ontology, prefixes)?;
+                position = self.parse_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
             "SubClassOf" => {
-                position = self.parse_subclass_of(tokens, position, ontology, prefixes)?;
+                position = self.parse_subclass_of(tokens, position, ontology, prefixes, base_iri)?;
             }
             "DisjointClasses" => {
-                position = self.parse_disjoint_classes(tokens, position, ontology, prefixes)?;
+                position = self.parse_disjoint_classes(tokens, position, ontology, prefixes, base_iri)?;
             }
             "ClassAssertion" => {
-                position = self.parse_class_assertion(tokens, position, ontology, prefixes)?;
+                position = self.parse_class_assertion(tokens, position, ontology, prefixes, base_iri)?;
             }
             "ObjectPropertyAssertion" => {
                 position =
@@ -243,6 +245,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &mut std::collections::HashMap<String, String>,
+        base_iri: &mut Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "Ontology"
         if position < tokens.len() && tokens[position] == "(" {
@@ -252,6 +255,15 @@ impl FunctionalParser {
                 let iri_str = tokens[position].trim_matches(['<', '>'].as_ref());
                 if url::Url::parse(iri_str).is_ok() {
                     ontology.set_iri(crate::ontology::IRI::new(iri_str));
+                    // Store base IRI for resolving relative IRIs
+                    *base_iri = Some(iri_str.to_string());
+                    // Add default prefix (empty string) for relative IRIs starting with ":"
+                    let default_base = if iri_str.ends_with('#') || iri_str.ends_with('/') {
+                        iri_str.to_string()
+                    } else {
+                        format!("{}#", iri_str)
+                    };
+                    prefixes.insert(String::new(), default_base);
                 }
                 position += 1;
             }
@@ -272,7 +284,7 @@ impl FunctionalParser {
                 // Parse statements inside the ontology
                 if paren_count == 1 {
                     // Only parse top-level statements
-                    position = self.parse_statement(tokens, position, ontology, prefixes)?;
+                    position = self.parse_statement(tokens, position, ontology, prefixes, base_iri)?;
                 } else {
                     position += 1;
                 }
@@ -293,6 +305,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "Declaration"
         if position < tokens.len() && tokens[position] == "(" {
@@ -949,6 +962,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "SubClassOf"
         if position < tokens.len() && tokens[position] == "(" {
@@ -991,6 +1005,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "ClassAssertion"
         if position < tokens.len() && tokens[position] == "(" {
@@ -1038,6 +1053,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "DisjointClasses"
         if position < tokens.len() && tokens[position] == "(" {
@@ -1127,13 +1143,31 @@ impl FunctionalParser {
         prefixes: &std::collections::HashMap<String, String>,
     ) -> Result<String> {
         if iri.starts_with('<') && iri.ends_with('>') {
+            // Already a full IRI
             Ok(iri[1..iri.len() - 1].to_string())
+        } else if iri.starts_with(':') {
+            // Relative IRI with default prefix (e.g., ":Employee")
+            let local = &iri[1..];
+            if let Some(base) = prefixes.get("") {
+                // Empty string key is the default prefix from ontology IRI
+                Ok(format!("{}{}", base, local))
+            } else {
+                // No base IRI defined, return as-is but this will likely fail validation
+                Err(crate::error::Error::OntologyParsing {
+                    message: format!(
+                        "Relative IRI '{}' found but no base ontology IRI is defined. \
+                         Relative IRIs require an ontology header like: Ontology(<http://example.org/> ...)",
+                        iri
+                    ),
+                })
+            }
         } else if let Some(colon_pos) = iri.find(':') {
+            // Prefixed IRI (e.g., "ex:Person")
             let prefix = &iri[..colon_pos];
             let local = &iri[colon_pos + 1..];
 
             if let Some(base) = prefixes.get(prefix) {
-                let expanded = format!("{base}{local}");
+                let expanded = format!("{}{}", base, local);
                 // Validate the expanded IRI can be parsed as a URL
                 if url::Url::parse(&expanded).is_err() {
                     return Err(crate::error::Error::OntologyParsing {
@@ -1145,9 +1179,11 @@ impl FunctionalParser {
                 }
                 Ok(expanded)
             } else {
+                // Prefix not found, return as-is
                 Ok(iri.to_string())
             }
         } else {
+            // No prefix, return as-is
             Ok(iri.to_string())
         }
     }
