@@ -400,8 +400,12 @@ impl TurtleParser {
         // Parse standard triple
         let tokens = self.tokenize_statement(statement)?;
 
-        // Handle semicolon-separated predicates
-        if tokens.iter().any(|t| matches!(t, Token::Semicolon)) {
+        // Handle semicolon-separated predicates, blank nodes, or collections
+        // Also route to parse_semicolon_statement if object is a collection or blank node
+        if tokens.iter().any(|t| matches!(t, Token::Semicolon))
+            || tokens.iter().any(|t| matches!(t, Token::LeftBracket))
+            || tokens.iter().any(|t| matches!(t, Token::LeftParen))
+        {
             return self.parse_semicolon_statement(&tokens, ontology, state);
         }
 
@@ -1836,7 +1840,14 @@ impl TurtleParser {
 
     /// Helper to add token from string
     fn add_token_from_string(&self, token_str: &str, tokens: &mut Vec<Token>) {
-        if token_str.contains(':') && !token_str.starts_with("http") {
+        // Check for blank node labels (e.g., _:b0)
+        // Blank nodes MUST have the format _:label (with colon)
+        if token_str.starts_with("_:") {
+            tokens.push(Token::BlankNode(token_str.to_string()));
+        } else if token_str.starts_with('_') && !token_str.contains(':') {
+            // Invalid blank node format (missing colon) - treat as keyword to trigger error
+            tokens.push(Token::Keyword(token_str.to_string()));
+        } else if token_str.contains(':') && !token_str.starts_with("http") {
             if let Some(colon_pos) = token_str.find(':') {
                 let prefix = token_str[..colon_pos].to_string();
                 let local = token_str[colon_pos + 1..].to_string();
@@ -1844,8 +1855,6 @@ impl TurtleParser {
             } else {
                 tokens.push(Token::Keyword(token_str.to_string()));
             }
-        } else if token_str.starts_with('_') {
-            tokens.push(Token::BlankNode(token_str.to_string()));
         } else {
             tokens.push(Token::Keyword(token_str.to_string()));
         }

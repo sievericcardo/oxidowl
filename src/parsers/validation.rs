@@ -112,6 +112,17 @@ impl SyntaxValidator {
             // Pattern: prefix:localpart
             for word in trimmed.split_whitespace() {
                 let clean = word.trim_end_matches(&['.', ',', ';', ')', ']'][..]).trim_start_matches(&['(', '['][..]);
+                
+                // Check for invalid blank node format (starts with _ but no colon)
+                // Valid: _:b0, Invalid: _b0
+                if clean.starts_with('_') && !clean.starts_with("_:") && !clean.contains('<') {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid blank node '{}' - must use format '_:label' with colon",
+                        line_num + 1,
+                        clean
+                    )));
+                }
+                
                 if let Some(colon_pos) = clean.find(':') {
                     // Skip IRIs in angle brackets
                     if clean.starts_with('<') {
@@ -119,6 +130,10 @@ impl SyntaxValidator {
                     }
                     // Skip HTTP/HTTPS URIs
                     if clean.contains("://") {
+                        continue;
+                    }
+                    // Skip blank nodes (already validated above)
+                    if clean.starts_with("_:") {
                         continue;
                     }
                     
@@ -178,6 +193,28 @@ impl SyntaxValidator {
             let has_triple_pattern = trimmed.contains(" a ") || 
                                      (trimmed.contains(':') && trimmed.split_whitespace().count() >= 2) ||
                                      (trimmed.starts_with('<') && trimmed.split_whitespace().count() >= 3);
+            
+            // Check for lines that don't match any valid Turtle pattern
+            // Valid patterns: triples, prefixes (@prefix/@base), or continuations (. ; ,)
+            let is_punctuation_only = trimmed == "." || trimmed == ";" || trimmed == ",";
+            let is_continuation = trimmed.starts_with('.') || trimmed.starts_with(';') || trimmed.starts_with(',');
+            
+            if !has_triple_pattern && !is_punctuation_only && !is_continuation {
+                // This line doesn't look like valid Turtle syntax
+                // Check if it contains words that suggest it's prose rather than Turtle
+                let word_count = trimmed.split_whitespace().count();
+                let has_turtle_chars = trimmed.contains('<') || trimmed.contains(':') || 
+                                      trimmed.contains('[') || trimmed.contains('(') ||
+                                      trimmed.starts_with("\"");
+                
+                // If it has multiple words but no Turtle-specific characters, it's likely invalid
+                if word_count >= 3 && !has_turtle_chars {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid Turtle syntax - line doesn't match any valid pattern",
+                        line_num + 1
+                    )));
+                }
+            }
             
             if has_triple_pattern {
                 // Check if properly terminated
@@ -848,18 +885,20 @@ impl SyntaxValidator {
                     ""
                 };
                 
-                // Only check for SubClassOf which should definitely be on separate line
-                if after_first_keyword.contains("SubClassOf:") {
+                // Check for SubClassOf on same line, but allow if it's part of Annotations pattern
+                // Pattern like "Class: X Annotations: ... SubClassOf: Y" is valid
+                if after_first_keyword.contains("SubClassOf:") && !after_first_keyword.contains("Annotations:") {
                     return Err(Error::ontology_parsing(format!(
                         "Line {}: Invalid Manchester syntax - 'SubClassOf:' should be on a separate indented line",
                         line_num + 1
                     )));
                 }
                 
-                // Check for EquivalentTo on same line as Class:
-                if after_first_keyword.contains("EquivalentTo:") || after_first_keyword.contains("EquivalentTo ") {
+                // Check for EquivalentTo WITHOUT colon on same line (malformed)
+                // EquivalentTo: (with colon) is fine on the same line
+                if after_first_keyword.contains("EquivalentTo ") && !after_first_keyword.contains("EquivalentTo:") {
                     return Err(Error::ontology_parsing(format!(
-                        "Line {}: Invalid Manchester syntax - 'EquivalentTo' should be on a separate indented line",
+                        "Line {}: Invalid Manchester syntax - 'EquivalentTo' must have colon ('EquivalentTo:')",
                         line_num + 1
                     )));
                 }
