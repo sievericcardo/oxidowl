@@ -813,8 +813,33 @@ impl SyntaxValidator {
                     continue;
                 }
                 
-                // Allow "Annotations: ... on ..." pattern for annotation-on-axioms
+                // Check for incomplete annotations BEFORE allowing them to continue
+                // This validation must run before the continue statement below
                 if trimmed.starts_with("Annotations:") {
+                    let after_keyword = trimmed[12..].trim();
+                    let parts: Vec<&str> = after_keyword.split_whitespace().collect();
+                    
+                    // Should have at least "property value" pattern
+                    if parts.len() < 2 {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Incomplete annotation - expected 'Annotations: property value'",
+                            line_num + 1
+                        )));
+                    }
+                    
+                    // Check if value looks suspiciously short (single character without quotes)
+                    if parts.len() == 2 {
+                        let value = parts[1];
+                        if value.len() == 1 && !value.starts_with('"') && !value.starts_with('<') {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid annotation value '{}' - single character values must be quoted",
+                                line_num + 1,
+                                value
+                            )));
+                        }
+                    }
+                    
+                    // After validation passes, allow "Annotations: ... on ..." pattern for annotation-on-axioms
                     continue;
                 }
                 
@@ -910,32 +935,6 @@ impl SyntaxValidator {
                     "Line {}: Invalid keyword 'Characteristic' - should be 'Characteristics' (plural)",
                     line_num + 1
                 )));
-            }
-
-            // Check for incomplete annotations (Annotations: without proper value)
-            if trimmed.starts_with("Annotations:") {
-                let after_keyword = trimmed[12..].trim();
-                let parts: Vec<&str> = after_keyword.split_whitespace().collect();
-                
-                // Should have at least "property value" pattern
-                if parts.len() < 2 {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: Incomplete annotation - expected 'Annotations: property value'",
-                        line_num + 1
-                    )));
-                }
-                
-                // Check if value looks suspiciously short (single character without quotes)
-                if parts.len() == 2 {
-                    let value = parts[1];
-                    if value.len() == 1 && !value.starts_with('"') && !value.starts_with('<') {
-                        return Err(Error::ontology_parsing(format!(
-                            "Line {}: Invalid annotation value '{}' - single character values must be quoted",
-                            line_num + 1,
-                            value
-                        )));
-                    }
-                }
             }
 
             // Check for random text that doesn't match any pattern
