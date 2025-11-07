@@ -690,6 +690,56 @@ impl SyntaxValidator {
             ));
         }
 
+        // Validate RDF/XML structure using quick-xml
+        use quick_xml::{Reader, events::Event};
+        let mut reader = Reader::from_str(content);
+        let mut inside_rdf_root = false;
+        let mut depth: i32 = 0;
+        
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(ref e)) => {
+                    let name_bytes = e.name();
+                    let name = String::from_utf8_lossy(name_bytes.as_ref());
+                    if name == "rdf:RDF" || name == "RDF" {
+                        inside_rdf_root = true;
+                        depth = 0;
+                    } else if inside_rdf_root {
+                        depth += 1;
+                    }
+                }
+                Ok(Event::End(ref e)) => {
+                    let name_bytes = e.name();
+                    let name = String::from_utf8_lossy(name_bytes.as_ref());
+                    if name == "rdf:RDF" || name == "RDF" {
+                        inside_rdf_root = false;
+                    } else if inside_rdf_root && depth > 0 {
+                        depth -= 1;
+                    }
+                }
+                Ok(Event::Text(ref e)) => {
+                    // Check if there's significant text content directly under rdf:RDF
+                    if inside_rdf_root && depth == 0 {
+                        let text = String::from_utf8_lossy(e);
+                        let trimmed_text = text.trim();
+                        // If there's non-whitespace text directly in rdf:RDF, it's invalid
+                        if !trimmed_text.is_empty() {
+                            return Err(Error::ontology_parsing(
+                                format!("Invalid RDF/XML: text content '{}' not allowed directly inside rdf:RDF element", trimmed_text)
+                            ));
+                        }
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => {
+                    return Err(Error::ontology_parsing(
+                        format!("RDF/XML parsing error: {}", e)
+                    ));
+                }
+                _ => {}
+            }
+        }
+
         // Reuse the XML validation logic
         self.validate_owl_xml(content)?;
 
