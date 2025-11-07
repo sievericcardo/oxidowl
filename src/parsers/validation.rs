@@ -599,6 +599,7 @@ impl SyntaxValidator {
         let mut in_tag = false;
         let mut current_tag = String::new();
         let mut is_closing = false;
+        let mut is_processing_instruction = false;
 
         for ch in trimmed.chars() {
             match ch {
@@ -606,11 +607,22 @@ impl SyntaxValidator {
                     in_tag = true;
                     current_tag.clear();
                     is_closing = false;
+                    is_processing_instruction = false;
+                }
+                '?' if in_tag && current_tag.is_empty() => {
+                    // XML declaration or processing instruction: <?...?>
+                    is_processing_instruction = true;
                 }
                 '/' if in_tag && current_tag.is_empty() => {
                     is_closing = true;
                 }
                 '>' if in_tag => {
+                    // Skip processing instructions (<?xml ...?>, etc.)
+                    if is_processing_instruction || current_tag.ends_with('?') {
+                        in_tag = false;
+                        continue;
+                    }
+                    
                     if current_tag.ends_with('/') {
                         // Self-closing tag
                         current_tag.pop();

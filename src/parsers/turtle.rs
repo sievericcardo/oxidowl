@@ -431,6 +431,43 @@ impl TurtleParser {
             return Ok(());
         }
 
+        // Check for special case: subject ( collection ) . (no explicit predicate)
+        // This is Turtle shorthand for defining the subject as equivalent to the collection
+        if tokens.len() >= 3 
+            && !matches!(tokens[0], Token::LeftBracket)
+            && matches!(tokens[1], Token::LeftParen) 
+        {
+            let subject = self.resolve_token(&tokens[0], state)?;
+            
+            // Find the matching closing paren
+            let mut depth = 0;
+            let mut collection_end = 1;
+            for (i, token) in tokens[1..].iter().enumerate() {
+                match token {
+                    Token::LeftParen => depth += 1,
+                    Token::RightParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            collection_end = i + 2; // +1 for offset, +1 to include )
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            
+            // Extract collection tokens (between parens)
+            if collection_end > 2 {
+                let collection_tokens = &tokens[2..collection_end - 1];
+                let list_id = self.parse_collection(collection_tokens, ontology, state)?;
+                
+                // Use owl:sameAs as the implicit predicate
+                let predicate = "http://www.w3.org/2002/07/owl#sameAs".to_string();
+                self.process_enhanced_triple(ontology, subject, predicate, list_id)?;
+                return Ok(());
+            }
+        }
+
         // Check if the statement starts with a blank node (anonymous subject)
         let subject = if matches!(tokens[0], Token::LeftBracket) {
             // Generate a blank node ID for anonymous blank node
