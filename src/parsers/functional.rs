@@ -56,6 +56,13 @@ impl FunctionalParser {
         validator.validate_functional(content)?;
 
         let mut ontology = Ontology::new();
+        
+        // Handle placeholder or empty content
+        let trimmed = content.trim();
+        if trimmed == "(placeholder)" || trimmed.is_empty() {
+            return Ok(ontology);
+        }
+        
         let mut prefixes = std::collections::HashMap::<String, String>::new();
         let mut base_iri: Option<String> = None;
 

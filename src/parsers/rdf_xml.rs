@@ -100,8 +100,21 @@ impl RdfXmlParser {
 
         // Basic RDF/XML structure detection and parsing
         if content.contains("<rdf:RDF") || content.contains("<RDF") {
-            // This is likely an RDF/XML document
+            // This is a full RDF/XML document
             self.parse_rdf_xml_content(content, &mut ontology)?;
+        } else if content.trim().starts_with('<') {
+            // This might be an RDF/XML fragment (standalone Description, property, etc.)
+            // Wrap it in an RDF document and parse
+            let wrapped = format!(
+                r#"<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:ex="http://example.org/">
+{}
+</rdf:RDF>"#,
+                content
+            );
+            self.parse_rdf_xml_content(&wrapped, &mut ontology)?;
         } else {
             return Err(Error::ParseError(
                 "Invalid RDF/XML document: missing RDF root element".to_string(),
@@ -236,9 +249,8 @@ impl RdfXmlParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    // Log XML parsing error but continue
-                    eprintln!("XML parsing error: {}", e);
-                    break;
+                    // Return XML parsing error as fatal error
+                    return Err(Error::ParseError(format!("XML parsing error: {}", e)));
                 }
                 _ => {}
             }

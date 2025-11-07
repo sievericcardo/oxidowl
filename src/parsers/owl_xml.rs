@@ -139,8 +139,16 @@ pub fn parse(content: &str) -> Result<Ontology> {
     // Find the root element
     let root = doc.root_element();
     
+    // Reject RDF/XML files that are being parsed as OWL/XML
+    let root_name = root.tag_name().name();
+    if root_name == "RDF" || root.tag_name().namespace() == Some("http://www.w3.org/1999/02/22-rdf-syntax-ns#") {
+        return Err(Error::ParseError(
+            "This appears to be an RDF/XML file, not OWL/XML. Use RDF/XML parser instead.".to_string()
+        ));
+    }
+    
     // Check if this is a full ontology document or a fragment
-    let is_fragment = root.tag_name().name() != "Ontology";
+    let is_fragment = root_name != "Ontology";
     
     if is_fragment {
         // Handle OWL/XML fragments (standalone Declaration, ClassAssertion, etc.)
