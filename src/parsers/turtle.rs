@@ -7,7 +7,7 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{
-        Class, ClassExpression, IRI, Individual, NamedIndividual, ObjectProperty, Ontology,
+        Class, ClassExpression, IRI, Individual, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
         Literal, DataProperty, DataPropertyExpression, DataRange, FacetRestriction,
         axioms::{
             Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom, DisjointUnionAxiom, Entity,
@@ -1272,14 +1272,8 @@ impl TurtleParser {
                                             // Parse the restriction if we accumulated one
                                             let restriction_content = current_token.trim();
                                             if !restriction_content.is_empty() && restriction_content.starts_with('[') {
-                                                match self.parse_restriction(restriction_content, state) {
-                                                    Ok(class_expr) => {
-                                                        intersection_classes.push(class_expr);
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!("Warning: Could not parse restriction: {}", e);
-                                                    }
-                                                }
+                                                let class_expr = self.parse_restriction(restriction_content, state)?;
+                                                intersection_classes.push(class_expr);
                                             }
                                             current_token.clear();
                                         }
@@ -1550,6 +1544,166 @@ impl TurtleParser {
                 property: DataPropertyExpression::DataProperty(data_property),
                 value: literal,
             })
+        } else if restriction_str.contains("owl:minQualifiedCardinality") 
+               || restriction_str.contains("owl:maxQualifiedCardinality") 
+               || restriction_str.contains("owl:qualifiedCardinality") {
+            // Qualified cardinality restrictions with owl:onClass
+            
+            // Resolve property - this is an object property
+            let property_token = if property_name.contains(':') {
+                let parts: Vec<&str> = property_name.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                } else {
+                    return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                }
+            } else {
+                return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+            };
+            
+            let property_iri = self.resolve_token(&property_token, state)?;
+            let object_property = ObjectProperty { iri: IRI::new(&property_iri) };
+            
+            // Extract cardinality value
+            let cardinality_str = if let Some(card_start) = restriction_str.find("owl:minQualifiedCardinality")
+                                        .or_else(|| restriction_str.find("owl:maxQualifiedCardinality"))
+                                        .or_else(|| restriction_str.find("owl:qualifiedCardinality")) {
+                let after_card = &restriction_str[card_start..];
+                let after_prop_name = &after_card[after_card.find("Cardinality").unwrap() + 11..].trim_start();
+                
+                // Extract the literal value (could be "2"^^xsd:nonNegativeInteger or just "2")
+                if let Some(quote_start) = after_prop_name.find('"') {
+                    let after_quote = &after_prop_name[quote_start + 1..];
+                    if let Some(quote_end) = after_quote.find('"') {
+                        after_quote[..quote_end].to_string()
+                    } else {
+                        return Err(Error::ontology_parsing("Invalid cardinality value format"));
+                    }
+                } else {
+                    // Unquoted number
+                    after_prop_name
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("0")
+                        .trim_end_matches(';')
+                        .to_string()
+                }
+            } else {
+                return Err(Error::ontology_parsing("No cardinality property found"));
+            };
+            
+            let cardinality: u32 = cardinality_str.parse()
+                .map_err(|_| Error::ontology_parsing(format!("Invalid cardinality value: {}", cardinality_str)))?;
+            
+            // Extract the onClass (filler)
+            let class_name = if let Some(class_start) = restriction_str.find("owl:onClass") {
+                let after_class = &restriction_str[class_start + 11..].trim_start();
+                after_class
+                    .split(&[';', ']', ' ', '\n', '\t'][..])
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+            } else {
+                // If no onClass is specified, use owl:Thing as default
+                "owl:Thing"
+            };
+            
+            // Resolve the class IRI
+            let class_token = if class_name.contains(':') {
+                let parts: Vec<&str> = class_name.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                } else {
+                    Token::PrefixedName("owl".to_string(), "Thing".to_string())
+                }
+            } else if class_name.starts_with('<') && class_name.ends_with('>') {
+                Token::IRI(class_name[1..class_name.len()-1].to_string())
+            } else {
+                return Err(Error::ontology_parsing(format!("Invalid class name: {}", class_name)));
+            };
+            
+            let class_iri = self.resolve_token(&class_token, state)?;
+            let filler = Box::new(ClassExpression::Class(Class { iri: IRI::new(&class_iri) }));
+            
+            // Determine which type of cardinality restriction
+            if restriction_str.contains("owl:minQualifiedCardinality") {
+                Ok(ClassExpression::ObjectMinCardinality {
+                    property: ObjectPropertyExpression::ObjectProperty(object_property),
+                    cardinality,
+                    filler,
+                })
+            } else if restriction_str.contains("owl:maxQualifiedCardinality") {
+                Ok(ClassExpression::ObjectMaxCardinality {
+                    property: ObjectPropertyExpression::ObjectProperty(object_property),
+                    cardinality,
+                    filler,
+                })
+            } else {
+                // owl:qualifiedCardinality
+                Ok(ClassExpression::ObjectExactCardinality {
+                    property: ObjectPropertyExpression::ObjectProperty(object_property),
+                    cardinality,
+                    filler,
+                })
+            }
+        } else if restriction_str.contains("owl:hasSelf") {
+            // ObjectHasSelf restriction
+            
+            // Validate that hasSelf has proper boolean value
+            if let Some(has_self_start) = restriction_str.find("owl:hasSelf") {
+                let after_has_self = &restriction_str[has_self_start + 11..].trim_start();
+                
+                // Extract the value
+                let value_str = if let Some(quote_start) = after_has_self.find('"') {
+                    let after_quote = &after_has_self[quote_start + 1..];
+                    if let Some(quote_end) = after_quote.find('"') {
+                        after_quote[..quote_end].to_string()
+                    } else {
+                        return Err(Error::ontology_parsing("Invalid owl:hasSelf value format"));
+                    }
+                } else {
+                    return Err(Error::ontology_parsing("owl:hasSelf must have a literal boolean value"));
+                };
+                
+                // Validate it's "true" or "false"
+                if value_str != "true" && value_str != "false" {
+                    return Err(Error::ontology_parsing(format!("Invalid owl:hasSelf value: '{}'. Must be 'true' or 'false'", value_str)));
+                }
+                
+                // Check for datatype annotation
+                if after_has_self.contains("^^") {
+                    let after_quotes = &after_has_self[after_has_self.find('"').unwrap()..];
+                    if let Some(quote_end) = after_quotes[1..].find('"') {
+                        let after_closing_quote = &after_quotes[quote_end + 2..];
+                        if after_closing_quote.trim_start().starts_with("^^") {
+                            let datatype_part = after_closing_quote.trim_start()[2..].split(&[';', ']', ' '][..]).next().unwrap_or("");
+                            // Validate it's xsd:boolean
+                            if datatype_part != "xsd:boolean" && !datatype_part.contains("XMLSchema#boolean") {
+                                return Err(Error::ontology_parsing(format!("Invalid datatype for owl:hasSelf: '{}'. Must be xsd:boolean", datatype_part)));
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Resolve property
+            let property_token = if property_name.contains(':') {
+                let parts: Vec<&str> = property_name.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                } else {
+                    return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                }
+            } else {
+                return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+            };
+            
+            let property_iri = self.resolve_token(&property_token, state)?;
+            let object_property = ObjectProperty { iri: IRI::new(&property_iri) };
+            
+            Ok(ClassExpression::ObjectHasSelf {
+                property: ObjectPropertyExpression::ObjectProperty(object_property),
+            })
         } else {
             Err(Error::ontology_parsing("Unsupported restriction type"))
         }
@@ -1797,6 +1951,41 @@ impl TurtleParser {
                         ));
                         current_token.clear();
                         in_literal = false;
+                        
+                        // Check if next is ^^ for datatype annotation
+                        if i + 2 < chars.len() && chars[i + 1] == '^' && chars[i + 2] == '^' {
+                            i += 2; // Skip the ^^
+                            let mut datatype_token = String::from("^^");
+                            i += 1;
+                            
+                            // Read the datatype (could be <IRI> or prefix:local)
+                            if i < chars.len() && chars[i] == '<' {
+                                // IRI datatype
+                                datatype_token.push('<');
+                                i += 1;
+                                while i < chars.len() && chars[i] != '>' {
+                                    datatype_token.push(chars[i]);
+                                    i += 1;
+                                }
+                                if i < chars.len() {
+                                    datatype_token.push('>');
+                                }
+                            } else {
+                                // Prefixed name datatype - read until whitespace or delimiter
+                                while i < chars.len() {
+                                    let ch = chars[i];
+                                    if ch.is_whitespace() || ch == ',' || ch == ';' || ch == '.' 
+                                        || ch == ')' || ch == ']' {
+                                        break;
+                                    }
+                                    datatype_token.push(ch);
+                                    i += 1;
+                                }
+                                i -= 1; // Back up one since we'll increment at end of loop
+                            }
+                            
+                            tokens.push(Token::Keyword(datatype_token));
+                        }
                     } else {
                         if !current_token.is_empty() {
                             self.add_token_from_string(&current_token, &mut tokens);
@@ -1905,8 +2094,11 @@ impl TurtleParser {
                 self.expand_prefixed_name(&format!("{prefix}:{local}"), state)
             }
             Token::Keyword(keyword) => {
-                // Try to expand as prefixed name if it contains ':'
-                if keyword.contains(':') {
+                // Don't expand datatype annotations (^^xsd:type)
+                if keyword.starts_with("^^") {
+                    Ok(keyword.clone())
+                } else if keyword.contains(':') {
+                    // Try to expand as prefixed name if it contains ':'
                     self.expand_prefixed_name(keyword, state)
                 } else {
                     Ok(keyword.clone())
@@ -2098,6 +2290,26 @@ impl TurtleParser {
                 };
                 println!("Creating enhanced SubClassOf axiom: {subject} rdfs:subClassOf {object}");
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
+            }
+            "http://www.w3.org/2002/07/owl#hasKey" => {
+                // owl:hasKey requires list syntax: owl:hasKey ( properties )
+                // If object is not a list (rdf:first/rest), it's invalid
+                if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
+                    return Err(Error::ontology_parsing(
+                        "owl:hasKey requires list syntax: owl:hasKey ( property1 property2 ... )"
+                    ));
+                }
+                // For now, just validate - full hasKey axiom support would go here
+            }
+            "http://www.w3.org/2002/07/owl#propertyChainAxiom" => {
+                // owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( prop1 prop2 ... )
+                // If object is not a list (rdf:first/rest), it's invalid
+                if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
+                    return Err(Error::ontology_parsing(
+                        "owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( property1 property2 ... )"
+                    ));
+                }
+                // For now, just validate - full property chain axiom support would go here
             }
             _ => {
                 // Detect if object is a literal (data property) or an individual (object property)

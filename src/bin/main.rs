@@ -501,6 +501,8 @@ enum InputFormat {
     Turtle,
     /// N-Triples format
     NTriples,
+    /// Manchester Syntax
+    Manchester,
     /// Auto-detect format
     Auto,
 }
@@ -513,6 +515,7 @@ impl From<InputFormat> for OntologyFormat {
             InputFormat::RdfXml => OntologyFormat::RdfXml,
             InputFormat::Turtle => OntologyFormat::Turtle,
             InputFormat::NTriples => OntologyFormat::NTriples,
+            InputFormat::Manchester => OntologyFormat::Manchester,
             InputFormat::Auto => OntologyFormat::Auto,
         }
     }
