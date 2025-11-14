@@ -742,6 +742,216 @@ impl SyntaxValidator {
 
         // Reuse the XML validation logic
         self.validate_owl_xml(content)?;
+        
+        // Additional RDF/XML semantic validation
+        
+        // Check for empty owl:complementOf
+        if content.contains("<owl:complementOf/>") || content.contains("<owl:complementOf />") {
+            return Err(Error::ontology_parsing(
+                "Empty owl:complementOf - must specify a class expression"
+            ));
+        }
+        
+        // Check for owl:unionOf with only one class
+        if content.contains("owl:unionOf") {
+            use quick_xml::{Reader, events::Event};
+            let mut reader = Reader::from_str(content);
+            let mut in_union = false;
+            let mut union_class_count = 0;
+            
+            loop {
+                match reader.read_event() {
+                    Ok(Event::Start(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:unionOf" {
+                            in_union = true;
+                            union_class_count = 0;
+                        } else if in_union && name == "owl:Class" {
+                            union_class_count += 1;
+                        }
+                    }
+                    Ok(Event::End(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:unionOf" {
+                            if union_class_count < 2 {
+                                return Err(Error::ontology_parsing(
+                                    "owl:unionOf must contain at least 2 classes"
+                                ));
+                            }
+                            in_union = false;
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => {
+                        return Err(Error::ontology_parsing(
+                            format!("RDF/XML parsing error: {}", e)
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
+        // Check for owl:oneOf with no individuals
+        if content.contains("owl:oneOf") {
+            use quick_xml::{Reader, events::Event};
+            let mut reader = Reader::from_str(content);
+            let mut in_one_of = false;
+            let mut one_of_item_count = 0;
+            
+            loop {
+                match reader.read_event() {
+                    Ok(Event::Start(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:oneOf" {
+                            in_one_of = true;
+                            one_of_item_count = 0;
+                        } else if in_one_of && (name == "owl:NamedIndividual" || name.contains("Individual")) {
+                            one_of_item_count += 1;
+                        }
+                    }
+                    Ok(Event::Empty(ref e)) => {
+                        // Handle self-closing tags like <owl:oneOf rdf:parseType="Collection"/>
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:oneOf" {
+                            return Err(Error::ontology_parsing(
+                                "owl:oneOf must contain at least 1 individual"
+                            ));
+                        }
+                    }
+                    Ok(Event::End(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:oneOf" {
+                            if one_of_item_count == 0 {
+                                return Err(Error::ontology_parsing(
+                                    "owl:oneOf must contain at least 1 individual"
+                                ));
+                            }
+                            in_one_of = false;
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => {
+                        return Err(Error::ontology_parsing(
+                            format!("RDF/XML parsing error: {}", e)
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
+        // Check for owl:hasKey with no properties
+        if content.contains("owl:hasKey") {
+            if content.contains("<owl:hasKey/>") || content.contains("<owl:hasKey />") {
+                return Err(Error::ontology_parsing(
+                    "Empty owl:hasKey - must specify at least one property"
+                ));
+            }
+        }
+        
+        // Check for owl:propertyChainAxiom with less than 2 properties
+        if content.contains("owl:propertyChainAxiom") {
+            use quick_xml::{Reader, events::Event};
+            let mut reader = Reader::from_str(content);
+            let mut in_chain = false;
+            let mut chain_property_count = 0;
+            
+            loop {
+                match reader.read_event() {
+                    Ok(Event::Start(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:propertyChainAxiom" {
+                            in_chain = true;
+                            chain_property_count = 0;
+                        } else if in_chain && (name == "owl:ObjectProperty" || name.contains("Property")) {
+                            chain_property_count += 1;
+                        }
+                    }
+                    Ok(Event::End(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:propertyChainAxiom" {
+                            if chain_property_count < 2 {
+                                return Err(Error::ontology_parsing(
+                                    "owl:propertyChainAxiom must contain at least 2 properties"
+                                ));
+                            }
+                            in_chain = false;
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => {
+                        return Err(Error::ontology_parsing(
+                            format!("RDF/XML parsing error: {}", e)
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
+        // Check for qualified cardinality without onClass
+        if content.contains("owl:qualifiedCardinality") || content.contains("owl:minQualifiedCardinality") 
+            || content.contains("owl:maxQualifiedCardinality") {
+            // These must be accompanied by owl:onClass
+            use quick_xml::{Reader, events::Event};
+            let mut reader = Reader::from_str(content);
+            let mut in_restriction = false;
+            let mut has_qualified_card = false;
+            let mut has_on_class = false;
+            let mut depth = 0;
+            
+            loop {
+                match reader.read_event() {
+                    Ok(Event::Start(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:Restriction" {
+                            in_restriction = true;
+                            has_qualified_card = false;
+                            has_on_class = false;
+                            depth = 0;
+                        } else if in_restriction {
+                            depth += 1;
+                            if name == "owl:qualifiedCardinality" || name == "owl:minQualifiedCardinality" 
+                                || name == "owl:maxQualifiedCardinality" {
+                                has_qualified_card = true;
+                            } else if name == "owl:onClass" {
+                                has_on_class = true;
+                            }
+                        }
+                    }
+                    Ok(Event::End(ref e)) => {
+                        let name_bytes = e.name();
+                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        if name == "owl:Restriction" {
+                            if has_qualified_card && !has_on_class {
+                                return Err(Error::ontology_parsing(
+                                    "Qualified cardinality restriction must include owl:onClass"
+                                ));
+                            }
+                            in_restriction = false;
+                        } else if in_restriction && depth > 0 {
+                            depth -= 1;
+                        }
+                    }
+                    Ok(Event::Eof) => break,
+                    Err(e) => {
+                        return Err(Error::ontology_parsing(
+                            format!("RDF/XML parsing error: {}", e)
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         Ok(())
     }
@@ -753,6 +963,9 @@ impl SyntaxValidator {
         }
 
         let lines: Vec<&str> = content.lines().collect();
+        
+        // Track current declaration context
+        let mut current_declaration_type: Option<&str> = None;
         
         // Valid Manchester keywords
         let valid_keywords = [
@@ -816,6 +1029,21 @@ impl SyntaxValidator {
             // Skip empty lines and comments
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
+            }
+
+            // Update current declaration type based on top-level declarations
+            if !line.starts_with(' ') && !line.starts_with('\t') {
+                if trimmed.starts_with("Class:") {
+                    current_declaration_type = Some("Class");
+                } else if trimmed.starts_with("ObjectProperty:") {
+                    current_declaration_type = Some("ObjectProperty");
+                } else if trimmed.starts_with("DataProperty:") || trimmed.starts_with("DatatypeProperty:") {
+                    current_declaration_type = Some("DataProperty");
+                } else if trimmed.starts_with("AnnotationProperty:") {
+                    current_declaration_type = Some("AnnotationProperty");
+                } else if trimmed.starts_with("Individual:") {
+                    current_declaration_type = Some("Individual");
+                }
             }
 
             // Check for common typos
@@ -919,13 +1147,79 @@ impl SyntaxValidator {
                             ""
                         };
                         
-                        let parts: Vec<&str> = after_equivalent.split_whitespace().collect();
-                        if parts.len() == 1 && !after_equivalent.contains('(') && !after_equivalent.contains("Self") {
+                        // For Class declarations, require complex expressions
+                        // For ObjectProperty/DataProperty, single identifiers are valid
+                        if current_declaration_type == Some("Class") {
+                            let parts: Vec<&str> = after_equivalent.split_whitespace().collect();
+                            if parts.len() == 1 && !after_equivalent.contains('(') && !after_equivalent.contains("Self") {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: Incomplete EquivalentTo expression - '{}' should be a complete class expression (e.g., 'knows Self', 'hasChild some Person')",
+                                    line_num + 1,
+                                    after_equivalent
+                                )));
+                            }
+                        }
+                        // For properties (ObjectProperty, DataProperty, AnnotationProperty), 
+                        // single identifiers are valid equivalences
+                        
+                        // Check for empty EquivalentTo
+                        if after_equivalent.is_empty() {
                             return Err(Error::ontology_parsing(format!(
-                                "Line {}: Incomplete EquivalentTo expression - '{}' should be a complete class expression (e.g., 'knows Self', 'hasChild some Person')",
-                                line_num + 1,
-                                after_equivalent
+                                "Line {}: Empty EquivalentTo expression",
+                                line_num + 1
                             )));
+                        }
+                    }
+                    
+                    // Validate "value" expressions have an individual
+                    if trimmed.contains(" value") {
+                        let words: Vec<&str> = trimmed.split_whitespace().collect();
+                        for (i, word) in words.iter().enumerate() {
+                            if *word == "value" && i == words.len() - 1 {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: Incomplete 'value' expression - expected 'property value individual'",
+                                    line_num + 1
+                                )));
+                            }
+                        }
+                    }
+                    
+                    // Validate "or" expressions have both operands
+                    if trimmed.contains(" or ") {
+                        let words: Vec<&str> = trimmed.split_whitespace().collect();
+                        for (i, word) in words.iter().enumerate() {
+                            if *word == "or" {
+                                // Check if "or" is at the start/end, or if word before is a keyword
+                                let is_invalid = i == 0 
+                                    || i == words.len() - 1
+                                    || (i > 0 && words[i - 1].ends_with(':'));
+                                    
+                                if is_invalid {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Incomplete 'or' expression - expected 'class1 or class2'",
+                                        line_num + 1
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Validate SubPropertyChain has "o" keyword between properties
+                    if trimmed.contains("SubPropertyChain:") {
+                        let after_chain = if let Some(pos) = trimmed.find("SubPropertyChain:") {
+                            trimmed[pos + 17..].trim()
+                        } else {
+                            ""
+                        };
+                        
+                        if !after_chain.is_empty() && !after_chain.contains(" o ") {
+                            let words: Vec<&str> = after_chain.split_whitespace().collect();
+                            if words.len() >= 2 {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: SubPropertyChain must use 'o' keyword between properties (e.g., 'hasFather o hasBrother')",
+                                    line_num + 1
+                                )));
+                            }
                         }
                     }
                     
