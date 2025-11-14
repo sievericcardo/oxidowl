@@ -878,6 +878,190 @@ impl SyntaxValidator {
                             )));
                         }
                     }
+                    
+                    // IMPORTANT: Validate indented line content BEFORE continuing
+                    // This ensures we catch errors in class expressions, cardinalities, etc.
+                    
+                    // Validate cardinality expressions use numbers, not words
+                    if trimmed.contains(" min ") || trimmed.contains(" max ") || trimmed.contains(" exactly ") {
+                        let words: Vec<&str> = trimmed.split_whitespace().collect();
+                        for (i, word) in words.iter().enumerate() {
+                            if (*word == "min" || *word == "max" || *word == "exactly") && i + 1 < words.len() {
+                                let cardinality_value = words[i + 1];
+                                // Check if it's a word instead of a number
+                                let number_words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+                                                   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", 
+                                                   "eighteen", "nineteen", "twenty"];
+                                if number_words.contains(&cardinality_value) {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Invalid cardinality value '{}' - must use numeric digits (e.g., '1', '2', '3'), not words",
+                                        line_num + 1,
+                                        cardinality_value
+                                    )));
+                                }
+                                // Check if it's a valid non-negative integer
+                                if !cardinality_value.chars().all(|c| c.is_ascii_digit()) {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Invalid cardinality value '{}' - must be a non-negative integer",
+                                        line_num + 1,
+                                        cardinality_value
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Validate EquivalentTo expressions are complete
+                    if trimmed.contains("EquivalentTo:") {
+                        let after_equivalent = if let Some(pos) = trimmed.find("EquivalentTo:") {
+                            trimmed[pos + 13..].trim()
+                        } else {
+                            ""
+                        };
+                        
+                        let parts: Vec<&str> = after_equivalent.split_whitespace().collect();
+                        if parts.len() == 1 && !after_equivalent.contains('(') && !after_equivalent.contains("Self") {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Incomplete EquivalentTo expression - '{}' should be a complete class expression (e.g., 'knows Self', 'hasChild some Person')",
+                                line_num + 1,
+                                after_equivalent
+                            )));
+                        }
+                    }
+                    
+                    // Validate SubClassOf expressions are complete
+                    if trimmed.contains("SubClassOf:") {
+                        let after_subclass = if let Some(pos) = trimmed.find("SubClassOf:") {
+                            trimmed[pos + 11..].trim()
+                        } else {
+                            ""
+                        };
+                        
+                        if after_subclass.contains(" value") && after_subclass.trim().ends_with("value") {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Incomplete 'value' expression - expected 'property value individual'",
+                                line_num + 1
+                            )));
+                        }
+                    }
+                    
+                    // Validate Characteristics don't have contradictory combinations
+                    if trimmed.contains("Characteristics:") {
+                        let characteristics_part = if let Some(pos) = trimmed.find("Characteristics:") {
+                            trimmed[pos + 16..].trim().to_lowercase()
+                        } else {
+                            String::new()
+                        };
+                        
+                        let contradictions = [
+                            ("asymmetric", "symmetric"),
+                            ("irreflexive", "reflexive"),
+                        ];
+                        
+                        for (char1, char2) in &contradictions {
+                            // Split by comma and whitespace to get individual characteristics
+                            let chars: Vec<&str> = characteristics_part.split(',').map(|s| s.trim()).collect();
+                            let has_char1 = chars.iter().any(|c| c == char1);
+                            let has_char2 = chars.iter().any(|c| c == char2);
+                            
+                            if has_char1 && has_char2 {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: Contradictory characteristics - cannot be both '{}' and '{}'",
+                                    line_num + 1,
+                                    char1,
+                                    char2
+                                )));
+                            }
+                        }
+                    }
+                    
+                    // Validate empty field keywords
+                    let empty_field_keywords = [
+                        "DisjointWith:", "EquivalentProperties:", "InverseOf:", "HasKey:"
+                    ];
+                    
+                    for keyword in &empty_field_keywords {
+                        if trimmed.contains(keyword) {
+                            let after_keyword = if let Some(pos) = trimmed.find(keyword) {
+                                trimmed[pos + keyword.len()..].trim()
+                            } else {
+                                ""
+                            };
+                            
+                            if after_keyword.is_empty() || after_keyword.chars().all(|c| c.is_whitespace() || c == ',') {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: Empty '{}' declaration - must specify a value",
+                                    line_num + 1,
+                                    keyword.trim_end_matches(':')
+                                )));
+                            }
+                        }
+                    }
+                    
+                    // Validate DisjointUnionOf has multiple classes
+                    if trimmed.contains("DisjointUnionOf:") {
+                        let after_keyword = if let Some(pos) = trimmed.find("DisjointUnionOf:") {
+                            trimmed[pos + 16..].trim()
+                        } else {
+                            ""
+                        };
+                        
+                        let parts: Vec<&str> = after_keyword.split(',').collect();
+                        if parts.len() == 1 && !after_keyword.is_empty() {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: DisjointUnionOf requires multiple classes (at least 2), found only 1",
+                                line_num + 1
+                            )));
+                        }
+                    }
+                    
+                    // Validate incomplete class expressions
+                    if trimmed.contains(" and not") && trimmed.trim().ends_with("not") {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Incomplete 'not' expression - 'not' must be followed by a class expression",
+                            line_num + 1
+                        )));
+                    }
+                    
+                    if trimmed.contains(" or)") || trimmed.contains("(or ") {
+                        if let Some(or_pos) = trimmed.find(" or") {
+                            let after_or = trimmed[or_pos + 3..].trim();
+                            if after_or.is_empty() || after_or.starts_with(')') {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: Incomplete 'or' expression - 'or' must have operands on both sides",
+                                    line_num + 1
+                                )));
+                            }
+                        }
+                    }
+                    
+                    // Validate datatype restrictions
+                    if (trimmed.contains(">=") || trimmed.contains("<=") || trimmed.contains(">") || trimmed.contains("<")) 
+                        && trimmed.contains('[') {
+                        let restriction_part = if let Some(start) = trimmed.find('[') {
+                            if let Some(end) = trimmed.find(']') {
+                                &trimmed[start + 1..end]
+                            } else {
+                                ""
+                            }
+                        } else {
+                            ""
+                        };
+                        
+                        if !restriction_part.is_empty() {
+                            let parts: Vec<&str> = restriction_part.split_whitespace().collect();
+                            for part in parts {
+                                if part.chars().all(|c| c.is_alphabetic()) {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Invalid datatype restriction value '{}' - expected numeric literal or quoted string",
+                                        line_num + 1,
+                                        part
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    
                     continue;
                 }
                 
@@ -1054,6 +1238,191 @@ impl SyntaxValidator {
                     }
                 }
             }
+            
+            // Validate cardinality expressions use numbers, not words
+            if trimmed.contains(" min ") || trimmed.contains(" max ") || trimmed.contains(" exactly ") {
+                let words: Vec<&str> = trimmed.split_whitespace().collect();
+                for (i, word) in words.iter().enumerate() {
+                    if (*word == "min" || *word == "max" || *word == "exactly") && i + 1 < words.len() {
+                        let cardinality_value = words[i + 1];
+                        // Check if it's a word instead of a number
+                        let number_words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+                                           "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", 
+                                           "eighteen", "nineteen", "twenty"];
+                        if number_words.contains(&cardinality_value) {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid cardinality value '{}' - must use numeric digits (e.g., '1', '2', '3'), not words",
+                                line_num + 1,
+                                cardinality_value
+                            )));
+                        }
+                        // Check if it's a valid non-negative integer
+                        if !cardinality_value.chars().all(|c| c.is_ascii_digit()) {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid cardinality value '{}' - must be a non-negative integer",
+                                line_num + 1,
+                                cardinality_value
+                            )));
+                        }
+                    }
+                }
+            }
+            
+            // Validate EquivalentTo expressions are complete (not just a property name)
+            if trimmed.contains("EquivalentTo:") {
+                let after_equivalent = if let Some(pos) = trimmed.find("EquivalentTo:") {
+                    trimmed[pos + 13..].trim()
+                } else {
+                    ""
+                };
+                
+                // Check if it's just a single word (property/class name) without any expression
+                let parts: Vec<&str> = after_equivalent.split_whitespace().collect();
+                if parts.len() == 1 && !after_equivalent.contains('(') && !after_equivalent.contains("Self") {
+                    // This is likely incomplete - should have "knows Self" or "hasChild some Child", etc.
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Incomplete EquivalentTo expression - '{}' should be a complete class expression (e.g., 'knows Self', 'hasChild some Person')",
+                        line_num + 1,
+                        after_equivalent
+                    )));
+                }
+            }
+            
+            // Validate SubClassOf expressions are complete
+            if trimmed.contains("SubClassOf:") {
+                let after_subclass = if let Some(pos) = trimmed.find("SubClassOf:") {
+                    trimmed[pos + 11..].trim()
+                } else {
+                    ""
+                };
+                
+                // Check for incomplete value expressions
+                if after_subclass.contains(" value") && after_subclass.trim().ends_with("value") {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Incomplete 'value' expression - expected 'property value individual'",
+                        line_num + 1
+                    )));
+                }
+            }
+            
+            // Validate Characteristics don't have contradictory combinations
+            if trimmed.contains("Characteristics:") {
+                let characteristics_part = if let Some(pos) = trimmed.find("Characteristics:") {
+                    trimmed[pos + 16..].trim().to_lowercase()
+                } else {
+                    String::new()
+                };
+                
+                // Check for contradictory characteristic pairs
+                let contradictions = [
+                    ("asymmetric", "symmetric"),
+                    ("irreflexive", "reflexive"),
+                ];
+                
+                for (char1, char2) in &contradictions {
+                    if characteristics_part.contains(char1) && characteristics_part.contains(char2) {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Contradictory characteristics - cannot be both '{}' and '{}'",
+                            line_num + 1,
+                            char1,
+                            char2
+                        )));
+                    }
+                }
+            }
+            
+            // Validate property declarations aren't followed by empty required fields
+            let empty_field_keywords = [
+                "DisjointWith:", "EquivalentProperties:", "InverseOf:", "HasKey:"
+            ];
+            
+            for keyword in &empty_field_keywords {
+                if trimmed.contains(keyword) {
+                    let after_keyword = if let Some(pos) = trimmed.find(keyword) {
+                        trimmed[pos + keyword.len()..].trim()
+                    } else {
+                        ""
+                    };
+                    
+                    // Check if nothing follows the keyword (empty or just whitespace/punctuation)
+                    if after_keyword.is_empty() || after_keyword.chars().all(|c| c.is_whitespace() || c == ',') {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Empty '{}' declaration - must specify a value",
+                            line_num + 1,
+                            keyword.trim_end_matches(':')
+                        )));
+                    }
+                }
+            }
+            
+            // Validate DisjointUnionOf has multiple classes
+            if trimmed.contains("DisjointUnionOf:") {
+                let after_keyword = if let Some(pos) = trimmed.find("DisjointUnionOf:") {
+                    trimmed[pos + 16..].trim()
+                } else {
+                    ""
+                };
+                
+                // Check if only one class is specified (need at least 2 for disjoint union)
+                let parts: Vec<&str> = after_keyword.split(',').collect();
+                if parts.len() == 1 && !after_keyword.is_empty() {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: DisjointUnionOf requires multiple classes (at least 2), found only 1",
+                        line_num + 1
+                    )));
+                }
+            }
+            
+            // Validate incomplete class expressions (hanging operators)
+            if trimmed.contains(" and not") && trimmed.trim().ends_with("not") {
+                return Err(Error::ontology_parsing(format!(
+                    "Line {}: Incomplete 'not' expression - 'not' must be followed by a class expression",
+                    line_num + 1
+                )));
+            }
+            
+            if trimmed.contains(" or)") || trimmed.contains("(or ") {
+                // Check if 'or' has operands on both sides
+                if let Some(or_pos) = trimmed.find(" or") {
+                    let after_or = trimmed[or_pos + 3..].trim();
+                    if after_or.is_empty() || after_or.starts_with(')') {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: Incomplete 'or' expression - 'or' must have operands on both sides",
+                            line_num + 1
+                        )));
+                    }
+                }
+            }
+            
+            // Validate datatype restrictions use valid values (not undefined names)
+            if (trimmed.contains(">=") || trimmed.contains("<=") || trimmed.contains(">") || trimmed.contains("<")) 
+                && trimmed.contains('[') {
+                // This looks like a datatype restriction
+                let restriction_part = if let Some(start) = trimmed.find('[') {
+                    if let Some(end) = trimmed.find(']') {
+                        &trimmed[start + 1..end]
+                    } else {
+                        ""
+                    }
+                } else {
+                    ""
+                };
+                
+                if !restriction_part.is_empty() {
+                    let parts: Vec<&str> = restriction_part.split_whitespace().collect();
+                    for part in parts {
+                        // Check if it looks like a name (starts with letter) but isn't a number
+                        if part.chars().all(|c| c.is_alphabetic()) {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Invalid datatype restriction value '{}' - expected numeric literal or quoted string",
+                                line_num + 1,
+                                part
+                            )));
+                        }
+                    }
+                }
+            }
+            
         }
 
         Ok(())

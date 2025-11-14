@@ -492,8 +492,58 @@ impl FunctionalParser {
                             "Expected data range in DataSomeValuesFrom".to_string(),
                         ));
                     }
-                    let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    
+                    // Check if it's a DatatypeRestriction
+                    let filler = if tokens[position] == "DatatypeRestriction" {
+                        // Parse DatatypeRestriction(baseType facet1 value1 facet2 value2 ...)
+                        position += 1; // Skip "DatatypeRestriction"
+                        if position < tokens.len() && tokens[position] == "(" {
+                            position += 1; // Skip "("
+                            
+                            // Parse base datatype
+                            if position >= tokens.len() {
+                                return Err(Error::ontology_parsing(
+                                    "Expected base datatype in DatatypeRestriction".to_string(),
+                                ));
+                            }
+                            let base_datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
+                            position += 1;
+                            
+                            // Skip facet-value pairs until closing ")"
+                            // For now, we'll just use the base datatype and ignore facets
+                            while position < tokens.len() && tokens[position] != ")" {
+                                position += 1;
+                            }
+                            
+                            if position < tokens.len() && tokens[position] == ")" {
+                                position += 1; // Skip ")"
+                            }
+                            
+                            crate::ontology::DataRange::Datatype(
+                                url::Url::parse(&base_datatype_iri)
+                                    .map_err(|e| {
+                                        Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                    })?
+                                    .into(),
+                            )
+                        } else {
+                            return Err(Error::ontology_parsing(
+                                "Expected '(' after DatatypeRestriction".to_string(),
+                            ));
+                        }
+                    } else {
+                        // Simple datatype IRI
+                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        position += 1;
+                        
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse(&datarange_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?
+                                .into(),
+                        )
+                    };
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -508,14 +558,6 @@ impl FunctionalParser {
                                 })?
                                 .into(),
                         },
-                    );
-
-                    let filler = crate::ontology::DataRange::Datatype(
-                        url::Url::parse(&datarange_iri)
-                            .map_err(|e| {
-                                Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                            })?
-                            .into(),
                     );
 
                     Ok((
