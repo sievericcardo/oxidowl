@@ -42,6 +42,51 @@ use crate::{
 };
 use std::path::Path;
 
+/// Extract the first section from a CrossSyntax multi-format file
+/// Returns the content of the first section (after the ### marker)
+pub fn extract_first_crosssyntax_section(content: &str) -> String {
+    let trimmed = content.trim();
+    
+    // Check if this is a CrossSyntax file
+    if !trimmed.starts_with("###") {
+        return content.to_string();
+    }
+    
+    let mut result = String::new();
+    let mut in_first_section = false;
+    let mut section_count = 0;
+    
+    for line in content.lines() {
+        let line_trimmed = line.trim();
+        
+        if line_trimmed.starts_with("###") {
+            // Skip comment lines like "### invalid ..." or "### valid ..."
+            // These don't represent actual syntax sections
+            let after_hash = line_trimmed.trim_start_matches("###").trim();
+            if after_hash.starts_with("invalid") || after_hash.starts_with("valid") {
+                continue;
+            }
+            
+            section_count += 1;
+            
+            if section_count == 1 {
+                // This is the first actual section marker, skip it and start collecting
+                in_first_section = true;
+                continue;
+            } else {
+                // We've reached the second section, stop
+                break;
+            }
+        }
+        if in_first_section {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+    
+    result
+}
+
 /// Detect format from file content for ambiguous cases
 fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat> {
     let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
@@ -49,6 +94,34 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
     })?;
     
     let trimmed = content.trim();
+    
+    // Check for CrossSyntax multi-format files
+    // These files start with ### followed by a format name
+    if trimmed.starts_with("###") || content.contains("\n###") {
+        // CrossSyntax files need special handling - we'll parse the first section
+        // Find the first actual format marker (skip comment lines like "### invalid ..." or "### valid ...")
+        for line in trimmed.lines() {
+            let line_trimmed = line.trim();
+            if line_trimmed.starts_with("###") {
+                // Skip comment lines - these don't represent actual syntax sections
+                let after_hash = line_trimmed.trim_start_matches("###").trim();
+                if after_hash.starts_with("invalid") || after_hash.starts_with("valid") {
+                    continue;
+                }
+                
+                // Extract format name from first non-comment ### line
+                let format_name = after_hash.to_lowercase();
+                return match format_name.as_str() {
+                    "turtle" => Ok(OntologyFormat::Turtle),
+                    "rdf/xml" | "rdf-xml" => Ok(OntologyFormat::RdfXml),
+                    "owl/xml" | "owl-xml" => Ok(OntologyFormat::OwlXml),
+                    "functional" => Ok(OntologyFormat::Functional),
+                    "manchester" => Ok(OntologyFormat::Manchester),
+                    _ => Ok(OntologyFormat::Functional), // Default fallback
+                };
+            }
+        }
+    }
     
     // Check for Functional syntax - more patterns
     // Functional syntax uses parentheses and specific keywords
@@ -145,20 +218,43 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
         "txt" => detect_format_from_content(path)?, // Could be any format
         _ => OntologyFormat::OwlXml, // Default fallback
     };
+    
+    // Read the file content
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        Error::io(format!("Failed to read file: {}", e))
+    })?;
+    
+    // Check if this is a CrossSyntax file and extract first section
+    let parsed_content = if content.trim().starts_with("###") {
+        extract_first_crosssyntax_section(&content)
+    } else {
+        content
+    };
 
     match format {
-        OntologyFormat::OwlXml => owl_xml::parse_file(path),
-        OntologyFormat::Functional => functional::parse_file(path),
-        OntologyFormat::RdfXml => rdf_xml::parse_file(path),
-        OntologyFormat::Turtle => turtle::parse_file(path),
-        OntologyFormat::NTriples => ntriples::parse_file(path),
+        OntologyFormat::OwlXml => {
+            let parser = owl_xml::OwlXmlParser::new();
+            parser.parse(&parsed_content)
+        }
+        OntologyFormat::Functional => {
+            let parser = functional::FunctionalParser::new();
+            parser.parse(&parsed_content)
+        }
+        OntologyFormat::RdfXml => {
+            let parser = rdf_xml::RdfXmlParser::new();
+            parser.parse(&parsed_content)
+        }
+        OntologyFormat::Turtle => {
+            let parser = turtle::TurtleParser::new();
+            parser.parse(&parsed_content)
+        }
+        OntologyFormat::NTriples => {
+            let parser = ntriples::NTriplesParser::new();
+            parser.parse(&parsed_content)
+        }
         OntologyFormat::Manchester => {
-            // Use Manchester parser
-            let content = std::fs::read_to_string(path).map_err(|e| {
-                Error::io(format!("Failed to read Manchester file: {}", e))
-            })?;
             let parser = ManchesterParser::new(ManchesterParserConfig::default());
-            parser.parse(&content)
+            parser.parse(&parsed_content)
         }
         OntologyFormat::Auto => Err(Error::ontology_parsing(
             "Auto format should have been resolved",

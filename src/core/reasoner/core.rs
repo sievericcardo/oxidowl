@@ -858,33 +858,36 @@ impl Reasoner {
         let content = std::fs::read_to_string(file_path).map_err(|e| crate::Error::Io {
             message: format!("Failed to read file: {}", e),
         })?;
+        
+        // Extract first section if CrossSyntax multi-format file
+        let parsed_content = extract_first_crosssyntax_section(&content);
 
         let ontology = match format {
             crate::ontology::OntologyFormat::Functional => {
                 let parser = functional::FunctionalParser::new();
-                parser.parse(&content)?
+                parser.parse(&parsed_content)?
             }
             crate::ontology::OntologyFormat::Manchester => {
                 let parser = manchester::ManchesterParser::new(
                     manchester::ManchesterParserConfig::default(),
                 );
-                parser.parse(&content)?
+                parser.parse(&parsed_content)?
             }
             crate::ontology::OntologyFormat::Turtle => {
                 let parser = turtle::TurtleParser::new();
-                parser.parse(&content)?
+                parser.parse(&parsed_content)?
             }
             crate::ontology::OntologyFormat::RdfXml => {
                 let parser = rdf_xml::RdfXmlParser::new();
-                parser.parse(&content)?
+                parser.parse(&parsed_content)?
             }
             crate::ontology::OntologyFormat::OwlXml => {
                 let parser = owl_xml::OwlXmlParser::new();
-                parser.parse(&content)?
+                parser.parse(&parsed_content)?
             }
             crate::ontology::OntologyFormat::NTriples => {
                 let parser = ntriples::NTriplesParser::new();
-                parser.parse(&content)?
+                parser.parse(&parsed_content)?
             }
             crate::ontology::OntologyFormat::Auto => {
                 // Try to determine format from file extension
@@ -896,69 +899,69 @@ impl Reasoner {
                 match extension.to_lowercase().as_str() {
                     "owl" | "owx" => {
                         let parser = owl_xml::OwlXmlParser::new();
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                     "xml" | "rdf" => {
                         // Try to detect XML type from content
-                        if content.trim_start().starts_with("<?xml") || content.contains("owl:Ontology") || content.contains("<Ontology") {
+                        if parsed_content.trim_start().starts_with("<?xml") || parsed_content.contains("owl:Ontology") || parsed_content.contains("<Ontology") {
                             let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         } else {
                             let parser = rdf_xml::RdfXmlParser::new();
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         }
                     }
                     "ttl" => {
                         let parser = turtle::TurtleParser::new();
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                     "ofn" => {
                         let parser = functional::FunctionalParser::new();
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                     "omn" | "man" => {
                         let parser = manchester::ManchesterParser::new(
                             manchester::ManchesterParserConfig::default(),
                         );
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                     "swrl" => {
                         // SWRL uses functional-like syntax
                         let parser = functional::FunctionalParser::new();
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                     "nt" => {
                         let parser = ntriples::NTriplesParser::new();
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                     "txt" => {
                         // Content-based detection for .txt files
-                        let trimmed = content.trim();
+                        let trimmed = parsed_content.trim();
                         if trimmed.starts_with("Ontology(") || trimmed.starts_with("Prefix(") {
                             let parser = functional::FunctionalParser::new();
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         } else if trimmed.starts_with("Prefix:") || trimmed.starts_with("Ontology:") 
                                 || trimmed.starts_with("Class:") {
                             let parser = manchester::ManchesterParser::new(
                                 manchester::ManchesterParserConfig::default(),
                             );
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         } else if trimmed.starts_with("@prefix") || trimmed.starts_with("@base") {
                             let parser = turtle::TurtleParser::new();
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
                             let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         } else {
                             // Default to functional
                             let parser = functional::FunctionalParser::new();
-                            parser.parse(&content)?
+                            parser.parse(&parsed_content)?
                         }
                     }
                     _ => {
                         // Default to OWL/XML
                         let parser = owl_xml::OwlXmlParser::new();
-                        parser.parse(&content)?
+                        parser.parse(&parsed_content)?
                     }
                 }
             }

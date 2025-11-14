@@ -473,8 +473,8 @@ impl SyntaxValidator {
                                         line_num, clean_value, datatype
                                     )));
                                 }
-                            } else if datatype.ends_with("double") || datatype.ends_with("float") || datatype.ends_with("decimal") {
-                                // Check if literal_value is a valid decimal number
+                            } else if datatype.ends_with("decimal") {
+                                // Check if literal_value is a valid decimal number (no exponent allowed)
                                 let clean_value = literal_value.trim();
                                 if clean_value.is_empty() {
                                     return Err(Error::ontology_parsing(format!(
@@ -482,16 +482,17 @@ impl SyntaxValidator {
                                         line_num
                                     )));
                                 }
-                                // Allow digits, optional sign, optional decimal point, optional exponent
+                                
+                                // Decimal does NOT allow exponential notation
+                                // Allow digits, optional sign, optional decimal point
                                 let mut has_dot = false;
-                                let mut has_exp = false;
                                 let mut chars_iter = clean_value.chars();
                                 
                                 // Optional leading sign
                                 if let Some(first) = chars_iter.next() {
                                     if first != '+' && first != '-' && !first.is_ascii_digit() && first != '.' {
                                         return Err(Error::ontology_parsing(format!(
-                                            "Line {}: Invalid numeric literal: \"{}\"^^{}",
+                                            "Line {}: Invalid decimal literal: \"{}\"^^{}",
                                             line_num, clean_value, datatype
                                         )));
                                     }
@@ -503,17 +504,70 @@ impl SyntaxValidator {
                                 for ch in chars_iter {
                                     match ch {
                                         '0'..='9' => {},
-                                        '.' if !has_dot && !has_exp => has_dot = true,
-                                        'e' | 'E' if !has_exp => {
-                                            has_exp = true;
-                                            // Next char can be +, -, or digit
+                                        '.' if !has_dot => has_dot = true,
+                                        'e' | 'E' => {
+                                            // Exponential notation NOT allowed in decimal
+                                            return Err(Error::ontology_parsing(format!(
+                                                "Line {}: Invalid decimal literal: \"{}\"^^{} (exponential notation not allowed)",
+                                                line_num, clean_value, datatype
+                                            )));
                                         },
-                                        '+' | '-' if has_exp => {}, // Sign after exponent
                                         _ => {
                                             return Err(Error::ontology_parsing(format!(
-                                                "Line {}: Invalid numeric literal: \"{}\"^^{} (invalid character '{}')",
+                                                "Line {}: Invalid decimal literal: \"{}\"^^{} (invalid character '{}')",
                                                 line_num, clean_value, datatype, ch
                                             )));
+                                        }
+                                    }
+                                }
+                            } else if datatype.ends_with("double") || datatype.ends_with("float") {
+                                // Check if literal_value is a valid double/float number
+                                let clean_value = literal_value.trim();
+                                if clean_value.is_empty() {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: Empty numeric literal",
+                                        line_num
+                                    )));
+                                }
+                                
+                                // Allow special float/double values: INF, -INF, NaN
+                                if clean_value == "INF" || clean_value == "-INF" || clean_value == "NaN" {
+                                    // These are valid special values for float/double
+                                    // Continue without validation
+                                } else {
+                                    // Allow digits, optional sign, optional decimal point, optional exponent
+                                    let mut has_dot = false;
+                                    let mut has_exp = false;
+                                    let mut chars_iter = clean_value.chars();
+                                    
+                                    // Optional leading sign
+                                    if let Some(first) = chars_iter.next() {
+                                        if first != '+' && first != '-' && !first.is_ascii_digit() && first != '.' {
+                                            return Err(Error::ontology_parsing(format!(
+                                                "Line {}: Invalid numeric literal: \"{}\"^^{}",
+                                                line_num, clean_value, datatype
+                                            )));
+                                        }
+                                        if first == '.' {
+                                            has_dot = true;
+                                        }
+                                    }
+                                    
+                                    for ch in chars_iter {
+                                        match ch {
+                                            '0'..='9' => {},
+                                            '.' if !has_dot && !has_exp => has_dot = true,
+                                            'e' | 'E' if !has_exp => {
+                                                has_exp = true;
+                                                // Next char can be +, -, or digit
+                                            },
+                                            '+' | '-' if has_exp => {}, // Sign after exponent
+                                            _ => {
+                                                return Err(Error::ontology_parsing(format!(
+                                                    "Line {}: Invalid numeric literal: \"{}\"^^{} (invalid character '{}')",
+                                                    line_num, clean_value, datatype, ch
+                                                )));
+                                            }
                                         }
                                     }
                                 }
