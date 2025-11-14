@@ -239,6 +239,30 @@ impl SyntaxValidator {
             ));
         }
         
+        // Check for owl:imports with missing IRI
+        if content.contains("owl:imports") {
+            for (line_num, line) in lines.iter().enumerate() {
+                if line.contains("owl:imports") {
+                    // Extract what comes after owl:imports
+                    if let Some(pos) = line.find("owl:imports") {
+                        let after_imports = &line[pos + 11..].trim();
+                        // Skip if it's just a comment
+                        if after_imports.starts_with('#') {
+                            continue;
+                        }
+                        let words: Vec<&str> = after_imports.split_whitespace().collect();
+                        // Check if there's anything after owl:imports before the statement delimiter
+                        if words.is_empty() || words[0].starts_with('.') || words[0].starts_with(';') {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: owl:imports requires an IRI value",
+                                line_num + 1
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+        
         // OWL 2 DL semantic validation
         // Check for owl:hasSelf with non-boolean value
         if content.contains("owl:hasSelf") {
