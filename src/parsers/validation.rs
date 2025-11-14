@@ -238,6 +238,103 @@ impl SyntaxValidator {
                 "File ends with unterminated statement (missing .)"
             ));
         }
+        
+        // OWL 2 DL semantic validation
+        // Check for owl:hasSelf with non-boolean value
+        if content.contains("owl:hasSelf") {
+            for (line_num, line) in lines.iter().enumerate() {
+                if line.contains("owl:hasSelf") {
+                    // Extract the value after owl:hasSelf
+                    if let Some(pos) = line.find("owl:hasSelf") {
+                        let after_has_self = &line[pos + 11..].trim();
+                        let words: Vec<&str> = after_has_self.split_whitespace().collect();
+                        if !words.is_empty() {
+                            let value = words[0].trim_end_matches(&['.', ';', ',', ']'][..]);
+                            
+                            // Allow: true, false, "true"^^xsd:boolean, "false"^^xsd:boolean
+                            // Reject: "yes", "no", or any other string
+                            
+                            // Remove datatype suffix if present (e.g., ^^xsd:boolean)
+                            let base_value = if value.contains("^^") {
+                                value.split("^^").next().unwrap_or(value)
+                            } else {
+                                value
+                            };
+                            
+                            // Remove quotes
+                            let unquoted = base_value.trim_matches('"');
+                            
+                            // Check if it's true or false
+                            if unquoted != "true" && unquoted != "false" {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: owl:hasSelf value must be a boolean (true or false), not '{}'",
+                                    line_num + 1,
+                                    unquoted
+                                )));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for qualified cardinality with non-numeric values
+        let cardinality_props = [
+            "owl:qualifiedCardinality",
+            "owl:minQualifiedCardinality", 
+            "owl:maxQualifiedCardinality",
+            "owl:cardinality",
+            "owl:minCardinality",
+            "owl:maxCardinality"
+        ];
+        
+        for prop in &cardinality_props {
+            if content.contains(prop) {
+                for (line_num, line) in lines.iter().enumerate() {
+                    if line.contains(prop) {
+                        if let Some(pos) = line.find(prop) {
+                            let after_prop = &line[pos + prop.len()..].trim();
+                            let words: Vec<&str> = after_prop.split_whitespace().collect();
+                            if !words.is_empty() {
+                                let value = words[0].trim_end_matches(&['.', ';', ',', ']'][..]);
+                                
+                                // Remove datatype suffix if present (e.g., ^^xsd:nonNegativeInteger)
+                                let base_value = if value.contains("^^") {
+                                    value.split("^^").next().unwrap_or(value)
+                                } else {
+                                    value
+                                };
+                                
+                                // Remove quotes if present
+                                let unquoted = base_value.trim_matches('"');
+                                
+                                // Check for word-based numbers
+                                let number_words = ["one", "two", "three", "four", "five", "six", "seven", 
+                                                   "eight", "nine", "ten", "zero"];
+                                if number_words.contains(&unquoted.to_lowercase().as_str()) {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: {} value must be a numeric digit (e.g., '2'), not a word ('{}')",
+                                        line_num + 1,
+                                        prop,
+                                        unquoted
+                                    )));
+                                }
+                                
+                                // Check if it's a valid non-negative integer
+                                if !unquoted.chars().all(|c| c.is_ascii_digit()) && !unquoted.is_empty() {
+                                    return Err(Error::ontology_parsing(format!(
+                                        "Line {}: {} value must be a non-negative integer, not '{}'",
+                                        line_num + 1,
+                                        prop,
+                                        unquoted
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
