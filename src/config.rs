@@ -166,6 +166,8 @@ pub enum CacheEvictionStrategy {
 /// Server configuration for the reasoning service
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
+    /// Enable server on startup (default: false for CLI usage, true for library usage)
+    pub enable_server: bool,
     /// Default port for the reasoning server
     pub port: u16,
     /// Default bind address for the server
@@ -313,8 +315,9 @@ impl Default for ReasonerConfig {
                 persistence: false,
             },
             server: ServerConfig {
+                enable_server: false, // Disabled by default for CLI usage
                 port: 8080,
-                bind_address: "127.0.01".to_string(),
+                bind_address: "127.0.0.1".to_string(),
                 max_connections: 100,
                 request_timeout: Duration::from_secs(30),
                 enable_cors: true,

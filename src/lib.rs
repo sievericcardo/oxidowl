@@ -62,6 +62,9 @@ pub mod visitor; // Visitor pattern for ontology traversal // Distributed query 
 #[cfg(feature = "server")]
 pub mod server;
 
+#[cfg(feature = "server")]
+pub use server::ServerManager;
+
 // Export explanation service (used by server)
 pub mod explanation;
 

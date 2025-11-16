@@ -1915,4 +1915,72 @@ impl Reasoner {
             message: format!("Failed to write DL clauses: {}", e),
         })
     }
+
+    /// Create a server manager for this reasoner
+    /// This allows starting web servers (OWLlink, SPARQL, REST API) for remote access
+    #[cfg(feature = "server")]
+    pub fn create_server_manager(&self) -> Result<crate::server::ServerManager> {
+        use std::sync::Arc;
+        
+        let ontology = self.ontology.as_ref()
+            .ok_or_else(|| Error::Reasoning {
+                message: "No ontology loaded. Load an ontology before starting the server.".to_string(),
+            })?;
+
+        let ontology_clone = ontology.read()
+            .map_err(|_| Error::Reasoning {
+                message: "Failed to acquire ontology read lock".to_string(),
+            })?
+            .clone();
+
+        let reasoning_service = Arc::new(crate::reasoning::ReasoningService::new(
+            ontology_clone,
+            self.config.clone(),
+        ));
+
+        Ok(crate::server::ServerManager::new(
+            self.config.server.clone(),
+            reasoning_service,
+        ))
+    }
+
+    /// Start a server with the specified configuration
+    /// Returns a ServerManager that can be used to stop the server
+    #[cfg(feature = "server")]
+    pub async fn start_server(&self) -> Result<crate::server::ServerManager> {
+        let mut server_manager = self.create_server_manager()?;
+        server_manager.start_all().await?;
+        Ok(server_manager)
+    }
+
+    /// Start a server on a specific port
+    /// Returns a ServerManager that can be used to stop the server
+    #[cfg(feature = "server")]
+    pub async fn start_server_on_port(&self, port: u16) -> Result<crate::server::ServerManager> {
+        use std::sync::Arc;
+        
+        let ontology = self.ontology.as_ref()
+            .ok_or_else(|| Error::Reasoning {
+                message: "No ontology loaded. Load an ontology before starting the server.".to_string(),
+            })?;
+
+        let ontology_clone = ontology.read()
+            .map_err(|_| Error::Reasoning {
+                message: "Failed to acquire ontology read lock".to_string(),
+            })?
+            .clone();
+
+        let reasoning_service = Arc::new(crate::reasoning::ReasoningService::new(
+            ontology_clone,
+            self.config.clone(),
+        ));
+
+        let mut server_manager = crate::server::ServerManager::with_port(
+            reasoning_service,
+            port,
+        );
+        server_manager.start_all().await?;
+        Ok(server_manager)
+    }
 }
+

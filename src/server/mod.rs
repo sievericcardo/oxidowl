@@ -43,6 +43,70 @@ impl ServerManager {
         }
     }
 
+    /// Create a new server manager with default configuration
+    pub fn with_defaults(reasoning_service: Arc<ReasoningService>) -> Self {
+        Self::new(ServerConfig::default(), reasoning_service)
+    }
+
+    /// Create a new server manager with custom port
+    pub fn with_port(reasoning_service: Arc<ReasoningService>, port: u16) -> Self {
+        let mut config = ServerConfig::default();
+        config.enable_server = true;
+        config.port = port;
+        config.rest_api_port = port;
+        Self::new(config, reasoning_service)
+    }
+
+    /// Create a new server manager with custom bind address and port
+    pub fn with_bind_and_port(
+        reasoning_service: Arc<ReasoningService>,
+        bind_address: String,
+        port: u16,
+    ) -> Self {
+        let mut config = ServerConfig::default();
+        config.enable_server = true;
+        config.bind_address = bind_address;
+        config.port = port;
+        config.rest_api_port = port;
+        Self::new(config, reasoning_service)
+    }
+
+    /// Enable specific server types
+    pub fn enable_owllink(&mut self, enabled: bool) -> &mut Self {
+        self.config.enable_owllink = enabled;
+        self
+    }
+
+    /// Enable SPARQL server
+    pub fn enable_sparql(&mut self, enabled: bool) -> &mut Self {
+        self.config.enable_sparql = enabled;
+        self
+    }
+
+    /// Enable REST API
+    pub fn enable_rest_api(&mut self, enabled: bool) -> &mut Self {
+        self.config.enable_rest_api = enabled;
+        self
+    }
+
+    /// Set OWLlink port
+    pub fn set_owllink_port(&mut self, port: u16) -> &mut Self {
+        self.config.owllink_port = port;
+        self
+    }
+
+    /// Set SPARQL port
+    pub fn set_sparql_port(&mut self, port: u16) -> &mut Self {
+        self.config.sparql_port = port;
+        self
+    }
+
+    /// Set REST API port
+    pub fn set_rest_api_port(&mut self, port: u16) -> &mut Self {
+        self.config.rest_api_port = port;
+        self
+    }
+
     /// Start all configured servers
     pub async fn start_all(&mut self) -> Result<()> {
         if self.config.enable_owllink {

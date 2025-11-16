@@ -783,8 +783,67 @@ impl TurtleParser {
 
             // Get object
             if i < tokens.len() {
-                let object = self.resolve_token(&tokens[i], state)?;
-                i += 1;
+                let object = match &tokens[i] {
+                    Token::LeftBracket => {
+                        // Handle nested blank node
+                        i += 1; // Skip the opening bracket
+                        let mut bracket_depth = 1;
+                        let start_idx = i;
+                        
+                        // Find matching closing bracket
+                        while i < tokens.len() && bracket_depth > 0 {
+                            match &tokens[i] {
+                                Token::LeftBracket => bracket_depth += 1,
+                                Token::RightBracket => bracket_depth -= 1,
+                                _ => {}
+                            }
+                            if bracket_depth > 0 {
+                                i += 1;
+                            }
+                        }
+                        
+                        // Parse the nested blank node content
+                        let nested_blank_node_id = format!("_:b{}", state.blank_node_counter);
+                        state.blank_node_counter += 1;
+                        
+                        let nested_tokens = &tokens[start_idx..i];
+                        self.parse_blank_node_content(nested_tokens, ontology, state, &nested_blank_node_id)?;
+                        
+                        i += 1; // Skip the closing bracket
+                        nested_blank_node_id
+                    }
+                    Token::LeftParen => {
+                        // Handle collection
+                        i += 1; // Skip the opening paren
+                        let mut paren_depth = 1;
+                        let start_idx = i;
+                        
+                        // Find matching closing paren
+                        while i < tokens.len() && paren_depth > 0 {
+                            match &tokens[i] {
+                                Token::LeftParen => paren_depth += 1,
+                                Token::RightParen => paren_depth -= 1,
+                                _ => {}
+                            }
+                            if paren_depth > 0 {
+                                i += 1;
+                            }
+                        }
+                        
+                        // Parse the collection
+                        let collection_tokens = &tokens[start_idx..i];
+                        let collection_id = self.parse_collection(collection_tokens, ontology, state)?;
+                        
+                        i += 1; // Skip the closing paren
+                        collection_id
+                    }
+                    _ => {
+                        // Regular token
+                        let obj = self.resolve_token(&tokens[i], state)?;
+                        i += 1;
+                        obj
+                    }
+                };
 
                 // Create triple
                 self.process_enhanced_triple(ontology, blank_node_id.to_string(), predicate, object)?;
