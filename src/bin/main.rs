@@ -119,11 +119,11 @@ struct Cli {
     #[arg(long, value_name = "ADDRESS")]
     server_bind: Option<String>,
 
-    /// Enable OWLlink server
+    /// Enable `OWLlink` server
     #[arg(long)]
     enable_owllink: bool,
 
-    /// OWLlink server port (default: 8081)
+    /// `OWLlink` server port (default: 8081)
     #[arg(long, value_name = "PORT")]
     owllink_port: Option<u16>,
 
