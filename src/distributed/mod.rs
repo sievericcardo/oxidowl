@@ -379,7 +379,7 @@ impl Default for NodeConfig {
     fn default() -> Self {
         Self {
             node_id: Uuid::new_v4(),
-            address: "127.0.0.1:8080".parse().unwrap(),
+            address: "127.0.0.1:8080".parse().expect("Failed to parse socket address for cluster node"),
             capabilities: NodeCapabilities::default(),
             settings: NodeSettings::default(),
         }

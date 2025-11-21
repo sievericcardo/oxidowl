@@ -1104,7 +1104,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_checkpoint_manager() {
-        let mut manager = CheckpointManager::new().await.unwrap();
+        let mut manager = CheckpointManager::new().await.expect("Failed to create checkpoint manager for fault tolerance");
         let checkpoint_id = Uuid::new_v4();
 
         let result = manager

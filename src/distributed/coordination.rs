@@ -317,7 +317,7 @@ mod tests {
     #[tokio::test]
     async fn test_lock_acquisition() {
         let config = ClusterConfig::default();
-        let coordinator = ClusterCoordinator::new(config).await.unwrap();
+        let coordinator = ClusterCoordinator::new(config).await.expect("Failed to create cluster coordinator with given configuration");
 
         let lock_id = "test_lock".to_string();
         let node_id = uuid::Uuid::new_v4();
@@ -325,22 +325,20 @@ mod tests {
 
         let acquired = coordinator
             .acquire_lock(lock_id.clone(), node_id, timeout)
-            .await
-            .unwrap();
+            .await.expect("Failed to acquire distributed lock on cluster");
         assert!(acquired);
 
         // Try to acquire same lock again (should fail)
         let acquired2 = coordinator
             .acquire_lock(lock_id.clone(), uuid::Uuid::new_v4(), timeout)
-            .await
-            .unwrap();
+            .await.expect("Failed to acquire distributed lock on cluster");
         assert!(!acquired2);
     }
 
     #[tokio::test]
     async fn test_lock_release() {
         let config = ClusterConfig::default();
-        let coordinator = ClusterCoordinator::new(config).await.unwrap();
+        let coordinator = ClusterCoordinator::new(config).await.expect("Failed to create cluster coordinator with given configuration");
 
         let lock_id = "test_lock".to_string();
         let node_id = uuid::Uuid::new_v4();
@@ -348,55 +346,52 @@ mod tests {
 
         coordinator
             .acquire_lock(lock_id.clone(), node_id, timeout)
-            .await
-            .unwrap();
+            .await.expect("Failed to acquire distributed lock on cluster");
         let released = coordinator
             .release_lock(lock_id.clone(), node_id)
-            .await
-            .unwrap();
+            .await.expect("Failed to acquire distributed lock on cluster");
         assert!(released);
 
         // Should be able to acquire again after release
         let acquired = coordinator
             .acquire_lock(lock_id, node_id, timeout)
-            .await
-            .unwrap();
+            .await.expect("Failed to acquire distributed lock on cluster");
         assert!(acquired);
     }
 
     #[tokio::test]
     async fn test_leader_management() {
         let config = ClusterConfig::default();
-        let coordinator = ClusterCoordinator::new(config).await.unwrap();
+        let coordinator = ClusterCoordinator::new(config).await.expect("Failed to create cluster coordinator with given configuration");
 
         let node_id = uuid::Uuid::new_v4();
 
         // Initially no leader
-        let leader = coordinator.get_leader().await.unwrap();
+        let leader = coordinator.get_leader().await.expect("Failed to get cluster leader node");
         assert!(leader.is_none());
 
         // Set leader
-        coordinator.set_leader(Some(node_id)).await.unwrap();
-        let leader = coordinator.get_leader().await.unwrap();
+        coordinator.set_leader(Some(node_id)).await.expect("Failed to set cluster leader node");
+        let leader = coordinator.get_leader().await.expect("Failed to get cluster leader node");
         assert_eq!(leader, Some(node_id));
 
         // Check if node is leader
-        let is_leader = coordinator.is_leader(node_id).await.unwrap();
+        let is_leader = coordinator.is_leader(node_id).await.expect("Failed to check if node is cluster leader");
         assert!(is_leader);
     }
 
     #[tokio::test]
     async fn test_consensus_participants() {
         let config = ClusterConfig::default();
-        let coordinator = ClusterCoordinator::new(config).await.unwrap();
+        let coordinator = ClusterCoordinator::new(config).await.expect("Failed to create cluster coordinator with given configuration");
 
         let node1 = uuid::Uuid::new_v4();
         let node2 = uuid::Uuid::new_v4();
 
-        coordinator.add_participant(node1).await.unwrap();
-        coordinator.add_participant(node2).await.unwrap();
+        coordinator.add_participant(node1).await.expect("Failed to add participant node to cluster");
+        coordinator.add_participant(node2).await.expect("Failed to add participant node to cluster");
 
-        let state = coordinator.get_consensus_state().await.unwrap();
+        let state = coordinator.get_consensus_state().await.expect("Failed to get consensus state from cluster");
         assert_eq!(state.participants.len(), 2);
         assert!(state.participants.contains(&node1));
         assert!(state.participants.contains(&node2));
