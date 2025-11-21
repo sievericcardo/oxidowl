@@ -133,7 +133,7 @@ mod tests {
         let serializer = MockSerializer;
         let ontology = Ontology::new();
 
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file for test");
         let path = temp_file.path();
 
         // Test serialization to file
@@ -141,7 +141,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify file content
-        let content = std::fs::read_to_string(path).unwrap();
+        let content = std::fs::read_to_string(path).expect("Failed to read file content as string");
         assert_eq!(content, "Mock serialized content");
     }
 
@@ -150,9 +150,9 @@ mod tests {
         let parser = MockParser;
 
         // Create a temporary file with test content
-        let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, "Test ontology content").unwrap();
-        temp_file.flush().unwrap();
+        let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file for test");
+        writeln!(temp_file, "Test ontology content").expect("Failed to write content to temporary file");
+        temp_file.flush().expect("Failed to flush temporary file");
 
         let result = parser.parse_from_file(temp_file.path());
         assert!(result.is_ok());

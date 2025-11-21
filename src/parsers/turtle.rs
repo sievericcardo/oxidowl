@@ -1709,7 +1709,7 @@ impl TurtleParser {
             {
                 let after_card = &restriction_str[card_start..];
                 let after_prop_name =
-                    &after_card[after_card.find("Cardinality").unwrap() + 11..].trim_start();
+                    &after_card[after_card.find("Cardinality").expect("Failed to find Cardinality keyword in restriction") + 11..].trim_start();
 
                 // Extract the literal value (could be "2"^^xsd:nonNegativeInteger or just "2")
                 if let Some(quote_start) = after_prop_name.find('"') {
@@ -1823,7 +1823,7 @@ impl TurtleParser {
 
                 // Check for datatype annotation
                 if after_has_self.contains("^^") {
-                    let after_quotes = &after_has_self[after_has_self.find('"').unwrap()..];
+                    let after_quotes = &after_has_self[after_has_self.find('"').expect("Failed to find quote in hasSelf restriction")..];
                     if let Some(quote_end) = after_quotes[1..].find('"') {
                         let after_closing_quote = &after_quotes[quote_end + 2..];
                         if after_closing_quote.trim_start().starts_with("^^") {
@@ -2721,7 +2721,7 @@ ast:Pump rdf:type owl:Class ;
         }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
-        let ontology = result.unwrap();
+        let ontology = result.expect("Failed to parse ontology from test input");
 
         // Check that disjoint union axiom was created
         let has_disjoint_union = ontology
@@ -2753,7 +2753,7 @@ ast:Operational rdfs:subClassOf ast:Pump .
         }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
-        let ontology = result.unwrap();
+        let ontology = result.expect("Failed to parse ontology from test input");
 
         // Check that SubClassOf axioms were created
         let subclass_count = ontology
