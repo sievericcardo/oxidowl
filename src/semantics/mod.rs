@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_rdf_term_creation() {
-        let iri = RdfTerm::iri("http://example.org/test").unwrap();
+        let iri = RdfTerm::iri("http://example.org/test").expect("Failed to create RDF IRI term from valid URI string");
         assert!(iri.is_iri());
 
         let blank = RdfTerm::blank_node("b1");
@@ -375,8 +375,8 @@ mod tests {
     fn test_rdf_graph_operations() {
         let mut graph = RdfGraph::new();
 
-        let subject = RdfTerm::iri("http://example.org/subject").unwrap();
-        let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
+        let subject = RdfTerm::iri("http://example.org/subject").expect("Failed to create RDF IRI term from valid URI string");
+        let predicate = RdfTerm::iri("http://example.org/predicate").expect("Failed to create RDF IRI term from valid URI string");
         let object = RdfTerm::literal("object");
 
         let triple = Triple {
@@ -399,8 +399,8 @@ mod tests {
     fn test_triple_pattern_matching() {
         let mut graph = RdfGraph::new();
 
-        let subject = RdfTerm::iri("http://example.org/subject").unwrap();
-        let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
+        let subject = RdfTerm::iri("http://example.org/subject").expect("Failed to create RDF IRI term from valid URI string");
+        let predicate = RdfTerm::iri("http://example.org/predicate").expect("Failed to create RDF IRI term from valid URI string");
         let object = RdfTerm::literal("object");
 
         let triple = Triple {
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(matches.len(), 1);
 
         // Find non-existent
-        let other_subject = RdfTerm::iri("http://example.org/other").unwrap();
+        let other_subject = RdfTerm::iri("http://example.org/other").expect("Failed to create RDF IRI term from valid URI string");
         let matches = graph.find_triples(Some(&other_subject), None, None);
         assert_eq!(matches.len(), 0);
     }

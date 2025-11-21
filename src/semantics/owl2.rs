@@ -1426,7 +1426,7 @@ mod tests {
         let owl_thing_interp = interp
             .class_interpretation
             .get(&OWL_THING.to_string())
-            .unwrap();
+            .expect("Failed to get owl:Thing class interpretation");
         assert_eq!(owl_thing_interp.len(), 2);
         assert!(owl_thing_interp.contains("individual1"));
         assert!(owl_thing_interp.contains("individual2"));
@@ -1435,7 +1435,7 @@ mod tests {
         let owl_nothing_interp = interp
             .class_interpretation
             .get(&OWL_NOTHING.to_string())
-            .unwrap();
+            .expect("Failed to get owl:Nothing class interpretation");
         assert!(owl_nothing_interp.is_empty());
     }
 
@@ -1464,7 +1464,7 @@ mod tests {
         });
 
         let intersection = ClassExpression::ObjectIntersectionOf(vec![person_class, owl_thing]);
-        let result = interp.interpret_class_expression(&intersection).unwrap();
+        let result = interp.interpret_class_expression(&intersection).expect("Failed to interpret OWL class expression intersection");
 
         assert_eq!(result.len(), 1);
         assert!(result.contains("individual1"));
@@ -1476,7 +1476,7 @@ mod tests {
         let mut engine = Owl2ReasoningEngine::new(axioms);
 
         // Test consistency check
-        let consistent = engine.is_consistent().unwrap();
+        let consistent = engine.is_consistent().expect("Failed to check OWL 2 ontology consistency");
         assert!(consistent);
 
         // Test satisfiability
@@ -1484,7 +1484,7 @@ mod tests {
             iri: crate::ontology::IRI::new("http://example.org/Person"),
         });
 
-        let satisfiable = engine.is_satisfiable(&person_class).unwrap();
+        let satisfiable = engine.is_satisfiable(&person_class).expect("Failed to check if class expression is satisfiable");
         assert!(satisfiable);
     }
 }

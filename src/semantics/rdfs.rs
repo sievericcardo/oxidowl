@@ -718,9 +718,9 @@ mod tests {
         let mut graph = RdfGraph::new();
         
         // Add domain statement: ex:knows rdfs:domain ex:Person
-        let knows = RdfTerm::iri("http://example.org/knows").unwrap();
+        let knows = RdfTerm::iri("http://example.org/knows").expect("Failed to create RDF IRI term from valid URI string");
         let domain = RdfTerm::Iri(RDFS_DOMAIN.clone());
-        let person = RdfTerm::iri("http://example.org/Person").unwrap();
+        let person = RdfTerm::iri("http://example.org/Person").expect("Failed to create RDF IRI term from valid URI string");
         
         graph.add_triple(Triple {
             subject: knows.clone(),
@@ -729,8 +729,8 @@ mod tests {
         });
         
         // Add usage: ex:john ex:knows ex:mary
-        let john = RdfTerm::iri("http://example.org/john").unwrap();
-        let mary = RdfTerm::iri("http://example.org/mary").unwrap();
+        let john = RdfTerm::iri("http://example.org/john").expect("Failed to create RDF IRI term from valid URI string");
+        let mary = RdfTerm::iri("http://example.org/mary").expect("Failed to create RDF IRI term from valid URI string");
         
         graph.add_triple(Triple {
             subject: john.clone(),
@@ -740,7 +740,7 @@ mod tests {
         
         // Apply RDFS reasoning
         let mut engine = RdfsEntailmentEngine::new(graph);
-        engine.reason().unwrap();
+        engine.reason().expect("Failed to execute RDFS reasoning over RDF graph");
         
         let closure = engine.closure();
         
@@ -760,9 +760,9 @@ mod tests {
         let mut graph = RdfGraph::new();
         
         // Add subclass statement: ex:Student rdfs:subClassOf ex:Person
-        let student = RdfTerm::iri("http://example.org/Student").unwrap();
+        let student = RdfTerm::iri("http://example.org/Student").expect("Failed to create RDF IRI term from valid URI string");
         let subclass = RdfTerm::Iri(RDFS_SUBCLASS_OF.clone());
-        let person = RdfTerm::iri("http://example.org/Person").unwrap();
+        let person = RdfTerm::iri("http://example.org/Person").expect("Failed to create RDF IRI term from valid URI string");
         
         graph.add_triple(Triple {
             subject: student.clone(),
@@ -771,7 +771,7 @@ mod tests {
         });
         
         // Add instance: ex:john rdf:type ex:Student
-        let john = RdfTerm::iri("http://example.org/john").unwrap();
+        let john = RdfTerm::iri("http://example.org/john").expect("Failed to create RDF IRI term from valid URI string");
         let type_iri = RdfTerm::Iri(RDF_TYPE.clone());
         
         graph.add_triple(Triple {
@@ -782,7 +782,7 @@ mod tests {
         
         // Apply RDFS reasoning
         let mut engine = RdfsEntailmentEngine::new(graph);
-        engine.reason().unwrap();
+        engine.reason().expect("Failed to execute RDFS reasoning over RDF graph");
         
         let closure = engine.closure();
         
