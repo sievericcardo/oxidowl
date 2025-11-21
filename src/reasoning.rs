@@ -413,7 +413,8 @@ impl ReasoningService {
             .into_iter()
             .map(|s| crate::ontology::Literal {
                 value: s.to_string(),
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap()),
+                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
+                    .expect("Valid hardcoded XSD string URL")),
                 language: None,
             })
             .collect();

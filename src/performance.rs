@@ -631,14 +631,19 @@ mod tests {
         let tracker = MemoryTracker::new(10);
 
         // Take some snapshots
-        tracker.snapshot(1024 * 1024, 512 * 1024).unwrap();
-        tracker.snapshot(2048 * 1024, 1024 * 1024).unwrap();
-        tracker.snapshot(3072 * 1024, 1536 * 1024).unwrap();
+        tracker.snapshot(1024 * 1024, 512 * 1024)
+            .expect("Snapshot should succeed");
+        tracker.snapshot(2048 * 1024, 1024 * 1024)
+            .expect("Snapshot should succeed");
+        tracker.snapshot(3072 * 1024, 1536 * 1024)
+            .expect("Snapshot should succeed");
 
-        let snapshots = tracker.get_snapshots().unwrap();
+        let snapshots = tracker.get_snapshots()
+            .expect("Getting snapshots should succeed");
         assert_eq!(snapshots.len(), 3);
 
-        let stats = tracker.get_stats().unwrap();
+        let stats = tracker.get_stats()
+            .expect("Getting stats should succeed");
         assert!(stats.peak_total_mb > 0.0);
     }
 
@@ -675,7 +680,7 @@ mod tests {
                 5,
                 100,
             ))
-            .unwrap();
+            .expect("Recording query timing should succeed");
 
         profiler
             .record(QueryTiming::new(
@@ -687,9 +692,10 @@ mod tests {
                 10,
                 200,
             ))
-            .unwrap();
+            .expect("Recording query timing should succeed");
 
-        let stats = profiler.get_stats().unwrap();
+        let stats = profiler.get_stats()
+            .expect("Getting stats should succeed");
         assert_eq!(stats.total_queries, 2);
         assert!(stats.avg_total_duration_ms > 0.0);
         assert!(stats.slowest_query_ms >= stats.fastest_query_ms);
@@ -701,7 +707,8 @@ mod tests {
         assert!(monitor.is_enabled());
 
         // Take memory snapshot
-        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024).unwrap();
+        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024)
+            .expect("Snapshot should succeed");
         assert!(snapshot.is_some());
 
         // Record query timing
@@ -715,16 +722,18 @@ mod tests {
                 5,
                 100,
             ))
-            .unwrap();
+            .expect("Recording query timing should succeed");
 
         // Get report
-        let report = monitor.get_report().unwrap();
+        let report = monitor.get_report()
+            .expect("Getting report should succeed");
         assert_eq!(report.query_stats.total_queries, 1);
 
         // Test disable
         monitor.disable();
         assert!(!monitor.is_enabled());
-        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024).unwrap();
+        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024)
+            .expect("Snapshot should succeed");
         assert!(snapshot.is_none());
     }
 

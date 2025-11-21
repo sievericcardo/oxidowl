@@ -1085,12 +1085,16 @@ mod tests {
         graph.add_dependency(onto_a.clone(), ImportDeclaration::new(onto_b.clone()));
         graph.add_dependency(onto_b.clone(), ImportDeclaration::new(onto_c.clone()));
 
-        let order = graph.topological_sort().unwrap();
+        let order = graph.topological_sort()
+            .expect("Topological sort should succeed for acyclic graph");
 
         // C should come before B, B should come before A
-        let pos_a = order.iter().position(|iri| iri == &onto_a).unwrap();
-        let pos_b = order.iter().position(|iri| iri == &onto_b).unwrap();
-        let pos_c = order.iter().position(|iri| iri == &onto_c).unwrap();
+        let pos_a = order.iter().position(|iri| iri == &onto_a)
+            .expect("onto_a should be in the sorted order");
+        let pos_b = order.iter().position(|iri| iri == &onto_b)
+            .expect("onto_b should be in the sorted order");
+        let pos_c = order.iter().position(|iri| iri == &onto_c)
+            .expect("onto_c should be in the sorted order");
 
         assert!(pos_c < pos_b);
         assert!(pos_b < pos_a);

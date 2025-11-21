@@ -401,9 +401,13 @@ impl IndividualStore {
 
         for individual in assertion.individuals() {
             if individual.is_anonymous() {
-                self.add_anonymous_individual(individual.anonymous_id().unwrap().clone());
+                if let Some(id) = individual.anonymous_id() {
+                    self.add_anonymous_individual(id.clone());
+                }
             } else {
-                self.add_named_individual(individual.named_iri().unwrap().clone());
+                if let Some(iri) = individual.named_iri() {
+                    self.add_named_individual(iri.clone());
+                }
             }
         }
 

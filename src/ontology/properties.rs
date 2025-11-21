@@ -38,7 +38,7 @@ impl ObjectProperty {
         Self::new(crate::ontology::IRI::from(
             "http://www.w3.org/2002/07/owl#topObjectProperty".to_string(),
         ))
-        .unwrap()
+        .expect("Valid hardcoded OWL topObjectProperty IRI")
     }
 
     /// Create the bottom object property (owl:bottomObjectProperty)
@@ -47,7 +47,7 @@ impl ObjectProperty {
         Self::new(crate::ontology::IRI::from(
             "http://www.w3.org/2002/07/owl#bottomObjectProperty".to_string(),
         ))
-        .unwrap()
+        .expect("Valid hardcoded OWL bottomObjectProperty IRI")
     }
 }
 

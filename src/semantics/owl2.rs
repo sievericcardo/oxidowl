@@ -1220,7 +1220,10 @@ impl Owl2ReasoningEngine {
                 return Ok(true);
             }
 
-            let current_node = nodes.get(&current_individual).unwrap().clone();
+            let current_node = nodes.get(&current_individual)
+                .ok_or_else(|| Error::reasoning(
+                    format!("Individual {} not found in tableau nodes", current_individual)))?  
+                .clone();
 
             // Check for obvious contradictions
             if self.has_contradiction(&current_node.concepts)? {
@@ -1285,7 +1288,10 @@ impl Owl2ReasoningEngine {
     ) -> Result<bool> {
         let mut made_changes = false;
 
-        let current_node = nodes.get(individual).unwrap().clone();
+        let current_node = nodes.get(individual)
+            .ok_or_else(|| Error::reasoning(
+                format!("Individual {} not found in tableau nodes", individual)))?
+            .clone();
 
         for concept in current_node.concepts.iter() {
             match concept {

@@ -392,7 +392,7 @@ impl DatatypeValidator {
         let datetime_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
         )
-        .unwrap(); // Safe: hardcoded regex pattern
+        .expect("Valid hardcoded regex pattern for datetime");
         Ok(datetime_pattern.is_match(value))
     }
 
@@ -401,45 +401,52 @@ impl DatatypeValidator {
         let datetime_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$",
         )
-        .unwrap(); // Safe: hardcoded regex pattern
+        .expect("Valid hardcoded regex pattern for datetime stamp");
         Ok(datetime_pattern.is_match(value))
     }
 
     fn validate_date(&self, value: &str) -> Result<bool> {
         // Format: YYYY-MM-DD(Z|[+-]HH:MM)?
-        let date_pattern = regex::Regex::new(r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+        let date_pattern = regex::Regex::new(r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for date");
         Ok(date_pattern.is_match(value))
     }
 
     fn validate_time(&self, value: &str) -> Result<bool> {
         // Format: HH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let time_pattern =
-            regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+            regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
+                .expect("Valid hardcoded regex pattern for time");
         Ok(time_pattern.is_match(value))
     }
 
     fn validate_gyear(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for gYear");
         Ok(pattern.is_match(value))
     }
 
     fn validate_gyear_month(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for gYearMonth");
         Ok(pattern.is_match(value))
     }
 
     fn validate_gmonth(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for gMonth");
         Ok(pattern.is_match(value))
     }
 
     fn validate_gmonth_day(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for gMonthDay");
         Ok(pattern.is_match(value))
     }
 
     fn validate_gday(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
+        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for gDay");
         Ok(pattern.is_match(value))
     }
 
@@ -447,7 +454,7 @@ impl DatatypeValidator {
         // Format: P(nY)?(nM)?(nD)?(T(nH)?(nM)?(nS)?)?
         let pattern =
             regex::Regex::new(r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$")
-                .unwrap(); // Safe: hardcoded regex pattern
+                .expect("Valid hardcoded regex pattern for duration");
         Ok(pattern.is_match(value))
     }
 

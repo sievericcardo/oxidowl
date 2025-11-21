@@ -604,7 +604,8 @@ impl QueryBinding {
 impl QueryCache {
     fn new() -> Self {
         Self {
-            results: lru::LruCache::new(std::num::NonZeroUsize::new(100).unwrap()), // Safe: hardcoded non-zero value
+            results: lru::LruCache::new(std::num::NonZeroUsize::new(100)
+                .expect("Hardcoded non-zero value for cache size")),
             statistics: CacheStatistics::default(),
         }
     }

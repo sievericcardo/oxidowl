@@ -239,7 +239,9 @@ impl SWRLBuiltIn for FirstBuiltIn {
                     return Err(Error::reasoning("Cannot get first element of empty list"));
                 }
 
-                let first_item = list.split(',').next().unwrap().trim();
+                let first_item = list.split(',').next()
+                    .ok_or_else(|| Error::reasoning("Failed to get first element from list"))?
+                    .trim();
 
                 // Try to match the type of the result
                 match result {
