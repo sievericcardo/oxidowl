@@ -70,7 +70,7 @@ fn bench_strategy_selection(c: &mut Criterion) {
         let constraints = default_constraints();
 
         group.bench_with_input(BenchmarkId::new("ML", size), size, |b, _| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
             b.iter(|| {
                 let result = rt.block_on(engine_ml.execute_query(&query, constraints.clone()));
                 black_box(result)
@@ -94,7 +94,7 @@ fn bench_strategy_selection(c: &mut Criterion) {
         .expect("Failed to create legacy engine");
 
         group.bench_with_input(BenchmarkId::new("Legacy", size), size, |b, _| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
             b.iter(|| {
                 let result = rt.block_on(engine_legacy.execute_query(&query, constraints.clone()));
                 black_box(result)
@@ -121,7 +121,7 @@ fn bench_query_throughput(c: &mut Criterion) {
         .expect("Failed to create engine");
 
     group.bench_function("10_queries", |b| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
         b.iter(|| {
             for i in 0..10 {
                 let query = create_star_query("x", &format!("Class{}", i));
@@ -132,7 +132,7 @@ fn bench_query_throughput(c: &mut Criterion) {
     });
 
     group.bench_function("50_queries", |b| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
         b.iter(|| {
             for i in 0..50 {
                 let query = create_star_query("x", &format!("Class{}", i % 10));
@@ -177,7 +177,7 @@ fn bench_ml_overhead(c: &mut Criterion) {
     let constraints = default_constraints();
 
     group.bench_function("ML_enabled", |b| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
         b.iter(|| {
             let result = rt.block_on(engine_ml.execute_query(&query, constraints.clone()));
             black_box(result)
@@ -185,7 +185,7 @@ fn bench_ml_overhead(c: &mut Criterion) {
     });
 
     group.bench_function("Legacy", |b| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
         b.iter(|| {
             let result = rt.block_on(engine_legacy.execute_query(&query, constraints.clone()));
             black_box(result)
@@ -218,7 +218,7 @@ fn bench_concurrent_execution(c: &mut Criterion) {
             for i in 0..4 {
                 let engine_clone = engine.clone();
                 let handle = std::thread::spawn(move || {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                     let query = create_star_query("x", &format!("C{}", i));
                     let constraints = default_constraints();
                     rt.block_on(engine_clone.execute_query(&query, constraints))
@@ -237,7 +237,7 @@ fn bench_concurrent_execution(c: &mut Criterion) {
             for i in 0..8 {
                 let engine_clone = engine.clone();
                 let handle = std::thread::spawn(move || {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                     let query = create_star_query("x", &format!("C{}", i));
                     let constraints = default_constraints();
                     rt.block_on(engine_clone.execute_query(&query, constraints))
@@ -274,7 +274,7 @@ fn bench_scalability(c: &mut Criterion) {
         let constraints = default_constraints();
 
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
             b.iter(|| {
                 let result = rt.block_on(engine.execute_query(&query, constraints.clone()));
                 black_box(result)
