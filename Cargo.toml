@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using tableau algorithms with parallel computation. This project started as a test to explore the capabilities of agentic LLM tools for software development."
 license = "BSD-3-Clause"
