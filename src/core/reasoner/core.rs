@@ -8,6 +8,7 @@ use crate::{
     cache::CacheManager,
     config::ReasonerConfig,
     core::{
+        lock_helpers::{read_lock, write_lock},
         reasoner::{
             classification::ClassificationService,
             explanation::ExplanationService,
@@ -148,7 +149,7 @@ impl Reasoner {
 
         // Check for explicit subclass declarations in the ontology
         if let Some(ontology) = &self.ontology {
-            let ontology_ref = ontology.read().unwrap();
+            let ontology_ref = read_lock(ontology, "core: reading ontology for is_subclass_of")?;
             for axiom in ontology_ref.axioms() {
                 if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
                     if &subclass_axiom.subclass == subclass
@@ -226,7 +227,7 @@ impl Reasoner {
     /// Check if the ontology is consistent
     pub fn is_consistent(&self) -> Result<bool> {
         if let Some(ontology) = &self.ontology {
-            let ontology_ref = ontology.read().unwrap();
+            let ontology_ref = read_lock(ontology, "core: reading ontology for consistency check")?;
 
             // PHASE 1: Pre-consistency check (fast detection of certain inconsistencies)
             log::info!("Running pre-consistency check");
@@ -266,7 +267,7 @@ impl Reasoner {
     pub fn is_class_satisfiable(&self, class: &ClassExpression) -> Result<bool> {
         if let Some(ontology) = &self.ontology {
             // Create a tableau for satisfiability checking
-            let ontology_ref = ontology.read().unwrap();
+            let ontology_ref = read_lock(ontology, "core: reading ontology for satisfiability check")?;
             let mut tableau = self
                 .tableau_factory
                 .create_for_consistency(&*ontology_ref)?;
@@ -285,7 +286,7 @@ impl Reasoner {
             };
 
             // Create a temporary ontology with the test assertion
-            let mut test_ontology = ontology.read().unwrap().clone();
+            let mut test_ontology = read_lock(ontology, "core: reading ontology to clone for test")?.clone();
             test_ontology.add_axiom(crate::ontology::Axiom::ClassAssertion(test_assertion));
 
             // Initialize a new tableau with the test ontology
@@ -326,7 +327,7 @@ impl Reasoner {
         direct: bool,
     ) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_superclasses")?;
             let mut superclasses = Vec::new();
 
             // Check all class expressions in the ontology for subsumption
@@ -383,7 +384,7 @@ impl Reasoner {
         direct: bool,
     ) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_subclasses")?;
             let mut subclasses = Vec::new();
 
             // Check all class expressions in the ontology for subsumption
@@ -439,7 +440,7 @@ impl Reasoner {
     /// Get equivalent classes
     pub fn get_equivalent_classes(&self, class: &ClassExpression) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_equivalent_classes")?;
             let mut equivalent_classes = Vec::new();
 
             // Check explicit equivalent class axioms
@@ -503,7 +504,7 @@ impl Reasoner {
         class: &ClassExpression,
     ) -> Result<bool> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for is_instance_of")?;
             self.classification_service.check_instance_with_datatype_reasoning(
                 individual,
                 class,
@@ -517,7 +518,7 @@ impl Reasoner {
     /// Get types of an individual
     pub fn get_types(&self, individual: &Individual, direct: bool) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_types")?;
             let mut types = Vec::new();
 
             // Look for explicit class assertions
@@ -556,7 +557,7 @@ impl Reasoner {
         property: &ObjectPropertyExpression,
     ) -> Result<Vec<Individual>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_object_property_values")?;
             let mut values = Vec::new();
 
             // Look for explicit object property assertions
@@ -588,7 +589,7 @@ impl Reasoner {
         property: &DataPropertyExpression,
     ) -> Result<Vec<crate::ontology::Literal>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_data_property_values")?;
             let mut values = Vec::new();
 
             // Look for explicit data property assertions
@@ -655,7 +656,7 @@ impl Reasoner {
         axiom: &crate::ontology::Axiom,
     ) -> Result<Vec<crate::ontology::Axiom>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for explain_entailment")?;
 
             // Simple explanation: find axioms that directly support the entailment
             let mut explanation = Vec::new();
@@ -726,7 +727,7 @@ impl Reasoner {
     /// Explain why the ontology is inconsistent
     pub fn explain_inconsistency(&self) -> Result<Vec<crate::ontology::Axiom>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for explain_inconsistency")?;
             let mut explanation = Vec::new();
 
             // Look for obvious inconsistencies
@@ -788,11 +789,11 @@ impl Reasoner {
     /// Add an axiom to the ontology
     pub fn add_axiom(&mut self, axiom: crate::ontology::Axiom) -> Result<()> {
         if let Some(ontology_ref) = &mut self.ontology {
-            let mut ontology = ontology_ref.write().unwrap();
+            let mut ontology = write_lock(ontology_ref, "core: writing ontology to add axiom")?;
             ontology.add_axiom(axiom);
 
             // Clear cache since ontology has changed
-            let mut cache = self.cache_manager.write().unwrap();
+            let mut cache = write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
             cache.clear_all();
 
             Ok(())
@@ -808,14 +809,14 @@ impl Reasoner {
     /// Remove an axiom from the ontology
     pub fn remove_axiom(&mut self, axiom: &crate::ontology::Axiom) -> Result<bool> {
         if let Some(ontology_ref) = &mut self.ontology {
-            let mut ontology = ontology_ref.write().unwrap();
+            let mut ontology = write_lock(ontology_ref, "core: writing ontology to remove axiom")?;
             let original_count = ontology.axioms().len();
             ontology.remove_axiom(axiom);
             let removed = ontology.axioms().len() < original_count;
 
             if removed {
                 // Clear cache since ontology has changed
-                let mut cache = self.cache_manager.write().unwrap();
+                let mut cache = write_lock(&self.cache_manager, "core: clearing cache after remove_axiom")?;
                 cache.clear_all();
             }
 
@@ -834,7 +835,9 @@ impl Reasoner {
     /// Get the size of the current ontology
     pub fn get_ontology_size(&self) -> usize {
         if let Some(ref ontology) = self.ontology {
-            ontology.read().unwrap().axioms().len()
+            read_lock(ontology, "core: reading ontology for size")
+                .map(|guard| guard.axioms().len())
+                .unwrap_or(0)
         } else {
             0
         }
@@ -975,7 +978,7 @@ impl Reasoner {
         &mut self,
     ) -> Result<super::results::PropertyClassificationResult> {
         if let Some(ontology) = &self.ontology {
-            let ontology_ref = ontology.read().unwrap();
+            let ontology_ref = read_lock(ontology, "core: reading ontology for classify_object_properties")?;
             let mut hierarchy = std::collections::HashMap::new();
 
             // Extract all object properties from the ontology
@@ -1014,7 +1017,7 @@ impl Reasoner {
         &mut self,
     ) -> Result<super::results::PropertyClassificationResult> {
         if let Some(ontology) = &self.ontology {
-            let ontology_ref = ontology.read().unwrap();
+            let ontology_ref = read_lock(ontology, "core: reading ontology for classify_data_properties")?;
             let mut hierarchy = std::collections::HashMap::new();
 
             // Extract all data properties from the ontology
@@ -1051,7 +1054,7 @@ impl Reasoner {
     /// Get unsatisfiable classes
     pub fn get_unsatisfiable_classes(&self) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_unsatisfiable_classes")?;
             let mut unsatisfiable = Vec::new();
 
             // Get all classes in the ontology
@@ -1087,7 +1090,7 @@ impl Reasoner {
     /// Get ontology prefixes
     pub fn get_prefixes(&self) -> Result<std::collections::HashMap<String, String>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_prefixes")?;
             let mut prefixes = std::collections::HashMap::new();
 
             // Extract prefixes from ontology entities
@@ -1148,7 +1151,7 @@ impl Reasoner {
     /// Dump DL clauses
     pub fn dump_dl_clauses(&self) -> Result<crate::dl_clauses::DLClauseSet> {
         if let Some(ontology) = &self.ontology {
-            let ontology_ref = ontology.read().unwrap();
+            let ontology_ref = read_lock(ontology, "core: reading ontology for dump_dl_clauses")?;
             let mut generator = DLClauseGenerator::new();
             generator.generate_clauses(&*ontology_ref)
         } else {
@@ -1421,7 +1424,7 @@ impl Reasoner {
         let mut results = Vec::new();
 
         if let Some(ontology) = &self.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(ontology, "core: reading ontology for execute_sparql_select")?;
 
             // For each triple pattern, find matching axioms
             for pattern in &query.patterns {
@@ -1682,7 +1685,7 @@ impl Reasoner {
 
             // Get superclasses of current class (careful to avoid infinite recursion)
             if let Some(ontology_ref) = &self.ontology {
-                let ontology = ontology_ref.read().unwrap();
+                let ontology = read_lock(ontology_ref, "core: reading ontology for get_all_inferred_superclasses")?;
                 for axiom in ontology.axioms() {
                     if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
                         if self.classes_equivalent(&subclass_axiom.subclass, &current)? {
@@ -1721,7 +1724,7 @@ impl Reasoner {
 
             // Get subclasses of current class (careful to avoid infinite recursion)
             if let Some(ontology_ref) = &self.ontology {
-                let ontology = ontology_ref.read().unwrap();
+                let ontology = read_lock(ontology_ref, "core: reading ontology for get_all_inferred_subclasses")?;
                 for axiom in ontology.axioms() {
                     if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom {
                         if self.classes_equivalent(&subclass_axiom.superclass, &current)? {
@@ -1755,7 +1758,7 @@ impl Reasoner {
         let mut classes = Vec::new();
 
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(ontology_ref, "core: reading ontology for get_all_classes_in_ontology_internal")?;
             for axiom in ontology.axioms() {
                 match axiom {
                     crate::ontology::Axiom::SubClassOf(axiom) => {

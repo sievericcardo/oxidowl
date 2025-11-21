@@ -351,7 +351,10 @@ impl NeuralNetworkModel {
                     let activations = self.forward_with_activations(&point.query_features);
                     
                     // Compute output error
-                    let output = activations.last().unwrap();
+                    let Some(output) = activations.last() else {
+                        log::warn!("No activation layers in neural network");
+                        continue;
+                    };
                     let target = vec![point.execution_time, point.memory_usage];
                     let mut delta: Vec<f64> = output
                         .iter()

@@ -6,6 +6,9 @@
 // Core error handling
 pub use crate::{Error, Result};
 
+// Lock helper utilities
+pub use crate::core::{read_lock, write_lock};
+
 // Core ontology types - most commonly used
 pub use crate::ontology::{
     Class, ClassExpression, DataProperty, DataPropertyExpression, IRI, Individual, ObjectProperty,

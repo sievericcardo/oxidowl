@@ -650,7 +650,8 @@ impl Lexer {
             return Ok(Some(Token::EOF));
         }
 
-        let ch = self.current_char.unwrap();
+        let ch = self.current_char
+            .ok_or_else(|| Error::parse_error("Unexpected end of input"))?;
 
         match ch {
             '?' => {

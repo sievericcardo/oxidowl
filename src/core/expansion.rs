@@ -529,8 +529,8 @@ impl ExpansionManager {
     fn next_insertion_order(&mut self) -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0) // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
     }
 
     /// Get strategy name for recording
@@ -1170,9 +1170,8 @@ mod uuid {
                 "{:016x}",
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-                    % (1u128 << 64)
+                    .map(|d| d.as_nanos() % (1u128 << 64))
+                    .unwrap_or(0) // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
             )
         }
     }

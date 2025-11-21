@@ -6,11 +6,14 @@
 use crate::{
     Error, Result,
     cache::CacheManager,
-    core::reasoner::{
-        datatype_validation::DatatypeValidator,
-        results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
-        statistics::ReasoningStatistics,
-        tasks::ReasoningTaskService,
+    core::{
+        lock_helpers::{read_lock, write_lock},
+        reasoner::{
+            datatype_validation::DatatypeValidator,
+            results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
+            statistics::ReasoningStatistics,
+            tasks::ReasoningTaskService,
+        },
     },
     ontology::{
         ClassExpression, DataPropertyExpression, Individual, IRI, ObjectPropertyExpression, Ontology,
@@ -56,17 +59,14 @@ impl ClassificationService {
         info!("Starting classification");
 
         // Check if we have a cached classification result
-        if let Some(cached_result) = self
-            .cache_manager
-            .read()
-            .unwrap()
+        if let Some(cached_result) = read_lock(&self.cache_manager, "classification: reading cache")?
             .get_classification_result(ontology)
         {
             debug!("Classification result found in cache");
             return Ok(cached_result);
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for classify")?;
 
         // Get all named classes from the ontology
         let signature = ontology_guard.signature()?;
@@ -141,9 +141,7 @@ impl ClassificationService {
         let result = ClassificationResult::new(hierarchy);
 
         // Cache the result
-        self.cache_manager
-            .write()
-            .unwrap()
+        write_lock(&self.cache_manager, "classification: storing classification result")?
             .store_classification_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
@@ -163,7 +161,7 @@ impl ClassificationService {
 
         info!("Starting object property classification");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for object property classification")?;
 
         // Get all object properties from the ontology
         let signature = ontology_guard.signature()?;
@@ -212,7 +210,7 @@ impl ClassificationService {
 
         info!("Starting data property classification");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for data property classification")?;
 
         // Get all data properties from the ontology
         let signature = ontology_guard.signature()?;
@@ -262,17 +260,14 @@ impl ClassificationService {
         info!("Starting realization");
 
         // Check if we have a cached realization result
-        if let Some(cached_result) = self
-            .cache_manager
-            .read()
-            .unwrap()
+        if let Some(cached_result) = read_lock(&self.cache_manager, "classification: reading cache for realization")?
             .get_realization_result(ontology)
         {
             debug!("Realization result found in cache");
             return Ok(cached_result);
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for realization")?;
 
         // Get all named individuals and classes
         let individuals: Vec<Individual> = ontology_guard.signature().unwrap().individuals.clone();
@@ -326,9 +321,7 @@ impl ClassificationService {
         let result = RealizationResult::new(realization);
 
         // Cache the result
-        self.cache_manager
-            .write()
-            .unwrap()
+        write_lock(&self.cache_manager, "classification: storing realization result")?
             .store_realization_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
@@ -348,7 +341,7 @@ impl ClassificationService {
 
         info!("Finding unsatisfiable classes");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for unsatisfiable classes")?;
 
         // Get all named classes from the ontology
         let signature = ontology_guard.signature()?;
@@ -390,7 +383,7 @@ impl ClassificationService {
         statistics: &mut ReasoningStatistics,
         _direct: bool,
     ) -> Result<Vec<ClassExpression>> {
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for get_superclasses")?;
         let mut superclasses = Vec::new();
 
         // Get all classes from the signature
@@ -417,7 +410,7 @@ impl ClassificationService {
         ontology: &OntologyRef,
         _direct: bool,
     ) -> Result<Vec<ClassExpression>> {
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for get_subclasses")?;
         let mut subclasses = Vec::new();
 
         if let ClassExpression::Class(target_class) = concept {
@@ -446,7 +439,7 @@ impl ClassificationService {
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
     ) -> Result<Vec<ClassExpression>> {
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for get_equivalent_classes")?;
         let mut equivalent_classes = Vec::new();
 
         // Special handling for union queries - check DisjointUnion axioms
@@ -503,7 +496,7 @@ impl ClassificationService {
         _direct: bool,
     ) -> Result<Vec<Individual>> {
         let individuals = {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(ontology, "classification: reading ontology for get_instances individuals")?;
             // Get all individuals from the signature
             ontology_guard.signature().unwrap().individuals.clone()
         }; // Drop the read lock here
@@ -516,7 +509,7 @@ impl ClassificationService {
             
             // Try direct datatype reasoning first
             {
-                let ontology_guard = ontology.read().unwrap();
+                let ontology_guard = read_lock(ontology, "classification: reading ontology for get_instances datatype reasoning")?;
                 if let Ok(true) = self.check_instance_with_datatype_reasoning(
                     individual,
                     concept,
@@ -858,7 +851,7 @@ impl ClassificationService {
     ) -> Result<Vec<String>> {
         info!("Getting types for individual: {individual}");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for get_types")?;
         let mut types = Vec::new();
 
         // Find all class assertions for this individual
@@ -912,7 +905,7 @@ impl ClassificationService {
     ) -> Result<Vec<String>> {
         info!("Getting object property values for {individual} -> {property}");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for get_object_property_values")?;
         let mut values = Vec::new();
 
         // Find all object property assertions for this individual and property
@@ -949,7 +942,7 @@ impl ClassificationService {
     ) -> Result<Vec<String>> {
         info!("Getting data property values for {individual} -> {property}");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "classification: reading ontology for get_data_property_values")?;
         let mut values = Vec::new();
 
         // Find all data property assertions for this individual and property

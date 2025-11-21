@@ -509,4 +509,13 @@ pub enum OptimizationError {
     StatisticsUnavailable(String),
     #[error("Rewriting failed: {0}")]
     RewritingFailed(String),
+    #[error("Internal error: {0}")]
+    InternalError(String),
+}
+
+impl OptimizationError {
+    /// Create an internal error
+    pub fn internal<S: Into<String>>(message: S) -> Self {
+        Self::InternalError(message.into())
+    }
 }

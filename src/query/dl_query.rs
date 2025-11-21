@@ -330,7 +330,8 @@ impl DLQueryEngine {
     ) -> Result<HashSet<ClassExpression>> {
         // Create a union of the provided classes
         let union_expr = if classes.len() == 1 {
-            classes.into_iter().next().unwrap()
+            classes.into_iter().next()
+                .ok_or_else(|| Error::internal("Expected at least one class in union query"))?
         } else {
             ClassExpression::ObjectUnionOf(classes)
         };

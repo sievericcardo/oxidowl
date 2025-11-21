@@ -226,7 +226,11 @@ impl MLHeuristicsEngine {
                 message: format!("Failed to acquire predictor lock: {}", e),
             })?;
 
-            let model = predictor.get_or_insert_with(|| CostPredictionModel::new());
+            let model = if let Some(m) = predictor.as_ref() {
+                m
+            } else {
+                predictor.get_or_insert(CostPredictionModel::new()?)
+            };
             model.train(&training_samples, self.config.learning_rate)?
         };
 
@@ -1111,25 +1115,29 @@ pub struct CostPredictionModel {
 
 #[cfg(feature = "ml")]
 impl CostPredictionModel {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         let device = Device::Cpu;
         let varmap = VarMap::new();
         let vb = VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
 
         // Neural network architecture: 18 -> 128 -> 64 -> 32 -> 1
-        let layer1 = candle_nn::linear(18, 128, vb.pp("layer1")).unwrap();
-        let layer2 = candle_nn::linear(128, 64, vb.pp("layer2")).unwrap();
-        let layer3 = candle_nn::linear(64, 32, vb.pp("layer3")).unwrap();
-        let output = candle_nn::linear(32, 1, vb.pp("output")).unwrap();
+        let layer1 = candle_nn::linear(18, 128, vb.pp("layer1"))
+            .map_err(|e| Error::Internal { message: format!("Failed to create layer1: {}", e) })?;
+        let layer2 = candle_nn::linear(128, 64, vb.pp("layer2"))
+            .map_err(|e| Error::Internal { message: format!("Failed to create layer2: {}", e) })?;
+        let layer3 = candle_nn::linear(64, 32, vb.pp("layer3"))
+            .map_err(|e| Error::Internal { message: format!("Failed to create layer3: {}", e) })?;
+        let output = candle_nn::linear(32, 1, vb.pp("output"))
+            .map_err(|e| Error::Internal { message: format!("Failed to create output layer: {}", e) })?;
 
-        Self {
+        Ok(Self {
             device,
             varmap,
             layer1,
             layer2,
             layer3,
             output,
-        }
+        })
     }
 
     pub fn predict(&self, features: &QueryFeatures) -> Result<CostPrediction, Error> {
@@ -1944,8 +1952,8 @@ impl ModelStorage {
         // Save model metadata
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .map(|d| d.as_secs())
+            .unwrap_or(0); // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
             
         let metadata = serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),

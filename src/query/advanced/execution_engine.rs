@@ -920,7 +920,8 @@ impl AdvancedExecutionEngine {
 
         // Step 2: Generate optimized query plan
         let query_plan = {
-            let mut optimizer = self.optimizer.lock().unwrap();
+            let mut optimizer = self.optimizer.lock()
+                .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock optimizer: {}", e)))?;
             optimizer.optimize_query(query)?
         };
 
@@ -930,7 +931,8 @@ impl AdvancedExecutionEngine {
         } else {
             // Fallback to legacy strategy selector
             let strategy = {
-                let mut selector = self.strategy_selector.lock().unwrap();
+                let mut selector = self.strategy_selector.lock()
+                    .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e)))?;
                 selector.select_strategy(query, &query_plan)?
             };
             (strategy, None)
@@ -1116,7 +1118,8 @@ impl AdvancedExecutionEngine {
         &self,
         query: &ConjunctiveQuery,
     ) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
-        let cache = self.result_cache.read().unwrap();
+        let cache = self.result_cache.read()
+            .map_err(|e| AdvancedQueryError::internal(format!("Failed to read result cache: {}", e)))?;
         let query_hash = cache.compute_query_hash(query, &self.ontology);
 
         if let Some(entry) = cache.get_entry(&query_hash) {
@@ -1138,7 +1141,8 @@ impl AdvancedExecutionEngine {
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         // Start monitoring
         {
-            let mut monitor = self.performance_monitor.lock().unwrap();
+            let mut monitor = self.performance_monitor.lock()
+                .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e)))?;
             monitor.start_execution(&execution_id, query, strategy);
         }
 
@@ -1155,7 +1159,8 @@ impl AdvancedExecutionEngine {
 
         // Complete monitoring
         {
-            let mut monitor = self.performance_monitor.lock().unwrap();
+            let mut monitor = self.performance_monitor.lock()
+                .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e)))?;
             monitor.complete_execution(&execution_id, &result);
         }
 
@@ -1199,7 +1204,8 @@ impl AdvancedExecutionEngine {
         };
 
         // Get strategy implementation and execute
-        let selector = self.strategy_selector.lock().unwrap();
+        let selector = self.strategy_selector.lock()
+            .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e)))?;
         let strategy_impl = selector.get_strategy(strategy)?;
         strategy_impl.execute(query, &context)
     }
@@ -1227,7 +1233,8 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
         result: &ConjunctiveQueryResult,
     ) -> Result<(), AdvancedQueryError> {
-        let mut cache = self.result_cache.write().unwrap();
+        let mut cache = self.result_cache.write()
+            .map_err(|e| AdvancedQueryError::internal(format!("Failed to write result cache: {}", e)))?;
         cache.insert(query, result.clone(), &self.ontology)?;
         Ok(())
     }
@@ -1240,8 +1247,12 @@ impl AdvancedExecutionEngine {
         strategy: &str,
         result: &ConjunctiveQueryResult,
     ) {
-        let mut selector = self.strategy_selector.lock().unwrap();
-        selector.update_performance_history(strategy, query, result);
+        let mut selector = self.strategy_selector.lock()
+            .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e)))
+            .ok();
+        if let Some(ref mut s) = selector {
+            s.update_performance_history(strategy, query, result);
+        }
     }
 }
 

@@ -65,7 +65,7 @@ impl QueryRewriter {
         Ok(Self {
             ontology,
             ql_validator,
-            rewriting_cache: LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()),
+            rewriting_cache: LruCache::new(std::num::NonZeroUsize::new(1000).unwrap()), // Safe: hardcoded non-zero value
             tbox_index,
             max_rewriting_depth: 50,
         })

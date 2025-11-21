@@ -732,13 +732,15 @@ impl CostBasedOptimizer {
 
         // Step 2: Generate base query plan
         let base_plan = {
-            let stats = self.statistics.read().unwrap();
+            let stats = self.statistics.read()
+                .map_err(|e| OptimizationError::internal(format!("Failed to read statistics: {}", e)))?;
             self.generate_base_plan(query, &pattern, &stats)?
         };
 
         // Step 3: Optimize join order if applicable
         let optimized_joins = if self.config.enable_join_optimization && pattern.join_count > 1 {
-            let stats = self.statistics.read().unwrap();
+            let stats = self.statistics.read()
+                .map_err(|e| OptimizationError::internal(format!("Failed to read statistics: {}", e)))?;
             self.optimize_join_order(query, &pattern, &stats)?
         } else {
             base_plan.strategy.clone()
@@ -746,7 +748,8 @@ impl CostBasedOptimizer {
 
         // Step 4: Generate index recommendations
         let index_recommendations = if self.config.enable_index_recommendations {
-            let stats = self.statistics.read().unwrap();
+            let stats = self.statistics.read()
+                .map_err(|e| OptimizationError::internal(format!("Failed to read statistics: {}", e)))?;
             self.index_advisor
                 .recommend_indices(query, &pattern, &stats)?
         } else {
@@ -763,7 +766,8 @@ impl CostBasedOptimizer {
         };
 
         // Step 6: Estimate performance for final plan
-        let stats = self.statistics.read().unwrap();
+        let stats = self.statistics.read()
+            .map_err(|e| OptimizationError::internal(format!("Failed to read statistics: {}", e)))?;
         let performance_prediction = self.estimate_performance(&rewritten_query, &pattern, &stats);
 
         // Step 7: Generate optimization suggestions

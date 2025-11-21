@@ -12,6 +12,7 @@ use super::{
 };
 use crate::{
     cache::CacheManager,
+    core::lock_helpers::{read_lock, write_lock},
     error::{Error, Result},
     ontology::{
         DataProperty, DataPropertyExpression, ObjectProperty, ObjectPropertyExpression, Ontology,
@@ -290,7 +291,7 @@ impl IncrementalReasoningService {
         let result = if query_delta.recommend_full_reexecution || query_delta.is_empty() {
             // Full query execution
             let results = {
-                let mut query_engine_guard = query_engine.lock().unwrap();
+                let mut query_engine_guard = query_engine.lock().map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
                 query_engine_guard.execute_query(&query)?
             };
             QueryResult {
@@ -461,7 +462,8 @@ impl IncrementalReasoningService {
         // This is a simplified implementation
         // In practice, this would implement sophisticated incremental query execution
 
-        let query_engine = self.query_engine.as_ref().unwrap();
+        let query_engine = self.query_engine.as_ref()
+            .ok_or_else(|| Error::internal("Query engine not initialized"))?;
 
         // For now, fall back to full execution if we have incremental additions/removals
         if !delta.incremental_additions.is_empty() || !delta.incremental_removals.is_empty() {
@@ -474,7 +476,7 @@ impl IncrementalReasoningService {
 
         // Execute full query for now
         let result = {
-            let mut query_engine_guard = query_engine.lock().unwrap();
+            let mut query_engine_guard = query_engine.lock().map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
             query_engine_guard.execute_query(&query)?
         };
 

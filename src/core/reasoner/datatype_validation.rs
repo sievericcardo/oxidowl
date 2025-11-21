@@ -215,7 +215,8 @@ impl DatatypeValidator {
         if value.is_empty() {
             return Ok(false);
         }
-        let first = value.chars().next().unwrap();
+        let first = value.chars().next()
+            .ok_or_else(|| Error::internal("Empty string after is_empty check"))?;
         Ok((first.is_alphabetic() || first == '_' || first == ':') &&
            value.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'))
     }
@@ -225,7 +226,8 @@ impl DatatypeValidator {
         if value.is_empty() {
             return Ok(false);
         }
-        let first = value.chars().next().unwrap();
+        let first = value.chars().next()
+            .ok_or_else(|| Error::internal("Empty string after is_empty check"))?;
         Ok((first.is_alphabetic() || first == '_') &&
            value.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') &&
            !value.contains(':'))
@@ -347,7 +349,7 @@ impl DatatypeValidator {
         // Basic format: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let datetime_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$"
-        ).unwrap();
+        ).unwrap(); // Safe: hardcoded regex pattern
         Ok(datetime_pattern.is_match(value))
     }
 
@@ -355,7 +357,7 @@ impl DatatypeValidator {
         // Like dateTime but timezone is required
         let datetime_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$"
-        ).unwrap();
+        ).unwrap(); // Safe: hardcoded regex pattern
         Ok(datetime_pattern.is_match(value))
     }
 
@@ -363,7 +365,7 @@ impl DatatypeValidator {
         // Format: YYYY-MM-DD(Z|[+-]HH:MM)?
         let date_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$"
-        ).unwrap();
+        ).unwrap(); // Safe: hardcoded regex pattern
         Ok(date_pattern.is_match(value))
     }
 
@@ -371,32 +373,32 @@ impl DatatypeValidator {
         // Format: HH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let time_pattern = regex::Regex::new(
             r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$"
-        ).unwrap();
+        ).unwrap(); // Safe: hardcoded regex pattern
         Ok(time_pattern.is_match(value))
     }
 
     fn validate_gyear(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gyear_month(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gmonth(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gmonth_day(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gday(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
@@ -404,7 +406,7 @@ impl DatatypeValidator {
         // Format: P(nY)?(nM)?(nD)?(T(nH)?(nM)?(nS)?)?
         let pattern = regex::Regex::new(
             r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$"
-        ).unwrap();
+        ).unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 

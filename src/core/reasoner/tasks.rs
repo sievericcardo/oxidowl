@@ -6,9 +6,12 @@
 use crate::{
     Error, Result,
     cache::CacheManager,
-    core::reasoner::{
-        statistics::ReasoningStatistics,
-        tableau::{ReasoningTask, TableauAlgorithmInstance, TableauFactory},
+    core::{
+        lock_helpers::{read_lock, write_lock},
+        reasoner::{
+            statistics::ReasoningStatistics,
+            tableau::{ReasoningTask, TableauAlgorithmInstance, TableauFactory},
+        },
     },
     ontology::{ClassExpression, Individual, Ontology, OntologyRef},
 };
@@ -46,17 +49,14 @@ impl ReasoningTaskService {
         info!("Checking ontology consistency");
 
         // Check cache first
-        if let Some(cached_result) = self
-            .cache_manager
-            .read()
-            .unwrap()
+        if let Some(cached_result) = read_lock(&self.cache_manager, "tasks: reading cache for consistency")?
             .get_consistency_result(ontology)
         {
             debug!("Consistency result found in cache");
             return Ok(cached_result);
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "tasks: reading ontology for consistency check")?;
 
         // Build tableau for consistency checking
         let tableau = self
@@ -67,9 +67,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_consistency_check(tableau, statistics)?;
 
         // Cache the result
-        self.cache_manager
-            .write()
-            .unwrap()
+        write_lock(&self.cache_manager, "tasks: storing consistency result")?
             .cache_consistency_result(ontology, result);
 
         let reasoning_time = start_time.elapsed();
@@ -101,10 +99,7 @@ impl ReasoningTaskService {
 
         // Check cache first
         if let Some(class_expr) = self.parse_class_expression(class_iri) {
-            if let Some(cached_result) = self
-                .cache_manager
-                .read()
-                .unwrap()
+            if let Some(cached_result) = read_lock(&self.cache_manager, "tasks: reading cache for satisfiability")?
                 .get_satisfiability_result(&class_expr)
             {
                 debug!("Satisfiability result found in cache for: {class_iri}");
@@ -112,7 +107,7 @@ impl ReasoningTaskService {
             }
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "tasks: reading ontology for satisfiability check")?;
 
         // Build tableau for satisfiability checking
         let tableau = self
@@ -124,9 +119,7 @@ impl ReasoningTaskService {
 
         // Cache the result
         if let Some(class_expr) = self.parse_class_expression(class_iri) {
-            self.cache_manager
-                .write()
-                .unwrap()
+            write_lock(&self.cache_manager, "tasks: storing satisfiability result")?
                 .cache_satisfiability_result(class_expr, result);
         }
 
@@ -155,10 +148,7 @@ impl ReasoningTaskService {
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
         ) {
-            if let Some(cached_result) = self
-                .cache_manager
-                .read()
-                .unwrap()
+            if let Some(cached_result) = read_lock(&self.cache_manager, "tasks: reading cache for subsumption")?
                 .get_subsumption_result(&sub_expr, &sup_expr)
             {
                 debug!("Subsumption result found in cache");
@@ -166,7 +156,7 @@ impl ReasoningTaskService {
             }
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "tasks: reading ontology for subsumption check")?;
 
         // Build tableau for subsumption checking
         let tableau = self.tableau_factory.create_algorithm_for_subsumption(
@@ -183,9 +173,7 @@ impl ReasoningTaskService {
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
         ) {
-            self.cache_manager
-                .write()
-                .unwrap()
+            write_lock(&self.cache_manager, "tasks: storing subsumption result")?
                 .cache_subsumption_result(sub_expr, sup_expr, result);
         }
 
@@ -209,17 +197,14 @@ impl ReasoningTaskService {
         info!("Checking instance relationship");
 
         // Check cache first
-        if let Some(cached_result) = self
-            .cache_manager
-            .read()
-            .unwrap()
+        if let Some(cached_result) = read_lock(&self.cache_manager, "tasks: reading cache for instance check")?
             .get_instance_result(individual, class_expr)
         {
             debug!("Instance result found in cache");
             return Ok(cached_result);
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "tasks: reading ontology for instance check")?;
 
         // Build tableau for instance checking
         let tableau = self.tableau_factory.create_for_instance_check(
@@ -232,7 +217,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_instance_check(tableau, statistics)?;
 
         // Cache the result
-        self.cache_manager.write().unwrap().store_instance_result(
+        write_lock(&self.cache_manager, "tasks: storing instance result")?.store_instance_result(
             individual.clone(),
             class_expr.clone(),
             result,
@@ -257,16 +242,13 @@ impl ReasoningTaskService {
         statistics.increment_subsumption_checks();
 
         // Check cache first
-        if let Some(cached_result) = self
-            .cache_manager
-            .read()
-            .unwrap()
+        if let Some(cached_result) = read_lock(&self.cache_manager, "tasks: reading cache for subsumption expressions")?
             .get_subsumption_result(subclass, superclass)
         {
             return Ok(cached_result);
         }
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "tasks: reading ontology for subsumption expressions check")?;
 
         // For now, convert to strings and use existing tableau methods
         let subclass_str = format!("{subclass:?}");
@@ -281,9 +263,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
 
         // Store in cache
-        self.cache_manager
-            .write()
-            .unwrap()
+        write_lock(&self.cache_manager, "tasks: storing subsumption expressions result")?
             .cache_subsumption_result(subclass.clone(), superclass.clone(), result);
 
         let reasoning_time = start_time.elapsed();
@@ -303,7 +283,7 @@ impl ReasoningTaskService {
 
         info!("Checking axiom entailment");
 
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "tasks: reading ontology for entailment check")?;
 
         let result = match axiom {
             crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
