@@ -289,7 +289,7 @@ mod tests {
 
         let report = validator
             .validate_profile(&ontology, OWL2Profile::Full)
-            .unwrap();
+            .expect("Failed to validate ontology against OWL 2 Full profile");
         assert!(report.conforms);
         assert_eq!(report.violations.len(), 0);
     }
@@ -299,7 +299,7 @@ mod tests {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new(); // Empty ontology should conform to all profiles
 
-        let result = validator.detect_profiles(&ontology).unwrap();
+        let result = validator.detect_profiles(&ontology).expect("Failed to detect compatible OWL 2 profiles for ontology");
 
         // Empty ontology should conform to all implemented profiles
         assert!(result.conforming_profiles.contains(&OWL2Profile::EL));
@@ -314,7 +314,7 @@ mod tests {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new();
 
-        let recommended = validator.recommend_profile(&ontology).unwrap();
+        let recommended = validator.recommend_profile(&ontology).expect("Failed to recommend optimal OWL 2 profile for ontology");
 
         // For empty ontology, should recommend most restrictive (EL)
         assert_eq!(recommended, OWL2Profile::EL);
@@ -327,7 +327,7 @@ mod tests {
 
         let suggestions = validator
             .get_optimization_suggestions(&ontology, OWL2Profile::EL)
-            .unwrap();
+            .expect("Failed to get optimization suggestions for OWL 2 EL profile");
 
         assert!(!suggestions.is_empty());
         assert!(suggestions[0].contains("conforms to"));
@@ -342,12 +342,12 @@ mod tests {
         assert!(
             validator
                 .can_convert_to_profile(&ontology, OWL2Profile::EL)
-                .unwrap()
+                .expect("Failed to check if ontology can convert to OWL 2 EL profile")
         );
         assert!(
             validator
                 .can_convert_to_profile(&ontology, OWL2Profile::Full)
-                .unwrap()
+                .expect("Failed to check if ontology can convert to OWL 2 Full profile")
         );
     }
 }
