@@ -391,11 +391,11 @@ mod tests {
         let builtin = CeilingBuiltIn;
 
         let args = vec![SWRLValue::Integer(4), SWRLValue::Float(3.2)];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![SWRLValue::Integer(3), SWRLValue::Float(3.2)];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 
@@ -408,7 +408,7 @@ mod tests {
             SWRLValue::Integer(7),
             SWRLValue::Integer(3),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true)); // 7 / 3 = 2 (integer division)
 
         let args = vec![
@@ -416,7 +416,7 @@ mod tests {
             SWRLValue::Integer(7),
             SWRLValue::Integer(3),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 }
