@@ -66,14 +66,14 @@ mod comprehensive_tests {
             let dt1 = SWRLValue::Literal(Literal {
                 value: "2023-01-01T10:00:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").unwrap(),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
                 ),
                 language: None,
             });
             let dt2 = SWRLValue::Literal(Literal {
                 value: "2023-01-01T11:00:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").unwrap(),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -97,14 +97,14 @@ mod comprehensive_tests {
             let expected_month = SWRLValue::Literal(Literal {
                 value: "6".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap(),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").expect("Test operation failed"),
                 ),
                 language: None,
             });
             let datetime = SWRLValue::Literal(Literal {
                 value: "2023-06-15T14:30:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").unwrap(),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -177,7 +177,7 @@ mod comprehensive_tests {
                 SWRLValue::String("contact@example.com".to_string()),
                 SWRLValue::String(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}".to_string()),
             ];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             assert_eq!(result, SWRLValue::Boolean(true));
 
             // Test non-matching pattern
@@ -185,7 +185,7 @@ mod comprehensive_tests {
                 SWRLValue::String("not-an-email".to_string()),
                 SWRLValue::String(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}".to_string()),
             ];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             assert_eq!(result, SWRLValue::Boolean(false));
         }
     }
@@ -201,7 +201,7 @@ mod comprehensive_tests {
                 SWRLValue::String(r"World".to_string()),
                 SWRLValue::String("Universe".to_string()),
             ];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             assert_eq!(result, SWRLValue::Boolean(true));
         }
     }
@@ -215,7 +215,7 @@ mod comprehensive_tests {
                 SWRLValue::String("The quick brown fox".to_string()),
                 SWRLValue::String(r"\w+".to_string()),
             ];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             if let SWRLValue::String(tokens) = result {
                 assert!(tokens.contains("The"));
                 assert!(tokens.contains("quick"));
@@ -236,7 +236,7 @@ mod comprehensive_tests {
                 SWRLValue::String("Contact me at john@example.com or jane@test.org".to_string()),
                 SWRLValue::String(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}".to_string()),
             ];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             if let SWRLValue::String(email) = result {
                 assert_eq!(email, "john@example.com");
             } else {
@@ -252,12 +252,12 @@ mod comprehensive_tests {
         if let Some(builtin) = registry.get("http://www.w3.org/2003/11/swrlb#isValidPattern") {
             // Test valid pattern
             let args = vec![SWRLValue::String(r"\d+".to_string())];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             assert_eq!(result, SWRLValue::Boolean(true));
 
             // Test invalid pattern
             let args = vec![SWRLValue::String(r"[".to_string())];
-            let result = builtin.execute(&args).unwrap();
+            let result = builtin.execute(&args).expect("Test operation failed");
             assert_eq!(result, SWRLValue::Boolean(false));
         }
     }
@@ -321,7 +321,7 @@ mod comprehensive_tests {
             ],
         );
         assert!(regex_result.is_ok());
-        assert_eq!(regex_result.unwrap(), SWRLValue::Boolean(true));
+        assert_eq!(regex_result.expect("Test operation failed"), SWRLValue::Boolean(true));
 
         // Test missing built-in execution through integration
         let boolean_result = registry.execute_builtin(
@@ -329,7 +329,7 @@ mod comprehensive_tests {
             &[SWRLValue::Boolean(false), SWRLValue::Boolean(true)],
         );
         assert!(boolean_result.is_ok());
-        assert_eq!(boolean_result.unwrap(), SWRLValue::Boolean(true));
+        assert_eq!(boolean_result.expect("Test operation failed"), SWRLValue::Boolean(true));
     }
 
     #[test]
@@ -343,13 +343,13 @@ mod comprehensive_tests {
         ];
         let result = registry
             .validate_builtin_call("http://www.w3.org/2003/11/swrlb#matches", &args)
-            .unwrap();
+            .expect("Test operation failed");
         assert!(result.valid);
 
         // Test validation of unsupported built-in
         let result = registry
             .validate_builtin_call("http://example.org/unsupported", &args)
-            .unwrap();
+            .expect("Test operation failed");
         assert!(!result.valid);
         assert!(!result.errors.is_empty());
     }

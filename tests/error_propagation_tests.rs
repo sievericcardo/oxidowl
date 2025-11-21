@@ -205,7 +205,7 @@ fn test_option_to_result_patterns() {
         |v| Ok(v.len()),
     );
     assert!(result3.is_ok());
-    assert_eq!(result3.unwrap(), 3);
+    assert_eq!(result3.expect("Test operation failed"), 3);
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn test_error_in_iterator_chain() {
     let results: Result<Vec<i32>, Error> = items.into_iter().map(process_item).collect();
 
     assert!(results.is_ok());
-    assert_eq!(results.unwrap(), vec![2, 4, 6]);
+    assert_eq!(results.expect("Test operation failed"), vec![2, 4, 6]);
 
     // Test with error
     let items_with_error = vec![1, -2, 3];
@@ -280,7 +280,7 @@ fn test_nested_error_handling() {
 
     let result = outer();
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "Value: 42");
+    assert_eq!(result.expect("Test operation failed"), "Value: 42");
 }
 
 #[test]

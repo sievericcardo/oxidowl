@@ -193,19 +193,19 @@ fn test_lock_helpers_with_normal_operations() {
     // Read lock should work
     let read_result = read_lock(&data, "test: normal read");
     assert!(read_result.is_ok());
-    assert_eq!(*read_result.unwrap(), 42);
+    assert_eq!(*read_result.expect("Test operation failed"), 42);
 
     // Write lock should work
     {
         let mut write_result = write_lock(&data, "test: normal write");
         assert!(write_result.is_ok());
-        *write_result.unwrap() = 100;
+        *write_result.expect("Test operation failed") = 100;
     }
 
     // Verify write
     let read_again = read_lock(&data, "test: verify write");
     assert!(read_again.is_ok());
-    assert_eq!(*read_again.unwrap(), 100);
+    assert_eq!(*read_again.expect("Test operation failed"), 100);
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn test_concurrent_readers_no_poison() {
             let result = read_lock(&data_clone, &format!("reader {}", i));
             assert!(result.is_ok(), "Reader {} should succeed", i);
 
-            let guard = result.unwrap();
+            let guard = result.expect("Test operation failed");
             assert_eq!(guard.len(), 5, "Reader {} should see 5 elements", i);
             guard.clone()
         });

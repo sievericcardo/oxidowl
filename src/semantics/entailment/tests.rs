@@ -16,9 +16,9 @@ fn test_rdf_simple_entailment() {
     // Create a simple premise graph
     let mut premises = RdfGraph::new();
     let triple = Triple {
-        subject: RdfTerm::iri("http://example.org/a").unwrap(),
-        predicate: RdfTerm::iri("http://example.org/p").unwrap(), 
-        object: RdfTerm::iri("http://example.org/b").unwrap(),
+        subject: RdfTerm::iri("http://example.org/a").expect("Failed to create RDF IRI term from valid URI string"),
+        predicate: RdfTerm::iri("http://example.org/p").expect("Failed to create RDF IRI term from valid URI string"), 
+        object: RdfTerm::iri("http://example.org/b").expect("Failed to create RDF IRI term from valid URI string"),
     };
     premises.add_triple(triple.clone());
 
@@ -27,7 +27,7 @@ fn test_rdf_simple_entailment() {
     conclusion.add_triple(triple);
 
     // Should entail itself
-    let result = checker.entails(&premises, &conclusion).unwrap();
+    let result = checker.entails(&premises, &conclusion).expect("Failed to check RDF entailment");
     assert!(result);
 }
 
@@ -50,10 +50,10 @@ fn test_entailment_cache() {
     let conclusion = RdfGraph::new();
     
     // First call
-    let result1 = checker.entails(&premises, &conclusion).unwrap();
+    let result1 = checker.entails(&premises, &conclusion).expect("Failed to check RDF entailment");
     
     // Second call should use cache
-    let result2 = checker.entails(&premises, &conclusion).unwrap();
+    let result2 = checker.entails(&premises, &conclusion).expect("Failed to check RDF entailment");
     
     assert_eq!(result1, result2);
     
@@ -61,7 +61,7 @@ fn test_entailment_cache() {
     checker.clear_cache();
     
     // Should still work after clearing cache
-    let result3 = checker.entails(&premises, &conclusion).unwrap();
+    let result3 = checker.entails(&premises, &conclusion).expect("Failed to check RDF entailment");
     assert_eq!(result1, result3);
 }
 

@@ -1,6 +1,6 @@
 //! Panic Detection Tests
 //!
-//! This test suite ensures that operations that previously used `.unwrap()` now properly
+//! This test suite ensures that operations that previously used `.expect("Test operation failed")` now properly
 //! return errors instead of panicking. These tests simulate edge cases that would have
 //! caused panics in the old implementation.
 
@@ -47,7 +47,7 @@ fn test_data_structure_edge_cases() {
         "Reading lock on new ontology should succeed"
     );
 
-    let guard = result.unwrap();
+    let guard = result.expect("Test operation failed");
     // The signature should exist (though empty) - no unwrap panic
     let sig_result = guard.signature();
     assert!(
@@ -64,7 +64,7 @@ fn test_option_unwrap_replacements() {
     let tableau = Tableau::new(config);
 
     // Stack operations that might be empty
-    // Old code: self.branching_stack.last().unwrap()
+    // Old code: self.branching_stack.last().expect("Test operation failed")
     // New code: checks before access or uses ok_or_else
 
     // Simulate accessing potentially empty stack
@@ -117,7 +117,7 @@ fn test_collection_operations_without_panic() {
 #[test]
 fn test_fingerprint_option_handling() {
     // Test that fingerprint operations handle None without panicking
-    // Old code: let fp = fingerprint.unwrap();
+    // Old code: let fp = fingerprint.expect("Test operation failed");
     // New code: let fp = fingerprint.ok_or_else(...)?;
 
     let fingerprint: Option<u64> = None;
@@ -140,7 +140,7 @@ fn test_fingerprint_option_handling() {
     let fingerprint_some: Option<u64> = Some(12345);
     let result_some = fingerprint_some.ok_or_else(|| Error::internal("Fingerprint is None"));
     assert!(result_some.is_ok());
-    assert_eq!(result_some.unwrap(), 12345);
+    assert_eq!(result_some.expect("Test operation failed"), 12345);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn test_result_propagation() {
     // Success case
     let result_ok = chained_operation(false);
     assert!(result_ok.is_ok());
-    assert_eq!(result_ok.unwrap(), 84);
+    assert_eq!(result_ok.expect("Test operation failed"), 84);
 
     // Failure case - error should propagate
     let result_err = chained_operation(true);

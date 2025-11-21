@@ -157,7 +157,7 @@ fn test_deterministic_clause_violation() {
         "Should detect violation when body satisfied but head not"
     );
 
-    let v = violation.unwrap();
+    let v = violation.expect("Test operation failed");
     assert_eq!(v.clause.id, "clause1");
     assert!(
         v.explanation
@@ -223,7 +223,7 @@ fn test_negative_clause_violation() {
         "Should detect violation for negative clause with satisfied body"
     );
 
-    let v = violation.unwrap();
+    let v = violation.expect("Test operation failed");
     assert_eq!(v.clause.id, "clause_neg");
     assert!(
         v.explanation.contains("negative clause") || v.explanation.contains("⊥"),
@@ -260,8 +260,8 @@ fn test_direct_disjointness_violation() {
     let ontology = create_test_ontology(axioms);
 
     // Build DisjointnessMap
-    let eq_closure = EquivalenceClosure::from_ontology(&ontology).unwrap();
-    let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).unwrap();
+    let eq_closure = EquivalenceClosure::from_ontology(&ontology).expect("Test operation failed");
+    let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).expect("Test operation failed");
 
     // Create empty clause set (we're testing disjointness checking)
     let clause_set = create_test_clause_set(vec![]);
@@ -285,8 +285,8 @@ fn test_no_disjointness_when_concepts_compatible() {
     let ontology = create_test_ontology(axioms);
 
     // Build reasoning support
-    let eq_closure = EquivalenceClosure::from_ontology(&ontology).unwrap();
-    let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).unwrap();
+    let eq_closure = EquivalenceClosure::from_ontology(&ontology).expect("Test operation failed");
+    let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).expect("Test operation failed");
 
     let clause_set = create_test_clause_set(vec![]);
     let mut checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
@@ -319,7 +319,7 @@ fn test_multiple_clauses_first_violates() {
 
     let violation = checker.check_node(&node);
     assert!(violation.is_some(), "Should detect first clause violation");
-    assert_eq!(violation.unwrap().clause.id, "c1");
+    assert_eq!(violation.expect("Test operation failed").clause.id, "c1");
 }
 
 #[test]
@@ -335,7 +335,7 @@ fn test_multiple_clauses_second_violates() {
 
     let violation = checker.check_node(&node);
     assert!(violation.is_some(), "Should detect second clause violation");
-    assert_eq!(violation.unwrap().clause.id, "c2");
+    assert_eq!(violation.expect("Test operation failed").clause.id, "c2");
 }
 
 #[test]

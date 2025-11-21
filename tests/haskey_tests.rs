@@ -26,7 +26,7 @@ mod tests {
         let ssn_prop = oxidowl::ontology::DataProperty {
             iri: IRI::new("http://example.org/ssn"),
         };
-        let spouse_prop = ObjectProperty::new(IRI::new("http://example.org/spouse")).unwrap();
+        let spouse_prop = ObjectProperty::new(IRI::new("http://example.org/spouse")).expect("Test operation failed");
 
         // Create HasKey axiom: Person has key properties ssn and spouse
         let has_key_axiom = HasKeyAxiom {
@@ -68,13 +68,13 @@ mod tests {
 
         // Create reasoner
         let config = ReasonerConfig::default();
-        let mut reasoner = Reasoner::new(config).unwrap();
+        let mut reasoner = Reasoner::new(config).expect("Test operation failed");
 
         // Load the ontology
         let _ = reasoner.load_ontology(ontology);
 
         // Test that reasoner accepts the ontology with HasKey axioms
-        assert!(reasoner.is_consistent().unwrap());
+        assert!(reasoner.is_consistent().expect("Test operation failed"));
     }
 
     #[test]
