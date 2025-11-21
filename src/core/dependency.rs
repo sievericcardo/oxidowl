@@ -534,10 +534,15 @@ impl DependencyTracker {
 
         // Update current branching level
         self.current_branching_level = branching_point;
-        while self.branching_stack.len() > 1
-            && self.branching_stack.last().unwrap() > &branching_point
-        {
-            self.branching_stack.pop();
+        while self.branching_stack.len() > 1 {
+            let last = self.branching_stack.last().ok_or_else(|| {
+                Error::internal("Dependency tracker: branching stack unexpectedly empty")
+            })?;
+            if last > &branching_point {
+                self.branching_stack.pop();
+            } else {
+                break;
+            }
         }
 
         Ok(())

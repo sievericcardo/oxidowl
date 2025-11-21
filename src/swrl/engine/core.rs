@@ -3,6 +3,7 @@
 //! This module contains the main SWRLRuleEngine struct and its public API.
 //! The core coordinates rule execution by delegating to specialized modules.
 
+use crate::core::lock_helpers::{read_lock, write_lock};
 use crate::ontology::{Axiom, Ontology};
 use crate::swrl::{
     SWRLAtom, SWRLConfig, SWRLExecutionContext, SWRLExecutionResult, SWRLReasoningStrategy,
@@ -111,7 +112,14 @@ impl SWRLRuleEngine {
     /// Load SWRL rules from the current ontology
     fn load_rules_from_ontology(&mut self) {
         if let Some(ontology) = &self.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard =
+                match read_lock(ontology, "SWRL core: reading ontology for loading rules") {
+                    Ok(guard) => guard,
+                    Err(e) => {
+                        warn!("Failed to acquire read lock on ontology: {}", e);
+                        return;
+                    }
+                };
 
             self.rule_states.clear();
             self.rules.clear();
@@ -153,7 +161,10 @@ impl SWRLRuleEngine {
                 let mut forward_chaining = std::mem::take(&mut self.forward_chaining);
                 let mut known_facts = Vec::new(); // Initialize with facts from ontology
                 if let Some(ontology_arc) = &self.ontology {
-                    let ontology_guard = ontology_arc.read().unwrap();
+                    let ontology_guard = read_lock(
+                        ontology_arc,
+                        "SWRL core: reading ontology for forward chaining",
+                    )?;
                     // We need to extract the Arc<Ontology> from Arc<RwLock<Ontology>>
                     // For now, let's create a temporary Arc
                     let temp_ontology = Arc::new((*ontology_guard).clone());
@@ -174,7 +185,10 @@ impl SWRLRuleEngine {
                 let mut backward_chaining = std::mem::take(&mut self.backward_chaining);
                 let mut known_facts = Vec::new(); // Initialize with facts from ontology
                 if let Some(ontology_arc) = &self.ontology {
-                    let ontology_guard = ontology_arc.read().unwrap();
+                    let ontology_guard = read_lock(
+                        ontology_arc,
+                        "SWRL core: reading ontology for backward chaining",
+                    )?;
                     let temp_ontology = Arc::new((*ontology_guard).clone());
                     drop(ontology_guard); // Release the lock
                     let result = backward_chaining.execute(
@@ -193,7 +207,10 @@ impl SWRLRuleEngine {
                 let mut hybrid_reasoning = std::mem::take(&mut self.hybrid_reasoning);
                 let mut known_facts = Vec::new(); // Initialize with facts from ontology
                 if let Some(ontology_arc) = &self.ontology {
-                    let ontology_guard = ontology_arc.read().unwrap();
+                    let ontology_guard = read_lock(
+                        ontology_arc,
+                        "SWRL core: reading ontology for hybrid reasoning",
+                    )?;
                     let temp_ontology = Arc::new((*ontology_guard).clone());
                     drop(ontology_guard); // Release the lock
                     let result = hybrid_reasoning.execute(
@@ -228,7 +245,10 @@ impl SWRLRuleEngine {
         let mut backward_chaining = std::mem::take(&mut self.backward_chaining);
         let mut known_facts = Vec::new(); // Initialize with facts from ontology
         if let Some(ontology_arc) = &self.ontology {
-            let ontology_guard = ontology_arc.read().unwrap();
+            let ontology_guard = read_lock(
+                ontology_arc,
+                "SWRL core: reading ontology for goal-driven execution",
+            )?;
             let temp_ontology = Arc::new((*ontology_guard).clone());
             drop(ontology_guard); // Release the lock
             let result = backward_chaining.execute_with_goal(
@@ -248,9 +268,9 @@ impl SWRLRuleEngine {
     /// Add a custom built-in predicate
     pub fn add_builtin(&mut self, builtin: Box<dyn SWRLBuiltIn>) {
         let iri = IRI::new(builtin.name());
-        Arc::get_mut(&mut self.builtin_registry)
-            .unwrap()
-            .register_builtin(iri, builtin);
+        if let Some(registry) = Arc::get_mut(&mut self.builtin_registry) {
+            registry.register_builtin(iri, builtin);
+        }
     }
 
     /// Set rule priority
@@ -328,7 +348,8 @@ impl SWRLRuleEngine {
     /// Apply inferences to the ontology
     pub(super) fn apply_inferences_to_ontology(&mut self, inferences: Vec<Axiom>) -> Result<()> {
         if let Some(ontology) = &self.ontology {
-            let mut ontology_guard = ontology.write().unwrap();
+            let mut ontology_guard =
+                write_lock(ontology, "SWRL core: writing inferences to ontology")?;
 
             for inference in inferences {
                 ontology_guard.add_axiom(inference);

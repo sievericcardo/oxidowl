@@ -4,6 +4,7 @@
 //! individual SWRL rules, including atom evaluation and variable binding.
 
 use crate::Result;
+use crate::core::lock_helpers::{read_lock, write_lock};
 use crate::ontology::{axioms::*, *};
 use crate::swrl::{
     SWRLExecutionContext, SWRLExecutionResult,
@@ -172,7 +173,7 @@ impl SWRLInterpreter {
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut bindings = Vec::new();
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "ontology for class atom evaluation")?;
 
         match argument {
             SWRLIArgument::Individual(individual) => {
@@ -218,7 +219,7 @@ impl SWRLInterpreter {
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut bindings = Vec::new();
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "ontology for object property atom evaluation")?;
 
         // Get all object property assertions for this property
         let property_assertions =
@@ -289,7 +290,7 @@ impl SWRLInterpreter {
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut bindings = Vec::new();
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "ontology for data property atom evaluation")?;
 
         // Get all data property assertions for this property
         let property_assertions = self.find_data_property_assertions(predicate, &ontology_guard)?;
@@ -371,7 +372,7 @@ impl SWRLInterpreter {
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut bindings = Vec::new();
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(ontology, "ontology for same individual atom evaluation")?;
 
         // Get the individuals from arguments or variables
         let first_individuals =
@@ -409,7 +410,10 @@ impl SWRLInterpreter {
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut bindings = Vec::new();
-        let ontology_guard = ontology.read().unwrap();
+        let ontology_guard = read_lock(
+            ontology,
+            "ontology for different individuals atom evaluation",
+        )?;
 
         // Get the individuals from arguments or variables
         let first_individuals =

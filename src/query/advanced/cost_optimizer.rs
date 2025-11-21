@@ -9,7 +9,9 @@ use super::optimization::{
     ExecutionStrategy, OptimizationError, PlanMetadata, QueryOptimizer, QueryPlan,
 };
 use super::optimizer::{AdvancedOptimizerConfig, AdvancedQueryOptimizer, AdvancedQueryPlan};
-use crate::ontology::{Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology};
+use crate::ontology::{
+    Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
+};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -732,13 +734,17 @@ impl CostBasedOptimizer {
 
         // Step 2: Generate base query plan
         let base_plan = {
-            let stats = self.statistics.read().unwrap();
+            let stats = self.statistics.read().map_err(|e| {
+                OptimizationError::internal(format!("Failed to read statistics: {}", e))
+            })?;
             self.generate_base_plan(query, &pattern, &stats)?
         };
 
         // Step 3: Optimize join order if applicable
         let optimized_joins = if self.config.enable_join_optimization && pattern.join_count > 1 {
-            let stats = self.statistics.read().unwrap();
+            let stats = self.statistics.read().map_err(|e| {
+                OptimizationError::internal(format!("Failed to read statistics: {}", e))
+            })?;
             self.optimize_join_order(query, &pattern, &stats)?
         } else {
             base_plan.strategy.clone()
@@ -746,7 +752,9 @@ impl CostBasedOptimizer {
 
         // Step 4: Generate index recommendations
         let index_recommendations = if self.config.enable_index_recommendations {
-            let stats = self.statistics.read().unwrap();
+            let stats = self.statistics.read().map_err(|e| {
+                OptimizationError::internal(format!("Failed to read statistics: {}", e))
+            })?;
             self.index_advisor
                 .recommend_indices(query, &pattern, &stats)?
         } else {
@@ -763,7 +771,9 @@ impl CostBasedOptimizer {
         };
 
         // Step 6: Estimate performance for final plan
-        let stats = self.statistics.read().unwrap();
+        let stats = self.statistics.read().map_err(|e| {
+            OptimizationError::internal(format!("Failed to read statistics: {}", e))
+        })?;
         let performance_prediction = self.estimate_performance(&rewritten_query, &pattern, &stats);
 
         // Step 7: Generate optimization suggestions
@@ -772,11 +782,11 @@ impl CostBasedOptimizer {
 
         // Step 8: Calculate confidence scores
         let confidence_scores = self.calculate_confidence_scores(&pattern, &stats);
-        
+
         // Step 9: Get estimates that need stats
         let estimated_result_size = self.estimate_result_size(&rewritten_query, &stats);
         let overall_confidence = self.calculate_overall_confidence(&pattern, &stats);
-        
+
         drop(stats); // Explicitly drop to avoid borrow issues
 
         Ok(AdvancedQueryPlan {
@@ -816,14 +826,20 @@ impl CostBasedOptimizer {
 
         // Build join graph showing which atoms share variables
         let mut join_graph: HashMap<usize, Vec<(usize, Vec<QueryVariable>)>> = HashMap::new();
-        
+
         for (i, atom_i) in atoms.iter().enumerate() {
             for (j, atom_j) in atoms.iter().enumerate() {
                 if i < j {
                     let shared_vars = self.find_shared_variables(atom_i, atom_j);
                     if !shared_vars.is_empty() {
-                        join_graph.entry(i).or_insert_with(Vec::new).push((j, shared_vars.clone()));
-                        join_graph.entry(j).or_insert_with(Vec::new).push((i, shared_vars));
+                        join_graph
+                            .entry(i)
+                            .or_insert_with(Vec::new)
+                            .push((j, shared_vars.clone()));
+                        join_graph
+                            .entry(j)
+                            .or_insert_with(Vec::new)
+                            .push((i, shared_vars));
                     }
                 }
             }
@@ -832,12 +848,12 @@ impl CostBasedOptimizer {
         // Use greedy heuristic: start with smallest estimated atom, add most selective joins
         let mut ordered_indices = Vec::new();
         let mut remaining: HashSet<usize> = (0..atoms.len()).collect();
-        
+
         // Find atom with smallest estimated cardinality
         let start_idx = (0..atoms.len())
             .min_by_key(|&i| self.estimate_atom_cardinality(&atoms[i]))
             .unwrap_or(0);
-        
+
         ordered_indices.push(start_idx);
         remaining.remove(&start_idx);
 
@@ -889,11 +905,8 @@ impl CostBasedOptimizer {
     fn find_shared_variables(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> Vec<QueryVariable> {
         let vars1 = self.extract_variables(atom1);
         let vars2 = self.extract_variables(atom2);
-        
-        vars1
-            .into_iter()
-            .filter(|v| vars2.contains(v))
-            .collect()
+
+        vars1.into_iter().filter(|v| vars2.contains(v)).collect()
     }
 
     /// Extract all variables from an atom
@@ -903,11 +916,15 @@ impl CostBasedOptimizer {
             QueryAtom::ClassAtom { variable, .. } => {
                 vars.insert(variable.clone());
             }
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vars.insert(subject.clone());
                 vars.insert(object.clone());
             }
-            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+            QueryAtom::DataPropertyAtom {
+                subject, literal, ..
+            } => {
                 vars.insert(subject.clone());
                 vars.insert(literal.clone());
             }
@@ -936,7 +953,7 @@ impl CostBasedOptimizer {
         // Simple heuristic: properties are more selective than classes
         let card1 = self.estimate_atom_cardinality(atom1) as f64;
         let card2 = self.estimate_atom_cardinality(atom2) as f64;
-        
+
         // Selectivity = expected result size / cartesian product size
         let expected_result = (card1 * card2).sqrt(); // Geometric mean heuristic
         expected_result / (card1 * card2)
@@ -945,14 +962,36 @@ impl CostBasedOptimizer {
     /// Describe an atom in readable form
     fn describe_atom(&self, atom: &QueryAtom) -> String {
         match atom {
-            QueryAtom::ClassAtom { class_expression, variable } => {
-                format!("{}(?{})", self.describe_class_expr(class_expression), variable.name)
+            QueryAtom::ClassAtom {
+                class_expression,
+                variable,
+            } => {
+                format!(
+                    "{}(?{})",
+                    self.describe_class_expr(class_expression),
+                    variable.name
+                )
             }
-            QueryAtom::ObjectPropertyAtom { property, subject, object } => {
-                format!("{}(?{}, ?{})", self.describe_prop_expr(property), subject.name, object.name)
+            QueryAtom::ObjectPropertyAtom {
+                property,
+                subject,
+                object,
+            } => {
+                format!(
+                    "{}(?{}, ?{})",
+                    self.describe_prop_expr(property),
+                    subject.name,
+                    object.name
+                )
             }
-            QueryAtom::DataPropertyAtom { property, subject, .. } => {
-                format!("{}(?{}, ...)", self.describe_data_prop(property), subject.name)
+            QueryAtom::DataPropertyAtom {
+                property, subject, ..
+            } => {
+                format!(
+                    "{}(?{}, ...)",
+                    self.describe_data_prop(property),
+                    subject.name
+                )
             }
             _ => "UnknownAtom".to_string(),
         }
@@ -960,25 +999,39 @@ impl CostBasedOptimizer {
 
     fn describe_class_expr(&self, expr: &ClassExpression) -> String {
         match expr {
-            ClassExpression::Class(c) => c.iri.as_str().split('#').last().unwrap_or("Class").to_string(),
+            ClassExpression::Class(c) => c
+                .iri
+                .as_str()
+                .split('#')
+                .last()
+                .unwrap_or("Class")
+                .to_string(),
             _ => "ComplexClass".to_string(),
         }
     }
 
     fn describe_prop_expr(&self, expr: &ObjectPropertyExpression) -> String {
         match expr {
-            ObjectPropertyExpression::ObjectProperty(p) => {
-                p.iri.as_str().split('#').last().unwrap_or("Property").to_string()
-            }
+            ObjectPropertyExpression::ObjectProperty(p) => p
+                .iri
+                .as_str()
+                .split('#')
+                .last()
+                .unwrap_or("Property")
+                .to_string(),
             _ => "ComplexProperty".to_string(),
         }
     }
 
     fn describe_data_prop(&self, expr: &DataPropertyExpression) -> String {
         match expr {
-            DataPropertyExpression::DataProperty(p) => {
-                p.iri.as_str().split('#').last().unwrap_or("DataProperty").to_string()
-            }
+            DataPropertyExpression::DataProperty(p) => p
+                .iri
+                .as_str()
+                .split('#')
+                .last()
+                .unwrap_or("DataProperty")
+                .to_string(),
         }
     }
 
@@ -986,7 +1039,7 @@ impl CostBasedOptimizer {
     fn estimate_result_size(&self, query: &ConjunctiveQuery, stats: &QueryStatistics) -> usize {
         // Look for similar queries in statistics
         let pattern = self.analyze_query_pattern(query);
-        
+
         if let Some(result_stats) = stats.result_sizes.get(&pattern) {
             result_stats.mean_size as usize
         } else {
@@ -1001,11 +1054,12 @@ impl CostBasedOptimizer {
     /// Calculate overall confidence based on statistics
     fn calculate_overall_confidence(&self, pattern: &QueryPattern, stats: &QueryStatistics) -> f64 {
         // Check if we have sufficient data for this pattern
-        let sample_size = stats.execution_times
+        let sample_size = stats
+            .execution_times
             .get(pattern)
             .map(|s| s.sample_count)
             .unwrap_or(0);
-        
+
         // Confidence increases with sample size (logarithmic)
         if sample_size == 0 {
             0.5 // Low confidence with no data
@@ -1019,9 +1073,13 @@ impl CostBasedOptimizer {
     }
 
     /// Get index recommendations for query
-    fn get_index_recommendations(&self, query: &ConjunctiveQuery, _pattern: &QueryPattern) -> Vec<super::optimizer::IndexRecommendation> {
+    fn get_index_recommendations(
+        &self,
+        query: &ConjunctiveQuery,
+        _pattern: &QueryPattern,
+    ) -> Vec<super::optimizer::IndexRecommendation> {
         let mut recommendations = Vec::new();
-        
+
         // Recommend indices for frequently accessed properties
         for atom in &query.body_atoms {
             match atom {
@@ -1035,7 +1093,9 @@ impl CostBasedOptimizer {
                         });
                     }
                 }
-                QueryAtom::ClassAtom { class_expression, .. } => {
+                QueryAtom::ClassAtom {
+                    class_expression, ..
+                } => {
                     if let ClassExpression::Class(_class) = class_expression {
                         recommendations.push(super::optimizer::IndexRecommendation {
                             index_type: "BTree".to_string(),
@@ -1048,16 +1108,20 @@ impl CostBasedOptimizer {
                 _ => {}
             }
         }
-        
+
         // Limit to top 3 recommendations
         recommendations.truncate(3);
         recommendations
     }
 
     /// Get optimization suggestions for query
-    fn get_optimization_suggestions(&self, query: &ConjunctiveQuery, pattern: &QueryPattern) -> Vec<super::optimizer::OptimizationSuggestion> {
+    fn get_optimization_suggestions(
+        &self,
+        query: &ConjunctiveQuery,
+        pattern: &QueryPattern,
+    ) -> Vec<super::optimizer::OptimizationSuggestion> {
         let mut suggestions = Vec::new();
-        
+
         // Suggest query simplification for complex queries
         if pattern.atom_count > 10 {
             suggestions.push(super::optimizer::OptimizationSuggestion {
@@ -1067,7 +1131,7 @@ impl CostBasedOptimizer {
                 implementation_complexity: 0.6,
             });
         }
-        
+
         // Suggest materialization for repeated patterns
         if self.has_repeated_patterns(query) {
             suggestions.push(super::optimizer::OptimizationSuggestion {
@@ -1077,7 +1141,7 @@ impl CostBasedOptimizer {
                 implementation_complexity: 0.8,
             });
         }
-        
+
         // Suggest adding indices if none recommended yet
         if query.body_atoms.len() > 3 {
             suggestions.push(super::optimizer::OptimizationSuggestion {
@@ -1087,19 +1151,19 @@ impl CostBasedOptimizer {
                 implementation_complexity: 0.3,
             });
         }
-        
+
         suggestions
     }
 
     /// Check if query has repeated patterns
     fn has_repeated_patterns(&self, query: &ConjunctiveQuery) -> bool {
         let mut pattern_counts: HashMap<String, usize> = HashMap::new();
-        
+
         for atom in &query.body_atoms {
             let pattern = self.describe_atom(atom);
             *pattern_counts.entry(pattern).or_insert(0) += 1;
         }
-        
+
         pattern_counts.values().any(|&count| count > 1)
     }
 
@@ -1133,7 +1197,7 @@ impl CostBasedOptimizer {
         // Count join points by finding shared variables between atoms
         let mut join_count = 0;
         let atoms = &query.body_atoms;
-        
+
         for i in 0..atoms.len() {
             for j in (i + 1)..atoms.len() {
                 if self.atoms_share_variable(&atoms[i], &atoms[j]) {
@@ -1141,7 +1205,7 @@ impl CostBasedOptimizer {
                 }
             }
         }
-        
+
         join_count
     }
 
@@ -1149,7 +1213,7 @@ impl CostBasedOptimizer {
     fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
         let vars1 = self.extract_variables_from_atom(atom1);
         let vars2 = self.extract_variables_from_atom(atom2);
-        
+
         vars1.iter().any(|v| vars2.contains(v))
     }
 
@@ -1157,59 +1221,66 @@ impl CostBasedOptimizer {
     fn extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
         match atom {
             QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vec![subject.clone(), object.clone()]
-            },
-            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+            }
+            QueryAtom::DataPropertyAtom {
+                subject, literal, ..
+            } => {
                 // literal is also a QueryVariable in conjunctive queries
                 vec![subject.clone(), literal.clone()]
-            },
+            }
             QueryAtom::SameIndividualAtom { left, right } => {
                 vec![left.clone(), right.clone()]
-            },
+            }
             QueryAtom::DifferentIndividualsAtom { left, right } => {
                 vec![left.clone(), right.clone()]
-            },
+            }
             QueryAtom::ConcreteIndividualAtom { variable, .. } => {
                 vec![variable.clone()]
-            },
+            }
             QueryAtom::ConcreteLiteralAtom { variable, .. } => {
                 vec![variable.clone()]
-            },
+            }
         }
     }
 
     fn has_recursive_patterns(&self, query: &ConjunctiveQuery) -> bool {
         // Check for transitive closure patterns or cyclic variable dependencies
-        
+
         // Build a dependency graph of variables
         let mut graph: HashMap<QueryVariable, Vec<QueryVariable>> = HashMap::new();
-        
+
         for atom in &query.body_atoms {
             match atom {
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
-                    graph.entry(subject.clone())
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
+                    graph
+                        .entry(subject.clone())
                         .or_insert_with(Vec::new)
                         .push(object.clone());
-                },
+                }
                 QueryAtom::DataPropertyAtom { subject, .. } => {
                     // Data properties create endpoints, not recursive patterns
                     graph.entry(subject.clone()).or_insert_with(Vec::new);
-                },
+                }
                 _ => {}
             }
         }
-        
+
         // Check for cycles using DFS
         let mut visited = HashSet::new();
         let mut rec_stack = HashSet::new();
-        
+
         for start_var in graph.keys() {
             if self.has_cycle_dfs(start_var, &graph, &mut visited, &mut rec_stack) {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -1224,14 +1295,14 @@ impl CostBasedOptimizer {
         if rec_stack.contains(var) {
             return true; // Found a cycle
         }
-        
+
         if visited.contains(var) {
             return false; // Already processed
         }
-        
+
         visited.insert(var.clone());
         rec_stack.insert(var.clone());
-        
+
         if let Some(neighbors) = graph.get(var) {
             for neighbor in neighbors {
                 if self.has_cycle_dfs(neighbor, graph, visited, rec_stack) {
@@ -1239,7 +1310,7 @@ impl CostBasedOptimizer {
                 }
             }
         }
-        
+
         rec_stack.remove(var);
         false
     }
@@ -1247,7 +1318,7 @@ impl CostBasedOptimizer {
     fn extract_axiom_types(&self, query: &ConjunctiveQuery) -> Vec<AxiomType> {
         // Implementation for extracting axiom types
         let mut types = HashSet::new();
-        
+
         for atom in &query.body_atoms {
             match atom {
                 QueryAtom::ClassAtom { .. } => {
@@ -1262,7 +1333,7 @@ impl CostBasedOptimizer {
                 _ => {}
             }
         }
-        
+
         types.into_iter().collect()
     }
 
@@ -1328,11 +1399,12 @@ impl CostBasedOptimizer {
         stats: &QueryStatistics,
     ) -> ConfidenceScores {
         // Calculate confidence based on historical data
-        let sample_count = stats.execution_times
+        let sample_count = stats
+            .execution_times
             .get(pattern)
             .map(|s| s.sample_count)
             .unwrap_or(0);
-        
+
         // Execution time confidence: higher with more samples
         let execution_time = if sample_count == 0 {
             0.5_f64
@@ -1341,10 +1413,10 @@ impl CostBasedOptimizer {
         } else {
             0.9_f64.min(0.7 + (sample_count as f64).ln() / 20.0)
         };
-        
+
         // Memory usage confidence: slightly lower than execution time
         let memory_usage = execution_time * 0.9;
-        
+
         // Strategy confidence: based on pattern complexity
         let strategy = match pattern.complexity_class {
             QueryComplexityClass::Atomic => 0.95,
@@ -1353,10 +1425,10 @@ impl CostBasedOptimizer {
             QueryComplexityClass::Recursive => 0.60,
             QueryComplexityClass::HighlyComplex => 0.50,
         };
-        
+
         // Overall is weighted average
         let overall = (execution_time * 0.4 + memory_usage * 0.3 + strategy * 0.3);
-        
+
         ConfidenceScores {
             performance_prediction: execution_time,
             index_recommendations: 0.8, // Moderate confidence in index recommendations

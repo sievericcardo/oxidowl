@@ -4,16 +4,13 @@
 
 use crate::{
     Error, Result,
-    reasoning::ReasoningService,
-    ontology::{ClassExpression, Individual},
     explanation::ExplanationService,
+    ontology::{ClassExpression, Individual},
+    reasoning::ReasoningService,
 };
-use std::{
-    sync::Arc,
-    net::SocketAddr,
-};
-use warp::{Filter, Reply};
 use serde::{Deserialize, Serialize};
+use std::{net::SocketAddr, sync::Arc};
+use warp::{Filter, Reply};
 
 /// REST API server implementation
 #[derive(Debug)]
@@ -31,8 +28,8 @@ pub struct RestApiServer {
 impl RestApiServer {
     /// Create a new REST API server
     pub fn new(
-        port: u16, 
-        bind_address: String, 
+        port: u16,
+        bind_address: String,
         reasoning_service: Arc<ReasoningService>,
         explanation_service: Arc<ExplanationService>,
     ) -> Self {
@@ -53,16 +50,13 @@ impl RestApiServer {
         let api = warp::path("api").and(warp::path("v1"));
 
         // Health check
-        let health = api
-            .and(warp::path("health"))
-            .and(warp::get())
-            .map(|| {
-                warp::reply::json(&ApiResponse::success(serde_json::json!({
-                    "status": "healthy",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "timestamp": chrono::Utc::now().to_rfc3339()
-                })))
-            });
+        let health = api.and(warp::path("health")).and(warp::get()).map(|| {
+            warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "status": "healthy",
+                "version": env!("CARGO_PKG_VERSION"),
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            })))
+        });
 
         // Reasoner status
         let status = api
@@ -152,27 +146,32 @@ impl RestApiServer {
             .or(instances)
             .or(explain)
             .or(load_ontology)
-            .with(warp::cors().allow_any_origin().allow_headers(vec!["content-type"]).allow_methods(vec!["GET", "POST"]))
+            .with(
+                warp::cors()
+                    .allow_any_origin()
+                    .allow_headers(vec!["content-type"])
+                    .allow_methods(vec!["GET", "POST"]),
+            )
             .recover(handle_rejection);
 
-        let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port).parse()
+        let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port)
+            .parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
-        let (_addr, server_fut) = warp::serve(routes).bind_with_graceful_shutdown(
-            addr,
-            async {
-                // Will be cancelled when task is aborted
-                futures::future::pending::<()>().await
-            }
-        );
-        
+        let (_addr, server_fut) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
+            // Will be cancelled when task is aborted
+            futures::future::pending::<()>().await
+        });
+
         let server_task = tokio::spawn(server_fut);
 
-        tracing::info!("REST API server started on {}:{}", self.bind_address, self.port);
+        tracing::info!(
+            "REST API server started on {}:{}",
+            self.bind_address,
+            self.port
+        );
 
-        Ok(RestApiServerHandle {
-            task: server_task,
-        })
+        Ok(RestApiServerHandle { task: server_task })
     }
 }
 
@@ -282,10 +281,7 @@ async fn get_reasoner_status(
         name: "Oxidowl".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         loaded_ontologies: 0, // Would get from reasoning service
-        supports_profiles: vec![
-            "OWL2-DL".to_string(),
-            "OWL2-EL".to_string(),
-        ],
+        supports_profiles: vec!["OWL2-DL".to_string(), "OWL2-EL".to_string()],
         features: vec![
             "Consistency Checking".to_string(),
             "Classification".to_string(),
@@ -302,14 +298,12 @@ async fn check_consistency(
     reasoning_service: Arc<ReasoningService>,
 ) -> Result<impl Reply, warp::Rejection> {
     match reasoning_service.is_consistent().await {
-        Ok(is_consistent) => {
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        Ok(is_consistent) => Ok(warp::reply::json(&ApiResponse::success(
+            serde_json::json!({
                 "consistent": is_consistent
-            }))))
-        }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+            }),
+        ))),
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -324,15 +318,13 @@ async fn check_satisfiability(
     };
 
     match reasoning_service.is_satisfiable(&class_expr).await {
-        Ok(is_satisfiable) => {
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        Ok(is_satisfiable) => Ok(warp::reply::json(&ApiResponse::success(
+            serde_json::json!({
                 "satisfiable": is_satisfiable,
                 "class_expression": request.class_expression
-            }))))
-        }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+            }),
+        ))),
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -351,17 +343,18 @@ async fn check_subsumption(
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     };
 
-    match reasoning_service.is_subsumed_by(&sub_expr, &super_expr).await {
-        Ok(is_subsumed) => {
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+    match reasoning_service
+        .is_subsumed_by(&sub_expr, &super_expr)
+        .await
+    {
+        Ok(is_subsumed) => Ok(warp::reply::json(&ApiResponse::success(
+            serde_json::json!({
                 "subsumed": is_subsumed,
                 "sub_class": request.sub_class,
                 "super_class": request.super_class
-            }))))
-        }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+            }),
+        ))),
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -369,7 +362,7 @@ async fn classify_ontology(
     reasoning_service: Arc<ReasoningService>,
 ) -> Result<impl Reply, warp::Rejection> {
     let start_time = std::time::Instant::now();
-    
+
     match reasoning_service.classify().await {
         Ok(_classification) => {
             let duration = start_time.elapsed();
@@ -382,9 +375,7 @@ async fn classify_ontology(
             };
             Ok(warp::reply::json(&ApiResponse::success(response)))
         }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -397,21 +388,23 @@ async fn get_subclasses(
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     };
 
-    match reasoning_service.get_subclasses(&class_expr, request.direct.unwrap_or(false)).await {
+    match reasoning_service
+        .get_subclasses(&class_expr, request.direct.unwrap_or(false))
+        .await
+    {
         Ok(subclasses) => {
-            let class_iris: Vec<String> = subclasses.into_iter()
-                .map(|c| format!("{:?}", c))
-                .collect();
-            
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-                "subclasses": class_iris,
-                "class_expression": request.class_expression,
-                "direct": request.direct.unwrap_or(false)
-            }))))
+            let class_iris: Vec<String> =
+                subclasses.into_iter().map(|c| format!("{:?}", c)).collect();
+
+            Ok(warp::reply::json(&ApiResponse::success(
+                serde_json::json!({
+                    "subclasses": class_iris,
+                    "class_expression": request.class_expression,
+                    "direct": request.direct.unwrap_or(false)
+                }),
+            )))
         }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -424,21 +417,25 @@ async fn get_superclasses(
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     };
 
-    match reasoning_service.get_superclasses(&class_expr, request.direct.unwrap_or(false)).await {
+    match reasoning_service
+        .get_superclasses(&class_expr, request.direct.unwrap_or(false))
+        .await
+    {
         Ok(superclasses) => {
-            let class_iris: Vec<String> = superclasses.into_iter()
+            let class_iris: Vec<String> = superclasses
+                .into_iter()
                 .map(|c| format!("{:?}", c))
                 .collect();
-            
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-                "superclasses": class_iris,
-                "class_expression": request.class_expression,
-                "direct": request.direct.unwrap_or(false)
-            }))))
+
+            Ok(warp::reply::json(&ApiResponse::success(
+                serde_json::json!({
+                    "superclasses": class_iris,
+                    "class_expression": request.class_expression,
+                    "direct": request.direct.unwrap_or(false)
+                }),
+            )))
         }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -451,21 +448,22 @@ async fn get_instances(
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     };
 
-    match reasoning_service.get_instances(&class_expr, request.direct.unwrap_or(false)).await {
+    match reasoning_service
+        .get_instances(&class_expr, request.direct.unwrap_or(false))
+        .await
+    {
         Ok(instances) => {
-            let individual_iris: Vec<String> = instances.into_iter()
-                .map(|i| i.iri)
-                .collect();
-            
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-                "instances": individual_iris,
-                "class_expression": request.class_expression,
-                "direct": request.direct.unwrap_or(false)
-            }))))
+            let individual_iris: Vec<String> = instances.into_iter().map(|i| i.iri).collect();
+
+            Ok(warp::reply::json(&ApiResponse::success(
+                serde_json::json!({
+                    "instances": individual_iris,
+                    "class_expression": request.class_expression,
+                    "direct": request.direct.unwrap_or(false)
+                }),
+            )))
         }
-        Err(e) => {
-            Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string())))
-        }
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }
 
@@ -474,14 +472,16 @@ async fn explain_inference(
     explanation_service: Arc<ExplanationService>,
 ) -> Result<impl Reply, warp::Rejection> {
     // For now, return a mock explanation - would integrate with actual explanation service
-    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-        "explanation": {
-            "inference_type": request.inference_type,
-            "axiom": request.axiom,
-            "justifications": [],
-            "message": "Explanation generation not yet fully implemented"
-        }
-    }))))
+    Ok(warp::reply::json(&ApiResponse::success(
+        serde_json::json!({
+            "explanation": {
+                "inference_type": request.inference_type,
+                "axiom": request.axiom,
+                "justifications": [],
+                "message": "Explanation generation not yet fully implemented"
+            }
+        }),
+    )))
 }
 
 async fn load_ontology_endpoint(
@@ -489,17 +489,20 @@ async fn load_ontology_endpoint(
     _reasoning_service: Arc<ReasoningService>,
 ) -> Result<impl Reply, warp::Rejection> {
     // For now, just acknowledge - would implement actual loading
-    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-        "status": "loaded",
-        "ontology_iri": request.ontology_iri,
-        "format": request.format.unwrap_or_else(|| "auto-detect".to_string())
-    }))))
+    Ok(warp::reply::json(&ApiResponse::success(
+        serde_json::json!({
+            "status": "loaded",
+            "ontology_iri": request.ontology_iri,
+            "format": request.format.unwrap_or_else(|| "auto-detect".to_string())
+        }),
+    )))
 }
 
 /// Parse a class expression from string using Manchester Syntax
 fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
     let parser = crate::parsers::manchester::ManchesterParser::default();
-    parser.parse_class_expression(expr_str)
+    parser
+        .parse_class_expression(expr_str)
         .map_err(|e| Error::ParseError(format!("Manchester syntax error: {}", e)))
 }
 

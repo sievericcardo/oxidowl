@@ -46,19 +46,19 @@ use std::path::Path;
 /// Returns the content of the first section (after the ### marker)
 pub fn extract_first_crosssyntax_section(content: &str) -> String {
     let trimmed = content.trim();
-    
+
     // Check if this is a CrossSyntax file
     if !trimmed.starts_with("###") {
         return content.to_string();
     }
-    
+
     let mut result = String::new();
     let mut in_first_section = false;
     let mut section_count = 0;
-    
+
     for line in content.lines() {
         let line_trimmed = line.trim();
-        
+
         if line_trimmed.starts_with("###") {
             // Skip comment lines like "### invalid ..." or "### valid ..."
             // These don't represent actual syntax sections
@@ -66,9 +66,9 @@ pub fn extract_first_crosssyntax_section(content: &str) -> String {
             if after_hash.starts_with("invalid") || after_hash.starts_with("valid") {
                 continue;
             }
-            
+
             section_count += 1;
-            
+
             if section_count == 1 {
                 // This is the first actual section marker, skip it and start collecting
                 in_first_section = true;
@@ -83,18 +83,17 @@ pub fn extract_first_crosssyntax_section(content: &str) -> String {
             result.push('\n');
         }
     }
-    
+
     result
 }
 
 /// Detect format from file content for ambiguous cases
 fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat> {
-    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
-        Error::io(format!("Failed to read file for format detection: {}", e))
-    })?;
-    
+    let content = std::fs::read_to_string(path.as_ref())
+        .map_err(|e| Error::io(format!("Failed to read file for format detection: {}", e)))?;
+
     let trimmed = content.trim();
-    
+
     // Check for CrossSyntax multi-format files
     // These files start with ### followed by a format name
     if trimmed.starts_with("###") || content.contains("\n###") {
@@ -108,7 +107,7 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
                 if after_hash.starts_with("invalid") || after_hash.starts_with("valid") {
                     continue;
                 }
-                
+
                 // Extract format name from first non-comment ### line
                 let format_name = after_hash.to_lowercase();
                 return match format_name.as_str() {
@@ -122,22 +121,23 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
             }
         }
     }
-    
+
     // Check for Functional syntax - more patterns
     // Functional syntax uses parentheses and specific keywords
-    if trimmed.starts_with("Ontology(") 
+    if trimmed.starts_with("Ontology(")
         || trimmed.starts_with("Prefix(")
         || trimmed.starts_with("Import(")
         || content.contains("Declaration(")
         || content.contains("SubClassOf(")
-        || (trimmed.starts_with("Import(") && content.contains("Ontology(")) {
+        || (trimmed.starts_with("Import(") && content.contains("Ontology("))
+    {
         return Ok(OntologyFormat::Functional);
     }
-    
+
     // Check for Manchester syntax - expanded patterns
     // Manchester uses colons after keywords
-    if trimmed.starts_with("Prefix:") 
-        || trimmed.starts_with("Ontology:") 
+    if trimmed.starts_with("Prefix:")
+        || trimmed.starts_with("Ontology:")
         || trimmed.starts_with("Class:")
         || trimmed.starts_with("ObjectProperty:")
         || trimmed.starts_with("DataProperty:")
@@ -145,26 +145,36 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
         || trimmed.starts_with("Import:")
         || content.contains("\nClass:")
         || content.contains("\nObjectProperty:")
-        || content.contains("\nDataProperty:") {
+        || content.contains("\nDataProperty:")
+    {
         return Ok(OntologyFormat::Manchester);
     }
-    
+
     // Check for Turtle syntax
     // Turtle uses @prefix and @base directives
-    if trimmed.starts_with("@prefix") 
+    if trimmed.starts_with("@prefix")
         || trimmed.starts_with("@base")
         || (content.contains("@prefix") && content.contains("<http"))
-        || (content.contains("rdf:type") && content.contains("owl:")) {
+        || (content.contains("rdf:type") && content.contains("owl:"))
+    {
         return Ok(OntologyFormat::Turtle);
     }
-    
+
     // Check for XML-based formats
     if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
         // Try to determine which XML type
         // Check for OWL/XML elements
-        let owl_xml_elements = ["<Ontology", "<Declaration", "<Class", "<ObjectProperty", 
-                                 "<DataProperty", "<AnnotationProperty", "<Individual",
-                                 "owl:Ontology", "<Import"];
+        let owl_xml_elements = [
+            "<Ontology",
+            "<Declaration",
+            "<Class",
+            "<ObjectProperty",
+            "<DataProperty",
+            "<AnnotationProperty",
+            "<Individual",
+            "owl:Ontology",
+            "<Import",
+        ];
         if owl_xml_elements.iter().any(|&elem| content.contains(elem)) {
             return Ok(OntologyFormat::OwlXml);
         }
@@ -175,27 +185,38 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
         // Default to OWL/XML for XML files (safer than RDF/XML)
         return Ok(OntologyFormat::OwlXml);
     }
-    
+
     // For .txt files or unknown content, try heuristics
     // Look for common OWL patterns to guess the format
-    
+
     // Check if it looks like Functional syntax (has parentheses and OWL keywords)
-    let functional_keywords = ["Declaration", "SubClassOf", "EquivalentClasses", "DisjointClasses"];
+    let functional_keywords = [
+        "Declaration",
+        "SubClassOf",
+        "EquivalentClasses",
+        "DisjointClasses",
+    ];
     if functional_keywords.iter().any(|&kw| content.contains(kw)) && content.contains('(') {
         return Ok(OntologyFormat::Functional);
     }
-    
+
     // Check if it looks like Manchester (colon-based declarations)
-    let manchester_keywords = ["Class:", "ObjectProperty:", "DataProperty:", "SubClassOf:", "EquivalentTo:"];
+    let manchester_keywords = [
+        "Class:",
+        "ObjectProperty:",
+        "DataProperty:",
+        "SubClassOf:",
+        "EquivalentTo:",
+    ];
     if manchester_keywords.iter().any(|&kw| content.contains(kw)) {
         return Ok(OntologyFormat::Manchester);
     }
-    
+
     // Check if it looks like Turtle (prefix declarations and triples)
     if content.contains("@prefix") || (content.contains(':') && content.contains('.')) {
         return Ok(OntologyFormat::Turtle);
     }
-    
+
     // Default to Functional syntax for unknown content
     Ok(OntologyFormat::Functional)
 }
@@ -216,14 +237,13 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
         "man" => OntologyFormat::Manchester,
         "swrl" => OntologyFormat::Functional, // SWRL uses functional-like syntax
         "txt" => detect_format_from_content(path)?, // Could be any format
-        _ => OntologyFormat::OwlXml, // Default fallback
+        _ => OntologyFormat::OwlXml,          // Default fallback
     };
-    
+
     // Read the file content
-    let content = std::fs::read_to_string(path).map_err(|e| {
-        Error::io(format!("Failed to read file: {}", e))
-    })?;
-    
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| Error::io(format!("Failed to read file: {}", e)))?;
+
     // Check if this is a CrossSyntax file and extract first section
     let parsed_content = if content.trim().starts_with("###") {
         extract_first_crosssyntax_section(&content)
@@ -291,7 +311,7 @@ pub fn save_file<P: AsRef<Path>>(
                 "ofn" => OntologyFormat::Functional,
                 "omn" | "man" => OntologyFormat::Manchester,
                 "txt" => OntologyFormat::Functional, // Default .txt to Functional
-                _ => OntologyFormat::OwlXml, // Default fallback
+                _ => OntologyFormat::OwlXml,         // Default fallback
             };
 
             save_file(ontology, path, detected_format)

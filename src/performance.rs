@@ -6,6 +6,8 @@
 //! - System resource monitoring (CPU, memory)
 //! - Performance metrics collection and reporting
 
+use crate::core::lock_helpers::{read_lock, write_lock};
+use crate::{Error, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -63,7 +65,11 @@ impl MemoryTracker {
     }
 
     /// Take a memory snapshot
-    pub fn snapshot(&self, cache_size: usize, reasoning_state_size: usize) -> MemorySnapshot {
+    pub fn snapshot(
+        &self,
+        cache_size: usize,
+        reasoning_state_size: usize,
+    ) -> Result<MemorySnapshot> {
         let snapshot = MemorySnapshot {
             heap_allocated: Self::get_heap_allocated(),
             cache_size,
@@ -72,7 +78,7 @@ impl MemoryTracker {
             timestamp: Instant::now(),
         };
 
-        let mut snapshots = self.snapshots.write().unwrap();
+        let mut snapshots = write_lock(&self.snapshots, "performance: snapshot")?;
         snapshots.push(snapshot.clone());
 
         // Keep only the most recent snapshots
@@ -80,14 +86,14 @@ impl MemoryTracker {
             snapshots.remove(0);
         }
 
-        snapshot
+        Ok(snapshot)
     }
 
     /// Get heap allocated memory in bytes
     #[cfg(target_os = "linux")]
     fn get_heap_allocated() -> usize {
         use std::fs;
-        
+
         // Read from /proc/self/status
         if let Ok(status) = fs::read_to_string("/proc/self/status") {
             for line in status.lines() {
@@ -106,7 +112,7 @@ impl MemoryTracker {
     #[cfg(target_os = "macos")]
     fn get_heap_allocated() -> usize {
         use std::process::Command;
-        
+
         // Use ps command to get memory usage
         if let Ok(output) = Command::new("ps")
             .args(["-o", "rss=", "-p"])
@@ -124,23 +130,27 @@ impl MemoryTracker {
 
     #[cfg(target_os = "windows")]
     fn get_heap_allocated() -> usize {
-        use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
+        use windows::Win32::System::ProcessStatus::{
+            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX,
+        };
         use windows::Win32::System::Threading::GetCurrentProcess;
-        
+
         unsafe {
             let process = GetCurrentProcess();
             let mut pmc: PROCESS_MEMORY_COUNTERS_EX = std::mem::zeroed();
             pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
-            
+
             if GetProcessMemoryInfo(
                 process,
                 &mut pmc as *mut _ as *mut _,
                 std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
-            ).is_ok() {
+            )
+            .is_ok()
+            {
                 return pmc.WorkingSetSize;
             }
         }
-        
+
         0
     }
 
@@ -153,7 +163,7 @@ impl MemoryTracker {
     #[cfg(target_os = "linux")]
     fn get_system_available_memory() -> usize {
         use std::fs;
-        
+
         if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
             for line in meminfo.lines() {
                 if line.starts_with("MemAvailable:") {
@@ -171,13 +181,13 @@ impl MemoryTracker {
     #[cfg(target_os = "macos")]
     fn get_system_available_memory() -> usize {
         use std::process::Command;
-        
+
         // Use vm_stat to get memory statistics
         if let Ok(output) = Command::new("vm_stat").output() {
             if let Ok(output_str) = String::from_utf8(output.stdout) {
                 let mut free_pages = 0usize;
                 let mut inactive_pages = 0usize;
-                
+
                 for line in output_str.lines() {
                     if line.contains("Pages free:") {
                         if let Some(value) = line.split(':').nth(1) {
@@ -193,7 +203,7 @@ impl MemoryTracker {
                         }
                     }
                 }
-                
+
                 // Page size is typically 4096 bytes on macOS
                 return (free_pages + inactive_pages) * 4096;
             }
@@ -204,16 +214,16 @@ impl MemoryTracker {
     #[cfg(target_os = "windows")]
     fn get_system_available_memory() -> usize {
         use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-        
+
         unsafe {
             let mut mem_status: MEMORYSTATUSEX = std::mem::zeroed();
             mem_status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
-            
+
             if GlobalMemoryStatusEx(&mut mem_status).is_ok() {
                 return mem_status.ullAvailPhys as usize;
             }
         }
-        
+
         0
     }
 
@@ -223,38 +233,48 @@ impl MemoryTracker {
     }
 
     /// Get all snapshots
-    #[must_use]
-    pub fn get_snapshots(&self) -> Vec<MemorySnapshot> {
-        self.snapshots.read().unwrap().clone()
+    pub fn get_snapshots(&self) -> Result<Vec<MemorySnapshot>> {
+        Ok(read_lock(&self.snapshots, "performance: get_snapshots")?.clone())
     }
 
     /// Get memory usage statistics
-    #[must_use]
-    pub fn get_stats(&self) -> MemoryStats {
-        let snapshots = self.snapshots.read().unwrap();
-        
+    pub fn get_stats(&self) -> Result<MemoryStats> {
+        let snapshots = read_lock(&self.snapshots, "performance: get_stats")?;
+
         if snapshots.is_empty() {
-            return MemoryStats::default();
+            return Ok(MemoryStats::default());
         }
 
         let total_used: Vec<usize> = snapshots.iter().map(|s| s.total_used()).collect();
         let heap_allocated: Vec<usize> = snapshots.iter().map(|s| s.heap_allocated).collect();
         let cache_sizes: Vec<usize> = snapshots.iter().map(|s| s.cache_size).collect();
 
-        MemoryStats {
+        Ok(MemoryStats {
             current_total_mb: snapshots.last().map(|s| s.total_used_mb()).unwrap_or(0.0),
             peak_total_mb: total_used.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
-            avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64) / (1024.0 * 1024.0),
-            current_heap_mb: snapshots.last().map(|s| s.heap_allocated as f64 / (1024.0 * 1024.0)).unwrap_or(0.0),
-            peak_heap_mb: heap_allocated.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
-            current_cache_mb: snapshots.last().map(|s| s.cache_size as f64 / (1024.0 * 1024.0)).unwrap_or(0.0),
-            peak_cache_mb: cache_sizes.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
-            system_available_mb: snapshots.last().map(|s| s.system_available_mb()).unwrap_or(0.0),
-        }
+            avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64)
+                / (1024.0 * 1024.0),
+            current_heap_mb: snapshots
+                .last()
+                .map(|s| s.heap_allocated as f64 / (1024.0 * 1024.0))
+                .unwrap_or(0.0),
+            peak_heap_mb: heap_allocated.iter().max().copied().unwrap_or(0) as f64
+                / (1024.0 * 1024.0),
+            current_cache_mb: snapshots
+                .last()
+                .map(|s| s.cache_size as f64 / (1024.0 * 1024.0))
+                .unwrap_or(0.0),
+            peak_cache_mb: cache_sizes.iter().max().copied().unwrap_or(0) as f64
+                / (1024.0 * 1024.0),
+            system_available_mb: snapshots
+                .last()
+                .map(|s| s.system_available_mb())
+                .unwrap_or(0.0),
+        })
     }
 
     /// Get system available memory in bytes (public helper)
-    /// 
+    ///
     /// Returns the amount of available system memory. Falls back to 1GB if unavailable.
     #[must_use]
     pub fn query_system_available_memory() -> usize {
@@ -262,8 +282,9 @@ impl MemoryTracker {
     }
 
     /// Clear all snapshots
-    pub fn clear(&self) {
-        self.snapshots.write().unwrap().clear();
+    pub fn clear(&self) -> Result<()> {
+        write_lock(&self.snapshots, "performance: clear")?.clear();
+        Ok(())
     }
 }
 
@@ -365,45 +386,53 @@ impl QueryProfiler {
     }
 
     /// Record a query timing
-    pub fn record(&self, timing: QueryTiming) {
-        let mut timings = self.timings.write().unwrap();
+    pub fn record(&self, timing: QueryTiming) -> Result<()> {
+        let mut timings = write_lock(&self.timings, "performance: record")?;
         timings.push(timing);
 
         // Keep only the most recent timings
         if timings.len() > self.max_timings {
             timings.remove(0);
         }
+        Ok(())
     }
 
     /// Get all timings
-    #[must_use]
-    pub fn get_timings(&self) -> Vec<QueryTiming> {
-        self.timings.read().unwrap().clone()
+    pub fn get_timings(&self) -> Result<Vec<QueryTiming>> {
+        Ok(read_lock(&self.timings, "performance: get_timings")?.clone())
     }
 
     /// Get profiling statistics
-    #[must_use]
-    pub fn get_stats(&self) -> QueryProfilingStats {
-        let timings = self.timings.read().unwrap();
-        
+    pub fn get_stats(&self) -> Result<QueryProfilingStats> {
+        let timings = read_lock(&self.timings, "performance: get_stats")?;
+
         if timings.is_empty() {
-            return QueryProfilingStats::default();
+            return Ok(QueryProfilingStats::default());
         }
 
         let total_durations: Vec<Duration> = timings.iter().map(|t| t.total_duration).collect();
-        let atom_durations: Vec<Duration> = timings.iter().map(|t| t.atom_evaluation_duration).collect();
+        let atom_durations: Vec<Duration> =
+            timings.iter().map(|t| t.atom_evaluation_duration).collect();
         let join_durations: Vec<Duration> = timings.iter().map(|t| t.join_duration).collect();
 
-        QueryProfilingStats {
+        Ok(QueryProfilingStats {
             total_queries: timings.len(),
             avg_total_duration_ms: Self::avg_duration_ms(&total_durations),
             avg_atom_evaluation_ms: Self::avg_duration_ms(&atom_durations),
             avg_join_duration_ms: Self::avg_duration_ms(&join_durations),
-            slowest_query_ms: total_durations.iter().max().map(|d| d.as_millis() as f64).unwrap_or(0.0),
-            fastest_query_ms: total_durations.iter().min().map(|d| d.as_millis() as f64).unwrap_or(0.0),
+            slowest_query_ms: total_durations
+                .iter()
+                .max()
+                .map(|d| d.as_millis() as f64)
+                .unwrap_or(0.0),
+            fastest_query_ms: total_durations
+                .iter()
+                .min()
+                .map(|d| d.as_millis() as f64)
+                .unwrap_or(0.0),
             total_atoms_evaluated: timings.iter().map(|t| t.atoms_evaluated).sum(),
             total_joins_performed: timings.iter().map(|t| t.joins_performed).sum(),
-        }
+        })
     }
 
     fn avg_duration_ms(durations: &[Duration]) -> f64 {
@@ -415,8 +444,9 @@ impl QueryProfiler {
     }
 
     /// Clear all timings
-    pub fn clear(&self) {
-        self.timings.write().unwrap().clear();
+    pub fn clear(&self) -> Result<()> {
+        write_lock(&self.timings, "performance: clear")?.clear();
+        Ok(())
     }
 }
 
@@ -475,19 +505,26 @@ impl PerformanceMonitor {
     }
 
     /// Take a memory snapshot
-    pub fn snapshot_memory(&self, cache_size: usize, reasoning_state_size: usize) -> Option<MemorySnapshot> {
+    pub fn snapshot_memory(
+        &self,
+        cache_size: usize,
+        reasoning_state_size: usize,
+    ) -> Result<Option<MemorySnapshot>> {
         if !self.enabled {
-            return None;
+            return Ok(None);
         }
-        Some(self.memory_tracker.snapshot(cache_size, reasoning_state_size))
+        Ok(Some(
+            self.memory_tracker
+                .snapshot(cache_size, reasoning_state_size)?,
+        ))
     }
 
     /// Record query timing
-    pub fn record_query_timing(&self, timing: QueryTiming) {
+    pub fn record_query_timing(&self, timing: QueryTiming) -> Result<()> {
         if !self.enabled {
-            return;
+            return Ok(());
         }
-        self.query_profiler.record(timing);
+        self.query_profiler.record(timing)
     }
 
     /// Get memory tracker
@@ -503,18 +540,18 @@ impl PerformanceMonitor {
     }
 
     /// Get comprehensive performance report
-    #[must_use]
-    pub fn get_report(&self) -> PerformanceReport {
-        PerformanceReport {
-            memory_stats: self.memory_tracker.get_stats(),
-            query_stats: self.query_profiler.get_stats(),
-        }
+    pub fn get_report(&self) -> Result<PerformanceReport> {
+        Ok(PerformanceReport {
+            memory_stats: self.memory_tracker.get_stats()?,
+            query_stats: self.query_profiler.get_stats()?,
+        })
     }
 
     /// Clear all monitoring data
-    pub fn clear(&self) {
-        self.memory_tracker.clear();
-        self.query_profiler.clear();
+    pub fn clear(&self) -> Result<()> {
+        self.memory_tracker.clear()?;
+        self.query_profiler.clear()?;
+        Ok(())
     }
 }
 
@@ -578,8 +615,8 @@ mod tests {
     #[test]
     fn test_memory_snapshot() {
         let snapshot = MemorySnapshot {
-            heap_allocated: 1024 * 1024 * 10, // 10 MB
-            cache_size: 1024 * 1024 * 2,      // 2 MB
+            heap_allocated: 1024 * 1024 * 10,      // 10 MB
+            cache_size: 1024 * 1024 * 2,           // 2 MB
             reasoning_state_size: 1024 * 1024 * 3, // 3 MB
             system_available: 1024 * 1024 * 1024,  // 1 GB
             timestamp: Instant::now(),
@@ -592,16 +629,16 @@ mod tests {
     #[test]
     fn test_memory_tracker() {
         let tracker = MemoryTracker::new(10);
-        
-        // Take some snapshots
-        tracker.snapshot(1024 * 1024, 512 * 1024);
-        tracker.snapshot(2048 * 1024, 1024 * 1024);
-        tracker.snapshot(3072 * 1024, 1536 * 1024);
 
-        let snapshots = tracker.get_snapshots();
+        // Take some snapshots
+        tracker.snapshot(1024 * 1024, 512 * 1024).unwrap();
+        tracker.snapshot(2048 * 1024, 1024 * 1024).unwrap();
+        tracker.snapshot(3072 * 1024, 1536 * 1024).unwrap();
+
+        let snapshots = tracker.get_snapshots().unwrap();
         assert_eq!(snapshots.len(), 3);
 
-        let stats = tracker.get_stats();
+        let stats = tracker.get_stats().unwrap();
         assert!(stats.peak_total_mb > 0.0);
     }
 
@@ -626,29 +663,33 @@ mod tests {
     #[test]
     fn test_query_profiler() {
         let profiler = QueryProfiler::new(10);
-        
-        // Record some timings
-        profiler.record(QueryTiming::new(
-            Duration::from_millis(100),
-            Duration::from_millis(50),
-            Duration::from_millis(30),
-            Duration::from_millis(20),
-            10,
-            5,
-            100,
-        ));
-        
-        profiler.record(QueryTiming::new(
-            Duration::from_millis(200),
-            Duration::from_millis(100),
-            Duration::from_millis(60),
-            Duration::from_millis(40),
-            20,
-            10,
-            200,
-        ));
 
-        let stats = profiler.get_stats();
+        // Record some timings
+        profiler
+            .record(QueryTiming::new(
+                Duration::from_millis(100),
+                Duration::from_millis(50),
+                Duration::from_millis(30),
+                Duration::from_millis(20),
+                10,
+                5,
+                100,
+            ))
+            .unwrap();
+
+        profiler
+            .record(QueryTiming::new(
+                Duration::from_millis(200),
+                Duration::from_millis(100),
+                Duration::from_millis(60),
+                Duration::from_millis(40),
+                20,
+                10,
+                200,
+            ))
+            .unwrap();
+
+        let stats = profiler.get_stats().unwrap();
         assert_eq!(stats.total_queries, 2);
         assert!(stats.avg_total_duration_ms > 0.0);
         assert!(stats.slowest_query_ms >= stats.fastest_query_ms);
@@ -660,28 +701,30 @@ mod tests {
         assert!(monitor.is_enabled());
 
         // Take memory snapshot
-        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024);
+        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024).unwrap();
         assert!(snapshot.is_some());
 
         // Record query timing
-        monitor.record_query_timing(QueryTiming::new(
-            Duration::from_millis(100),
-            Duration::from_millis(50),
-            Duration::from_millis(30),
-            Duration::from_millis(20),
-            10,
-            5,
-            100,
-        ));
+        monitor
+            .record_query_timing(QueryTiming::new(
+                Duration::from_millis(100),
+                Duration::from_millis(50),
+                Duration::from_millis(30),
+                Duration::from_millis(20),
+                10,
+                5,
+                100,
+            ))
+            .unwrap();
 
         // Get report
-        let report = monitor.get_report();
+        let report = monitor.get_report().unwrap();
         assert_eq!(report.query_stats.total_queries, 1);
 
         // Test disable
         monitor.disable();
         assert!(!monitor.is_enabled());
-        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024);
+        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024).unwrap();
         assert!(snapshot.is_none());
     }
 

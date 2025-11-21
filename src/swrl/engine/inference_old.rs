@@ -8,6 +8,7 @@
 use crate::ontology::{Axiom, Ontology};
 use crate::swrl::{SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLRule, SWRLIArgument, SWRLFact};
 use crate::{Error, Result};
+use crate::core::lock_helpers::{read_lock, write_lock};
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -172,10 +173,13 @@ pub struct BackwardChaining {
         let mut context = SWRLExecutionContext::new();
         context.max_depth = engine.config.max_execution_depth;
 
+        let ontology = engine.ontology.as_ref()
+            .ok_or_else(|| Error::reasoning("No ontology set for SWRL execution"))?;
+
         let result = engine.interpreter.execute_rule(
             rule,
             &mut context,
-            engine.ontology.as_ref().unwrap(),
+            ontology,
         )?;
 
         let execution_time = start_time.elapsed();
@@ -388,7 +392,7 @@ impl BackwardChaining {
     ) -> Result<Option<Vec<SWRLAtom>>> {
         // Get the rule from the ontology
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(ontology, "SWRL inference: reading ontology for rule processing")?;
             
             for axiom in ontology_guard.axioms() {
                 if let Axiom::Rule(rule_axiom) = axiom {
@@ -493,6 +497,4 @@ impl Default for HybridReasoning {
     fn default() -> Self {
         Self::new()
     }
-}
-    NeedsMoreProofs,
 }

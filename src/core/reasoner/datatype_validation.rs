@@ -3,8 +3,8 @@
 //! This module implements validation for XML Schema Datatypes (XSD) as specified
 //! in the OWL 2 specification. It handles datatype checking and facet restrictions.
 
+use crate::ontology::{IRI, Literal};
 use crate::{Error, Result};
-use crate::ontology::{Literal, IRI};
 use std::str::FromStr;
 
 /// XSD namespace
@@ -37,7 +37,7 @@ impl DatatypeValidator {
                 return Ok(true);
             }
         };
-        
+
         let datatype_iri_str = datatype_url.as_str();
         let value = &literal.value;
 
@@ -104,7 +104,10 @@ impl DatatypeValidator {
             _ => {
                 // Unknown datatype
                 if self.strict {
-                    Err(Error::invalid_input(format!("Unknown XSD datatype: {}", datatype_local)))
+                    Err(Error::invalid_input(format!(
+                        "Unknown XSD datatype: {}",
+                        datatype_local
+                    )))
                 } else {
                     Ok(true)
                 }
@@ -138,11 +141,25 @@ impl DatatypeValidator {
         match (local1, local2) {
             // Integer hierarchy
             (_, "decimal") if self.is_integer_type(local1) => true,
-            (_, "integer") if matches!(local1,
-                "long" | "int" | "short" | "byte" |
-                "nonNegativeInteger" | "positiveInteger" |
-                "nonPositiveInteger" | "negativeInteger" |
-                "unsignedLong" | "unsignedInt" | "unsignedShort" | "unsignedByte") => true,
+            (_, "integer")
+                if matches!(
+                    local1,
+                    "long"
+                        | "int"
+                        | "short"
+                        | "byte"
+                        | "nonNegativeInteger"
+                        | "positiveInteger"
+                        | "nonPositiveInteger"
+                        | "negativeInteger"
+                        | "unsignedLong"
+                        | "unsignedInt"
+                        | "unsignedShort"
+                        | "unsignedByte"
+                ) =>
+            {
+                true
+            }
             ("int" | "short" | "byte", "long") => true,
             ("short" | "byte", "int") => true,
             ("byte", "short") => true,
@@ -153,7 +170,10 @@ impl DatatypeValidator {
             ("unsignedByte", "unsignedShort") => true,
 
             // String hierarchy
-            ("normalizedString" | "token" | "language" | "Name" | "NCName" | "NMTOKEN", "string") => true,
+            (
+                "normalizedString" | "token" | "language" | "Name" | "NCName" | "NMTOKEN",
+                "string",
+            ) => true,
             ("token" | "language" | "Name" | "NCName" | "NMTOKEN", "normalizedString") => true,
             ("Name" | "NCName", "token") => true,
             ("NCName", "Name") => true,
@@ -163,11 +183,22 @@ impl DatatypeValidator {
     }
 
     fn is_integer_type(&self, local_name: &str) -> bool {
-        matches!(local_name,
-            "integer" | "long" | "int" | "short" | "byte" |
-            "nonNegativeInteger" | "positiveInteger" |
-            "nonPositiveInteger" | "negativeInteger" |
-            "unsignedLong" | "unsignedInt" | "unsignedShort" | "unsignedByte")
+        matches!(
+            local_name,
+            "integer"
+                | "long"
+                | "int"
+                | "short"
+                | "byte"
+                | "nonNegativeInteger"
+                | "positiveInteger"
+                | "nonPositiveInteger"
+                | "negativeInteger"
+                | "unsignedLong"
+                | "unsignedInt"
+                | "unsignedShort"
+                | "unsignedByte"
+        )
     }
 
     // String type validators
@@ -181,9 +212,7 @@ impl DatatypeValidator {
         if !self.validate_normalized_string(value)? {
             return Ok(false);
         }
-        Ok(!value.starts_with(' ') &&
-           !value.ends_with(' ') &&
-           !value.contains("  "))
+        Ok(!value.starts_with(' ') && !value.ends_with(' ') && !value.contains("  "))
     }
 
     fn validate_language(&self, value: &str) -> Result<bool> {
@@ -194,15 +223,17 @@ impl DatatypeValidator {
         }
 
         // First part must be letters only, 1-8 characters
-        if !parts[0].chars().all(|c| c.is_ascii_alphabetic()) ||
-           parts[0].len() > 8 || parts[0].is_empty() {
+        if !parts[0].chars().all(|c| c.is_ascii_alphabetic())
+            || parts[0].len() > 8
+            || parts[0].is_empty()
+        {
             return Ok(false);
         }
 
         // Subsequent parts must be alphanumeric, 1-8 characters
         for part in &parts[1..] {
-            if !part.chars().all(|c| c.is_ascii_alphanumeric()) ||
-               part.len() > 8 || part.is_empty() {
+            if !part.chars().all(|c| c.is_ascii_alphanumeric()) || part.len() > 8 || part.is_empty()
+            {
                 return Ok(false);
             }
         }
@@ -215,9 +246,14 @@ impl DatatypeValidator {
         if value.is_empty() {
             return Ok(false);
         }
-        let first = value.chars().next().unwrap();
-        Ok((first.is_alphabetic() || first == '_' || first == ':') &&
-           value.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'))
+        let first = value
+            .chars()
+            .next()
+            .ok_or_else(|| Error::internal("Empty string after is_empty check"))?;
+        Ok((first.is_alphabetic() || first == '_' || first == ':')
+            && value
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'))
     }
 
     fn validate_ncname(&self, value: &str) -> Result<bool> {
@@ -225,16 +261,23 @@ impl DatatypeValidator {
         if value.is_empty() {
             return Ok(false);
         }
-        let first = value.chars().next().unwrap();
-        Ok((first.is_alphabetic() || first == '_') &&
-           value.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') &&
-           !value.contains(':'))
+        let first = value
+            .chars()
+            .next()
+            .ok_or_else(|| Error::internal("Empty string after is_empty check"))?;
+        Ok((first.is_alphabetic() || first == '_')
+            && value
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+            && !value.contains(':'))
     }
 
     fn validate_nmtoken(&self, value: &str) -> Result<bool> {
         // NameChar+
-        Ok(!value.is_empty() &&
-           value.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'))
+        Ok(!value.is_empty()
+            && value
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'))
     }
 
     // Boolean validator
@@ -250,8 +293,11 @@ impl DatatypeValidator {
             return Ok(false);
         }
 
-        let without_sign = trimmed.strip_prefix('+').or_else(|| trimmed.strip_prefix('-')).unwrap_or(trimmed);
-        
+        let without_sign = trimmed
+            .strip_prefix('+')
+            .or_else(|| trimmed.strip_prefix('-'))
+            .unwrap_or(trimmed);
+
         // Must have at least one digit
         if !without_sign.chars().any(|c| c.is_ascii_digit()) {
             return Ok(false);
@@ -332,79 +378,76 @@ impl DatatypeValidator {
 
     fn validate_float(&self, value: &str) -> Result<bool> {
         let trimmed = value.trim();
-        Ok(f32::from_str(trimmed).is_ok() ||
-           matches!(trimmed, "INF" | "-INF" | "NaN"))
+        Ok(f32::from_str(trimmed).is_ok() || matches!(trimmed, "INF" | "-INF" | "NaN"))
     }
 
     fn validate_double(&self, value: &str) -> Result<bool> {
         let trimmed = value.trim();
-        Ok(f64::from_str(trimmed).is_ok() ||
-           matches!(trimmed, "INF" | "-INF" | "NaN"))
+        Ok(f64::from_str(trimmed).is_ok() || matches!(trimmed, "INF" | "-INF" | "NaN"))
     }
 
     // Date/Time validators (simplified - full ISO 8601 is complex)
     fn validate_datetime(&self, value: &str) -> Result<bool> {
         // Basic format: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let datetime_pattern = regex::Regex::new(
-            r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$"
-        ).unwrap();
+            r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
+        )
+        .unwrap(); // Safe: hardcoded regex pattern
         Ok(datetime_pattern.is_match(value))
     }
 
     fn validate_datetime_stamp(&self, value: &str) -> Result<bool> {
         // Like dateTime but timezone is required
         let datetime_pattern = regex::Regex::new(
-            r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$"
-        ).unwrap();
+            r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$",
+        )
+        .unwrap(); // Safe: hardcoded regex pattern
         Ok(datetime_pattern.is_match(value))
     }
 
     fn validate_date(&self, value: &str) -> Result<bool> {
         // Format: YYYY-MM-DD(Z|[+-]HH:MM)?
-        let date_pattern = regex::Regex::new(
-            r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$"
-        ).unwrap();
+        let date_pattern = regex::Regex::new(r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(date_pattern.is_match(value))
     }
 
     fn validate_time(&self, value: &str) -> Result<bool> {
         // Format: HH:MM:SS(.sss)?(Z|[+-]HH:MM)?
-        let time_pattern = regex::Regex::new(
-            r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$"
-        ).unwrap();
+        let time_pattern =
+            regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(time_pattern.is_match(value))
     }
 
     fn validate_gyear(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gyear_month(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gmonth(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gmonth_day(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_gday(&self, value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap();
+        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$").unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
     fn validate_duration(&self, value: &str) -> Result<bool> {
         // Format: P(nY)?(nM)?(nD)?(T(nH)?(nM)?(nS)?)?
-        let pattern = regex::Regex::new(
-            r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$"
-        ).unwrap();
+        let pattern =
+            regex::Regex::new(r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$")
+                .unwrap(); // Safe: hardcoded regex pattern
         Ok(pattern.is_match(value))
     }
 
@@ -416,11 +459,12 @@ impl DatatypeValidator {
     fn validate_base64_binary(&self, value: &str) -> Result<bool> {
         // Remove whitespace
         let clean: String = value.chars().filter(|c| !c.is_whitespace()).collect();
-        
+
         // Must be valid base64 characters
-        let valid_chars = clean.chars().all(|c|
-            c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=');
-        
+        let valid_chars = clean
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=');
+
         // Padding must be correct
         let padding_ok = match clean.matches('=').count() {
             0 => true,
@@ -428,7 +472,7 @@ impl DatatypeValidator {
             2 => clean.ends_with("=="),
             _ => false,
         };
-        
+
         Ok(valid_chars && padding_ok && clean.len() % 4 == 0)
     }
 
@@ -480,7 +524,7 @@ mod tests {
         let long_iri = IRI::new("http://www.w3.org/2001/XMLSchema#long");
         let integer_iri = IRI::new("http://www.w3.org/2001/XMLSchema#integer");
         let decimal_iri = IRI::new("http://www.w3.org/2001/XMLSchema#decimal");
-        
+
         assert!(validator.datatypes_compatible(&int_iri, &long_iri));
         assert!(validator.datatypes_compatible(&int_iri, &integer_iri));
         assert!(validator.datatypes_compatible(&int_iri, &decimal_iri));

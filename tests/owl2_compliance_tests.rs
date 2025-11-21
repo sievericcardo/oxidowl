@@ -361,7 +361,10 @@ ObjectProperty without name:
     let result = parser.parse_string(invalid_manchester);
 
     // With strict validation enabled, invalid Manchester syntax should be rejected
-    assert!(result.is_err(), "Parser should reject invalid Manchester syntax with strict validation");
+    assert!(
+        result.is_err(),
+        "Parser should reject invalid Manchester syntax with strict validation"
+    );
 }
 
 #[test]

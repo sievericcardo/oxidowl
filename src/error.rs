@@ -4,7 +4,7 @@
 //! parsing, network operations, and configuration.
 
 /// Main error type for Oxidowl
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Ontology parsing error
     #[error("Ontology parsing error: {message}")]
@@ -129,6 +129,113 @@ pub enum Error {
     /// Configuration error (alternative variant)
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
+
+    /// Lock acquisition failed (poisoned lock)
+    #[error("Lock poisoned: {message}")]
+    LockPoisoned { message: String },
+
+    /// Data structure in unexpected state
+    #[error("Data structure error: {message}")]
+    DataStructure { message: String },
+
+    /// Collection operation failed
+    #[error("Collection error: {message}")]
+    CollectionError { message: String },
+
+    /// System operation failed
+    #[error("System error: {message}")]
+    SystemError { message: String },
+}
+
+// Manual Clone implementation because Backtrace doesn't implement Clone
+impl Clone for Error {
+    fn clone(&self) -> Self {
+        match self {
+            Error::OntologyParsing { message } => Error::OntologyParsing {
+                message: message.clone(),
+            },
+            Error::Reasoning { message } => Error::Reasoning {
+                message: message.clone(),
+            },
+            Error::Config { message } => Error::Config {
+                message: message.clone(),
+            },
+            Error::Network { message } => Error::Network {
+                message: message.clone(),
+            },
+            Error::Io { message } => Error::Io {
+                message: message.clone(),
+            },
+            Error::XmlParsing { message } => Error::XmlParsing {
+                message: message.clone(),
+            },
+            Error::Sparql { message } => Error::Sparql {
+                message: message.clone(),
+            },
+            Error::Cache { message } => Error::Cache {
+                message: message.clone(),
+            },
+            Error::ResourceExhaustion { message } => Error::ResourceExhaustion {
+                message: message.clone(),
+            },
+            Error::Timeout { message } => Error::Timeout {
+                message: message.clone(),
+            },
+            Error::Unsupported { message } => Error::Unsupported {
+                message: message.clone(),
+            },
+            Error::InvalidDatatype(s) => Error::InvalidDatatype(s.clone()),
+            Error::InvalidLiteral(s) => Error::InvalidLiteral(s.clone()),
+            Error::ParseError(s) => Error::ParseError(s.clone()),
+            Error::Internal { message } => Error::Internal {
+                message: message.clone(),
+            },
+            Error::InvalidInput { message } => Error::InvalidInput {
+                message: message.clone(),
+            },
+            Error::InvalidDisjunctIndex { index } => Error::InvalidDisjunctIndex { index: *index },
+            Error::InvalidBranchingChoice { index } => {
+                Error::InvalidBranchingChoice { index: *index }
+            }
+            Error::MaxDepthExceeded { depth } => Error::MaxDepthExceeded { depth: *depth },
+            Error::BranchingPointNotFound { id } => {
+                Error::BranchingPointNotFound { id: id.clone() }
+            }
+            Error::NoBranchingChoicesAvailable => Error::NoBranchingChoicesAvailable,
+            Error::ResourceExhausted { message } => Error::ResourceExhausted {
+                message: message.clone(),
+            },
+            Error::InvalidPropertyChain { message } => Error::InvalidPropertyChain {
+                message: message.clone(),
+            },
+            Error::InvalidAssertion { message } => Error::InvalidAssertion {
+                message: message.clone(),
+            },
+            Error::QueueFull => Error::QueueFull,
+            Error::DLQuery { message } => Error::DLQuery {
+                message: message.clone(),
+            },
+            Error::AxiomAlreadyExists => Error::AxiomAlreadyExists,
+            Error::AxiomNotFound => Error::AxiomNotFound,
+            Error::ImportError { message } => Error::ImportError {
+                message: message.clone(),
+            },
+            Error::ReasoningError(s) => Error::ReasoningError(s.clone()),
+            Error::ConfigurationError(s) => Error::ConfigurationError(s.clone()),
+            Error::LockPoisoned { message } => Error::LockPoisoned {
+                message: message.clone(),
+            },
+            Error::DataStructure { message } => Error::DataStructure {
+                message: message.clone(),
+            },
+            Error::CollectionError { message } => Error::CollectionError {
+                message: message.clone(),
+            },
+            Error::SystemError { message } => Error::SystemError {
+                message: message.clone(),
+            },
+        }
+    }
 }
 
 /// Specialized error for reasoner operations
@@ -230,6 +337,34 @@ impl Error {
         }
     }
 
+    /// Lock poisoned error constructor
+    pub fn lock_poisoned<S: Into<String>>(message: S) -> Self {
+        Self::LockPoisoned {
+            message: message.into(),
+        }
+    }
+
+    /// Data structure error constructor
+    pub fn data_structure<S: Into<String>>(message: S) -> Self {
+        Self::DataStructure {
+            message: message.into(),
+        }
+    }
+
+    /// Collection error constructor
+    pub fn collection_error<S: Into<String>>(message: S) -> Self {
+        Self::CollectionError {
+            message: message.into(),
+        }
+    }
+
+    /// System error constructor
+    pub fn system_error<S: Into<String>>(message: S) -> Self {
+        Self::SystemError {
+            message: message.into(),
+        }
+    }
+
     /// Create an invalid input error
     pub fn invalid_input<S: Into<String>>(message: S) -> Self {
         Self::InvalidInput {
@@ -279,6 +414,11 @@ impl Error {
             message: message.into(),
         }
     }
+
+    /// Create a parse error
+    pub fn parse_error<S: Into<String>>(message: S) -> Self {
+        Self::ParseError(message.into())
+    }
 }
 
 impl From<std::io::Error> for Error {
@@ -321,7 +461,9 @@ impl Error {
             | Error::ResourceExhaustion { .. }
             | Error::ResourceExhausted { .. }
             | Error::Timeout { .. } => ErrorCategory::Resource,
-            Error::Unsupported { .. } | Error::Internal { .. } => ErrorCategory::Internal,
+            Error::Unsupported { .. } | Error::Internal { .. } | Error::LockPoisoned { .. } => {
+                ErrorCategory::Internal
+            }
             Error::InvalidInput { .. }
             | Error::InvalidDisjunctIndex { .. }
             | Error::InvalidBranchingChoice { .. }
@@ -332,7 +474,10 @@ impl Error {
             | Error::InvalidAssertion { .. }
             | Error::QueueFull
             | Error::AxiomAlreadyExists
-            | Error::AxiomNotFound => ErrorCategory::Internal,
+            | Error::AxiomNotFound
+            | Error::DataStructure { .. }
+            | Error::CollectionError { .. }
+            | Error::SystemError { .. } => ErrorCategory::Internal,
             Error::DLQuery { .. } => ErrorCategory::Input,
             Error::InvalidDatatype(_) => ErrorCategory::Input,
             Error::InvalidLiteral(_) => ErrorCategory::Input,
@@ -358,7 +503,7 @@ impl Error {
             | Error::ResourceExhausted { .. }
             | Error::Timeout { .. }
             | Error::Network { .. } => true,
-            Error::Io { .. } | Error::Internal { .. } => false,
+            Error::Io { .. } | Error::Internal { .. } | Error::LockPoisoned { .. } => false,
             Error::InvalidInput { .. }
             | Error::InvalidDisjunctIndex { .. }
             | Error::InvalidBranchingChoice { .. }
@@ -369,7 +514,10 @@ impl Error {
             | Error::InvalidAssertion { .. }
             | Error::QueueFull
             | Error::AxiomAlreadyExists
-            | Error::AxiomNotFound => false,
+            | Error::AxiomNotFound
+            | Error::DataStructure { .. }
+            | Error::CollectionError { .. }
+            | Error::SystemError { .. } => false,
             Error::DLQuery { .. } => false,
             Error::InvalidDatatype(_) => false,
             Error::InvalidLiteral(_) => false,

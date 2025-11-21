@@ -226,7 +226,11 @@ impl MLHeuristicsEngine {
                 message: format!("Failed to acquire predictor lock: {}", e),
             })?;
 
-            let model = predictor.get_or_insert_with(|| CostPredictionModel::new());
+            let model = if let Some(m) = predictor.as_ref() {
+                m
+            } else {
+                predictor.get_or_insert(CostPredictionModel::new()?)
+            };
             model.train(&training_samples, self.config.learning_rate)?
         };
 
@@ -496,14 +500,16 @@ impl QueryFeatureExtractor {
         if n <= 1 {
             return 0;
         }
-        
+
         // Build adjacency list for join graph
         let mut join_graph: Vec<Vec<usize>> = vec![Vec::new(); n];
         let mut join_variables: Vec<Vec<String>> = vec![Vec::new(); n];
-        
+
         for i in 0..n {
             for j in (i + 1)..n {
-                if let Some(shared_vars) = self.get_shared_variables(&query.body_atoms[i], &query.body_atoms[j]) {
+                if let Some(shared_vars) =
+                    self.get_shared_variables(&query.body_atoms[i], &query.body_atoms[j])
+                {
                     if !shared_vars.is_empty() {
                         join_graph[i].push(j);
                         join_graph[j].push(i);
@@ -513,21 +519,21 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         // Count actual joins considering graph structure
         let mut total_joins = 0;
         let mut visited = vec![false; n];
-        
+
         // Use DFS to find connected components and count joins within each
         for start in 0..n {
             if !visited[start] {
                 total_joins += self.count_joins_in_component(&join_graph, &mut visited, start);
             }
         }
-        
+
         total_joins
     }
-    
+
     fn count_joins_in_component(
         &self,
         graph: &[Vec<usize>],
@@ -537,37 +543,35 @@ impl QueryFeatureExtractor {
         let mut stack = vec![start];
         let mut component_size = 0;
         let mut join_count = 0;
-        
+
         while let Some(node) = stack.pop() {
             if visited[node] {
                 continue;
             }
-            
+
             visited[node] = true;
             component_size += 1;
             join_count += graph[node].len();
-            
+
             for &neighbor in &graph[node] {
                 if !visited[neighbor] {
                     stack.push(neighbor);
                 }
             }
         }
-        
+
         // Each edge was counted twice (once from each endpoint)
         // In a connected component of size n, minimum joins = n-1 (tree)
         // Our count gives 2 * actual_edges, so divide by 2
         join_count / 2
     }
-    
+
     fn get_shared_variables(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> Option<Vec<String>> {
         let vars1 = self.extract_atom_variables(atom1);
         let vars2 = self.extract_atom_variables(atom2);
-        
-        let shared: Vec<String> = vars1.into_iter()
-            .filter(|v| vars2.contains(v))
-            .collect();
-        
+
+        let shared: Vec<String> = vars1.into_iter().filter(|v| vars2.contains(v)).collect();
+
         if shared.is_empty() {
             None
         } else {
@@ -578,18 +582,22 @@ impl QueryFeatureExtractor {
     fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
         self.get_shared_variables(atom1, atom2).is_some()
     }
-    
+
     fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<String> {
         let mut vars = Vec::new();
         match atom {
             QueryAtom::ClassAtom { variable, .. } => {
                 vars.push(variable.name.clone());
             }
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vars.push(subject.name.clone());
                 vars.push(object.name.clone());
             }
-            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+            QueryAtom::DataPropertyAtom {
+                subject, literal, ..
+            } => {
                 vars.push(subject.name.clone());
                 vars.push(literal.name.clone());
             }
@@ -629,51 +637,55 @@ impl QueryFeatureExtractor {
     }
 
     fn estimate_ontology_depth(&self, ontology: &Ontology) -> f32 {
-        use std::collections::{HashSet, VecDeque};
         use crate::ontology::ClassExpression;
-        
+        use std::collections::{HashSet, VecDeque};
+
         let classes = ontology.classes();
         if classes.is_empty() {
             return 1.0;
         }
-        
+
         let mut total_depth = 0;
         let mut count = 0;
-        
+
         // Calculate depth for each class
         for (_iri, class) in classes {
             let depth = self.calculate_class_depth(&class, ontology);
             total_depth += depth;
             count += 1;
         }
-        
+
         if count > 0 {
             (total_depth as f32 / count as f32).max(1.0)
         } else {
             1.0
         }
     }
-    
+
     fn calculate_class_depth(&self, class: &crate::ontology::Class, ontology: &Ontology) -> usize {
         use std::collections::{HashSet, VecDeque};
-        
+
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
         queue.push_back((class.iri.clone(), 0));
         visited.insert(class.iri.clone());
-        
+
         let mut max_depth = 0;
-        
+
         while let Some((current_iri, depth)) = queue.pop_front() {
             max_depth = max_depth.max(depth);
-            
+
             // Find SubClassOf axioms where current_iri is the subclass
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom {
-                    if let crate::ontology::ClassExpression::Class(sub_class) = &sub_class_axiom.subclass {
+                    if let crate::ontology::ClassExpression::Class(sub_class) =
+                        &sub_class_axiom.subclass
+                    {
                         if sub_class.iri == current_iri {
                             // Found a superclass
-                            if let crate::ontology::ClassExpression::Class(sup_class) = &sub_class_axiom.superclass {
+                            if let crate::ontology::ClassExpression::Class(sup_class) =
+                                &sub_class_axiom.superclass
+                            {
                                 if visited.insert(sup_class.iri.clone()) {
                                     queue.push_back((sup_class.iri.clone(), depth + 1));
                                 }
@@ -683,7 +695,7 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         max_depth
     }
 
@@ -694,11 +706,11 @@ impl QueryFeatureExtractor {
 
         // Find structurally similar queries using fingerprinting
         let mut similar_times: Vec<(f32, f32)> = Vec::new(); // (time, similarity_score)
-        
+
         for (hist_hash, hist_time) in history.iter() {
             // Calculate structural similarity between query hashes
             let similarity = self.calculate_hash_similarity(query_hash, *hist_hash);
-            
+
             // Only consider queries with similarity above threshold
             if similarity > 0.7 {
                 similar_times.push((*hist_time, similarity));
@@ -721,15 +733,15 @@ impl QueryFeatureExtractor {
         if hash1 == hash2 {
             return 1.0;
         }
-        
+
         // Use Hamming distance on hash bits
         let xor = hash1 ^ hash2;
         let different_bits = xor.count_ones();
-        
+
         // Similarity decreases with number of different bits
         let max_bits = 64.0;
         let similarity = 1.0 - (different_bits as f32 / max_bits);
-        
+
         similarity
     }
 
@@ -738,13 +750,19 @@ impl QueryFeatureExtractor {
         QueryFingerprint {
             num_atoms: query.body_atoms.len(),
             num_variables: query.answer_variables.len(),
-            num_class_atoms: query.body_atoms.iter()
+            num_class_atoms: query
+                .body_atoms
+                .iter()
                 .filter(|a| matches!(a, QueryAtom::ClassAtom { .. }))
                 .count(),
-            num_property_atoms: query.body_atoms.iter()
+            num_property_atoms: query
+                .body_atoms
+                .iter()
                 .filter(|a| matches!(a, QueryAtom::ObjectPropertyAtom { .. }))
                 .count(),
-            num_data_atoms: query.body_atoms.iter()
+            num_data_atoms: query
+                .body_atoms
+                .iter()
                 .filter(|a| matches!(a, QueryAtom::DataPropertyAtom { .. }))
                 .count(),
             has_cycles: self.detect_query_cycles(query),
@@ -755,24 +773,34 @@ impl QueryFeatureExtractor {
     /// Detect cycles in query structure
     fn detect_query_cycles(&self, query: &ConjunctiveQuery) -> bool {
         // Build a graph of variable dependencies
-        let mut graph: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-        
+        let mut graph: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
         for atom in &query.body_atoms {
-            if let QueryAtom::ObjectPropertyAtom { subject, object, .. } = atom {
-                graph.entry(subject.name.clone())
+            if let QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } = atom
+            {
+                graph
+                    .entry(subject.name.clone())
                     .or_insert_with(Vec::new)
                     .push(object.name.clone());
             }
         }
-        
+
         // Simple cycle detection: if any variable appears more than once in a path
         for start in graph.keys() {
             let mut visited = std::collections::HashSet::new();
-            if self.dfs_has_cycle(start, &graph, &mut visited, &mut std::collections::HashSet::new()) {
+            if self.dfs_has_cycle(
+                start,
+                &graph,
+                &mut visited,
+                &mut std::collections::HashSet::new(),
+            ) {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -790,10 +818,10 @@ impl QueryFeatureExtractor {
         if visited.contains(node) {
             return false;
         }
-        
+
         visited.insert(node.to_string());
         rec_stack.insert(node.to_string());
-        
+
         if let Some(neighbors) = graph.get(node) {
             for neighbor in neighbors {
                 if self.dfs_has_cycle(neighbor, graph, visited, rec_stack) {
@@ -801,14 +829,16 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         rec_stack.remove(node);
         false
     }
 
     /// Calculate maximum join width (max variables in any atom)
     fn calculate_max_join_width(&self, query: &ConjunctiveQuery) -> usize {
-        query.body_atoms.iter()
+        query
+            .body_atoms
+            .iter()
             .map(|atom| match atom {
                 QueryAtom::ClassAtom { .. } => 1,
                 QueryAtom::ObjectPropertyAtom { .. } => 2,
@@ -825,18 +855,18 @@ impl QueryFeatureExtractor {
     fn estimate_cache_hit_probability(&self, query: &ConjunctiveQuery) -> f32 {
         // Estimate based on query hash and history
         let query_hash = self.calculate_query_hash(query);
-        
+
         let history = match self.query_history.read() {
             Ok(h) => h,
             Err(_) => return 0.5, // Default if lock fails
         };
-        
+
         // Count how many times similar queries appeared
         let similar_count = history
             .iter()
             .filter(|(hash, _)| *hash == query_hash)
             .count();
-        
+
         // More appearances = higher cache hit probability
         if similar_count == 0 {
             0.1 // Low probability for new queries
@@ -846,7 +876,7 @@ impl QueryFeatureExtractor {
             0.9 // High probability for frequently seen queries
         }
     }
-    
+
     fn get_available_memory(&self) -> f32 {
         #[cfg(target_os = "linux")]
         {
@@ -863,7 +893,7 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             use std::process::Command;
@@ -876,13 +906,13 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             // On Windows, we'd use GlobalMemoryStatusEx via winapi
             // For now, use a reasonable default
         }
-        
+
         // Fallback: conservative estimate
         4096.0 // 4GB in MB
     }
@@ -896,7 +926,8 @@ impl QueryFeatureExtractor {
                     if let Ok(load_val) = load.parse::<f32>() {
                         // Normalize by number of CPUs
                         if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
-                            let cpu_count = cpuinfo.lines()
+                            let cpu_count = cpuinfo
+                                .lines()
                                 .filter(|l| l.starts_with("processor"))
                                 .count() as f32;
                             if cpu_count > 0.0 {
@@ -908,7 +939,7 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             use std::process::Command;
@@ -916,13 +947,16 @@ impl QueryFeatureExtractor {
             if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output() {
                 if let Ok(load_str) = String::from_utf8(output.stdout) {
                     // Parse "{  1.5 2.0 2.5 }" format
-                    let parts: Vec<&str> = load_str.trim_matches(|c| c == '{' || c == '}')
+                    let parts: Vec<&str> = load_str
+                        .trim_matches(|c| c == '{' || c == '}')
                         .split_whitespace()
                         .collect();
                     if !parts.is_empty() {
                         if let Ok(load) = parts[0].parse::<f32>() {
                             // Normalize by CPU count
-                            if let Ok(cpu_output) = Command::new("sysctl").arg("-n").arg("hw.ncpu").output() {
+                            if let Ok(cpu_output) =
+                                Command::new("sysctl").arg("-n").arg("hw.ncpu").output()
+                            {
                                 if let Ok(cpu_str) = String::from_utf8(cpu_output.stdout) {
                                     if let Ok(cpu_count) = cpu_str.trim().parse::<f32>() {
                                         return (load / cpu_count).min(1.0);
@@ -935,7 +969,7 @@ impl QueryFeatureExtractor {
                 }
             }
         }
-        
+
         // Fallback: moderate utilization
         0.4 // 40% utilization
     }
@@ -943,52 +977,56 @@ impl QueryFeatureExtractor {
     fn calculate_complexity_score(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> f32 {
         let atom_count = query.body_atoms.len() as f32;
         let variable_count = self.count_unique_variables(query) as f32;
-        
+
         // Get ontology size metrics
         let class_count = ontology.classes().len() as f32;
         let object_property_count = ontology.object_properties().len() as f32;
-        
+
         // Count data properties from declarations
-        let data_property_count = ontology.axioms().iter()
+        let data_property_count = ontology
+            .axioms()
+            .iter()
             .filter(|axiom| {
                 if let crate::ontology::Axiom::Declaration(decl) = axiom {
-                    matches!(decl.entity, crate::ontology::axioms::Entity::DataProperty(_))
+                    matches!(
+                        decl.entity,
+                        crate::ontology::axioms::Entity::DataProperty(_)
+                    )
                 } else {
                     false
                 }
             })
             .count() as f32;
-        
+
         let property_count = object_property_count + data_property_count;
         let axiom_count = ontology.axioms().len() as f32;
         let individual_count = ontology.individuals().len() as f32;
-        
+
         // Calculate average class hierarchy depth
         let avg_depth = self.estimate_ontology_depth(ontology);
-        
+
         // Query complexity component
         let query_complexity = atom_count * variable_count.sqrt();
-        
+
         // Ontology complexity component
-        let ontology_complexity = 
-            (class_count + property_count + 1.0).ln() * avg_depth +
-            (axiom_count + 1.0).ln() * 0.5 +
-            (individual_count + 1.0).ln() * 0.3;
-        
+        let ontology_complexity = (class_count + property_count + 1.0).ln() * avg_depth
+            + (axiom_count + 1.0).ln() * 0.5
+            + (individual_count + 1.0).ln() * 0.3;
+
         // Combined complexity score
         (query_complexity * ontology_complexity).sqrt()
     }
-    
+
     fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
         use std::collections::HashSet;
-        
+
         let mut variables = HashSet::new();
-        
+
         for atom in &query.body_atoms {
             let atom_vars = self.extract_atom_variables(atom);
             variables.extend(atom_vars);
         }
-        
+
         variables.len()
     }
 
@@ -997,16 +1035,18 @@ impl QueryFeatureExtractor {
         if atom_count == 0.0 {
             return 1.0;
         }
-        
+
         let individual_count = ontology.individuals().len() as f32;
         let class_count = ontology.classes().len() as f32;
-        
+
         // Calculate selectivity based on query structure
         let mut total_selectivity = 1.0;
-        
+
         for atom in &query.body_atoms {
             let atom_selectivity = match atom {
-                QueryAtom::ClassAtom { class_expression, .. } => {
+                QueryAtom::ClassAtom {
+                    class_expression, ..
+                } => {
                     // Class atoms: estimate based on class hierarchy
                     if class_count > 0.0 {
                         1.0 / (class_count + 1.0)
@@ -1047,14 +1087,14 @@ impl QueryFeatureExtractor {
                     0.01
                 }
             };
-            
+
             total_selectivity *= atom_selectivity;
         }
-        
+
         // Adjust for joins (shared variables increase selectivity)
         let join_count = self.count_joins(query);
         let join_factor = (1.0 + join_count as f32).ln();
-        
+
         total_selectivity * join_factor
     }
 
@@ -1111,25 +1151,33 @@ pub struct CostPredictionModel {
 
 #[cfg(feature = "ml")]
 impl CostPredictionModel {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         let device = Device::Cpu;
         let varmap = VarMap::new();
         let vb = VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
 
         // Neural network architecture: 18 -> 128 -> 64 -> 32 -> 1
-        let layer1 = candle_nn::linear(18, 128, vb.pp("layer1")).unwrap();
-        let layer2 = candle_nn::linear(128, 64, vb.pp("layer2")).unwrap();
-        let layer3 = candle_nn::linear(64, 32, vb.pp("layer3")).unwrap();
-        let output = candle_nn::linear(32, 1, vb.pp("output")).unwrap();
+        let layer1 = candle_nn::linear(18, 128, vb.pp("layer1")).map_err(|e| Error::Internal {
+            message: format!("Failed to create layer1: {}", e),
+        })?;
+        let layer2 = candle_nn::linear(128, 64, vb.pp("layer2")).map_err(|e| Error::Internal {
+            message: format!("Failed to create layer2: {}", e),
+        })?;
+        let layer3 = candle_nn::linear(64, 32, vb.pp("layer3")).map_err(|e| Error::Internal {
+            message: format!("Failed to create layer3: {}", e),
+        })?;
+        let output = candle_nn::linear(32, 1, vb.pp("output")).map_err(|e| Error::Internal {
+            message: format!("Failed to create output layer: {}", e),
+        })?;
 
-        Self {
+        Ok(Self {
             device,
             varmap,
             layer1,
             layer2,
             layer3,
             output,
-        }
+        })
     }
 
     pub fn predict(&self, features: &QueryFeatures) -> Result<CostPrediction, Error> {
@@ -1202,46 +1250,43 @@ impl CostPredictionModel {
         let start_time = Instant::now();
         let epochs = 50;
         let batch_size = 32.min(samples.len());
-        
+
         let mut total_loss = 0.0;
         let mut epoch_losses = Vec::new();
-        
+
         for epoch in 0..epochs {
             let mut epoch_loss = 0.0;
             let mut batch_count = 0;
-            
+
             // Mini-batch training
             for batch_start in (0..samples.len()).step_by(batch_size) {
                 let batch_end = (batch_start + batch_size).min(samples.len());
                 let batch = &samples[batch_start..batch_end];
-                
+
                 // Prepare batch tensors
                 let mut batch_features = Vec::new();
                 let mut batch_targets = Vec::new();
-                
+
                 for sample in batch {
                     batch_features.extend(sample.features.to_vector());
                     batch_targets.push(sample.actual_cost as f32);
                 }
-                
-                let input = Tensor::from_vec(
-                    batch_features,
-                    &[batch.len(), 18],
-                    &self.device,
-                ).map_err(|e| Error::Internal {
-                    message: format!("Failed to create input tensor: {}", e),
-                })?;
-                
-                let target = Tensor::from_vec(
-                    batch_targets.clone(),
-                    &[batch.len(), 1],
-                    &self.device,
-                ).map_err(|e| Error::Internal {
-                    message: format!("Failed to create target tensor: {}", e),
-                })?;
-                
+
+                let input = Tensor::from_vec(batch_features, &[batch.len(), 18], &self.device)
+                    .map_err(|e| Error::Internal {
+                        message: format!("Failed to create input tensor: {}", e),
+                    })?;
+
+                let target =
+                    Tensor::from_vec(batch_targets.clone(), &[batch.len(), 1], &self.device)
+                        .map_err(|e| Error::Internal {
+                            message: format!("Failed to create target tensor: {}", e),
+                        })?;
+
                 // Forward pass
-                let x = self.layer1.forward(&input)
+                let x = self
+                    .layer1
+                    .forward(&input)
                     .map_err(|e| Error::Internal {
                         message: format!("Layer1 forward failed: {}", e),
                     })?
@@ -1249,8 +1294,10 @@ impl CostPredictionModel {
                     .map_err(|e| Error::Internal {
                         message: format!("ReLU failed: {}", e),
                     })?;
-                
-                let x = self.layer2.forward(&x)
+
+                let x = self
+                    .layer2
+                    .forward(&x)
                     .map_err(|e| Error::Internal {
                         message: format!("Layer2 forward failed: {}", e),
                     })?
@@ -1258,8 +1305,10 @@ impl CostPredictionModel {
                     .map_err(|e| Error::Internal {
                         message: format!("ReLU failed: {}", e),
                     })?;
-                
-                let x = self.layer3.forward(&x)
+
+                let x = self
+                    .layer3
+                    .forward(&x)
                     .map_err(|e| Error::Internal {
                         message: format!("Layer3 forward failed: {}", e),
                     })?
@@ -1267,18 +1316,18 @@ impl CostPredictionModel {
                     .map_err(|e| Error::Internal {
                         message: format!("ReLU failed: {}", e),
                     })?;
-                
-                let output = self.output.forward(&x)
-                    .map_err(|e| Error::Internal {
-                        message: format!("Output forward failed: {}", e),
-                    })?;
-                
+
+                let output = self.output.forward(&x).map_err(|e| Error::Internal {
+                    message: format!("Output forward failed: {}", e),
+                })?;
+
                 // Compute MSE loss
                 let diff = output.sub(&target).map_err(|e| Error::Internal {
                     message: format!("Failed to compute difference: {}", e),
                 })?;
-                
-                let loss = diff.sqr()
+
+                let loss = diff
+                    .sqr()
                     .map_err(|e| Error::Internal {
                         message: format!("Failed to compute squared error: {}", e),
                     })?
@@ -1286,44 +1335,47 @@ impl CostPredictionModel {
                     .map_err(|e| Error::Internal {
                         message: format!("Failed to compute mean: {}", e),
                     })?;
-                
+
                 // Backward pass
                 let grads = loss.backward().map_err(|e| Error::Internal {
                     message: format!("Backward pass failed: {}", e),
                 })?;
-                
+
                 // Update parameters using SGD
                 for (name, var) in self.varmap.all_vars() {
                     if let Some(grad) = grads.get(&var) {
-                        let updated = var.sub(&(grad * learning_rate))
+                        let updated =
+                            var.sub(&(grad * learning_rate))
+                                .map_err(|e| Error::Internal {
+                                    message: format!("Parameter update failed for {}: {}", name, e),
+                                })?;
+                        self.varmap
+                            .set_var(&name, &updated)
                             .map_err(|e| Error::Internal {
-                                message: format!("Parameter update failed for {}: {}", name, e),
+                                message: format!("Failed to set variable {}: {}", name, e),
                             })?;
-                        self.varmap.set_var(&name, &updated).map_err(|e| Error::Internal {
-                            message: format!("Failed to set variable {}: {}", name, e),
-                        })?;
                     }
                 }
-                
+
                 let loss_val = loss.to_scalar::<f32>().map_err(|e| Error::Internal {
                     message: format!("Failed to extract loss value: {}", e),
                 })? as f64;
-                
+
                 epoch_loss += loss_val;
                 batch_count += 1;
             }
-            
+
             epoch_loss /= batch_count as f64;
             epoch_losses.push(epoch_loss);
             total_loss += epoch_loss;
         }
-        
+
         let training_time = start_time.elapsed();
         let avg_loss = total_loss / epochs as f64;
-        
+
         // Compute final metrics on all samples
         let (mae, rmse, r2) = self.compute_metrics(samples)?;
-        
+
         Ok(TrainingMetrics {
             r2_score: r2,
             mae,
@@ -1332,37 +1384,39 @@ impl CostPredictionModel {
             samples_trained: samples.len(),
         })
     }
-    
+
     /// Compute evaluation metrics on samples
     fn compute_metrics(&self, samples: &[TrainingSample]) -> Result<(f64, f64, f64), Error> {
         let mut errors = Vec::new();
         let mut actuals = Vec::new();
         let mut predictions = Vec::new();
-        
+
         for sample in samples {
             let pred = self.predict(&sample.features)?;
             let actual = sample.actual_cost;
-            
+
             errors.push((pred.execution_time - actual).abs());
             actuals.push(actual);
             predictions.push(pred.execution_time);
         }
-        
+
         // MAE
         let mae = errors.iter().sum::<f64>() / errors.len() as f64;
-        
+
         // RMSE
         let mse = errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64;
         let rmse = mse.sqrt();
-        
+
         // R² score
         let actual_mean = actuals.iter().sum::<f64>() / actuals.len() as f64;
         let ss_tot: f64 = actuals.iter().map(|a| (a - actual_mean).powi(2)).sum();
-        let ss_res: f64 = actuals.iter().zip(predictions.iter())
+        let ss_res: f64 = actuals
+            .iter()
+            .zip(predictions.iter())
             .map(|(a, p)| (a - p).powi(2))
             .sum();
         let r2 = 1.0 - (ss_res / ss_tot);
-        
+
         Ok((mae, rmse, r2))
     }
 }
@@ -1940,62 +1994,62 @@ impl ModelStorage {
     #[cfg(feature = "ml")]
     pub fn save_cost_predictor(&self, model: &CostPredictionModel) -> Result<(), Error> {
         let path = self.storage_dir.join("cost_predictor.bin");
-        
+
         // Save model metadata
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-            
+            .map(|d| d.as_secs())
+            .unwrap_or(0); // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
+
         let metadata = serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
             "feature_dimension": model.feature_dimension(),
             "saved_at_timestamp": timestamp,
         });
-        
+
         let metadata_path = path.with_extension("meta.json");
-        let metadata_json = serde_json::to_string_pretty(&metadata).map_err(|e| {
-            Error::Internal {
+        let metadata_json =
+            serde_json::to_string_pretty(&metadata).map_err(|e| Error::Internal {
                 message: format!("Failed to serialize metadata: {}", e),
-            }
-        })?;
-        
+            })?;
+
         std::fs::write(metadata_path, metadata_json).map_err(|e| Error::Internal {
             message: format!("Failed to write metadata: {}", e),
         })?;
-        
+
         // Note: Actual model weight serialization would require implementing
         // Serialize/Deserialize for Candle tensors, which is complex.
         // For now, we save the metadata to indicate model was saved.
-        
+
         Ok(())
     }
 
     #[cfg(feature = "ml")]
     pub fn load_cost_predictor(&self) -> Result<CostPredictionModel, Error> {
         let metadata_path = self.storage_dir.join("cost_predictor.bin.meta.json");
-        
+
         if !metadata_path.exists() {
             return Err(Error::Internal {
                 message: "No saved model found".to_string(),
             });
         }
-        
+
         // Load metadata
-        let metadata_json = std::fs::read_to_string(metadata_path).map_err(|e| Error::Internal {
-            message: format!("Failed to read metadata: {}", e),
-        })?;
-        
-        let _metadata: serde_json::Value = serde_json::from_str(&metadata_json).map_err(|e| {
-            Error::Internal {
+        let metadata_json =
+            std::fs::read_to_string(metadata_path).map_err(|e| Error::Internal {
+                message: format!("Failed to read metadata: {}", e),
+            })?;
+
+        let _metadata: serde_json::Value =
+            serde_json::from_str(&metadata_json).map_err(|e| Error::Internal {
                 message: format!("Failed to parse metadata: {}", e),
-            }
-        })?;
-        
+            })?;
+
         // Note: Would need to load actual model weights here
         // For now, return an error indicating full implementation pending
         Err(Error::Internal {
-            message: "Model weight loading requires Candle serialization (pending implementation)".to_string(),
+            message: "Model weight loading requires Candle serialization (pending implementation)"
+                .to_string(),
         })
     }
 

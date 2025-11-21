@@ -2,6 +2,7 @@
 //!
 //! This module implements validation logic for SWRL rules and goal satisfaction checking.
 
+use crate::core::lock_helpers::{read_lock, write_lock};
 use crate::ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule};
 use crate::{Error, Result};
@@ -213,7 +214,10 @@ impl GoalChecker {
     /// Check if a goal is satisfied by current facts in the ontology
     pub fn is_goal_satisfied(&mut self, engine: &SWRLRuleEngine, goal: &SWRLAtom) -> Result<bool> {
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(
+                ontology,
+                "SWRL validation: reading ontology for goal satisfaction",
+            )?;
 
             match goal {
                 SWRLAtom::ClassAtom {
@@ -271,7 +275,10 @@ impl GoalChecker {
         let mut applicable_rules = Vec::new();
 
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(
+                ontology,
+                "SWRL validation: reading ontology for finding rules",
+            )?;
 
             for axiom in ontology_guard.axioms() {
                 if let Axiom::Rule(rule_axiom) = axiom {
@@ -307,7 +314,10 @@ impl GoalChecker {
         class: &ClassExpression,
     ) -> Result<bool> {
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(
+                ontology,
+                "SWRL validation: reading ontology for class membership",
+            )?;
 
             // Check for direct class assertions
             for axiom in ontology_guard.axioms() {
@@ -331,7 +341,10 @@ impl GoalChecker {
         object: &SWRLIArgument,
     ) -> Result<bool> {
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(
+                ontology,
+                "SWRL validation: reading ontology for object property",
+            )?;
 
             for axiom in ontology_guard.axioms() {
                 if let Axiom::ObjectPropertyAssertion(assertion) = axiom {
@@ -356,7 +369,10 @@ impl GoalChecker {
         object: &SWRLDArgument,
     ) -> Result<bool> {
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(
+                ontology,
+                "SWRL validation: reading ontology for data property",
+            )?;
 
             for axiom in ontology_guard.axioms() {
                 if let Axiom::DataPropertyAssertion(assertion) = axiom {

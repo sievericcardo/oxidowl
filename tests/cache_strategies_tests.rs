@@ -115,7 +115,7 @@ fn test_size_based_lru_eviction_order() {
 
     cache.insert("a", 1, 80);
     cache.insert("b", 2, 80);
-    
+
     // Access a to make it most recent
     cache.get(&"a");
 

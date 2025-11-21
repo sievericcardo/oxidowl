@@ -330,35 +330,39 @@ impl NeuralNetworkModel {
 
         let epochs = 100;
         let batch_size = 32.min(data.len());
-        
+
         for _ in 0..epochs {
             // Mini-batch gradient descent
             for batch_start in (0..data.len()).step_by(batch_size) {
                 let batch_end = (batch_start + batch_size).min(data.len());
                 let batch = &data[batch_start..batch_end];
-                
+
                 // Accumulate gradients for batch
-                let mut layer_gradients: Vec<LayerGradients> = self.layers
+                let mut layer_gradients: Vec<LayerGradients> = self
+                    .layers
                     .iter()
                     .map(|layer| LayerGradients {
                         weight_gradients: vec![0.0; layer.weights.len()],
                         bias_gradients: vec![0.0; layer.biases.len()],
                     })
                     .collect();
-                
+
                 for point in batch {
                     // Forward pass with activation storage
                     let activations = self.forward_with_activations(&point.query_features);
-                    
+
                     // Compute output error
-                    let output = activations.last().unwrap();
+                    let Some(output) = activations.last() else {
+                        log::warn!("No activation layers in neural network");
+                        continue;
+                    };
                     let target = vec![point.execution_time, point.memory_usage];
                     let mut delta: Vec<f64> = output
                         .iter()
                         .zip(target.iter())
                         .map(|(o, t)| o - t)
                         .collect();
-                    
+
                     // Backward pass through layers
                     for i in (0..self.layers.len()).rev() {
                         let layer = &self.layers[i];
@@ -367,16 +371,17 @@ impl NeuralNetworkModel {
                         } else {
                             &activations[i - 1]
                         };
-                        
+
                         // Compute gradients for this layer
                         for j in 0..layer.output_size {
                             for k in 0..layer.input_size {
                                 let weight_idx = j * layer.input_size + k;
-                                layer_gradients[i].weight_gradients[weight_idx] += delta[j] * input[k];
+                                layer_gradients[i].weight_gradients[weight_idx] +=
+                                    delta[j] * input[k];
                             }
                             layer_gradients[i].bias_gradients[j] += delta[j];
                         }
-                        
+
                         // Propagate error to previous layer
                         if i > 0 {
                             let mut new_delta = vec![0.0; layer.input_size];
@@ -386,22 +391,27 @@ impl NeuralNetworkModel {
                                     new_delta[j] += delta[k] * layer.weights[weight_idx];
                                 }
                                 // Apply activation derivative
-                                new_delta[j] *= self.activation_derivative(activations[i - 1][j], &self.layers[i - 1].activation);
+                                new_delta[j] *= self.activation_derivative(
+                                    activations[i - 1][j],
+                                    &self.layers[i - 1].activation,
+                                );
                             }
                             delta = new_delta;
                         }
                     }
                 }
-                
+
                 // Update weights using accumulated gradients
                 let batch_size_f64 = batch.len() as f64;
                 for (i, gradients) in layer_gradients.iter().enumerate() {
                     let layer = &mut self.layers[i];
                     for j in 0..layer.weights.len() {
-                        layer.weights[j] -= self.learning_rate * gradients.weight_gradients[j] / batch_size_f64;
+                        layer.weights[j] -=
+                            self.learning_rate * gradients.weight_gradients[j] / batch_size_f64;
                     }
                     for j in 0..layer.biases.len() {
-                        layer.biases[j] -= self.learning_rate * gradients.bias_gradients[j] / batch_size_f64;
+                        layer.biases[j] -=
+                            self.learning_rate * gradients.bias_gradients[j] / batch_size_f64;
                     }
                 }
             }
@@ -409,24 +419,30 @@ impl NeuralNetworkModel {
 
         self.update_accuracy_metrics(data);
     }
-    
+
     /// Forward pass that stores activations for backpropagation
     fn forward_with_activations(&self, input: &[f64]) -> Vec<Vec<f64>> {
         let mut activations = Vec::new();
         let mut current_output = input.to_vec();
-        
+
         for layer in &self.layers {
             current_output = layer.forward(&current_output);
             activations.push(current_output.clone());
         }
-        
+
         activations
     }
-    
+
     /// Compute derivative of activation function
     fn activation_derivative(&self, x: f64, activation: &ActivationFunction) -> f64 {
         match activation {
-            ActivationFunction::ReLU => if x > 0.0 { 1.0 } else { 0.0 },
+            ActivationFunction::ReLU => {
+                if x > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             ActivationFunction::Sigmoid => {
                 let sig = 1.0 / (1.0 + (-x).exp());
                 sig * (1.0 - sig)

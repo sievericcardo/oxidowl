@@ -133,6 +133,13 @@ pub enum AdvancedQueryError {
     InternalError(String),
 }
 
+impl AdvancedQueryError {
+    /// Create an internal error
+    pub fn internal<S: Into<String>>(message: S) -> Self {
+        Self::InternalError(message.into())
+    }
+}
+
 impl QueryEngine {
     /// Create a new query execution engine
     pub fn new(
@@ -597,7 +604,7 @@ impl QueryBinding {
 impl QueryCache {
     fn new() -> Self {
         Self {
-            results: lru::LruCache::new(std::num::NonZeroUsize::new(100).unwrap()),
+            results: lru::LruCache::new(std::num::NonZeroUsize::new(100).unwrap()), // Safe: hardcoded non-zero value
             statistics: CacheStatistics::default(),
         }
     }

@@ -22,7 +22,10 @@ use crate::{
     Error, Result,
     cache::CacheManager,
     config::ReasonerConfig,
-    core::reasoner::Reasoner,
+    core::{
+        lock_helpers::{read_lock, write_lock},
+        reasoner::Reasoner,
+    },
     ontology::{
         ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
     },
@@ -73,11 +76,12 @@ impl ReasoningService {
 
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.read().unwrap();
-            if let Some(result) = cache_manager
-                .get_consistency_result(&self.reasoner.read().unwrap().get_ontology().unwrap())
-            {
-                return Ok(result);
+            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
+            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
+            if let Some(ontology) = reasoner.get_ontology() {
+                if let Some(result) = cache_manager.get_consistency_result(&ontology) {
+                    return Ok(result);
+                }
             }
         }
 
@@ -85,13 +89,15 @@ impl ReasoningService {
         log::info!("Executing SWRL rules before consistency check");
         self.execute_swrl_rules().await?;
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.write().unwrap();
-            cache_manager.cache_consistency_result(&reasoner.get_ontology().unwrap(), result);
+            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
+            if let Some(ontology) = reasoner.get_ontology() {
+                cache_manager.cache_consistency_result(&ontology, result);
+            }
         }
 
         // Check timeout
@@ -114,19 +120,19 @@ impl ReasoningService {
 
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.read().unwrap();
+            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             if let Some(result) = cache_manager.get_satisfiability_result(expression) {
                 return Ok(result);
             }
         }
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
 
         let result = reasoner.is_class_satisfiable(expression)?;
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             cache_manager.cache_satisfiability_result(expression.clone(), result);
         }
 
@@ -154,18 +160,18 @@ impl ReasoningService {
 
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.read().unwrap();
+            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             if let Some(result) = cache_manager.get_subsumption_result(subclass, superclass) {
                 return Ok(result);
             }
         }
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let result = reasoner.is_subsumed_by(subclass, superclass)?;
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
 
@@ -214,7 +220,7 @@ impl ReasoningService {
     ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let superclasses = reasoner.get_superclasses(class, direct)?;
 
         // Check timeout
@@ -242,7 +248,7 @@ impl ReasoningService {
     ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let subclasses = reasoner.get_subclasses(class, direct)?;
 
         // Check timeout
@@ -269,7 +275,7 @@ impl ReasoningService {
     ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let equivalent_classes = reasoner.get_equivalent_classes(class)?;
 
         // Check timeout
@@ -297,7 +303,7 @@ impl ReasoningService {
     ) -> Result<HashSet<Individual>> {
         let start = Instant::now();
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let instances = reasoner.get_instances(class, direct)?;
 
         // Check timeout
@@ -322,7 +328,7 @@ impl ReasoningService {
     ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let types = reasoner.get_types(individual, direct)?;
 
         // Check timeout
@@ -362,7 +368,7 @@ impl ReasoningService {
     ) -> Result<HashSet<Individual>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let values = reasoner.get_object_property_values(individual, property)?;
 
         // Check timeout
@@ -390,7 +396,7 @@ impl ReasoningService {
     ) -> Result<HashSet<crate::ontology::Literal>> {
         let start = Instant::now();
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let result = reasoner.get_data_property_values(individual, property)?;
 
         // Check timeout
@@ -426,10 +432,10 @@ impl ReasoningService {
 
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.read().unwrap();
+            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
-            let reasoner = self.reasoner.read().unwrap();
+            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
                 if let Some(cached) = cache_manager.get_classification_result(&ontology) {
                     log::info!("Classification (cached) completed in {:?}", start.elapsed());
@@ -442,7 +448,7 @@ impl ReasoningService {
         log::info!("Executing SWRL rules before classification");
         self.execute_swrl_rules().await?;
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let result = reasoner.classify()?;
 
         // Check timeout
@@ -456,10 +462,10 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
-            let reasoner = self.reasoner.read().unwrap();
+            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
                 cache_manager.store_classification_result(&ontology, result.clone());
             }
@@ -476,7 +482,7 @@ impl ReasoningService {
         log::info!("Executing SWRL rules");
 
         // Execute SWRL rules
-        let mut swrl_engine = self.swrl_engine.write().unwrap();
+        let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
         let result = swrl_engine
             .execute_rules()
             .map_err(|e| Error::reasoning(format!("SWRL rule execution failed: {}", e)))?;
@@ -489,9 +495,9 @@ impl ReasoningService {
             );
 
             // Get the reasoner and update the ontology with inferences
-            let mut reasoner = self.reasoner.write().unwrap();
+            let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
             if let Some(ontology_ref) = reasoner.get_ontology() {
-                let mut ontology = ontology_ref.write().unwrap();
+                let mut ontology = write_lock(&ontology_ref, "reasoning: writing ontology")?;
 
                 // Apply each inference to the ontology
                 for inference in &result.inferences {
@@ -499,7 +505,7 @@ impl ReasoningService {
                 }
 
                 // Clear caches since the ontology has been modified
-                self.cache_manager.write().unwrap().clear_all();
+                write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
                 log::info!(
                     "Added {} new axioms from SWRL inferences",
                     result.inferences.len()
@@ -534,10 +540,10 @@ impl ReasoningService {
 
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.read().unwrap();
+            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
-            let reasoner = self.reasoner.read().unwrap();
+            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
                 if let Some(cached) = cache_manager.get_realization_result(&ontology) {
                     log::info!("Realization (cached) completed in {:?}", start.elapsed());
@@ -550,7 +556,7 @@ impl ReasoningService {
         log::info!("Executing SWRL rules before realization");
         self.execute_swrl_rules().await?;
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let result = reasoner.realize()?;
 
         // Check timeout
@@ -564,10 +570,10 @@ impl ReasoningService {
 
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = self.cache_manager.write().unwrap();
+            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             let ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
-            let reasoner = self.reasoner.read().unwrap();
+            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
                 cache_manager.store_realization_result(&ontology, result.clone());
             }
@@ -591,7 +597,7 @@ impl ReasoningService {
             });
         }
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let explanations = reasoner.explain_entailment(axiom)?;
 
         // Check timeout
@@ -627,7 +633,7 @@ impl ReasoningService {
             });
         }
 
-        let reasoner = self.reasoner.write().unwrap();
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let explanations = reasoner.explain_inconsistency()?;
 
         // Check timeout
@@ -666,7 +672,7 @@ impl ReasoningService {
             });
         }
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         for axiom in axioms {
             reasoner.add_axiom(axiom)?;
         }
@@ -682,7 +688,7 @@ impl ReasoningService {
 
         // Clear relevant caches
         if self.config.cache.enable_satisfiability_cache {
-            self.cache_manager.write().unwrap().clear_all();
+            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
         }
 
         // Log the time taken for adding axioms
@@ -700,7 +706,7 @@ impl ReasoningService {
             });
         }
 
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         for axiom in axioms {
             reasoner.remove_axiom(&axiom)?;
         }
@@ -716,7 +722,7 @@ impl ReasoningService {
 
         // Clear relevant caches
         if self.config.cache.enable_satisfiability_cache {
-            self.cache_manager.write().unwrap().clear_all();
+            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
         }
 
         // Log the time taken for removing axioms
@@ -727,8 +733,11 @@ impl ReasoningService {
     /// Get reasoning statistics
     #[must_use]
     pub fn get_statistics(&self) -> ReasoningStatistics {
-        let reasoner = self.reasoner.read().unwrap();
-        let cache_stats = self.cache_manager.read().unwrap().get_stats();
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")
+            .expect("Failed to lock reasoner");
+        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")
+            .expect("Failed to lock cache")
+            .get_stats();
 
         // Get statistics from the reasoner
         let reasoner_stats = reasoner.get_statistics();
@@ -744,7 +753,9 @@ impl ReasoningService {
     /// Estimate current memory usage
     fn estimate_memory_usage(&self) -> usize {
         // Simple estimation based on cache size and other factors
-        let cache_stats = self.cache_manager.read().unwrap().get_stats();
+        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")
+            .expect("Failed to lock cache")
+            .get_stats();
         cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
         (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10 // Conservative fraction of max allowed
     }
@@ -754,9 +765,9 @@ impl ReasoningService {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
-        let reasoner = self.reasoner.read().unwrap();
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
         if let Some(ontology) = reasoner.get_ontology() {
-            let ontology_guard = ontology.read().unwrap();
+            let ontology_guard = read_lock(&ontology, "reasoning: reading ontology")?;
 
             let mut hasher = DefaultHasher::new();
 
@@ -837,26 +848,26 @@ impl ReasoningService {
 
     /// Get SWRL execution statistics
     pub async fn get_swrl_statistics(&self) -> Result<crate::swrl::SWRLStatistics> {
-        let swrl_engine = self.swrl_engine.read().unwrap();
+        let swrl_engine = read_lock(&self.swrl_engine, "reasoning: reading SWRL engine")?;
         Ok(swrl_engine.get_statistics().clone())
     }
 
     /// Set SWRL rule priority
     pub async fn set_swrl_rule_priority(&self, rule_id: u64, priority: u32) -> Result<()> {
-        let mut swrl_engine = self.swrl_engine.write().unwrap();
+        let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
         swrl_engine.set_rule_priority(rule_id, priority);
         Ok(())
     }
 
     /// Get ordered SWRL rules by priority
     pub async fn get_swrl_rule_order(&self) -> Result<Vec<u64>> {
-        let swrl_engine = self.swrl_engine.read().unwrap();
+        let swrl_engine = read_lock(&self.swrl_engine, "reasoning: reading SWRL engine")?;
         Ok(swrl_engine.get_rule_ids())
     }
 
     /// Enable or disable a specific SWRL rule
     pub async fn set_swrl_rule_active(&self, rule_id: u64, active: bool) -> Result<()> {
-        let mut swrl_engine = self.swrl_engine.write().unwrap();
+        let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
         swrl_engine.set_rule_active(rule_id, active).map_err(|e| {
             Error::reasoning(format!(
                 "Failed to set SWRL rule {} active state: {}",
@@ -1004,9 +1015,9 @@ impl QueryInterface {
 impl ReasoningService {
     /// Get the IRI of the current ontology
     pub fn get_ontology_iri(&self) -> Result<Option<crate::ontology::IRI>> {
-        let reasoner = self.reasoner.read().unwrap();
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
         if let Some(ontology_ref) = reasoner.get_ontology() {
-            let ontology = ontology_ref.read().unwrap();
+            let ontology = read_lock(&ontology_ref, "reasoning: reading ontology")?;
             Ok(ontology.get_iri().cloned())
         } else {
             Ok(None)
@@ -1015,12 +1026,16 @@ impl ReasoningService {
 
     /// Calculate a hash for the current ontology
     fn calculate_ontology_hash(&self) -> u64 {
-        let reasoner = self.reasoner.read().unwrap();
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")
+            .expect("Failed to lock reasoner");
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
 
         // Hash based on reasoner state as a simple fingerprint
         let axiom_count = if let Some(ontology) = reasoner.get_ontology() {
-            ontology.read().unwrap().axioms().len()
+            read_lock(&ontology, "reasoning: reading ontology")
+                .expect("Failed to lock ontology")
+                .axioms()
+                .len()
         } else {
             0
         };
@@ -1032,7 +1047,7 @@ impl ReasoningService {
     // Synchronous wrapper methods for advanced query processing
     /// Synchronous version of get_instances for use in advanced query processing
     pub fn get_instances_sync(&self, class: &ClassExpression) -> Result<Vec<Individual>> {
-        let mut reasoner = self.reasoner.write().unwrap();
+        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         reasoner.get_instances(class, false)
     }
 
@@ -1042,7 +1057,7 @@ impl ReasoningService {
         individual: &Individual,
         class: &ClassExpression,
     ) -> Result<bool> {
-        let reasoner = self.reasoner.read().unwrap();
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
         reasoner.is_instance_of(individual, class)
     }
 
