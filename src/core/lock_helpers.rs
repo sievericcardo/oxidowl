@@ -5,10 +5,11 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
+//! ```rust
 //! use oxidowl::prelude::*;
 //! use std::sync::RwLock;
 //!
+//! # fn main() -> Result<()> {
 //! let data = RwLock::new(vec![1, 2, 3]);
 //! 
 //! // Instead of:
@@ -16,6 +17,8 @@
 //!
 //! // Use:
 //! let guard = read_lock(&data, "accessing data")?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::error::{Error, Result};

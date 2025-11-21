@@ -14,7 +14,7 @@ fn test_memory_tracking_integration() {
         tracker.snapshot(cache_size, reasoning_state);
     }
     
-    let stats = tracker.get_stats();
+    let stats = tracker.get_stats().expect("Failed to get memory stats");
     
     // Verify statistics
     assert!(stats.peak_total_mb > 0.0);
@@ -48,7 +48,7 @@ fn test_query_profiling_integration() {
         profiler.record(timing);
     }
     
-    let stats = profiler.get_stats();
+    let stats = profiler.get_stats().expect("Failed to get query stats");
     
     // Verify statistics
     assert_eq!(stats.total_queries, 20);
@@ -87,7 +87,7 @@ fn test_performance_monitor_integration() {
     }
     
     // Get comprehensive report
-    let report = monitor.get_report();
+    let report = monitor.get_report().expect("Failed to get performance report");
     
     // Verify memory stats
     assert!(report.memory_stats.current_total_mb > 0.0);
@@ -110,8 +110,8 @@ fn test_performance_monitor_integration() {
 fn test_performance_monitor_disabled() {
     let mut monitor = PerformanceMonitor::new(false);
     
-    // When disabled, snapshots should return None
-    let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024);
+    // When disabled, snapshots should return Ok(None)
+    let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024).expect("Should return Ok");
     assert!(snapshot.is_none());
     
     // Recording should not fail but won't record anything
@@ -127,7 +127,7 @@ fn test_performance_monitor_disabled() {
     monitor.record_query_timing(timing);
     
     // Stats should show zero queries
-    let report = monitor.get_report();
+    let report = monitor.get_report().expect("Failed to get report");
     assert_eq!(report.query_stats.total_queries, 0);
 }
 
@@ -138,7 +138,7 @@ fn test_memory_snapshot_calculations() {
     // 10 MB heap + 2 MB cache + 3 MB reasoning state = 15 MB total
     tracker.snapshot(2 * 1024 * 1024, 3 * 1024 * 1024);
     
-    let snapshots = tracker.get_snapshots();
+    let snapshots = tracker.get_snapshots().expect("Failed to get snapshots");
     assert_eq!(snapshots.len(), 1);
     
     let snapshot = &snapshots[0];
@@ -192,7 +192,7 @@ fn test_profiler_max_timings_limit() {
     }
     
     // Should only have the last 5
-    let timings = profiler.get_timings();
+    let timings = profiler.get_timings().expect("Failed to get timings");
     assert_eq!(timings.len(), 5);
     
     // The oldest should be timing #6 (timings 1-5 should be evicted)
@@ -210,6 +210,6 @@ fn test_tracker_max_snapshots_limit() {
     }
     
     // Should only have the last 3
-    let snapshots = tracker.get_snapshots();
+    let snapshots = tracker.get_snapshots().expect("Failed to get snapshots");
     assert_eq!(snapshots.len(), 3);
 }

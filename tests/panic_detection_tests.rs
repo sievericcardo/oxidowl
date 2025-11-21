@@ -6,6 +6,7 @@
 
 use oxidowl::{
     Error,
+    config::ReasoningConfig,
     core::{
         lock_helpers::{read_lock, write_lock},
         tableau::{Tableau, TableauNode, TableauState},
@@ -20,7 +21,8 @@ fn test_empty_collection_access_returns_error() {
     
     // Create an empty tableau
     let ontology = Arc::new(RwLock::new(Ontology::new()));
-    let mut tableau = Tableau::new(ontology.clone());
+    let config = ReasoningConfig::default();
+    let mut tableau = Tableau::new(config);
     
     // In the old implementation, popping from empty queue would panic with unwrap()
     // Now it should return None, which we can handle
@@ -49,8 +51,8 @@ fn test_data_structure_edge_cases() {
 fn test_option_unwrap_replacements() {
     // Test that operations using Option::unwrap() now handle None gracefully
     
-    let ontology = Arc::new(RwLock::new(Ontology::new()));
-    let tableau = Tableau::new(ontology);
+    let config = ReasoningConfig::default();
+    let tableau = Tableau::new(config);
     
     // Stack operations that might be empty
     // Old code: self.branching_stack.last().unwrap()

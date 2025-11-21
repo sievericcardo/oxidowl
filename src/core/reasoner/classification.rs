@@ -1084,9 +1084,9 @@ impl ClassificationService {
         literal: &crate::ontology::Literal,
         restriction: &crate::ontology::FacetRestriction,
     ) -> Result<bool> {
-        let facet_iri = restriction.facet.as_str();
+        let facet_iri = restriction.facet.to_string();
         
-        match facet_iri {
+        match facet_iri.as_str() {
             "http://www.w3.org/2001/XMLSchema#minInclusive" => {
                 self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a >= b)
             }
