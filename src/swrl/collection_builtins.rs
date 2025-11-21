@@ -197,11 +197,11 @@ mod tests {
             SWRLValue::Integer(3),
             SWRLValue::String("apple,banana,cherry".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![SWRLValue::Integer(0), SWRLValue::String("".to_string())];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -210,11 +210,11 @@ mod tests {
         let builtin = IsEmptyBuiltIn;
 
         let args = vec![SWRLValue::String("".to_string())];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![SWRLValue::String("apple".to_string())];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 
@@ -227,7 +227,7 @@ mod tests {
             SWRLValue::String("apple,banana".to_string()),
             SWRLValue::String("cherry".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -239,14 +239,14 @@ mod tests {
             SWRLValue::String("apple,banana".to_string()),
             SWRLValue::String("apple,banana,cherry".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![
             SWRLValue::String("apple,grape".to_string()),
             SWRLValue::String("apple,banana,cherry".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 }

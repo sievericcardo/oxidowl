@@ -60,17 +60,17 @@ mod tests {
 
         // Test true -> false
         let args = vec![SWRLValue::Boolean(false), SWRLValue::Boolean(true)];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         // Test false -> true
         let args = vec![SWRLValue::Boolean(true), SWRLValue::Boolean(false)];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         // Test mismatch
         let args = vec![SWRLValue::Boolean(true), SWRLValue::Boolean(true)];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 }
