@@ -12,7 +12,7 @@ async fn test_swrl_engine_integration() {
     let reasoning_service = ReasoningService::new(ontology, config);
 
     // Test that SWRL methods are available and working
-    let swrl_stats = reasoning_service.get_swrl_statistics().await.unwrap();
+    let swrl_stats = reasoning_service.get_swrl_statistics().await.expect("Test operation failed");
     assert_eq!(
         swrl_stats.total_rule_applications, 0,
         "Should have 0 rule applications in empty ontology"
@@ -36,7 +36,7 @@ async fn test_swrl_execution_method_available() {
     let reasoning_service = ReasoningService::new(ontology, config);
 
     // Test that SWRL execution method is available
-    let swrl_result = reasoning_service.execute_swrl_rules().await.unwrap();
+    let swrl_result = reasoning_service.execute_swrl_rules().await.expect("Test operation failed");
 
     // Should return an empty result since there are no SWRL rules
     assert!(

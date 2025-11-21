@@ -155,7 +155,7 @@ mod tests {
         assert!(large_characteristics.is_ok(), "Large ontology analysis should succeed");
         
         // Verify ultra-large classification
-        match large_characteristics.unwrap() {
+        match large_characteristics.expect("Failed to analyze large ontology characteristics") {
             OntologyCharacteristics::UltraLarge { concept_count, .. } => {
                 assert_eq!(concept_count, 600_000);
             },
@@ -174,7 +174,7 @@ mod tests {
         let partitions_result = coordinator.partition_ontology(&test_ontology);
         assert!(partitions_result.is_ok(), "Ontology partitioning should succeed");
         
-        let partitions = partitions_result.unwrap();
+        let partitions = partitions_result.expect("Failed to partition ontology for distributed processing");
         assert!(!partitions.is_empty(), "Should create at least one partition");
         
         // Verify partition sizes are reasonable
@@ -191,7 +191,7 @@ mod tests {
         let modules_result = optimizer.extract_semantic_modules(&test_ontology);
         assert!(modules_result.is_ok(), "Module extraction should succeed");
         
-        let modules = modules_result.unwrap();
+        let modules = modules_result.expect("Failed to extract semantic modules from ontology");
         assert!(!modules.is_empty(), "Should extract at least one module");
         
         // Verify module structure
@@ -212,7 +212,7 @@ mod tests {
         let hierarchy_result = optimizer.build_concept_hierarchy(&test_ontology);
         assert!(hierarchy_result.is_ok(), "Hierarchy building should succeed");
         
-        let levels = hierarchy_result.unwrap();
+        let levels = hierarchy_result.expect("Failed to build concept hierarchy from ontology");
         assert!(!levels.is_empty(), "Should build at least one hierarchy level");
         
         // Verify hierarchy structure
@@ -233,7 +233,7 @@ mod tests {
         
         assert!(strategy_result.is_ok(), "Strategy selection should succeed");
         
-        match strategy_result.unwrap() {
+        match strategy_result.expect("Failed to select large-scale processing strategy for ontology") {
             LargeScaleStrategy::Distributed => {
                 assert!(true, "Distributed strategy selected for ultra-large ontology");
             },
@@ -437,7 +437,7 @@ mod tests {
         assert!(best_result.best_strategy.is_some());
         
         // Should select modular strategy (45s < 60s)
-        match best_result.best_strategy.unwrap() {
+        match best_result.best_strategy.expect("Failed to determine best large-scale processing strategy") {
             LargeScaleStrategy::Modular => {
                 assert!(true, "Best strategy correctly selected");
             },

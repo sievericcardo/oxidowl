@@ -95,7 +95,7 @@ Individual: ex:john
 "#;
 
     let mut parser = ManchesterParser::default();
-    let ontology = parser.parse_string(manchester_content).unwrap();
+    let ontology = parser.parse_string(manchester_content).expect("Test operation failed");
 
     // Check that basic ontology was created (simplified implementation)
     // Note: The current implementation is simplified and doesn't fully parse all Manchester syntax
@@ -155,50 +155,50 @@ fn test_manchester_class_expressions() {
     let parser = ManchesterParser::default();
 
     // Test simple class
-    let expr = parser.parse_class_expression("Person").unwrap();
+    let expr = parser.parse_class_expression("Person").expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::Class(_)));
 
     // Test intersection
-    let expr = parser.parse_class_expression("Person and Student").unwrap();
+    let expr = parser.parse_class_expression("Person and Student").expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectIntersectionOf(_)));
 
     // Test union
-    let expr = parser.parse_class_expression("Person or Animal").unwrap();
+    let expr = parser.parse_class_expression("Person or Animal").expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectUnionOf(_)));
 
     // Test complement
-    let expr = parser.parse_class_expression("not Person").unwrap();
+    let expr = parser.parse_class_expression("not Person").expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectComplementOf(_)));
 
     // Test existential restriction
     let expr = parser
         .parse_class_expression("hasChild some Person")
-        .unwrap();
+        .expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectSomeValuesFrom { .. }));
 
     // Test universal restriction
     let expr = parser
         .parse_class_expression("hasChild only Person")
-        .unwrap();
+        .expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectAllValuesFrom { .. }));
 
     // Test minimum cardinality
     let expr = parser
         .parse_cardinality_restriction("hasChild min 2 Person")
-        .unwrap();
+        .expect("Test operation failed");
     assert_eq!(expr, "hasChild min 2 Person");
 
     // Test exact cardinality without filler
     let expr = parser
         .parse_cardinality_restriction("hasChild exactly 1")
-        .unwrap();
+        .expect("Test operation failed");
     assert_eq!(expr, "hasChild exactly 1");
 
     // Test enumeration
     // Note: enumeration syntax may not be fully supported yet in Manchester parser
     // let expr = parser
     //     .parse_class_expression("{john, mary, peter}")
-    //     .unwrap();
+    //     .expect("Test operation failed");
     // assert!(matches!(expr, ClassExpression::ObjectOneOf(_)));
 }
 
@@ -247,7 +247,7 @@ fn test_owl2_profile_detection() {
     let ontology = Ontology::new();
     let mut validator = OWL2DLValidator::new(ontology);
 
-    let report = validator.validate().unwrap();
+    let report = validator.validate().expect("Test operation failed");
 
     // Should detect some profile (even if just DL for empty ontology)
     assert!(report.profile.is_some());
@@ -337,11 +337,11 @@ ObjectProperty: ex:hasChild
 "#;
 
     let mut parser = ManchesterParser::default();
-    let ontology = parser.parse_string(manchester_content).unwrap();
+    let ontology = parser.parse_string(manchester_content).expect("Test operation failed");
 
     // Validate the parsed ontology
     let mut validator = OWL2DLValidator::new(ontology);
-    let report = validator.validate().unwrap();
+    let report = validator.validate().expect("Test operation failed");
 
     // Should be valid OWL 2 DL
     assert!(report.is_valid);

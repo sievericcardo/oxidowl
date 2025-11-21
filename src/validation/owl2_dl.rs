@@ -2134,7 +2134,7 @@ mod tests {
         // Add test axioms...
 
         let mut validator = OWL2DLValidator::new(ontology);
-        let report = validator.validate().unwrap();
+        let report = validator.validate().expect("Failed to validate OWL 2 DL compliance for ontology");
 
         // Assert validation results
         assert!(report.is_valid);
@@ -2147,7 +2147,7 @@ mod tests {
         // Note: Simplified implementation doesn't fully detect complex cardinality violations
 
         let mut validator = OWL2DLValidator::new(ontology);
-        let report = validator.validate().unwrap();
+        let report = validator.validate().expect("Failed to validate OWL 2 DL compliance for ontology");
 
         // The simplified implementation returns valid for empty ontologies
         assert!(report.is_valid);
@@ -2160,7 +2160,7 @@ mod tests {
         // Add test axioms with anonymous individuals...
 
         let mut validator = OWL2DLValidator::new(ontology);
-        let report = validator.validate().unwrap();
+        let report = validator.validate().expect("Failed to validate OWL 2 DL compliance for ontology");
 
         // Check for appropriate errors
         assert_eq!(report.errors.len(), 0); // Should be valid if used correctly

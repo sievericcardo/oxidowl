@@ -5,6 +5,7 @@
 //! and inference caches.
 
 use crate::{
+    core::lock_helpers::{read_lock, write_lock},
     ontology::{ClassExpression, Individual, Ontology, OntologyRef},
     performance::MemoryTracker,
     reasoning::{ClassificationResult, RealizationResult},
@@ -100,20 +101,26 @@ impl ConceptSatisfiabilityCache {
             return None; // Cache is disabled
         }
 
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = write_lock(&self.cache, "cache get").ok()?;
         if let Some(entry) = cache.get_mut(expression) {
             if entry.is_expired(self.config.ttl) {
                 cache.remove(expression); // Remove expired entry
-                self.metrics.write().unwrap().misses += 1;
+                if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
+                    metrics.misses += 1;
+                }
                 None
             } else {
                 entry.hit(); // Increment hit count
-                self.metrics.write().unwrap().hits += 1;
+                if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
+                    metrics.hits += 1;
+                }
                 Some(entry.value)
             }
         } else {
             // If not found, we can return None
-            self.metrics.write().unwrap().misses += 1;
+            if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
+                metrics.misses += 1;
+            }
             None
         }
     }
@@ -123,49 +130,61 @@ impl ConceptSatisfiabilityCache {
             return; // Cache is disabled
         }
 
-        let mut cache = self.cache.write().unwrap();
-
-        if cache.len() >= self.config.max_size {
-            // Evict the oldest entry if max size exceeded
-            self.evict_lru(&mut cache);
+        if let Ok(mut cache) = write_lock(&self.cache, "cache put") {
+            if cache.len() >= self.config.max_size {
+                // Evict the oldest entry if max size exceeded
+                self.evict_lru(&mut cache);
+            }
+            cache.insert(expression, CacheEntry::new(result));
         }
-        cache.insert(expression, CacheEntry::new(result));
     }
 
     fn evict_lru(&self, cache: &mut HashMap<ClassExpression, CacheEntry<bool>>) {
         if let Some((key, _)) = cache.iter().min_by_key(|(_, entry)| entry.timestamp) {
             let key_to_remove = key.clone();
             cache.remove(&key_to_remove);
-            self.metrics.write().unwrap().evictions += 1;
+            if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
+                metrics.evictions += 1;
+            }
         }
     }
 
     pub fn clear(&self) {
-        self.cache.write().unwrap().clear();
-        *self.metrics.write().unwrap() = CacheMetrics::default();
+        if let Ok(mut cache) = write_lock(&self.cache, "cache clear") {
+            cache.clear();
+        }
+        if let Ok(mut metrics) = write_lock(&self.metrics, "metrics reset") {
+            *metrics = CacheMetrics::default();
+        }
     }
 
     #[must_use]
     pub fn get_metrics(&self) -> CacheMetrics {
-        self.metrics.read().unwrap().clone()
+        read_lock(&self.metrics, "get metrics")
+            .map(|m| m.clone())
+            .unwrap_or_default()
     }
 
     #[must_use]
     pub fn size(&self) -> usize {
-        self.cache.read().unwrap().len()
+        read_lock(&self.cache, "cache size")
+            .map(|c| c.len())
+            .unwrap_or(0)
     }
 
     #[must_use]
     pub fn hit_rate(&self) -> f64 {
-        let cache = self.cache.read().unwrap();
+        if let Ok(cache) = read_lock(&self.cache, "cache hit rate") {
+            let total_hits: u64 = cache.values().map(|entry| entry.hit_count).sum();
+            let entries = cache.len() as u64;
 
-        let total_hits: u64 = cache.values().map(|entry| entry.hit_count).sum();
-        let entries = cache.len() as u64;
-
-        if entries == 0 {
-            0.0 // Avoid division by zero
+            if entries == 0 {
+                0.0 // Avoid division by zero
+            } else {
+                total_hits as f64 / cache.len() as f64
+            }
         } else {
-            total_hits as f64 / cache.len() as f64
+            0.0
         }
     }
 }

@@ -940,7 +940,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(hierarchy) = &obj_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!(
                     "{}_object_properties.txt",
-                    output_path.file_stem().unwrap().to_string_lossy()
+                    output_path.file_stem().expect("Failed to get file stem from output path").to_string_lossy()
                 ));
                 // TODO: Implement save_to_file for ObjectPropertyHierarchy
                 // hierarchy.save_to_file(&prop_output)?;
@@ -952,7 +952,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(hierarchy) = &data_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!(
                     "{}_data_properties.txt",
-                    output_path.file_stem().unwrap().to_string_lossy()
+                    output_path.file_stem().expect("Failed to get file stem from output path").to_string_lossy()
                 ));
                 // TODO: Implement save_to_file for DataPropertyHierarchy
                 // hierarchy.save_to_file(&prop_output)?;

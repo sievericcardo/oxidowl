@@ -276,11 +276,11 @@ mod tests {
             SWRLValue::String("hello".to_string()),
             SWRLValue::String("world".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![SWRLValue::Integer(5), SWRLValue::Integer(5)];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 
@@ -299,10 +299,10 @@ mod tests {
         let or_builtin = BooleanOrBuiltIn;
 
         let args = vec![SWRLValue::Boolean(true), SWRLValue::Boolean(false)];
-        let result = and_builtin.execute(&args).unwrap();
+        let result = and_builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
 
-        let result = or_builtin.execute(&args).unwrap();
+        let result = or_builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -316,7 +316,7 @@ mod tests {
             SWRLValue::Integer(10),
             SWRLValue::Integer(7),
         ];
-        let result = min_builtin.execute(&args).unwrap();
+        let result = min_builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false)); // 5 != min(10, 7)
 
         let args = vec![
@@ -324,7 +324,7 @@ mod tests {
             SWRLValue::Integer(10),
             SWRLValue::Integer(7),
         ];
-        let result = max_builtin.execute(&args).unwrap();
+        let result = max_builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true)); // 10 == max(10, 7)
     }
 }

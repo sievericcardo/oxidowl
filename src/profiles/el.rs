@@ -344,7 +344,7 @@ mod tests {
         let validator = ELValidator::new();
 
         let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild")).unwrap(),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild")).expect("Failed to create ObjectProperty for test: hasChild"),
         );
         let filler = ClassExpression::class(IRI::new("http://example.org/Person"));
         let existential = ClassExpression::ObjectSomeValuesFrom {
@@ -360,7 +360,7 @@ mod tests {
         let validator = ELValidator::new();
 
         let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild")).unwrap(),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild")).expect("Failed to create ObjectProperty for test: hasChild"),
         );
         let filler = ClassExpression::class(IRI::new("http://example.org/Person"));
         let universal = ClassExpression::ObjectAllValuesFrom {
@@ -376,7 +376,7 @@ mod tests {
         let validator = ELValidator::new();
 
         let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/knows")).unwrap(),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/knows")).expect("Failed to create ObjectProperty for test: knows"),
         );
         let self_restriction = ClassExpression::ObjectHasSelf { property };
 

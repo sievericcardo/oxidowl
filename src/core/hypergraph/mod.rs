@@ -540,7 +540,7 @@ mod tests {
 
         let id = graph.add_node(node);
         assert_eq!(graph.node_count(), 1);
-        assert_eq!(graph.root().unwrap().id, id);
+        assert_eq!(graph.root().expect("Failed to get root node from hypergraph").id, id);
     }
 
     #[test]
@@ -556,7 +556,7 @@ mod tests {
         let edge_id = graph.add_edge(edge);
 
         assert_eq!(graph.edge_count(), 1);
-        assert_eq!(graph.get_edge(edge_id).unwrap().role, "knows");
+        assert_eq!(graph.get_edge(edge_id).expect("Failed to get edge from hypergraph").role, "knows");
     }
 
     #[test]

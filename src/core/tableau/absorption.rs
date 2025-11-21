@@ -518,7 +518,7 @@ mod tests {
         }
 
         // Check implications map
-        assert!(absorber.get_implied_concepts("A").unwrap().contains("B"));
+        assert!(absorber.get_implied_concepts("A").expect("Failed to get implied concepts from absorber").contains("B"));
     }
 
     #[test]
@@ -551,7 +551,7 @@ mod tests {
         assert!(
             absorber
                 .get_role_domain_concepts("R")
-                .unwrap()
+                .expect("Failed to get role domain concepts from absorber")
                 .contains("A")
         );
     }

@@ -513,9 +513,9 @@ mod tests {
             .with_domain(domain)
             .with_iri("http://example.org/test".to_string(), "d1".to_string())
             .build()
-            .unwrap();
+            .expect("Failed to build RDF interpretation from builder");
 
-        assert!(interpretation.is_well_formed().unwrap());
+        assert!(interpretation.is_well_formed().expect("Failed to check if RDF interpretation is well-formed"));
     }
 
     #[test]
@@ -540,9 +540,9 @@ mod tests {
         relations.insert(("d1".to_string(), "d2".to_string()));
         interpretation.set_property_interpretation("pred".to_string(), relations);
 
-        let subject = RdfTerm::iri("http://example.org/subject").unwrap();
-        let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
-        let object = RdfTerm::iri("http://example.org/object").unwrap();
+        let subject = RdfTerm::iri("http://example.org/subject").expect("Failed to create RDF IRI term from valid URI string");
+        let predicate = RdfTerm::iri("http://example.org/predicate").expect("Failed to create RDF IRI term from valid URI string");
+        let object = RdfTerm::iri("http://example.org/object").expect("Failed to create RDF IRI term from valid URI string");
 
         let triple = Triple {
             subject,

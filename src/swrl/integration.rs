@@ -389,7 +389,7 @@ mod tests {
         assert!(categories.contains_key("string"));
 
         // Check that datetime category has expected built-ins
-        let datetime_builtins = categories.get("datetime").unwrap();
+        let datetime_builtins = categories.get("datetime").expect("Failed to get datetime category from SWRL builtin registry");
         assert!(
             datetime_builtins
                 .contains(&"http://www.w3.org/2003/11/swrlb#dateTimeEqual".to_string())
@@ -407,13 +407,13 @@ mod tests {
         ];
         let result = registry
             .validate_builtin_call("http://www.w3.org/2003/11/swrlb#matches", &args)
-            .unwrap();
+            .expect("Failed to validate SWRL builtin call for matches");
         assert!(result.valid);
 
         // Test unsupported built-in
         let result = registry
             .validate_builtin_call("http://example.org/unsupported", &args)
-            .unwrap();
+            .expect("Failed to validate SWRL builtin call for unsupported builtin");
         assert!(!result.valid);
     }
 
@@ -445,7 +445,7 @@ mod tests {
 
         let result = registry
             .execute_builtin("http://www.w3.org/2003/11/swrlb#matches", &args)
-            .unwrap();
+            .expect("Failed to execute SWRL matches builtin");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -458,7 +458,7 @@ mod tests {
 
         let result = registry
             .execute_builtin("http://www.w3.org/2003/11/swrlb#booleanNot", &args)
-            .unwrap();
+            .expect("Failed to execute SWRL booleanNot builtin");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 }

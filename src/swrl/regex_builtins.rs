@@ -489,7 +489,7 @@ mod tests {
             SWRLValue::String("hello world".to_string()),
             SWRLValue::String(r"world".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         // Test no match
@@ -497,7 +497,7 @@ mod tests {
             SWRLValue::String("hello world".to_string()),
             SWRLValue::String(r"xyz".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
 
         // Test case insensitive
@@ -506,7 +506,7 @@ mod tests {
             SWRLValue::String(r"hello".to_string()),
             SWRLValue::Boolean(true),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -521,7 +521,7 @@ mod tests {
             SWRLValue::String(r"world".to_string()),
             SWRLValue::String("universe".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -534,7 +534,7 @@ mod tests {
             SWRLValue::String("apple,banana,cherry".to_string()),
             SWRLValue::String(r"\w+".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::String("apple,banana,cherry".to_string()));
     }
 
@@ -547,7 +547,7 @@ mod tests {
             SWRLValue::String("apple,banana,cherry".to_string()),
             SWRLValue::String(r",".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::String("apple,banana,cherry".to_string()));
     }
 
@@ -560,7 +560,7 @@ mod tests {
             SWRLValue::String("Contact: john@example.com".to_string()),
             SWRLValue::String(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::String("john@example.com".to_string()));
     }
 
@@ -570,12 +570,12 @@ mod tests {
 
         // Valid pattern
         let args = vec![SWRLValue::String(r"\d+".to_string())];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         // Invalid pattern
         let args = vec![SWRLValue::String(r"[".to_string())];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 }

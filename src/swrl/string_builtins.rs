@@ -265,14 +265,14 @@ mod tests {
             SWRLValue::String("Hello".to_string()),
             SWRLValue::String("HELLO".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![
             SWRLValue::String("Hello".to_string()),
             SWRLValue::String("World".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 
@@ -284,7 +284,7 @@ mod tests {
             SWRLValue::String("hello world test".to_string()),
             SWRLValue::String("  hello   world    test  ".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -297,7 +297,7 @@ mod tests {
             SWRLValue::String("hello world".to_string()),
             SWRLValue::String(" ".to_string()),
         ];
-        let result = builtin.execute(&args).unwrap();
+        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 }

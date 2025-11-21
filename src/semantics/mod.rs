@@ -240,54 +240,96 @@ pub mod vocabulary {
 
     lazy_static! {
         // RDF vocabulary
-        pub static ref RDF_TYPE: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#type").unwrap();
-        pub static ref RDF_PROPERTY: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#Property").unwrap();
-        pub static ref RDF_NIL: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#nil").unwrap();
-        pub static ref RDF_FIRST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#first").unwrap();
-        pub static ref RDF_REST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest").unwrap();
-        pub static ref RDF_LIST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#List").unwrap();
+        pub static ref RDF_TYPE: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+            .expect("Valid hardcoded RDF type URL");
+        pub static ref RDF_PROPERTY: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#Property")
+            .expect("Valid hardcoded RDF Property URL");
+        pub static ref RDF_NIL: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#nil")
+            .expect("Valid hardcoded RDF nil URL");
+        pub static ref RDF_FIRST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#first")
+            .expect("Valid hardcoded RDF first URL");
+        pub static ref RDF_REST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest")
+            .expect("Valid hardcoded RDF rest URL");
+        pub static ref RDF_LIST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#List")
+            .expect("Valid hardcoded RDF List URL");
 
         // RDFS vocabulary
-        pub static ref RDFS_RESOURCE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Resource").unwrap();
-        pub static ref RDFS_CLASS: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Class").unwrap();
-        pub static ref RDFS_SUBCLASS_OF: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap();
-        pub static ref RDFS_SUBPROPERTY_OF: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf").unwrap();
-        pub static ref RDFS_DOMAIN: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap();
-        pub static ref RDFS_RANGE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap();
-        pub static ref RDFS_LABEL: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#label").unwrap();
-        pub static ref RDFS_COMMENT: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#comment").unwrap();
-        pub static ref RDFS_LITERAL: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal").unwrap();
-        pub static ref RDFS_DATATYPE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Datatype").unwrap();
+        pub static ref RDFS_RESOURCE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Resource")
+            .expect("Valid hardcoded RDFS Resource URL");
+        pub static ref RDFS_CLASS: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Class")
+            .expect("Valid hardcoded RDFS Class URL");
+        pub static ref RDFS_SUBCLASS_OF: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+            .expect("Valid hardcoded RDFS subClassOf URL");
+        pub static ref RDFS_SUBPROPERTY_OF: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf")
+            .expect("Valid hardcoded RDFS subPropertyOf URL");
+        pub static ref RDFS_DOMAIN: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#domain")
+            .expect("Valid hardcoded RDFS domain URL");
+        pub static ref RDFS_RANGE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#range")
+            .expect("Valid hardcoded RDFS range URL");
+        pub static ref RDFS_LABEL: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#label")
+            .expect("Valid hardcoded RDFS label URL");
+        pub static ref RDFS_COMMENT: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#comment")
+            .expect("Valid hardcoded RDFS comment URL");
+        pub static ref RDFS_LITERAL: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
+            .expect("Valid hardcoded RDFS Literal URL");
+        pub static ref RDFS_DATATYPE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Datatype")
+            .expect("Valid hardcoded RDFS Datatype URL");
 
         // OWL vocabulary
-        pub static ref OWL_THING: Url = Url::parse("http://www.w3.org/2002/07/owl#Thing").unwrap();
-        pub static ref OWL_NOTHING: Url = Url::parse("http://www.w3.org/2002/07/owl#Nothing").unwrap();
-        pub static ref OWL_CLASS: Url = Url::parse("http://www.w3.org/2002/07/owl#Class").unwrap();
-        pub static ref OWL_OBJECT_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#ObjectProperty").unwrap();
-        pub static ref OWL_DATA_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#DatatypeProperty").unwrap();
-        pub static ref OWL_FUNCTIONAL_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#FunctionalProperty").unwrap();
-        pub static ref OWL_INVERSE_FUNCTIONAL_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#InverseFunctionalProperty").unwrap();
-        pub static ref OWL_TRANSITIVE_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#TransitiveProperty").unwrap();
-        pub static ref OWL_SYMMETRIC_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#SymmetricProperty").unwrap();
-        pub static ref OWL_ASYMMETRIC_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#AsymmetricProperty").unwrap();
-        pub static ref OWL_REFLEXIVE_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#ReflexiveProperty").unwrap();
-        pub static ref OWL_IRREFLEXIVE_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#IrreflexiveProperty").unwrap();
-        pub static ref OWL_SAME_AS: Url = Url::parse("http://www.w3.org/2002/07/owl#sameAs").unwrap();
-        pub static ref OWL_DIFFERENT_FROM: Url = Url::parse("http://www.w3.org/2002/07/owl#differentFrom").unwrap();
-        pub static ref OWL_EQUIVALENT_CLASS: Url = Url::parse("http://www.w3.org/2002/07/owl#equivalentClass").unwrap();
-        pub static ref OWL_EQUIVALENT_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#equivalentProperty").unwrap();
-        pub static ref OWL_DISJOINT_WITH: Url = Url::parse("http://www.w3.org/2002/07/owl#disjointWith").unwrap();
-        pub static ref OWL_INVERSE_OF: Url = Url::parse("http://www.w3.org/2002/07/owl#inverseOf").unwrap();
+        pub static ref OWL_THING: Url = Url::parse("http://www.w3.org/2002/07/owl#Thing")
+            .expect("Valid hardcoded OWL Thing URL");
+        pub static ref OWL_NOTHING: Url = Url::parse("http://www.w3.org/2002/07/owl#Nothing")
+            .expect("Valid hardcoded OWL Nothing URL");
+        pub static ref OWL_CLASS: Url = Url::parse("http://www.w3.org/2002/07/owl#Class")
+            .expect("Valid hardcoded OWL Class URL");
+        pub static ref OWL_OBJECT_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#ObjectProperty")
+            .expect("Valid hardcoded OWL ObjectProperty URL");
+        pub static ref OWL_DATA_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#DatatypeProperty")
+            .expect("Valid hardcoded OWL DatatypeProperty URL");
+        pub static ref OWL_FUNCTIONAL_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#FunctionalProperty")
+            .expect("Valid hardcoded OWL FunctionalProperty URL");
+        pub static ref OWL_INVERSE_FUNCTIONAL_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#InverseFunctionalProperty")
+            .expect("Valid hardcoded OWL InverseFunctionalProperty URL");
+        pub static ref OWL_TRANSITIVE_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#TransitiveProperty")
+            .expect("Valid hardcoded OWL TransitiveProperty URL");
+        pub static ref OWL_SYMMETRIC_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#SymmetricProperty")
+            .expect("Valid hardcoded OWL SymmetricProperty URL");
+        pub static ref OWL_ASYMMETRIC_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#AsymmetricProperty")
+            .expect("Valid hardcoded OWL AsymmetricProperty URL");
+        pub static ref OWL_REFLEXIVE_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#ReflexiveProperty")
+            .expect("Valid hardcoded OWL ReflexiveProperty URL");
+        pub static ref OWL_IRREFLEXIVE_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#IrreflexiveProperty")
+            .expect("Valid hardcoded OWL IrreflexiveProperty URL");
+        pub static ref OWL_SAME_AS: Url = Url::parse("http://www.w3.org/2002/07/owl#sameAs")
+            .expect("Valid hardcoded OWL sameAs URL");
+        pub static ref OWL_DIFFERENT_FROM: Url = Url::parse("http://www.w3.org/2002/07/owl#differentFrom")
+            .expect("Valid hardcoded OWL differentFrom URL");
+        pub static ref OWL_EQUIVALENT_CLASS: Url = Url::parse("http://www.w3.org/2002/07/owl#equivalentClass")
+            .expect("Valid hardcoded OWL equivalentClass URL");
+        pub static ref OWL_EQUIVALENT_PROPERTY: Url = Url::parse("http://www.w3.org/2002/07/owl#equivalentProperty")
+            .expect("Valid hardcoded OWL equivalentProperty URL");
+        pub static ref OWL_DISJOINT_WITH: Url = Url::parse("http://www.w3.org/2002/07/owl#disjointWith")
+            .expect("Valid hardcoded OWL disjointWith URL");
+        pub static ref OWL_INVERSE_OF: Url = Url::parse("http://www.w3.org/2002/07/owl#inverseOf")
+            .expect("Valid hardcoded OWL inverseOf URL");
 
         // XSD datatypes
-        pub static ref XSD_STRING: Url = Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap();
-        pub static ref XSD_BOOLEAN: Url = Url::parse("http://www.w3.org/2001/XMLSchema#boolean").unwrap();
-        pub static ref XSD_INTEGER: Url = Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap();
-        pub static ref XSD_DECIMAL: Url = Url::parse("http://www.w3.org/2001/XMLSchema#decimal").unwrap();
-        pub static ref XSD_DOUBLE: Url = Url::parse("http://www.w3.org/2001/XMLSchema#double").unwrap();
-        pub static ref XSD_FLOAT: Url = Url::parse("http://www.w3.org/2001/XMLSchema#float").unwrap();
-        pub static ref XSD_DATE: Url = Url::parse("http://www.w3.org/2001/XMLSchema#date").unwrap();
-        pub static ref XSD_DATETIME: Url = Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").unwrap();
+        pub static ref XSD_STRING: Url = Url::parse("http://www.w3.org/2001/XMLSchema#string")
+            .expect("Valid hardcoded XSD string URL");
+        pub static ref XSD_BOOLEAN: Url = Url::parse("http://www.w3.org/2001/XMLSchema#boolean")
+            .expect("Valid hardcoded XSD boolean URL");
+        pub static ref XSD_INTEGER: Url = Url::parse("http://www.w3.org/2001/XMLSchema#integer")
+            .expect("Valid hardcoded XSD integer URL");
+        pub static ref XSD_DECIMAL: Url = Url::parse("http://www.w3.org/2001/XMLSchema#decimal")
+            .expect("Valid hardcoded XSD decimal URL");
+        pub static ref XSD_DOUBLE: Url = Url::parse("http://www.w3.org/2001/XMLSchema#double")
+            .expect("Valid hardcoded XSD double URL");
+        pub static ref XSD_FLOAT: Url = Url::parse("http://www.w3.org/2001/XMLSchema#float")
+            .expect("Valid hardcoded XSD float URL");
+        pub static ref XSD_DATE: Url = Url::parse("http://www.w3.org/2001/XMLSchema#date")
+            .expect("Valid hardcoded XSD date URL");
+        pub static ref XSD_DATETIME: Url = Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+            .expect("Valid hardcoded XSD dateTime URL");
     }
 }
 
@@ -319,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_rdf_term_creation() {
-        let iri = RdfTerm::iri("http://example.org/test").unwrap();
+        let iri = RdfTerm::iri("http://example.org/test").expect("Failed to create RDF IRI term from valid URI string");
         assert!(iri.is_iri());
 
         let blank = RdfTerm::blank_node("b1");
@@ -333,8 +375,8 @@ mod tests {
     fn test_rdf_graph_operations() {
         let mut graph = RdfGraph::new();
 
-        let subject = RdfTerm::iri("http://example.org/subject").unwrap();
-        let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
+        let subject = RdfTerm::iri("http://example.org/subject").expect("Failed to create RDF IRI term from valid URI string");
+        let predicate = RdfTerm::iri("http://example.org/predicate").expect("Failed to create RDF IRI term from valid URI string");
         let object = RdfTerm::literal("object");
 
         let triple = Triple {
@@ -357,8 +399,8 @@ mod tests {
     fn test_triple_pattern_matching() {
         let mut graph = RdfGraph::new();
 
-        let subject = RdfTerm::iri("http://example.org/subject").unwrap();
-        let predicate = RdfTerm::iri("http://example.org/predicate").unwrap();
+        let subject = RdfTerm::iri("http://example.org/subject").expect("Failed to create RDF IRI term from valid URI string");
+        let predicate = RdfTerm::iri("http://example.org/predicate").expect("Failed to create RDF IRI term from valid URI string");
         let object = RdfTerm::literal("object");
 
         let triple = Triple {
@@ -382,7 +424,7 @@ mod tests {
         assert_eq!(matches.len(), 1);
 
         // Find non-existent
-        let other_subject = RdfTerm::iri("http://example.org/other").unwrap();
+        let other_subject = RdfTerm::iri("http://example.org/other").expect("Failed to create RDF IRI term from valid URI string");
         let matches = graph.find_triples(Some(&other_subject), None, None);
         assert_eq!(matches.len(), 0);
     }

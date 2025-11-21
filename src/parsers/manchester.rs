@@ -349,9 +349,9 @@ mod tests {
         let mut parser = ManchesterParser::default();
         parser
             .parse_prefix_declaration("Prefix: ex: <http://example.org/>")
-            .unwrap();
+            .expect("Failed to parse Manchester syntax prefix declaration");
 
-        assert_eq!(parser.prefixes.get("ex").unwrap(), "http://example.org/");
+        assert_eq!(parser.prefixes.get("ex").expect("Failed to get namespace prefix from parser"), "http://example.org/");
     }
 
     #[test]
@@ -359,14 +359,14 @@ mod tests {
         let parser = ManchesterParser::default();
 
         // Test simple class
-        let expr = parser.parse_class_expression("Person").unwrap();
+        let expr = parser.parse_class_expression("Person").expect("Failed to parse Manchester syntax class expression");
         match expr {
             crate::ontology::ClassExpression::Class(_) => {}
             _ => panic!("Expected Class variant"),
         }
 
         // Test intersection
-        let expr = parser.parse_class_expression("Person and Student").unwrap();
+        let expr = parser.parse_class_expression("Person and Student").expect("Failed to parse Manchester syntax class expression");
         match expr {
             crate::ontology::ClassExpression::ObjectIntersectionOf(_) => {}
             _ => panic!("Expected ObjectIntersectionOf variant"),
@@ -375,7 +375,7 @@ mod tests {
         // Test some restriction
         let expr = parser
             .parse_class_expression("hasChild some Person")
-            .unwrap();
+            .expect("Failed to parse Manchester syntax class expression");
         match expr {
             crate::ontology::ClassExpression::ObjectSomeValuesFrom { .. } => {}
             _ => panic!("Expected ObjectSomeValuesFrom variant"),
@@ -393,7 +393,7 @@ Class: ex:Student
 "#;
 
         let mut parser = ManchesterParser::default();
-        let ontology = parser.parse_string(manchester_content).unwrap();
+        let ontology = parser.parse_string(manchester_content).expect("Failed to parse Manchester syntax ontology");
 
         // Check that basic ontology was created
         assert_eq!(ontology.axioms().len(), 0); // For now, simplified implementation

@@ -105,7 +105,7 @@ mod tests {
         let validator = DLValidator::new();
         let ontology = Ontology::new();
 
-        let report = validator.validate(&ontology).unwrap();
+        let report = validator.validate(&ontology).expect("Failed to validate ontology against OWL 2 profile");
         // Empty ontology should be valid for OWL 2 DL
         assert!(report.conforms);
     }
@@ -124,7 +124,7 @@ mod tests {
             crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
                 "http://example.org/prop",
             ))
-            .unwrap(),
+            .expect("Failed to create ObjectProperty for test: prop"),
         );
         assert!(validator.is_property_expression_allowed(&prop_expr));
     }

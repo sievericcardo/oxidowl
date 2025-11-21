@@ -641,20 +641,20 @@ mod tests {
     #[test]
     fn test_initialization() {
         let mut expansion = HypertableauExpansion::new();
-        let root_id = expansion.initialize(vec!["Person".to_string()]).unwrap();
+        let root_id = expansion.initialize(vec!["Person".to_string()]).expect("Failed to complete operation successfully");
 
         // Don't assert specific node ID since it's from a global counter
         // Just verify the node was created and has correct properties
         assert_eq!(expansion.state, ExpansionState::Running);
 
-        let root = expansion.graph().get_node(root_id).unwrap();
+        let root = expansion.graph().get_node(root_id).expect("Failed to get node from expansion graph");
         assert!(root.has_label("Person"));
     }
 
     #[test]
     fn test_and_rule() {
         let mut expansion = HypertableauExpansion::new();
-        let root_id = expansion.initialize(vec![]).unwrap();
+        let root_id = expansion.initialize(vec![]).expect("Failed to initialize hypergraph expansion");
 
         // Create C ⊓ D expression
         let c = ClassExpression::Class(crate::ontology::Class {
@@ -673,10 +673,10 @@ mod tests {
             priority: 100,
         };
 
-        let result = expansion.apply_and_rule(&task).unwrap();
+        let result = expansion.apply_and_rule(&task).expect("Failed to apply AND expansion rule to task");
         assert!(!result.has_clash);
 
-        let root = expansion.graph().get_node(root_id).unwrap();
+        let root = expansion.graph().get_node(root_id).expect("Failed to get node from expansion graph");
         assert!(root.has_label("http://example.org/C"));
         assert!(root.has_label("http://example.org/D"));
     }
@@ -684,7 +684,7 @@ mod tests {
     #[test]
     fn test_some_rule_creates_node() {
         let mut expansion = HypertableauExpansion::new();
-        let root_id = expansion.initialize(vec![]).unwrap();
+        let root_id = expansion.initialize(vec![]).expect("Failed to initialize hypergraph expansion");
 
         // Create ∃hasChild.Person
         let person = ClassExpression::Class(crate::ontology::Class {
@@ -708,19 +708,19 @@ mod tests {
             priority: 80,
         };
 
-        let result = expansion.apply_some_rule(&task).unwrap();
+        let result = expansion.apply_some_rule(&task).expect("Failed to apply SOME expansion rule to task");
         assert_eq!(result.new_nodes.len(), 1);
         assert_eq!(result.new_edges.len(), 1);
 
         let new_node_id = result.new_nodes[0];
-        let new_node = expansion.graph().get_node(new_node_id).unwrap();
+        let new_node = expansion.graph().get_node(new_node_id).expect("Failed to get node from expansion graph");
         assert!(new_node.has_label("http://example.org/Person"));
     }
 
     #[test]
     fn test_some_rule_reuses_node() {
         let mut expansion = HypertableauExpansion::new();
-        let root_id = expansion.initialize(vec![]).unwrap();
+        let root_id = expansion.initialize(vec![]).expect("Failed to initialize hypergraph expansion");
 
         // Create first ∃hasChild.Person
         let person = ClassExpression::Class(crate::ontology::Class {
@@ -744,7 +744,7 @@ mod tests {
             priority: 80,
         };
 
-        let result1 = expansion.apply_some_rule(&task1).unwrap();
+        let result1 = expansion.apply_some_rule(&task1).expect("Failed to apply SOME expansion rule to task");
         let first_node_id = result1.new_nodes[0];
 
         // Create second ∃hasChild.Person - should reuse
@@ -756,7 +756,7 @@ mod tests {
             priority: 80,
         };
 
-        let result2 = expansion.apply_some_rule(&task2).unwrap();
+        let result2 = expansion.apply_some_rule(&task2).expect("Failed to apply SOME expansion rule to task");
         // In the current implementation, both calls create new nodes since the signature
         // matching doesn't work perfectly yet. The test expectation should match reality.
         assert_eq!(result2.new_nodes.len(), 1); // New node is created
@@ -771,7 +771,7 @@ mod tests {
 
         let root_id = expansion
             .initialize(vec!["A".to_string(), "B".to_string()])
-            .unwrap();
+            .expect("Failed to initialize hypergraph expansion");
 
         assert!(expansion.has_clash(root_id));
     }
@@ -796,9 +796,9 @@ mod tests {
             child.parent = Some(parent_id);
         }
 
-        expansion.check_blocking().unwrap();
+        expansion.check_blocking().expect("Failed to check for blocking in tableau expansion");
 
-        let child = expansion.graph().get_node(child_id).unwrap();
+        let child = expansion.graph().get_node(child_id).expect("Failed to get node from expansion graph");
         assert!(child.is_blocked);
         assert_eq!(child.blocked_by, Some(parent_id));
     }

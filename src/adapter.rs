@@ -145,7 +145,7 @@ mod tests {
         let result = adapter.convert_basic_ontology::<String>(&mock_ontology);
         assert!(result.is_ok());
 
-        let ontology = result.unwrap();
+        let ontology = result.expect("Failed to complete operation successfully");
         assert!(ontology.get_iri().is_some());
     }
 
@@ -156,7 +156,7 @@ mod tests {
         let mut adapter = HornedOwlAdapter::new();
         // Use proper IRI constructor - build IRI from string
         let horned_iri = horned_owl::model::IRI::from("http://example.org/test".to_string());
-        let oxidowl_iri = adapter.convert_iri(&horned_iri).unwrap();
+        let oxidowl_iri = adapter.convert_iri(&horned_iri).expect("Failed to convert Horned OWL IRI to OxidOwl IRI");
         assert_eq!(oxidowl_iri.as_str(), "http://example.org/test");
     }
 
@@ -165,7 +165,7 @@ mod tests {
         let mut adapter = HornedOwlAdapter::new();
         let horned_iri = horned_owl::model::IRI::from("http://example.org/Person".to_string());
         let horned_class = horned_owl::model::Class(horned_iri);
-        let oxidowl_class = adapter.convert_class(&horned_class).unwrap();
+        let oxidowl_class = adapter.convert_class(&horned_class).expect("Failed to convert Horned OWL class to OxidOwl class");
         assert_eq!(oxidowl_class.iri.as_str(), "http://example.org/Person");
     }
     */

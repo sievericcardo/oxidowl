@@ -37,7 +37,7 @@ async fn test_greenhouse_reasoning() {
     let result = load_greenhouse_ontology();
     assert!(result.is_ok(), "Should be able to load greenhouse ontology");
     
-    let ontology = result.unwrap();
+    let ontology = result.expect("Test operation failed");
     let config = ReasonerConfig::test_config();
     let reasoning_service = ReasoningService::new(ontology, config);
     
@@ -45,7 +45,7 @@ async fn test_greenhouse_reasoning() {
     let consistency_result = reasoning_service.is_consistent().await;
     assert!(consistency_result.is_ok(), "Consistency check should succeed");
     
-    let is_consistent = consistency_result.unwrap();
+    let is_consistent = consistency_result.expect("Test operation failed");
     println!("Greenhouse ontology is consistent: {}", is_consistent);
     
     // Test class satisfiability for key greenhouse classes if they exist
@@ -64,7 +64,7 @@ fn test_load_greenhouse_ontology() {
     let result = load_greenhouse_ontology();
     assert!(result.is_ok(), "Should be able to load greenhouse ontology");
     
-    let ontology = result.unwrap();
+    let ontology = result.expect("Test operation failed");
     println!("Successfully loaded greenhouse ontology with {} classes", 
              ontology.classes().len());
     

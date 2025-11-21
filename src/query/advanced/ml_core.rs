@@ -2184,7 +2184,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         assert_eq!(recommendation.strategy.as_str(), "indexed_lookup");
         assert!(recommendation.confidence >= 0.85);
         assert!(recommendation.reasoning.contains("Star query"));
@@ -2218,7 +2218,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         assert_eq!(recommendation.strategy.as_str(), "materialization");
         assert!(recommendation.confidence >= 0.80);
         assert!(recommendation.reasoning.contains("Star query"));
@@ -2251,7 +2251,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         assert_eq!(recommendation.strategy.as_str(), "join_order");
         assert!(recommendation.confidence >= 0.85);
         assert!(recommendation.reasoning.contains("chain query"));
@@ -2287,7 +2287,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         // It's a Chain with join_count (5) > 3, so returns "hybrid"
         // But test expects "backward_chaining"... let me check actual return
         // From the error, it's returning "materialization"
@@ -2325,7 +2325,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         assert_eq!(recommendation.strategy.as_str(), "join_order");
         assert!(recommendation.confidence >= 0.70);
     }
@@ -2357,7 +2357,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         // With high property atoms and join count >= 3, this is detected as Star pattern
         // Low selectivity leads to Materialization
         assert_eq!(recommendation.strategy.as_str(), "materialization");
@@ -2391,7 +2391,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         // With join_count (5) in [2,5] and variable_count (6) == join_count + 1, it's Chain
         // join_count (5) > 3 so returns "hybrid"
         assert_eq!(recommendation.strategy.as_str(), "hybrid");
@@ -2425,7 +2425,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         // With join_count (5) < variable_count (7), and join_count in [2,5], this is Chain
         // But variable_count (7) != join_count + 1 (6), so not Chain
         // Falls through to Tree (class_atom_count >= 2, join_count >= 2)
@@ -2461,7 +2461,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         // Falls to Complex pattern
         // Result size estimate: 5000 * 0.001 * 0.1^6 = 0.005 (< 100)
         // Should return "adaptive" but error shows it returns "adaptive"
@@ -2499,7 +2499,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
         // Same pattern - Complex
         // Result size estimate: 5000 * 0.1 * 0.1^6 = 0.5 (< 100 still!)
         // So this also returns "adaptive"
@@ -2637,7 +2637,7 @@ mod tests {
         let indexed = model
             .strategy_registry
             .get(&ExecutionStrategy::IndexedLookup)
-            .unwrap();
+            .expect("Failed to get execution strategy metadata from registry");
         assert_eq!(indexed.strategy.as_str(), "indexed_lookup");
         assert!(indexed.resources.requires_index);
         assert_eq!(
@@ -2650,7 +2650,7 @@ mod tests {
         let join_order = model
             .strategy_registry
             .get(&ExecutionStrategy::JoinOrder)
-            .unwrap();
+            .expect("Failed to get execution strategy metadata from registry");
         assert_eq!(join_order.strategy.as_str(), "join_order");
         assert!(join_order.resources.supports_parallel);
         assert_eq!(
@@ -2662,7 +2662,7 @@ mod tests {
         let materialization = model
             .strategy_registry
             .get(&ExecutionStrategy::Materialization)
-            .unwrap();
+            .expect("Failed to get execution strategy metadata from registry");
         assert_eq!(materialization.strategy.as_str(), "materialization");
         assert_eq!(
             materialization.performance.scalability,
@@ -2673,7 +2673,7 @@ mod tests {
         let hybrid = model
             .strategy_registry
             .get(&ExecutionStrategy::Hybrid)
-            .unwrap();
+            .expect("Failed to get execution strategy metadata from registry");
         assert_eq!(hybrid.strategy.as_str(), "hybrid");
         assert!(hybrid.resources.supports_parallel);
         assert!(hybrid.success_rate >= 0.85);
@@ -2762,7 +2762,7 @@ mod tests {
             query_hash: 12345,
         };
 
-        let recommendation = model.select(&features).unwrap();
+        let recommendation = model.select(&features).expect("Failed to select ML strategy based on query features");
 
         // Should have alternatives
         assert!(!recommendation.alternatives.is_empty());
@@ -2799,7 +2799,7 @@ mod tests {
     #[test]
     fn test_ml_heuristics_engine_select_strategy_fallback() {
         let config = MLHeuristicsConfig::default();
-        let engine = MLHeuristicsEngine::new(config).unwrap();
+        let engine = MLHeuristicsEngine::new(config).expect("Failed to create ML heuristics engine with given configuration");
 
         let features = QueryFeatures {
             atom_count: 5.0,
@@ -2824,7 +2824,7 @@ mod tests {
         };
 
         // Should use fallback when no model loaded
-        let recommendation = engine.select_strategy(&features).unwrap();
+        let recommendation = engine.select_strategy(&features).expect("Failed to select query execution strategy using ML heuristics");
         assert_eq!(recommendation.strategy.as_str(), "default");
         assert_eq!(recommendation.confidence, 0.5);
         assert!(recommendation.reasoning.contains("No model loaded"));

@@ -585,7 +585,7 @@ mod tests {
         let max_card = ClassExpression::ObjectMaxCardinality {
             cardinality: 1,
             property: ObjectPropertyExpression::ObjectProperty(
-                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).unwrap(),
+                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).expect("Failed to create ObjectProperty for test: prop"),
             ),
             filler: Box::new(ClassExpression::Class(Class::new(IRI::new(
                 "http://example.org/Thing",
@@ -597,7 +597,7 @@ mod tests {
         let min_card = ClassExpression::ObjectMinCardinality {
             cardinality: 1,
             property: ObjectPropertyExpression::ObjectProperty(
-                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).unwrap(),
+                crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).expect("Failed to create ObjectProperty for test: prop"),
             ),
             filler: Box::new(ClassExpression::Class(Class::new(IRI::new(
                 "http://example.org/Thing",
@@ -612,13 +612,13 @@ mod tests {
 
         // Atomic object property - allowed
         let prop = ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).unwrap(),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).expect("Failed to create ObjectProperty for test: hasParent"),
         );
         assert!(validator.is_property_expression_allowed(&prop));
 
         // Inverse property - not allowed in RL
         let inverse_prop = ObjectPropertyExpression::InverseObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).unwrap(),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).expect("Failed to create ObjectProperty for test: hasParent"),
         );
         assert!(!validator.is_property_expression_allowed(&inverse_prop));
     }
@@ -645,7 +645,7 @@ mod tests {
         let validator = RLValidator::new();
         let ontology = Ontology::new();
 
-        let report = validator.validate(&ontology).unwrap();
+        let report = validator.validate(&ontology).expect("Failed to validate ontology against OWL 2 profile");
         assert!(report.conforms); // Empty ontology should conform
         assert!(report.violations.is_empty());
     }
@@ -657,9 +657,9 @@ mod tests {
 
         // Add a non-RL axiom (inverse object property)
         let prop1 =
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop1")).unwrap();
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop1")).expect("Failed to create ObjectProperty for test: prop1");
         let prop2 =
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop2")).unwrap();
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop2")).expect("Failed to create ObjectProperty for test: prop2");
         ontology.axioms.push(Axiom::InverseObjectProperties(
             crate::ontology::axioms::InverseObjectPropertiesAxiom {
                 id: 0,
@@ -669,7 +669,7 @@ mod tests {
             },
         ));
 
-        let report = validator.validate(&ontology).unwrap();
+        let report = validator.validate(&ontology).expect("Failed to validate ontology against OWL 2 profile");
         assert!(!report.conforms);
         assert!(!report.violations.is_empty());
     }

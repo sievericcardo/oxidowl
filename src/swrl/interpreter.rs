@@ -854,7 +854,7 @@ mod tests {
 
         let bindings = interpreter
             .find_class_atom_bindings(&person_class, &argument, &current_binding, &ontology)
-            .unwrap();
+            .expect("Failed to find SWRL class atom bindings in ontology");
 
         // Should find bindings for both john and mary
         assert_eq!(bindings.len(), 2);
@@ -879,7 +879,7 @@ mod tests {
         let mut context_with_binding = SWRLExecutionContext::new();
         context_with_binding
             .bind(var, SWRLValue::Individual(john.clone()))
-            .unwrap();
+            .expect("Failed to bind SWRL variable to individual in execution context");
 
         let resolved = interpreter.resolve_individual_argument(&var_arg, &context_with_binding);
         assert_eq!(resolved, Some(john));

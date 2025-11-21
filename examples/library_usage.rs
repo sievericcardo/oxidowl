@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
         .ok_or_else(|| oxidowl::Error::OntologyParsing {
             message: "No ontology loaded".to_string(),
         })?;
-    let ontology_data = ontology.read().unwrap().clone();
+    let ontology_data = ontology.read().expect("Test operation failed").clone();
     let reasoning_service = ReasoningService::new(ontology_data.clone(), config.clone());
 
     // 6. Create DL query engine with namespace

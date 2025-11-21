@@ -7,10 +7,10 @@ mod simple_tests {
     #[test]
     fn test_year_month_duration_parser() {
         // Test valid duration formats
-        assert_eq!(parse_year_month_duration("P1Y").unwrap(), (1, 0));
-        assert_eq!(parse_year_month_duration("P6M").unwrap(), (0, 6));
-        assert_eq!(parse_year_month_duration("P2Y5M").unwrap(), (2, 5));
-        assert_eq!(parse_year_month_duration("P0Y0M").unwrap(), (0, 0));
+        assert_eq!(parse_year_month_duration("P1Y").expect("Test operation failed"), (1, 0));
+        assert_eq!(parse_year_month_duration("P6M").expect("Test operation failed"), (0, 6));
+        assert_eq!(parse_year_month_duration("P2Y5M").expect("Test operation failed"), (2, 5));
+        assert_eq!(parse_year_month_duration("P0Y0M").expect("Test operation failed"), (0, 0));
 
         // Test invalid formats
         assert!(parse_year_month_duration("1Y").is_err()); // Missing P

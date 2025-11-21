@@ -1178,7 +1178,7 @@ impl FunctionalParser {
                         // No filler, use rdfs:Literal as default
                         crate::ontology::DataRange::Datatype(
                             url::Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
-                                .unwrap()
+                                .expect("Failed to complete operation successfully")
                                 .into(),
                         )
                     };
@@ -1252,7 +1252,7 @@ impl FunctionalParser {
                         // No filler, use rdfs:Literal as default
                         crate::ontology::DataRange::Datatype(
                             url::Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
-                                .unwrap()
+                                .expect("Failed to complete operation successfully")
                                 .into(),
                         )
                     };
@@ -1326,7 +1326,7 @@ impl FunctionalParser {
                         // No filler, use rdfs:Literal as default
                         crate::ontology::DataRange::Datatype(
                             url::Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
-                                .unwrap()
+                                .expect("Failed to complete operation successfully")
                                 .into(),
                         )
                     };

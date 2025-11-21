@@ -39,7 +39,7 @@ impl SparqlServer {
             port,
             bind_address,
             reasoning_service,
-            store: Arc::new(RwLock::new(Store::new().unwrap())),
+            store: Arc::new(RwLock::new(Store::new().expect("Failed to create new SPARQL store"))),
         }
     }
 
@@ -97,8 +97,8 @@ impl SparqlServer {
     /// Initialize the RDF store with ontology data
     async fn initialize_store(&self) -> Result<()> {
         let reasoner = self.reasoning_service.get_reasoner().await?;
-        let ontology = reasoner.read().unwrap().get_ontology().unwrap();
-        let ontology_guard = ontology.read().unwrap();
+        let ontology = reasoner.read().expect("Failed to acquire read lock on reasoner").get_ontology().expect("Failed to get ontology from reasoner");
+        let ontology_guard = ontology.read().expect("Failed to acquire read lock on ontology");
 
         let mut store = self.store.write().await;
 

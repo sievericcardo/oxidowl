@@ -285,19 +285,19 @@ mod tests {
     #[tokio::test]
     async fn test_node_selection() {
         let config = LoadBalancingConfig::default();
-        let balancer = LoadBalancer::new(config).await.unwrap();
+        let balancer = LoadBalancer::new(config).await.expect("Failed to create load balancer with given configuration");
 
         let node_id = uuid::Uuid::new_v4();
         let nodes = vec![node_id];
 
-        let selected = balancer.select_node(&nodes).await.unwrap();
+        let selected = balancer.select_node(&nodes).await.expect("Failed to select node using load balancer");
         assert_eq!(selected, Some(node_id));
     }
 
     #[tokio::test]
     async fn test_load_score_calculation() {
         let config = LoadBalancingConfig::default();
-        let balancer = LoadBalancer::new(config).await.unwrap();
+        let balancer = LoadBalancer::new(config).await.expect("Failed to create load balancer with given configuration");
 
         let low_load = NodeLoad {
             node_id: uuid::Uuid::new_v4(),

@@ -677,7 +677,7 @@ mod tests {
         let validator = SWRLValidator::new();
         let empty_rule = SWRLRule::new(Vec::new(), Vec::new());
 
-        let result = validator.validate_rule(&empty_rule).unwrap();
+        let result = validator.validate_rule(&empty_rule).expect("Failed to validate SWRL rule");
         assert!(!result.is_valid);
         assert_eq!(result.issues.len(), 2); // Empty head and empty body
     }
@@ -700,7 +700,7 @@ mod tests {
         };
 
         let safe_rule = SWRLRule::new(vec![head_atom], vec![body_atom]);
-        let result = validator.validate_rule(&safe_rule).unwrap();
+        let result = validator.validate_rule(&safe_rule).expect("Failed to validate SWRL rule");
 
         assert!(result.is_valid);
     }
@@ -724,7 +724,7 @@ mod tests {
         };
 
         let unsafe_rule = SWRLRule::new(vec![head_atom], vec![body_atom]);
-        let result = validator.validate_rule(&unsafe_rule).unwrap();
+        let result = validator.validate_rule(&unsafe_rule).expect("Failed to validate SWRL rule");
 
         assert!(!result.is_valid);
         assert!(result.has_errors());
@@ -757,7 +757,7 @@ mod tests {
         };
 
         let rule = SWRLRule::new(vec![head_atom], vec![class_atom, builtin_atom]);
-        let result = validator.validate_rule(&rule).unwrap();
+        let result = validator.validate_rule(&rule).expect("Failed to validate SWRL rule");
 
         // Should be valid (both variables are used in class atom)
         assert!(result.is_valid);
@@ -786,7 +786,7 @@ mod tests {
         };
 
         let rule = SWRLRule::new(vec![head_atom], vec![class_atom, builtin_atom]);
-        let result = validator.validate_rule(&rule).unwrap();
+        let result = validator.validate_rule(&rule).expect("Failed to validate SWRL rule");
 
         // Should have an unknown built-in issue
         assert!(

@@ -118,7 +118,7 @@ fn test_query_execution_basic() {
     let constraints = default_constraints();
 
     // Execute query
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
     let result = rt.block_on(engine.execute_query(&query, constraints));
 
     match result {
@@ -156,7 +156,7 @@ fn test_concurrent_queries() {
     for thread_id in 0..4 {
         let engine_clone = engine.clone();
         let handle = std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
             let query = simple_query("var", &format!("Class{}", thread_id));
             let constraints = default_constraints();
             let result = rt.block_on(engine_clone.execute_query(&query, constraints));
@@ -192,7 +192,7 @@ fn test_multiple_query_execution() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
 
     // Execute 10 queries
     let mut successful = 0;
@@ -223,7 +223,7 @@ fn test_performance_measurement() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
     let query = simple_query("x", "Entity");
     let constraints = default_constraints();
 
@@ -252,7 +252,7 @@ fn test_error_handling() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
 
     // Test with empty query
     let empty_query = ConjunctiveQuery {

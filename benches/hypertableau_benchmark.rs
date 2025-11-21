@@ -190,7 +190,7 @@ fn bench_linear_hierarchy(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
@@ -203,7 +203,7 @@ fn bench_linear_hierarchy(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
@@ -232,7 +232,7 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
             &label,
             |b, _label| {
                 b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                     rt.block_on(async {
                         let mut config = ReasonerConfig::default();
                         config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
@@ -249,7 +249,7 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
             &label,
             |b, _label| {
                 b.iter(|| {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                     rt.block_on(async {
                         let mut config = ReasonerConfig::default();
                         config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
@@ -274,7 +274,7 @@ fn bench_complex_expressions(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
@@ -287,7 +287,7 @@ fn bench_complex_expressions(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
@@ -311,7 +311,7 @@ fn bench_equivalent_classes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
@@ -324,7 +324,7 @@ fn bench_equivalent_classes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
@@ -348,7 +348,7 @@ fn bench_disjoint_classes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
@@ -361,7 +361,7 @@ fn bench_disjoint_classes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("hypertableau", size), size, |b, _size| {
             b.iter(|| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;

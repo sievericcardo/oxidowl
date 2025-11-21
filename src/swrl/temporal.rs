@@ -180,13 +180,13 @@ impl TemporalValue {
         // Try to detect timezone
         if Self::has_timezone(value) {
             // Parse with timezone
-            DateTime::parse_from_rfc3339(value)
-                .map(|dt| {
-                    TemporalValue::DateTimeWithTz(
-                        dt.with_timezone(&FixedOffset::east_opt(0).unwrap()),
-                    )
-                })
-                .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))
+            let dt = DateTime::parse_from_rfc3339(value)
+                .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            
+            // Convert to UTC (offset 0) - this operation is infallible for valid DateTime
+            let utc_dt = dt.with_timezone(&FixedOffset::east_opt(0)
+                .expect("Zero offset is always valid"));
+            Ok(TemporalValue::DateTimeWithTz(utc_dt))
         } else {
             // Parse without timezone
             NaiveDateTime::from_str(value)
@@ -460,7 +460,9 @@ impl TemporalValue {
                 Ok(TemporalValue::DateTime(*dt + *dur))
             }
             (TemporalValue::Date(date), TemporalValue::DayTimeDuration(dur)) => {
-                let dt = date.and_hms_opt(0, 0, 0).unwrap();
+                let dt = date.and_hms_opt(0, 0, 0)
+                    .ok_or_else(|| TemporalError::InvalidDateFormat(
+                        "Failed to convert date to datetime".to_string()))?;
                 let result_dt = dt + *dur;
                 Ok(TemporalValue::Date(result_dt.date()))
             }
@@ -480,7 +482,9 @@ impl TemporalValue {
                 Ok(TemporalValue::DateTime(*dt - *dur))
             }
             (TemporalValue::Date(date), TemporalValue::DayTimeDuration(dur)) => {
-                let dt = date.and_hms_opt(0, 0, 0).unwrap();
+                let dt = date.and_hms_opt(0, 0, 0)
+                    .ok_or_else(|| TemporalError::InvalidDateFormat(
+                        "Failed to convert date to datetime".to_string()))?;
                 let result_dt = dt - *dur;
                 Ok(TemporalValue::Date(result_dt.date()))
             }

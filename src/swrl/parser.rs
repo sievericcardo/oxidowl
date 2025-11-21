@@ -829,7 +829,7 @@ mod tests {
         let result = parser.parse_rule(rule_text);
 
         assert!(result.is_ok());
-        let rule = result.unwrap();
+        let rule = result.expect("Failed to parse simple SWRL rule");
         assert_eq!(rule.body.len(), 1);
         assert_eq!(rule.head.len(), 1);
     }
@@ -841,13 +841,13 @@ mod tests {
 
         let result = manager.resolve_qname("ex", "Person");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "http://example.org/Person");
+        assert_eq!(result.expect("Failed to resolve qualified name with namespace prefix"), "http://example.org/Person");
     }
 
     #[test]
     fn test_lexer_tokenization() {
         let mut lexer = Lexer::new("Person(?p)");
-        let tokens = lexer.tokenize().unwrap();
+        let tokens = lexer.tokenize().expect("Failed to tokenize SWRL expression");
 
         assert_eq!(tokens.len(), 4);
         assert!(matches!(tokens[0], Token::Identifier(_)));
@@ -867,7 +867,7 @@ mod tests {
             println!("Parse error: {:?}", e);
         }
         assert!(result.is_ok());
-        let rule = result.unwrap();
+        let rule = result.expect("Failed to parse complex SWRL rule with multiple body atoms");
         assert_eq!(rule.body.len(), 3);
         assert_eq!(rule.head.len(), 1);
     }
@@ -884,7 +884,7 @@ mod tests {
         let result = parser.parse_rules(rules_text);
         assert!(result.is_ok());
 
-        let rules = result.unwrap();
+        let rules = result.expect("Failed to parse SWRL rules with prefix declarations");
         assert_eq!(rules.len(), 1);
     }
 }
