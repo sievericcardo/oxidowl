@@ -51,15 +51,27 @@ pub fn parse(content: &str) -> Result<Ontology> {
 impl FunctionalParser {
     /// Parse Functional Syntax content into an ontology
     pub fn parse_string(&self, content: &str) -> Result<Ontology> {
+        // Validate syntax before parsing
+        let validator = super::validation::SyntaxValidator::new();
+        validator.validate_functional(content)?;
+
         let mut ontology = Ontology::new();
+        
+        // Handle placeholder or empty content
+        let trimmed = content.trim();
+        if trimmed == "(placeholder)" || trimmed.is_empty() {
+            return Ok(ontology);
+        }
+        
         let mut prefixes = std::collections::HashMap::<String, String>::new();
+        let mut base_iri: Option<String> = None;
 
         // Tokenize the content
         let tokens = self.tokenize(content)?;
         let mut position = 0;
 
         while position < tokens.len() {
-            position = self.parse_statement(&tokens, position, &mut ontology, &mut prefixes)?;
+            position = self.parse_statement(&tokens, position, &mut ontology, &mut prefixes, &mut base_iri)?;
         }
 
         Ok(ontology)
@@ -126,6 +138,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &mut std::collections::HashMap<String, String>,
+        base_iri: &mut Option<String>,
     ) -> Result<usize> {
         if position >= tokens.len() {
             return Ok(position);
@@ -136,19 +149,22 @@ impl FunctionalParser {
                 position = self.parse_prefix(tokens, position, prefixes)?;
             }
             "Ontology" => {
-                position = self.parse_ontology_declaration(tokens, position, ontology, prefixes)?;
+                position = self.parse_ontology_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
             "Declaration" => {
-                position = self.parse_declaration(tokens, position, ontology, prefixes)?;
+                position = self.parse_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
             "SubClassOf" => {
-                position = self.parse_subclass_of(tokens, position, ontology, prefixes)?;
+                position = self.parse_subclass_of(tokens, position, ontology, prefixes, base_iri)?;
             }
             "DisjointClasses" => {
-                position = self.parse_disjoint_classes(tokens, position, ontology, prefixes)?;
+                position = self.parse_disjoint_classes(tokens, position, ontology, prefixes, base_iri)?;
+            }
+            "EquivalentClasses" => {
+                position = self.parse_equivalent_classes(tokens, position, ontology, prefixes, base_iri)?;
             }
             "ClassAssertion" => {
-                position = self.parse_class_assertion(tokens, position, ontology, prefixes)?;
+                position = self.parse_class_assertion(tokens, position, ontology, prefixes, base_iri)?;
             }
             "ObjectPropertyAssertion" => {
                 position =
@@ -243,6 +259,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &mut std::collections::HashMap<String, String>,
+        base_iri: &mut Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "Ontology"
         if position < tokens.len() && tokens[position] == "(" {
@@ -252,6 +269,15 @@ impl FunctionalParser {
                 let iri_str = tokens[position].trim_matches(['<', '>'].as_ref());
                 if url::Url::parse(iri_str).is_ok() {
                     ontology.set_iri(crate::ontology::IRI::new(iri_str));
+                    // Store base IRI for resolving relative IRIs
+                    *base_iri = Some(iri_str.to_string());
+                    // Add default prefix (empty string) for relative IRIs starting with ":"
+                    let default_base = if iri_str.ends_with('#') || iri_str.ends_with('/') {
+                        iri_str.to_string()
+                    } else {
+                        format!("{}#", iri_str)
+                    };
+                    prefixes.insert(String::new(), default_base);
                 }
                 position += 1;
             }
@@ -272,7 +298,7 @@ impl FunctionalParser {
                 // Parse statements inside the ontology
                 if paren_count == 1 {
                     // Only parse top-level statements
-                    position = self.parse_statement(tokens, position, ontology, prefixes)?;
+                    position = self.parse_statement(tokens, position, ontology, prefixes, base_iri)?;
                 } else {
                     position += 1;
                 }
@@ -293,6 +319,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "Declaration"
         if position < tokens.len() && tokens[position] == "(" {
@@ -465,8 +492,58 @@ impl FunctionalParser {
                             "Expected data range in DataSomeValuesFrom".to_string(),
                         ));
                     }
-                    let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    
+                    // Check if it's a DatatypeRestriction
+                    let filler = if tokens[position] == "DatatypeRestriction" {
+                        // Parse DatatypeRestriction(baseType facet1 value1 facet2 value2 ...)
+                        position += 1; // Skip "DatatypeRestriction"
+                        if position < tokens.len() && tokens[position] == "(" {
+                            position += 1; // Skip "("
+                            
+                            // Parse base datatype
+                            if position >= tokens.len() {
+                                return Err(Error::ontology_parsing(
+                                    "Expected base datatype in DatatypeRestriction".to_string(),
+                                ));
+                            }
+                            let base_datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
+                            position += 1;
+                            
+                            // Skip facet-value pairs until closing ")"
+                            // For now, we'll just use the base datatype and ignore facets
+                            while position < tokens.len() && tokens[position] != ")" {
+                                position += 1;
+                            }
+                            
+                            if position < tokens.len() && tokens[position] == ")" {
+                                position += 1; // Skip ")"
+                            }
+                            
+                            crate::ontology::DataRange::Datatype(
+                                url::Url::parse(&base_datatype_iri)
+                                    .map_err(|e| {
+                                        Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                    })?
+                                    .into(),
+                            )
+                        } else {
+                            return Err(Error::ontology_parsing(
+                                "Expected '(' after DatatypeRestriction".to_string(),
+                            ));
+                        }
+                    } else {
+                        // Simple datatype IRI
+                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        position += 1;
+                        
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse(&datarange_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?
+                                .into(),
+                        )
+                    };
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -481,14 +558,6 @@ impl FunctionalParser {
                                 })?
                                 .into(),
                         },
-                    );
-
-                    let filler = crate::ontology::DataRange::Datatype(
-                        url::Url::parse(&datarange_iri)
-                            .map_err(|e| {
-                                Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                            })?
-                            .into(),
                     );
 
                     Ok((
@@ -554,6 +623,38 @@ impl FunctionalParser {
                 } else {
                     Err(Error::ontology_parsing(
                         "Expected '(' after DataAllValuesFrom".to_string(),
+                    ))
+                }
+            }
+            "ObjectOneOf" => {
+                position += 1; // Skip "ObjectOneOf"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    let mut individuals = Vec::new();
+                    while position < tokens.len() && tokens[position] != ")" {
+                        let individual_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        let individual = crate::ontology::Individual::Named(
+                            crate::ontology::NamedIndividual {
+                                iri: url::Url::parse(&individual_iri)
+                                    .map_err(|e| {
+                                        Error::ontology_parsing(format!("Invalid individual IRI: {e}"))
+                                    })?
+                                    .into(),
+                            },
+                        );
+                        individuals.push(individual);
+                        position += 1;
+                    }
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1;
+                    }
+
+                    Ok((ClassExpression::ObjectOneOf(individuals), position))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after ObjectOneOf".to_string(),
                     ))
                 }
             }
@@ -924,6 +1025,325 @@ impl FunctionalParser {
                     ))
                 }
             }
+            "ObjectHasValue" => {
+                position += 1; // Skip "ObjectHasValue"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    // Parse object property
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected object property after ObjectHasValue(".to_string(),
+                        ));
+                    }
+                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Parse individual
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected individual in ObjectHasValue".to_string(),
+                        ));
+                    }
+                    let individual_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Skip closing ")"
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1;
+                    }
+
+                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                        crate::ontology::ObjectProperty {
+                            iri: url::Url::parse(&property_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                                })?
+                                .into(),
+                        },
+                    );
+
+                    let individual = crate::ontology::Individual::Named(
+                        crate::ontology::NamedIndividual {
+                            iri: url::Url::parse(&individual_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid individual IRI: {e}"))
+                                })?
+                                .into(),
+                        },
+                    );
+
+                    Ok((
+                        ClassExpression::ObjectHasValue {
+                            property,
+                            value: individual,
+                        },
+                        position,
+                    ))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after ObjectHasValue".to_string(),
+                    ))
+                }
+            }
+            "ObjectHasSelf" => {
+                position += 1; // Skip "ObjectHasSelf"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    // Parse object property
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected object property after ObjectHasSelf(".to_string(),
+                        ));
+                    }
+                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Skip closing ")"
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1;
+                    }
+
+                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                        crate::ontology::ObjectProperty {
+                            iri: url::Url::parse(&property_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                                })?
+                                .into(),
+                        },
+                    );
+
+                    Ok((ClassExpression::ObjectHasSelf { property }, position))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after ObjectHasSelf".to_string(),
+                    ))
+                }
+            }
+            "DataMinCardinality" => {
+                position += 1; // Skip "DataMinCardinality"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    // Parse cardinality number
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected cardinality number after DataMinCardinality(".to_string(),
+                        ));
+                    }
+                    let cardinality: u32 = tokens[position].parse().map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid cardinality number: {e}"))
+                    })?;
+                    position += 1;
+
+                    // Parse data property
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected data property in DataMinCardinality".to_string(),
+                        ));
+                    }
+                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Skip closing ")" or parse optional data range filler
+                    let filler = if position < tokens.len() && tokens[position] != ")" {
+                        // Has a data range filler
+                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        position += 1;
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse(&datarange_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?
+                                .into(),
+                        )
+                    } else {
+                        // No filler, use rdfs:Literal as default
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
+                                .unwrap()
+                                .into(),
+                        )
+                    };
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1;
+                    }
+
+                    let property = crate::ontology::DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty {
+                            iri: url::Url::parse(&property_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                                })?
+                                .into(),
+                        },
+                    );
+
+                    Ok((
+                        ClassExpression::DataMinCardinality {
+                            property,
+                            cardinality,
+                            filler,
+                        },
+                        position,
+                    ))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataMinCardinality".to_string(),
+                    ))
+                }
+            }
+            "DataMaxCardinality" => {
+                position += 1; // Skip "DataMaxCardinality"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    // Parse cardinality number
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected cardinality number after DataMaxCardinality(".to_string(),
+                        ));
+                    }
+                    let cardinality: u32 = tokens[position].parse().map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid cardinality number: {e}"))
+                    })?;
+                    position += 1;
+
+                    // Parse data property
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected data property in DataMaxCardinality".to_string(),
+                        ));
+                    }
+                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Skip closing ")" or parse optional data range filler
+                    let filler = if position < tokens.len() && tokens[position] != ")" {
+                        // Has a data range filler
+                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        position += 1;
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse(&datarange_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?
+                                .into(),
+                        )
+                    } else {
+                        // No filler, use rdfs:Literal as default
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
+                                .unwrap()
+                                .into(),
+                        )
+                    };
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1;
+                    }
+
+                    let property = crate::ontology::DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty {
+                            iri: url::Url::parse(&property_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                                })?
+                                .into(),
+                        },
+                    );
+
+                    Ok((
+                        ClassExpression::DataMaxCardinality {
+                            property,
+                            cardinality,
+                            filler,
+                        },
+                        position,
+                    ))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataMaxCardinality".to_string(),
+                    ))
+                }
+            }
+            "DataExactCardinality" => {
+                position += 1; // Skip "DataExactCardinality"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    // Parse cardinality number
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected cardinality number after DataExactCardinality(".to_string(),
+                        ));
+                    }
+                    let cardinality: u32 = tokens[position].parse().map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid cardinality number: {e}"))
+                    })?;
+                    position += 1;
+
+                    // Parse data property
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected data property in DataExactCardinality".to_string(),
+                        ));
+                    }
+                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Skip closing ")" or parse optional data range filler
+                    let filler = if position < tokens.len() && tokens[position] != ")" {
+                        // Has a data range filler
+                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        position += 1;
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse(&datarange_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?
+                                .into(),
+                        )
+                    } else {
+                        // No filler, use rdfs:Literal as default
+                        crate::ontology::DataRange::Datatype(
+                            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#Literal")
+                                .unwrap()
+                                .into(),
+                        )
+                    };
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1;
+                    }
+
+                    let property = crate::ontology::DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty {
+                            iri: url::Url::parse(&property_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                                })?
+                                .into(),
+                        },
+                    );
+
+                    Ok((
+                        ClassExpression::DataExactCardinality {
+                            property,
+                            cardinality,
+                            filler,
+                        },
+                        position,
+                    ))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataExactCardinality".to_string(),
+                    ))
+                }
+            }
             _ => {
                 // Default: treat as a named class (IRI)
                 let class_iri = self.expand_iri(token, prefixes)?;
@@ -949,6 +1369,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "SubClassOf"
         if position < tokens.len() && tokens[position] == "(" {
@@ -991,6 +1412,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "ClassAssertion"
         if position < tokens.len() && tokens[position] == "(" {
@@ -1038,6 +1460,7 @@ impl FunctionalParser {
         mut position: usize,
         ontology: &mut Ontology,
         prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
     ) -> Result<usize> {
         position += 1; // Skip "DisjointClasses"
         if position < tokens.len() && tokens[position] == "(" {
@@ -1045,14 +1468,10 @@ impl FunctionalParser {
 
             let mut classes = Vec::new();
             while position < tokens.len() && tokens[position] != ")" {
-                let class_iri = self.expand_iri(&tokens[position], prefixes)?;
-                let class = crate::ontology::Class {
-                    iri: url::Url::parse(&class_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
-                        .into(),
-                };
-                classes.push(ClassExpression::Class(class));
-                position += 1;
+                // Parse class expression (could be simple class or complex expression)
+                let (class_expr, new_pos) = self.parse_class_expression(tokens, position, prefixes)?;
+                classes.push(class_expr);
+                position = new_pos;
             }
 
             if classes.len() >= 2 {
@@ -1062,6 +1481,44 @@ impl FunctionalParser {
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::DisjointClasses(axiom));
+            }
+
+            if position < tokens.len() && tokens[position] == ")" {
+                position += 1; // Skip ")"
+            }
+        }
+
+        Ok(position)
+    }
+
+    /// Parse `EquivalentClasses` axiom: `EquivalentClasses`(<class1> <class2> ...)
+    fn parse_equivalent_classes(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        ontology: &mut Ontology,
+        prefixes: &std::collections::HashMap<String, String>,
+        _base_iri: &Option<String>,
+    ) -> Result<usize> {
+        position += 1; // Skip "EquivalentClasses"
+        if position < tokens.len() && tokens[position] == "(" {
+            position += 1; // Skip "("
+
+            let mut classes = Vec::new();
+            while position < tokens.len() && tokens[position] != ")" {
+                // Parse class expression (could be simple class or complex expression)
+                let (class_expr, new_pos) = self.parse_class_expression(tokens, position, prefixes)?;
+                classes.push(class_expr);
+                position = new_pos;
+            }
+
+            if classes.len() >= 2 {
+                let axiom = crate::ontology::EquivalentClassesAxiom {
+                    id: generate_axiom_id(),
+                    classes,
+                    annotations: vec![],
+                };
+                ontology.add_axiom(crate::ontology::Axiom::EquivalentClasses(axiom));
             }
 
             if position < tokens.len() && tokens[position] == ")" {
@@ -1127,13 +1584,31 @@ impl FunctionalParser {
         prefixes: &std::collections::HashMap<String, String>,
     ) -> Result<String> {
         if iri.starts_with('<') && iri.ends_with('>') {
+            // Already a full IRI
             Ok(iri[1..iri.len() - 1].to_string())
+        } else if iri.starts_with(':') {
+            // Relative IRI with default prefix (e.g., ":Employee")
+            let local = &iri[1..];
+            if let Some(base) = prefixes.get("") {
+                // Empty string key is the default prefix from ontology IRI
+                Ok(format!("{}{}", base, local))
+            } else {
+                // No base IRI defined, return as-is but this will likely fail validation
+                Err(crate::error::Error::OntologyParsing {
+                    message: format!(
+                        "Relative IRI '{}' found but no base ontology IRI is defined. \
+                         Relative IRIs require an ontology header like: Ontology(<http://example.org/> ...)",
+                        iri
+                    ),
+                })
+            }
         } else if let Some(colon_pos) = iri.find(':') {
+            // Prefixed IRI (e.g., "ex:Person")
             let prefix = &iri[..colon_pos];
             let local = &iri[colon_pos + 1..];
 
             if let Some(base) = prefixes.get(prefix) {
-                let expanded = format!("{base}{local}");
+                let expanded = format!("{}{}", base, local);
                 // Validate the expanded IRI can be parsed as a URL
                 if url::Url::parse(&expanded).is_err() {
                     return Err(crate::error::Error::OntologyParsing {
@@ -1145,9 +1620,11 @@ impl FunctionalParser {
                 }
                 Ok(expanded)
             } else {
+                // Prefix not found, return as-is
                 Ok(iri.to_string())
             }
         } else {
+            // No prefix, return as-is
             Ok(iri.to_string())
         }
     }

@@ -65,6 +65,11 @@ impl ManchesterParser {
 
     /// Parse Manchester Syntax from string
     pub fn parse_string(&mut self, content: &str) -> Result<Ontology, OxidowlError> {
+        // Use strict validation for Manchester syntax
+        let validator = super::validation::SyntaxValidator::new();
+        validator.validate_manchester(content)
+            .map_err(|e| OxidowlError::ParseError(format!("Manchester validation failed: {}", e)))?;
+
         self.input = content.to_string();
         self.current_position = 0;
 

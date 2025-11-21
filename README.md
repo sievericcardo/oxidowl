@@ -183,8 +183,6 @@ config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
 | Many equivalent classes (>10) | Traditional | 2-7x faster |
 | General purpose / unknown | Traditional | Safer default |
 
-See [Hypertableau Guide](docs/HYPERTABLEAU_GUIDE.md) for detailed configuration and performance analysis.
-
 ## Features (Latest)
 
 Oxidowl has been significantly enhanced with improvements that bring it up to competitive standards with major OWL reasoners while adding unique capabilities.
@@ -246,15 +244,31 @@ println!("Proof Tree:\n{}", proof_tree);
 
 ### Multi-Protocol Server Support
 
-Run Oxidowl as a server with multiple protocol interfaces:
+Run Oxidowl as a server with multiple protocol interfaces. **Note:** By default, the reasoner runs without servers. Use the `--enable-server` flags to start web services.
+
+#### Starting the Server
 
 ```bash
-# Start with all server interfaces enabled
-cargo run --features="server,sparql,explanations" -- serve \
-    --owllink-port 8080 \
-    --sparql-port 8081 \
-    --rest-port 8082 \
-    --ontology medical-ontology.owl
+# Start REST API server on default port (8080)
+oxidowl --enable-server ontology.owl
+
+# Start on a custom port
+oxidowl --enable-server --server-port 9090 ontology.owl
+
+# Start OWLlink server
+oxidowl --enable-owllink --owllink-port 8081 ontology.owl
+
+# Start SPARQL endpoint
+oxidowl --enable-sparql --sparql-port 8082 ontology.owl
+
+# Start all server types with custom ports
+oxidowl --enable-server --server-port 8080 \
+        --enable-owllink --owllink-port 8081 \
+        --enable-sparql --sparql-port 8082 \
+        ontology.owl
+
+# Bind to all interfaces (for remote access)
+oxidowl --enable-server --server-bind 0.0.0.0 --server-port 8080 ontology.owl
 ```
 
 #### SPARQL Endpoint
@@ -293,6 +307,33 @@ curl -X POST http://localhost:8082/api/v1/explain \
   -H "Content-Type: application/json" \
   -d '{"inference_type": "subsumption", "axiom": "Human ⊑ Animal"}'
 ```
+
+#### Library Usage with Server
+
+```rust
+use oxidowl::{Reasoner, ReasonerConfig, OntologyFormat};
+
+#[cfg(feature = "server")]
+#[tokio::main]
+async fn main() -> oxidowl::Result<()> {
+    let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
+    reasoner.load_ontology_from_file("ontology.owl", OntologyFormat::Auto)?;
+    
+    // Start server on port 8080
+    let mut server_manager = reasoner.start_server_on_port(8080).await?;
+    
+    println!("Server running on http://127.0.0.1:8080");
+    
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await.unwrap();
+    
+    // Stop servers gracefully
+    server_manager.stop_all().await?;
+    Ok(())
+}
+```
+
+See [examples/server_example.rs](examples/server_example.rs) for a complete example.
 
 ### Advanced Import Resolution
 

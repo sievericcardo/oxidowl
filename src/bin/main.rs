@@ -107,6 +107,34 @@ struct Cli {
     #[arg(long)]
     dump_clauses: bool,
 
+    /// Enable web server for OWLlink/SPARQL/REST API
+    #[arg(long)]
+    enable_server: bool,
+
+    /// Server port (default: 8080)
+    #[arg(long, value_name = "PORT")]
+    server_port: Option<u16>,
+
+    /// Server bind address (default: 127.0.0.1)
+    #[arg(long, value_name = "ADDRESS")]
+    server_bind: Option<String>,
+
+    /// Enable OWLlink server
+    #[arg(long)]
+    enable_owllink: bool,
+
+    /// OWLlink server port (default: 8081)
+    #[arg(long, value_name = "PORT")]
+    owllink_port: Option<u16>,
+
+    /// Enable SPARQL server
+    #[arg(long)]
+    enable_sparql: bool,
+
+    /// SPARQL server port (default: 8082)
+    #[arg(long, value_name = "PORT")]
+    sparql_port: Option<u16>,
+
     /// Use legacy subcommand mode (for backward compatibility)
     #[command(subcommand)]
     command: Option<Commands>,
@@ -501,6 +529,8 @@ enum InputFormat {
     Turtle,
     /// N-Triples format
     NTriples,
+    /// Manchester Syntax
+    Manchester,
     /// Auto-detect format
     Auto,
 }
@@ -513,6 +543,7 @@ impl From<InputFormat> for OntologyFormat {
             InputFormat::RdfXml => OntologyFormat::RdfXml,
             InputFormat::Turtle => OntologyFormat::Turtle,
             InputFormat::NTriples => OntologyFormat::NTriples,
+            InputFormat::Manchester => OntologyFormat::Manchester,
             InputFormat::Auto => OntologyFormat::Auto,
         }
     }
@@ -549,6 +580,38 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = load_configuration(cli.config.as_deref())?;
 
+    // Apply CLI server overrides to config
+    let mut config = config;
+    let server_enabled = cli.enable_server || cli.enable_owllink || cli.enable_sparql;
+    
+    if cli.enable_server {
+        config.server.enable_server = true;
+    }
+    if let Some(port) = cli.server_port {
+        config.server.port = port;
+        config.server.rest_api_port = port;
+    }
+    if let Some(bind) = &cli.server_bind {
+        config.server.bind_address = bind.clone();
+    }
+    if cli.enable_owllink {
+        config.server.enable_owllink = true;
+    }
+    if let Some(port) = cli.owllink_port {
+        config.server.owllink_port = port;
+    }
+    if cli.enable_sparql {
+        config.server.enable_sparql = true;
+    }
+    if let Some(port) = cli.sparql_port {
+        config.server.sparql_port = port;
+    }
+
+    // If server is enabled, run in server mode
+    if server_enabled {
+        return run_server_mode(config, effective_quiet).await;
+    }
+
     // Execute command
     let start_time = Instant::now();
     let result = if let Some(command) = &cli.command {
@@ -574,6 +637,70 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
+}
+
+#[cfg(feature = "server")]
+async fn run_server_mode(config: ReasonerConfig, quiet: bool) -> Result<()> {
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    
+    if !quiet {
+        println!("Starting Oxidowl in server mode...");
+    }
+
+    // Create a basic ontology and reasoning service
+    let ontology = oxidowl::Ontology::new();
+    let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(
+        ontology,
+        config.clone(),
+    ));
+
+    // Create and start server manager
+    let mut server_manager = oxidowl::server::ServerManager::new(
+        config.server.clone(),
+        reasoning_service,
+    );
+
+    server_manager.start_all().await?;
+
+    if !quiet {
+        let status = server_manager.get_status();
+        println!("Server started successfully!");
+        println!("  Running servers: {}", status.running_servers);
+        if status.owllink_enabled {
+            println!("  OWLlink server: http://{}:{}", config.server.bind_address, config.server.owllink_port);
+        }
+        if status.sparql_enabled {
+            println!("  SPARQL server: http://{}:{}", config.server.bind_address, config.server.sparql_port);
+        }
+        if status.rest_api_enabled {
+            println!("  REST API: http://{}:{}", config.server.bind_address, config.server.rest_api_port);
+        }
+        println!("\nPress Ctrl+C to stop the server...");
+    }
+
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await
+        .map_err(|e| oxidowl::Error::io(format!("Failed to listen for shutdown signal: {}", e)))?;
+
+    if !quiet {
+        println!("\nShutting down servers...");
+    }
+
+    server_manager.stop_all().await?;
+
+    if !quiet {
+        println!("Servers stopped successfully.");
+    }
+
+    Ok(())
+}
+
+#[cfg(not(feature = "server"))]
+async fn run_server_mode(_config: ReasonerConfig, _quiet: bool) -> Result<()> {
+    Err(oxidowl::Error::config(
+        "Server mode requires the 'server' feature to be enabled. Recompile with --features server".to_string()
+    ))
 }
 
 async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
