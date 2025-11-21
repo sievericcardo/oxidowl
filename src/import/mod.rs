@@ -254,8 +254,9 @@ impl ImportDependencyGraph {
         // So ontology_iri should have incoming edges from its dependencies
         for (ontology_iri, deps) in &self.dependencies {
             for _dep in deps {
-                *in_degree.get_mut(ontology_iri)
-                    .expect("Ontology IRI not found in in_degree map (internal consistency error)") += 1;
+                *in_degree.get_mut(ontology_iri).expect(
+                    "Ontology IRI not found in in_degree map (internal consistency error)",
+                ) += 1;
             }
         }
 

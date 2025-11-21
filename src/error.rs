@@ -151,41 +151,89 @@ pub enum Error {
 impl Clone for Error {
     fn clone(&self) -> Self {
         match self {
-            Error::OntologyParsing { message } => Error::OntologyParsing { message: message.clone() },
-            Error::Reasoning { message } => Error::Reasoning { message: message.clone() },
-            Error::Config { message } => Error::Config { message: message.clone() },
-            Error::Network { message } => Error::Network { message: message.clone() },
-            Error::Io { message } => Error::Io { message: message.clone() },
-            Error::XmlParsing { message } => Error::XmlParsing { message: message.clone() },
-            Error::Sparql { message } => Error::Sparql { message: message.clone() },
-            Error::Cache { message } => Error::Cache { message: message.clone() },
-            Error::ResourceExhaustion { message } => Error::ResourceExhaustion { message: message.clone() },
-            Error::Timeout { message } => Error::Timeout { message: message.clone() },
-            Error::Unsupported { message } => Error::Unsupported { message: message.clone() },
+            Error::OntologyParsing { message } => Error::OntologyParsing {
+                message: message.clone(),
+            },
+            Error::Reasoning { message } => Error::Reasoning {
+                message: message.clone(),
+            },
+            Error::Config { message } => Error::Config {
+                message: message.clone(),
+            },
+            Error::Network { message } => Error::Network {
+                message: message.clone(),
+            },
+            Error::Io { message } => Error::Io {
+                message: message.clone(),
+            },
+            Error::XmlParsing { message } => Error::XmlParsing {
+                message: message.clone(),
+            },
+            Error::Sparql { message } => Error::Sparql {
+                message: message.clone(),
+            },
+            Error::Cache { message } => Error::Cache {
+                message: message.clone(),
+            },
+            Error::ResourceExhaustion { message } => Error::ResourceExhaustion {
+                message: message.clone(),
+            },
+            Error::Timeout { message } => Error::Timeout {
+                message: message.clone(),
+            },
+            Error::Unsupported { message } => Error::Unsupported {
+                message: message.clone(),
+            },
             Error::InvalidDatatype(s) => Error::InvalidDatatype(s.clone()),
             Error::InvalidLiteral(s) => Error::InvalidLiteral(s.clone()),
             Error::ParseError(s) => Error::ParseError(s.clone()),
-            Error::Internal { message } => Error::Internal { message: message.clone() },
-            Error::InvalidInput { message } => Error::InvalidInput { message: message.clone() },
+            Error::Internal { message } => Error::Internal {
+                message: message.clone(),
+            },
+            Error::InvalidInput { message } => Error::InvalidInput {
+                message: message.clone(),
+            },
             Error::InvalidDisjunctIndex { index } => Error::InvalidDisjunctIndex { index: *index },
-            Error::InvalidBranchingChoice { index } => Error::InvalidBranchingChoice { index: *index },
+            Error::InvalidBranchingChoice { index } => {
+                Error::InvalidBranchingChoice { index: *index }
+            }
             Error::MaxDepthExceeded { depth } => Error::MaxDepthExceeded { depth: *depth },
-            Error::BranchingPointNotFound { id } => Error::BranchingPointNotFound { id: id.clone() },
+            Error::BranchingPointNotFound { id } => {
+                Error::BranchingPointNotFound { id: id.clone() }
+            }
             Error::NoBranchingChoicesAvailable => Error::NoBranchingChoicesAvailable,
-            Error::ResourceExhausted { message } => Error::ResourceExhausted { message: message.clone() },
-            Error::InvalidPropertyChain { message } => Error::InvalidPropertyChain { message: message.clone() },
-            Error::InvalidAssertion { message } => Error::InvalidAssertion { message: message.clone() },
+            Error::ResourceExhausted { message } => Error::ResourceExhausted {
+                message: message.clone(),
+            },
+            Error::InvalidPropertyChain { message } => Error::InvalidPropertyChain {
+                message: message.clone(),
+            },
+            Error::InvalidAssertion { message } => Error::InvalidAssertion {
+                message: message.clone(),
+            },
             Error::QueueFull => Error::QueueFull,
-            Error::DLQuery { message } => Error::DLQuery { message: message.clone() },
+            Error::DLQuery { message } => Error::DLQuery {
+                message: message.clone(),
+            },
             Error::AxiomAlreadyExists => Error::AxiomAlreadyExists,
             Error::AxiomNotFound => Error::AxiomNotFound,
-            Error::ImportError { message } => Error::ImportError { message: message.clone() },
+            Error::ImportError { message } => Error::ImportError {
+                message: message.clone(),
+            },
             Error::ReasoningError(s) => Error::ReasoningError(s.clone()),
             Error::ConfigurationError(s) => Error::ConfigurationError(s.clone()),
-            Error::LockPoisoned { message } => Error::LockPoisoned { message: message.clone() },
-            Error::DataStructure { message } => Error::DataStructure { message: message.clone() },
-            Error::CollectionError { message } => Error::CollectionError { message: message.clone() },
-            Error::SystemError { message } => Error::SystemError { message: message.clone() },
+            Error::LockPoisoned { message } => Error::LockPoisoned {
+                message: message.clone(),
+            },
+            Error::DataStructure { message } => Error::DataStructure {
+                message: message.clone(),
+            },
+            Error::CollectionError { message } => Error::CollectionError {
+                message: message.clone(),
+            },
+            Error::SystemError { message } => Error::SystemError {
+                message: message.clone(),
+            },
         }
     }
 }

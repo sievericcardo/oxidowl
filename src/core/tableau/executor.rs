@@ -84,12 +84,9 @@ impl TableauExecutor {
             }
 
             // Get next rule application
-            let rule_app = tableau
-                .pending_queue
-                .pop_front()
-                .ok_or_else(|| {
-                    Error::internal("Tableau executor: pending queue empty despite non-empty check")
-                })?;
+            let rule_app = tableau.pending_queue.pop_front().ok_or_else(|| {
+                Error::internal("Tableau executor: pending queue empty despite non-empty check")
+            })?;
 
             // Apply the rule
             Self::apply_rule(tableau, rule_app)?;

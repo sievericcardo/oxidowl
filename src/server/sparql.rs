@@ -5,23 +5,19 @@
 
 use crate::{
     Error, Result,
+    ontology::{Axiom, Ontology},
     reasoning::ReasoningService,
-    ontology::{Ontology, Axiom},
 };
 use oxigraph::{
-    store::Store,
-    sparql::{Query, QueryResults, QuerySolution},
-    model::{Dataset, GraphName, NamedNode, Quad, Subject, Term, Triple},
     io::{RdfFormat, RdfParser},
+    model::{Dataset, GraphName, NamedNode, Quad, Subject, Term, Triple},
+    sparql::{Query, QueryResults, QuerySolution},
+    store::Store,
 };
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    net::SocketAddr,
-};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use warp::{Filter, Reply};
-use serde::{Deserialize, Serialize};
 
 /// SPARQL server for ontology querying
 #[derive(Debug)]
@@ -75,22 +71,27 @@ impl SparqlServer {
             .and(warp::get())
             .map(|| warp::reply::json(&serde_json::json!({"status": "ok"})));
 
-        let routes = sparql_query
-            .or(sparql_update)
-            .or(health)
-            .with(warp::cors().allow_any_origin().allow_headers(vec!["content-type"]).allow_methods(vec!["GET", "POST"]));
+        let routes = sparql_query.or(sparql_update).or(health).with(
+            warp::cors()
+                .allow_any_origin()
+                .allow_headers(vec!["content-type"])
+                .allow_methods(vec!["GET", "POST"]),
+        );
 
-        let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port).parse()
+        let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port)
+            .parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
         let server = warp::serve(routes).bind(addr);
         let server_task = tokio::spawn(server);
 
-        tracing::info!("SPARQL server started on {}:{}", self.bind_address, self.port);
+        tracing::info!(
+            "SPARQL server started on {}:{}",
+            self.bind_address,
+            self.port
+        );
 
-        Ok(SparqlServerHandle {
-            task: server_task,
-        })
+        Ok(SparqlServerHandle { task: server_task })
     }
 
     /// Initialize the RDF store with ontology data
@@ -100,13 +101,20 @@ impl SparqlServer {
         let ontology_guard = ontology.read().unwrap();
 
         let mut store = self.store.write().await;
-        
+
         // Convert ontology axioms to RDF triples and add to store
         for axiom in &ontology_guard.axioms {
             let triples = self.axiom_to_triples(axiom)?;
             for triple in triples {
-                let quad = Quad::new(triple.subject, triple.predicate, triple.object, GraphName::DefaultGraph);
-                store.insert(&quad).map_err(|e| Error::SparqlError(e.to_string()))?;
+                let quad = Quad::new(
+                    triple.subject,
+                    triple.predicate,
+                    triple.object,
+                    GraphName::DefaultGraph,
+                );
+                store
+                    .insert(&quad)
+                    .map_err(|e| Error::SparqlError(e.to_string()))?;
             }
         }
 
@@ -114,14 +122,24 @@ impl SparqlServer {
         let classification = self.reasoning_service.get_classification().await?;
         for (subclass, superclasses) in &classification.hierarchy {
             for superclass in superclasses {
-                let sub_iri = NamedNode::new(subclass).map_err(|e| Error::SparqlError(e.to_string()))?;
-                let sup_iri = NamedNode::new(superclass).map_err(|e| Error::SparqlError(e.to_string()))?;
-                let rdfs_subclass = NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                    .map_err(|e| Error::SparqlError(e.to_string()))?;
+                let sub_iri =
+                    NamedNode::new(subclass).map_err(|e| Error::SparqlError(e.to_string()))?;
+                let sup_iri =
+                    NamedNode::new(superclass).map_err(|e| Error::SparqlError(e.to_string()))?;
+                let rdfs_subclass =
+                    NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+                        .map_err(|e| Error::SparqlError(e.to_string()))?;
 
                 let triple = Triple::new(sub_iri, rdfs_subclass, sup_iri);
-                let quad = Quad::new(triple.subject, triple.predicate, triple.object, GraphName::DefaultGraph);
-                store.insert(&quad).map_err(|e| Error::SparqlError(e.to_string()))?;
+                let quad = Quad::new(
+                    triple.subject,
+                    triple.predicate,
+                    triple.object,
+                    GraphName::DefaultGraph,
+                );
+                store
+                    .insert(&quad)
+                    .map_err(|e| Error::SparqlError(e.to_string()))?;
             }
         }
 
@@ -136,9 +154,12 @@ impl SparqlServer {
         match axiom {
             Axiom::SubClassOf(sub, sup) => {
                 // Convert class expressions to IRIs (simplified)
-                if let (Some(sub_iri), Some(sup_iri)) = (self.class_expr_to_iri(sub), self.class_expr_to_iri(sup)) {
-                    let rdfs_subclass = NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                        .map_err(|e| Error::SparqlError(e.to_string()))?;
+                if let (Some(sub_iri), Some(sup_iri)) =
+                    (self.class_expr_to_iri(sub), self.class_expr_to_iri(sup))
+                {
+                    let rdfs_subclass =
+                        NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+                            .map_err(|e| Error::SparqlError(e.to_string()))?;
                     triples.push(Triple::new(sub_iri, rdfs_subclass, sup_iri));
                 }
             }
@@ -146,18 +167,19 @@ impl SparqlServer {
                 if let Some(class_iri) = self.class_expr_to_iri(class) {
                     let individual_iri = NamedNode::new(&individual.iri)
                         .map_err(|e| Error::SparqlError(e.to_string()))?;
-                    let rdf_type = NamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-                        .map_err(|e| Error::SparqlError(e.to_string()))?;
+                    let rdf_type =
+                        NamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+                            .map_err(|e| Error::SparqlError(e.to_string()))?;
                     triples.push(Triple::new(individual_iri, rdf_type, class_iri));
                 }
             }
             Axiom::ObjectPropertyAssertion(prop, subj, obj) => {
                 let prop_iri = NamedNode::new(&prop.to_string())
                     .map_err(|e| Error::SparqlError(e.to_string()))?;
-                let subj_iri = NamedNode::new(&subj.iri)
-                    .map_err(|e| Error::SparqlError(e.to_string()))?;
-                let obj_iri = NamedNode::new(&obj.iri)
-                    .map_err(|e| Error::SparqlError(e.to_string()))?;
+                let subj_iri =
+                    NamedNode::new(&subj.iri).map_err(|e| Error::SparqlError(e.to_string()))?;
+                let obj_iri =
+                    NamedNode::new(&obj.iri).map_err(|e| Error::SparqlError(e.to_string()))?;
                 triples.push(Triple::new(subj_iri, prop_iri, obj_iri));
             }
             _ => {
@@ -169,11 +191,12 @@ impl SparqlServer {
     }
 
     /// Convert class expression to IRI (simplified for atomic classes)
-    fn class_expr_to_iri(&self, class_expr: &crate::ontology::ClassExpression) -> Option<NamedNode> {
+    fn class_expr_to_iri(
+        &self,
+        class_expr: &crate::ontology::ClassExpression,
+    ) -> Option<NamedNode> {
         match class_expr {
-            crate::ontology::ClassExpression::Class(class) => {
-                NamedNode::new(&class.iri).ok()
-            }
+            crate::ontology::ClassExpression::Class(class) => NamedNode::new(&class.iri).ok(),
             _ => None, // Complex expressions would need more sophisticated handling
         }
     }
@@ -222,9 +245,7 @@ pub enum SparqlResults {
     /// ASK query result
     Boolean(bool),
     /// CONSTRUCT/DESCRIBE query results
-    Graph {
-        triples: Vec<SparqlTriple>,
-    },
+    Graph { triples: Vec<SparqlTriple> },
 }
 
 /// SPARQL value in results
@@ -259,8 +280,9 @@ async fn handle_sparql_query(
     reasoning_service: Arc<ReasoningService>,
 ) -> Result<impl Reply, warp::Rejection> {
     let start_time = std::time::Instant::now();
-    
-    let query_string = form.get("query")
+
+    let query_string = form
+        .get("query")
         .ok_or_else(|| warp::reject::custom(SparqlError("Missing query parameter".to_string())))?;
 
     tracing::debug!("Executing SPARQL query: {}", query_string);
@@ -271,7 +293,8 @@ async fn handle_sparql_query(
 
     // Execute query
     let store_guard = store.read().await;
-    let results = store_guard.query(query)
+    let results = store_guard
+        .query(query)
         .map_err(|e| warp::reject::custom(SparqlError(format!("Query execution error: {}", e))))?;
 
     let execution_time = start_time.elapsed().as_millis() as u64;
@@ -290,8 +313,9 @@ async fn handle_sparql_query(
                     })
                 })
                 .collect();
-            
-            let bindings = bindings.map_err(|e| warp::reject::custom(SparqlError(e.to_string())))?;
+
+            let bindings =
+                bindings.map_err(|e| warp::reject::custom(SparqlError(e.to_string())))?;
             SparqlResults::Bindings { bindings }
         }
         QueryResults::Boolean(result) => SparqlResults::Boolean(result),
@@ -306,7 +330,7 @@ async fn handle_sparql_query(
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| warp::reject::custom(SparqlError(e.to_string())))?;
-            
+
             SparqlResults::Graph { triples }
         }
     };
@@ -324,14 +348,16 @@ async fn handle_sparql_update(
     form: HashMap<String, String>,
     store: Arc<RwLock<Store>>,
 ) -> Result<impl Reply, warp::Rejection> {
-    let update_string = form.get("update")
+    let update_string = form
+        .get("update")
         .ok_or_else(|| warp::reject::custom(SparqlError("Missing update parameter".to_string())))?;
 
     tracing::debug!("Executing SPARQL update: {}", update_string);
 
     // Parse and execute update
     let mut store_guard = store.write().await;
-    store_guard.update(update_string)
+    store_guard
+        .update(update_string)
         .map_err(|e| warp::reject::custom(SparqlError(format!("Update execution error: {}", e))))?;
 
     Ok(warp::reply::json(&serde_json::json!({
@@ -362,7 +388,7 @@ fn term_to_sparql_value(term: &Term) -> SparqlValue {
             } else {
                 Some(literal.datatype().as_str().to_string())
             };
-            
+
             SparqlValue {
                 value_type: "literal".to_string(),
                 value: literal.value().to_string(),
@@ -388,6 +414,7 @@ impl warp::reject::Reject for SparqlError {}
 // XSD namespace constants
 mod xsd {
     use oxigraph::model::NamedNode;
-    
-    pub const STRING: NamedNode = NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#string");
+
+    pub const STRING: NamedNode =
+        NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#string");
 }

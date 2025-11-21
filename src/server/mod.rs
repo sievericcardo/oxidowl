@@ -4,21 +4,17 @@
 //! SPARQL endpoint, and REST API for reasoning services.
 
 pub mod owllink;
+pub mod rest;
 #[cfg(feature = "sparql")]
 pub mod sparql;
-pub mod rest;
 
 // Re-export main types for convenience
-pub use rest::RestApiServer;
 pub use owllink::OWLlinkServer;
+pub use rest::RestApiServer;
 #[cfg(feature = "sparql")]
 pub use sparql::SparqlServer;
 
-use crate::{
-    Error, Result,
-    config::ServerConfig,
-    reasoning::ReasoningService,
-};
+use crate::{Error, Result, config::ServerConfig, reasoning::ReasoningService};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -133,7 +129,7 @@ impl ServerManager {
         if self.config.enable_rest_api {
             // Create a mock explanation service for now
             let explanation_service = Arc::new(crate::explanation::ExplanationService::new());
-            
+
             let rest_server = rest::RestApiServer::new(
                 self.config.rest_api_port,
                 self.config.bind_address.clone(),

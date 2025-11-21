@@ -131,14 +131,21 @@ impl ForwardChaining {
             // Try to extend each existing binding
             for existing_binding in &all_bindings {
                 // Apply existing bindings to the body atom
-                let bound_atom = self.unification_engine.apply_bindings(body_atom, existing_binding);
+                let bound_atom = self
+                    .unification_engine
+                    .apply_bindings(body_atom, existing_binding);
 
                 // Find all facts that unify with this atom
-                let matching_bindings = self.unification_engine.match_atom_with_facts(&bound_atom, known_facts);
+                let matching_bindings = self
+                    .unification_engine
+                    .match_atom_with_facts(&bound_atom, known_facts);
 
                 // Compose with existing bindings
                 for new_binding in matching_bindings {
-                    if let Some(composed) = self.unification_engine.compose_bindings(existing_binding, &new_binding) {
+                    if let Some(composed) = self
+                        .unification_engine
+                        .compose_bindings(existing_binding, &new_binding)
+                    {
                         next_bindings.push(composed);
                     }
                 }

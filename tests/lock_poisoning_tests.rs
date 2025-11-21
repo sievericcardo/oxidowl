@@ -26,13 +26,19 @@ fn test_read_lock_poisoned() {
 
     // Now try to acquire a read lock - should return LockPoisoned error
     let result = read_lock(&data, "test: reading poisoned lock");
-    
+
     assert!(result.is_err(), "Reading poisoned lock should return error");
-    
+
     match result {
         Err(Error::LockPoisoned { message, .. }) => {
-            assert!(message.contains("Read lock poisoned"), "Error message should mention read lock");
-            assert!(message.contains("test: reading poisoned lock"), "Error should include context");
+            assert!(
+                message.contains("Read lock poisoned"),
+                "Error message should mention read lock"
+            );
+            assert!(
+                message.contains("test: reading poisoned lock"),
+                "Error should include context"
+            );
         }
         Err(e) => panic!("Expected LockPoisoned error, got: {:?}", e),
         Ok(_) => panic!("Should not succeed reading poisoned lock"),
@@ -54,13 +60,22 @@ fn test_write_lock_poisoned() {
 
     // Try to acquire a write lock
     let result = write_lock(&data, "test: writing to poisoned lock");
-    
-    assert!(result.is_err(), "Writing to poisoned lock should return error");
-    
+
+    assert!(
+        result.is_err(),
+        "Writing to poisoned lock should return error"
+    );
+
     match result {
         Err(Error::LockPoisoned { message, .. }) => {
-            assert!(message.contains("Write lock poisoned"), "Error message should mention write lock");
-            assert!(message.contains("test: writing to poisoned lock"), "Error should include context");
+            assert!(
+                message.contains("Write lock poisoned"),
+                "Error message should mention write lock"
+            );
+            assert!(
+                message.contains("test: writing to poisoned lock"),
+                "Error should include context"
+            );
         }
         Err(e) => panic!("Expected LockPoisoned error, got: {:?}", e),
         Ok(_) => panic!("Should not succeed writing to poisoned lock"),
@@ -70,25 +85,25 @@ fn test_write_lock_poisoned() {
 #[test]
 fn test_lock_poisoning_error_propagation() {
     // Test that lock poisoning errors propagate correctly through ? operator
-    
+
     fn operation_with_poisoned_lock(lock: &RwLock<i32>) -> Result<i32, Error> {
         let guard = read_lock(lock, "operation: reading value")?;
         Ok(*guard)
     }
-    
+
     let data = Arc::new(RwLock::new(100));
     let data_clone = Arc::clone(&data);
-    
+
     // Poison the lock
     let handle = thread::spawn(move || {
         let _guard = data_clone.write().expect("Lock for poisoning");
         panic!("Poison!");
     });
     let _ = handle.join();
-    
+
     // Call function that uses ? operator
     let result = operation_with_poisoned_lock(&data);
-    
+
     assert!(result.is_err());
     match result {
         Err(Error::LockPoisoned { .. }) => {
@@ -101,26 +116,26 @@ fn test_lock_poisoning_error_propagation() {
 #[test]
 fn test_multiple_threads_with_poisoned_lock() {
     // Test that multiple threads all receive the LockPoisoned error
-    
+
     let data = Arc::new(RwLock::new(String::from("test")));
     let data_clone = Arc::clone(&data);
-    
+
     // Poison the lock
     let poison_handle = thread::spawn(move || {
         let _guard = data_clone.write().expect("Lock for poisoning");
         panic!("Poison the lock");
     });
     let _ = poison_handle.join();
-    
+
     // Spawn multiple threads trying to access the poisoned lock
     let mut handles = vec![];
-    
+
     for i in 0..5 {
         let data_clone = Arc::clone(&data);
         let handle = thread::spawn(move || {
             let result = read_lock(&data_clone, &format!("thread {}: reading", i));
             assert!(result.is_err(), "Thread {} should see poisoned lock", i);
-            
+
             match result {
                 Err(Error::LockPoisoned { .. }) => true,
                 _ => false,
@@ -128,7 +143,7 @@ fn test_multiple_threads_with_poisoned_lock() {
         });
         handles.push(handle);
     }
-    
+
     // All threads should detect the poison
     for handle in handles {
         let thread_result = handle.join().expect("Thread should complete");
@@ -139,27 +154,27 @@ fn test_multiple_threads_with_poisoned_lock() {
 #[test]
 fn test_lock_poison_with_nested_operations() {
     // Test that poison is detected even in nested lock operations
-    
+
     fn nested_operation(lock1: &RwLock<i32>, lock2: &RwLock<i32>) -> Result<i32, Error> {
         let guard1 = read_lock(lock1, "nested: lock1")?;
         let guard2 = read_lock(lock2, "nested: lock2")?;
         Ok(*guard1 + *guard2)
     }
-    
+
     let lock1 = Arc::new(RwLock::new(10));
     let lock2 = Arc::new(RwLock::new(20));
     let lock2_clone = Arc::clone(&lock2);
-    
+
     // Poison lock2
     let handle = thread::spawn(move || {
         let _guard = lock2_clone.write().expect("Lock for poisoning");
         panic!("Poison lock2");
     });
     let _ = handle.join();
-    
+
     // Try nested operation - should fail on lock2
     let result = nested_operation(&lock1, &lock2);
-    
+
     assert!(result.is_err());
     match result {
         Err(Error::LockPoisoned { message, .. }) => {
@@ -169,25 +184,24 @@ fn test_lock_poison_with_nested_operations() {
     }
 }
 
-
 #[test]
 fn test_lock_helpers_with_normal_operations() {
     // Test that lock helpers work correctly with normal (non-poisoned) locks
-    
+
     let data = Arc::new(RwLock::new(42));
-    
+
     // Read lock should work
     let read_result = read_lock(&data, "test: normal read");
     assert!(read_result.is_ok());
     assert_eq!(*read_result.unwrap(), 42);
-    
+
     // Write lock should work
     {
         let mut write_result = write_lock(&data, "test: normal write");
         assert!(write_result.is_ok());
         *write_result.unwrap() = 100;
     }
-    
+
     // Verify write
     let read_again = read_lock(&data, "test: verify write");
     assert!(read_again.is_ok());
@@ -197,24 +211,24 @@ fn test_lock_helpers_with_normal_operations() {
 #[test]
 fn test_concurrent_readers_no_poison() {
     // Test that multiple concurrent readers work without issues
-    
+
     let data = Arc::new(RwLock::new(vec![1, 2, 3, 4, 5]));
     let mut handles = vec![];
-    
+
     // Spawn multiple reader threads
     for i in 0..10 {
         let data_clone = Arc::clone(&data);
         let handle = thread::spawn(move || {
             let result = read_lock(&data_clone, &format!("reader {}", i));
             assert!(result.is_ok(), "Reader {} should succeed", i);
-            
+
             let guard = result.unwrap();
             assert_eq!(guard.len(), 5, "Reader {} should see 5 elements", i);
             guard.clone()
         });
         handles.push(handle);
     }
-    
+
     // All readers should succeed
     for handle in handles {
         let data = handle.join().expect("Reader thread should complete");
@@ -225,33 +239,39 @@ fn test_concurrent_readers_no_poison() {
 #[test]
 fn test_error_message_quality() {
     // Test that error messages are descriptive and helpful
-    
+
     let data = Arc::new(RwLock::new("test data"));
     let data_clone = Arc::clone(&data);
-    
+
     // Poison the lock
     let handle = thread::spawn(move || {
         let _guard = data_clone.write().expect("Lock for poisoning");
         panic!("Test poison");
     });
     let _ = handle.join();
-    
+
     // Check error message quality
     let result = read_lock(&data, "important operation: loading configuration");
-    
+
     match result {
         Err(Error::LockPoisoned { message, .. }) => {
             // Error should mention:
             // 1. That it's a read lock
             assert!(message.contains("Read lock"), "Should mention read lock");
-            
+
             // 2. That it's poisoned
             assert!(message.contains("poisoned"), "Should mention poisoned");
-            
+
             // 3. The context we provided
-            assert!(message.contains("important operation"), "Should include operation context");
-            assert!(message.contains("loading configuration"), "Should include detailed context");
-            
+            assert!(
+                message.contains("important operation"),
+                "Should include operation context"
+            );
+            assert!(
+                message.contains("loading configuration"),
+                "Should include detailed context"
+            );
+
             println!("Lock poisoning error message: {}", message);
         }
         _ => panic!("Expected LockPoisoned error with descriptive message"),

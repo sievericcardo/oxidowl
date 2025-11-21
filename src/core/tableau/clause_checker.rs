@@ -509,9 +509,9 @@ impl ClauseChecker {
             return self.check_deterministic_clauses(node);
         }
 
-        let fp = fingerprint.ok_or_else(|| {
-            Error::internal("Clause checker: fingerprint is None despite check")
-        }).ok()?;
+        let fp = fingerprint
+            .ok_or_else(|| Error::internal("Clause checker: fingerprint is None despite check"))
+            .ok()?;
 
         // Get clauses to check
         let clauses_to_check: Vec<DLClause> = if let Some(index) = &self.clause_index {
@@ -679,9 +679,9 @@ impl ClauseChecker {
             return self.check_negative_clauses(node);
         }
 
-        let fp = fingerprint.ok_or_else(|| {
-            Error::internal("Clause checker: fingerprint is None despite check")
-        }).ok()?;
+        let fp = fingerprint
+            .ok_or_else(|| Error::internal("Clause checker: fingerprint is None despite check"))
+            .ok()?;
 
         // Get negative clauses (clone to avoid borrow issues)
         let negative_clauses: Vec<DLClause> = if let Some(index) = &self.clause_index {

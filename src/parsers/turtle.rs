@@ -7,11 +7,13 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{
-        Class, ClassExpression, IRI, Individual, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
-        Literal, DataProperty, DataPropertyExpression, DataRange, FacetRestriction,
+        Class, ClassExpression, DataProperty, DataPropertyExpression, DataRange, FacetRestriction,
+        IRI, Individual, Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression,
+        Ontology,
         axioms::{
-            Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom, DisjointUnionAxiom, Entity,
-            EquivalentClassesAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom,
+            DisjointUnionAxiom, Entity, EquivalentClassesAxiom, ObjectPropertyAssertionAxiom,
+            SubClassOfAxiom,
         },
     },
 };
@@ -433,12 +435,12 @@ impl TurtleParser {
 
         // Check for special case: subject ( collection ) . (no explicit predicate)
         // This is Turtle shorthand for defining the subject as equivalent to the collection
-        if tokens.len() >= 3 
+        if tokens.len() >= 3
             && !matches!(tokens[0], Token::LeftBracket)
-            && matches!(tokens[1], Token::LeftParen) 
+            && matches!(tokens[1], Token::LeftParen)
         {
             let subject = self.resolve_token(&tokens[0], state)?;
-            
+
             // Find the matching closing paren
             let mut depth = 0;
             let mut collection_end = 1;
@@ -455,12 +457,12 @@ impl TurtleParser {
                     _ => {}
                 }
             }
-            
+
             // Extract collection tokens (between parens)
             if collection_end > 2 {
                 let collection_tokens = &tokens[2..collection_end - 1];
                 let list_id = self.parse_collection(collection_tokens, ontology, state)?;
-                
+
                 // Use owl:sameAs as the implicit predicate
                 let predicate = "http://www.w3.org/2002/07/owl#sameAs".to_string();
                 self.process_enhanced_triple(ontology, subject, predicate, list_id)?;
@@ -538,12 +540,14 @@ impl TurtleParser {
                 pred.clone()
             } else {
                 // Parse new predicate
-                let pred = self.resolve_token(&tokens[start_index], state).map_err(|e| {
-                    Error::ontology_parsing(format!(
-                        "Failed to resolve predicate token at index {}: {}",
-                        start_index, e
-                    ))
-                })?;
+                let pred = self
+                    .resolve_token(&tokens[start_index], state)
+                    .map_err(|e| {
+                        Error::ontology_parsing(format!(
+                            "Failed to resolve predicate token at index {}: {}",
+                            start_index, e
+                        ))
+                    })?;
                 start_index += 1; // Move past the predicate
                 current_predicate = Some(pred.clone());
                 pred
@@ -574,11 +578,21 @@ impl TurtleParser {
                         // Parse the content of the blank node
                         if start_index > blank_start {
                             let blank_tokens = &tokens[blank_start..start_index - 1];
-                            self.parse_blank_node_content(blank_tokens, ontology, state, &blank_node_id)?;
+                            self.parse_blank_node_content(
+                                blank_tokens,
+                                ontology,
+                                state,
+                                &blank_node_id,
+                            )?;
                         }
 
                         // Create triple with blank node as object
-                        self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), blank_node_id)?;
+                        self.process_enhanced_triple(
+                            ontology,
+                            subject.clone(),
+                            predicate.clone(),
+                            blank_node_id,
+                        )?;
                         continue;
                     }
                     Token::LeftParen => {
@@ -599,10 +613,16 @@ impl TurtleParser {
                         // Create RDF list from collection
                         if start_index > collection_start {
                             let collection_tokens = &tokens[collection_start..start_index - 1];
-                            let list_id = self.parse_collection(collection_tokens, ontology, state)?;
+                            let list_id =
+                                self.parse_collection(collection_tokens, ontology, state)?;
 
                             // Create triple with list as object
-                            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), list_id)?;
+                            self.process_enhanced_triple(
+                                ontology,
+                                subject.clone(),
+                                predicate.clone(),
+                                list_id,
+                            )?;
                         }
                         continue;
                     }
@@ -619,33 +639,34 @@ impl TurtleParser {
                                     // Extract datatype IRI
                                     let dt_str = kw[2..].to_string();
                                     start_index += 1; // Skip the type annotation
-                                    
+
                                     // Resolve prefix if needed
-                                    let resolved_dt = if dt_str.contains(':') && !dt_str.starts_with("http") {
-                                        if let Some(colon_pos) = dt_str.find(':') {
-                                            let prefix = &dt_str[..colon_pos];
-                                            let local = &dt_str[colon_pos + 1..];
-                                            if let Some(base) = state.prefixes.get(prefix) {
-                                                format!("{}{}", base, local)
+                                    let resolved_dt =
+                                        if dt_str.contains(':') && !dt_str.starts_with("http") {
+                                            if let Some(colon_pos) = dt_str.find(':') {
+                                                let prefix = &dt_str[..colon_pos];
+                                                let local = &dt_str[colon_pos + 1..];
+                                                if let Some(base) = state.prefixes.get(prefix) {
+                                                    format!("{}{}", base, local)
+                                                } else {
+                                                    dt_str
+                                                }
                                             } else {
                                                 dt_str
                                             }
                                         } else {
                                             dt_str
-                                        }
-                                    } else {
-                                        dt_str
-                                    };
-                                    
+                                        };
+
                                     let dt_iri = IRI::new(&resolved_dt);
                                     dt_iri.to_url().ok()
                                 }
-                                _ => None
+                                _ => None,
                             }
                         } else {
                             None
                         };
-                        
+
                         // Create DataPropertyAssertion
                         let subject_ind = Individual::Named(NamedIndividual {
                             iri: IRI::new(&subject),
@@ -658,10 +679,12 @@ impl TurtleParser {
                             language: None,
                             datatype,
                         };
-                        
+
                         let axiom = DataPropertyAssertionAxiom {
                             id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(data_property),
+                            property: crate::ontology::DataPropertyExpression::DataProperty(
+                                data_property,
+                            ),
                             individual: subject_ind,
                             value: literal,
                             annotations: vec![],
@@ -682,7 +705,8 @@ impl TurtleParser {
                         start_index, e
                     );
                     // Skip to next statement
-                    while start_index < tokens.len() && !matches!(tokens[start_index], Token::Period | Token::Semicolon)
+                    while start_index < tokens.len()
+                        && !matches!(tokens[start_index], Token::Period | Token::Semicolon)
                     {
                         start_index += 1;
                     }
@@ -700,7 +724,9 @@ impl TurtleParser {
             // Handle comma-separated objects for the same predicate
             while start_index < tokens.len() && matches!(tokens[start_index], Token::Comma) {
                 start_index += 1; // Skip comma
-                if start_index < tokens.len() && !matches!(tokens[start_index], Token::Semicolon | Token::Period) {
+                if start_index < tokens.len()
+                    && !matches!(tokens[start_index], Token::Semicolon | Token::Period)
+                {
                     // Skip complex objects like blank nodes that start with [
                     if matches!(tokens[start_index], Token::LeftBracket) {
                         // Skip to the end of the blank node
@@ -737,7 +763,9 @@ impl TurtleParser {
             }
 
             // Reset current predicate if we hit a semicolon or period
-            if start_index < tokens.len() && matches!(tokens[start_index], Token::Semicolon | Token::Period) {
+            if start_index < tokens.len()
+                && matches!(tokens[start_index], Token::Semicolon | Token::Period)
+            {
                 current_predicate = None;
             }
         }
@@ -789,7 +817,7 @@ impl TurtleParser {
                         i += 1; // Skip the opening bracket
                         let mut bracket_depth = 1;
                         let start_idx = i;
-                        
+
                         // Find matching closing bracket
                         while i < tokens.len() && bracket_depth > 0 {
                             match &tokens[i] {
@@ -801,14 +829,19 @@ impl TurtleParser {
                                 i += 1;
                             }
                         }
-                        
+
                         // Parse the nested blank node content
                         let nested_blank_node_id = format!("_:b{}", state.blank_node_counter);
                         state.blank_node_counter += 1;
-                        
+
                         let nested_tokens = &tokens[start_idx..i];
-                        self.parse_blank_node_content(nested_tokens, ontology, state, &nested_blank_node_id)?;
-                        
+                        self.parse_blank_node_content(
+                            nested_tokens,
+                            ontology,
+                            state,
+                            &nested_blank_node_id,
+                        )?;
+
                         i += 1; // Skip the closing bracket
                         nested_blank_node_id
                     }
@@ -817,7 +850,7 @@ impl TurtleParser {
                         i += 1; // Skip the opening paren
                         let mut paren_depth = 1;
                         let start_idx = i;
-                        
+
                         // Find matching closing paren
                         while i < tokens.len() && paren_depth > 0 {
                             match &tokens[i] {
@@ -829,11 +862,12 @@ impl TurtleParser {
                                 i += 1;
                             }
                         }
-                        
+
                         // Parse the collection
                         let collection_tokens = &tokens[start_idx..i];
-                        let collection_id = self.parse_collection(collection_tokens, ontology, state)?;
-                        
+                        let collection_id =
+                            self.parse_collection(collection_tokens, ontology, state)?;
+
                         i += 1; // Skip the closing paren
                         collection_id
                     }
@@ -846,7 +880,12 @@ impl TurtleParser {
                 };
 
                 // Create triple
-                self.process_enhanced_triple(ontology, blank_node_id.to_string(), predicate, object)?;
+                self.process_enhanced_triple(
+                    ontology,
+                    blank_node_id.to_string(),
+                    predicate,
+                    object,
+                )?;
             }
         }
 
@@ -1019,33 +1058,34 @@ impl TurtleParser {
                                     // Extract datatype IRI
                                     let dt_str = kw[2..].to_string();
                                     i += 1; // Skip the type annotation
-                                    
+
                                     // Resolve prefix if needed
-                                    let resolved_dt = if dt_str.contains(':') && !dt_str.starts_with("http") {
-                                        if let Some(colon_pos) = dt_str.find(':') {
-                                            let prefix = &dt_str[..colon_pos];
-                                            let local = &dt_str[colon_pos + 1..];
-                                            if let Some(base) = state.prefixes.get(prefix) {
-                                                format!("{}{}", base, local)
+                                    let resolved_dt =
+                                        if dt_str.contains(':') && !dt_str.starts_with("http") {
+                                            if let Some(colon_pos) = dt_str.find(':') {
+                                                let prefix = &dt_str[..colon_pos];
+                                                let local = &dt_str[colon_pos + 1..];
+                                                if let Some(base) = state.prefixes.get(prefix) {
+                                                    format!("{}{}", base, local)
+                                                } else {
+                                                    dt_str
+                                                }
                                             } else {
                                                 dt_str
                                             }
                                         } else {
                                             dt_str
-                                        }
-                                    } else {
-                                        dt_str
-                                    };
-                                    
+                                        };
+
                                     let dt_iri = IRI::new(&resolved_dt);
                                     dt_iri.to_url().ok()
                                 }
-                                _ => None
+                                _ => None,
                             }
                         } else {
                             None
                         };
-                        
+
                         // Create DataPropertyAssertion
                         let subject_ind = Individual::Named(NamedIndividual {
                             iri: IRI::new(&subject),
@@ -1058,10 +1098,12 @@ impl TurtleParser {
                             language: None,
                             datatype,
                         };
-                        
+
                         let axiom = DataPropertyAssertionAxiom {
                             id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(data_property),
+                            property: crate::ontology::DataPropertyExpression::DataProperty(
+                                data_property,
+                            ),
                             individual: subject_ind,
                             value: literal,
                             annotations: vec![],
@@ -1292,7 +1334,7 @@ impl TurtleParser {
                         let search_start = start + paren_start + 1;
                         let mut paren_depth = 1;
                         let mut paren_end_pos = None;
-                        
+
                         for (i, ch) in statement[search_start..].chars().enumerate() {
                             match ch {
                                 '(' => paren_depth += 1,
@@ -1306,7 +1348,7 @@ impl TurtleParser {
                                 _ => {}
                             }
                         }
-                        
+
                         if let Some(paren_end) = paren_end_pos {
                             let classes_str = &statement[search_start..search_start + paren_end];
 
@@ -1330,8 +1372,13 @@ impl TurtleParser {
                                             in_restriction = false;
                                             // Parse the restriction if we accumulated one
                                             let restriction_content = current_token.trim();
-                                            if !restriction_content.is_empty() && restriction_content.starts_with('[') {
-                                                let class_expr = self.parse_restriction(restriction_content, state)?;
+                                            if !restriction_content.is_empty()
+                                                && restriction_content.starts_with('[')
+                                            {
+                                                let class_expr = self.parse_restriction(
+                                                    restriction_content,
+                                                    state,
+                                                )?;
                                                 intersection_classes.push(class_expr);
                                             }
                                             current_token.clear();
@@ -1500,9 +1547,13 @@ impl TurtleParser {
             && token != ")"
             && token != "."
     }
-    
+
     /// Parse an OWL restriction from a blank node string like "[ rdf:type owl:Restriction ; owl:onProperty ... ]"
-    fn parse_restriction(&self, restriction_str: &str, state: &mut ParseState) -> Result<ClassExpression> {
+    fn parse_restriction(
+        &self,
+        restriction_str: &str,
+        state: &mut ParseState,
+    ) -> Result<ClassExpression> {
         // Extract property name
         let property_name = if let Some(prop_start) = restriction_str.find("owl:onProperty") {
             let after_prop = &restriction_str[prop_start + 14..].trim_start();
@@ -1513,57 +1564,75 @@ impl TurtleParser {
                 .trim_end_matches(';')
                 .trim()
         } else {
-            return Err(Error::ontology_parsing("No owl:onProperty found in restriction"));
+            return Err(Error::ontology_parsing(
+                "No owl:onProperty found in restriction",
+            ));
         };
-        
+
         // Check if it's owl:someValuesFrom or owl:hasValue
         if restriction_str.contains("owl:someValuesFrom") {
             // Data property restriction with datatype
-            
+
             // Resolve property
             let property_token = if property_name.contains(':') {
                 let parts: Vec<&str> = property_name.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
-                    return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid property name: {}",
+                        property_name
+                    )));
                 }
             } else {
-                return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                return Err(Error::ontology_parsing(format!(
+                    "Invalid property name: {}",
+                    property_name
+                )));
             };
-            
+
             let property_iri = self.resolve_token(&property_token, state)?;
-            let data_property = DataProperty { iri: IRI::new(&property_iri) };
-            
+            let data_property = DataProperty {
+                iri: IRI::new(&property_iri),
+            };
+
             // Parse the datatype restriction
             let data_range = self.parse_datatype_restriction(restriction_str, state)?;
-            
+
             Ok(ClassExpression::DataSomeValuesFrom {
                 property: DataPropertyExpression::DataProperty(data_property),
                 filler: data_range,
             })
         } else if restriction_str.contains("owl:hasValue") {
             // Data property with specific value
-            
+
             // Resolve property
             let property_token = if property_name.contains(':') {
                 let parts: Vec<&str> = property_name.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
-                    return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid property name: {}",
+                        property_name
+                    )));
                 }
             } else {
-                return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                return Err(Error::ontology_parsing(format!(
+                    "Invalid property name: {}",
+                    property_name
+                )));
             };
-            
+
             let property_iri = self.resolve_token(&property_token, state)?;
-            let data_property = DataProperty { iri: IRI::new(&property_iri) };
-            
+            let data_property = DataProperty {
+                iri: IRI::new(&property_iri),
+            };
+
             // Extract the value - look for quoted string or unquoted value
             let value_str = if let Some(val_start) = restriction_str.find("owl:hasValue") {
                 let after_val = &restriction_str[val_start + 12..].trim_start();
-                
+
                 // Check if it's a quoted string
                 if let Some(quote_start) = after_val.find('"') {
                     // Find the closing quote
@@ -1592,44 +1661,56 @@ impl TurtleParser {
             } else {
                 return Err(Error::ontology_parsing("No owl:hasValue found"));
             };
-            
+
             let literal = Literal {
                 value: value_str,
                 datatype: None,
                 language: None,
             };
-            
+
             Ok(ClassExpression::DataHasValue {
                 property: DataPropertyExpression::DataProperty(data_property),
                 value: literal,
             })
-        } else if restriction_str.contains("owl:minQualifiedCardinality") 
-               || restriction_str.contains("owl:maxQualifiedCardinality") 
-               || restriction_str.contains("owl:qualifiedCardinality") {
+        } else if restriction_str.contains("owl:minQualifiedCardinality")
+            || restriction_str.contains("owl:maxQualifiedCardinality")
+            || restriction_str.contains("owl:qualifiedCardinality")
+        {
             // Qualified cardinality restrictions with owl:onClass
-            
+
             // Resolve property - this is an object property
             let property_token = if property_name.contains(':') {
                 let parts: Vec<&str> = property_name.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
-                    return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid property name: {}",
+                        property_name
+                    )));
                 }
             } else {
-                return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                return Err(Error::ontology_parsing(format!(
+                    "Invalid property name: {}",
+                    property_name
+                )));
             };
-            
+
             let property_iri = self.resolve_token(&property_token, state)?;
-            let object_property = ObjectProperty { iri: IRI::new(&property_iri) };
-            
+            let object_property = ObjectProperty {
+                iri: IRI::new(&property_iri),
+            };
+
             // Extract cardinality value
-            let cardinality_str = if let Some(card_start) = restriction_str.find("owl:minQualifiedCardinality")
-                                        .or_else(|| restriction_str.find("owl:maxQualifiedCardinality"))
-                                        .or_else(|| restriction_str.find("owl:qualifiedCardinality")) {
+            let cardinality_str = if let Some(card_start) = restriction_str
+                .find("owl:minQualifiedCardinality")
+                .or_else(|| restriction_str.find("owl:maxQualifiedCardinality"))
+                .or_else(|| restriction_str.find("owl:qualifiedCardinality"))
+            {
                 let after_card = &restriction_str[card_start..];
-                let after_prop_name = &after_card[after_card.find("Cardinality").unwrap() + 11..].trim_start();
-                
+                let after_prop_name =
+                    &after_card[after_card.find("Cardinality").unwrap() + 11..].trim_start();
+
                 // Extract the literal value (could be "2"^^xsd:nonNegativeInteger or just "2")
                 if let Some(quote_start) = after_prop_name.find('"') {
                     let after_quote = &after_prop_name[quote_start + 1..];
@@ -1650,10 +1731,11 @@ impl TurtleParser {
             } else {
                 return Err(Error::ontology_parsing("No cardinality property found"));
             };
-            
-            let cardinality: u32 = cardinality_str.parse()
-                .map_err(|_| Error::ontology_parsing(format!("Invalid cardinality value: {}", cardinality_str)))?;
-            
+
+            let cardinality: u32 = cardinality_str.parse().map_err(|_| {
+                Error::ontology_parsing(format!("Invalid cardinality value: {}", cardinality_str))
+            })?;
+
             // Extract the onClass (filler)
             let class_name = if let Some(class_start) = restriction_str.find("owl:onClass") {
                 let after_class = &restriction_str[class_start + 11..].trim_start();
@@ -1666,7 +1748,7 @@ impl TurtleParser {
                 // If no onClass is specified, use owl:Thing as default
                 "owl:Thing"
             };
-            
+
             // Resolve the class IRI
             let class_token = if class_name.contains(':') {
                 let parts: Vec<&str> = class_name.splitn(2, ':').collect();
@@ -1676,14 +1758,19 @@ impl TurtleParser {
                     Token::PrefixedName("owl".to_string(), "Thing".to_string())
                 }
             } else if class_name.starts_with('<') && class_name.ends_with('>') {
-                Token::IRI(class_name[1..class_name.len()-1].to_string())
+                Token::IRI(class_name[1..class_name.len() - 1].to_string())
             } else {
-                return Err(Error::ontology_parsing(format!("Invalid class name: {}", class_name)));
+                return Err(Error::ontology_parsing(format!(
+                    "Invalid class name: {}",
+                    class_name
+                )));
             };
-            
+
             let class_iri = self.resolve_token(&class_token, state)?;
-            let filler = Box::new(ClassExpression::Class(Class { iri: IRI::new(&class_iri) }));
-            
+            let filler = Box::new(ClassExpression::Class(Class {
+                iri: IRI::new(&class_iri),
+            }));
+
             // Determine which type of cardinality restriction
             if restriction_str.contains("owl:minQualifiedCardinality") {
                 Ok(ClassExpression::ObjectMinCardinality {
@@ -1707,11 +1794,11 @@ impl TurtleParser {
             }
         } else if restriction_str.contains("owl:hasSelf") {
             // ObjectHasSelf restriction
-            
+
             // Validate that hasSelf has proper boolean value
             if let Some(has_self_start) = restriction_str.find("owl:hasSelf") {
                 let after_has_self = &restriction_str[has_self_start + 11..].trim_start();
-                
+
                 // Extract the value
                 let value_str = if let Some(quote_start) = after_has_self.find('"') {
                     let after_quote = &after_has_self[quote_start + 1..];
@@ -1721,45 +1808,66 @@ impl TurtleParser {
                         return Err(Error::ontology_parsing("Invalid owl:hasSelf value format"));
                     }
                 } else {
-                    return Err(Error::ontology_parsing("owl:hasSelf must have a literal boolean value"));
+                    return Err(Error::ontology_parsing(
+                        "owl:hasSelf must have a literal boolean value",
+                    ));
                 };
-                
+
                 // Validate it's "true" or "false"
                 if value_str != "true" && value_str != "false" {
-                    return Err(Error::ontology_parsing(format!("Invalid owl:hasSelf value: '{}'. Must be 'true' or 'false'", value_str)));
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid owl:hasSelf value: '{}'. Must be 'true' or 'false'",
+                        value_str
+                    )));
                 }
-                
+
                 // Check for datatype annotation
                 if after_has_self.contains("^^") {
                     let after_quotes = &after_has_self[after_has_self.find('"').unwrap()..];
                     if let Some(quote_end) = after_quotes[1..].find('"') {
                         let after_closing_quote = &after_quotes[quote_end + 2..];
                         if after_closing_quote.trim_start().starts_with("^^") {
-                            let datatype_part = after_closing_quote.trim_start()[2..].split(&[';', ']', ' '][..]).next().unwrap_or("");
+                            let datatype_part = after_closing_quote.trim_start()[2..]
+                                .split(&[';', ']', ' '][..])
+                                .next()
+                                .unwrap_or("");
                             // Validate it's xsd:boolean
-                            if datatype_part != "xsd:boolean" && !datatype_part.contains("XMLSchema#boolean") {
-                                return Err(Error::ontology_parsing(format!("Invalid datatype for owl:hasSelf: '{}'. Must be xsd:boolean", datatype_part)));
+                            if datatype_part != "xsd:boolean"
+                                && !datatype_part.contains("XMLSchema#boolean")
+                            {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Invalid datatype for owl:hasSelf: '{}'. Must be xsd:boolean",
+                                    datatype_part
+                                )));
                             }
                         }
                     }
                 }
             }
-            
+
             // Resolve property
             let property_token = if property_name.contains(':') {
                 let parts: Vec<&str> = property_name.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
-                    return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid property name: {}",
+                        property_name
+                    )));
                 }
             } else {
-                return Err(Error::ontology_parsing(format!("Invalid property name: {}", property_name)));
+                return Err(Error::ontology_parsing(format!(
+                    "Invalid property name: {}",
+                    property_name
+                )));
             };
-            
+
             let property_iri = self.resolve_token(&property_token, state)?;
-            let object_property = ObjectProperty { iri: IRI::new(&property_iri) };
-            
+            let object_property = ObjectProperty {
+                iri: IRI::new(&property_iri),
+            };
+
             Ok(ClassExpression::ObjectHasSelf {
                 property: ObjectPropertyExpression::ObjectProperty(object_property),
             })
@@ -1767,9 +1875,13 @@ impl TurtleParser {
             Err(Error::ontology_parsing("Unsupported restriction type"))
         }
     }
-    
+
     /// Parse a datatype restriction like "[ rdf:type rdfs:Datatype ; owl:onDatatype xsd:double ; owl:withRestrictions ( ... ) ]"
-    fn parse_datatype_restriction(&self, restriction_str: &str, state: &mut ParseState) -> Result<DataRange> {
+    fn parse_datatype_restriction(
+        &self,
+        restriction_str: &str,
+        state: &mut ParseState,
+    ) -> Result<DataRange> {
         // Extract base datatype
         let datatype_name = if let Some(dt_start) = restriction_str.find("owl:onDatatype") {
             let after_dt = &restriction_str[dt_start + 14..].trim_start();
@@ -1782,7 +1894,7 @@ impl TurtleParser {
         } else {
             "xsd:string"
         };
-        
+
         // Resolve datatype IRI
         let datatype_token = if datatype_name.contains(':') {
             let parts: Vec<&str> = datatype_name.splitn(2, ':').collect();
@@ -1794,22 +1906,23 @@ impl TurtleParser {
         } else {
             Token::PrefixedName("xsd".to_string(), "string".to_string())
         };
-        
+
         let datatype_iri = self.resolve_token(&datatype_token, state)?;
-        
+
         // Parse facet restrictions
         let mut facets = Vec::new();
-        
+
         if let Some(restr_start) = restriction_str.find("owl:withRestrictions") {
             if let Some(paren_start) = restriction_str[restr_start..].find('(') {
                 if let Some(paren_end) = restriction_str[restr_start + paren_start..].find(')') {
-                    let facets_str = &restriction_str[restr_start + paren_start + 1..restr_start + paren_start + paren_end];
+                    let facets_str = &restriction_str
+                        [restr_start + paren_start + 1..restr_start + paren_start + paren_end];
                     eprintln!("Parsing facets: {}", facets_str);
-                    
+
                     // Parse facets like "[ xsd:maxExclusive \"80.0\"^^xsd:double ]"
                     let mut in_bracket = false;
                     let mut current_facet = String::new();
-                    
+
                     for ch in facets_str.chars() {
                         match ch {
                             '[' => {
@@ -1835,34 +1948,40 @@ impl TurtleParser {
                 }
             }
         }
-        
+
         Ok(DataRange::DatatypeRestriction {
             datatype: IRI::new(&datatype_iri),
             restrictions: facets,
         })
     }
-    
+
     /// Parse a facet restriction like "xsd:maxExclusive \"80.0\"^^xsd:double"
     fn parse_facet(&self, facet_str: &str, state: &mut ParseState) -> Result<FacetRestriction> {
         let parts: Vec<&str> = facet_str.trim().split_whitespace().collect();
         if parts.len() < 2 {
             return Err(Error::ontology_parsing("Invalid facet format"));
         }
-        
+
         // Resolve facet IRI
         let facet_token = if parts[0].contains(':') {
             let p: Vec<&str> = parts[0].splitn(2, ':').collect();
             if p.len() == 2 {
                 Token::PrefixedName(p[0].to_string(), p[1].to_string())
             } else {
-                return Err(Error::ontology_parsing(format!("Invalid facet name: {}", parts[0])));
+                return Err(Error::ontology_parsing(format!(
+                    "Invalid facet name: {}",
+                    parts[0]
+                )));
             }
         } else {
-            return Err(Error::ontology_parsing(format!("Invalid facet name: {}", parts[0])));
+            return Err(Error::ontology_parsing(format!(
+                "Invalid facet name: {}",
+                parts[0]
+            )));
         };
-        
+
         let facet_iri = self.resolve_token(&facet_token, state)?;
-        
+
         // Extract value (remove quotes and datatype annotation)
         // The value might be like "80.0"^^xsd:double or just "80.0"
         let value_part = parts[1];
@@ -1871,15 +1990,15 @@ impl TurtleParser {
             .next()
             .unwrap_or(value_part)
             .trim_matches('"')
-            .trim_matches('\\')  // Remove escape characters if present
+            .trim_matches('\\') // Remove escape characters if present
             .to_string();
-        
+
         let literal = Literal {
             value: value_str,
             datatype: None,
             language: None,
         };
-        
+
         Ok(FacetRestriction {
             facet: IRI::new(&facet_iri),
             value: literal,
@@ -2010,13 +2129,13 @@ impl TurtleParser {
                         ));
                         current_token.clear();
                         in_literal = false;
-                        
+
                         // Check if next is ^^ for datatype annotation
                         if i + 2 < chars.len() && chars[i + 1] == '^' && chars[i + 2] == '^' {
                             i += 2; // Skip the ^^
                             let mut datatype_token = String::from("^^");
                             i += 1;
-                            
+
                             // Read the datatype (could be <IRI> or prefix:local)
                             if i < chars.len() && chars[i] == '<' {
                                 // IRI datatype
@@ -2033,8 +2152,13 @@ impl TurtleParser {
                                 // Prefixed name datatype - read until whitespace or delimiter
                                 while i < chars.len() {
                                     let ch = chars[i];
-                                    if ch.is_whitespace() || ch == ',' || ch == ';' || ch == '.' 
-                                        || ch == ')' || ch == ']' {
+                                    if ch.is_whitespace()
+                                        || ch == ','
+                                        || ch == ';'
+                                        || ch == '.'
+                                        || ch == ')'
+                                        || ch == ']'
+                                    {
                                         break;
                                     }
                                     datatype_token.push(ch);
@@ -2042,7 +2166,7 @@ impl TurtleParser {
                                 }
                                 i -= 1; // Back up one since we'll increment at end of loop
                             }
-                            
+
                             tokens.push(Token::Keyword(datatype_token));
                         }
                     } else {
@@ -2183,7 +2307,7 @@ impl TurtleParser {
     fn decode_escape_sequences(&self, input: &str) -> String {
         let mut result = String::new();
         let mut chars = input.chars().peekable();
-        
+
         while let Some(ch) = chars.next() {
             if ch == '\\' {
                 if let Some(&next_ch) = chars.peek() {
@@ -2256,7 +2380,7 @@ impl TurtleParser {
                 result.push(ch);
             }
         }
-        
+
         result
     }
 
@@ -2355,7 +2479,7 @@ impl TurtleParser {
                 // If object is not a list (rdf:first/rest), it's invalid
                 if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
                     return Err(Error::ontology_parsing(
-                        "owl:hasKey requires list syntax: owl:hasKey ( property1 property2 ... )"
+                        "owl:hasKey requires list syntax: owl:hasKey ( property1 property2 ... )",
                     ));
                 }
                 // For now, just validate - full hasKey axiom support would go here
@@ -2365,7 +2489,7 @@ impl TurtleParser {
                 // If object is not a list (rdf:first/rest), it's invalid
                 if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
                     return Err(Error::ontology_parsing(
-                        "owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( property1 property2 ... )"
+                        "owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( property1 property2 ... )",
                     ));
                 }
                 // For now, just validate - full property chain axiom support would go here
@@ -2373,7 +2497,7 @@ impl TurtleParser {
             _ => {
                 // Detect if object is a literal (data property) or an individual (object property)
                 let is_literal = object.starts_with('"') || object.contains("^^");
-                
+
                 if is_literal {
                     // DataPropertyAssertion
                     let subject_ind = Individual::Named(NamedIndividual {
@@ -2382,27 +2506,29 @@ impl TurtleParser {
                     let data_property = DataProperty {
                         iri: IRI::new(&predicate),
                     };
-                    
+
                     // Parse literal value and datatype
                     let (value, datatype) = if let Some(idx) = object.find("^^") {
                         let val = object[..idx].trim_matches('"').to_string();
-                        let dt_str = object[idx+2..].to_string();
+                        let dt_str = object[idx + 2..].to_string();
                         let dt_iri = IRI::new(&dt_str);
                         let dt_url = dt_iri.to_url().ok();
                         (val, dt_url)
                     } else {
                         (object.trim_matches('"').to_string(), None)
                     };
-                    
+
                     let literal = Literal {
                         value,
                         language: None,
                         datatype,
                     };
-                    
+
                     let axiom = DataPropertyAssertionAxiom {
                         id: generate_axiom_id(),
-                        property: crate::ontology::DataPropertyExpression::DataProperty(data_property),
+                        property: crate::ontology::DataPropertyExpression::DataProperty(
+                            data_property,
+                        ),
                         individual: subject_ind,
                         value: literal,
                         annotations: vec![],
@@ -2420,7 +2546,9 @@ impl TurtleParser {
 
                     let axiom = ObjectPropertyAssertionAxiom {
                         id: generate_axiom_id(),
-                        property: crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
+                        property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                            property,
+                        ),
                         source: subject_ind,
                         target: object_ind,
                         annotations: vec![],

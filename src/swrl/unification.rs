@@ -4,8 +4,8 @@
 //! Unification is the process of finding variable bindings that make two
 //! expressions identical.
 
-use crate::ontology::axioms::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLVariable};
 use crate::ontology::IRI;
+use crate::ontology::axioms::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLVariable};
 use crate::swrl::{SWRLExecutionContext, SWRLValue};
 use crate::{Error, Result};
 use log::debug;
@@ -63,15 +63,23 @@ impl UnificationEngine {
     /// or None if no such bindings exist.
     pub fn unify_atoms(&self, atom1: &SWRLAtom, atom2: &SWRLAtom) -> UnificationResult {
         let mut bindings = Bindings::new();
-        
+
         if self.debug {
             debug!("Attempting to unify atoms: {:?} with {:?}", atom1, atom2);
         }
 
         // Try to unify based on atom type
         let success = match (atom1, atom2) {
-            (SWRLAtom::ClassAtom { predicate: p1, argument: a1 },
-             SWRLAtom::ClassAtom { predicate: p2, argument: a2 }) => {
+            (
+                SWRLAtom::ClassAtom {
+                    predicate: p1,
+                    argument: a1,
+                },
+                SWRLAtom::ClassAtom {
+                    predicate: p2,
+                    argument: a2,
+                },
+            ) => {
                 // Class atoms must have same predicate
                 if p1 != p2 {
                     false
@@ -79,28 +87,56 @@ impl UnificationEngine {
                     self.unify_i_arguments(a1, a2, &mut bindings)
                 }
             }
-            (SWRLAtom::ObjectPropertyAtom { predicate: p1, first_argument: a1_1, second_argument: a1_2 },
-             SWRLAtom::ObjectPropertyAtom { predicate: p2, first_argument: a2_1, second_argument: a2_2 }) => {
+            (
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: p1,
+                    first_argument: a1_1,
+                    second_argument: a1_2,
+                },
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: p2,
+                    first_argument: a2_1,
+                    second_argument: a2_2,
+                },
+            ) => {
                 // Object property atoms must have same predicate
                 if p1 != p2 {
                     false
                 } else {
-                    self.unify_i_arguments(a1_1, a2_1, &mut bindings) &&
-                    self.unify_i_arguments(a1_2, a2_2, &mut bindings)
+                    self.unify_i_arguments(a1_1, a2_1, &mut bindings)
+                        && self.unify_i_arguments(a1_2, a2_2, &mut bindings)
                 }
             }
-            (SWRLAtom::DataPropertyAtom { predicate: p1, first_argument: a1_1, second_argument: a1_2 },
-             SWRLAtom::DataPropertyAtom { predicate: p2, first_argument: a2_1, second_argument: a2_2 }) => {
+            (
+                SWRLAtom::DataPropertyAtom {
+                    predicate: p1,
+                    first_argument: a1_1,
+                    second_argument: a1_2,
+                },
+                SWRLAtom::DataPropertyAtom {
+                    predicate: p2,
+                    first_argument: a2_1,
+                    second_argument: a2_2,
+                },
+            ) => {
                 // Data property atoms must have same predicate
                 if p1 != p2 {
                     false
                 } else {
-                    self.unify_i_arguments(a1_1, a2_1, &mut bindings) &&
-                    self.unify_d_arguments(a1_2, a2_2, &mut bindings)
+                    self.unify_i_arguments(a1_1, a2_1, &mut bindings)
+                        && self.unify_d_arguments(a1_2, a2_2, &mut bindings)
                 }
             }
-            (SWRLAtom::DataRangeAtom { predicate: dr1, argument: a1 },
-             SWRLAtom::DataRangeAtom { predicate: dr2, argument: a2 }) => {
+            (
+                SWRLAtom::DataRangeAtom {
+                    predicate: dr1,
+                    argument: a1,
+                },
+                SWRLAtom::DataRangeAtom {
+                    predicate: dr2,
+                    argument: a2,
+                },
+            ) => {
                 // Data range atoms must have same predicate
                 if dr1 != dr2 {
                     false
@@ -108,25 +144,50 @@ impl UnificationEngine {
                     self.unify_d_arguments(a1, a2, &mut bindings)
                 }
             }
-            (SWRLAtom::SameIndividualAtom { first_argument: a1_1, second_argument: a1_2 },
-             SWRLAtom::SameIndividualAtom { first_argument: a2_1, second_argument: a2_2 }) => {
-                self.unify_i_arguments(a1_1, a2_1, &mut bindings) &&
-                self.unify_i_arguments(a1_2, a2_2, &mut bindings)
+            (
+                SWRLAtom::SameIndividualAtom {
+                    first_argument: a1_1,
+                    second_argument: a1_2,
+                },
+                SWRLAtom::SameIndividualAtom {
+                    first_argument: a2_1,
+                    second_argument: a2_2,
+                },
+            ) => {
+                self.unify_i_arguments(a1_1, a2_1, &mut bindings)
+                    && self.unify_i_arguments(a1_2, a2_2, &mut bindings)
             }
-            (SWRLAtom::DifferentIndividualsAtom { first_argument: a1_1, second_argument: a1_2 },
-             SWRLAtom::DifferentIndividualsAtom { first_argument: a2_1, second_argument: a2_2 }) => {
-                self.unify_i_arguments(a1_1, a2_1, &mut bindings) &&
-                self.unify_i_arguments(a1_2, a2_2, &mut bindings)
+            (
+                SWRLAtom::DifferentIndividualsAtom {
+                    first_argument: a1_1,
+                    second_argument: a1_2,
+                },
+                SWRLAtom::DifferentIndividualsAtom {
+                    first_argument: a2_1,
+                    second_argument: a2_2,
+                },
+            ) => {
+                self.unify_i_arguments(a1_1, a2_1, &mut bindings)
+                    && self.unify_i_arguments(a1_2, a2_2, &mut bindings)
             }
-            (SWRLAtom::BuiltInAtom { predicate: p1, arguments: args1 },
-             SWRLAtom::BuiltInAtom { predicate: p2, arguments: args2 }) => {
+            (
+                SWRLAtom::BuiltInAtom {
+                    predicate: p1,
+                    arguments: args1,
+                },
+                SWRLAtom::BuiltInAtom {
+                    predicate: p2,
+                    arguments: args2,
+                },
+            ) => {
                 // Built-in atoms must have same predicate and same number of arguments
                 if p1 != p2 || args1.len() != args2.len() {
                     false
                 } else {
-                    args1.iter().zip(args2.iter()).all(|(arg1, arg2)| {
-                        self.unify_d_arguments(arg1, arg2, &mut bindings)
-                    })
+                    args1
+                        .iter()
+                        .zip(args2.iter())
+                        .all(|(arg1, arg2)| self.unify_d_arguments(arg1, arg2, &mut bindings))
                 }
             }
             _ => false, // Different atom types cannot unify
@@ -158,7 +219,7 @@ impl UnificationEngine {
                 // v1.iri and v2.iri are already IRI types
                 let v1_iri = &v1.iri;
                 let v2_iri = &v2.iri;
-                
+
                 // Check existing bindings
                 match (bindings.get(v1_iri), bindings.get(v2_iri)) {
                     (Some(b1), Some(b2)) => b1 == b2, // Both bound, must match
@@ -236,41 +297,56 @@ impl UnificationEngine {
     /// Apply bindings to an atom
     pub fn apply_bindings(&self, atom: &SWRLAtom, bindings: &Bindings) -> SWRLAtom {
         match atom {
-            SWRLAtom::ClassAtom { predicate, argument } => SWRLAtom::ClassAtom {
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => SWRLAtom::ClassAtom {
                 predicate: predicate.clone(),
                 argument: self.apply_bindings_to_i_arg(argument, bindings),
             },
-            SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
-                SWRLAtom::ObjectPropertyAtom {
-                    predicate: predicate.clone(),
-                    first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
-                    second_argument: self.apply_bindings_to_i_arg(second_argument, bindings),
-                }
-            }
-            SWRLAtom::DataPropertyAtom { predicate, first_argument, second_argument } => {
-                SWRLAtom::DataPropertyAtom {
-                    predicate: predicate.clone(),
-                    first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
-                    second_argument: self.apply_bindings_to_d_arg(second_argument, bindings),
-                }
-            }
-            SWRLAtom::DataRangeAtom { predicate, argument } => SWRLAtom::DataRangeAtom {
+            SWRLAtom::ObjectPropertyAtom {
+                predicate,
+                first_argument,
+                second_argument,
+            } => SWRLAtom::ObjectPropertyAtom {
+                predicate: predicate.clone(),
+                first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
+                second_argument: self.apply_bindings_to_i_arg(second_argument, bindings),
+            },
+            SWRLAtom::DataPropertyAtom {
+                predicate,
+                first_argument,
+                second_argument,
+            } => SWRLAtom::DataPropertyAtom {
+                predicate: predicate.clone(),
+                first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
+                second_argument: self.apply_bindings_to_d_arg(second_argument, bindings),
+            },
+            SWRLAtom::DataRangeAtom {
+                predicate,
+                argument,
+            } => SWRLAtom::DataRangeAtom {
                 predicate: predicate.clone(),
                 argument: self.apply_bindings_to_d_arg(argument, bindings),
             },
-            SWRLAtom::SameIndividualAtom { first_argument, second_argument } => {
-                SWRLAtom::SameIndividualAtom {
-                    first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
-                    second_argument: self.apply_bindings_to_i_arg(second_argument, bindings),
-                }
-            }
-            SWRLAtom::DifferentIndividualsAtom { first_argument, second_argument } => {
-                SWRLAtom::DifferentIndividualsAtom {
-                    first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
-                    second_argument: self.apply_bindings_to_i_arg(second_argument, bindings),
-                }
-            }
-            SWRLAtom::BuiltInAtom { predicate, arguments } => SWRLAtom::BuiltInAtom {
+            SWRLAtom::SameIndividualAtom {
+                first_argument,
+                second_argument,
+            } => SWRLAtom::SameIndividualAtom {
+                first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
+                second_argument: self.apply_bindings_to_i_arg(second_argument, bindings),
+            },
+            SWRLAtom::DifferentIndividualsAtom {
+                first_argument,
+                second_argument,
+            } => SWRLAtom::DifferentIndividualsAtom {
+                first_argument: self.apply_bindings_to_i_arg(first_argument, bindings),
+                second_argument: self.apply_bindings_to_i_arg(second_argument, bindings),
+            },
+            SWRLAtom::BuiltInAtom {
+                predicate,
+                arguments,
+            } => SWRLAtom::BuiltInAtom {
                 predicate: predicate.clone(),
                 arguments: arguments
                     .iter()
@@ -314,11 +390,7 @@ impl UnificationEngine {
     }
 
     /// Find all variable bindings that make atom match any fact
-    pub fn match_atom_with_facts(
-        &self,
-        atom: &SWRLAtom,
-        facts: &[SWRLAtom],
-    ) -> Vec<Bindings> {
+    pub fn match_atom_with_facts(&self, atom: &SWRLAtom, facts: &[SWRLAtom]) -> Vec<Bindings> {
         let mut all_bindings = Vec::new();
 
         for fact in facts {
@@ -363,7 +435,7 @@ impl UnificationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::{Class, ClassExpression, Individual, IRI, ObjectProperty};
+    use crate::ontology::{Class, ClassExpression, IRI, Individual, ObjectProperty};
 
     fn make_variable(name: &str) -> SWRLVariable {
         SWRLVariable {

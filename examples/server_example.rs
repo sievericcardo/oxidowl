@@ -14,9 +14,9 @@
 //! cargo run --example server_example --features server -- path/to/ontology.owl --port 9090
 //! ```
 
-use oxidowl::{Reasoner, ReasonerConfig, OntologyFormat, Result};
-use std::path::PathBuf;
 use clap::Parser;
+use oxidowl::{OntologyFormat, Reasoner, ReasonerConfig, Result};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "server_example")]
@@ -46,7 +46,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     use std::sync::Arc;
-    
+
     // Initialize logging
     tracing_subscriber::fmt::init();
 
@@ -57,12 +57,12 @@ async fn main() -> Result<()> {
 
     // Create reasoner with default configuration
     let mut config = ReasonerConfig::default();
-    
+
     // Configure server settings
     config.server.enable_server = true;
     config.server.rest_api_port = args.port;
     config.server.bind_address = args.bind.clone();
-    
+
     if args.owllink {
         config.server.enable_owllink = true;
         config.server.owllink_port = args.owllink_port;
@@ -79,27 +79,33 @@ async fn main() -> Result<()> {
     // Perform initial consistency check
     println!("Performing consistency check...");
     let is_consistent = reasoner.is_consistent()?;
-    println!("Ontology is {}\n", if is_consistent { "consistent" } else { "inconsistent" });
+    println!(
+        "Ontology is {}\n",
+        if is_consistent {
+            "consistent"
+        } else {
+            "inconsistent"
+        }
+    );
 
     // Create and start the server
     println!("Starting web server...");
-    
-    let ontology = reasoner.get_ontology()
+
+    let ontology = reasoner
+        .get_ontology()
         .ok_or_else(|| oxidowl::Error::io("No ontology loaded".to_string()))?;
-    
-    let ontology_clone = ontology.read()
+
+    let ontology_clone = ontology
+        .read()
         .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?
         .clone();
-    
+
     let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(
         ontology_clone,
         config.clone(),
     ));
 
-    let mut server_manager = oxidowl::ServerManager::new(
-        config.server.clone(),
-        reasoning_service,
-    );
+    let mut server_manager = oxidowl::ServerManager::new(config.server.clone(), reasoning_service);
 
     server_manager.start_all().await?;
 
@@ -112,7 +118,8 @@ async fn main() -> Result<()> {
     println!("\nPress Ctrl+C to stop the server...\n");
 
     // Wait for Ctrl+C
-    tokio::signal::ctrl_c().await
+    tokio::signal::ctrl_c()
+        .await
         .map_err(|e| oxidowl::Error::io(format!("Failed to listen for shutdown signal: {}", e)))?;
 
     println!("\nShutting down servers...");

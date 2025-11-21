@@ -191,7 +191,9 @@ impl HypertableauExpansion {
         debug!("Starting hypertableau expansion");
 
         while !self.expansion_queue.is_empty() && self.state == ExpansionState::Running {
-            let task = self.expansion_queue.pop_front()
+            let task = self
+                .expansion_queue
+                .pop_front()
                 .ok_or_else(|| Error::internal("Expected expansion task in non-empty queue"))?;
 
             trace!(

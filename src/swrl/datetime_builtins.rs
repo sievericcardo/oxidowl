@@ -889,10 +889,12 @@ impl SWRLBuiltIn for SubtractDatesYieldingDayTimeDurationBuiltIn {
         // Calculate duration in days between dates
         let duration_days = match (&date1, &date2) {
             (TemporalValue::Date(d1), TemporalValue::Date(d2)) => {
-                let dt1 = d1.and_hms_opt(0, 0, 0)
-                    .ok_or_else(|| crate::Error::reasoning("Invalid date for datetime conversion"))?;
-                let dt2 = d2.and_hms_opt(0, 0, 0)
-                    .ok_or_else(|| crate::Error::reasoning("Invalid date for datetime conversion"))?;
+                let dt1 = d1.and_hms_opt(0, 0, 0).ok_or_else(|| {
+                    crate::Error::reasoning("Invalid date for datetime conversion")
+                })?;
+                let dt2 = d2.and_hms_opt(0, 0, 0).ok_or_else(|| {
+                    crate::Error::reasoning("Invalid date for datetime conversion")
+                })?;
                 (dt1 - dt2).num_days()
             }
             _ => return Err(crate::Error::reasoning("Both arguments must be dates")),

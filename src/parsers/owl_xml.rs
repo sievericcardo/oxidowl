@@ -138,18 +138,21 @@ pub fn parse(content: &str) -> Result<Ontology> {
 
     // Find the root element
     let root = doc.root_element();
-    
+
     // Reject RDF/XML files that are being parsed as OWL/XML
     let root_name = root.tag_name().name();
-    if root_name == "RDF" || root.tag_name().namespace() == Some("http://www.w3.org/1999/02/22-rdf-syntax-ns#") {
+    if root_name == "RDF"
+        || root.tag_name().namespace() == Some("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    {
         return Err(Error::ParseError(
-            "This appears to be an RDF/XML file, not OWL/XML. Use RDF/XML parser instead.".to_string()
+            "This appears to be an RDF/XML file, not OWL/XML. Use RDF/XML parser instead."
+                .to_string(),
         ));
     }
-    
+
     // Check if this is a full ontology document or a fragment
     let is_fragment = root_name != "Ontology";
-    
+
     if is_fragment {
         // Handle OWL/XML fragments (standalone Declaration, ClassAssertion, etc.)
         parse_axiom_element(&root, &mut ontology, &None)?;
@@ -224,140 +227,140 @@ fn parse_axiom_element(
                 ontology.add_axiom(axiom);
             }
         }
-            "EquivalentObjectProperties" => {
-                if let Ok(axiom) = parse_equivalent_object_properties(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "DisjointObjectProperties" => {
-                if let Ok(axiom) = parse_disjoint_object_properties(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "SubDataPropertyOf" => {
-                println!("DEBUG: Found SubDataPropertyOf in XML");
-                if let Ok(axiom) = parse_sub_data_property_of(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "EquivalentDataProperties" => {
-                if let Ok(axiom) = parse_equivalent_data_properties(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "DisjointDataProperties" => {
-                if let Ok(axiom) = parse_disjoint_data_properties(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "FunctionalObjectProperty" => {
-                if let Ok(axiom) = parse_functional_object_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "InverseFunctionalObjectProperty" => {
-                println!("DEBUG: Found InverseFunctionalObjectProperty in XML");
-                if let Ok(axiom) = parse_inverse_functional_object_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "FunctionalDataProperty" => {
-                println!("DEBUG: Found FunctionalDataProperty in XML");
-                if let Ok(axiom) = parse_functional_data_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "ObjectPropertyDomain" => {
-                println!("DEBUG: Found ObjectPropertyDomain in XML");
-                if let Ok(axiom) = parse_object_property_domain(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "ObjectPropertyRange" => {
-                println!("DEBUG: Found ObjectPropertyRange in XML");
-                if let Ok(axiom) = parse_object_property_range(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "DataPropertyDomain" => {
-                println!("DEBUG: Found DataPropertyDomain in XML");
-                if let Ok(axiom) = parse_data_property_domain(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "DataPropertyRange" => {
-                println!("DEBUG: Found DataPropertyRange in XML");
-                if let Ok(axiom) = parse_data_property_range(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "TransitiveObjectProperty" => {
-                println!("DEBUG: Found TransitiveObjectProperty in XML");
-                match parse_transitive_object_property(element) {
-                    Ok(axiom) => {
-                        println!("DEBUG: Successfully parsed TransitiveObjectProperty axiom");
-                        ontology.add_axiom(axiom);
-                        println!("DEBUG: Added TransitiveObjectProperty axiom to ontology");
-                    }
-                    Err(e) => {
-                        println!("DEBUG: Failed to parse TransitiveObjectProperty: {:?}", e);
-                    }
-                }
-            }
-            "SymmetricObjectProperty" => {
-                println!("DEBUG: Found SymmetricObjectProperty in XML");
-                if let Ok(axiom) = parse_symmetric_object_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "ReflexiveObjectProperty" => {
-                println!("DEBUG: Found ReflexiveObjectProperty in XML");
-                if let Ok(axiom) = parse_reflexive_object_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "IrreflexiveObjectProperty" => {
-                println!("DEBUG: Found IrreflexiveObjectProperty in XML");
-                if let Ok(axiom) = parse_irreflexive_object_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "AsymmetricObjectProperty" => {
-                println!("DEBUG: Found AsymmetricObjectProperty in XML");
-                if let Ok(axiom) = parse_asymmetric_object_property(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "InverseObjectProperties" => {
-                println!("DEBUG: Found InverseObjectProperties in XML");
-                if let Ok(axiom) = parse_inverse_object_properties(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "SameIndividual" => {
-                println!("DEBUG: Found SameIndividual in XML");
-                if let Ok(axiom) = parse_same_individual(element) {
-                    println!("DEBUG: Successfully parsed SameIndividual axiom");
-                    ontology.add_axiom(axiom);
-                    println!("DEBUG: Added SameIndividual axiom to ontology");
-                }
-            }
-            "DifferentIndividuals" => {
-                println!("DEBUG: Found DifferentIndividuals in XML");
-                if let Ok(axiom) = parse_different_individuals(element) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            "HasKey" => {
-                if let Ok(axiom) = parse_has_key(element, base_iri.as_ref()) {
-                    ontology.add_axiom(axiom);
-                }
-            }
-            _ => {
-                // Skip unknown elements or log warning
+        "EquivalentObjectProperties" => {
+            if let Ok(axiom) = parse_equivalent_object_properties(element) {
+                ontology.add_axiom(axiom);
             }
         }
-    
+        "DisjointObjectProperties" => {
+            if let Ok(axiom) = parse_disjoint_object_properties(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "SubDataPropertyOf" => {
+            println!("DEBUG: Found SubDataPropertyOf in XML");
+            if let Ok(axiom) = parse_sub_data_property_of(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "EquivalentDataProperties" => {
+            if let Ok(axiom) = parse_equivalent_data_properties(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "DisjointDataProperties" => {
+            if let Ok(axiom) = parse_disjoint_data_properties(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "FunctionalObjectProperty" => {
+            if let Ok(axiom) = parse_functional_object_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "InverseFunctionalObjectProperty" => {
+            println!("DEBUG: Found InverseFunctionalObjectProperty in XML");
+            if let Ok(axiom) = parse_inverse_functional_object_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "FunctionalDataProperty" => {
+            println!("DEBUG: Found FunctionalDataProperty in XML");
+            if let Ok(axiom) = parse_functional_data_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "ObjectPropertyDomain" => {
+            println!("DEBUG: Found ObjectPropertyDomain in XML");
+            if let Ok(axiom) = parse_object_property_domain(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "ObjectPropertyRange" => {
+            println!("DEBUG: Found ObjectPropertyRange in XML");
+            if let Ok(axiom) = parse_object_property_range(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "DataPropertyDomain" => {
+            println!("DEBUG: Found DataPropertyDomain in XML");
+            if let Ok(axiom) = parse_data_property_domain(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "DataPropertyRange" => {
+            println!("DEBUG: Found DataPropertyRange in XML");
+            if let Ok(axiom) = parse_data_property_range(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "TransitiveObjectProperty" => {
+            println!("DEBUG: Found TransitiveObjectProperty in XML");
+            match parse_transitive_object_property(element) {
+                Ok(axiom) => {
+                    println!("DEBUG: Successfully parsed TransitiveObjectProperty axiom");
+                    ontology.add_axiom(axiom);
+                    println!("DEBUG: Added TransitiveObjectProperty axiom to ontology");
+                }
+                Err(e) => {
+                    println!("DEBUG: Failed to parse TransitiveObjectProperty: {:?}", e);
+                }
+            }
+        }
+        "SymmetricObjectProperty" => {
+            println!("DEBUG: Found SymmetricObjectProperty in XML");
+            if let Ok(axiom) = parse_symmetric_object_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "ReflexiveObjectProperty" => {
+            println!("DEBUG: Found ReflexiveObjectProperty in XML");
+            if let Ok(axiom) = parse_reflexive_object_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "IrreflexiveObjectProperty" => {
+            println!("DEBUG: Found IrreflexiveObjectProperty in XML");
+            if let Ok(axiom) = parse_irreflexive_object_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "AsymmetricObjectProperty" => {
+            println!("DEBUG: Found AsymmetricObjectProperty in XML");
+            if let Ok(axiom) = parse_asymmetric_object_property(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "InverseObjectProperties" => {
+            println!("DEBUG: Found InverseObjectProperties in XML");
+            if let Ok(axiom) = parse_inverse_object_properties(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "SameIndividual" => {
+            println!("DEBUG: Found SameIndividual in XML");
+            if let Ok(axiom) = parse_same_individual(element) {
+                println!("DEBUG: Successfully parsed SameIndividual axiom");
+                ontology.add_axiom(axiom);
+                println!("DEBUG: Added SameIndividual axiom to ontology");
+            }
+        }
+        "DifferentIndividuals" => {
+            println!("DEBUG: Found DifferentIndividuals in XML");
+            if let Ok(axiom) = parse_different_individuals(element) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        "HasKey" => {
+            if let Ok(axiom) = parse_has_key(element, base_iri.as_ref()) {
+                ontology.add_axiom(axiom);
+            }
+        }
+        _ => {
+            // Skip unknown elements or log warning
+        }
+    }
+
     Ok(())
 }
 
@@ -456,10 +459,7 @@ fn parse_equivalent_classes(
 }
 
 /// Parse a `DisjointClasses` element
-fn parse_disjoint_classes(
-    element: &roxmltree::Node,
-    base_iri: Option<&url::Url>,
-) -> Result<Axiom> {
+fn parse_disjoint_classes(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let mut class_expressions = Vec::new();
 
     for child in element.children().filter(roxmltree::Node::is_element) {
@@ -622,7 +622,7 @@ fn parse_equivalent_object_properties(element: &roxmltree::Node) -> Result<Axiom
         .children()
         .filter(roxmltree::Node::is_element)
         .collect();
-    
+
     if children.len() < 2 {
         return Err(Error::io(
             "EquivalentObjectProperties must have at least 2 children".to_string(),
@@ -649,7 +649,7 @@ fn parse_disjoint_object_properties(element: &roxmltree::Node) -> Result<Axiom> 
         .children()
         .filter(roxmltree::Node::is_element)
         .collect();
-    
+
     if children.len() < 2 {
         return Err(Error::io(
             "DisjointObjectProperties must have at least 2 children".to_string(),
@@ -676,7 +676,7 @@ fn parse_equivalent_data_properties(element: &roxmltree::Node) -> Result<Axiom> 
         .children()
         .filter(roxmltree::Node::is_element)
         .collect();
-    
+
     if children.len() < 2 {
         return Err(Error::io(
             "EquivalentDataProperties must have at least 2 children".to_string(),
@@ -703,7 +703,7 @@ fn parse_disjoint_data_properties(element: &roxmltree::Node) -> Result<Axiom> {
         .children()
         .filter(roxmltree::Node::is_element)
         .collect();
-    
+
     if children.len() < 2 {
         return Err(Error::io(
             "DisjointDataProperties must have at least 2 children".to_string(),

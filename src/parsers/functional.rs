@@ -56,13 +56,13 @@ impl FunctionalParser {
         validator.validate_functional(content)?;
 
         let mut ontology = Ontology::new();
-        
+
         // Handle placeholder or empty content
         let trimmed = content.trim();
         if trimmed == "(placeholder)" || trimmed.is_empty() {
             return Ok(ontology);
         }
-        
+
         let mut prefixes = std::collections::HashMap::<String, String>::new();
         let mut base_iri: Option<String> = None;
 
@@ -71,7 +71,13 @@ impl FunctionalParser {
         let mut position = 0;
 
         while position < tokens.len() {
-            position = self.parse_statement(&tokens, position, &mut ontology, &mut prefixes, &mut base_iri)?;
+            position = self.parse_statement(
+                &tokens,
+                position,
+                &mut ontology,
+                &mut prefixes,
+                &mut base_iri,
+            )?;
         }
 
         Ok(ontology)
@@ -149,22 +155,28 @@ impl FunctionalParser {
                 position = self.parse_prefix(tokens, position, prefixes)?;
             }
             "Ontology" => {
-                position = self.parse_ontology_declaration(tokens, position, ontology, prefixes, base_iri)?;
+                position = self
+                    .parse_ontology_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
             "Declaration" => {
-                position = self.parse_declaration(tokens, position, ontology, prefixes, base_iri)?;
+                position =
+                    self.parse_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
             "SubClassOf" => {
-                position = self.parse_subclass_of(tokens, position, ontology, prefixes, base_iri)?;
+                position =
+                    self.parse_subclass_of(tokens, position, ontology, prefixes, base_iri)?;
             }
             "DisjointClasses" => {
-                position = self.parse_disjoint_classes(tokens, position, ontology, prefixes, base_iri)?;
+                position =
+                    self.parse_disjoint_classes(tokens, position, ontology, prefixes, base_iri)?;
             }
             "EquivalentClasses" => {
-                position = self.parse_equivalent_classes(tokens, position, ontology, prefixes, base_iri)?;
+                position =
+                    self.parse_equivalent_classes(tokens, position, ontology, prefixes, base_iri)?;
             }
             "ClassAssertion" => {
-                position = self.parse_class_assertion(tokens, position, ontology, prefixes, base_iri)?;
+                position =
+                    self.parse_class_assertion(tokens, position, ontology, prefixes, base_iri)?;
             }
             "ObjectPropertyAssertion" => {
                 position =
@@ -298,7 +310,8 @@ impl FunctionalParser {
                 // Parse statements inside the ontology
                 if paren_count == 1 {
                     // Only parse top-level statements
-                    position = self.parse_statement(tokens, position, ontology, prefixes, base_iri)?;
+                    position =
+                        self.parse_statement(tokens, position, ontology, prefixes, base_iri)?;
                 } else {
                     position += 1;
                 }
@@ -492,14 +505,14 @@ impl FunctionalParser {
                             "Expected data range in DataSomeValuesFrom".to_string(),
                         ));
                     }
-                    
+
                     // Check if it's a DatatypeRestriction
                     let filler = if tokens[position] == "DatatypeRestriction" {
                         // Parse DatatypeRestriction(baseType facet1 value1 facet2 value2 ...)
                         position += 1; // Skip "DatatypeRestriction"
                         if position < tokens.len() && tokens[position] == "(" {
                             position += 1; // Skip "("
-                            
+
                             // Parse base datatype
                             if position >= tokens.len() {
                                 return Err(Error::ontology_parsing(
@@ -508,21 +521,23 @@ impl FunctionalParser {
                             }
                             let base_datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
                             position += 1;
-                            
+
                             // Skip facet-value pairs until closing ")"
                             // For now, we'll just use the base datatype and ignore facets
                             while position < tokens.len() && tokens[position] != ")" {
                                 position += 1;
                             }
-                            
+
                             if position < tokens.len() && tokens[position] == ")" {
                                 position += 1; // Skip ")"
                             }
-                            
+
                             crate::ontology::DataRange::Datatype(
                                 url::Url::parse(&base_datatype_iri)
                                     .map_err(|e| {
-                                        Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                        Error::ontology_parsing(format!(
+                                            "Invalid datatype IRI: {e}"
+                                        ))
                                     })?
                                     .into(),
                             )
@@ -535,7 +550,7 @@ impl FunctionalParser {
                         // Simple datatype IRI
                         let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
                         position += 1;
-                        
+
                         crate::ontology::DataRange::Datatype(
                             url::Url::parse(&datarange_iri)
                                 .map_err(|e| {
@@ -634,15 +649,16 @@ impl FunctionalParser {
                     let mut individuals = Vec::new();
                     while position < tokens.len() && tokens[position] != ")" {
                         let individual_iri = self.expand_iri(&tokens[position], prefixes)?;
-                        let individual = crate::ontology::Individual::Named(
-                            crate::ontology::NamedIndividual {
+                        let individual =
+                            crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
                                 iri: url::Url::parse(&individual_iri)
                                     .map_err(|e| {
-                                        Error::ontology_parsing(format!("Invalid individual IRI: {e}"))
+                                        Error::ontology_parsing(format!(
+                                            "Invalid individual IRI: {e}"
+                                        ))
                                     })?
                                     .into(),
-                            },
-                        );
+                            });
                         individuals.push(individual);
                         position += 1;
                     }
@@ -1063,15 +1079,14 @@ impl FunctionalParser {
                         },
                     );
 
-                    let individual = crate::ontology::Individual::Named(
-                        crate::ontology::NamedIndividual {
+                    let individual =
+                        crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
                             iri: url::Url::parse(&individual_iri)
                                 .map_err(|e| {
                                     Error::ontology_parsing(format!("Invalid individual IRI: {e}"))
                                 })?
                                 .into(),
-                        },
-                    );
+                        });
 
                     Ok((
                         ClassExpression::ObjectHasValue {
@@ -1469,7 +1484,8 @@ impl FunctionalParser {
             let mut classes = Vec::new();
             while position < tokens.len() && tokens[position] != ")" {
                 // Parse class expression (could be simple class or complex expression)
-                let (class_expr, new_pos) = self.parse_class_expression(tokens, position, prefixes)?;
+                let (class_expr, new_pos) =
+                    self.parse_class_expression(tokens, position, prefixes)?;
                 classes.push(class_expr);
                 position = new_pos;
             }
@@ -1507,7 +1523,8 @@ impl FunctionalParser {
             let mut classes = Vec::new();
             while position < tokens.len() && tokens[position] != ")" {
                 // Parse class expression (could be simple class or complex expression)
-                let (class_expr, new_pos) = self.parse_class_expression(tokens, position, prefixes)?;
+                let (class_expr, new_pos) =
+                    self.parse_class_expression(tokens, position, prefixes)?;
                 classes.push(class_expr);
                 position = new_pos;
             }

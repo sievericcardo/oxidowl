@@ -11,7 +11,7 @@
 //!
 //! # fn main() -> Result<()> {
 //! let data = RwLock::new(vec![1, 2, 3]);
-//! 
+//!
 //! // Instead of:
 //! // let guard = data.read().unwrap();
 //!
@@ -51,9 +51,8 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// # Ok::<(), oxidowl::error::Error>(())
 /// ```
 pub fn read_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockReadGuard<'a, T>> {
-    lock.read().map_err(|e| {
-        Error::lock_poisoned(format!("Read lock poisoned: {} - {}", context, e))
-    })
+    lock.read()
+        .map_err(|e| Error::lock_poisoned(format!("Read lock poisoned: {} - {}", context, e)))
 }
 
 /// Acquire a write lock on an RwLock with proper error handling
@@ -83,9 +82,8 @@ pub fn read_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockRead
 /// # Ok::<(), oxidowl::error::Error>(())
 /// ```
 pub fn write_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockWriteGuard<'a, T>> {
-    lock.write().map_err(|e| {
-        Error::lock_poisoned(format!("Write lock poisoned: {} - {}", context, e))
-    })
+    lock.write()
+        .map_err(|e| Error::lock_poisoned(format!("Write lock poisoned: {} - {}", context, e)))
 }
 
 #[cfg(test)]
@@ -107,7 +105,7 @@ mod tests {
         let mut guard = write_lock(&data, "test write").unwrap();
         *guard = 100;
         drop(guard);
-        
+
         let guard = read_lock(&data, "test read after write").unwrap();
         assert_eq!(*guard, 100);
     }
@@ -129,7 +127,7 @@ mod tests {
         // Now try to acquire the lock - should get LockPoisoned error
         let result = read_lock(&data, "reading poisoned lock");
         assert!(result.is_err());
-        
+
         if let Err(Error::LockPoisoned { message, .. }) = result {
             assert!(message.contains("Read lock poisoned"));
             assert!(message.contains("reading poisoned lock"));
@@ -153,7 +151,7 @@ mod tests {
         // Try to acquire write lock
         let result = write_lock(&data, "writing to poisoned lock");
         assert!(result.is_err());
-        
+
         if let Err(Error::LockPoisoned { message, .. }) = result {
             assert!(message.contains("Write lock poisoned"));
             assert!(message.contains("writing to poisoned lock"));

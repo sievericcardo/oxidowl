@@ -5,8 +5,10 @@
 
 use crate::{
     Error, Result,
-    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, DataPropertyExpression},
-    core::tableau::{TableauNode, TableauEdge, NodeId},
+    core::tableau::{NodeId, TableauEdge, TableauNode},
+    ontology::{
+        Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -40,11 +42,9 @@ impl ExplanationService {
         superclass: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Explanation> {
-        let mut justification = self.justification_computer.compute_subsumption_justification(
-            subclass,
-            superclass,
-            ontology_axioms,
-        )?;
+        let mut justification = self
+            .justification_computer
+            .compute_subsumption_justification(subclass, superclass, ontology_axioms)?;
 
         let proof_tree = self.build_subsumption_proof_tree(subclass, superclass, &justification)?;
 
@@ -62,7 +62,9 @@ impl ExplanationService {
 
     /// Generate explanation for an inconsistency
     pub fn explain_inconsistency(&self, ontology_axioms: &[Axiom]) -> Result<Explanation> {
-        let justification = self.justification_computer.compute_inconsistency_justification(ontology_axioms)?;
+        let justification = self
+            .justification_computer
+            .compute_inconsistency_justification(ontology_axioms)?;
         let proof_tree = self.build_inconsistency_proof_tree(&justification)?;
 
         Ok(Explanation {
@@ -80,10 +82,9 @@ impl ExplanationService {
         class: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Explanation> {
-        let justification = self.justification_computer.compute_unsatisfiability_justification(
-            class,
-            ontology_axioms,
-        )?;
+        let justification = self
+            .justification_computer
+            .compute_unsatisfiability_justification(class, ontology_axioms)?;
         let proof_tree = self.build_unsatisfiability_proof_tree(class, &justification)?;
 
         Ok(Explanation {
@@ -98,7 +99,11 @@ impl ExplanationService {
     }
 
     /// Format explanation as human-readable text
-    pub fn format_explanation(&self, explanation: &Explanation, format: ExplanationFormat) -> String {
+    pub fn format_explanation(
+        &self,
+        explanation: &Explanation,
+        format: ExplanationFormat,
+    ) -> String {
         self.explanation_formatter.format(explanation, format)
     }
 
@@ -205,9 +210,7 @@ pub enum ExplanationConclusion {
     /// Inconsistency in the ontology
     Inconsistency,
     /// Unsatisfiable class
-    Unsatisfiability {
-        class: ClassExpression,
-    },
+    Unsatisfiability { class: ClassExpression },
     /// Instance relationship
     InstanceOf {
         individual: Individual,
@@ -263,14 +266,9 @@ pub enum Inference {
     /// Inconsistency detection
     Inconsistency,
     /// Unsatisfiability detection
-    Unsatisfiability {
-        class: ClassExpression,
-    },
+    Unsatisfiability { class: ClassExpression },
     /// Tableau rule application
-    TableauRule {
-        rule: String,
-        node: String,
-    },
+    TableauRule { rule: String, node: String },
 }
 
 /// Inference rules used in reasoning
@@ -315,9 +313,9 @@ impl JustificationComputer {
     ) -> Result<Vec<Axiom>> {
         // Implement MUS (Minimal Unsatisfiable Subset) using a deletion-based algorithm
         // Start with all relevant axioms and remove one at a time to check minimality
-        
+
         let relevant_axioms = self.find_relevant_axioms(subclass, superclass, ontology_axioms);
-        
+
         if relevant_axioms.is_empty() {
             return Ok(Vec::new());
         }
@@ -325,11 +323,11 @@ impl JustificationComputer {
         // Try to minimize the axiom set
         let mut minimal_set = relevant_axioms.clone();
         let mut index = 0;
-        
+
         while index < minimal_set.len() {
             // Try removing axiom at index
             let removed = minimal_set.remove(index);
-            
+
             // Check if entailment still holds without this axiom
             if self.still_entails_without(&minimal_set, subclass, superclass) {
                 // Can remove this axiom - it's not essential
@@ -340,7 +338,7 @@ impl JustificationComputer {
                 index += 1;
             }
         }
-        
+
         Ok(minimal_set)
     }
 
@@ -353,53 +351,59 @@ impl JustificationComputer {
     ) -> bool {
         // Simplified entailment check
         // In practice, this would use a proper reasoner
-        
+
         // Check direct SubClassOf axioms
         for axiom in axioms {
             if let Axiom::SubClassOf(axiom_data) = axiom {
                 if &axiom_data.subclass == subclass && &axiom_data.superclass == superclass {
                     return true;
                 }
-                
+
                 // Check transitivity: if subclass -> intermediate and intermediate -> superclass
                 if &axiom_data.subclass == subclass {
                     for other_axiom in axioms {
                         if let Axiom::SubClassOf(other_data) = other_axiom {
-                            if &other_data.subclass == &axiom_data.superclass && &other_data.superclass == superclass {
+                            if &other_data.subclass == &axiom_data.superclass
+                                && &other_data.superclass == superclass
+                            {
                                 return true;
                             }
                         }
                     }
                 }
             }
-            
+
             // Check EquivalentClasses
             if let Axiom::EquivalentClasses(axiom_data) = axiom {
-                if axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass) {
+                if axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass)
+                {
                     return true;
                 }
             }
         }
-        
+
         false
     }
 
     /// Compute justification for inconsistency
-    pub fn compute_inconsistency_justification(&self, ontology_axioms: &[Axiom]) -> Result<Vec<Axiom>> {
+    pub fn compute_inconsistency_justification(
+        &self,
+        ontology_axioms: &[Axiom],
+    ) -> Result<Vec<Axiom>> {
         // Find a minimal subset of axioms that causes inconsistency
         // This uses a deletion-based algorithm similar to MUS
-        
+
         if ontology_axioms.is_empty() {
             return Ok(Vec::new());
         }
 
         let mut minimal_set = ontology_axioms.to_vec();
         let mut index = 0;
-        
+
         while index < minimal_set.len() {
             // Try removing axiom at index
             let removed = minimal_set.remove(index);
-            
+
             // Check if the subset is still inconsistent
             if self.is_inconsistent(&minimal_set) {
                 // Still inconsistent without this axiom - can remove it
@@ -410,14 +414,14 @@ impl JustificationComputer {
                 index += 1;
             }
         }
-        
+
         Ok(minimal_set)
     }
 
     /// Simplified check for inconsistency (placeholder for proper reasoner check)
     fn is_inconsistent(&self, axioms: &[Axiom]) -> bool {
         // Check for obvious contradictions
-        
+
         // Check for disjoint classes being asserted equivalent
         for axiom in axioms {
             if let Axiom::EquivalentClasses(equiv_data) = axiom {
@@ -426,7 +430,10 @@ impl JustificationComputer {
                         // If any two classes are both equivalent and disjoint, it's inconsistent
                         for c1 in &equiv_data.classes {
                             for c2 in &equiv_data.classes {
-                                if c1 != c2 && disj_data.classes.contains(c1) && disj_data.classes.contains(c2) {
+                                if c1 != c2
+                                    && disj_data.classes.contains(c1)
+                                    && disj_data.classes.contains(c2)
+                                {
                                     return true;
                                 }
                             }
@@ -435,7 +442,7 @@ impl JustificationComputer {
                 }
             }
         }
-        
+
         // Check for class being subclass of its complement
         for axiom in axioms {
             if let Axiom::SubClassOf(axiom_data) = axiom {
@@ -446,7 +453,7 @@ impl JustificationComputer {
                 }
             }
         }
-        
+
         // Without a full reasoner, we can't determine all inconsistencies
         // Return false as conservative default
         false
@@ -478,7 +485,8 @@ impl JustificationComputer {
         ontology_axioms
             .iter()
             .filter(|axiom| {
-                self.axiom_mentions_class(axiom, subclass) || self.axiom_mentions_class(axiom, superclass)
+                self.axiom_mentions_class(axiom, subclass)
+                    || self.axiom_mentions_class(axiom, superclass)
             })
             .cloned()
             .collect()
@@ -488,31 +496,34 @@ impl JustificationComputer {
         // Comprehensive check that recursively inspects class expressions
         match axiom {
             Axiom::SubClassOf(axiom_data) => {
-                self.class_expr_mentions(&axiom_data.subclass, class) || 
-                self.class_expr_mentions(&axiom_data.superclass, class)
-            },
-            Axiom::EquivalentClasses(axiom_data) => {
-                axiom_data.classes.iter().any(|c| self.class_expr_mentions(c, class))
-            },
-            Axiom::DisjointClasses(axiom_data) => {
-                axiom_data.classes.iter().any(|c| self.class_expr_mentions(c, class))
-            },
+                self.class_expr_mentions(&axiom_data.subclass, class)
+                    || self.class_expr_mentions(&axiom_data.superclass, class)
+            }
+            Axiom::EquivalentClasses(axiom_data) => axiom_data
+                .classes
+                .iter()
+                .any(|c| self.class_expr_mentions(c, class)),
+            Axiom::DisjointClasses(axiom_data) => axiom_data
+                .classes
+                .iter()
+                .any(|c| self.class_expr_mentions(c, class)),
             Axiom::DisjointUnion(axiom_data) => {
-                self.class_expr_mentions(&axiom_data.class, class) || 
-                axiom_data.disjoint_classes.iter().any(|c| self.class_expr_mentions(c, class))
-            },
-            Axiom::ClassAssertion(axiom_data) => {
                 self.class_expr_mentions(&axiom_data.class, class)
-            },
+                    || axiom_data
+                        .disjoint_classes
+                        .iter()
+                        .any(|c| self.class_expr_mentions(c, class))
+            }
+            Axiom::ClassAssertion(axiom_data) => self.class_expr_mentions(&axiom_data.class, class),
             Axiom::ObjectPropertyDomain(axiom_data) => {
                 self.class_expr_mentions(&axiom_data.domain, class)
-            },
+            }
             Axiom::ObjectPropertyRange(axiom_data) => {
                 self.class_expr_mentions(&axiom_data.range, class)
-            },
+            }
             Axiom::DataPropertyDomain(axiom_data) => {
                 self.class_expr_mentions(&axiom_data.domain, class)
-            },
+            }
             _ => false,
         }
     }
@@ -525,36 +536,34 @@ impl JustificationComputer {
 
         match expr {
             ClassExpression::Class(_) => expr == target,
-            
-            ClassExpression::ObjectIntersectionOf(exprs) |
-            ClassExpression::ObjectUnionOf(exprs) => {
+
+            ClassExpression::ObjectIntersectionOf(exprs)
+            | ClassExpression::ObjectUnionOf(exprs) => {
                 exprs.iter().any(|e| self.class_expr_mentions(e, target))
-            },
-            
-            ClassExpression::ObjectComplementOf(inner) => {
-                self.class_expr_mentions(inner, target)
-            },
-            
-            ClassExpression::ObjectSomeValuesFrom { filler, .. } |
-            ClassExpression::ObjectAllValuesFrom { filler, .. } => {
+            }
+
+            ClassExpression::ObjectComplementOf(inner) => self.class_expr_mentions(inner, target),
+
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. } => {
                 self.class_expr_mentions(filler, target)
-            },
-            
-            ClassExpression::ObjectMinCardinality { filler, .. } |
-            ClassExpression::ObjectMaxCardinality { filler, .. } |
-            ClassExpression::ObjectExactCardinality { filler, .. } => {
+            }
+
+            ClassExpression::ObjectMinCardinality { filler, .. }
+            | ClassExpression::ObjectMaxCardinality { filler, .. }
+            | ClassExpression::ObjectExactCardinality { filler, .. } => {
                 self.class_expr_mentions(filler, target)
-            },
-            
-            ClassExpression::ObjectOneOf(_) |
-            ClassExpression::ObjectHasValue { .. } |
-            ClassExpression::ObjectHasSelf { .. } |
-            ClassExpression::DataSomeValuesFrom { .. } |
-            ClassExpression::DataAllValuesFrom { .. } |
-            ClassExpression::DataHasValue { .. } |
-            ClassExpression::DataMinCardinality { .. } |
-            ClassExpression::DataMaxCardinality { .. } |
-            ClassExpression::DataExactCardinality { .. } => false,
+            }
+
+            ClassExpression::ObjectOneOf(_)
+            | ClassExpression::ObjectHasValue { .. }
+            | ClassExpression::ObjectHasSelf { .. }
+            | ClassExpression::DataSomeValuesFrom { .. }
+            | ClassExpression::DataAllValuesFrom { .. }
+            | ClassExpression::DataHasValue { .. }
+            | ClassExpression::DataMinCardinality { .. }
+            | ClassExpression::DataMaxCardinality { .. }
+            | ClassExpression::DataExactCardinality { .. } => false,
         }
     }
 }
@@ -584,7 +593,10 @@ impl ProofTracker {
     /// Add a reasoning step
     pub fn add_step(&mut self, step: ReasoningStep) {
         if let Some(node_id) = step.node_id {
-            self.node_map.entry(node_id).or_insert_with(Vec::new).push(step.clone());
+            self.node_map
+                .entry(node_id)
+                .or_insert_with(Vec::new)
+                .push(step.clone());
         }
         self.steps.push(step);
     }
@@ -664,19 +676,31 @@ impl ExplanationFormatter {
 
     fn format_plain_text(&self, explanation: &Explanation) -> String {
         let mut result = String::new();
-        
+
         match &explanation.conclusion {
-            ExplanationConclusion::Subsumption { subclass, superclass } => {
-                result.push_str(&format!("Explanation for: {:?} ⊑ {:?}\n\n", subclass, superclass));
+            ExplanationConclusion::Subsumption {
+                subclass,
+                superclass,
+            } => {
+                result.push_str(&format!(
+                    "Explanation for: {:?} ⊑ {:?}\n\n",
+                    subclass, superclass
+                ));
             }
             ExplanationConclusion::Inconsistency => {
                 result.push_str("Explanation for inconsistency:\n\n");
             }
             ExplanationConclusion::Unsatisfiability { class } => {
-                result.push_str(&format!("Explanation for unsatisfiability of: {:?}\n\n", class));
+                result.push_str(&format!(
+                    "Explanation for unsatisfiability of: {:?}\n\n",
+                    class
+                ));
             }
             ExplanationConclusion::InstanceOf { individual, class } => {
-                result.push_str(&format!("Explanation for: {:?} : {:?}\n\n", individual, class));
+                result.push_str(&format!(
+                    "Explanation for: {:?} : {:?}\n\n",
+                    individual, class
+                ));
             }
         }
 
@@ -690,25 +714,30 @@ impl ExplanationFormatter {
 
     fn format_html(&self, explanation: &Explanation) -> String {
         // HTML formatting implementation
-        format!("<html><body><h1>Explanation</h1><p>{}</p></body></html>", 
-                self.format_plain_text(explanation))
+        format!(
+            "<html><body><h1>Explanation</h1><p>{}</p></body></html>",
+            self.format_plain_text(explanation)
+        )
     }
 
     fn format_json(&self, explanation: &Explanation) -> String {
         // Since Explanation doesn't implement Serialize (due to Axiom),
         // we create a simplified JSON representation
         let conclusion_str = format!("{:?}", explanation.conclusion);
-        let justification_str = explanation.justification
+        let justification_str = explanation
+            .justification
             .iter()
             .map(|axiom| format!("{:?}", axiom))
             .collect::<Vec<_>>()
             .join(", ");
-        
-        format!(r#"{{"conclusion": "{}", "justification": [{}], "explanation_type": "{:?}", "confidence": {}}}"#,
-                conclusion_str.replace('"', r#"\""#),
-                justification_str,
-                explanation.explanation_type,
-                explanation.confidence)
+
+        format!(
+            r#"{{"conclusion": "{}", "justification": [{}], "explanation_type": "{:?}", "confidence": {}}}"#,
+            conclusion_str.replace('"', r#"\""#),
+            justification_str,
+            explanation.explanation_type,
+            explanation.confidence
+        )
     }
 
     fn format_manchester(&self, explanation: &Explanation) -> String {

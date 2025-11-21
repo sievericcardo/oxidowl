@@ -477,7 +477,7 @@ pub struct ExecutionTrace {
     pub current_stage: Option<String>,
     pub memory_usage: Vec<(Instant, usize)>,
     pub intermediate_results: Vec<IntermediateResult>,
-    
+
     // Detailed timing breakdown
     pub atom_evaluation_start: Option<Instant>,
     pub atom_evaluation_duration: Duration,
@@ -920,8 +920,9 @@ impl AdvancedExecutionEngine {
 
         // Step 2: Generate optimized query plan
         let query_plan = {
-            let mut optimizer = self.optimizer.lock()
-                .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock optimizer: {}", e)))?;
+            let mut optimizer = self.optimizer.lock().map_err(|e| {
+                AdvancedQueryError::internal(format!("Failed to lock optimizer: {}", e))
+            })?;
             optimizer.optimize_query(query)?
         };
 
@@ -931,8 +932,9 @@ impl AdvancedExecutionEngine {
         } else {
             // Fallback to legacy strategy selector
             let strategy = {
-                let mut selector = self.strategy_selector.lock()
-                    .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e)))?;
+                let mut selector = self.strategy_selector.lock().map_err(|e| {
+                    AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e))
+                })?;
                 selector.select_strategy(query, &query_plan)?
             };
             (strategy, None)
@@ -1118,8 +1120,9 @@ impl AdvancedExecutionEngine {
         &self,
         query: &ConjunctiveQuery,
     ) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
-        let cache = self.result_cache.read()
-            .map_err(|e| AdvancedQueryError::internal(format!("Failed to read result cache: {}", e)))?;
+        let cache = self.result_cache.read().map_err(|e| {
+            AdvancedQueryError::internal(format!("Failed to read result cache: {}", e))
+        })?;
         let query_hash = cache.compute_query_hash(query, &self.ontology);
 
         if let Some(entry) = cache.get_entry(&query_hash) {
@@ -1141,8 +1144,9 @@ impl AdvancedExecutionEngine {
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         // Start monitoring
         {
-            let mut monitor = self.performance_monitor.lock()
-                .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e)))?;
+            let mut monitor = self.performance_monitor.lock().map_err(|e| {
+                AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e))
+            })?;
             monitor.start_execution(&execution_id, query, strategy);
         }
 
@@ -1159,8 +1163,9 @@ impl AdvancedExecutionEngine {
 
         // Complete monitoring
         {
-            let mut monitor = self.performance_monitor.lock()
-                .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e)))?;
+            let mut monitor = self.performance_monitor.lock().map_err(|e| {
+                AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e))
+            })?;
             monitor.complete_execution(&execution_id, &result);
         }
 
@@ -1204,8 +1209,9 @@ impl AdvancedExecutionEngine {
         };
 
         // Get strategy implementation and execute
-        let selector = self.strategy_selector.lock()
-            .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e)))?;
+        let selector = self.strategy_selector.lock().map_err(|e| {
+            AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e))
+        })?;
         let strategy_impl = selector.get_strategy(strategy)?;
         strategy_impl.execute(query, &context)
     }
@@ -1233,8 +1239,9 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
         result: &ConjunctiveQueryResult,
     ) -> Result<(), AdvancedQueryError> {
-        let mut cache = self.result_cache.write()
-            .map_err(|e| AdvancedQueryError::internal(format!("Failed to write result cache: {}", e)))?;
+        let mut cache = self.result_cache.write().map_err(|e| {
+            AdvancedQueryError::internal(format!("Failed to write result cache: {}", e))
+        })?;
         cache.insert(query, result.clone(), &self.ontology)?;
         Ok(())
     }
@@ -1247,8 +1254,12 @@ impl AdvancedExecutionEngine {
         strategy: &str,
         result: &ConjunctiveQueryResult,
     ) {
-        let mut selector = self.strategy_selector.lock()
-            .map_err(|e| AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e)))
+        let mut selector = self
+            .strategy_selector
+            .lock()
+            .map_err(|e| {
+                AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e))
+            })
             .ok();
         if let Some(ref mut s) = selector {
             s.update_performance_history(strategy, query, result);
@@ -1292,41 +1303,64 @@ impl QueryResultCache {
 
         // Hash the query structure
         let mut structure_hasher = DefaultHasher::new();
-        
+
         // Hash answer variables
         for var in &query.answer_variables {
             var.hash(&mut structure_hasher);
         }
-        
+
         // Hash body atoms
         for atom in &query.body_atoms {
             atom.hash(&mut structure_hasher);
         }
-        
+
         // Hash constraints (simplified - hash constraint counts)
-        query.constraints.distinct_variables.len().hash(&mut structure_hasher);
-        query.constraints.type_constraints.len().hash(&mut structure_hasher);
-        query.constraints.value_constraints.len().hash(&mut structure_hasher);
-        
+        query
+            .constraints
+            .distinct_variables
+            .len()
+            .hash(&mut structure_hasher);
+        query
+            .constraints
+            .type_constraints
+            .len()
+            .hash(&mut structure_hasher);
+        query
+            .constraints
+            .value_constraints
+            .len()
+            .hash(&mut structure_hasher);
+
         let structure_hash = structure_hasher.finish();
 
         // Hash parameter values (the specific IRIs, literals, etc.)
         let mut parameter_hasher = DefaultHasher::new();
-        
+
         // Hash specific values in atoms
         for atom in &query.body_atoms {
             match atom {
-                QueryAtom::ClassAtom { variable, class_expression } => {
+                QueryAtom::ClassAtom {
+                    variable,
+                    class_expression,
+                } => {
                     variable.hash(&mut parameter_hasher);
                     // Hash the class expression string representation
                     format!("{:?}", class_expression).hash(&mut parameter_hasher);
                 }
-                QueryAtom::ObjectPropertyAtom { subject, property, object } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject,
+                    property,
+                    object,
+                } => {
                     subject.hash(&mut parameter_hasher);
                     format!("{:?}", property).hash(&mut parameter_hasher);
                     object.hash(&mut parameter_hasher);
                 }
-                QueryAtom::DataPropertyAtom { subject, property, literal } => {
+                QueryAtom::DataPropertyAtom {
+                    subject,
+                    property,
+                    literal,
+                } => {
                     subject.hash(&mut parameter_hasher);
                     format!("{:?}", property).hash(&mut parameter_hasher);
                     format!("{:?}", literal).hash(&mut parameter_hasher);
@@ -1339,7 +1373,10 @@ impl QueryResultCache {
                     left.hash(&mut parameter_hasher);
                     right.hash(&mut parameter_hasher);
                 }
-                QueryAtom::ConcreteIndividualAtom { variable, individual } => {
+                QueryAtom::ConcreteIndividualAtom {
+                    variable,
+                    individual,
+                } => {
                     variable.hash(&mut parameter_hasher);
                     format!("{:?}", individual).hash(&mut parameter_hasher);
                 }
@@ -1349,7 +1386,7 @@ impl QueryResultCache {
                 }
             }
         }
-        
+
         let parameter_hash = parameter_hasher.finish();
 
         // Use ontology's axiom count as a version indicator
@@ -1380,15 +1417,15 @@ impl QueryResultCache {
         ontology: &Ontology,
     ) -> Result<(), AdvancedQueryError> {
         let query_hash = self.compute_query_hash(query, ontology);
-        
+
         // Estimate entry size (simplified)
-        let entry_size = std::mem::size_of::<ConjunctiveQueryResult>() 
+        let entry_size = std::mem::size_of::<ConjunctiveQueryResult>()
             + result.bindings.len() * std::mem::size_of::<HashMap<QueryVariable, Individual>>();
 
         // Check if we need to evict entries
-        while self.cache_entries.len() >= self.config.max_entries 
-            || self.size_tracker.current_size + entry_size > self.config.max_size_bytes {
-            
+        while self.cache_entries.len() >= self.config.max_entries
+            || self.size_tracker.current_size + entry_size > self.config.max_size_bytes
+        {
             // Evict least recently used entry
             if let Some(lru_hash) = self.lru_tracker.get_lru() {
                 if let Some(removed_entry) = self.cache_entries.remove(&lru_hash) {
@@ -1412,7 +1449,9 @@ impl QueryResultCache {
                 confidence_score: 1.0,
                 invalidation_triggers: vec![
                     InvalidationTrigger::TimeExpiry(now + ttl),
-                    InvalidationTrigger::OntologyChange { version: ontology.axioms.len() as u64 },
+                    InvalidationTrigger::OntologyChange {
+                        version: ontology.axioms.len() as u64,
+                    },
                 ],
                 priority: CachePriority::Normal,
             },
@@ -1473,11 +1512,11 @@ impl LruTracker {
     pub fn insert(&mut self, hash: QueryHash) {
         // Remove if already exists to update position
         self.remove(&hash);
-        
+
         // Add to front (most recently used)
         self.access_order.push_front(hash.clone());
         self.position_map.insert(hash, 0);
-        
+
         // Update positions
         self.update_positions();
     }
@@ -1541,10 +1580,10 @@ impl ExecutionStrategySelector {
     ) -> Result<String, AdvancedQueryError> {
         // Extract query features for decision making
         let features = self.extract_query_features(query, plan);
-        
+
         // Use rule-based model to select strategy
         let strategy = self.apply_selection_rules(&features);
-        
+
         // Update selection history
         self.performance_history
             .entry(strategy.clone())
@@ -1558,10 +1597,10 @@ impl ExecutionStrategySelector {
                 confidence_scores: Vec::new(),
                 last_used: Instant::now(),
             });
-        
+
         Ok(strategy)
     }
-    
+
     /// Extract features from query and plan for strategy selection
     fn extract_query_features(
         &self,
@@ -1571,12 +1610,12 @@ impl ExecutionStrategySelector {
         let num_atoms = query.body_atoms.len();
         let num_variables = self.count_distinct_variables(query);
         let num_answer_vars = query.answer_variables.len();
-        
+
         // Count different atom types
         let mut num_class_atoms = 0;
         let mut num_property_atoms = 0;
         let mut num_data_atoms = 0;
-        
+
         for atom in &query.body_atoms {
             match atom {
                 QueryAtom::ClassAtom { .. } => num_class_atoms += 1,
@@ -1585,12 +1624,12 @@ impl ExecutionStrategySelector {
                 _ => {}
             }
         }
-        
+
         // Estimate complexity
         let join_complexity = self.estimate_join_complexity(query);
         let has_cycles = self.detect_query_cycles(query);
         let selectivity = 0.5; // Default selectivity if not available in plan
-        
+
         StrategyQueryFeatures {
             num_atoms,
             num_variables,
@@ -1601,52 +1640,55 @@ impl ExecutionStrategySelector {
             join_complexity,
             has_cycles,
             selectivity,
-            predicted_time: plan.predicted_performance.estimated_execution_time.as_secs_f64(),
+            predicted_time: plan
+                .predicted_performance
+                .estimated_execution_time
+                .as_secs_f64(),
             predicted_memory: plan.predicted_performance.estimated_memory_usage as f64,
         }
     }
-    
+
     /// Apply rule-based strategy selection
     fn apply_selection_rules(&self, features: &StrategyQueryFeatures) -> String {
         // Rule 1: Simple queries with few atoms - use direct strategy
         if features.num_atoms <= 3 && !features.has_cycles {
             return "direct".to_string();
         }
-        
+
         // Rule 2: Queries with many joins - use join-optimized strategy
         if features.join_complexity > 5.0 {
             return "join_optimized".to_string();
         }
-        
+
         // Rule 3: Queries with cycles - use specialized cycle handler
         if features.has_cycles {
             return "cycle_aware".to_string();
         }
-        
+
         // Rule 4: Low selectivity queries - use filtering strategy
         if features.selectivity < 0.1 {
             return "filter_first".to_string();
         }
-        
+
         // Rule 5: High memory prediction - use streaming strategy
         if features.predicted_memory > 1_000_000_000.0 {
             return "streaming".to_string();
         }
-        
+
         // Rule 6: Many answer variables - use projection optimization
         if features.num_answer_vars > features.num_variables / 2 {
             return "projection_optimized".to_string();
         }
-        
+
         // Rule 7: Data property heavy queries - use data-optimized strategy
         if features.num_data_atoms > features.num_class_atoms {
             return "data_optimized".to_string();
         }
-        
+
         // Default strategy for balanced queries
         "balanced".to_string()
     }
-    
+
     /// Count distinct variables in query
     fn count_distinct_variables(&self, query: &ConjunctiveQuery) -> usize {
         let mut variables = HashSet::new();
@@ -1655,11 +1697,15 @@ impl ExecutionStrategySelector {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.clone());
                 }
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(object.clone());
                 }
-                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(literal.clone());
                 }
@@ -1681,14 +1727,14 @@ impl ExecutionStrategySelector {
         }
         variables.len()
     }
-    
+
     /// Estimate join complexity based on shared variables
     fn estimate_join_complexity(&self, query: &ConjunctiveQuery) -> f64 {
         let n = query.body_atoms.len();
         if n <= 1 {
             return 0.0;
         }
-        
+
         let mut join_count = 0;
         for i in 0..n {
             for j in (i + 1)..n {
@@ -1697,17 +1743,17 @@ impl ExecutionStrategySelector {
                 }
             }
         }
-        
+
         // Normalize by maximum possible joins
         let max_joins = (n * (n - 1)) / 2;
         (join_count as f64 / max_joins as f64) * 10.0
     }
-    
+
     /// Check if two atoms share a variable
     fn atoms_share_variable(&self, atom1: &QueryAtom, atom2: &QueryAtom) -> bool {
         let vars1 = self.extract_atom_variables(atom1);
         let vars2 = self.extract_atom_variables(atom2);
-        
+
         for v1 in &vars1 {
             for v2 in &vars2 {
                 if v1 == v2 {
@@ -1717,41 +1763,51 @@ impl ExecutionStrategySelector {
         }
         false
     }
-    
+
     /// Extract all variables from an atom
     fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
         match atom {
             QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vec![subject.clone(), object.clone()]
             }
-            QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+            QueryAtom::DataPropertyAtom {
+                subject, literal, ..
+            } => {
                 vec![subject.clone(), literal.clone()]
             }
             QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
-            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            }
             QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
             QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
         }
     }
-    
+
     /// Detect cycles in query dependency graph
     fn detect_query_cycles(&self, query: &ConjunctiveQuery) -> bool {
         // Build adjacency list for variable dependencies
         let mut graph: HashMap<QueryVariable, Vec<QueryVariable>> = HashMap::new();
-        
+
         for atom in &query.body_atoms {
-            if let QueryAtom::ObjectPropertyAtom { subject, object, .. } = atom {
-                graph.entry(subject.clone())
+            if let QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } = atom
+            {
+                graph
+                    .entry(subject.clone())
                     .or_insert_with(Vec::new)
                     .push(object.clone());
             }
         }
-        
+
         // DFS cycle detection
         let mut visited = HashSet::new();
         let mut rec_stack = HashSet::new();
-        
+
         for var in graph.keys() {
             if !visited.contains(var) {
                 if self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack) {
@@ -1759,10 +1815,10 @@ impl ExecutionStrategySelector {
                 }
             }
         }
-        
+
         false
     }
-    
+
     /// DFS helper for cycle detection
     fn has_cycle_dfs(
         &self,
@@ -1773,7 +1829,7 @@ impl ExecutionStrategySelector {
     ) -> bool {
         visited.insert(node.clone());
         rec_stack.insert(node.clone());
-        
+
         if let Some(neighbors) = graph.get(node) {
             for neighbor in neighbors {
                 if !visited.contains(neighbor) {
@@ -1785,7 +1841,7 @@ impl ExecutionStrategySelector {
                 }
             }
         }
-        
+
         rec_stack.remove(node);
         false
     }
@@ -2099,7 +2155,7 @@ impl ThreadPool {
 impl ResourceManager {
     pub fn new() -> Self {
         use crate::performance::MemoryTracker;
-        
+
         // Query actual system available memory, fallback to 1GB if unavailable
         let available_memory = MemoryTracker::query_system_available_memory();
         let available_memory = if available_memory > 0 {
@@ -2107,7 +2163,7 @@ impl ResourceManager {
         } else {
             1024 * 1024 * 1024 // 1 GB fallback
         };
-        
+
         Self {
             available_memory,
             memory_allocations: HashMap::new(),
