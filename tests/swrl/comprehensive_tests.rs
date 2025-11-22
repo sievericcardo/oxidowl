@@ -3,7 +3,7 @@
 use oxidowl::ontology::Literal;
 use oxidowl::swrl::{
     SWRLValue, datetime_builtins::DateTimeBuiltInRegistry, integration::SWRLFeatureRegistry,
-    regex_builtins::RegexBuiltInRegistry, temporal::TemporalValue,
+    regex_builtins::RegexBuiltInRegistry,
 };
 
 #[cfg(test)]

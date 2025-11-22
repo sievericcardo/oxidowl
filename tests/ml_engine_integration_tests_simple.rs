@@ -4,7 +4,7 @@
 
 use oxidowl::config::ReasonerConfig;
 use oxidowl::ontology::concepts::Class;
-use oxidowl::ontology::{ClassExpression, IRI, ObjectPropertyExpression, Ontology};
+use oxidowl::ontology::{ClassExpression, IRI, Ontology};
 use oxidowl::query::advanced::execution_engine::{ExecutionConstraints, ExecutionPriority};
 use oxidowl::query::advanced::{
     AdvancedExecutionConfig, AdvancedExecutionEngine, ConjunctiveQuery, QueryAtom, QueryVariable,

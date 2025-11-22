@@ -1,11 +1,10 @@
 use oxidowl::ontology::*;
 use oxidowl::swrl::*;
-use oxidowl::*;
 
 #[test]
 fn test_new_built_ins_integration() {
     // Create a simple ontology
-    let mut ontology = Ontology::new();
+    let ontology = Ontology::new();
 
     // Create SWRL variables (using IRI)
     let x = SWRLVariable::new(IRI::new("http://example.org/x"));

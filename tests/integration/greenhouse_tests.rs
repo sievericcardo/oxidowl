@@ -4,7 +4,7 @@ use oxidowl::{
     config::ReasonerConfig,
     ontology::{
         ClassExpression, IRI, Ontology,
-        axioms::{self, Axiom, AxiomId, DeclarationAxiom, Entity},
+        axioms::{self},
         concepts::Class,
         individuals::{Individual, NamedIndividual},
     },

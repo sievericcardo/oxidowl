@@ -74,7 +74,7 @@ fn test_query_profiling_integration() {
 
 #[test]
 fn test_performance_monitor_integration() {
-    let mut monitor = PerformanceMonitor::new(true);
+    let monitor = PerformanceMonitor::new(true);
 
     // Simulate query execution with memory snapshots
     for i in 1..=5 {
@@ -116,7 +116,7 @@ fn test_performance_monitor_integration() {
 
 #[test]
 fn test_performance_monitor_disabled() {
-    let mut monitor = PerformanceMonitor::new(false);
+    let monitor = PerformanceMonitor::new(false);
 
     // When disabled, snapshots should return Ok(None)
     let snapshot = monitor
