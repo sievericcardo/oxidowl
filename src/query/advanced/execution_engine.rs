@@ -1848,7 +1848,7 @@ impl ExecutionStrategySelector {
 
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
         // Get strategy implementation by name
-        Err(AdvancedQueryError::StrategyNotFound(name.to_string()))
+        Err(AdvancedQueryError::strategy_not_found(name.to_string()))
     }
 
     pub fn update_performance_history(
@@ -1989,7 +1989,7 @@ impl ExecutionPerformanceMonitor {
                 trace.joins_performed,
                 result_size,
             );
-            self.query_profiler.record(timing);
+            let _ = self.query_profiler.record(timing);
 
             let completed = CompletedExecution {
                 execution_id: execution_id.clone(),
@@ -2199,7 +2199,7 @@ impl Default for ParallelExecutionConfig {
 
 // Additional error variants for AdvancedQueryError
 impl AdvancedQueryError {
-    pub fn StrategyNotFound(strategy: String) -> Self {
+    pub fn strategy_not_found(strategy: String) -> Self {
         AdvancedQueryError::InternalError(format!("Execution strategy not found: {}", strategy))
     }
 }
