@@ -5,29 +5,28 @@
 //! with the existing reasoning infrastructure.
 
 use super::{
-    ChangeEvent, IncrementalConfig, IncrementalStatistics,
+    IncrementalConfig, IncrementalStatistics,
     cache_management::{ConsistencyReport, IncrementalCacheManager},
-    change_tracking::{ABoxChange, ChangeTracker, InvalidationEvent, TBoxChange},
-    delta_computation::{DeltaComputer, QueryDelta, ReasoningDelta},
+    change_tracking::{ABoxChange, ChangeTracker, TBoxChange},
+    delta_computation::{DeltaComputer, QueryDelta},
 };
 use crate::{
     cache::CacheManager,
-    core::lock_helpers::{read_lock, write_lock},
     error::{Error, Result},
     ontology::{
-        DataProperty, DataPropertyExpression, ObjectProperty, ObjectPropertyExpression, Ontology,
+        Ontology,
         axioms::Axiom,
         concepts::{Class, ClassExpression},
         individuals::Individual,
     },
     query::advanced::{
         conjunctive::ConjunctiveQuery,
-        execution::{AdvancedQueryError, QueryEngine},
+        execution::QueryEngine,
     },
     reasoning::ReasoningService,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, Mutex, RwLock},
     time::Instant,
 };
@@ -228,7 +227,7 @@ impl IncrementalReasoningService {
 
         // Add assertion to ontology (this would need to be implemented in Ontology)
         {
-            let mut ontology = self.ontology.write().await;
+            let ontology = self.ontology.write().await;
             // ontology.add_class_assertion(individual.clone(), class.clone());
             // For now, we'll just track the change
         }

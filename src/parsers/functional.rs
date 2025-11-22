@@ -5,7 +5,7 @@
 use std::{
     collections::HashMap,
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufReader, Read},
     path::Path,
 };
 

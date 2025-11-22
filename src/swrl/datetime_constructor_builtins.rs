@@ -4,9 +4,8 @@
 
 use crate::error::{Error, Result};
 use crate::ontology::{IRI, Literal};
-use crate::swrl::temporal::{TemporalError, TemporalValue};
 use crate::swrl::{SWRLBuiltIn, SWRLValue};
-use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use std::collections::HashMap;
 
 /// Registry for date/time constructor built-ins

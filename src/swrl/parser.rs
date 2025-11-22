@@ -6,7 +6,7 @@ use crate::ontology::{
     Class, ClassExpression, DataProperty, DataPropertyExpression, IRI, Individual, Literal,
     ObjectProperty, ObjectPropertyExpression,
 };
-use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable};
+use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLVariable};
 use crate::{Error, Result};
 use std::collections::HashMap;
 

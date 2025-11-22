@@ -4,7 +4,7 @@
 //! Description Logic queries to predict their execution characteristics.
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::optimizer::{QueryFeatureExtractor, QueryPerformanceDataPoint};
+use super::optimizer::QueryFeatureExtractor;
 use crate::ontology::{ClassExpression, ObjectPropertyExpression};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};

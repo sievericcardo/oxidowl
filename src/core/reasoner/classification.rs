@@ -4,7 +4,7 @@
 //! property classification, and individual type inference.
 
 use crate::{
-    Error, Result,
+    Result,
     cache::CacheManager,
     core::{
         lock_helpers::{read_lock, write_lock},

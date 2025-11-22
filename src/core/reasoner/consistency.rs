@@ -24,7 +24,7 @@ impl PreConsistencyChecker {
         log::info!("Building pre-consistency checker");
 
         // Build equivalence closure
-        let mut equivalence_closure = EquivalenceClosure::from_ontology(ontology)?;
+        let equivalence_closure = EquivalenceClosure::from_ontology(ontology)?;
 
         // Build disjointness map
         let disjointness_map = DisjointnessMap::from_ontology(ontology, &equivalence_closure)?;

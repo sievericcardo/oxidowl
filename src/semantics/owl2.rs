@@ -7,14 +7,9 @@
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
 use crate::{
     Error, Result,
-    config::ReasoningConfig,
-    core::{
-        expansion::ExpansionStrategy,
-        tableau::{Tableau, TableauBuilder, TableauNode, TableauState},
-    },
     ontology::{
-        Axiom, ClassExpression, DataPropertyExpression, DataRange, IRI, Individual, Literal,
-        ObjectPropertyExpression, Ontology, OntologyRef,
+        Axiom, ClassExpression, DataPropertyExpression, DataRange, Individual, Literal,
+        ObjectPropertyExpression,
     },
 };
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -1248,7 +1243,7 @@ impl Owl2ReasoningEngine {
 
     /// Check for contradictions in a set of concepts
     fn has_contradiction(&self, concepts: &HashSet<ClassExpression>) -> Result<bool> {
-        use crate::ontology::concepts::Class;
+        
 
         // Check for owl:Nothing
         for concept in concepts {

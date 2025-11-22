@@ -7,8 +7,7 @@
 //! - Performance metrics collection and reporting
 
 use crate::core::lock_helpers::{read_lock, write_lock};
-use crate::{Error, Result};
-use std::collections::HashMap;
+use crate::Result;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 

@@ -37,7 +37,7 @@ pub use result_aggregation::{AggregatedResult, PartialResult, ResultAggregator};
 
 use crate::prelude::*;
 use std::net::SocketAddr;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Unique identifier for cluster nodes
@@ -723,7 +723,7 @@ impl DistributedQueryProcessor {
         }
 
         {
-            let mut fault_tolerance = self.fault_tolerance.write().await;
+            let fault_tolerance = self.fault_tolerance.write().await;
             fault_tolerance.stop().await?;
         }
 

@@ -20,7 +20,7 @@ pub use interpretation::{Interpretation, InterpretationBuilder, InterpretationFa
 pub use owl2::{Owl2Interpretation, Owl2ReasoningEngine};
 
 use crate::{Error, Result};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use url::Url;
 
 /// RDF Triple representation

@@ -4,7 +4,7 @@
 //! https://www.w3.org/TR/rdf11-mt/#simple-entailment
 
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple};
-use crate::{Error, Result};
+use crate::Result;
 use std::collections::{HashMap, HashSet};
 
 /// RDF Simple Interpretation

@@ -12,9 +12,9 @@ use crate::error::Error;
 use crate::ontology::Ontology;
 use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[cfg(feature = "ml")]
 use candle_core::{Device, Tensor};
@@ -122,7 +122,7 @@ impl MLHeuristicsEngine {
 
     /// Initialize with pre-trained models
     pub fn with_pretrained_models(config: MLHeuristicsConfig) -> Result<Self, Error> {
-        let mut engine = Self::new(config)?;
+        let engine = Self::new(config)?;
         engine.load_models()?;
         Ok(engine)
     }
@@ -637,8 +637,8 @@ impl QueryFeatureExtractor {
     }
 
     fn estimate_ontology_depth(&self, ontology: &Ontology) -> f32 {
-        use crate::ontology::ClassExpression;
-        use std::collections::{HashSet, VecDeque};
+        
+        
 
         let classes = ontology.classes();
         if classes.is_empty() {
@@ -1045,7 +1045,7 @@ impl QueryFeatureExtractor {
         for atom in &query.body_atoms {
             let atom_selectivity = match atom {
                 QueryAtom::ClassAtom {
-                    class_expression, ..
+                     ..
                 } => {
                     // Class atoms: estimate based on class hierarchy
                     if class_count > 0.0 {
@@ -1604,7 +1604,7 @@ impl StrategySelectionModel {
 
     /// Initialize the strategy registry with metadata
     fn initialize_registry(&mut self) {
-        use std::collections::HashMap;
+        
 
         // IndexedLookup strategy
         self.strategy_registry.insert(

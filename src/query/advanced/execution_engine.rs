@@ -8,24 +8,19 @@
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use super::cost_optimizer::CostBasedOptimizer;
-use super::execution::{AdvancedQueryError, ConjunctiveQueryResult, QueryEngine};
+use super::execution::{AdvancedQueryError, ConjunctiveQueryResult};
 use super::ml_core::{
     ExecutionStrategy as MLExecutionStrategy, MLHeuristicsConfig as MLConfig,
-    MLHeuristicsEngine as MLEngine, QueryExecution, QueryFeatures, StrategyRecommendation,
+    MLHeuristicsEngine as MLEngine, QueryExecution, StrategyRecommendation,
 };
-use super::optimization::OptimizationError;
-use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
-use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use super::optimizer::AdvancedQueryPlan;
+use crate::ontology::{Individual, Ontology};
 use crate::performance::{QueryProfiler, QueryTiming};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::future::Future;
 use std::hash::{Hash, Hasher};
-use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 

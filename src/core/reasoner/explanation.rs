@@ -4,7 +4,7 @@
 //! and other reasoning results.
 
 use crate::{
-    Error, Result,
+    Result,
     ontology::{Axiom, ClassExpression, Individual, Ontology},
 };
 use std::collections::{HashMap, HashSet};

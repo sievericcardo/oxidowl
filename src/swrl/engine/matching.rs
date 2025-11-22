@@ -4,12 +4,10 @@
 //! and unification logic for rule matching and goal resolution.
 
 use crate::Result;
-use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression};
+use crate::ontology::{ClassExpression, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument};
-use log::debug;
 use std::collections::HashMap;
 
-use super::core::SWRLRuleEngine;
 
 /// Unification engine for SWRL atoms and arguments
 #[derive(Debug)]

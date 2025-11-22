@@ -4,22 +4,16 @@
 //! including root node creation and initial concept loading.
 
 use super::{
-    edge::{PropertyInclusion, TableauEdge},
-    node::{ConceptLabel, NodeId, NodeType, TableauNode},
-    state::{ClashDetector, TableauState, TableauStatistics},
+    edge::PropertyInclusion,
+    node::{ConceptLabel, NodeType},
 };
 use crate::{
-    Error, Result,
+    Result,
     config::ReasoningConfig,
-    core::{
-        blocking::BlockingChecker,
-        completion::CompletionRuleSet,
-        dependency::DependencyTracker,
-        expansion::{DefaultExpansionStrategy, ExpansionStrategy},
-    },
+    core::expansion::DefaultExpansionStrategy,
     ontology::{ClassExpression, Ontology},
 };
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 /// Tableau builder for constructing configured tableau instances
 #[derive(Debug)]
@@ -95,7 +89,7 @@ impl TableauBuilder {
     }
 
     /// Configure builder from ontology axioms
-    pub fn from_ontology(mut self, ontology: &Ontology) -> Result<Self> {
+    pub fn from_ontology(self, ontology: &Ontology) -> Result<Self> {
         // Extract property axioms from ontology
         // This would analyze the ontology and extract:
         // - Functional properties

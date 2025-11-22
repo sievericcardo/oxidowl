@@ -7,7 +7,7 @@ use crate::ontology::{
     ClassExpression, DataPropertyExpression, IRI, Individual, Literal, ObjectPropertyExpression,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 
 /// A variable in a conjunctive query

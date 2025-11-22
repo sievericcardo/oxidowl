@@ -6,9 +6,8 @@
 //! - Advanced indexing strategies for SROIQV(D) constructs
 //! - Real-time performance monitoring and optimization
 
-use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::ml_models::{EnsembleModel, LinearRegressionModel, NeuralNetworkModel};
-use super::optimization::{ExecutionStrategy, OptimizationError, QueryOptimizer, QueryPlan};
+use super::conjunctive::{ConjunctiveQuery, QueryAtom};
+use super::optimization::{OptimizationError, QueryOptimizer, QueryPlan};
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
 use crate::reasoning::ReasoningService;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -676,7 +675,7 @@ impl AdvancedQueryOptimizer {
         for atom in &query.body_atoms {
             match atom {
                 QueryAtom::ClassAtom {
-                    class_expression, ..
+                     ..
                 } => {
                     recommendations.push(IndexRecommendation {
                         index_type: "ConceptIndex".to_string(),
@@ -685,7 +684,7 @@ impl AdvancedQueryOptimizer {
                         maintenance_cost: 0.05,
                     });
                 }
-                QueryAtom::ObjectPropertyAtom { property, .. } => {
+                QueryAtom::ObjectPropertyAtom {  .. } => {
                     recommendations.push(IndexRecommendation {
                         index_type: "RoleIndex".to_string(),
                         expected_improvement: 0.4,

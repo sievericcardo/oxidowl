@@ -12,7 +12,7 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::{
-    Axiom, ClassExpression, DataPropertyExpression, DataRange, ObjectPropertyExpression, Ontology,
+    Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology,
 };
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,

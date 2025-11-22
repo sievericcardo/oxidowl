@@ -3,8 +3,7 @@
 //! This module provides validation functionality for SWRL rules,
 //! ensuring they are well-formed, safe, and semantically correct.
 
-use crate::ontology::{axioms::*, *};
-use crate::swrl::builtins::{SWRLBuiltInRegistry, SWRLValue};
+use crate::ontology::*;
 use crate::{Error, Result};
 use log::debug;
 use std::collections::{HashMap, HashSet};

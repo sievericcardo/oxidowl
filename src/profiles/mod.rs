@@ -8,7 +8,6 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
-use std::collections::HashSet;
 
 pub mod dl;
 pub mod el;

@@ -3,12 +3,9 @@
 //! This module implements algorithms for computing minimal reasoning updates
 //! based on ontology changes, avoiding expensive full re-reasoning operations.
 
-use super::{
-    IncrementalStatistics,
-    change_tracking::{ABoxChange, ChangeTracker, InvalidationEvent, TBoxChange},
-};
+use super::change_tracking::{ABoxChange, ChangeTracker, TBoxChange};
 use crate::{
-    error::{OxidowlError, Result},
+    error::Result,
     ontology::{
         Ontology,
         axioms::Axiom,

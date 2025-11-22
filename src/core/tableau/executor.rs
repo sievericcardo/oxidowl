@@ -4,8 +4,7 @@
 //! rule application, and completion checking.
 
 use super::{
-    edge::TableauEdge,
-    node::{ConceptLabel, NodeId, NodeType, RoleLabel},
+    node::{ConceptLabel, NodeId, NodeType},
     state::{Clash, ClashType, TableauState},
 };
 use crate::{

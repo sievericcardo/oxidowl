@@ -3,9 +3,8 @@
 //! This module handles the overall state of tableau expansion,
 //! including statistics, clash detection, and completion tracking.
 
-use super::node::{ConceptLabel, NodeId, RoleLabel};
+use super::node::{NodeId, RoleLabel};
 use crate::core::dependency::DependencySet;
-use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 /// Current state of tableau expansion

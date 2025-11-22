@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock, mpsc};
-use tokio::time::{Duration, Instant, interval, sleep, timeout};
+use tokio::time::{Duration, Instant, interval, timeout};
 use uuid::Uuid;
 
 /// Information about a cluster node

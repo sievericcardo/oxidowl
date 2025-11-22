@@ -4,8 +4,8 @@
 //! including those from DisjointClasses and DisjointUnion axioms.
 
 use crate::core::tableau::equivalence::{ConceptId, EquivalenceClosure};
-use crate::ontology::{Axiom, ClassExpression, Ontology};
-use crate::{Error, Result};
+use crate::ontology::{Axiom, Ontology};
+use crate::Result;
 use std::collections::{HashMap, HashSet};
 
 /// Tracks disjointness relationships between concepts

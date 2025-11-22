@@ -3,7 +3,7 @@
 //! Handles intelligent distribution of queries across cluster nodes,
 //! including query partitioning, load-aware assignment, and parallel execution coordination.
 
-use crate::distributed::cluster::{ClusterManager, NodeInfo, NodeStatus};
+use crate::distributed::cluster::{ClusterManager, NodeInfo};
 use crate::distributed::{DistributedError, NodeId};
 use crate::prelude::*;
 use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};

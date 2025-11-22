@@ -2,7 +2,7 @@
 
 use crate::{
     error::Result,
-    ontology::{Axiom, ClassExpression, DataPropertyExpression, ObjectPropertyExpression},
+    ontology::{Axiom, ClassExpression},
 };
 use log::debug;
 

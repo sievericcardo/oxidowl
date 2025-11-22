@@ -1047,7 +1047,7 @@ impl TurtleParser {
                     }
                     Token::Literal(lit_value) => {
                         // Handle literal values as data property assertions
-                        let mut literal_value = lit_value.clone();
+                        let literal_value = lit_value.clone();
                         i += 1; // Move past literal
 
                         // Check if there's a type annotation (^^datatype)

@@ -6,7 +6,7 @@
 //! - Index-based optimization
 //! - Cost-based query planning
 
-use super::conjunctive::{ConjunctiveQuery, OptimizationStrategy, QueryAtom, QueryVariable};
+use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use crate::ontology::{ClassExpression, ObjectPropertyExpression, Ontology};
 use crate::reasoning::ReasoningService;
 use std::collections::{HashMap, HashSet};

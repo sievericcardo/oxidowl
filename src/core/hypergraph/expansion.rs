@@ -25,10 +25,10 @@
 //! 6. Check for blocking to terminate expansion
 //! 7. Detect clashes and backtrack if needed
 
-use super::{EdgeType, HyperEdge, HyperNode, Hypergraph, NodeId, NodeSignature};
+use super::{HyperEdge, HyperNode, Hypergraph, NodeId, NodeSignature};
 use crate::{
     Error, Result,
-    core::{completion::CompletionRule, dependency::DependencySet},
+    core::completion::CompletionRule,
     ontology::ClassExpression,
 };
 use log::{debug, trace};

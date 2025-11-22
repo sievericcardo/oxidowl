@@ -3,16 +3,13 @@
 //! Handles collection and merging of partial results from distributed query execution,
 //! ensuring correctness and consistency of the final aggregated results.
 
-use crate::distributed::query_distribution::{PartitionStatus, QueryPartition};
 use crate::distributed::{DistributedError, NodeId};
-use crate::ontology::Individual;
 use crate::prelude::*;
-use crate::query::advanced::conjunctive::QueryVariable;
-use crate::query::advanced::execution::{BoundValue, ConjunctiveQueryResult, QueryBinding};
+use crate::query::advanced::execution::{BoundValue, QueryBinding};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 
 /// Partial result from a single query partition execution

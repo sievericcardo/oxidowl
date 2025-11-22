@@ -4,16 +4,15 @@
 //! selection and performance optimization, targeting 40-60% reduction in reasoning
 //! times through learned optimization patterns.
 
-use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::ml_models::{EnsembleModel, LinearRegressionModel, NeuralNetworkModel};
+use super::conjunctive::{ConjunctiveQuery, QueryAtom};
+use super::ml_models::{EnsembleModel, NeuralNetworkModel};
 use super::optimizer::{
-    AccuracyMetrics, PerformancePredictionModel, QueryFeatureExtractor, QueryPerformanceDataPoint,
+    PerformancePredictionModel, QueryFeatureExtractor, QueryPerformanceDataPoint,
 };
-use crate::ontology::{ClassExpression, IRI, Individual, ObjectPropertyExpression, Ontology};
+use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Expansion order item for tableau reasoning

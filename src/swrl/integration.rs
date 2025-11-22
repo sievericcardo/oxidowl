@@ -13,7 +13,6 @@ use crate::swrl::{
 };
 use crate::{Error, Result};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Comprehensive SWRL feature registry
 pub struct SWRLFeatureRegistry {
