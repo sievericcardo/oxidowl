@@ -6,9 +6,7 @@
 use crate::{
     Result,
     core::tableau::NodeId,
-    ontology::{
-        Axiom, ClassExpression, Individual, ObjectPropertyExpression,
-    },
+    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression},
 };
 use serde::{Deserialize, Serialize};
 use std::{

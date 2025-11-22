@@ -7,9 +7,7 @@
 //! - Gene Ontology
 //! - Large synthetic ontologies
 
-use super::conjunctive::{
-    ConjunctiveQuery, QueryConstraints, QueryMetadata,
-};
+use super::conjunctive::{ConjunctiveQuery, QueryConstraints, QueryMetadata};
 use super::optimization::OptimizationError;
 use super::optimizer::AdvancedQueryOptimizer;
 use crate::ontology::{ClassExpression, IRI, Ontology};

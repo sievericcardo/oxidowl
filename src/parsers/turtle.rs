@@ -1708,8 +1708,11 @@ impl TurtleParser {
                 .or_else(|| restriction_str.find("owl:qualifiedCardinality"))
             {
                 let after_card = &restriction_str[card_start..];
-                let after_prop_name =
-                    &after_card[after_card.find("Cardinality").expect("Failed to find Cardinality keyword in restriction") + 11..].trim_start();
+                let after_prop_name = &after_card[after_card
+                    .find("Cardinality")
+                    .expect("Failed to find Cardinality keyword in restriction")
+                    + 11..]
+                    .trim_start();
 
                 // Extract the literal value (could be "2"^^xsd:nonNegativeInteger or just "2")
                 if let Some(quote_start) = after_prop_name.find('"') {
@@ -1823,7 +1826,9 @@ impl TurtleParser {
 
                 // Check for datatype annotation
                 if after_has_self.contains("^^") {
-                    let after_quotes = &after_has_self[after_has_self.find('"').expect("Failed to find quote in hasSelf restriction")..];
+                    let after_quotes = &after_has_self[after_has_self
+                        .find('"')
+                        .expect("Failed to find quote in hasSelf restriction")..];
                     if let Some(quote_end) = after_quotes[1..].find('"') {
                         let after_closing_quote = &after_quotes[quote_end + 2..];
                         if after_closing_quote.trim_start().starts_with("^^") {

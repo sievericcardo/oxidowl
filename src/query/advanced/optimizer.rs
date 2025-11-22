@@ -674,9 +674,7 @@ impl AdvancedQueryOptimizer {
         // Analyze query atoms and recommend appropriate indices
         for atom in &query.body_atoms {
             match atom {
-                QueryAtom::ClassAtom {
-                     ..
-                } => {
+                QueryAtom::ClassAtom { .. } => {
                     recommendations.push(IndexRecommendation {
                         index_type: "ConceptIndex".to_string(),
                         expected_improvement: 0.3,
@@ -684,7 +682,7 @@ impl AdvancedQueryOptimizer {
                         maintenance_cost: 0.05,
                     });
                 }
-                QueryAtom::ObjectPropertyAtom {  .. } => {
+                QueryAtom::ObjectPropertyAtom { .. } => {
                     recommendations.push(IndexRecommendation {
                         index_type: "RoleIndex".to_string(),
                         expected_improvement: 0.4,

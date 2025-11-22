@@ -590,7 +590,6 @@ impl FaultTolerance {
         use crate::distributed::result_aggregation::{
             PartialResult, PartialResultMetadata, PartialResultStatus, PerformanceMetrics,
         };
-        
 
         // Simulate execution time
         sleep(Duration::from_millis(100)).await;
@@ -1104,7 +1103,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_checkpoint_manager() {
-        let mut manager = CheckpointManager::new().await.expect("Failed to create checkpoint manager for fault tolerance");
+        let mut manager = CheckpointManager::new()
+            .await
+            .expect("Failed to create checkpoint manager for fault tolerance");
         let checkpoint_id = Uuid::new_v4();
 
         let result = manager

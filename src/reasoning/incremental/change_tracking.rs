@@ -641,7 +641,7 @@ impl ChangeTracker {
                 TBoxChange::AxiomAdded { axiom, .. } => {
                     graph.analyze_axiom_dependencies(axiom)?;
                 }
-                TBoxChange::AxiomRemoved {  .. } => {
+                TBoxChange::AxiomRemoved { .. } => {
                     // For simplicity, we rebuild the graph when axioms are removed
                     // A more sophisticated implementation would selectively remove dependencies
                     tracing::warn!(

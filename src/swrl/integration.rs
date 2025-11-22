@@ -388,7 +388,9 @@ mod tests {
         assert!(categories.contains_key("string"));
 
         // Check that datetime category has expected built-ins
-        let datetime_builtins = categories.get("datetime").expect("Failed to get datetime category from SWRL builtin registry");
+        let datetime_builtins = categories
+            .get("datetime")
+            .expect("Failed to get datetime category from SWRL builtin registry");
         assert!(
             datetime_builtins
                 .contains(&"http://www.w3.org/2003/11/swrlb#dateTimeEqual".to_string())

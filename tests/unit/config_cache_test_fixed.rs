@@ -4,9 +4,7 @@
 
 use oxidowl::{
     cache::{CacheConfig, CacheManager, ConceptSatisfiabilityCache},
-    ontology::{
-        Ontology, OntologyRef,
-    },
+    ontology::{Ontology, OntologyRef},
 };
 
 #[test]

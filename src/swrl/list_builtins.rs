@@ -239,7 +239,9 @@ impl SWRLBuiltIn for FirstBuiltIn {
                     return Err(Error::reasoning("Cannot get first element of empty list"));
                 }
 
-                let first_item = list.split(',').next()
+                let first_item = list
+                    .split(',')
+                    .next()
                     .ok_or_else(|| Error::reasoning("Failed to get first element from list"))?
                     .trim();
 
@@ -539,14 +541,18 @@ mod tests {
             SWRLValue::String("apple".to_string()),
             SWRLValue::String("apple,banana,cherry".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![
             SWRLValue::String("grape".to_string()),
             SWRLValue::String("apple,banana,cherry".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(false));
     }
 
@@ -558,11 +564,15 @@ mod tests {
             SWRLValue::Integer(3),
             SWRLValue::String("apple,banana,cherry".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         let args = vec![SWRLValue::Integer(0), SWRLValue::String("".to_string())];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -575,7 +585,9 @@ mod tests {
             SWRLValue::String("apple,banana,cherry".to_string()),
             SWRLValue::String("apple,banana,grape".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 }

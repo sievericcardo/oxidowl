@@ -26,7 +26,8 @@ mod tests {
         let ssn_prop = oxidowl::ontology::DataProperty {
             iri: IRI::new("http://example.org/ssn"),
         };
-        let spouse_prop = ObjectProperty::new(IRI::new("http://example.org/spouse")).expect("Test operation failed");
+        let spouse_prop = ObjectProperty::new(IRI::new("http://example.org/spouse"))
+            .expect("Test operation failed");
 
         // Create HasKey axiom: Person has key properties ssn and spouse
         let has_key_axiom = HasKeyAxiom {

@@ -102,11 +102,13 @@ mod tests {
     #[test]
     fn test_write_lock_success() {
         let data = RwLock::new(42);
-        let mut guard = write_lock(&data, "test write").expect("Failed to acquire write lock in test");
+        let mut guard =
+            write_lock(&data, "test write").expect("Failed to acquire write lock in test");
         *guard = 100;
         drop(guard);
 
-        let guard = read_lock(&data, "test read after write").expect("Failed to acquire read lock after write in test");
+        let guard = read_lock(&data, "test read after write")
+            .expect("Failed to acquire read lock after write in test");
         assert_eq!(*guard, 100);
     }
 
@@ -117,7 +119,9 @@ mod tests {
 
         // Poison the lock by panicking while holding it
         let handle = thread::spawn(move || {
-            let _guard = data_clone.write().expect("Failed to acquire write lock for poisoning test");
+            let _guard = data_clone
+                .write()
+                .expect("Failed to acquire write lock for poisoning test");
             panic!("Intentional panic to poison lock");
         });
 
@@ -143,7 +147,9 @@ mod tests {
 
         // Poison the lock
         let handle = thread::spawn(move || {
-            let _guard = data_clone.write().expect("Failed to acquire write lock for poisoning test");
+            let _guard = data_clone
+                .write()
+                .expect("Failed to acquire write lock for poisoning test");
             panic!("Intentional panic");
         });
         let _ = handle.join();

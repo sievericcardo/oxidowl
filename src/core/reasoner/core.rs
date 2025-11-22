@@ -802,8 +802,7 @@ impl Reasoner {
             ontology.add_axiom(axiom);
 
             // Clear cache since ontology has changed
-            let cache =
-                write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
+            let cache = write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
             cache.clear_all();
 
             Ok(())

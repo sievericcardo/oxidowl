@@ -5,9 +5,7 @@
 //! performance and intelligent query processing.
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::optimization::{
-    ExecutionStrategy, OptimizationError, PlanMetadata, QueryPlan,
-};
+use super::optimization::{ExecutionStrategy, OptimizationError, PlanMetadata, QueryPlan};
 use super::optimizer::AdvancedQueryPlan;
 use crate::ontology::{
     ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,

@@ -12,7 +12,8 @@ fn satisfiability_benchmark(c: &mut Criterion) {
 
     c.bench_function("simple_concept_satisfiability", |b| {
         b.iter(|| {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
+            let rt = tokio::runtime::Runtime::new()
+                .expect("Failed to create tokio runtime for benchmark");
             rt.block_on(async {
                 let class = Class::new(IRI::new("http://example.org/A"));
                 let concept = ClassExpression::Class(class);
@@ -24,7 +25,8 @@ fn satisfiability_benchmark(c: &mut Criterion) {
 
     c.bench_function("complex_concept_satisfiability", |b| {
         b.iter(|| {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
+            let rt = tokio::runtime::Runtime::new()
+                .expect("Failed to create tokio runtime for benchmark");
             rt.block_on(async {
                 let class_a = Class::new(IRI::new("http://example.org/A"));
                 let class_b = Class::new(IRI::new("http://example.org/B"));
@@ -49,7 +51,8 @@ fn satisfiability_benchmark(c: &mut Criterion) {
 fn consistency_benchmark(c: &mut Criterion) {
     c.bench_function("empty_ontology_consistency", |b| {
         b.iter(|| {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
+            let rt = tokio::runtime::Runtime::new()
+                .expect("Failed to create tokio runtime for benchmark");
             rt.block_on(async {
                 let config = ReasonerConfig::default();
                 let ontology = Ontology::new();
@@ -62,7 +65,8 @@ fn consistency_benchmark(c: &mut Criterion) {
 
     c.bench_function("simple_ontology_consistency", |b| {
         b.iter(|| {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
+            let rt = tokio::runtime::Runtime::new()
+                .expect("Failed to create tokio runtime for benchmark");
             rt.block_on(async {
                 let config = ReasonerConfig::default();
                 let mut ontology = Ontology::new();

@@ -70,13 +70,19 @@ mod tests {
 
         let dt1 = SWRLValue::Literal(Literal {
             value: "2023-12-25T10:30:00".to_string(),
-            datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed")),
+            datatype: Some(
+                url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                    .expect("Test operation failed"),
+            ),
             language: None,
         });
 
         let dt2 = SWRLValue::Literal(Literal {
             value: "2023-12-25T10:30:00".to_string(),
-            datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed")),
+            datatype: Some(
+                url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                    .expect("Test operation failed"),
+            ),
             language: None,
         });
 
@@ -90,17 +96,25 @@ mod tests {
 
         let year_result = SWRLValue::Literal(Literal {
             value: "2023".to_string(),
-            datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").expect("Test operation failed")),
+            datatype: Some(
+                url::Url::parse("http://www.w3.org/2001/XMLSchema#integer")
+                    .expect("Test operation failed"),
+            ),
             language: None,
         });
 
         let datetime = SWRLValue::Literal(Literal {
             value: "2023-12-25T10:30:00".to_string(),
-            datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed")),
+            datatype: Some(
+                url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                    .expect("Test operation failed"),
+            ),
             language: None,
         });
 
-        let result = builtin.execute(&[year_result, datetime]).expect("Test operation failed");
+        let result = builtin
+            .execute(&[year_result, datetime])
+            .expect("Test operation failed");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -138,12 +152,18 @@ mod tests {
         let invalid_literals = vec![
             Literal {
                 value: "not-a-date".to_string(),
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#date").expect("Test operation failed")),
+                datatype: Some(
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
+                        .expect("Test operation failed"),
+                ),
                 language: None,
             },
             Literal {
                 value: "2023-13-01".to_string(), // Invalid month
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#date").expect("Test operation failed")),
+                datatype: Some(
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
+                        .expect("Test operation failed"),
+                ),
                 language: None,
             },
         ];

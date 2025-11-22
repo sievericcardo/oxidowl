@@ -11,9 +11,7 @@
 //! This implementation provides full OWL 2 QL profile validation according to the W3C specification.
 
 use crate::error::OxidowlError;
-use crate::ontology::{
-    Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology,
-};
+use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
 };
@@ -744,13 +742,15 @@ mod tests {
 
         // Atomic object property - allowed
         let prop = ObjectPropertyExpression::ObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).expect("Failed to create ObjectProperty for test: hasParent"),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent"))
+                .expect("Failed to create ObjectProperty for test: hasParent"),
         );
         assert!(validator.is_property_expression_allowed(&prop));
 
         // Inverse property - not allowed in QL
         let inverse_prop = ObjectPropertyExpression::InverseObjectProperty(
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent")).expect("Failed to create ObjectProperty for test: hasParent"),
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasParent"))
+                .expect("Failed to create ObjectProperty for test: hasParent"),
         );
         assert!(!validator.is_property_expression_allowed(&inverse_prop));
     }
@@ -773,7 +773,9 @@ mod tests {
         let validator = QLValidator::new();
         let ontology = Ontology::new();
 
-        let report = validator.validate(&ontology).expect("Failed to validate ontology against OWL 2 profile");
+        let report = validator
+            .validate(&ontology)
+            .expect("Failed to validate ontology against OWL 2 profile");
         assert!(report.conforms); // Empty ontology should conform
         assert!(report.violations.is_empty());
     }
@@ -784,8 +786,8 @@ mod tests {
         let mut ontology = Ontology::new();
 
         // Add a non-QL axiom (functional property)
-        let prop =
-            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop")).expect("Failed to create ObjectProperty for test: prop");
+        let prop = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop"))
+            .expect("Failed to create ObjectProperty for test: prop");
         ontology.axioms.push(Axiom::FunctionalObjectProperty(
             crate::ontology::axioms::FunctionalObjectPropertyAxiom {
                 id: 0,
@@ -794,7 +796,9 @@ mod tests {
             },
         ));
 
-        let report = validator.validate(&ontology).expect("Failed to validate ontology against OWL 2 profile");
+        let report = validator
+            .validate(&ontology)
+            .expect("Failed to validate ontology against OWL 2 profile");
         assert!(!report.conforms);
         assert!(!report.violations.is_empty());
     }

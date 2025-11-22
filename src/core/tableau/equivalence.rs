@@ -3,8 +3,8 @@
 //! This module implements a Union-Find data structure to efficiently
 //! track and query equivalence relationships between concepts.
 
-use crate::ontology::{Axiom, ClassExpression, Ontology};
 use crate::Result;
+use crate::ontology::{Axiom, ClassExpression, Ontology};
 use std::collections::{HashMap, HashSet};
 
 /// Concept identifier for equivalence tracking

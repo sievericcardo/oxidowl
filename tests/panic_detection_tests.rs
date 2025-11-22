@@ -7,10 +7,7 @@
 use oxidowl::{
     Error,
     config::ReasoningConfig,
-    core::{
-        lock_helpers::read_lock,
-        tableau::Tableau,
-    },
+    core::{lock_helpers::read_lock, tableau::Tableau},
     ontology::Ontology,
 };
 use std::sync::{Arc, RwLock};

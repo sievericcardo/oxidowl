@@ -19,10 +19,7 @@ use crate::{
         concepts::{Class, ClassExpression},
         individuals::Individual,
     },
-    query::advanced::{
-        conjunctive::ConjunctiveQuery,
-        execution::QueryEngine,
-    },
+    query::advanced::{conjunctive::ConjunctiveQuery, execution::QueryEngine},
     reasoning::ReasoningService,
 };
 use std::{

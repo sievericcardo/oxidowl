@@ -1,11 +1,9 @@
 //! Backward Chaining Implementation for SWRL
 
 use crate::ontology::{
-    ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, IRI,
+    ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
 };
-use crate::swrl::{
-    SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable,
-};
+use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable};
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 use std::fmt;

@@ -5,12 +5,11 @@
 //! - Backward chaining: goal-driven rule execution  
 //! - Hybrid reasoning: combination of both strategies
 
+use crate::Result;
 use crate::ontology::{Axiom, Ontology};
 use crate::swrl::{
-    Bindings, SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLRule,
-    UnificationEngine,
+    Bindings, SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLRule, UnificationEngine,
 };
-use crate::Result;
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::sync::Arc;

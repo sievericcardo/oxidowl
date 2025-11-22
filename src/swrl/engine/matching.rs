@@ -8,7 +8,6 @@ use crate::ontology::{ClassExpression, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument};
 use std::collections::HashMap;
 
-
 /// Unification engine for SWRL atoms and arguments
 #[derive(Debug)]
 pub struct UnificationEngine {

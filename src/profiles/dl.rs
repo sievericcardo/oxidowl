@@ -105,7 +105,9 @@ mod tests {
         let validator = DLValidator::new();
         let ontology = Ontology::new();
 
-        let report = validator.validate(&ontology).expect("Failed to validate ontology against OWL 2 profile");
+        let report = validator
+            .validate(&ontology)
+            .expect("Failed to validate ontology against OWL 2 profile");
         // Empty ontology should be valid for OWL 2 DL
         assert!(report.conforms);
     }

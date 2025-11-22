@@ -903,10 +903,9 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                 for super_prop_expr in super_props {
                     let DataPropertyExpression::DataProperty(super_prop) = super_prop_expr;
                     // Convert ontology::DataProperty to properties::DataProperty
-                    let properties_super_prop =
-                        oxidowl::ontology::properties::DataProperty {
-                            iri: super_prop.iri.clone(),
-                        };
+                    let properties_super_prop = oxidowl::ontology::properties::DataProperty {
+                        iri: super_prop.iri.clone(),
+                    };
                     hierarchy.add_property(properties_super_prop);
                     let prop_iri = prop.iri.clone();
                     let super_iri = super_prop.iri.clone();
@@ -937,7 +936,10 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(_hierarchy) = &obj_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!(
                     "{}_object_properties.txt",
-                    output_path.file_stem().expect("Failed to get file stem from output path").to_string_lossy()
+                    output_path
+                        .file_stem()
+                        .expect("Failed to get file stem from output path")
+                        .to_string_lossy()
                 ));
                 // TODO: Implement save_to_file for ObjectPropertyHierarchy
                 // hierarchy.save_to_file(&prop_output)?;
@@ -949,7 +951,10 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(_hierarchy) = &data_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!(
                     "{}_data_properties.txt",
-                    output_path.file_stem().expect("Failed to get file stem from output path").to_string_lossy()
+                    output_path
+                        .file_stem()
+                        .expect("Failed to get file stem from output path")
+                        .to_string_lossy()
                 ));
                 // TODO: Implement save_to_file for DataPropertyHierarchy
                 // hierarchy.save_to_file(&prop_output)?;
@@ -2456,8 +2461,7 @@ fn display_data_property_subtree(
     if let Some(sub_props) = hierarchy.get_sub_properties(property_iri) {
         for sub_prop_iri in sub_props {
             // Convert IRI back to DataPropertyExpression for recursion
-            if let Some(sub_data_prop) =
-                hierarchy.all_properties().find(|p| &p.iri == sub_prop_iri)
+            if let Some(sub_data_prop) = hierarchy.all_properties().find(|p| &p.iri == sub_prop_iri)
             {
                 // Convert properties::DataProperty to ontology::DataProperty
                 let ontology_sub_prop = oxidowl::ontology::DataProperty {

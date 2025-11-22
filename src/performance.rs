@@ -6,8 +6,8 @@
 //! - System resource monitoring (CPU, memory)
 //! - Performance metrics collection and reporting
 
-use crate::core::lock_helpers::{read_lock, write_lock};
 use crate::Result;
+use crate::core::lock_helpers::{read_lock, write_lock};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -630,19 +630,22 @@ mod tests {
         let tracker = MemoryTracker::new(10);
 
         // Take some snapshots
-        tracker.snapshot(1024 * 1024, 512 * 1024)
+        tracker
+            .snapshot(1024 * 1024, 512 * 1024)
             .expect("Snapshot should succeed");
-        tracker.snapshot(2048 * 1024, 1024 * 1024)
+        tracker
+            .snapshot(2048 * 1024, 1024 * 1024)
             .expect("Snapshot should succeed");
-        tracker.snapshot(3072 * 1024, 1536 * 1024)
+        tracker
+            .snapshot(3072 * 1024, 1536 * 1024)
             .expect("Snapshot should succeed");
 
-        let snapshots = tracker.get_snapshots()
+        let snapshots = tracker
+            .get_snapshots()
             .expect("Getting snapshots should succeed");
         assert_eq!(snapshots.len(), 3);
 
-        let stats = tracker.get_stats()
-            .expect("Getting stats should succeed");
+        let stats = tracker.get_stats().expect("Getting stats should succeed");
         assert!(stats.peak_total_mb > 0.0);
     }
 
@@ -693,8 +696,7 @@ mod tests {
             ))
             .expect("Recording query timing should succeed");
 
-        let stats = profiler.get_stats()
-            .expect("Getting stats should succeed");
+        let stats = profiler.get_stats().expect("Getting stats should succeed");
         assert_eq!(stats.total_queries, 2);
         assert!(stats.avg_total_duration_ms > 0.0);
         assert!(stats.slowest_query_ms >= stats.fastest_query_ms);
@@ -706,7 +708,8 @@ mod tests {
         assert!(monitor.is_enabled());
 
         // Take memory snapshot
-        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024)
+        let snapshot = monitor
+            .snapshot_memory(1024 * 1024, 512 * 1024)
             .expect("Snapshot should succeed");
         assert!(snapshot.is_some());
 
@@ -724,14 +727,14 @@ mod tests {
             .expect("Recording query timing should succeed");
 
         // Get report
-        let report = monitor.get_report()
-            .expect("Getting report should succeed");
+        let report = monitor.get_report().expect("Getting report should succeed");
         assert_eq!(report.query_stats.total_queries, 1);
 
         // Test disable
         monitor.disable();
         assert!(!monitor.is_enabled());
-        let snapshot = monitor.snapshot_memory(1024 * 1024, 512 * 1024)
+        let snapshot = monitor
+            .snapshot_memory(1024 * 1024, 512 * 1024)
             .expect("Snapshot should succeed");
         assert!(snapshot.is_none());
     }

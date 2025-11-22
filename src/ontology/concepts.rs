@@ -173,7 +173,9 @@ impl ClassExpression {
         if expressions.is_empty() {
             Self::thing() // Intersection of nothing is Thing
         } else if expressions.len() == 1 {
-            expressions.into_iter().next()
+            expressions
+                .into_iter()
+                .next()
                 .expect("Vector has exactly one element as verified by length check")
         } else {
             ClassExpression::ObjectIntersectionOf(expressions)
@@ -186,7 +188,9 @@ impl ClassExpression {
         if expressions.is_empty() {
             Self::nothing() // Union of nothing is Nothing
         } else if expressions.len() == 1 {
-            expressions.into_iter().next()
+            expressions
+                .into_iter()
+                .next()
                 .expect("Vector has exactly one element as verified by length check")
         } else {
             ClassExpression::ObjectUnionOf(expressions)
@@ -445,7 +449,9 @@ impl ClassExpression {
                 } else if unique_exprs.is_empty() {
                     Ok(Self::thing()) // Empty intersection is Thing
                 } else if unique_exprs.len() == 1 {
-                    Ok(unique_exprs.into_iter().next()
+                    Ok(unique_exprs
+                        .into_iter()
+                        .next()
                         .expect("Vector has exactly one element as verified by length check"))
                 } else {
                     Ok(ClassExpression::ObjectIntersectionOf(unique_exprs))
@@ -482,7 +488,9 @@ impl ClassExpression {
                 } else if unique_exprs.is_empty() {
                     Ok(Self::nothing()) // Empty union is Nothing
                 } else if unique_exprs.len() == 1 {
-                    Ok(unique_exprs.into_iter().next()
+                    Ok(unique_exprs
+                        .into_iter()
+                        .next()
                         .expect("Vector has exactly one element as verified by length check"))
                 } else {
                     Ok(ClassExpression::ObjectUnionOf(unique_exprs))

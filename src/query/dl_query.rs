@@ -766,14 +766,18 @@ mod tests {
     #[test]
     fn test_tokenize_simple_class() {
         let parser = DLQueryParser::new();
-        let tokens = parser.tokenize("Person").expect("Failed to tokenize simple DL query 'Person'");
+        let tokens = parser
+            .tokenize("Person")
+            .expect("Failed to tokenize simple DL query 'Person'");
         assert_eq!(tokens, vec!["Person"]);
     }
 
     #[test]
     fn test_tokenize_restriction() {
         let parser = DLQueryParser::new();
-        let tokens = parser.tokenize("hasChild some Person").expect("Failed to tokenize DL query with restriction 'hasChild some Person'");
+        let tokens = parser
+            .tokenize("hasChild some Person")
+            .expect("Failed to tokenize DL query with restriction 'hasChild some Person'");
         assert_eq!(tokens, vec!["hasChild", "some", "Person"]);
     }
 
@@ -798,7 +802,9 @@ mod tests {
     #[test]
     fn test_parse_simple_class() {
         let parser = DLQueryParser::new();
-        let expr = parser.parse_class_expression("Person").expect("Failed to parse simple class expression 'Person'");
+        let expr = parser
+            .parse_class_expression("Person")
+            .expect("Failed to parse simple class expression 'Person'");
         match expr {
             ClassExpression::Class(class) => {
                 assert!(class.iri.to_string().contains("Person"));

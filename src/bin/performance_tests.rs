@@ -638,7 +638,12 @@ async fn test_class_assertions() -> Result<(), Box<dyn std::error::Error>> {
     let john = Individual::Named(NamedIndividual::new(IRI::new("John")));
 
     ontology.add_class(person.clone());
-    ontology.add_individual(john.iri().expect("Failed to get IRI from individual").clone(), john.clone());
+    ontology.add_individual(
+        john.iri()
+            .expect("Failed to get IRI from individual")
+            .clone(),
+        john.clone(),
+    );
 
     ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
         id: 1,

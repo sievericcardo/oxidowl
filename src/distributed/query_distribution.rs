@@ -418,7 +418,10 @@ impl QueryDistributor {
             .map(|atom| (atom, self.calculate_atom_complexity(atom)))
             .collect();
 
-        atoms_with_complexity.sort_by(|a, b| b.1.partial_cmp(&a.1).expect("Failed to compare atom complexity scores"));
+        atoms_with_complexity.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .expect("Failed to compare atom complexity scores")
+        });
 
         // Distribute atoms to balance complexity across nodes
         let chunk_size =
