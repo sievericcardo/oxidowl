@@ -20,7 +20,8 @@ mod missing_features_tests {
             let dt_utc = SWRLValue::Literal(Literal {
                 value: "2023-01-01T10:00:00Z".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -34,7 +35,10 @@ mod missing_features_tests {
                     assert_eq!(literal.value, "Z");
                     assert_eq!(
                         literal.datatype,
-                        Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string").expect("Test operation failed"))
+                        Some(
+                            url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
+                                .expect("Test operation failed")
+                        )
                     );
                 }
                 _ => panic!("Expected literal result"),
@@ -45,7 +49,8 @@ mod missing_features_tests {
             let dt_plus5 = SWRLValue::Literal(Literal {
                 value: "2023-01-01T10:00:00+05:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -66,7 +71,8 @@ mod missing_features_tests {
             let dt_minus3 = SWRLValue::Literal(Literal {
                 value: "2023-01-01T10:00:00-03:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -97,13 +103,17 @@ mod missing_features_tests {
             let result_var = SWRLValue::String("result".to_string());
             let base_date = SWRLValue::Literal(Literal {
                 value: "2023-01-15".to_string(),
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#date").expect("Test operation failed")),
+                datatype: Some(
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
+                        .expect("Test operation failed"),
+                ),
                 language: None,
             });
             let duration = SWRLValue::Literal(Literal {
                 value: "P2Y3M".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -118,7 +128,10 @@ mod missing_features_tests {
                     assert_eq!(literal.value, "2025-04-15");
                     assert_eq!(
                         literal.datatype,
-                        Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#date").expect("Test operation failed"))
+                        Some(
+                            url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
+                                .expect("Test operation failed")
+                        )
                     );
                 }
                 _ => panic!("Expected literal result"),
@@ -140,14 +153,16 @@ mod missing_features_tests {
             let duration1 = SWRLValue::Literal(Literal {
                 value: "P1Y6M".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
             let duration2 = SWRLValue::Literal(Literal {
                 value: "P2Y3M".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -185,7 +200,8 @@ mod missing_features_tests {
             let dt_no_tz = SWRLValue::Literal(Literal {
                 value: "2023-01-01T10:00:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -215,13 +231,17 @@ mod missing_features_tests {
             let result_var = SWRLValue::String("result".to_string());
             let base_date = SWRLValue::Literal(Literal {
                 value: "2023-06-15".to_string(),
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#date").expect("Test operation failed")),
+                datatype: Some(
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
+                        .expect("Test operation failed"),
+                ),
                 language: None,
             });
             let zero_duration = SWRLValue::Literal(Literal {
                 value: "P0Y0M".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });

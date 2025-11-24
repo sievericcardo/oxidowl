@@ -261,7 +261,8 @@ fn test_direct_disjointness_violation() {
 
     // Build DisjointnessMap
     let eq_closure = EquivalenceClosure::from_ontology(&ontology).expect("Test operation failed");
-    let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).expect("Test operation failed");
+    let disj_map =
+        DisjointnessMap::from_ontology(&ontology, &eq_closure).expect("Test operation failed");
 
     // Create empty clause set (we're testing disjointness checking)
     let clause_set = create_test_clause_set(vec![]);
@@ -286,7 +287,8 @@ fn test_no_disjointness_when_concepts_compatible() {
 
     // Build reasoning support
     let eq_closure = EquivalenceClosure::from_ontology(&ontology).expect("Test operation failed");
-    let disj_map = DisjointnessMap::from_ontology(&ontology, &eq_closure).expect("Test operation failed");
+    let disj_map =
+        DisjointnessMap::from_ontology(&ontology, &eq_closure).expect("Test operation failed");
 
     let clause_set = create_test_clause_set(vec![]);
     let mut checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);

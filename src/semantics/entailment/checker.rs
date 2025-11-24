@@ -3,8 +3,8 @@
 //! This module contains the main EntailmentChecker struct and EntailmentRegime enum
 //! for checking various types of entailment relationships.
 
-use crate::semantics::{RdfGraph, RdfTerm, Triple};
-use crate::{Error, Result};
+use crate::Result;
+use crate::semantics::RdfGraph;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

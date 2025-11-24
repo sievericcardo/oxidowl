@@ -5,7 +5,7 @@
 use crate::{Error, Result};
 use std::{
     collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 use tokio::sync::RwLock;

@@ -20,19 +20,15 @@ use crate::{
         },
         tableau::TableauState,
     },
-    dl_clauses::{DLClauseGenerator, DLClauseSet},
+    dl_clauses::DLClauseGenerator,
     ontology::{
-        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
-        OntologyFormat, OntologyRef,
+        ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, OntologyRef,
     },
 };
-use log::{info, warn};
 use serde_json;
 use std::{
     collections::HashMap,
-    path::Path,
     sync::{Arc, RwLock},
-    time::Instant,
 };
 
 /// OWLlink request structure
@@ -269,7 +265,7 @@ impl Reasoner {
             // Create a tableau for satisfiability checking
             let ontology_ref =
                 read_lock(ontology, "core: reading ontology for satisfiability check")?;
-            let mut tableau = self
+            let tableau = self
                 .tableau_factory
                 .create_for_consistency(&*ontology_ref)?;
 
@@ -806,8 +802,7 @@ impl Reasoner {
             ontology.add_axiom(axiom);
 
             // Clear cache since ontology has changed
-            let mut cache =
-                write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
+            let cache = write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
             cache.clear_all();
 
             Ok(())
@@ -830,7 +825,7 @@ impl Reasoner {
 
             if removed {
                 // Clear cache since ontology has changed
-                let mut cache = write_lock(
+                let cache = write_lock(
                     &self.cache_manager,
                     "core: clearing cache after remove_axiom",
                 )?;

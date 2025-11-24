@@ -34,14 +34,13 @@ use crate::{
     config::{ReasoningConfig, TableauConfig},
     core::{
         blocking::BlockingStrategy,
-        completion::{CompletionRule, CompletionStrategy, RuleApplication},
+        completion::{CompletionStrategy, RuleApplication},
         dependency::DependencySet,
         expansion::{DefaultExpansionStrategy, ExpansionStrategy},
     },
     ontology::{ClassExpression, Ontology},
 };
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Duration;
 
 /// Main tableau structure
 pub struct Tableau {

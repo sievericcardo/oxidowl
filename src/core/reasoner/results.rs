@@ -4,7 +4,7 @@
 //! including classification results, realization results, and property classification results.
 
 use crate::{
-    Error, Result,
+    Result,
     ontology::{ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression},
 };
 use std::{

@@ -3,8 +3,8 @@
 //! Provides comprehensive fault tolerance mechanisms including failure detection,
 //! automatic recovery, circuit breaker patterns, and graceful degradation.
 
-use crate::distributed::cluster::{ClusterManager, HealthStatus, NodeHealth, NodeInfo};
-use crate::distributed::query_distribution::{PartitionStatus, QueryPartition};
+use crate::distributed::cluster::{ClusterManager, HealthStatus};
+use crate::distributed::query_distribution::QueryPartition;
 use crate::distributed::{DistributedError, NodeId};
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -590,7 +590,6 @@ impl FaultTolerance {
         use crate::distributed::result_aggregation::{
             PartialResult, PartialResultMetadata, PartialResultStatus, PerformanceMetrics,
         };
-        use crate::query::advanced::execution::QueryBinding;
 
         // Simulate execution time
         sleep(Duration::from_millis(100)).await;
@@ -1104,7 +1103,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_checkpoint_manager() {
-        let mut manager = CheckpointManager::new().await.expect("Failed to create checkpoint manager for fault tolerance");
+        let mut manager = CheckpointManager::new()
+            .await
+            .expect("Failed to create checkpoint manager for fault tolerance");
         let checkpoint_id = Uuid::new_v4();
 
         let result = manager

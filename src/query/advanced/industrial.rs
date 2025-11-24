@@ -7,19 +7,12 @@
 //! - Gene Ontology
 //! - Large synthetic ontologies
 
-use super::conjunctive::{
-    ConjunctiveQuery, QueryAtom, QueryConstraints, QueryMetadata, QueryVariable,
-};
-use super::optimization::{OptimizationError, QueryOptimizer, QueryPlan};
-use super::optimizer::{
-    AdvancedOptimizerConfig, AdvancedQueryOptimizer, IntelligentIndexingSystem, PerformanceMonitor,
-    PerformancePredictor, QueryPerformanceDataPoint,
-};
-use crate::ontology::{ClassExpression, IRI, Individual, ObjectPropertyExpression, Ontology};
-use crate::reasoning::ReasoningService;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex, RwLock};
+use super::conjunctive::{ConjunctiveQuery, QueryConstraints, QueryMetadata};
+use super::optimization::OptimizationError;
+use super::optimizer::AdvancedQueryOptimizer;
+use crate::ontology::{ClassExpression, IRI, Ontology};
+use std::collections::{HashMap, HashSet};
+use std::hash::Hasher;
 use std::time::{Duration, Instant};
 
 /// Industrial-strength optimizer for Phase 3

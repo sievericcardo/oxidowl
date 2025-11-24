@@ -3,16 +3,11 @@
 //! This module provides wrappers and factories for the traditional tableau algorithm.
 
 use crate::{
-    Error, Result,
+    Result,
     config::{ReasonerConfig, TableauAlgorithm},
-    core::{
-        dependency::DependencySet,
-        tableau::{RoleLabel, Tableau, TableauBuilder, TableauEdge, TableauState},
-    },
-    ontology::{Axiom, ClassExpression, Individual, Ontology, OntologyRef},
+    core::tableau::{Tableau, TableauBuilder, TableauState},
+    ontology::{ClassExpression, Individual, Ontology},
 };
-use log::warn;
-use std::sync::Arc;
 
 /// Wrapper for tableau algorithm implementation
 pub struct TableauAlgorithmInstance {

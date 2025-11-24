@@ -5,22 +5,19 @@
 //! reasoning with ontology changes.
 
 use super::{
-    IncrementalStatistics,
-    change_tracking::{ChangeTracker, InvalidationEvent},
+    change_tracking::InvalidationEvent,
     delta_computation::{QueryDelta, ReasoningDelta},
 };
 use crate::{
-    cache::{CacheManager, ConceptSatisfiabilityCache},
-    error::{OxidowlError, Result},
+    cache::CacheManager,
+    error::Result,
     ontology::{
-        Ontology, OntologyRef,
-        axioms::Axiom,
         concepts::{Class, ClassExpression},
         individuals::Individual,
     },
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     sync::{Arc, RwLock},
     time::Instant,
 };

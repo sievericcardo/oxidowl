@@ -299,7 +299,9 @@ mod tests {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new(); // Empty ontology should conform to all profiles
 
-        let result = validator.detect_profiles(&ontology).expect("Failed to detect compatible OWL 2 profiles for ontology");
+        let result = validator
+            .detect_profiles(&ontology)
+            .expect("Failed to detect compatible OWL 2 profiles for ontology");
 
         // Empty ontology should conform to all implemented profiles
         assert!(result.conforming_profiles.contains(&OWL2Profile::EL));
@@ -314,7 +316,9 @@ mod tests {
         let validator = OWL2ProfileValidator::new();
         let ontology = Ontology::new();
 
-        let recommended = validator.recommend_profile(&ontology).expect("Failed to recommend optimal OWL 2 profile for ontology");
+        let recommended = validator
+            .recommend_profile(&ontology)
+            .expect("Failed to recommend optimal OWL 2 profile for ontology");
 
         // For empty ontology, should recommend most restrictive (EL)
         assert_eq!(recommended, OWL2Profile::EL);

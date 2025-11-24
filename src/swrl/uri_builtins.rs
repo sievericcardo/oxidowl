@@ -155,7 +155,9 @@ mod tests {
             SWRLValue::Uri("resource".to_string()),
             SWRLValue::Uri("http://example.org/".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -167,7 +169,9 @@ mod tests {
             SWRLValue::Uri("http://example.org/test".to_string()),
             SWRLValue::String("http://example.org/test".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
         // Test URN construction
@@ -175,7 +179,9 @@ mod tests {
             SWRLValue::Uri("urn:test".to_string()),
             SWRLValue::String("test".to_string()),
         ];
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 }

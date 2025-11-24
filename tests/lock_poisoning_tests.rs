@@ -197,7 +197,7 @@ fn test_lock_helpers_with_normal_operations() {
 
     // Write lock should work
     {
-        let mut write_result = write_lock(&data, "test: normal write");
+        let write_result = write_lock(&data, "test: normal write");
         assert!(write_result.is_ok());
         *write_result.expect("Test operation failed") = 100;
     }

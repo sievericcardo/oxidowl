@@ -5,17 +5,15 @@
 //! performance and intelligent query processing.
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::optimization::{
-    ExecutionStrategy, OptimizationError, PlanMetadata, QueryOptimizer, QueryPlan,
-};
-use super::optimizer::{AdvancedOptimizerConfig, AdvancedQueryOptimizer, AdvancedQueryPlan};
+use super::optimization::{ExecutionStrategy, OptimizationError, PlanMetadata, QueryPlan};
+use super::optimizer::AdvancedQueryPlan;
 use crate::ontology::{
-    Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
+    ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
 };
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::sync::{Arc, Mutex, RwLock};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 /// Phase 2: Cost-based Query Optimizer
@@ -1427,7 +1425,7 @@ impl CostBasedOptimizer {
         };
 
         // Overall is weighted average
-        let overall = (execution_time * 0.4 + memory_usage * 0.3 + strategy * 0.3);
+        let overall = execution_time * 0.4 + memory_usage * 0.3 + strategy * 0.3;
 
         ConfidenceScores {
             performance_prediction: execution_time,

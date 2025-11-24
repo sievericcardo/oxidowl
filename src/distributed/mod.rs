@@ -37,7 +37,7 @@ pub use result_aggregation::{AggregatedResult, PartialResult, ResultAggregator};
 
 use crate::prelude::*;
 use std::net::SocketAddr;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Unique identifier for cluster nodes
@@ -379,7 +379,9 @@ impl Default for NodeConfig {
     fn default() -> Self {
         Self {
             node_id: Uuid::new_v4(),
-            address: "127.0.0.1:8080".parse().expect("Failed to parse socket address for cluster node"),
+            address: "127.0.0.1:8080"
+                .parse()
+                .expect("Failed to parse socket address for cluster node"),
             capabilities: NodeCapabilities::default(),
             settings: NodeSettings::default(),
         }
@@ -723,7 +725,7 @@ impl DistributedQueryProcessor {
         }
 
         {
-            let mut fault_tolerance = self.fault_tolerance.write().await;
+            let fault_tolerance = self.fault_tolerance.write().await;
             fault_tolerance.stop().await?;
         }
 

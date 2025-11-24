@@ -10,10 +10,10 @@ use crate::{
         lock_helpers::{read_lock, write_lock},
         reasoner::{
             statistics::ReasoningStatistics,
-            tableau::{ReasoningTask, TableauAlgorithmInstance, TableauFactory},
+            tableau::{TableauAlgorithmInstance, TableauFactory},
         },
     },
-    ontology::{ClassExpression, Individual, Ontology, OntologyRef},
+    ontology::{ClassExpression, Individual, OntologyRef},
 };
 use log::{debug, info};
 use std::{

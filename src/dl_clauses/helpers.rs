@@ -7,7 +7,7 @@ use crate::{
     error::Result,
     ontology::{
         ClassExpression, DataPropertyExpression, DataRange, Individual, Literal,
-        ObjectPropertyExpression, SWRLDArgument, SWRLIArgument,
+        ObjectPropertyExpression,
     },
 };
 

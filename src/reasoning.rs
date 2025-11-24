@@ -29,7 +29,7 @@ use crate::{
     ontology::{
         ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
     },
-    query::{DLQuery, DLQueryEngine, QueryResult, QueryType},
+    query::{DLQuery, DLQueryEngine, QueryResult},
     swrl::{SWRLConfig, SWRLExecutionResult, SWRLRuleEngine},
 };
 use std::{
@@ -89,7 +89,7 @@ impl ReasoningService {
         log::info!("Executing SWRL rules before consistency check");
         self.execute_swrl_rules().await?;
 
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
@@ -126,7 +126,7 @@ impl ReasoningService {
             }
         }
 
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
 
         let result = reasoner.is_class_satisfiable(expression)?;
 
@@ -303,7 +303,7 @@ impl ReasoningService {
     ) -> Result<HashSet<Individual>> {
         let start = Instant::now();
 
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let instances = reasoner.get_instances(class, direct)?;
 
         // Check timeout
@@ -328,7 +328,7 @@ impl ReasoningService {
     ) -> Result<HashSet<ClassExpression>> {
         let start = Instant::now();
 
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         let types = reasoner.get_types(individual, direct)?;
 
         // Check timeout
@@ -413,8 +413,10 @@ impl ReasoningService {
             .into_iter()
             .map(|s| crate::ontology::Literal {
                 value: s.to_string(),
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
-                    .expect("Valid hardcoded XSD string URL")),
+                datatype: Some(
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
+                        .expect("Valid hardcoded XSD string URL"),
+                ),
                 language: None,
             })
             .collect();
@@ -496,7 +498,7 @@ impl ReasoningService {
             );
 
             // Get the reasoner and update the ontology with inferences
-            let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
+            let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
             if let Some(ontology_ref) = reasoner.get_ontology() {
                 let mut ontology = write_lock(&ontology_ref, "reasoning: writing ontology")?;
 
@@ -1048,7 +1050,7 @@ impl ReasoningService {
     // Synchronous wrapper methods for advanced query processing
     /// Synchronous version of get_instances for use in advanced query processing
     pub fn get_instances_sync(&self, class: &ClassExpression) -> Result<Vec<Individual>> {
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
+        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         reasoner.get_instances(class, false)
     }
 
@@ -1079,7 +1081,7 @@ impl ReasoningService {
 
     /// Invalidate all caches (useful for incremental reasoning)
     pub async fn invalidate_all_caches(&self) -> Result<()> {
-        if let Ok(mut cache) = self.cache_manager.write() {
+        if let Ok(cache) = self.cache_manager.write() {
             // Invalidate caches - the actual implementation would depend on CacheManager
             tracing::debug!("All caches invalidated");
         }

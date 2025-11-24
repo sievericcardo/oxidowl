@@ -4,9 +4,8 @@
 
 use crate::error::{Error, Result};
 use crate::ontology::{IRI, Literal};
-use crate::swrl::temporal::{TemporalError, TemporalValue};
 use crate::swrl::{SWRLBuiltIn, SWRLValue};
-use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use std::collections::HashMap;
 
 /// Registry for date/time constructor built-ins
@@ -175,7 +174,11 @@ impl SWRLBuiltIn for DateBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -218,7 +221,11 @@ impl SWRLBuiltIn for DateTimeBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -255,7 +262,11 @@ impl SWRLBuiltIn for TimeBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -294,7 +305,11 @@ impl SWRLBuiltIn for YearMonthDurationBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -339,7 +354,11 @@ impl SWRLBuiltIn for DayTimeDurationBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -395,7 +414,11 @@ impl SWRLBuiltIn for DateTimeStampBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -430,7 +453,11 @@ impl SWRLBuiltIn for GYearBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -470,7 +497,11 @@ impl SWRLBuiltIn for GYearMonthBuiltIn {
 
         match &args[0] {
             SWRLValue::Literal(lit) => Ok(SWRLValue::Boolean(
-                lit.value == expected_result.as_literal().expect("Failed to convert SWRL result to literal value").value,
+                lit.value
+                    == expected_result
+                        .as_literal()
+                        .expect("Failed to convert SWRL result to literal value")
+                        .value,
             )),
             _ => Ok(expected_result),
         }
@@ -518,7 +549,9 @@ mod tests {
             SWRLValue::Integer(15),
         ];
 
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -539,7 +572,9 @@ mod tests {
             SWRLValue::Integer(45),
         ];
 
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -556,7 +591,9 @@ mod tests {
             SWRLValue::Integer(6),
         ];
 
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -575,7 +612,9 @@ mod tests {
             SWRLValue::Float(45.0), // seconds
         ];
 
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 
@@ -591,7 +630,9 @@ mod tests {
             SWRLValue::Integer(2023),
         ];
 
-        let result = builtin.execute(&args).expect("Failed to execute SWRL builtin with given arguments");
+        let result = builtin
+            .execute(&args)
+            .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
     }
 }

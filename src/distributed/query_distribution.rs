@@ -3,7 +3,7 @@
 //! Handles intelligent distribution of queries across cluster nodes,
 //! including query partitioning, load-aware assignment, and parallel execution coordination.
 
-use crate::distributed::cluster::{ClusterManager, NodeInfo, NodeStatus};
+use crate::distributed::cluster::{ClusterManager, NodeInfo};
 use crate::distributed::{DistributedError, NodeId};
 use crate::prelude::*;
 use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
@@ -418,7 +418,10 @@ impl QueryDistributor {
             .map(|atom| (atom, self.calculate_atom_complexity(atom)))
             .collect();
 
-        atoms_with_complexity.sort_by(|a, b| b.1.partial_cmp(&a.1).expect("Failed to compare atom complexity scores"));
+        atoms_with_complexity.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .expect("Failed to compare atom complexity scores")
+        });
 
         // Distribute atoms to balance complexity across nodes
         let chunk_size =

@@ -3,7 +3,7 @@
 use oxidowl::ontology::Literal;
 use oxidowl::swrl::{
     SWRLValue, datetime_builtins::DateTimeBuiltInRegistry, integration::SWRLFeatureRegistry,
-    regex_builtins::RegexBuiltInRegistry, temporal::TemporalValue,
+    regex_builtins::RegexBuiltInRegistry,
 };
 
 #[cfg(test)]
@@ -66,14 +66,16 @@ mod comprehensive_tests {
             let dt1 = SWRLValue::Literal(Literal {
                 value: "2023-01-01T10:00:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
             let dt2 = SWRLValue::Literal(Literal {
                 value: "2023-01-01T11:00:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -97,14 +99,16 @@ mod comprehensive_tests {
             let expected_month = SWRLValue::Literal(Literal {
                 value: "6".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#integer")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
             let datetime = SWRLValue::Literal(Literal {
                 value: "2023-06-15T14:30:00".to_string(),
                 datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime").expect("Test operation failed"),
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#dateTime")
+                        .expect("Test operation failed"),
                 ),
                 language: None,
             });
@@ -321,7 +325,10 @@ mod comprehensive_tests {
             ],
         );
         assert!(regex_result.is_ok());
-        assert_eq!(regex_result.expect("Test operation failed"), SWRLValue::Boolean(true));
+        assert_eq!(
+            regex_result.expect("Test operation failed"),
+            SWRLValue::Boolean(true)
+        );
 
         // Test missing built-in execution through integration
         let boolean_result = registry.execute_builtin(
@@ -329,7 +336,10 @@ mod comprehensive_tests {
             &[SWRLValue::Boolean(false), SWRLValue::Boolean(true)],
         );
         assert!(boolean_result.is_ok());
-        assert_eq!(boolean_result.expect("Test operation failed"), SWRLValue::Boolean(true));
+        assert_eq!(
+            boolean_result.expect("Test operation failed"),
+            SWRLValue::Boolean(true)
+        );
     }
 
     #[test]

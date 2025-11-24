@@ -6,7 +6,7 @@
 
 use crate::{
     core::lock_helpers::{read_lock, write_lock},
-    ontology::{ClassExpression, Individual, Ontology, OntologyRef},
+    ontology::{ClassExpression, Individual, OntologyRef},
     performance::MemoryTracker,
     reasoning::{ClassificationResult, RealizationResult},
 };

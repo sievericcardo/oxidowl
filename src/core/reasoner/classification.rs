@@ -4,7 +4,7 @@
 //! property classification, and individual type inference.
 
 use crate::{
-    Error, Result,
+    Result,
     cache::CacheManager,
     core::{
         lock_helpers::{read_lock, write_lock},
@@ -284,7 +284,11 @@ impl ClassificationService {
             read_lock(ontology, "classification: reading ontology for realization")?;
 
         // Get all named individuals and classes
-        let individuals: Vec<Individual> = ontology_guard.signature().expect("Failed to extract ontology signature").individuals.clone();
+        let individuals: Vec<Individual> = ontology_guard
+            .signature()
+            .expect("Failed to extract ontology signature")
+            .individuals
+            .clone();
 
         let classes: Vec<ClassExpression> = ontology_guard
             .signature()
@@ -408,7 +412,11 @@ impl ClassificationService {
         let mut superclasses = Vec::new();
 
         // Get all classes from the signature
-        for class in &ontology_guard.signature().expect("Failed to extract ontology signature").classes {
+        for class in &ontology_guard
+            .signature()
+            .expect("Failed to extract ontology signature")
+            .classes
+        {
             let class_expr = ClassExpression::Class(class.clone());
             if self.task_service.check_subsumption_expressions(
                 concept,
@@ -490,7 +498,11 @@ impl ClassificationService {
         }
 
         // General case: Check all classes from the signature for bidirectional subsumption
-        for class in &ontology_guard.signature().expect("Failed to extract ontology signature").classes {
+        for class in &ontology_guard
+            .signature()
+            .expect("Failed to extract ontology signature")
+            .classes
+        {
             let class_expr = ClassExpression::Class(class.clone());
             if concept != &class_expr {
                 let subsumes_1_2 = self.task_service.check_subsumption_expressions(
@@ -528,7 +540,11 @@ impl ClassificationService {
                 "classification: reading ontology for get_instances individuals",
             )?;
             // Get all individuals from the signature
-            ontology_guard.signature().expect("Failed to extract ontology signature").individuals.clone()
+            ontology_guard
+                .signature()
+                .expect("Failed to extract ontology signature")
+                .individuals
+                .clone()
         }; // Drop the read lock here
 
         let mut instances = Vec::new();
@@ -909,7 +925,10 @@ impl ClassificationService {
                 // Get all superclasses of this type
                 // Convert string to ClassExpression for the call
                 let class_expr = ClassExpression::Class(crate::ontology::Class {
-                    iri: crate::ontology::IRI::new(t).to_url().expect("Failed to convert IRI to URL").into(),
+                    iri: crate::ontology::IRI::new(t)
+                        .to_url()
+                        .expect("Failed to convert IRI to URL")
+                        .into(),
                 });
                 if let Ok(supertypes) =
                     self.get_superclasses(&class_expr, ontology, _statistics, false)

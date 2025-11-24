@@ -5,9 +5,8 @@
 //! expressions identical.
 
 use crate::ontology::IRI;
-use crate::ontology::axioms::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLVariable};
-use crate::swrl::{SWRLExecutionContext, SWRLValue};
-use crate::{Error, Result};
+use crate::ontology::axioms::{SWRLAtom, SWRLDArgument, SWRLIArgument};
+use crate::swrl::SWRLVariable;
 use log::debug;
 use std::collections::HashMap;
 

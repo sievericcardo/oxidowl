@@ -5,12 +5,12 @@
 //! direct evaluation.
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryConstraints, QueryVariable};
-use super::optimization::{ExecutionStrategy, QueryOptimizer, QueryPlan};
+use super::optimization::{ExecutionStrategy, QueryOptimizer};
 use super::rewriting::QueryRewriter;
 use crate::ontology::{Individual, Literal, Ontology};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -604,8 +604,9 @@ impl QueryBinding {
 impl QueryCache {
     fn new() -> Self {
         Self {
-            results: lru::LruCache::new(std::num::NonZeroUsize::new(100)
-                .expect("Hardcoded non-zero value for cache size")),
+            results: lru::LruCache::new(
+                std::num::NonZeroUsize::new(100).expect("Hardcoded non-zero value for cache size"),
+            ),
             statistics: CacheStatistics::default(),
         }
     }

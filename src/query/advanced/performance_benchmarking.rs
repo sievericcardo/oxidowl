@@ -7,14 +7,12 @@
 use super::conjunctive::{
     ConjunctiveQuery, QueryAtom, QueryConstraints, QueryMetadata, QueryVariable,
 };
-use super::industrial::{IndustrialClassificationResult, IndustrialOptimizer};
+use super::industrial::IndustrialOptimizer;
 use super::ml_heuristics::{MLHeuristicsEngine, ReasoningStrategy};
-use super::optimizer::{AdvancedQueryOptimizer, AdvancedQueryPlan};
+use super::optimizer::AdvancedQueryOptimizer;
 use crate::ontology::{ClassExpression, IRI, Ontology};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::Path;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Query complexity levels for benchmarking

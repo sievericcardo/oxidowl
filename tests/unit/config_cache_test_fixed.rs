@@ -4,12 +4,7 @@
 
 use oxidowl::{
     cache::{CacheConfig, CacheManager, ConceptSatisfiabilityCache},
-    config::ReasonerConfig,
-    ontology::{
-        ClassExpression, IRI, Ontology, OntologyRef,
-        concepts::Class,
-        individuals::{Individual, NamedIndividual},
-    },
+    ontology::{Ontology, OntologyRef},
 };
 
 #[test]

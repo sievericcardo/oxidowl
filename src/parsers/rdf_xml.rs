@@ -370,9 +370,13 @@ impl RdfXmlParser {
                 for caps in regex.captures_iter(content) {
                     if caps.len() >= 2 {
                         let ind_iri = if caps.len() == 2 {
-                            caps.get(1).expect("Failed to get regex capture group").as_str()
+                            caps.get(1)
+                                .expect("Failed to get regex capture group")
+                                .as_str()
                         } else {
-                            caps.get(2).expect("Failed to get regex capture group").as_str()
+                            caps.get(2)
+                                .expect("Failed to get regex capture group")
+                                .as_str()
                         };
 
                         let iri = crate::ontology::IRI::new(ind_iri);

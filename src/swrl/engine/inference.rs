@@ -5,12 +5,11 @@
 //! - Backward chaining: goal-driven rule execution  
 //! - Hybrid reasoning: combination of both strategies
 
+use crate::Result;
 use crate::ontology::{Axiom, Ontology};
 use crate::swrl::{
-    Bindings, SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLIArgument, SWRLRule,
-    UnificationEngine,
+    Bindings, SWRLAtom, SWRLExecutionContext, SWRLExecutionResult, SWRLRule, UnificationEngine,
 };
-use crate::{Error, Result};
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -244,7 +243,7 @@ impl BackwardChaining {
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
 
-        let mut total_inferences = Vec::new();
+        let total_inferences = Vec::new();
         let mut total_applications = 0;
         let mut goal_stack = vec![goal.clone()];
         let mut visited_goals = HashSet::new();

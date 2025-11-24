@@ -4,8 +4,8 @@
 //! individual SWRL rules, including atom evaluation and variable binding.
 
 use crate::Result;
-use crate::core::lock_helpers::{read_lock, write_lock};
-use crate::ontology::{axioms::*, *};
+use crate::core::lock_helpers::read_lock;
+use crate::ontology::*;
 use crate::swrl::{
     SWRLExecutionContext, SWRLExecutionResult,
     builtins::{SWRLBuiltInRegistry, SWRLValue},

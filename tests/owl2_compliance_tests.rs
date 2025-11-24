@@ -95,7 +95,9 @@ Individual: ex:john
 "#;
 
     let mut parser = ManchesterParser::default();
-    let ontology = parser.parse_string(manchester_content).expect("Test operation failed");
+    let ontology = parser
+        .parse_string(manchester_content)
+        .expect("Test operation failed");
 
     // Check that basic ontology was created (simplified implementation)
     // Note: The current implementation is simplified and doesn't fully parse all Manchester syntax
@@ -155,19 +157,27 @@ fn test_manchester_class_expressions() {
     let parser = ManchesterParser::default();
 
     // Test simple class
-    let expr = parser.parse_class_expression("Person").expect("Test operation failed");
+    let expr = parser
+        .parse_class_expression("Person")
+        .expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::Class(_)));
 
     // Test intersection
-    let expr = parser.parse_class_expression("Person and Student").expect("Test operation failed");
+    let expr = parser
+        .parse_class_expression("Person and Student")
+        .expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectIntersectionOf(_)));
 
     // Test union
-    let expr = parser.parse_class_expression("Person or Animal").expect("Test operation failed");
+    let expr = parser
+        .parse_class_expression("Person or Animal")
+        .expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectUnionOf(_)));
 
     // Test complement
-    let expr = parser.parse_class_expression("not Person").expect("Test operation failed");
+    let expr = parser
+        .parse_class_expression("not Person")
+        .expect("Test operation failed");
     assert!(matches!(expr, ClassExpression::ObjectComplementOf(_)));
 
     // Test existential restriction
@@ -337,7 +347,9 @@ ObjectProperty: ex:hasChild
 "#;
 
     let mut parser = ManchesterParser::default();
-    let ontology = parser.parse_string(manchester_content).expect("Test operation failed");
+    let ontology = parser
+        .parse_string(manchester_content)
+        .expect("Test operation failed");
 
     // Validate the parsed ontology
     let mut validator = OWL2DLValidator::new(ontology);

@@ -20,7 +20,6 @@ pub use change_tracking::{ABoxChange, ChangeTracker, DependencyGraph, TBoxChange
 pub use delta_computation::{DeltaComputer, QueryDelta, ReasoningDelta};
 pub use service::IncrementalReasoningService;
 
-use crate::error::{OxidowlError, Result};
 use std::time::Instant;
 
 /// Represents a change event in the ontology with timestamp information

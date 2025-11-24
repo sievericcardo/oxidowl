@@ -518,7 +518,12 @@ mod tests {
         }
 
         // Check implications map
-        assert!(absorber.get_implied_concepts("A").expect("Failed to get implied concepts from absorber").contains("B"));
+        assert!(
+            absorber
+                .get_implied_concepts("A")
+                .expect("Failed to get implied concepts from absorber")
+                .contains("B")
+        );
     }
 
     #[test]

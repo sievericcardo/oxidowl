@@ -224,7 +224,7 @@ impl OWL2DLValidator {
         }
 
         let mut errors = Vec::new();
-        let mut warnings = Vec::new();
+        let warnings = Vec::new();
 
         // 1. Validate property hierarchy restrictions (Section 11.1)
         errors.extend(self.validate_property_hierarchy()?);
@@ -633,7 +633,7 @@ impl OWL2DLValidator {
 
     /// Validate property assertions
     fn validate_property_assertions(&self) -> Result<Vec<ValidationError>, OxidowlError> {
-        let mut errors = Vec::new();
+        let errors = Vec::new();
 
         // Check functional property violations, etc.
         // This would be expanded based on specific requirements
@@ -766,7 +766,7 @@ impl OWL2DLValidator {
         _chain: &[ObjectPropertyExpression],
         _super_property: &ObjectPropertyExpression,
     ) -> Result<Vec<ValidationError>, OxidowlError> {
-        let mut errors = Vec::new();
+        let errors = Vec::new();
 
         // Implement property chain validation according to OWL 2 DL rules
         // This is a complex validation that ensures property chain axioms
@@ -2049,10 +2049,10 @@ impl OWL2DLValidator {
     /// Detect which OWL 2 profile the ontology conforms to
     fn detect_profile(&self) -> OWL2Profile {
         let mut has_complex_class_expressions = false;
-        let mut has_number_restrictions = false;
-        let mut has_nominals = false;
+        let has_number_restrictions = false;
+        let has_nominals = false;
         let mut has_inverse_properties = false;
-        let mut has_complex_role_inclusions = false;
+        let has_complex_role_inclusions = false;
 
         // Analyze ontology constructs
         for axiom in self.ontology.axioms() {
@@ -2134,7 +2134,9 @@ mod tests {
         // Add test axioms...
 
         let mut validator = OWL2DLValidator::new(ontology);
-        let report = validator.validate().expect("Failed to validate OWL 2 DL compliance for ontology");
+        let report = validator
+            .validate()
+            .expect("Failed to validate OWL 2 DL compliance for ontology");
 
         // Assert validation results
         assert!(report.is_valid);
@@ -2147,7 +2149,9 @@ mod tests {
         // Note: Simplified implementation doesn't fully detect complex cardinality violations
 
         let mut validator = OWL2DLValidator::new(ontology);
-        let report = validator.validate().expect("Failed to validate OWL 2 DL compliance for ontology");
+        let report = validator
+            .validate()
+            .expect("Failed to validate OWL 2 DL compliance for ontology");
 
         // The simplified implementation returns valid for empty ontologies
         assert!(report.is_valid);
@@ -2160,7 +2164,9 @@ mod tests {
         // Add test axioms with anonymous individuals...
 
         let mut validator = OWL2DLValidator::new(ontology);
-        let report = validator.validate().expect("Failed to validate OWL 2 DL compliance for ontology");
+        let report = validator
+            .validate()
+            .expect("Failed to validate OWL 2 DL compliance for ontology");
 
         // Check for appropriate errors
         assert_eq!(report.errors.len(), 0); // Should be valid if used correctly

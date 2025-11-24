@@ -6,7 +6,7 @@ use crate::ontology::{
     Class, ClassExpression, DataProperty, DataPropertyExpression, IRI, Individual, Literal,
     ObjectProperty, ObjectPropertyExpression,
 };
-use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable};
+use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLVariable};
 use crate::{Error, Result};
 use std::collections::HashMap;
 
@@ -841,13 +841,18 @@ mod tests {
 
         let result = manager.resolve_qname("ex", "Person");
         assert!(result.is_ok());
-        assert_eq!(result.expect("Failed to resolve qualified name with namespace prefix"), "http://example.org/Person");
+        assert_eq!(
+            result.expect("Failed to resolve qualified name with namespace prefix"),
+            "http://example.org/Person"
+        );
     }
 
     #[test]
     fn test_lexer_tokenization() {
         let mut lexer = Lexer::new("Person(?p)");
-        let tokens = lexer.tokenize().expect("Failed to tokenize SWRL expression");
+        let tokens = lexer
+            .tokenize()
+            .expect("Failed to tokenize SWRL expression");
 
         assert_eq!(tokens.len(), 4);
         assert!(matches!(tokens[0], Token::Identifier(_)));

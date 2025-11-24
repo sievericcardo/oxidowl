@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::dl_clauses::{
     axiom_compilers::AxiomCompiler,
-    types::{DLAtom, DLClause, DLClauseSet, DLClauseStatistics},
+    types::{DLClause, DLClauseSet, DLClauseStatistics},
 };
 
 /// DL clause generator that converts OWL axioms to DL clauses

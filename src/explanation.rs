@@ -4,15 +4,13 @@
 //! including proof tracking, justification computation, and explanation formatting.
 
 use crate::{
-    Error, Result,
-    core::tableau::{NodeId, TableauEdge, TableauNode},
-    ontology::{
-        Axiom, ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression,
-    },
+    Result,
+    core::tableau::NodeId,
+    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression},
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::HashMap,
     fmt,
     sync::{Arc, Mutex},
 };
@@ -42,7 +40,7 @@ impl ExplanationService {
         superclass: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Explanation> {
-        let mut justification = self
+        let justification = self
             .justification_computer
             .compute_subsumption_justification(subclass, superclass, ontology_axioms)?;
 

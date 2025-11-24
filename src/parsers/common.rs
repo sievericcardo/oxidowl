@@ -151,7 +151,8 @@ mod tests {
 
         // Create a temporary file with test content
         let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file for test");
-        writeln!(temp_file, "Test ontology content").expect("Failed to write content to temporary file");
+        writeln!(temp_file, "Test ontology content")
+            .expect("Failed to write content to temporary file");
         temp_file.flush().expect("Failed to flush temporary file");
 
         let result = parser.parse_from_file(temp_file.path());

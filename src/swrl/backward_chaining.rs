@@ -3,11 +3,9 @@
 use crate::ontology::{
     ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
 };
-use crate::swrl::{
-    SWRLAtom, SWRLBuiltIn, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable,
-};
+use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable};
 use crate::{Error, Result};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 // =============================================================================

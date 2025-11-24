@@ -3,6 +3,7 @@
 //! This module checks DL clauses against the current tableau state
 //! to detect violations dynamically during reasoning.
 
+use crate::Error;
 use crate::core::tableau::absorption::ClauseAbsorber;
 use crate::core::tableau::clause_index::ClauseIndex;
 use crate::core::tableau::disjointness::DisjointnessMap;
@@ -12,7 +13,6 @@ use crate::core::tableau::incremental_checker::{
 };
 use crate::core::tableau::node::{ConceptLabel, TableauNode};
 use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
-use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
 /// Configuration for clause checking optimizations

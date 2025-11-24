@@ -8,24 +8,19 @@
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use super::cost_optimizer::CostBasedOptimizer;
-use super::execution::{AdvancedQueryError, ConjunctiveQueryResult, QueryEngine};
+use super::execution::{AdvancedQueryError, ConjunctiveQueryResult};
 use super::ml_core::{
     ExecutionStrategy as MLExecutionStrategy, MLHeuristicsConfig as MLConfig,
-    MLHeuristicsEngine as MLEngine, QueryExecution, QueryFeatures, StrategyRecommendation,
+    MLHeuristicsEngine as MLEngine, QueryExecution, StrategyRecommendation,
 };
-use super::optimization::OptimizationError;
-use super::optimizer::{AdvancedQueryPlan, PerformancePrediction};
-use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
+use super::optimizer::AdvancedQueryPlan;
+use crate::ontology::{Individual, Ontology};
 use crate::performance::{QueryProfiler, QueryTiming};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::future::Future;
 use std::hash::{Hash, Hasher};
-use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -1848,7 +1843,7 @@ impl ExecutionStrategySelector {
 
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
         // Get strategy implementation by name
-        Err(AdvancedQueryError::StrategyNotFound(name.to_string()))
+        Err(AdvancedQueryError::strategy_not_found(name.to_string()))
     }
 
     pub fn update_performance_history(
@@ -1989,7 +1984,7 @@ impl ExecutionPerformanceMonitor {
                 trace.joins_performed,
                 result_size,
             );
-            self.query_profiler.record(timing);
+            let _ = self.query_profiler.record(timing);
 
             let completed = CompletedExecution {
                 execution_id: execution_id.clone(),
@@ -2199,7 +2194,7 @@ impl Default for ParallelExecutionConfig {
 
 // Additional error variants for AdvancedQueryError
 impl AdvancedQueryError {
-    pub fn StrategyNotFound(strategy: String) -> Self {
+    pub fn strategy_not_found(strategy: String) -> Self {
         AdvancedQueryError::InternalError(format!("Execution strategy not found: {}", strategy))
     }
 }

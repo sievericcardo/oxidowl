@@ -414,9 +414,8 @@ impl DatatypeValidator {
 
     fn validate_time(&self, value: &str) -> Result<bool> {
         // Format: HH:MM:SS(.sss)?(Z|[+-]HH:MM)?
-        let time_pattern =
-            regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
-                .expect("Valid hardcoded regex pattern for time");
+        let time_pattern = regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
+            .expect("Valid hardcoded regex pattern for time");
         Ok(time_pattern.is_match(value))
     }
 
@@ -497,31 +496,91 @@ mod tests {
     #[test]
     fn test_validate_boolean() {
         let validator = DatatypeValidator::new();
-        assert!(validator.validate_boolean("true").expect("Failed to validate boolean datatype value"));
-        assert!(validator.validate_boolean("false").expect("Failed to validate boolean datatype value"));
-        assert!(validator.validate_boolean("1").expect("Failed to validate boolean datatype value"));
-        assert!(validator.validate_boolean("0").expect("Failed to validate boolean datatype value"));
-        assert!(!validator.validate_boolean("yes").expect("Failed to validate boolean datatype value"));
+        assert!(
+            validator
+                .validate_boolean("true")
+                .expect("Failed to validate boolean datatype value")
+        );
+        assert!(
+            validator
+                .validate_boolean("false")
+                .expect("Failed to validate boolean datatype value")
+        );
+        assert!(
+            validator
+                .validate_boolean("1")
+                .expect("Failed to validate boolean datatype value")
+        );
+        assert!(
+            validator
+                .validate_boolean("0")
+                .expect("Failed to validate boolean datatype value")
+        );
+        assert!(
+            !validator
+                .validate_boolean("yes")
+                .expect("Failed to validate boolean datatype value")
+        );
     }
 
     #[test]
     fn test_validate_integer() {
         let validator = DatatypeValidator::new();
-        assert!(validator.validate_integer("123").expect("Failed to validate integer datatype value"));
-        assert!(validator.validate_integer("-456").expect("Failed to validate integer datatype value"));
-        assert!(validator.validate_integer("0").expect("Failed to validate integer datatype value"));
-        assert!(!validator.validate_integer("12.34").expect("Failed to validate integer datatype value"));
-        assert!(!validator.validate_integer("abc").expect("Failed to validate integer datatype value"));
+        assert!(
+            validator
+                .validate_integer("123")
+                .expect("Failed to validate integer datatype value")
+        );
+        assert!(
+            validator
+                .validate_integer("-456")
+                .expect("Failed to validate integer datatype value")
+        );
+        assert!(
+            validator
+                .validate_integer("0")
+                .expect("Failed to validate integer datatype value")
+        );
+        assert!(
+            !validator
+                .validate_integer("12.34")
+                .expect("Failed to validate integer datatype value")
+        );
+        assert!(
+            !validator
+                .validate_integer("abc")
+                .expect("Failed to validate integer datatype value")
+        );
     }
 
     #[test]
     fn test_validate_decimal() {
         let validator = DatatypeValidator::new();
-        assert!(validator.validate_decimal("123.45").expect("Failed to validate decimal datatype value"));
-        assert!(validator.validate_decimal("-67.89").expect("Failed to validate decimal datatype value"));
-        assert!(validator.validate_decimal("100").expect("Failed to validate decimal datatype value"));
-        assert!(validator.validate_decimal(".5").expect("Failed to validate decimal datatype value"));
-        assert!(!validator.validate_decimal("12.34.56").expect("Failed to validate decimal datatype value"));
+        assert!(
+            validator
+                .validate_decimal("123.45")
+                .expect("Failed to validate decimal datatype value")
+        );
+        assert!(
+            validator
+                .validate_decimal("-67.89")
+                .expect("Failed to validate decimal datatype value")
+        );
+        assert!(
+            validator
+                .validate_decimal("100")
+                .expect("Failed to validate decimal datatype value")
+        );
+        assert!(
+            validator
+                .validate_decimal(".5")
+                .expect("Failed to validate decimal datatype value")
+        );
+        assert!(
+            !validator
+                .validate_decimal("12.34.56")
+                .expect("Failed to validate decimal datatype value")
+        );
     }
 
     #[test]

@@ -13,7 +13,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufReader, Read},
     path::Path,
 };
 

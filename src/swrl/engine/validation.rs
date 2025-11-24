@@ -2,12 +2,12 @@
 //!
 //! This module implements validation logic for SWRL rules and goal satisfaction checking.
 
-use crate::core::lock_helpers::{read_lock, write_lock};
-use crate::ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression};
+use crate::core::lock_helpers::read_lock;
+use crate::ontology::{Axiom, ClassExpression, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule};
 use crate::{Error, Result};
-use log::{debug, warn};
-use std::collections::{HashMap, HashSet};
+use log::debug;
+use std::collections::HashSet;
 
 use super::core::SWRLRuleEngine;
 use super::matching::{PatternMatcher, UnificationEngine};
