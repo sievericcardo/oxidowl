@@ -23,26 +23,22 @@ impl Class {
 
     #[must_use]
     pub fn thing() -> Self {
-        Self::new(crate::ontology::IRI::new(
-            "http://www.w3.org/2002/07/owl#Thing",
-        ))
+        Self::new(crate::ontology::IRI::owl_thing())
     }
 
     #[must_use]
     pub fn nothing() -> Self {
-        Self::new(crate::ontology::IRI::new(
-            "http://www.w3.org/2002/07/owl#Nothing",
-        ))
+        Self::new(crate::ontology::IRI::owl_nothing())
     }
 
     #[must_use]
     pub fn is_thing(&self) -> bool {
-        self.iri == crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing")
+        self.iri.is_owl_thing()
     }
 
     #[must_use]
     pub fn is_nothing(&self) -> bool {
-        self.iri == crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing")
+        self.iri.is_owl_nothing()
     }
 }
 
@@ -431,10 +427,10 @@ impl ClassExpression {
 
                 for expr in simplified {
                     if let ClassExpression::Class(class) = &expr {
-                        if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+                        if class.iri.is_owl_nothing() {
                             has_nothing = true;
                             break; // Nothing dominates intersection
-                        } else if class.iri.as_str() != "http://www.w3.org/2002/07/owl#Thing" {
+                        } else if !class.iri.is_owl_thing() {
                             continue; // Ignore Thing in intersection
                         }
                     }
@@ -470,10 +466,10 @@ impl ClassExpression {
 
                 for expr in simplified {
                     if let ClassExpression::Class(class) = &expr {
-                        if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+                        if class.iri.is_owl_thing() {
                             has_thing = true;
                             break; // Thing dominates union
-                        } else if class.iri.as_str() != "http://www.w3.org/2002/07/owl#Nothing" {
+                        } else if !class.iri.is_owl_nothing() {
                             continue; // Ignore Nothing in union
                         }
                     }
@@ -504,10 +500,10 @@ impl ClassExpression {
                     // Double negation elimination
                     Ok(inner.as_ref().clone())
                 } else if let ClassExpression::Class(class) = &simplified {
-                    if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+                    if class.iri.is_owl_thing() {
                         // Complement of Thing is Nothing
                         Ok(ClassExpression::nothing())
-                    } else if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+                    } else if class.iri.is_owl_nothing() {
                         // Complement of Nothing is Thing
                         Ok(ClassExpression::thing())
                     } else {

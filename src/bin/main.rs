@@ -1377,7 +1377,7 @@ async fn execute_full_reasoning(
         );
 
         // Check owl:Thing satisfiability like HermiT does
-        let owl_thing_iri = oxidowl::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing");
+        let owl_thing_iri = oxidowl::ontology::IRI::owl_thing();
         let owl_thing_class = oxidowl::ontology::Class::new(owl_thing_iri);
         let owl_thing_expr = oxidowl::ontology::ClassExpression::Class(owl_thing_class);
         let owl_thing_satisfiable = reasoner.is_class_satisfiable(&owl_thing_expr)?;

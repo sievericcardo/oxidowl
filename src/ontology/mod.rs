@@ -10,6 +10,7 @@ pub mod concepts;
 pub mod datatypes;
 pub mod individuals;
 pub mod properties;
+pub mod vocabulary;
 
 // Re-export main types
 pub use axioms::*;
