@@ -634,6 +634,7 @@ impl CompletionRuleSet {
                     ));
 
                     if let Some(filler_concept) = filler {
+                        // Convert once, reuse the Individual instead of cloning String
                         result.concept_additions.push((
                             string_to_individual(new_individual),
                             filler_concept.clone(),
@@ -850,7 +851,7 @@ impl CompletionRuleSet {
                     for _i in 0..*cardinality {
                         let witness = Individual::fresh();
 
-                        // Add role assertion to witness
+                        // Add role assertion to witness (witness cloned once here)
                         result.role_additions.push((
                             source_individual.clone(),
                             witness.clone(),
