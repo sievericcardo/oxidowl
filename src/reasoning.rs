@@ -783,7 +783,7 @@ impl ReasoningService {
 
                 // Hash some class names for uniqueness
                 for class in signature.classes.iter().take(10) {
-                    class.iri.to_string().hash(&mut hasher);
+                    class.iri.as_str().hash(&mut hasher);
                 }
             }
 

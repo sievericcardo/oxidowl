@@ -551,30 +551,31 @@ impl DLQueryParser {
         }
 
         // Handle parentheses
-        if tokens[start] == "(" {
+        if tokens.get(start).map(|s| s.as_str()) == Some("(") {
             let (expr, end) = self.parse_expression_tokens(tokens, start + 1)?;
-            if end >= tokens.len() || tokens[end] != ")" {
+            if end >= tokens.len() || tokens.get(end).map(|s| s.as_str()) != Some(")") {
                 return Err(Error::reasoning("Missing closing parenthesis"));
             }
             return Ok((expr, end + 1));
         }
 
         // Parse class names or IRIs
-        if tokens[start].starts_with('<') && tokens[start].ends_with('>') {
-            let iri_str = &tokens[start][1..tokens[start].len() - 1];
+        let token = tokens.get(start).ok_or_else(|| Error::reasoning("Unexpected end of tokens"))?;
+        if token.starts_with('<') && token.ends_with('>') {
+            let iri_str = &token[1..token.len() - 1];
             let class = Class::new(IRI::new(iri_str));
             return self.parse_binary_operators(ClassExpression::Class(class), tokens, start + 1);
         }
 
         // Handle class names (prefixed or unprefixed)
-        if self.is_class_name(&tokens[start]) {
-            let class_expr = self.parse_class_name(&tokens[start])?;
+        if self.is_class_name(token) {
+            let class_expr = self.parse_class_name(token)?;
             return self.parse_binary_operators(class_expr, tokens, start + 1);
         }
 
         Err(Error::reasoning(format!(
             "Unexpected token: {}",
-            tokens[start]
+            token
         )))
     }
 
@@ -615,7 +616,9 @@ impl DLQueryParser {
             "some" => {
                 // Parse "property some class" where left is the property context
                 if start + 1 < tokens.len() {
-                    let property = self.parse_property_name(&tokens[start - 1])?;
+                    let prev_token = tokens.get(start.saturating_sub(1))
+                        .ok_or_else(|| Error::reasoning("Expected property before 'some'"))?;
+                    let property = self.parse_property_name(prev_token)?;
                     let (filler, end) = self.parse_expression_tokens(tokens, start + 1)?;
                     let restriction = ClassExpression::ObjectSomeValuesFrom {
                         property,
@@ -628,7 +631,9 @@ impl DLQueryParser {
             }
             "only" => {
                 if start + 1 < tokens.len() {
-                    let property = self.parse_property_name(&tokens[start - 1])?;
+                    let prev_token = tokens.get(start.saturating_sub(1))
+                        .ok_or_else(|| Error::reasoning("Expected property before 'only'"))?;
+                    let property = self.parse_property_name(prev_token)?;
                     let (filler, end) = self.parse_expression_tokens(tokens, start + 1)?;
                     let restriction = ClassExpression::ObjectAllValuesFrom {
                         property,

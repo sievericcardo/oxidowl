@@ -798,7 +798,7 @@ mod tests {
     }
 
     #[test]
-    fn test_blocking() {
+    fn test_blocking() -> Result<()> {
         let mut expansion = HypertableauExpansion::new();
 
         // Create parent node with concepts
@@ -818,14 +818,14 @@ mod tests {
         }
 
         expansion
-            .check_blocking()
-            .expect("Failed to check for blocking in tableau expansion");
+            .check_blocking()?;
 
         let child = expansion
             .graph()
             .get_node(child_id)
-            .expect("Failed to get node from expansion graph");
+            .ok_or_else(|| Error::internal("Failed to get node from expansion graph"))?;
         assert!(child.is_blocked);
         assert_eq!(child.blocked_by, Some(parent_id));
+        Ok(())
     }
 }

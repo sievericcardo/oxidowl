@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lock_acquisition() {
+    async fn test_lock_acquisition() -> Result<()> {
         let config = ClusterConfig::default();
         let coordinator = ClusterCoordinator::new(config)
             .await
@@ -327,20 +327,19 @@ mod tests {
 
         let acquired = coordinator
             .acquire_lock(lock_id.clone(), node_id, timeout)
-            .await
-            .expect("Failed to acquire distributed lock on cluster");
+            .await?;
         assert!(acquired);
 
         // Try to acquire same lock again (should fail)
         let acquired2 = coordinator
             .acquire_lock(lock_id.clone(), uuid::Uuid::new_v4(), timeout)
-            .await
-            .expect("Failed to acquire distributed lock on cluster");
+            .await?;
         assert!(!acquired2);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_lock_release() {
+    async fn test_lock_release() -> Result<()> {
         let config = ClusterConfig::default();
         let coordinator = ClusterCoordinator::new(config)
             .await
@@ -352,20 +351,18 @@ mod tests {
 
         coordinator
             .acquire_lock(lock_id.clone(), node_id, timeout)
-            .await
-            .expect("Failed to acquire distributed lock on cluster");
+            .await?;
         let released = coordinator
             .release_lock(lock_id.clone(), node_id)
-            .await
-            .expect("Failed to acquire distributed lock on cluster");
+            .await?;
         assert!(released);
 
         // Should be able to acquire again after release
         let acquired = coordinator
             .acquire_lock(lock_id, node_id, timeout)
-            .await
-            .expect("Failed to acquire distributed lock on cluster");
+            .await?;
         assert!(acquired);
+        Ok(())
     }
 
     #[tokio::test]
