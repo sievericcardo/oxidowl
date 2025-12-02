@@ -17,6 +17,7 @@ use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
     fmt,
+    sync::Arc,
 };
 
 /// Strategy for expanding existential concepts in the tableau.
@@ -453,7 +454,7 @@ impl ExpansionManager {
             CompletionRule::Some,
             candidate.node.clone(),
             candidate.existential.clone(),
-            candidate.dependencies.clone(),
+            Arc::new(candidate.dependencies.clone()),
         );
         result.rule_applications.push(rule_app);
 
@@ -487,7 +488,7 @@ impl ExpansionManager {
             CompletionRule::Some,
             candidate.node.clone(),
             candidate.existential.clone(),
-            candidate.dependencies.clone(),
+            Arc::new(candidate.dependencies.clone()),
         );
         result.rule_applications.push(rule_app);
 

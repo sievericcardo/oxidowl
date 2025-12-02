@@ -9,7 +9,7 @@ use crate::{
     core::dependency::DependencySet,
     ontology::{ClassExpression, DataProperty, Individual, ObjectPropertyExpression, Role},
 };
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 /// Helper function to convert string to Individual
 fn string_to_individual(node_id: String) -> Individual {
@@ -132,7 +132,7 @@ pub struct RuleApplication {
     pub priority: RulePriority,
 
     /// Dependencies for this rule application
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 /// Context specific to each rule type
@@ -141,7 +141,7 @@ pub enum RuleContext {
     /// Context for concept-based rules (AND, OR, etc.)
     Concept {
         concept: ClassExpression,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     },
 
     /// Context for role-based rules (SOME, ALL, etc.)
@@ -236,24 +236,24 @@ pub struct RuleResult {
     pub new_applications: Vec<RuleApplication>,
 
     /// Concept additions required
-    pub concept_additions: Vec<(Individual, ClassExpression, DependencySet)>,
+    pub concept_additions: Vec<(Individual, ClassExpression, Arc<DependencySet>)>,
 
     /// Role additions required
     pub role_additions: Vec<(
         Individual,
         Individual,
         ObjectPropertyExpression,
-        DependencySet,
+        Arc<DependencySet>,
     )>,
 
     /// Edge additions required (legacy)
-    pub edge_additions: Vec<(String, String, ObjectPropertyExpression, DependencySet)>,
+    pub edge_additions: Vec<(String, String, ObjectPropertyExpression, Arc<DependencySet>)>,
 
     /// New individuals created
-    pub new_individuals: Vec<(String, DependencySet)>,
+    pub new_individuals: Vec<(String, Arc<DependencySet>)>,
 
     /// Merges to perform
-    pub merges: Vec<(String, String, DependencySet)>,
+    pub merges: Vec<(String, String, Arc<DependencySet>)>,
 
     /// Clashes detected
     pub clashes: Vec<ClashInfo>,
@@ -269,18 +269,18 @@ pub struct RuleResult {
         Individual,
         String,
         crate::ontology::DataPropertyExpression,
-        DependencySet,
+        Arc<DependencySet>,
     )>,
 
     /// Datatype constraints
-    pub datatype_constraints: Vec<(String, crate::ontology::DataRange, DependencySet)>,
+    pub datatype_constraints: Vec<(String, crate::ontology::DataRange, Arc<DependencySet>)>,
 
     /// Universal constraints for validation
     pub universal_constraints: Vec<(
         Individual,
         crate::ontology::DataPropertyExpression,
         ClassExpression,
-        DependencySet,
+        Arc<DependencySet>,
     )>,
 
     /// Cardinality constraints for validation
@@ -290,7 +290,7 @@ pub struct RuleResult {
         u32,
         ClassExpression,
         bool,
-        DependencySet,
+        Arc<DependencySet>,
     )>,
 }
 
@@ -307,7 +307,7 @@ pub struct ClashInfo {
     pub concepts: Vec<ClassExpression>,
 
     /// Dependencies leading to the clash
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 
     /// Explanation of the clash
     pub explanation: String,
@@ -348,7 +348,7 @@ pub struct BranchInfo {
     pub choices: Vec<ClassExpression>,
 
     /// Dependencies for this branching
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 /// Rule application strategy
@@ -500,7 +500,7 @@ impl CompletionRuleSet {
                     result.concept_additions.push((
                         individual.clone(),
                         conjunct.clone(),
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
             }
@@ -554,14 +554,14 @@ impl CompletionRuleSet {
                     source_individual,
                     witness_individual.clone(),
                     property.clone(),
-                    dependencies.clone(),
+                    Arc::clone(dependencies),
                 ));
 
                 // Add filler concept to the witness individual
                 result.concept_additions.push((
                     witness_individual,
                     (**filler).clone(),
-                    dependencies.clone(),
+                    Arc::clone(dependencies),
                 ));
             }
         }
@@ -584,7 +584,7 @@ impl CompletionRuleSet {
             result.concept_additions.push((
                 string_to_individual(target.clone()),
                 concept.clone(),
-                application.dependencies.clone(),
+                Arc::clone(&application.dependencies),
             ));
         }
 
@@ -624,20 +624,20 @@ impl CompletionRuleSet {
 
                     result
                         .new_individuals
-                        .push((new_individual.clone(), deps.clone()));
+                        .push((new_individual.clone(), Arc::clone(&deps)));
 
                     result.edge_additions.push((
                         application.node.clone(),
                         new_individual.clone(),
                         object_property.clone(),
-                        deps.clone(),
+                        Arc::clone(&deps),
                     ));
 
                     if let Some(filler_concept) = filler {
                         result.concept_additions.push((
                             string_to_individual(new_individual),
                             filler_concept.clone(),
-                            deps.clone(),
+                            Arc::clone(&deps),
                         ));
                     }
                 }
@@ -664,14 +664,14 @@ impl CompletionRuleSet {
             if existing > allowed {
                 // Need to merge some successors or detect clash
                 // For simplicity, we'll create a merge for the first excess nodes
-                let deps = application.dependencies.clone();
+                let deps = Arc::clone(&application.dependencies);
                 let target = existing_successors[allowed - 1].clone();
                 
                 for i in allowed..existing {
                     result.merges.push((
                         existing_successors[i].clone(),
                         target.clone(),
-                        deps.clone(),
+                        Arc::clone(&deps),
                     ));
                 }
             }
@@ -697,7 +697,7 @@ impl CompletionRuleSet {
                     .map(|iri| iri.as_str())
                     .unwrap_or("unknown")
                     .to_string(),
-                application.dependencies.clone(),
+                Arc::clone(&application.dependencies),
             ));
         }
 
@@ -719,7 +719,7 @@ impl CompletionRuleSet {
                     application.node.clone(),
                     application.node.clone(),
                     property.clone(),
-                    dependencies.clone(),
+                    Arc::clone(dependencies),
                 ));
             }
         }
@@ -757,14 +757,14 @@ impl CompletionRuleSet {
                         individual,
                         witness_value.clone(),
                         property.clone(),
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
 
                     // Add datatype constraint
                     result.datatype_constraints.push((
                         witness_value,
                         filler.clone(),
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
                 ClassExpression::DataAllValuesFrom { property, filler } => {
@@ -780,7 +780,7 @@ impl CompletionRuleSet {
                             property: property.clone(),
                             filler: filler.clone(),
                         },
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
                 ClassExpression::DataHasValue { property, value } => {
@@ -789,7 +789,7 @@ impl CompletionRuleSet {
                         individual,
                         value.value.clone(), // Use value directly
                         property.clone(),
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
                 _ => {
@@ -819,7 +819,7 @@ impl CompletionRuleSet {
                     result.concept_additions.push((
                         string_to_individual(application.node.clone()),
                         definition,
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
             }
@@ -855,14 +855,14 @@ impl CompletionRuleSet {
                             source_individual.clone(),
                             witness.clone(),
                             property.clone(),
-                            dependencies.clone(),
+                            Arc::clone(dependencies),
                         ));
 
                         // Add filler concept to witness
                         result.concept_additions.push((
                             witness,
                             (**filler).clone(),
-                            dependencies.clone(),
+                            Arc::clone(dependencies),
                         ));
 
                         // Add inequality constraints between witnesses if needed
@@ -884,7 +884,7 @@ impl CompletionRuleSet {
                         *cardinality,
                         (**filler).clone(),
                         false, // false = max cardinality
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
                 ClassExpression::ObjectExactCardinality {
@@ -902,13 +902,13 @@ impl CompletionRuleSet {
                             source_individual.clone(),
                             witness.clone(),
                             property.clone(),
-                            dependencies.clone(),
+                            Arc::clone(dependencies),
                         ));
 
                         result.concept_additions.push((
                             witness,
                             (**filler).clone(),
-                            dependencies.clone(),
+                            Arc::clone(dependencies),
                         ));
                     }
 
@@ -919,7 +919,7 @@ impl CompletionRuleSet {
                         *cardinality,
                         (**filler).clone(),
                         false, // max cardinality constraint
-                        dependencies.clone(),
+                        Arc::clone(dependencies),
                     ));
                 }
                 _ => {
@@ -948,7 +948,7 @@ impl CompletionRuleSet {
                 source.clone(),
                 target.clone(),
                 super_property.clone(),
-                application.dependencies.clone(),
+                Arc::clone(&application.dependencies),
             ));
         }
 
@@ -1082,7 +1082,7 @@ impl RuleApplication {
         node: String,
         context: RuleContext,
         priority: RulePriority,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     ) -> Self {
         Self {
             rule,
@@ -1099,7 +1099,7 @@ impl RuleApplication {
         rule: CompletionRule,
         node: String,
         concept: ClassExpression,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     ) -> Self {
         let priority = match rule {
             CompletionRule::And | CompletionRule::All | CompletionRule::Self_ => {
@@ -1117,7 +1117,7 @@ impl RuleApplication {
             node,
             RuleContext::Concept {
                 concept,
-                dependencies: dependencies.clone(),
+                dependencies: Arc::clone(&dependencies),
             },
             priority,
             dependencies,
@@ -1132,7 +1132,7 @@ impl RuleApplication {
         source: String,
         target: String,
         concept: ClassExpression,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     ) -> Self {
         Self::new(
             rule,
@@ -1155,7 +1155,7 @@ impl RuleApplication {
         target: String,
         source: String,
         super_property: ObjectPropertyExpression,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     ) -> Self {
         Self::new(
             CompletionRule::PropertyChain,

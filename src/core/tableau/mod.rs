@@ -40,7 +40,10 @@ use crate::{
     },
     ontology::{ClassExpression, Ontology},
 };
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
 
 /// Main tableau structure
 pub struct Tableau {
@@ -290,10 +293,10 @@ impl Tableau {
                             node: root_id.to_string(),
                             context: RuleContext::Concept {
                                 concept: intersection,
-                                dependencies: DependencySet::new(),
+                                dependencies: Arc::new(DependencySet::new()),
                             },
                             priority: RulePriority::High,
-                            dependencies: DependencySet::new(),
+                            dependencies: Arc::new(DependencySet::new()),
                         };
                         self.pending_queue.push_back(rule_app);
                     }
@@ -321,10 +324,10 @@ impl Tableau {
                             node: root_id.to_string(),
                             context: RuleContext::Concept {
                                 concept: intersection,
-                                dependencies: DependencySet::new(),
+                                dependencies: Arc::new(DependencySet::new()),
                             },
                             priority: RulePriority::High,
-                            dependencies: DependencySet::new(),
+                            dependencies: Arc::new(DependencySet::new()),
                         };
                         self.pending_queue.push_back(rule_app);
                     }
@@ -352,10 +355,10 @@ impl Tableau {
                     node: root_id.to_string(),
                     context: RuleContext::Concept {
                         concept: intersection,
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                     },
                     priority: RulePriority::High,
-                    dependencies: DependencySet::new(),
+                    dependencies: Arc::new(DependencySet::new()),
                 };
                 self.pending_queue.push_back(rule_app);
             }
@@ -383,10 +386,10 @@ impl Tableau {
                     node: node_id.to_string(),
                     context: RuleContext::Concept {
                         concept: class_expr.clone(),
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                     },
                     priority: RulePriority::High,
-                    dependencies: DependencySet::new(),
+                    dependencies: Arc::new(DependencySet::new()),
                 };
                 self.pending_queue.push_back(rule_app);
             }
@@ -396,10 +399,10 @@ impl Tableau {
                     node: node_id.to_string(),
                     context: RuleContext::Concept {
                         concept: class_expr.clone(),
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                     },
                     priority: RulePriority::Normal,
-                    dependencies: DependencySet::new(),
+                    dependencies: Arc::new(DependencySet::new()),
                 };
                 self.pending_queue.push_back(rule_app);
             }
@@ -409,10 +412,10 @@ impl Tableau {
                     node: node_id.to_string(),
                     context: RuleContext::Concept {
                         concept: class_expr.clone(),
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                     },
                     priority: RulePriority::Normal,
-                    dependencies: DependencySet::new(),
+                    dependencies: Arc::new(DependencySet::new()),
                 };
                 self.pending_queue.push_back(rule_app);
             }
@@ -422,10 +425,10 @@ impl Tableau {
                     node: node_id.to_string(),
                     context: RuleContext::Concept {
                         concept: class_expr.clone(),
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                     },
                     priority: RulePriority::High,
-                    dependencies: DependencySet::new(),
+                    dependencies: Arc::new(DependencySet::new()),
                 };
                 self.pending_queue.push_back(rule_app);
             }
@@ -584,7 +587,7 @@ impl Tableau {
             )));
         }
 
-        let edge = TableauEdge::new(from, to, role.clone(), DependencySet::new());
+        let edge = TableauEdge::new(from, to, role.clone(), Arc::new(DependencySet::new()));
         self.edges.push(edge);
 
         // Update node connections
