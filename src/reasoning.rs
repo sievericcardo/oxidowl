@@ -986,7 +986,7 @@ impl QueryInterface {
         &self,
         concepts: Vec<ClassExpression>,
     ) -> Result<HashMap<ClassExpression, bool>> {
-        let mut results = HashMap::new();
+        let mut results = HashMap::with_capacity(concepts.len());
 
         for concept in concepts {
             let result = self.reasoning_service.is_satisfiable(&concept).await?;
@@ -1001,7 +1001,7 @@ impl QueryInterface {
         &self,
         queries: Vec<(ClassExpression, ClassExpression)>,
     ) -> Result<HashMap<(ClassExpression, ClassExpression), bool>> {
-        let mut results = HashMap::new();
+        let mut results = HashMap::with_capacity(queries.len());
 
         for (subclass, superclass) in queries {
             let result = self

@@ -426,7 +426,7 @@ impl ClassExpression {
                     .collect::<crate::Result<Vec<_>>>()?;
 
                 // Remove duplicates and empty expressions
-                let mut unique_exprs = Vec::new();
+                let mut unique_exprs = Vec::with_capacity(simplified.len());
                 let mut has_nothing = false;
 
                 for expr in simplified {
@@ -465,7 +465,7 @@ impl ClassExpression {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 // Remove duplicates and empty expressions
-                let mut unique_exprs = Vec::new();
+                let mut unique_exprs = Vec::with_capacity(simplified.len());
                 let mut has_thing = false;
 
                 for expr in simplified {

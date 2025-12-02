@@ -711,7 +711,7 @@ impl Ontology {
     /// Get classes by extracting them from declaration axioms
     #[must_use]
     pub fn classes(&self) -> Vec<(IRI, concepts::Class)> {
-        let mut classes = Vec::new();
+        let mut classes = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
             if let axioms::Axiom::Declaration(decl) = axiom {
@@ -728,7 +728,7 @@ impl Ontology {
     /// Extract individuals from the axioms
     #[must_use]
     pub fn individuals(&self) -> Vec<(IRI, individuals::Individual)> {
-        let mut individuals = Vec::new();
+        let mut individuals = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
             match axiom {
@@ -832,7 +832,7 @@ impl Ontology {
     /// Get object properties by extracting them from declaration axioms
     #[must_use]
     pub fn object_properties(&self) -> Vec<ObjectProperty> {
-        let mut properties = Vec::new();
+        let mut properties = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
             if let axioms::Axiom::Declaration(decl) = axiom {
