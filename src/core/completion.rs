@@ -521,14 +521,13 @@ impl CompletionRuleSet {
             // Extract disjuncts from union
             if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
                 // Create branching choices for each disjunct (simplified)
-                let mut choices = Vec::new();
-                for (index, disjunct) in disjuncts.iter().enumerate() {
-                    choices.push(format!("Disjunct {index}: {disjunct}"));
+                let mut choices = Vec::with_capacity(disjuncts.len());
+                for i in 0..disjuncts.len() {
+                    choices.push(format!("Disjunct {i}"));
                 }
 
                 // Create simple branching point
-                let branching_type = format!("GroundDisjunction: {concept}");
-                result.branching_points.push((branching_type, choices));
+                result.branching_points.push((String::from("GroundDisjunction"), choices));
             }
         }
 
