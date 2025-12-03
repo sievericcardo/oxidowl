@@ -234,8 +234,8 @@ impl ImportDependencyGraph {
             });
         }
 
-        let mut in_degree: HashMap<IRI, usize> = HashMap::new();
-        let mut result = Vec::new();
+        let mut in_degree: HashMap<IRI, usize> = HashMap::with_capacity(self.dependencies.len());
+        let mut result = Vec::with_capacity(self.dependencies.len());
         let mut queue = VecDeque::new();
 
         // Initialize in-degrees

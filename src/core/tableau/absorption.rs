@@ -329,7 +329,7 @@ impl ClauseAbsorber {
         let head_atom = &clause.head[0];
         if head_atom.arguments.len() == 1 {
             let head_var = &head_atom.arguments[0];
-            let mut from_concepts = Vec::new();
+            let mut from_concepts = Vec::with_capacity(clause.body.len());
             let mut all_same_var = true;
 
             // All body atoms must be concept assertions with same variable
@@ -364,7 +364,7 @@ impl ClauseAbsorber {
             return None;
         }
 
-        let mut concepts = Vec::new();
+        let mut concepts = Vec::with_capacity(clause.body.len());
         let mut first_var = None;
 
         for body_atom in &clause.body {

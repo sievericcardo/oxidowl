@@ -5,7 +5,10 @@
 
 use super::node::{NodeId, RoleLabel};
 use crate::core::dependency::DependencySet;
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 /// Current state of tableau expansion
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +57,7 @@ pub struct Clash {
     pub nodes: Vec<NodeId>,
 
     /// Dependencies that led to this clash
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 
     /// Explanation for the clash
     pub explanation: String,

@@ -321,7 +321,7 @@ impl ELNormalizer {
 
     /// Normalize axioms to EL normal form
     pub fn normalize_axioms(&self, axioms: &[Axiom]) -> Result<Vec<ELAxiom>> {
-        let mut el_axioms = Vec::new();
+        let mut el_axioms = Vec::with_capacity(axioms.len());
         
         for axiom in axioms {
             match axiom {
@@ -458,7 +458,7 @@ impl ConceptHierarchy {
 
     /// Convert to classification hierarchy format
     pub fn to_classification_hierarchy(&self) -> HashMap<String, Vec<String>> {
-        let mut hierarchy = HashMap::new();
+        let mut hierarchy = HashMap::with_capacity(self.transitive_subsumptions.len());
         
         for (sub, sups) in &self.transitive_subsumptions {
             let sub_name = format!("{:?}", sub);

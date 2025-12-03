@@ -16,7 +16,7 @@ use crate::{
     ontology::{Class, ClassExpression, IRI},
 };
 use log::{debug, trace, warn};
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 /// Tableau execution engine
 pub struct TableauExecutor;
@@ -55,10 +55,10 @@ impl TableauExecutor {
             node: node_id.to_string(),
             context: RuleContext::Concept {
                 concept: class_expr,
-                dependencies: DependencySet::new(),
+                dependencies: Arc::new(DependencySet::new()),
             },
             priority,
-            dependencies: DependencySet::new(),
+            dependencies: Arc::new(DependencySet::new()),
         })
     }
     /// Run the main tableau expansion loop
@@ -291,7 +291,7 @@ impl TableauExecutor {
                             description: explanation.clone(),
                         },
                         nodes: vec![node.id],
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                         explanation: format!(
                             "DL Clause violation at node {}: {}",
                             node.id, explanation
@@ -338,7 +338,7 @@ impl TableauExecutor {
                         node: i,
                     },
                     nodes: vec![i],
-                    dependencies: DependencySet::new(), // Would collect actual dependencies
+                    dependencies: Arc::new(DependencySet::new()), // Would collect actual dependencies
                     explanation: "Complementary concepts found".to_string(),
                 };
                 tableau.clash_detector.add_clash(clash);

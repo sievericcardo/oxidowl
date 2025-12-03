@@ -5,6 +5,7 @@
 
 use super::node::{NodeId, RoleLabel};
 use crate::core::dependency::DependencySet;
+use std::sync::Arc;
 
 /// Edge between tableau nodes
 #[derive(Debug, Clone)]
@@ -19,12 +20,12 @@ pub struct TableauEdge {
     pub role: RoleLabel,
 
     /// Dependency information
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 impl TableauEdge {
     /// Create a new tableau edge
-    pub fn new(from: NodeId, to: NodeId, role: RoleLabel, dependencies: DependencySet) -> Self {
+    pub fn new(from: NodeId, to: NodeId, role: RoleLabel, dependencies: Arc<DependencySet>) -> Self {
         Self {
             from,
             to,

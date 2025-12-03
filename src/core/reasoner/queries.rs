@@ -93,14 +93,14 @@ impl QueryProcessor {
 
     /// Execute SELECT query
     fn execute_select_query(&self, query: &SparqlQuery, ontology: &Ontology) -> Result<String> {
-        let mut results = Vec::new();
-
         // Find bindings that satisfy the query patterns
         let bindings = self.find_pattern_bindings(&query.patterns, ontology)?;
+        
+        let mut results = Vec::with_capacity(bindings.len());
 
         // Project to selected variables
         for binding in bindings {
-            let mut row = Vec::new();
+            let mut row = Vec::with_capacity(query.variables.len());
             for var in &query.variables {
                 if let Some(value) = binding.get(var) {
                     row.push(value.clone());
@@ -128,7 +128,7 @@ impl QueryProcessor {
         let construct_patterns = self.extract_construct_patterns(&query.query_text)?;
         let bindings = self.find_pattern_bindings(&query.patterns, ontology)?;
 
-        let mut triples = Vec::new();
+        let mut triples = Vec::with_capacity(bindings.len() * construct_patterns.len());
         for binding in bindings {
             for pattern in &construct_patterns {
                 if let Some(triple) = self.instantiate_pattern(pattern, &binding) {

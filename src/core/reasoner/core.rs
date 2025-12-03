@@ -357,7 +357,7 @@ impl Reasoner {
 
             // Always add owl:Thing as superclass (unless the class is owl:Thing itself)
             let owl_thing = ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+                crate::ontology::IRI::owl_thing(),
             ));
             if !self.classes_equivalent(class, &owl_thing).unwrap_or(false) {
                 superclasses.push(owl_thing);
@@ -414,7 +414,7 @@ impl Reasoner {
 
             // Always add owl:Nothing as subclass (unless the class is owl:Nothing itself)
             let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
+                crate::ontology::IRI::owl_nothing(),
             ));
             if !self
                 .classes_equivalent(class, &owl_nothing)
@@ -1095,7 +1095,7 @@ impl Reasoner {
 
             // Always include owl:Nothing if not already included
             let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
+                crate::ontology::IRI::owl_nothing(),
             ));
             if !unsatisfiable
                 .iter()
@@ -1108,7 +1108,7 @@ impl Reasoner {
         } else {
             // In empty ontology, only owl:Nothing is unsatisfiable
             Ok(vec![ClassExpression::Class(crate::ontology::Class::new(
-                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
+                crate::ontology::IRI::owl_nothing(),
             ))])
         }
     }

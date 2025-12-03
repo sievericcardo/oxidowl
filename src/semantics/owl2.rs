@@ -1402,7 +1402,7 @@ impl Owl2ReasoningEngine {
     pub fn is_consistent(&mut self) -> Result<bool> {
         // Check if owl:Nothing is satisfiable
         let nothing = ClassExpression::Class(crate::ontology::concepts::Class {
-            iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
+            iri: crate::ontology::IRI::owl_nothing(),
         });
 
         let nothing_satisfiable = self.is_satisfiable(&nothing)?;
@@ -1463,7 +1463,7 @@ mod tests {
         });
 
         let owl_thing = ClassExpression::Class(Class {
-            iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+            iri: crate::ontology::IRI::owl_thing(),
         });
 
         let intersection = ClassExpression::ObjectIntersectionOf(vec![person_class, owl_thing]);

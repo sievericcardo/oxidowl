@@ -205,7 +205,7 @@ impl QueryOptimizer {
         // Use a simplified greedy approach for now
         // In practice, you'd want dynamic programming for optimal results
         let mut remaining_atoms: Vec<usize> = (0..n).collect();
-        let mut join_order = Vec::new();
+        let mut join_order = Vec::with_capacity(n);
         let mut current_variables = HashSet::new();
         let mut total_cost = 0.0;
 
