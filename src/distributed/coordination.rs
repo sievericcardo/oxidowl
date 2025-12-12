@@ -352,15 +352,11 @@ mod tests {
         coordinator
             .acquire_lock(lock_id.clone(), node_id, timeout)
             .await?;
-        let released = coordinator
-            .release_lock(lock_id.clone(), node_id)
-            .await?;
+        let released = coordinator.release_lock(lock_id.clone(), node_id).await?;
         assert!(released);
 
         // Should be able to acquire again after release
-        let acquired = coordinator
-            .acquire_lock(lock_id, node_id, timeout)
-            .await?;
+        let acquired = coordinator.acquire_lock(lock_id, node_id, timeout).await?;
         assert!(acquired);
         Ok(())
     }

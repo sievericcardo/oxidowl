@@ -817,8 +817,7 @@ mod tests {
             child.parent = Some(parent_id);
         }
 
-        expansion
-            .check_blocking()?;
+        expansion.check_blocking()?;
 
         let child = expansion
             .graph()

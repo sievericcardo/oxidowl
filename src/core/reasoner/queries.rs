@@ -95,7 +95,7 @@ impl QueryProcessor {
     fn execute_select_query(&self, query: &SparqlQuery, ontology: &Ontology) -> Result<String> {
         // Find bindings that satisfy the query patterns
         let bindings = self.find_pattern_bindings(&query.patterns, ontology)?;
-        
+
         let mut results = Vec::with_capacity(bindings.len());
 
         // Project to selected variables

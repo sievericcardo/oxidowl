@@ -79,9 +79,7 @@ impl ClassificationService {
 
         // Add owl:Thing if not present
         let owl_thing = ClassExpression::Class(crate::ontology::Class {
-            iri: crate::ontology::IRI::owl_thing()
-                .to_url()?
-                .into(),
+            iri: crate::ontology::IRI::owl_thing().to_url()?.into(),
         });
         if !classes.contains(&owl_thing) {
             classes.push(owl_thing.clone());

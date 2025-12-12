@@ -638,9 +638,8 @@ impl IndividualStore {
     /// Get all individuals (both named and anonymous)
     #[must_use]
     pub fn all_individuals(&self) -> Vec<Individual> {
-        let mut individuals = Vec::with_capacity(
-            self.named_individuals.len() + self.anonymous_individuals.len()
-        );
+        let mut individuals =
+            Vec::with_capacity(self.named_individuals.len() + self.anonymous_individuals.len());
         for named in self.named_individuals.values() {
             individuals.push(Individual::Named(named.clone()));
         }

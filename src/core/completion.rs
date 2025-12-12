@@ -527,7 +527,9 @@ impl CompletionRuleSet {
                 }
 
                 // Create simple branching point
-                result.branching_points.push((String::from("GroundDisjunction"), choices));
+                result
+                    .branching_points
+                    .push((String::from("GroundDisjunction"), choices));
             }
         }
 
@@ -615,9 +617,9 @@ impl CompletionRuleSet {
                         ));
                     }
                 };
-                
+
                 let deps = application.dependencies.clone();
-                
+
                 // Create additional successors
                 for i in existing..needed {
                     let new_individual = format!("_card_{}_{}", application.node, i);
@@ -667,7 +669,7 @@ impl CompletionRuleSet {
                 // For simplicity, we'll create a merge for the first excess nodes
                 let deps = Arc::clone(&application.dependencies);
                 let target = existing_successors[allowed - 1].clone();
-                
+
                 for i in allowed..existing {
                     result.merges.push((
                         existing_successors[i].clone(),
@@ -747,7 +749,7 @@ impl CompletionRuleSet {
         } = &application.context
         {
             let individual = string_to_individual(application.node.clone());
-            
+
             match concept {
                 ClassExpression::DataSomeValuesFrom { property, filler } => {
                     // Create a witness data value for the existential
@@ -840,7 +842,7 @@ impl CompletionRuleSet {
         } = &application.context
         {
             let source_individual = string_to_individual(application.node.clone());
-            
+
             match concept {
                 ClassExpression::ObjectMinCardinality {
                     property,
@@ -1023,8 +1025,8 @@ impl RuleResult {
             edge_additions: Vec::with_capacity(capacity),
             new_individuals: Vec::with_capacity(capacity),
             merges: Vec::with_capacity(capacity),
-            clashes: Vec::with_capacity(capacity / 4),  // Clashes are less common
-            branches: Vec::with_capacity(capacity / 4),  // Branches are less common
+            clashes: Vec::with_capacity(capacity / 4), // Clashes are less common
+            branches: Vec::with_capacity(capacity / 4), // Branches are less common
             branching_points: Vec::with_capacity(capacity / 4),
             data_assertions: Vec::with_capacity(capacity / 2),
             datatype_constraints: Vec::with_capacity(capacity / 2),

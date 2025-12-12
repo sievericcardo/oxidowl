@@ -101,12 +101,14 @@ impl SparqlServer {
         let reasoner = self.reasoning_service.get_reasoner().await?;
         let ontology = reasoner
             .read()
-            .map_err(|e| Error::lock_poisoned(format!("Failed to acquire read lock on reasoner: {}", e)))?
+            .map_err(|e| {
+                Error::lock_poisoned(format!("Failed to acquire read lock on reasoner: {}", e))
+            })?
             .get_ontology()
             .ok_or_else(|| Error::reasoning("Failed to get ontology from reasoner"))?;
-        let ontology_guard = ontology
-            .read()
-            .map_err(|e| Error::lock_poisoned(format!("Failed to acquire read lock on ontology: {}", e)))?;
+        let ontology_guard = ontology.read().map_err(|e| {
+            Error::lock_poisoned(format!("Failed to acquire read lock on ontology: {}", e))
+        })?;
 
         let mut store = self.store.write().await;
 
