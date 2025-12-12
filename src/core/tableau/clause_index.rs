@@ -77,7 +77,8 @@ impl ClauseIndex {
     /// Time: O(n × k) where k = atoms per clause
     /// Space: O(n × p) where p = unique predicates
     pub fn from_clause_set(clause_set: &DLClauseSet) -> Self {
-        let total_clauses = clause_set.deterministic_clauses.len() + clause_set.disjunctive_clauses.len();
+        let total_clauses =
+            clause_set.deterministic_clauses.len() + clause_set.disjunctive_clauses.len();
         let mut body_index: HashMap<String, HashSet<usize>> = HashMap::with_capacity(total_clauses);
         let mut head_index: HashMap<String, HashSet<usize>> = HashMap::with_capacity(total_clauses);
         let mut negative_clause_ids = Vec::with_capacity(total_clauses / 4); // Estimate

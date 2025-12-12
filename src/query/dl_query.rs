@@ -560,7 +560,9 @@ impl DLQueryParser {
         }
 
         // Parse class names or IRIs
-        let token = tokens.get(start).ok_or_else(|| Error::reasoning("Unexpected end of tokens"))?;
+        let token = tokens
+            .get(start)
+            .ok_or_else(|| Error::reasoning("Unexpected end of tokens"))?;
         if token.starts_with('<') && token.ends_with('>') {
             let iri_str = &token[1..token.len() - 1];
             let class = Class::new(IRI::new(iri_str));
@@ -573,10 +575,7 @@ impl DLQueryParser {
             return self.parse_binary_operators(class_expr, tokens, start + 1);
         }
 
-        Err(Error::reasoning(format!(
-            "Unexpected token: {}",
-            token
-        )))
+        Err(Error::reasoning(format!("Unexpected token: {}", token)))
     }
 
     /// Parse binary operators (and, or, some, etc.)
@@ -616,7 +615,8 @@ impl DLQueryParser {
             "some" => {
                 // Parse "property some class" where left is the property context
                 if start + 1 < tokens.len() {
-                    let prev_token = tokens.get(start.saturating_sub(1))
+                    let prev_token = tokens
+                        .get(start.saturating_sub(1))
                         .ok_or_else(|| Error::reasoning("Expected property before 'some'"))?;
                     let property = self.parse_property_name(prev_token)?;
                     let (filler, end) = self.parse_expression_tokens(tokens, start + 1)?;
@@ -631,7 +631,8 @@ impl DLQueryParser {
             }
             "only" => {
                 if start + 1 < tokens.len() {
-                    let prev_token = tokens.get(start.saturating_sub(1))
+                    let prev_token = tokens
+                        .get(start.saturating_sub(1))
                         .ok_or_else(|| Error::reasoning("Expected property before 'only'"))?;
                     let property = self.parse_property_name(prev_token)?;
                     let (filler, end) = self.parse_expression_tokens(tokens, start + 1)?;

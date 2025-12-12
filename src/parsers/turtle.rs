@@ -407,6 +407,7 @@ impl TurtleParser {
         if tokens.iter().any(|t| matches!(t, Token::Semicolon))
             || tokens.iter().any(|t| matches!(t, Token::LeftBracket))
             || tokens.iter().any(|t| matches!(t, Token::LeftParen))
+            || tokens.iter().any(|t| matches!(t, Token::Comma))
         {
             return self.parse_semicolon_statement(&tokens, ontology, state);
         }
@@ -555,6 +556,11 @@ impl TurtleParser {
 
             // Check if the object is a complex structure (blank node, list, etc.)
             if start_index < tokens.len() {
+                // First, check if we've reached the end of the statement
+                if matches!(tokens[start_index], Token::Period | Token::Semicolon) {
+                    break;
+                }
+
                 match &tokens[start_index] {
                     Token::LeftBracket => {
                         // Parse blank node as object
@@ -2304,7 +2310,13 @@ impl TurtleParser {
                 // Decode escape sequences in literals
                 Ok(self.decode_escape_sequences(lit))
             }
-            _ => Err(Error::ontology_parsing("Cannot resolve token to URI")),
+            _ => {
+                let token_desc = format!("{:?}", token);
+                Err(Error::ontology_parsing(format!(
+                    "Cannot resolve token to URI: {:?}",
+                    token_desc
+                )))
+            }
         }
     }
 

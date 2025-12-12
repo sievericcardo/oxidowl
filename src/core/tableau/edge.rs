@@ -25,7 +25,12 @@ pub struct TableauEdge {
 
 impl TableauEdge {
     /// Create a new tableau edge
-    pub fn new(from: NodeId, to: NodeId, role: RoleLabel, dependencies: Arc<DependencySet>) -> Self {
+    pub fn new(
+        from: NodeId,
+        to: NodeId,
+        role: RoleLabel,
+        dependencies: Arc<DependencySet>,
+    ) -> Self {
         Self {
             from,
             to,
