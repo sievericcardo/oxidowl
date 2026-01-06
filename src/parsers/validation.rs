@@ -718,16 +718,18 @@ impl SyntaxValidator {
         let mut paren_depth = 0;
         let mut in_iri = false;
         let mut ontology_count = 0;
+        let mut byte_offset = 0;
 
-        for (i, ch) in content.chars().enumerate() {
+        for (_, ch) in content.chars().enumerate() {
             match ch {
                 '<' => in_iri = true,
                 '>' => in_iri = false,
                 '(' if !in_iri => {
                     paren_depth += 1;
                     // Check if this starts an Ontology declaration
-                    if i > 0 {
-                        let prefix = &content[..i].trim_end();
+                    if byte_offset > 0 {
+                        // Use byte_offset which is guaranteed to be on char boundary
+                        let prefix = &content[..byte_offset].trim_end();
                         if prefix.ends_with("Ontology") {
                             ontology_count += 1;
                         }
@@ -741,6 +743,7 @@ impl SyntaxValidator {
                 }
                 _ => {}
             }
+            byte_offset += ch.len_utf8();
         }
 
         if paren_depth != 0 {
@@ -756,15 +759,16 @@ impl SyntaxValidator {
             let mut depth = 0;
             let mut max_depth_at_ontology = 0;
             in_iri = false;
+            byte_offset = 0;
 
-            for (i, ch) in content.chars().enumerate() {
+            for (_, ch) in content.chars().enumerate() {
                 match ch {
                     '<' => in_iri = true,
                     '>' => in_iri = false,
                     '(' if !in_iri => {
                         depth += 1;
-                        if i > 0 {
-                            let prefix = &content[..i].trim_end();
+                        if byte_offset > 0 {
+                            let prefix = &content[..byte_offset].trim_end();
                             if prefix.ends_with("Ontology") {
                                 if max_depth_at_ontology > 0 && depth > max_depth_at_ontology {
                                     return Err(Error::ontology_parsing(
@@ -778,6 +782,7 @@ impl SyntaxValidator {
                     ')' if !in_iri => depth -= 1,
                     _ => {}
                 }
+                byte_offset += ch.len_utf8();
             }
         }
 
@@ -2124,17 +2129,24 @@ impl SyntaxValidator {
             // Check for basic SWRL structure
             let has_arrow = trimmed.contains("->") || trimmed.contains(":-");
             let has_brackets = trimmed.starts_with('[') && trimmed.ends_with(']');
+            let looks_like_declaration = trimmed.starts_with("Ontology(") 
+                || trimmed.starts_with("Prefix(") 
+                || trimmed.starts_with("Import(") 
+                || trimmed.starts_with("Declaration(") 
+                || trimmed.starts_with("Annotation(");
 
-            if !has_arrow
-                && !has_brackets
-                && !trimmed.starts_with("Ontology(")
-                && !trimmed.starts_with("Prefix(")
-            {
-                // This doesn't look like valid SWRL syntax
-                return Err(Error::ontology_parsing(format!(
-                    "Line {}: Invalid SWRL syntax - expected rule with '->' or ':-' or bracketed rule name",
-                    line_num + 1
-                )));
+            // Only validate SWRL structure if it looks like a SWRL rule
+            // (has DLSafeRule or looks like a rule pattern)
+            if !has_arrow && !has_brackets && !looks_like_declaration {
+                // This might be a complex SWRL construct or annotation
+                // Only fail if we're very sure it's invalid
+                if trimmed.contains("DLSafeRule") {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid SWRL syntax - DLSafeRule requires '->' or ':-' operator",
+                        line_num + 1
+                    )));
+                }
+                // Otherwise, be lenient and let the SWRL parser handle it
             }
 
             // If it has an arrow, validate basic structure

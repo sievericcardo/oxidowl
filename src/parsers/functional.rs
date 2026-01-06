@@ -1360,6 +1360,14 @@ impl FunctionalParser {
                 }
             }
             _ => {
+                // Check if this is an OWL keyword that shouldn't be treated as a class IRI
+                if matches!(token.as_str(), "Annotation" | "AnnotationProperty" | "Import" | "Declaration") {
+                    return Err(Error::ontology_parsing(format!(
+                        "Unexpected keyword '{}' in class expression context. Keywords cannot be used as class names.",
+                        token
+                    )));
+                }
+                
                 // Default: treat as a named class (IRI)
                 let class_iri = self.expand_iri(token, prefixes)?;
                 let class = crate::ontology::Class {
@@ -1637,12 +1645,30 @@ impl FunctionalParser {
                 }
                 Ok(expanded)
             } else {
-                // Prefix not found, return as-is
-                Ok(iri.to_string())
+                // Prefix not found - if it looks like it might be a URL scheme, return as-is
+                // Otherwise, it's an error (e.g., undefined prefix)
+                if prefix.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.') && local.starts_with("//") {
+                    // Looks like a URL with scheme (e.g., http://, https://, ftp://)
+                    Ok(iri.to_string())
+                } else {
+                    // Undefined prefix - create a more informative error
+                    Err(crate::error::Error::OntologyParsing {
+                        message: format!(
+                            "Undefined prefix '{}' in IRI '{}'. Available prefixes: {:?}",
+                            prefix, iri, prefixes.keys().collect::<Vec<_>>()
+                        ),
+                    })
+                }
             }
         } else {
-            // No prefix, return as-is
-            Ok(iri.to_string())
+            // No colon found - this is a relative IRI without a prefix
+            // This should have a default base IRI to resolve against
+            Err(crate::error::Error::OntologyParsing {
+                message: format!(
+                    "Relative IRI '{}' without a prefix or base IRI. Available prefixes: {:?}",
+                    iri, prefixes.keys().collect::<Vec<_>>()
+                ),
+            })
         }
     }
 
