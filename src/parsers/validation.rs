@@ -2141,15 +2141,20 @@ impl SyntaxValidator {
                 // This might be a complex SWRL construct or annotation
                 // Only fail if we're very sure it's invalid
                 if trimmed.contains("DLSafeRule") {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: Invalid SWRL syntax - DLSafeRule requires '->' or ':-' operator",
-                        line_num + 1
-                    )));
+                    // DLSafeRule in Functional Syntax doesn't use arrows
+                    // It uses DLSafeRule(Body(...) Head(...)) format
+                    // Don't validate here - let the parser handle it
                 }
                 // Otherwise, be lenient and let the SWRL parser handle it
             }
 
-            // If it has an arrow, validate basic structure
+            // For Functional Syntax with DLSafeRule, skip arrow validation
+            // Functional Syntax uses DLSafeRule(Body(...) Head(...)), not arrows
+            if trimmed.contains("DLSafeRule") {
+                continue; // Skip this line, let parser handle Functional Syntax SWRL
+            }
+
+            // If it has an arrow, validate basic structure (for human-readable SWRL only)
             if has_arrow {
                 let arrow = if trimmed.contains("->") { "->" } else { ":-" };
                 let parts: Vec<&str> = trimmed.split(arrow).collect();

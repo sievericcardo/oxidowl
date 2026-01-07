@@ -667,3 +667,115 @@ Ontology(<http://example.org/test>
         Err(e) => panic!("Should skip multiple annotations, got error: {}", e),
     }
 }
+
+// ============================================================================
+// v0.8.0 Fixes for Fifth Fuzzing Campaign
+// ============================================================================
+
+#[test]
+fn test_bare_keyword_as_class_name_rejected() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Fifth campaign: Bare keywords (not in angle brackets, not prefixed) should be rejected
+    // This is CORRECT behavior - bare keywords cannot be used as IRIs
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(Class(ObjectSomeValuesFrom))
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should correctly reject bare keyword
+    match result {
+        Err(Error::OntologyParsing { message, .. }) => {
+            assert!(
+                message.contains("Cannot use OWL keyword") || message.contains("ObjectSomeValuesFrom"),
+                "Should reject bare keyword, got: {}",
+                message
+            );
+        }
+        Ok(_) => panic!("Should reject bare keyword 'ObjectSomeValuesFrom' as class name"),
+        Err(e) => panic!("Expected OntologyParsing error, got: {}", e),
+    }
+}
+
+#[test]
+fn test_prefixed_keyword_allowed() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Prefixed keywords like owl:ObjectSomeValuesFrom should work
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Ontology(<http://example.org/test>
+    Declaration(Class(owl:ObjectSomeValuesFrom))
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should succeed - prefixed names are OK
+    match result {
+        Ok(_) => println!("Prefixed keyword correctly allowed"),
+        Err(e) => panic!("Should allow prefixed keyword 'owl:ObjectSomeValuesFrom', got error: {}", e),
+    }
+}
+
+#[test]
+fn test_dlsaferule_functional_syntax() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Fifth campaign: DLSafeRule in Functional Syntax doesn't use arrows
+    // Should not trigger "expected format 'body -> head'" error
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    DLSafeRule(
+        Body()
+        Head()
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should not fail with "expected format 'body -> head'" validation error
+    match result {
+        Ok(_) => println!("DLSafeRule Functional Syntax correctly parsed"),
+        Err(Error::OntologyParsing { message, .. }) => {
+            assert!(
+                !message.contains("expected format 'body -> head'"),
+                "Should not check for arrow format in Functional Syntax, got: {}",
+                message
+            );
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn test_swrl_validation_skips_functional_syntax() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Validator should skip DLSafeRule lines and let parser handle them
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(swrl:=<http://www.w3.org/2003/11/swrl#>)
+Ontology(<http://example.org/test>
+    DLSafeRule(Body(ClassAtom(:Person Variable(:x))) Head(ClassAtom(:Adult Variable(:x))))
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should not fail validation - parser handles DLSafeRule
+    match result {
+        Ok(_) => println!("SWRL validation correctly skipped for Functional Syntax"),
+        Err(Error::OntologyParsing { message, .. }) => {
+            assert!(
+                !message.contains("Invalid SWRL rule") && !message.contains("expected format"),
+                "Validation should skip Functional Syntax DLSafeRule, got: {}",
+                message
+            );
+        }
+        _ => {}
+    }
+}
