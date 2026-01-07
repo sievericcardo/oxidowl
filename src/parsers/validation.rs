@@ -2127,121 +2127,133 @@ impl SyntaxValidator {
             // Also support [ruleName: body -> head]
 
             // Check for basic SWRL structure
-            let has_arrow = trimmed.contains("->") || trimmed.contains(":-");
-            let has_brackets = trimmed.starts_with('[') && trimmed.ends_with(']');
-            let looks_like_declaration = trimmed.starts_with("Ontology(") 
+            // Skip SWRL validation entirely for standard OWL 2 declarations and Functional Syntax
+            // SWRL rules in Functional Syntax use DLSafeRule(Body(...) Head(...)) - no arrows
+            // SWRL rules in human-readable syntax have arrows but also have variables (?x, ?y, etc.)
+            let looks_like_owl_construct = trimmed.starts_with("Ontology(") 
                 || trimmed.starts_with("Prefix(") 
                 || trimmed.starts_with("Import(") 
                 || trimmed.starts_with("Declaration(") 
-                || trimmed.starts_with("Annotation(");
+                || trimmed.starts_with("Annotation(")
+                || trimmed.starts_with("SubClassOf(")
+                || trimmed.starts_with("EquivalentClasses(")
+                || trimmed.starts_with("DisjointClasses(")
+                || trimmed.starts_with("ClassAssertion(")
+                || trimmed.starts_with("ObjectPropertyAssertion(")
+                || trimmed.starts_with("DataPropertyAssertion(")
+                || trimmed.starts_with("DLSafeRule(");
 
-            // Only validate SWRL structure if it looks like a SWRL rule
-            // (has DLSafeRule or looks like a rule pattern)
-            if !has_arrow && !has_brackets && !looks_like_declaration {
-                // This might be a complex SWRL construct or annotation
-                // Only fail if we're very sure it's invalid
-                if trimmed.contains("DLSafeRule") {
-                    // DLSafeRule in Functional Syntax doesn't use arrows
-                    // It uses DLSafeRule(Body(...) Head(...)) format
-                    // Don't validate here - let the parser handle it
-                }
-                // Otherwise, be lenient and let the SWRL parser handle it
+            // Skip validation for standard OWL constructs - they may contain -> in IRIs
+            if looks_like_owl_construct {
+                continue;
             }
 
-            // For Functional Syntax with DLSafeRule, skip arrow validation
-            // Functional Syntax uses DLSafeRule(Body(...) Head(...)), not arrows
-            if trimmed.contains("DLSafeRule") {
-                continue; // Skip this line, let parser handle Functional Syntax SWRL
-            }
+            // Check if this looks like a human-readable SWRL rule:
+            // - Contains an arrow (-> or :-)
+            // - NOT inside angle brackets (which would be part of an IRI)
+            // - Contains SWRL variables (indicated by ?) OR is bracketed [...]
+            let has_arrow = trimmed.contains("->") || trimmed.contains(":-");
+            let has_variables = trimmed.contains('?');
+            let has_brackets = trimmed.starts_with('[') && trimmed.ends_with(']');
+            let looks_like_swrl = (has_arrow && has_variables) || has_brackets;
 
-            // If it has an arrow, validate basic structure (for human-readable SWRL only)
-            if has_arrow {
-                let arrow = if trimmed.contains("->") { "->" } else { ":-" };
-                let parts: Vec<&str> = trimmed.split(arrow).collect();
+            // Only validate if it truly looks like human-readable SWRL
+            if looks_like_swrl {
+                // For bracketed rules, extract the inner content first
+                let content_to_validate = if has_brackets {
+                    &trimmed[1..trimmed.len() - 1]
+                } else {
+                    trimmed
+                };
 
-                if parts.len() != 2 {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: Invalid SWRL rule - expected format 'body {} head'",
-                        line_num + 1,
-                        arrow
-                    )));
-                }
+                // Arrow-based validation
+                if has_arrow || has_brackets {
+                    let arrow = if content_to_validate.contains("->") { "->" } else { ":-" };
+                    
+                    // For bracketed rules without arrows, skip validation
+                    if !content_to_validate.contains("->") && !content_to_validate.contains(":-") {
+                        if has_brackets {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Bracketed SWRL rule must contain '->' or ':-'",
+                                line_num + 1
+                            )));
+                        }
+                        continue; // Skip lines with arrows in IRIs but no SWRL structure
+                    }
 
-                let body = parts[0].trim();
-                let head = parts[1].trim();
+                    let parts: Vec<&str> = content_to_validate.split(arrow).collect();
 
-                // Check that body and head are not empty
-                if body.is_empty() {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: SWRL rule has empty body",
-                        line_num + 1
-                    )));
-                }
-
-                if head.is_empty() {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: SWRL rule has empty head",
-                        line_num + 1
-                    )));
-                }
-
-                // SWRL validation relaxed - parentheses balance should be checked during parsing,
-                // not here, because Functional Syntax tokens parentheses differently than human-readable SWRL.
-                // The validator sees the raw text, but the parser sees tokenized structures.
-                // Skip strict validation and let the parser handle it.
-
-                // SWRL head validation relaxed - let parser handle parentheses and structure checks
-
-                // Check for variables (should start with ?)
-                // SWRL variables typically use ?var syntax
-                let has_variables = body.contains('?') || head.contains('?');
-                if !has_variables {
-                    // This might be okay for ground rules, but warn if suspicious
-                    // Only flag as error if it looks malformed
-                    if body.contains("var") || head.contains("var") {
+                    if parts.len() != 2 {
                         return Err(Error::ontology_parsing(format!(
-                            "Line {}: SWRL variables should use '?' prefix (e.g., ?var not var)",
+                            "Line {}: Invalid SWRL rule - expected format 'body {} head'",
+                            line_num + 1,
+                            arrow
+                        )));
+                    }
+
+                    let body = parts[0].trim();
+                    let head = parts[1].trim();
+
+                    // Check that body and head are not empty
+                    if body.is_empty() {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: SWRL rule has empty body",
                             line_num + 1
                         )));
                     }
-                }
-            }
 
-            // For bracketed rules, basic validation
-            if has_brackets {
-                let inner = &trimmed[1..trimmed.len() - 1];
+                    if head.is_empty() {
+                        return Err(Error::ontology_parsing(format!(
+                            "Line {}: SWRL rule has empty head",
+                            line_num + 1
+                        )));
+                    }
 
-                // Check if it contains arrow
-                if !inner.contains("->") && !inner.contains(":-") {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: Bracketed SWRL rule must contain '->' or ':-'",
-                        line_num + 1
-                    )));
-                }
+                    // SWRL validation relaxed - parentheses balance should be checked during parsing,
+                    // not here, because Functional Syntax tokens parentheses differently than human-readable SWRL.
+                    // The validator sees the raw text, but the parser sees tokenized structures.
+                    // Skip strict validation and let the parser handle it.
 
-                // Check for rule name format: [ruleName: body -> head]
-                // If there's text before the first '(' and it contains a space or letter,
-                // it should have a colon after the rule name
-                let arrow_pos = inner.find("->").or_else(|| inner.find(":-"));
-                if let Some(arrow_idx) = arrow_pos {
-                    let before_arrow = &inner[..arrow_idx];
+                    // SWRL head validation relaxed - let parser handle parentheses and structure checks
 
-                    // Find the first atom start (opening paren)
-                    if let Some(first_paren) = before_arrow.find('(') {
-                        let potential_rule_name = before_arrow[..first_paren].trim();
+                    // Check for variables (should start with ?)
+                    // SWRL variables typically use ?var syntax
+                    let has_swrl_variables = body.contains('?') || head.contains('?');
+                    if !has_swrl_variables {
+                        // This might be okay for ground rules, but warn if suspicious
+                        // Only flag as error if it looks malformed
+                        if body.contains("var") || head.contains("var") {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: SWRL variables should use '?' prefix (e.g., ?var not var)",
+                                line_num + 1
+                            )));
+                        }
+                    }
 
-                        // If there's text before the first atom, it's a rule name
-                        if !potential_rule_name.is_empty() {
-                            // Rule name should be followed by ':'
-                            if !potential_rule_name.ends_with(':') {
-                                // Check if it looks like a rule name (alphanumeric)
-                                if potential_rule_name.chars().any(|c| c.is_alphanumeric()) {
-                                    return Err(Error::ontology_parsing(format!(
-                                        "Line {}: SWRL rule name '{}' must be followed by ':' (e.g., '{}:')",
-                                        line_num + 1,
-                                        potential_rule_name,
-                                        potential_rule_name
-                                    )));
+                    // For bracketed rules, check rule name format
+                    if has_brackets {
+                        let arrow_pos = content_to_validate.find("->").or_else(|| content_to_validate.find(":-"));
+                        if let Some(arrow_idx) = arrow_pos {
+                            let before_arrow = &content_to_validate[..arrow_idx];
+
+                            // Find the first atom start (opening paren)
+                            if let Some(first_paren) = before_arrow.find('(') {
+                                let potential_rule_name = before_arrow[..first_paren].trim();
+
+                                // If there's text before the first atom, it's a rule name
+                                if !potential_rule_name.is_empty() {
+                                    // Rule name should be followed by ':'
+                                    if !potential_rule_name.ends_with(':') {
+                                        // Check if it looks like a rule name (alphanumeric)
+                                        if potential_rule_name.chars().any(|c| c.is_alphanumeric()) {
+                                            return Err(Error::ontology_parsing(format!(
+                                                "Line {}: SWRL rule name '{}' must be followed by ':' (e.g., '{}:')",
+                                                line_num + 1,
+                                                potential_rule_name,
+                                                potential_rule_name
+                                            )));
+                                        }
+                                    }
                                 }
                             }
                         }

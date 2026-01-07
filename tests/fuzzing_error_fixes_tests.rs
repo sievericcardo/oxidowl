@@ -779,3 +779,40 @@ Ontology(<http://example.org/test>
         _ => {}
     }
 }
+
+/// Test that IRIs containing arrow symbols (-> or :-) are not incorrectly flagged as SWRL rules
+/// Issue: Sixth fuzzing campaign found cases where IRIs like <http://lsrn.org/EC:1.1.-.->>
+/// contained arrow-like substrings that triggered SWRL validation errors
+#[test]
+fn test_arrows_in_iris_not_flagged_as_swrl() {
+    let ontology_str = r#"
+Prefix(:=<http://example.org/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+
+Ontology(<http://example.org/test>
+
+# These IRIs contain -> which should NOT trigger SWRL validation
+SubClassOf(<http://lsrn.org/EC:1.1.-.-> <http://lsrn.org/EC:1.-.-.->)
+EquivalentClasses(<http://lsrn.org/EC:1.1.1.-> <http://lsrn.org/EC:3.1.1.6>)
+
+Declaration(Class(:Person))
+
+)
+"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(ontology_str);
+    
+    // Should parse successfully - arrows in IRIs should not trigger SWRL validation
+    assert!(
+        result.is_ok(),
+        "Failed to parse ontology with arrows in IRIs: {:?}",
+        result.err()
+    );
+
+    // Verify the ontology was parsed correctly
+    if let Ok(ontology) = result {
+        println!("✓ Arrows in IRIs correctly parsed without SWRL validation errors");
+        assert!(!ontology.axioms().is_empty(), "Ontology should have axioms");
+    }
+}
