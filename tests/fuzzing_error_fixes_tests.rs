@@ -58,7 +58,7 @@ Ontology(<http://example.org/test>
     
     // Should fail with clear error about keyword misuse, not relative URL error
     match result {
-        Err(Error::OntologyParsing { message }) => {
+        Err(Error::OntologyParsing { message, .. }) => {
             assert!(
                 message.contains("Unexpected keyword") || message.contains("Annotation"),
                 "Error should mention keyword issue, got: {}",
@@ -83,7 +83,7 @@ Ontology(<http://example.org/test>
     
     // Should fail with clear error about undefined prefix or relative IRI
     match result {
-        Err(Error::OntologyParsing { message }) => {
+        Err(Error::OntologyParsing { message, .. }) => {
             assert!(
                 message.contains("Relative IRI") || message.contains("Undefined prefix") || message.contains("relative URL"),
                 "Error should mention relative IRI or undefined prefix, got: {}",
@@ -109,7 +109,7 @@ Ontology(<http://example.org/test>
     
     // Should fail with clear error about undefined prefix
     match result {
-        Err(Error::OntologyParsing { message }) => {
+        Err(Error::OntologyParsing { message, .. }) => {
             assert!(
                 message.contains("Undefined prefix") || message.contains("undefined"),
                 "Error should mention undefined prefix, got: {}",
@@ -221,5 +221,311 @@ Ontology(<http://example.org/café>
     match result {
         Ok(_) => println!("Nested UTF-8 validation passed"),
         Err(e) => println!("Nested UTF-8 validation failed with proper error: {}", e),
+    }
+}
+
+// ============================================================================
+// v0.8.0 Tests: Error Verbosity and Performance
+// ============================================================================
+
+#[test]
+fn test_error_verbosity_minimal() {
+    use oxidowl::parsers::{ParserConfig, ErrorVerbosity};
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    SubClassOf(Annotation owl:Thing)
+)"#;
+
+    let config = ParserConfig { error_verbosity: ErrorVerbosity::Minimal };
+    let parser = FunctionalParser::with_config(config);
+    let result = parser.parse(content);
+    
+    match result {
+        Err(Error::OntologyParsing { message, line, column, context, token: _ }) => {
+            assert!(message.contains("keyword"));
+            // Minimal verbosity should not populate extra fields
+            assert!(line.is_none() || column.is_none() || context.is_none());
+        }
+        _ => panic!("Expected OntologyParsing error"),
+    }
+}
+
+#[test]
+fn test_error_verbosity_standard() {
+    use oxidowl::parsers::{ParserConfig, ErrorVerbosity};
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    SubClassOf(Import owl:Thing)
+)"#;
+
+    let config = ParserConfig { error_verbosity: ErrorVerbosity::Standard };
+    let parser = FunctionalParser::with_config(config);
+    let result = parser.parse(content);
+    
+    match result {
+        Err(Error::OntologyParsing { message, .. }) => {
+            assert!(message.contains("keyword"));
+        }
+        _ => panic!("Expected OntologyParsing error"),
+    }
+}
+
+#[test]
+fn test_error_verbosity_detailed() {
+    use oxidowl::parsers::{ParserConfig, ErrorVerbosity};
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    SubClassOf(Declaration owl:Thing)
+)"#;
+
+    let config = ParserConfig { error_verbosity: ErrorVerbosity::Detailed };
+    let parser = FunctionalParser::with_config(config);
+    let result = parser.parse(content);
+    
+    match result {
+        Err(Error::OntologyParsing { message, .. }) => {
+            assert!(message.contains("keyword"));
+        }
+        _ => panic!("Expected OntologyParsing error"),
+    }
+}
+
+#[test]
+fn test_comprehensive_keyword_validation() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Test various OWL keywords that should not be used as class names
+    let keywords = vec![
+        "Annotation", "AnnotationProperty", "Import", "Declaration",
+        "ObjectIntersectionOf", "ObjectUnionOf", "DataSomeValuesFrom",
+        "SubClassOf", "EquivalentClasses", "DisjointClasses",
+        "HasKey", "DLSafeRule", "Body", "Head",
+    ];
+    
+    let parser = FunctionalParser::new();
+    
+    for keyword in keywords {
+        let content = format!(
+            r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    SubClassOf({} <http://example.org/Thing>)
+)"#,
+            keyword
+        );
+        
+        let result = parser.parse(&content);
+        match result {
+            Err(Error::OntologyParsing { message, .. }) => {
+                assert!(
+                    message.contains("keyword") || message.contains(keyword),
+                    "Error should mention keyword issue for '{}', got: {}",
+                    keyword,
+                    message
+                );
+            }
+            _ => panic!("Expected parsing error for OWL keyword '{}' in class position", keyword),
+        }
+    }
+}
+
+#[test]
+fn test_swrl_rule_parsing() {
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(swrl:=<http://www.w3.org/2003/11/swrl#>)
+Ontology(<http://example.org/test>
+    DLSafeRule(
+        Body(ClassAtom(:Person Variable(:x)))
+        Head(ClassAtom(:Adult Variable(:x)))
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // SWRL parsing should not panic and should handle basic structure
+    match result {
+        Ok(_) => println!("SWRL rule parsing succeeded"),
+        Err(e) => println!("SWRL rule parsing failed with: {}", e),
+    }
+}
+
+#[test]
+fn test_swrl_with_minimal_validation() {
+    use oxidowl::parsers::{ParserConfig, ErrorVerbosity};
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    DLSafeRule(Body() Head())
+)"#;
+
+    // Minimal verbosity should skip detailed SWRL validation
+    let config = ParserConfig { error_verbosity: ErrorVerbosity::Minimal };
+    let parser = FunctionalParser::with_config(config);
+    let result = parser.parse(content);
+    
+    // Should not panic, minimal validation
+    match result {
+        Ok(_) => println!("SWRL minimal validation passed"),
+        Err(e) => println!("SWRL minimal validation error: {}", e),
+    }
+}
+
+#[test]
+fn test_keyword_validation_performance() {
+    use std::time::Instant;
+    use oxidowl::parsers::FunctionalParser;
+    
+    let parser = FunctionalParser::new();
+    
+    // Create a large valid ontology to test parsing performance
+    let mut content = String::from(
+        r#"Prefix(:=<http://example.org/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Ontology(<http://example.org/test>
+"#,
+    );
+    
+    // Add many class declarations
+    for i in 0..100 {
+        content.push_str(&format!("    Declaration(Class(:Class{}))\n", i));
+    }
+    
+    // Add many subclass axioms
+    for i in 0..100 {
+        content.push_str(&format!("    SubClassOf(:Class{} owl:Thing)\n", i));
+    }
+    
+    content.push_str(")");
+    
+    let start = Instant::now();
+    let result = parser.parse(&content);
+    let duration = start.elapsed();
+    
+    match result {
+        Ok(_) => println!("Performance test passed in {:?}", duration),
+        Err(e) => println!("Performance test error: {} (in {:?})", e, duration),
+    }
+    
+    // Test should complete in reasonable time (< 100ms for this size)
+    assert!(duration.as_millis() < 100, "Parsing took too long: {:?}", duration);
+}
+
+// ============================================================================
+// v0.8.0 Fixes for Third Fuzzing Campaign
+// ============================================================================
+
+#[test]
+fn test_keywords_in_full_iris() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Keywords inside angle brackets (full IRIs) should be allowed
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(Class(<http://example.org/ObjectSomeValuesFrom>))
+    Declaration(Class(<http://example.org/Annotation>))
+    SubClassOf(<http://example.org/ObjectSomeValuesFrom> <http://example.org/Annotation>)
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should succeed - keywords in full IRIs are valid
+    match result {
+        Ok(_) => println!("Keywords in full IRIs correctly allowed"),
+        Err(e) => panic!("Should allow keywords in full IRIs, got error: {}", e),
+    }
+}
+
+#[test]
+fn test_annotation_keyword_in_angle_brackets() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Specific case from mutant_1043.owl
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Ontology(<http://example.org/test>
+    SubClassOf(<http://example.org/Annotation> owl:Thing)
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should succeed
+    match result {
+        Ok(_) => println!("Annotation in full IRI correctly allowed"),
+        Err(e) => panic!("Should allow 'Annotation' in full IRI, got error: {}", e),
+    }
+}
+
+#[test]
+fn test_objectsomevaluesfrom_in_angle_brackets() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Specific case from mutant_1042.owl
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(Class(<http://www.w3.org/2002/07/owl#ObjectSomeValuesFrom>))
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should succeed
+    match result {
+        Ok(_) => println!("ObjectSomeValuesFrom in full IRI correctly allowed"),
+        Err(e) => panic!("Should allow 'ObjectSomeValuesFrom' in full IRI, got error: {}", e),
+    }
+}
+
+#[test]
+fn test_lenient_swrl_validation() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // SWRL rules with various formats should not cause parse errors
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(swrl:=<http://www.w3.org/2003/11/swrl#>)
+Ontology(<http://example.org/test>
+    DLSafeRule(
+        Body()
+        Head()
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should succeed or fail gracefully without panicking
+    match result {
+        Ok(_) => println!("Lenient SWRL validation passed"),
+        Err(e) => println!("SWRL validation error (expected): {}", e),
+    }
+}
+
+#[test]
+fn test_keyword_rejection_still_works() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Bare keywords (not in angle brackets) should still be rejected
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    SubClassOf(Annotation owl:Thing)
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should fail with keyword error
+    match result {
+        Err(Error::OntologyParsing { message, .. }) => {
+            assert!(
+                message.contains("keyword") || message.contains("Annotation"),
+                "Error should mention keyword issue, got: {}",
+                message
+            );
+        }
+        _ => panic!("Expected parsing error for bare keyword in class position"),
     }
 }

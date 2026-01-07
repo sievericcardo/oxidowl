@@ -624,9 +624,9 @@ impl Reasoner {
             self.classification_service
                 .classify(ontology, &mut statistics)
         } else {
-            Err(Error::OntologyParsing {
-                message: "No ontology loaded for classification".into(),
-            })
+            Err(Error::ontology_parsing(
+                "No ontology loaded for classification",
+            ))
         }
     }
 
@@ -637,9 +637,9 @@ impl Reasoner {
             self.classification_service
                 .realize(ontology, &mut statistics)
         } else {
-            Err(Error::OntologyParsing {
-                message: "No ontology loaded for realization".into(),
-            })
+            Err(Error::ontology_parsing(
+                "No ontology loaded for realization",
+            ))
         }
     }
 

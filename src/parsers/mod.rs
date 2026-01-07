@@ -11,6 +11,64 @@ pub mod rdf_xml;
 pub mod turtle;
 pub mod validation;
 
+/// Error verbosity level for parser error messages
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorVerbosity {
+    /// Minimal: just the error message
+    Minimal,
+    /// Standard: message + line/column information
+    Standard,
+    /// Detailed: full context stack and token information
+    Detailed,
+}
+
+impl Default for ErrorVerbosity {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+/// Parser configuration
+#[derive(Debug, Clone)]
+pub struct ParserConfig {
+    /// Error verbosity level
+    pub error_verbosity: ErrorVerbosity,
+}
+
+impl Default for ParserConfig {
+    fn default() -> Self {
+        Self {
+            error_verbosity: ErrorVerbosity::Standard,
+        }
+    }
+}
+
+impl ParserConfig {
+    /// Create a new parser configuration with minimal error verbosity
+    #[must_use]
+    pub fn minimal() -> Self {
+        Self {
+            error_verbosity: ErrorVerbosity::Minimal,
+        }
+    }
+
+    /// Create a new parser configuration with standard error verbosity
+    #[must_use]
+    pub fn standard() -> Self {
+        Self {
+            error_verbosity: ErrorVerbosity::Standard,
+        }
+    }
+
+    /// Create a new parser configuration with detailed error verbosity
+    #[must_use]
+    pub fn detailed() -> Self {
+        Self {
+            error_verbosity: ErrorVerbosity::Detailed,
+        }
+    }
+}
+
 // Re-export parser structs and functions
 pub use common::{OntologyParser, OntologySerializer};
 pub use functional::{

@@ -2417,18 +2417,14 @@ impl TurtleParser {
                 Ok(result)
             } else {
                 // Handle unknown prefixes - this should be an error for proper Turtle parsing
-                return Err(crate::error::Error::OntologyParsing {
-                    message: format!("Undefined prefix: {}", prefix),
-                });
+                return Err(Error::ontology_parsing(format!("Undefined prefix: {}", prefix)));
             }
         } else if let Some(base) = &state.base_uri {
             let result = format!("{base}{name}");
             Ok(result)
         } else {
             // Relative URI without base - this should be an error
-            Err(crate::error::Error::OntologyParsing {
-                message: format!("Relative URI without base: {}", name),
-            })
+            Err(Error::ontology_parsing(format!("Relative URI without base: {}", name)))
         }
     }
 

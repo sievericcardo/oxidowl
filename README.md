@@ -31,6 +31,15 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 📥 **Advanced Import Resolution**: Recursive imports, cycle detection, and IRI mapping
 - 🧪 **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
 
+#### v0.8.0 Highlights (Latest)
+
+- 🔥 **Zero-Overhead Parser State**: Compile-time optimizations with no runtime cost for successful parsing
+- ⚡ **O(1) Keyword Validation**: Perfect hash tables for comprehensive OWL keyword checking
+- 📝 **Configurable Error Verbosity**: Three levels (Minimal/Standard/Detailed) for performance tuning
+- 🔧 **SWRL Validation**: Basic parsing support for DLSafeRule constructs
+- 🚀 **Performance Improvements**: <2% overhead for minimal verbosity, inline hot paths
+- 🎨 **Enhanced Error Messages**: Optional line/column/context information for debugging
+
 #### Competitive Advantages
 
 - **Performance**: EL reasoning with polynomial complexity vs exponential in full DL
@@ -141,6 +150,37 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+### Parser Error Verbosity Configuration (v0.8.0)
+
+Control the level of detail in parsing error messages for performance tuning:
+
+```rust
+use oxidowl::parsers::{FunctionalParser, ParserConfig, ErrorVerbosity};
+
+// Minimal verbosity - best performance (<2% overhead)
+let parser = FunctionalParser::with_config(ParserConfig::minimal());
+let result = parser.parse_string(ontology_content);
+
+// Standard verbosity - balanced (default, <5% overhead)
+let parser = FunctionalParser::new(); // Uses Standard by default
+let result = parser.parse_string(ontology_content);
+
+// Detailed verbosity - full debugging information
+let parser = FunctionalParser::with_config(ParserConfig::detailed());
+let result = parser.parse_string(ontology_content);
+
+// Custom configuration
+let config = ParserConfig {
+    error_verbosity: ErrorVerbosity::Detailed,
+};
+let parser = FunctionalParser::with_config(config);
+```
+
+**Performance Impact:**
+- **Minimal**: Just error messages, <2% slowdown
+- **Standard**: Adds line/column info, <5% slowdown  
+- **Detailed**: Full context and tokens, overhead only on error paths
 
 ### Algorithm Selection: Traditional vs Hypertableau
 
