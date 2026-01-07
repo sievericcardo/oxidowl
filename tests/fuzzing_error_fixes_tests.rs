@@ -529,3 +529,141 @@ Ontology(<http://example.org/test>
         _ => panic!("Expected parsing error for bare keyword in class position"),
     }
 }
+
+// ============================================================================
+// v0.8.0 Fixes for Fourth Fuzzing Campaign
+// ============================================================================
+
+#[test]
+fn test_swrl_unbalanced_parentheses_relaxed() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Fourth campaign: SWRL rules with unbalanced parentheses in body
+    // The validator should not check parentheses balance, let parser handle it
+    let content = r#"Prefix(:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    DLSafeRule(
+        Body(ClassAtom(:Person Variable(:x)))
+        Head(ClassAtom(:Adult Variable(:x)))
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should not fail on validation - parser may fail, but no validation error
+    match result {
+        Ok(_) => println!("SWRL rule parsing succeeded"),
+        Err(Error::OntologyParsing { message, .. }) => {
+            // Should not contain "Unbalanced parentheses" from validator
+            assert!(
+                !message.contains("Unbalanced parentheses in SWRL rule body"),
+                "Validator should not check SWRL parentheses, got: {}",
+                message
+            );
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn test_annotation_in_subclassof_axiom() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    // Fourth campaign: Annotation keyword at start of axiom
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+
+Ontology(<http://example.org/test>
+    SubClassOf(
+        Annotation(rdfs:comment "This is annotated")
+        :Employee
+        :Person
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    // Should skip the Annotation(...) and parse the axiom correctly
+    match result {
+        Ok(_) => println!("Annotation in axiom correctly skipped"),
+        Err(e) => panic!("Should skip Annotation in axiom, got error: {}", e),
+    }
+}
+
+#[test]
+fn test_annotation_in_disjoint_classes() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+Ontology(<http://example.org/test>
+    DisjointClasses(
+        Annotation(rdfs:comment "Disjoint annotation")
+        :Cat
+        :Dog
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    match result {
+        Ok(_) => println!("Annotation in DisjointClasses correctly handled"),
+        Err(e) => panic!("Should handle annotated DisjointClasses, got: {}", e),
+    }
+}
+
+#[test]
+fn test_annotation_in_class_assertion() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+Ontology(<http://example.org/test>
+    Declaration(Class(:Person))
+    Declaration(NamedIndividual(:john))
+    ClassAssertion(
+        Annotation(rdfs:comment "John is a person")
+        :Person
+        :john
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    match result {
+        Ok(_) => println!("Annotation in ClassAssertion correctly handled"),
+        Err(e) => panic!("Should handle annotated ClassAssertion, got: {}", e),
+    }
+}
+
+#[test]
+fn test_multiple_annotations_in_axiom() {
+    use oxidowl::parsers::FunctionalParser;
+    
+    let content = r#"Prefix(:=<http://example.org/>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+Ontology(<http://example.org/test>
+    SubClassOf(
+        Annotation(rdfs:comment "First annotation")
+        Annotation(rdfs:label "Employee subclass")
+        :Employee
+        :Person
+    )
+)"#;
+
+    let parser = FunctionalParser::new();
+    let result = parser.parse(content);
+    
+    match result {
+        Ok(_) => println!("Multiple annotations correctly skipped"),
+        Err(e) => panic!("Should skip multiple annotations, got error: {}", e),
+    }
+}

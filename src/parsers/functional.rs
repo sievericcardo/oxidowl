@@ -370,6 +370,39 @@ impl FunctionalParser {
         Ok(position)
     }
 
+    /// Skip over Annotation(...) sequences that can precede axioms
+    /// Returns the new position after all annotations
+    #[inline(always)]
+    fn skip_annotations(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+    ) -> usize {
+        // Skip any number of Annotation(...) constructs
+        while position < tokens.len() && tokens[position] == "Annotation" {
+            // Check if next token is "(" - if not, this is not an Annotation construct
+            if position + 1 >= tokens.len() || tokens[position + 1] != "(" {
+                // Not an Annotation(...) - stop skipping
+                break;
+            }
+            
+            position += 1; // Skip "Annotation"
+            position += 1; // Skip "("
+            
+            // Count parentheses to find the matching closing paren
+            let mut paren_count = 1;
+            while position < tokens.len() && paren_count > 0 {
+                if tokens[position] == "(" {
+                    paren_count += 1;
+                } else if tokens[position] == ")" {
+                    paren_count -= 1;
+                }
+                position += 1;
+            }
+        }
+        position
+    }
+
     /// Parse SWRL rule with minimal overhead
     /// Uses simple validation - just checks basic structure
     fn parse_swrl_rule(
@@ -1543,6 +1576,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             if position < tokens.len() {
                 // Parse subclass expression
                 let (subclass, new_pos) =
@@ -1585,6 +1621,9 @@ impl FunctionalParser {
         position += 1; // Skip "ClassAssertion"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
+
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
 
             if position + 1 < tokens.len() {
                 let class_iri = self.expand_iri(&tokens[position], prefixes)?;
@@ -1634,6 +1673,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             let mut classes = Vec::new();
             while position < tokens.len() && tokens[position] != ")" {
                 // Parse class expression (could be simple class or complex expression)
@@ -1673,6 +1715,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             let mut classes = Vec::new();
             while position < tokens.len() && tokens[position] != ")" {
                 // Parse class expression (could be simple class or complex expression)
@@ -1710,6 +1755,9 @@ impl FunctionalParser {
         position += 1; // Skip "ObjectPropertyAssertion"
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
+
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
 
             if position + 2 < tokens.len() {
                 let prop_iri = self.expand_iri(&tokens[position], prefixes)?;
@@ -1833,6 +1881,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             if position < tokens.len() {
                 // Parse class
                 let class_iri = self.expand_iri(&tokens[position], prefixes)?;
@@ -1916,6 +1967,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
@@ -1955,6 +2009,9 @@ impl FunctionalParser {
 
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
+
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
 
             if position < tokens.len() {
                 // Parse property IRI
@@ -1996,6 +2053,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
@@ -2036,6 +2096,9 @@ impl FunctionalParser {
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
 
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
+
             if position < tokens.len() {
                 // Parse property IRI
                 let property_iri = self.expand_iri(&tokens[position], prefixes)?;
@@ -2075,6 +2138,9 @@ impl FunctionalParser {
 
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
+
+            // Skip any Annotation(...) sequences
+            position = self.skip_annotations(tokens, position);
 
             if position < tokens.len() {
                 // Parse property IRI

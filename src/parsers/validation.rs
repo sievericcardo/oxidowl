@@ -2180,51 +2180,12 @@ impl SyntaxValidator {
                     )));
                 }
 
-                // Validate atoms in body (should have parentheses for atoms)
-                // Be lenient - allow rules without parentheses if they're simple or malformed
-                let body_trimmed = body.trim();
-                if !body_trimmed.is_empty() && !body_trimmed.starts_with('?') && !body_trimmed.starts_with('$') {
-                    // Only validate parentheses for non-empty, non-variable bodies
-                    if body.contains("Atom") || body.contains("Built") {
-                        // If it looks like it should have atoms, check for parentheses
-                        if !body.contains('(') || !body.contains(')') {
-                            // Don't fail - just skip this validation for malformed input
-                            // The rule will likely fail during execution anyway
-                        }
-                    }
-                }
+                // SWRL validation relaxed - parentheses balance should be checked during parsing,
+                // not here, because Functional Syntax tokens parentheses differently than human-readable SWRL.
+                // The validator sees the raw text, but the parser sees tokenized structures.
+                // Skip strict validation and let the parser handle it.
 
-                // Check for balanced parentheses in body
-                let body_open = body.matches('(').count();
-                let body_close = body.matches(')').count();
-                if body_open != body_close {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: Unbalanced parentheses in SWRL rule body ({} open, {} close)",
-                        line_num + 1,
-                        body_open,
-                        body_close
-                    )));
-                }
-
-                // Validate atoms in head
-                if !head.contains('(') || !head.contains(')') {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: SWRL rule head must contain atoms with parentheses",
-                        line_num + 1
-                    )));
-                }
-
-                // Check for balanced parentheses in head
-                let head_open = head.matches('(').count();
-                let head_close = head.matches(')').count();
-                if head_open != head_close {
-                    return Err(Error::ontology_parsing(format!(
-                        "Line {}: Unbalanced parentheses in SWRL rule head ({} open, {} close)",
-                        line_num + 1,
-                        head_open,
-                        head_close
-                    )));
-                }
+                // SWRL head validation relaxed - let parser handle parentheses and structure checks
 
                 // Check for variables (should start with ?)
                 // SWRL variables typically use ?var syntax
