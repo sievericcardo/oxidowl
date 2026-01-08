@@ -1,6 +1,7 @@
 /// Tests for fixes to the 28 fuzzing errors found
 /// This test suite ensures that the error fixes are working correctly
 use oxidowl::error::Error;
+use oxidowl::ontology::Axiom;
 use oxidowl::parsers::functional::FunctionalParser;
 use oxidowl::parsers::Parser;
 
@@ -816,3 +817,138 @@ Declaration(Class(:Person))
         assert!(!ontology.axioms().is_empty(), "Ontology should have axioms");
     }
 }
+
+/// Test from Seventh Fuzzing Campaign: ClassAssertion with complex class expressions
+/// Mutants revealed that ClassAssertion should support complex class expressions like
+/// ObjectSomeValuesFrom, not just simple class IRIs.
+#[test]
+fn test_class_assertion_with_complex_expression() {
+    // This is valid OWL 2: ClassAssertion can have any class expression
+    let content = r#"
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(ex:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(ObjectProperty(ex:hasColor))
+    Declaration(Individual(ex:MyObject))
+    ClassAssertion(ObjectSomeValuesFrom(ex:hasColor ex:Red) ex:MyObject)
+)"#;
+    
+    let result = FunctionalParser::new().parse(content);
+    assert!(result.is_ok(), "ClassAssertion should support ObjectSomeValuesFrom: {:?}", result.err());
+    
+    let ontology = result.unwrap();
+    let axioms = ontology.axioms();
+    
+    // Find the ClassAssertion axiom
+    let class_assertions: Vec<_> = axioms.iter()
+        .filter(|a| matches!(a, Axiom::ClassAssertion(_)))
+        .collect();
+    assert_eq!(class_assertions.len(), 1, "Should have exactly one ClassAssertion, found {} total axioms", axioms.len());
+}
+
+/// Test ClassAssertion with ObjectIntersectionOf
+#[test]
+fn test_class_assertion_with_intersection() {
+    let content = r#"
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(ex:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(Class(ex:Person))
+    Declaration(Class(ex:Employee))
+    Declaration(Individual(ex:John))
+    ClassAssertion(ObjectIntersectionOf(ex:Person ex:Employee) ex:John)
+)"#;
+    
+    let result = FunctionalParser::new().parse(content);
+    assert!(result.is_ok(), "ClassAssertion should support ObjectIntersectionOf: {:?}", result.err());
+}
+
+/// Test ClassAssertion with DataSomeValuesFrom
+#[test]
+fn test_class_assertion_with_data_restriction() {
+    let content = r#"
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(ex:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(DataProperty(ex:hasAge))
+    Declaration(Individual(ex:John))
+    ClassAssertion(DataSomeValuesFrom(ex:hasAge xsd:integer) ex:John)
+)"#;
+    
+    let result = FunctionalParser::new().parse(content);
+    assert!(result.is_ok(), "ClassAssertion should support DataSomeValuesFrom: {:?}", result.err());
+}
+
+/// Test ClassAssertion with ObjectAllValuesFrom (from fuzzing campaign 7 pattern)
+#[test]
+fn test_class_assertion_with_all_values_from() {
+    let content = r#"
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(ex:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(ObjectProperty(ex:hasSugar))
+    Declaration(Class(ex:DryWineSugar))
+    Declaration(Individual(ex:Wine1))
+    ClassAssertion(ObjectAllValuesFrom(ex:hasSugar ex:DryWineSugar) ex:Wine1)
+)"#;
+    
+    let result = FunctionalParser::new().parse(content);
+    assert!(result.is_ok(), "ClassAssertion should support ObjectAllValuesFrom: {:?}", result.err());
+}
+
+/// Test ClassAssertion still works with simple class IRIs (backward compatibility)
+#[test]
+fn test_class_assertion_simple_class_still_works() {
+    let content = r#"
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(ex:=<http://example.org/>)
+Ontology(<http://example.org/test>
+    Declaration(Class(ex:Person))
+    Declaration(Individual(ex:John))
+    ClassAssertion(ex:Person ex:John)
+)"#;
+    
+    let result = FunctionalParser::new().parse(content);
+    assert!(result.is_ok(), "ClassAssertion should still work with simple classes: {:?}", result.err());
+}
+
+/// Test the EXACT pattern from Campaign 7: ClassAssertion with ObjectSomeValuesFrom
+/// This is the actual pattern that was failing: asserting an individual into an
+/// anonymous existential restriction class. This is VALID OWL 2 DL syntax.
+#[test]
+fn test_campaign_7_exact_pattern() {
+    // This is the exact pattern from mutant_34.owl line 2318 that was failing
+    let content = r#"
+Prefix(wine:=<http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#>)
+Ontology(<http://example.org/test>
+    Declaration(ObjectProperty(wine:hasQualitativeSugar))
+    Declaration(Class(wine:OffDryWineSugar))
+    Declaration(Individual(wine:LouisJadotChateauMorgonBeaujolais2002))
+    
+    ClassAssertion(
+        ObjectSomeValuesFrom(wine:hasQualitativeSugar wine:OffDryWineSugar) 
+        wine:LouisJadotChateauMorgonBeaujolais2002
+    )
+)"#;
+    
+    let result = FunctionalParser::new().parse(content);
+    assert!(
+        result.is_ok(), 
+        "ClassAssertion(ObjectSomeValuesFrom(...) Individual) is VALID OWL 2 DL syntax and should parse: {:?}", 
+        result.err()
+    );
+    
+    // Verify the axiom was created correctly
+    let ontology = result.unwrap();
+    let axioms = ontology.axioms();
+    let class_assertions: Vec<_> = axioms.iter()
+        .filter(|a| matches!(a, Axiom::ClassAssertion(_)))
+        .collect();
+    assert_eq!(
+        class_assertions.len(), 
+        1, 
+        "Should have exactly one ClassAssertion with complex class expression"
+    );
+}
+

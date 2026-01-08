@@ -1625,15 +1625,20 @@ impl FunctionalParser {
             // Skip any Annotation(...) sequences
             position = self.skip_annotations(tokens, position);
 
-            if position + 1 < tokens.len() {
-                let class_iri = self.expand_iri(&tokens[position], prefixes)?;
-                let individual_iri = self.expand_iri(&tokens[position + 1], prefixes)?;
+            if position < tokens.len() {
+                // Parse class expression (can be simple IRI or complex expression like ObjectSomeValuesFrom)
+                let (class_expr, new_pos) = self.parse_class_expression(tokens, position, prefixes)?;
+                position = new_pos;
 
-                let class = crate::ontology::Class {
-                    iri: url::Url::parse(&class_iri)
-                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?
-                        .into(),
-                };
+                // Parse individual IRI
+                if position >= tokens.len() {
+                    return Err(Error::ontology_parsing(
+                        "Expected individual IRI in ClassAssertion".to_string(),
+                    ));
+                }
+                let individual_iri = self.expand_iri(&tokens[position], prefixes)?;
+                position += 1;
+
                 let individual =
                     crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
                         iri: url::Url::parse(&individual_iri)
@@ -1643,13 +1648,11 @@ impl FunctionalParser {
 
                 let axiom = crate::ontology::ClassAssertionAxiom {
                     id: generate_axiom_id(),
-                    class: ClassExpression::Class(class),
+                    class: class_expr,
                     individual,
                     annotations: vec![],
                 };
                 ontology.add_axiom(crate::ontology::Axiom::ClassAssertion(axiom));
-
-                position += 2;
             }
 
             if position < tokens.len() && tokens[position] == ")" {
