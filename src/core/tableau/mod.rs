@@ -381,20 +381,30 @@ impl Tableau {
                     node.concepts.insert(concept);
                 }
 
-                // Also add all equivalent classes (if any)
+                // Also add all equivalent classes (if any) - but only if we have equivalence closure
+                // This is an optimization to avoid expensive lookups when not needed
                 if let Some(checker) = &mut self.clause_checker {
                     if let ClassExpression::Class(ref class) = assertion.class {
-                        let concept_id = equivalence::ConceptId(class.iri.to_string());
                         if let Some(eq_closure) = checker.equivalence_closure() {
+                            let concept_id = equivalence::ConceptId(class.iri.to_string());
                             let equiv_class = eq_closure.get_equivalence_class(&concept_id);
-                            for equiv_concept_id in equiv_class {
-                                // Add the equivalent concept to the node
-                                let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
-                                let equiv_class = crate::ontology::Class::new(equiv_iri);
-                                let equiv_expr = ClassExpression::Class(equiv_class);
-                                let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
-                                if let Some(node) = self.nodes.get_mut(node_id) {
-                                    node.concepts.insert(equiv_concept);
+                            
+                            // Only add equivalent concepts if there are any (skip if just the original concept)
+                            if equiv_class.len() > 1 {
+                                for equiv_concept_id in equiv_class {
+                                    // Skip if it's the same as the original concept
+                                    if equiv_concept_id.0 == class.iri.to_string() {
+                                        continue;
+                                    }
+                                    
+                                    // Add the equivalent concept to the node
+                                    let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
+                                    let equiv_class = crate::ontology::Class::new(equiv_iri);
+                                    let equiv_expr = ClassExpression::Class(equiv_class);
+                                    let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
+                                    if let Some(node) = self.nodes.get_mut(node_id) {
+                                        node.concepts.insert(equiv_concept);
+                                    }
                                 }
                             }
                         }
