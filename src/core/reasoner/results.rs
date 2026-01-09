@@ -27,12 +27,24 @@ pub enum ReasoningResult {
 #[derive(Debug, Clone)]
 pub struct ClassificationResult {
     pub hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>,
+    pub ontology_iri: Option<String>,
 }
 
 impl ClassificationResult {
     #[must_use]
     pub fn new(hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>) -> Self {
-        Self { hierarchy }
+        Self { 
+            hierarchy,
+            ontology_iri: None,
+        }
+    }
+
+    #[must_use]
+    pub fn new_with_iri(hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>, ontology_iri: Option<String>) -> Self {
+        Self { 
+            hierarchy,
+            ontology_iri,
+        }
     }
 
     pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
@@ -77,9 +89,10 @@ impl ClassificationResult {
     /// Write hierarchy in HermiT-style functional syntax format
     pub fn write_hermit_style_hierarchy<W: Write>(&self, writer: &mut W) -> Result<()> {
         // Start with ontology declaration matching HermiT output
-        writeln!(writer, "Prefix(:=<http://www.smolang.org/greenhouseDT#>)")?;
+        let ontology_iri = self.ontology_iri.as_deref().unwrap_or("http://example.org/ontology");
+        writeln!(writer, "Prefix(:=<{ontology_iri}#>)")?;
         writeln!(writer)?;
-        writeln!(writer, "Ontology(<http://www.smolang.org/greenhouseDT#>")?;
+        writeln!(writer, "Ontology(<{ontology_iri}>")?;
         writeln!(writer)?;
 
         // Build a proper class hierarchy based on subsumption relationships

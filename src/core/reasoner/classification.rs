@@ -137,7 +137,13 @@ impl ClassificationService {
             hierarchy.insert(subclass.clone(), superclasses);
         }
 
-        let result = ClassificationResult::new(hierarchy);
+        // Extract ontology IRI before dropping the read lock
+        let ontology_iri = ontology_guard.iri.as_ref().map(|iri| iri.to_string());
+        
+        // Drop the read lock before creating result
+        drop(ontology_guard);
+        
+        let result = ClassificationResult::new_with_iri(hierarchy, ontology_iri);
 
         // Cache the result
         write_lock(
