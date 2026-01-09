@@ -201,12 +201,26 @@ impl Tableau {
             clause_set.disjunctive_clauses.len()
         );
 
-        // Create EquivalenceClosure and DisjointnessMap for enhanced reasoning
-        let eq_closure = EquivalenceClosure::from_ontology(ontology)?;
-        let disj_map = DisjointnessMap::from_ontology(ontology, &eq_closure)?;
+        // Only create EquivalenceClosure and DisjointnessMap if the ontology has relevant axioms
+        // This avoids expensive initialization for simple ontologies
+        let has_equiv_or_disjoint = ontology.axioms().iter().any(|axiom| {
+            matches!(
+                axiom,
+                crate::ontology::Axiom::EquivalentClasses(_)
+                    | crate::ontology::Axiom::DisjointClasses(_)
+                    | crate::ontology::Axiom::DisjointUnion(_)
+            )
+        });
 
-        // Create ClauseChecker with the generated clauses and reasoning support
-        let checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
+        let checker = if has_equiv_or_disjoint {
+            // Create EquivalenceClosure and DisjointnessMap for enhanced reasoning
+            let eq_closure = EquivalenceClosure::from_ontology(ontology)?;
+            let disj_map = DisjointnessMap::from_ontology(ontology, &eq_closure)?;
+            ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map)
+        } else {
+            // No equivalence or disjointness axioms, use simple checker
+            ClauseChecker::new(clause_set)
+        };
 
         // Store the ClauseChecker for use during tableau expansion
         self.clause_checker = Some(checker);
@@ -236,9 +250,14 @@ impl Tableau {
         // convert DL clauses into tableau concepts and rules
 
         // Process axioms directly to ensure they are applied to the tableau
-        // This is critical for detecting inconsistencies
+        // For consistency checking, we only need to process ClassAssertion axioms
+        // Other axioms (EquivalentClasses, DisjointClasses, SubClassOf) are handled
+        // via the DL clause generation and don't need explicit processing here
         for axiom in ontology.axioms() {
-            self.process_axiom(axiom)?;
+            // Only process axioms that affect the tableau state
+            if matches!(axiom, crate::ontology::Axiom::ClassAssertion(_)) {
+                self.process_axiom(axiom)?;
+            }
         }
 
         Ok(())
