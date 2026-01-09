@@ -363,6 +363,48 @@ impl Tableau {
                 self.pending_queue.push_back(rule_app);
             }
 
+            // Handle ClassAssertion axioms
+            Axiom::ClassAssertion(assertion) => {
+                // Get or create node for the individual
+                let individual_iri = assertion.individual.to_string();
+                let node_id = if let Some(&existing_id) = self.individual_map.get(&individual_iri) {
+                    existing_id
+                } else {
+                    let new_id = self.add_node(NodeType::Nominal)?;
+                    self.individual_map.insert(individual_iri, new_id);
+                    new_id
+                };
+
+                // Add the class assertion to the node
+                let concept = ConceptLabel::Complex(Box::new(assertion.class.clone()));
+                if let Some(node) = self.nodes.get_mut(node_id) {
+                    node.concepts.insert(concept);
+                }
+
+                // Also add all equivalent classes (if any)
+                if let Some(checker) = &mut self.clause_checker {
+                    if let ClassExpression::Class(ref class) = assertion.class {
+                        let concept_id = equivalence::ConceptId(class.iri.to_string());
+                        if let Some(eq_closure) = checker.equivalence_closure() {
+                            let equiv_class = eq_closure.get_equivalence_class(&concept_id);
+                            for equiv_concept_id in equiv_class {
+                                // Add the equivalent concept to the node
+                                let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
+                                let equiv_class = crate::ontology::Class::new(equiv_iri);
+                                let equiv_expr = ClassExpression::Class(equiv_class);
+                                let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
+                                if let Some(node) = self.nodes.get_mut(node_id) {
+                                    node.concepts.insert(equiv_concept);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Queue rule for expanding this concept
+                self.queue_rule_for_concept(node_id, &assertion.class)?;
+            }
+
             // Other axioms can be added as needed
             _ => {}
         }
