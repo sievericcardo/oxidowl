@@ -261,6 +261,13 @@ impl Reasoner {
 
     /// Check if a class is satisfiable
     pub fn is_class_satisfiable(&self, class: &ClassExpression) -> Result<bool> {
+        // owl:Nothing is always unsatisfiable by definition
+        if let ClassExpression::Class(c) = class {
+            if c.is_nothing() {
+                return Ok(false);
+            }
+        }
+
         if let Some(ontology) = &self.ontology {
             // Create a tableau for satisfiability checking
             let ontology_ref =
@@ -297,15 +304,8 @@ impl Reasoner {
 
             Ok(state == TableauState::Satisfiable)
         } else {
-            // In empty ontology, all classes except owl:Nothing are satisfiable
-            match class {
-                ClassExpression::Class(c)
-                    if c.iri.to_string() == "http://www.w3.org/2002/07/owl#Nothing" =>
-                {
-                    Ok(false)
-                }
-                _ => Ok(true),
-            }
+            // In empty ontology, all classes are satisfiable (except owl:Nothing, already handled)
+            Ok(true)
         }
     }
 
@@ -624,9 +624,9 @@ impl Reasoner {
             self.classification_service
                 .classify(ontology, &mut statistics)
         } else {
-            Err(Error::OntologyParsing {
-                message: "No ontology loaded for classification".into(),
-            })
+            Err(Error::ontology_parsing(
+                "No ontology loaded for classification",
+            ))
         }
     }
 
@@ -637,9 +637,9 @@ impl Reasoner {
             self.classification_service
                 .realize(ontology, &mut statistics)
         } else {
-            Err(Error::OntologyParsing {
-                message: "No ontology loaded for realization".into(),
-            })
+            Err(Error::ontology_parsing(
+                "No ontology loaded for realization",
+            ))
         }
     }
 

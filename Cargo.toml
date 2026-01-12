@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using tableau algorithms with parallel computation. This project started as a test to explore the capabilities of agentic LLM tools for software development."
 license = "BSD-3-Clause"
@@ -47,6 +47,9 @@ iso8601-duration = "0.2"
 # Hash computation and advanced data structures
 # Compressed bitmaps for efficient set operations
 lru = "0.16"     # LRU cache for blocking candidates
+
+# Compile-time perfect hash for keyword lookup
+phf = { version = "0.11", features = ["macros"] }
 
 # Performance profiling (optional)
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }

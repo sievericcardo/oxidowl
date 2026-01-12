@@ -71,6 +71,18 @@ impl TableauExecutor {
             Self::create_root_node(tableau)?;
         }
 
+        // Detect clashes in initial state (only needed if there are Nominal nodes with ClassAssertions)
+        // This is an expensive operation, so we skip it if there are no individuals
+        let has_nominal_nodes = tableau.nodes.iter().any(|n| n.node_type == NodeType::Nominal);
+        if has_nominal_nodes {
+            Self::detect_clashes(tableau)?;
+            if tableau.clash_detector.has_clashes() {
+                debug!("Clash detected in initial state, tableau is unsatisfiable");
+                tableau.state = TableauState::Unsatisfiable;
+                return Ok(tableau.state);
+            }
+        }
+
         // Main expansion loop
         while !tableau.pending_queue.is_empty() && tableau.state == TableauState::Unknown {
             // Check for timeout
@@ -90,7 +102,8 @@ impl TableauExecutor {
             // Apply the rule
             Self::apply_rule(tableau, rule_app)?;
 
-            // Check for clashes
+            // Check for clashes (fast check - only complementary concepts on updated nodes)
+            // The expensive equivalence-disjointness check was already done at initialization
             if tableau.clash_detector.has_clashes() {
                 debug!("Clash detected, tableau is unsatisfiable");
                 tableau.state = TableauState::Unsatisfiable;
@@ -328,21 +341,159 @@ impl TableauExecutor {
     }
 
     /// Detect clashes in the tableau
+    /// This is an expensive operation and should only be called at initialization
+    /// or when specifically needed (not after every rule application)
     fn detect_clashes(tableau: &mut super::Tableau) -> Result<()> {
+        use super::equivalence::ConceptId;
+        use crate::ontology::ClassExpression;
+
+        // Only check Nominal nodes for expensive clash detection
+        // Root node and other nodes are checked via fast incremental detection
         for (i, node) in tableau.nodes.iter().enumerate() {
+            // Skip non-Nominal nodes for expensive checks - they're handled incrementally
+            if node.node_type != NodeType::Nominal {
+                continue;
+            }
+
             // Check for concept clashes (C and ¬C)
             if node.has_concept_clash() {
                 let clash = Clash {
                     clash_type: ClashType::Concept {
-                        concept: "unknown".to_string(), // Would need to identify which concept
+                        concept: "unknown".to_string(),
                         node: i,
                     },
                     nodes: vec![i],
-                    dependencies: Arc::new(DependencySet::new()), // Would collect actual dependencies
+                    dependencies: Arc::new(DependencySet::new()),
                     explanation: "Complementary concepts found".to_string(),
                 };
                 tableau.clash_detector.add_clash(clash);
                 tableau.statistics.increment_clashes();
+            }
+
+            // Check for Complex concept clashes (C and ObjectComplementOf(C))
+            let complex_concepts: Vec<&ClassExpression> = node
+                .concepts
+                .iter()
+                .filter_map(|concept| {
+                    if let super::node::ConceptLabel::Complex(class_expr) = concept {
+                        Some(&**class_expr)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            for idx1 in 0..complex_concepts.len() {
+                for idx2 in (idx1 + 1)..complex_concepts.len() {
+                    let expr1 = complex_concepts[idx1];
+                    let expr2 = complex_concepts[idx2];
+
+                    // Check if one is ObjectComplementOf the other
+                    let is_complement = match (expr1, expr2) {
+                        (ClassExpression::ObjectComplementOf(inner), other)
+                        | (other, ClassExpression::ObjectComplementOf(inner)) => **inner == *other,
+                        _ => false,
+                    };
+
+                    if is_complement {
+                        let clash = Clash {
+                            clash_type: ClashType::Concept {
+                                concept: format!("C and ¬C"),
+                                node: i,
+                            },
+                            nodes: vec![i],
+                            dependencies: Arc::new(DependencySet::new()),
+                            explanation: format!(
+                                "Node {} has a concept and its complement",
+                                i
+                            ),
+                        };
+                        tableau.clash_detector.add_clash(clash);
+                        tableau.statistics.increment_clashes();
+                        log::warn!(
+                            "Complement clash detected at node {}: C and ¬C",
+                            i
+                        );
+                    }
+                }
+            }
+
+            // Check for equivalence-disjointness clashes (expensive check)
+            // This detects cases where an individual has two concepts that are equivalent and disjoint
+            if let Some(checker) = &mut tableau.clause_checker {
+                let node_concepts: Vec<ConceptId> = node
+                    .concepts
+                    .iter()
+                    .filter_map(|concept| {
+                        if let super::node::ConceptLabel::Complex(class_expr) = concept {
+                            if let ClassExpression::Class(_) = **class_expr {
+                                Some(ConceptId::from_class_expression(class_expr))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                // Early exit if not enough concepts to check
+                if node_concepts.len() < 2 {
+                    continue;
+                }
+
+                // Check all pairs of concepts on this node
+                let has_eq_closure = checker.equivalence_closure().is_some();
+                let has_disj_map = checker.disjointness_map().is_some();
+                
+                if !has_eq_closure || !has_disj_map {
+                    continue; // Skip if we don't have the necessary data structures
+                }
+
+                for idx1 in 0..node_concepts.len() {
+                    for idx2 in (idx1 + 1)..node_concepts.len() {
+                        let c1 = &node_concepts[idx1];
+                        let c2 = &node_concepts[idx2];
+
+                        // First check disjointness (cheaper), then equivalence
+                        let are_disjoint = checker
+                            .disjointness_map()
+                            .map(|disj| disj.are_disjoint(c1, c2))
+                            .unwrap_or(false);
+                        
+                        if !are_disjoint {
+                            continue; // Not disjoint, can't have the clash
+                        }
+
+                        // Only check equivalence if they're disjoint
+                        let are_equivalent = checker
+                            .equivalence_closure()
+                            .map(|eq| eq.are_equivalent(c1, c2))
+                            .unwrap_or(false);
+
+                        if are_equivalent {
+                            let clash = Clash {
+                                clash_type: ClashType::Concept {
+                                    concept: format!("{:?} ≡ {:?} but {:?} ⊥ {:?}", c1, c2, c1, c2),
+                                    node: i,
+                                },
+                                nodes: vec![i],
+                                dependencies: Arc::new(DependencySet::new()),
+                                explanation: format!(
+                                    "Node {} has concepts {:?} and {:?} which are both equivalent and disjoint",
+                                    i, c1, c2
+                                ),
+                            };
+                            tableau.clash_detector.add_clash(clash);
+                            tableau.statistics.increment_clashes();
+                            log::warn!(
+                                "Equivalence-disjointness clash detected at node {}: {:?} ≡ {:?} but {:?} ⊥ {:?}",
+                                i, c1, c2, c1, c2
+                            );
+                            return Ok(()); // Found a clash, no need to continue
+                        }
+                    }
+                }
             }
         }
 

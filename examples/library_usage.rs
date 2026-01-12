@@ -34,6 +34,10 @@ async fn main() -> Result<()> {
         .get_ontology()
         .ok_or_else(|| oxidowl::Error::OntologyParsing {
             message: "No ontology loaded".to_string(),
+            line: None,
+            column: None,
+            context: None,
+            token: None,
         })?;
     let ontology_data = ontology.read().expect("Test operation failed").clone();
     let reasoning_service = ReasoningService::new(ontology_data.clone(), config.clone());

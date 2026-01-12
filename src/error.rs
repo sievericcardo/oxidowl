@@ -6,9 +6,15 @@
 /// Main error type for Oxidowl
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Ontology parsing error
-    #[error("Ontology parsing error: {message}")]
-    OntologyParsing { message: String },
+    /// Ontology parsing error with optional context information
+    #[error("{}", format_ontology_parsing_error(.message, .line, .column, .context, .token))]
+    OntologyParsing {
+        message: String,
+        line: Option<usize>,
+        column: Option<usize>,
+        context: Option<String>,
+        token: Option<String>,
+    },
 
     /// Reasoning error during tableau processing
     #[error("Reasoning error: {message}")]
@@ -151,8 +157,12 @@ pub enum Error {
 impl Clone for Error {
     fn clone(&self) -> Self {
         match self {
-            Error::OntologyParsing { message } => Error::OntologyParsing {
+            Error::OntologyParsing { message, line, column, context, token } => Error::OntologyParsing {
                 message: message.clone(),
+                line: *line,
+                column: *column,
+                context: context.clone(),
+                token: token.clone(),
             },
             Error::Reasoning { message } => Error::Reasoning {
                 message: message.clone(),
@@ -238,6 +248,35 @@ impl Clone for Error {
     }
 }
 
+/// Format ontology parsing error based on verbosity level
+fn format_ontology_parsing_error(
+    message: &str,
+    line: &Option<usize>,
+    column: &Option<usize>,
+    context: &Option<String>,
+    token: &Option<String>,
+) -> String {
+    let mut result = format!("Ontology parsing error: {}", message);
+    
+    if let Some(l) = line {
+        if let Some(c) = column {
+            result.push_str(&format!(" at line {}, column {}", l, c));
+        } else {
+            result.push_str(&format!(" at line {}", l));
+        }
+    }
+    
+    if let Some(t) = token {
+        result.push_str(&format!(" (token: '{}')", t));
+    }
+    
+    if let Some(ctx) = context {
+        result.push_str(&format!("\nContext: {}", ctx));
+    }
+    
+    result
+}
+
 /// Specialized error for reasoner operations
 /// Result type alias
 pub type Result<T> = std::result::Result<T, Error>;
@@ -246,10 +285,31 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub type OxidowlError = Error;
 
 impl Error {
-    /// Ontology parsing error constructor
+    /// Ontology parsing error constructor (minimal - backward compatible)
     pub fn ontology_parsing<S: Into<String>>(message: S) -> Self {
         Self::OntologyParsing {
             message: message.into(),
+            line: None,
+            column: None,
+            context: None,
+            token: None,
+        }
+    }
+
+    /// Ontology parsing error constructor with detailed context
+    pub fn ontology_parsing_detailed<S: Into<String>>(
+        message: S,
+        line: Option<usize>,
+        column: Option<usize>,
+        context: Option<String>,
+        token: Option<String>,
+    ) -> Self {
+        Self::OntologyParsing {
+            message: message.into(),
+            line,
+            column,
+            context,
+            token,
         }
     }
 

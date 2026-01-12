@@ -1,0 +1,11 @@
+Prefix(:=<http://example.org/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+
+Ontology(<http://example.org/test>
+
+SubClassOf(<http://lsrn.org/EC:1.1.-.-> <http://lsrn.org/EC:1.-.-.->)
+EquivalentClasses(<http://lsrn.org/EC:1.1.1.-> <http://lsrn.org/EC:3.1.1.6>)
+
+Declaration(Class(:Person))
+
+)

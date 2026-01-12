@@ -208,7 +208,34 @@ impl TurtleParser {
             self.parse_statement(&statement, &mut ontology, &mut state)?;
         }
 
+        // Extract ontology IRI if present
+        if ontology.get_iri().is_none() {
+            if let Some(iri) = Self::extract_ontology_iri_from_content(content) {
+                ontology.set_ontology_iri(Some(iri));
+            }
+        }
+
         Ok(ontology)
+    }
+    
+    /// Extract ontology IRI from Turtle content
+    fn extract_ontology_iri_from_content(content: &str) -> Option<IRI> {
+        // Match pattern: <http://...> rdf:type owl:Ontology
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
+                // Extract IRI between < and >
+                if let Some(start) = trimmed.find('<') {
+                    if let Some(end) = trimmed[start..].find('>') {
+                        let iri_str = &trimmed[start + 1..start + end];
+                        if iri_str.starts_with("http") {
+                            return Some(IRI::new(iri_str));
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Normalize content by handling multi-line statements properly
@@ -2417,18 +2444,14 @@ impl TurtleParser {
                 Ok(result)
             } else {
                 // Handle unknown prefixes - this should be an error for proper Turtle parsing
-                return Err(crate::error::Error::OntologyParsing {
-                    message: format!("Undefined prefix: {}", prefix),
-                });
+                return Err(Error::ontology_parsing(format!("Undefined prefix: {}", prefix)));
             }
         } else if let Some(base) = &state.base_uri {
             let result = format!("{base}{name}");
             Ok(result)
         } else {
             // Relative URI without base - this should be an error
-            Err(crate::error::Error::OntologyParsing {
-                message: format!("Relative URI without base: {}", name),
-            })
+            Err(Error::ontology_parsing(format!("Relative URI without base: {}", name)))
         }
     }
 

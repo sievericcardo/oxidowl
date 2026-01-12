@@ -201,12 +201,26 @@ impl Tableau {
             clause_set.disjunctive_clauses.len()
         );
 
-        // Create EquivalenceClosure and DisjointnessMap for enhanced reasoning
-        let eq_closure = EquivalenceClosure::from_ontology(ontology)?;
-        let disj_map = DisjointnessMap::from_ontology(ontology, &eq_closure)?;
+        // Only create EquivalenceClosure and DisjointnessMap if the ontology has relevant axioms
+        // This avoids expensive initialization for simple ontologies
+        let has_equiv_or_disjoint = ontology.axioms().iter().any(|axiom| {
+            matches!(
+                axiom,
+                crate::ontology::Axiom::EquivalentClasses(_)
+                    | crate::ontology::Axiom::DisjointClasses(_)
+                    | crate::ontology::Axiom::DisjointUnion(_)
+            )
+        });
 
-        // Create ClauseChecker with the generated clauses and reasoning support
-        let checker = ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map);
+        let checker = if has_equiv_or_disjoint {
+            // Create EquivalenceClosure and DisjointnessMap for enhanced reasoning
+            let eq_closure = EquivalenceClosure::from_ontology(ontology)?;
+            let disj_map = DisjointnessMap::from_ontology(ontology, &eq_closure)?;
+            ClauseChecker::with_reasoning_support(clause_set, eq_closure, disj_map)
+        } else {
+            // No equivalence or disjointness axioms, use simple checker
+            ClauseChecker::new(clause_set)
+        };
 
         // Store the ClauseChecker for use during tableau expansion
         self.clause_checker = Some(checker);
@@ -236,9 +250,14 @@ impl Tableau {
         // convert DL clauses into tableau concepts and rules
 
         // Process axioms directly to ensure they are applied to the tableau
-        // This is critical for detecting inconsistencies
+        // For consistency checking, we only need to process ClassAssertion axioms
+        // Other axioms (EquivalentClasses, DisjointClasses, SubClassOf) are handled
+        // via the DL clause generation and don't need explicit processing here
         for axiom in ontology.axioms() {
-            self.process_axiom(axiom)?;
+            // Only process axioms that affect the tableau state
+            if matches!(axiom, crate::ontology::Axiom::ClassAssertion(_)) {
+                self.process_axiom(axiom)?;
+            }
         }
 
         Ok(())
@@ -361,6 +380,58 @@ impl Tableau {
                     dependencies: Arc::new(DependencySet::new()),
                 };
                 self.pending_queue.push_back(rule_app);
+            }
+
+            // Handle ClassAssertion axioms
+            Axiom::ClassAssertion(assertion) => {
+                // Get or create node for the individual
+                let individual_iri = assertion.individual.to_string();
+                let node_id = if let Some(&existing_id) = self.individual_map.get(&individual_iri) {
+                    existing_id
+                } else {
+                    let new_id = self.add_node(NodeType::Nominal)?;
+                    self.individual_map.insert(individual_iri, new_id);
+                    new_id
+                };
+
+                // Add the class assertion to the node
+                let concept = ConceptLabel::Complex(Box::new(assertion.class.clone()));
+                if let Some(node) = self.nodes.get_mut(node_id) {
+                    node.concepts.insert(concept);
+                }
+
+                // Also add all equivalent classes (if any) - but only if we have equivalence closure
+                // This is an optimization to avoid expensive lookups when not needed
+                if let Some(checker) = &mut self.clause_checker {
+                    if let ClassExpression::Class(ref class) = assertion.class {
+                        if let Some(eq_closure) = checker.equivalence_closure() {
+                            let concept_id = equivalence::ConceptId(class.iri.to_string());
+                            let equiv_class = eq_closure.get_equivalence_class(&concept_id);
+                            
+                            // Only add equivalent concepts if there are any (skip if just the original concept)
+                            if equiv_class.len() > 1 {
+                                for equiv_concept_id in equiv_class {
+                                    // Skip if it's the same as the original concept
+                                    if equiv_concept_id.0 == class.iri.to_string() {
+                                        continue;
+                                    }
+                                    
+                                    // Add the equivalent concept to the node
+                                    let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
+                                    let equiv_class = crate::ontology::Class::new(equiv_iri);
+                                    let equiv_expr = ClassExpression::Class(equiv_class);
+                                    let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
+                                    if let Some(node) = self.nodes.get_mut(node_id) {
+                                        node.concepts.insert(equiv_concept);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Queue rule for expanding this concept
+                self.queue_rule_for_concept(node_id, &assertion.class)?;
             }
 
             // Other axioms can be added as needed

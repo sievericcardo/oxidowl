@@ -919,6 +919,16 @@ impl ClauseChecker {
         self.check_cache.as_mut()
     }
 
+    /// Get the equivalence closure (if available)
+    pub fn equivalence_closure(&mut self) -> Option<&mut EquivalenceClosure> {
+        self.equivalence_closure.as_mut()
+    }
+
+    /// Get the disjointness map (if available)
+    pub fn disjointness_map(&self) -> Option<&DisjointnessMap> {
+        self.disjointness_map.as_ref()
+    }
+
     /// Check if incremental checking is enabled
     pub fn is_incremental_enabled(&self) -> bool {
         self.check_cache.is_some()
