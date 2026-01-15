@@ -5,9 +5,9 @@
 
 use oxidowl::{
     Result,
-    ontology::{Ontology, IRI},
-    core::reasoner::Reasoner,
     config::ReasonerConfig,
+    core::reasoner::Reasoner,
+    ontology::{IRI, Ontology},
 };
 
 #[tokio::main]

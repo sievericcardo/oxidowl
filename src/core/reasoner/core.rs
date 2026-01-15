@@ -1631,10 +1631,8 @@ impl Reasoner {
             .as_ref()
             .ok_or_else(|| Error::reasoning("No ontology loaded"))?;
 
-        let mut ontology_guard = write_lock(
-            ontology,
-            "core: writing ontology for execute_sparql_insert",
-        )?;
+        let mut ontology_guard =
+            write_lock(ontology, "core: writing ontology for execute_sparql_insert")?;
 
         let mut inserted_count = 0;
 
@@ -1660,10 +1658,8 @@ impl Reasoner {
             .as_ref()
             .ok_or_else(|| Error::reasoning("No ontology loaded"))?;
 
-        let mut ontology_guard = write_lock(
-            ontology,
-            "core: writing ontology for execute_sparql_delete",
-        )?;
+        let mut ontology_guard =
+            write_lock(ontology, "core: writing ontology for execute_sparql_delete")?;
 
         let mut deleted_count = 0;
         let initial_count = ontology_guard.axioms().len();
@@ -1701,30 +1697,30 @@ impl Reasoner {
             // Find the opening brace after the keyword
             let search_from = start + keyword.len();
             let remaining_query = &query[search_from..];
-            
+
             if let Some(brace_start) = remaining_query.find('{') {
                 let content_start = search_from + brace_start + 1;
                 let remaining_after_brace = &query[content_start..];
-                
+
                 if let Some(brace_end) = remaining_after_brace.find('}') {
                     let data_content = &query[content_start..content_start + brace_end];
-                    
+
                     // Parse triple patterns line by line
                     // Each line can contain one triple pattern
                     // Lines can end with . or ; or just a newline
                     let lines: Vec<&str> = data_content.lines().collect();
-                    
+
                     for line in lines {
                         let line = line.trim();
-                        
+
                         // Skip empty lines
                         if line.is_empty() {
                             continue;
                         }
-                        
+
                         // Remove trailing . or ; if present
                         let line_clean = line.trim_end_matches('.').trim_end_matches(';').trim();
-                        
+
                         if line_clean.is_empty() {
                             continue;
                         }
@@ -1732,7 +1728,7 @@ impl Reasoner {
                         // Parse statement into triple pattern
                         // Split by whitespace to get subject, predicate, object
                         let parts: Vec<&str> = line_clean.split_whitespace().collect();
-                        
+
                         if parts.len() >= 3 {
                             let subject = parts[0];
                             let predicate = parts[1];
@@ -1749,7 +1745,7 @@ impl Reasoner {
                 }
             }
         }
-        
+
         if patterns.is_empty() {
             return Err(Error::reasoning(&format!(
                 "No patterns found in {} query. Data content might be malformed.",
@@ -1763,10 +1759,12 @@ impl Reasoner {
     /// Convert a triple pattern to an OWL axiom
     fn triple_pattern_to_axiom(&self, pattern: &TriplePattern) -> Result<crate::ontology::Axiom> {
         use crate::ontology::{
-            axioms::{Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, ObjectPropertyAssertionAxiom},
-            ClassExpression, Class, Individual, IRI, Literal,
-            ObjectPropertyExpression, ObjectProperty,
-            DataPropertyExpression, DataProperty,
+            Class, ClassExpression, DataProperty, DataPropertyExpression, IRI, Individual, Literal,
+            ObjectProperty, ObjectPropertyExpression,
+            axioms::{
+                Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom,
+                ObjectPropertyAssertionAxiom,
+            },
         };
 
         // Remove angle brackets from IRIs
@@ -1823,20 +1821,22 @@ impl Reasoner {
             iri: IRI::new(predicate),
         });
 
-        Ok(Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-            id: axiom_id,
-            source,
-            target,
-            property,
-            annotations: Vec::new(),
-        }))
+        Ok(Axiom::ObjectPropertyAssertion(
+            ObjectPropertyAssertionAxiom {
+                id: axiom_id,
+                source,
+                target,
+                property,
+                annotations: Vec::new(),
+            },
+        ))
     }
 
     /// Generate a unique axiom ID from a triple pattern
     fn generate_axiom_id(&self, pattern: &TriplePattern) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         pattern.subject.hash(&mut hasher);
         pattern.predicate.hash(&mut hasher);

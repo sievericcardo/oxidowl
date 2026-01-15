@@ -8,10 +8,10 @@
 //! - **Consistent** (there exists a model where A and B are both empty)
 //! - **Incoherent** (classes A and B are unsatisfiable)
 
-use oxidowl::ontology::*;
-use oxidowl::core::reasoner::Reasoner;
-use oxidowl::config::ReasonerConfig;
 use oxidowl::Result;
+use oxidowl::config::ReasonerConfig;
+use oxidowl::core::reasoner::Reasoner;
+use oxidowl::ontology::*;
 
 /// Test that EquivalentClasses + DisjointClasses makes classes unsatisfiable
 /// but the ontology remains consistent
@@ -80,7 +80,9 @@ fn test_campaign_6_pattern_consistent_incoherent() -> Result<()> {
     let mut ontology = Ontology::new();
 
     let healthy = Class::new(IRI::new("http://www.smolang.org/greenhouseDT#Healthy"));
-    let moist = Class::new(IRI::new("http://www.smolang.org/greenhouseDT#MoistStrategy"));
+    let moist = Class::new(IRI::new(
+        "http://www.smolang.org/greenhouseDT#MoistStrategy",
+    ));
 
     let expr_healthy = ClassExpression::Class(healthy.clone());
     let expr_moist = ClassExpression::Class(moist.clone());
@@ -103,9 +105,18 @@ fn test_campaign_6_pattern_consistent_incoherent() -> Result<()> {
     reasoner.load_ontology(ontology)?;
 
     // Should be consistent but incoherent
-    assert!(reasoner.is_consistent()?, "Campaign 6 pattern should be consistent");
-    assert!(!reasoner.is_class_satisfiable(&expr_healthy)?, "Healthy should be unsatisfiable");
-    assert!(!reasoner.is_class_satisfiable(&expr_moist)?, "MoistStrategy should be unsatisfiable");
+    assert!(
+        reasoner.is_consistent()?,
+        "Campaign 6 pattern should be consistent"
+    );
+    assert!(
+        !reasoner.is_class_satisfiable(&expr_healthy)?,
+        "Healthy should be unsatisfiable"
+    );
+    assert!(
+        !reasoner.is_class_satisfiable(&expr_moist)?,
+        "MoistStrategy should be unsatisfiable"
+    );
 
     Ok(())
 }
@@ -115,8 +126,12 @@ fn test_campaign_6_pattern_consistent_incoherent() -> Result<()> {
 fn test_campaign_7_8_pattern_consistent_incoherent() -> Result<()> {
     let mut ontology = Ontology::new();
 
-    let dt = Class::new(IRI::new("http://bmkeg.isi.edu/ooevv/edu.isi.bmkeg.ooevv.model.DataTransformation"));
-    let bs = Class::new(IRI::new("http://bmkeg.isi.edu/ooevv/edu.isi.bmkeg.ooevv.model.scale.BinaryScale"));
+    let dt = Class::new(IRI::new(
+        "http://bmkeg.isi.edu/ooevv/edu.isi.bmkeg.ooevv.model.DataTransformation",
+    ));
+    let bs = Class::new(IRI::new(
+        "http://bmkeg.isi.edu/ooevv/edu.isi.bmkeg.ooevv.model.scale.BinaryScale",
+    ));
 
     let expr_dt = ClassExpression::Class(dt);
     let expr_bs = ClassExpression::Class(bs);
@@ -136,9 +151,18 @@ fn test_campaign_7_8_pattern_consistent_incoherent() -> Result<()> {
     let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
     reasoner.load_ontology(ontology)?;
 
-    assert!(reasoner.is_consistent()?, "Campaign 7/8 pattern should be consistent");
-    assert!(!reasoner.is_class_satisfiable(&expr_dt)?, "DataTransformation should be unsatisfiable");
-    assert!(!reasoner.is_class_satisfiable(&expr_bs)?, "BinaryScale should be unsatisfiable");
+    assert!(
+        reasoner.is_consistent()?,
+        "Campaign 7/8 pattern should be consistent"
+    );
+    assert!(
+        !reasoner.is_class_satisfiable(&expr_dt)?,
+        "DataTransformation should be unsatisfiable"
+    );
+    assert!(
+        !reasoner.is_class_satisfiable(&expr_bs)?,
+        "BinaryScale should be unsatisfiable"
+    );
 
     Ok(())
 }
@@ -177,12 +201,24 @@ fn test_transitive_equivalence_with_disjointness() -> Result<()> {
     reasoner.load_ontology(ontology)?;
 
     // Ontology should be consistent
-    assert!(reasoner.is_consistent()?, "Ontology with transitive equivalence should be consistent");
+    assert!(
+        reasoner.is_consistent()?,
+        "Ontology with transitive equivalence should be consistent"
+    );
 
     // All three classes should be unsatisfiable
-    assert!(!reasoner.is_class_satisfiable(&a)?, "A should be unsatisfiable");
-    assert!(!reasoner.is_class_satisfiable(&b)?, "B should be unsatisfiable");
-    assert!(!reasoner.is_class_satisfiable(&c)?, "C should be unsatisfiable");
+    assert!(
+        !reasoner.is_class_satisfiable(&a)?,
+        "A should be unsatisfiable"
+    );
+    assert!(
+        !reasoner.is_class_satisfiable(&b)?,
+        "B should be unsatisfiable"
+    );
+    assert!(
+        !reasoner.is_class_satisfiable(&c)?,
+        "C should be unsatisfiable"
+    );
 
     Ok(())
 }
@@ -260,11 +296,22 @@ fn test_coherent_ontology_is_consistent() -> Result<()> {
     reasoner.load_ontology(ontology)?;
 
     // Should be both consistent and coherent
-    assert!(reasoner.is_consistent()?, "Coherent ontology should be consistent");
-    assert!(reasoner.is_class_satisfiable(&person)?, "Person should be satisfiable");
-    assert!(reasoner.is_class_satisfiable(&student)?, "Student should be satisfiable");
-    assert!(reasoner.is_class_satisfiable(&teacher)?, "Teacher should be satisfiable");
+    assert!(
+        reasoner.is_consistent()?,
+        "Coherent ontology should be consistent"
+    );
+    assert!(
+        reasoner.is_class_satisfiable(&person)?,
+        "Person should be satisfiable"
+    );
+    assert!(
+        reasoner.is_class_satisfiable(&student)?,
+        "Student should be satisfiable"
+    );
+    assert!(
+        reasoner.is_class_satisfiable(&teacher)?,
+        "Teacher should be satisfiable"
+    );
 
     Ok(())
 }
-

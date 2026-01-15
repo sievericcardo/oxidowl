@@ -14,7 +14,7 @@ use phf::phf_set;
 use crate::{
     Error, Result,
     ontology::{ClassExpression, Ontology},
-    parsers::{common::OntologySerializer, ErrorVerbosity, ParserConfig},
+    parsers::{ErrorVerbosity, ParserConfig, common::OntologySerializer},
 };
 
 /// Compile-time perfect hash set of all OWL 2 keywords
@@ -25,13 +25,13 @@ static OWL_KEYWORDS: phf::Set<&'static str> = phf_set! {
     "ObjectOneOf", "ObjectSomeValuesFrom", "ObjectAllValuesFrom",
     "ObjectHasValue", "ObjectHasSelf", "ObjectMinCardinality",
     "ObjectMaxCardinality", "ObjectExactCardinality",
-    
+
     // Data ranges and restrictions
     "DataSomeValuesFrom", "DataAllValuesFrom", "DataHasValue",
     "DataMinCardinality", "DataMaxCardinality", "DataExactCardinality",
     "DataIntersectionOf", "DataUnionOf", "DataComplementOf",
     "DataOneOf", "DatatypeRestriction",
-    
+
     // Axioms
     "SubClassOf", "EquivalentClasses", "DisjointClasses", "DisjointUnion",
     "SubObjectPropertyOf", "EquivalentObjectProperties", "DisjointObjectProperties",
@@ -44,14 +44,14 @@ static OWL_KEYWORDS: phf::Set<&'static str> = phf_set! {
     "DatatypeDefinition", "HasKey", "SameIndividual", "DifferentIndividuals",
     "ClassAssertion", "ObjectPropertyAssertion", "NegativeObjectPropertyAssertion",
     "DataPropertyAssertion", "NegativeDataPropertyAssertion",
-    
+
     // Annotations
     "Annotation", "AnnotationAssertion", "SubAnnotationPropertyOf",
     "AnnotationPropertyDomain", "AnnotationPropertyRange",
-    
+
     // SWRL
     "DLSafeRule", "Body", "Head",
-    
+
     // Ontology structure
     "Ontology", "Import", "Prefix", "Declaration",
 };
@@ -81,7 +81,7 @@ impl ParseContext {
     fn new() -> Self {
         Self { line: 1, column: 1 }
     }
-    
+
     /// Update context based on character (for tracking position during tokenization)
     #[inline(always)]
     fn update(&mut self, ch: char) {
@@ -115,16 +115,14 @@ impl FunctionalParser {
     pub fn with_config(config: ParserConfig) -> Self {
         Self { config }
     }
-    
+
     /// Construct an error with appropriate verbosity
     /// Mark as cold to optimize branch prediction
     #[cold]
     #[inline(never)]
     fn make_error(&self, message: String, token: Option<String>) -> Error {
         match self.config.error_verbosity {
-            ErrorVerbosity::Minimal => {
-                Error::ontology_parsing(message)
-            }
+            ErrorVerbosity::Minimal => Error::ontology_parsing(message),
             ErrorVerbosity::Standard => {
                 // Line/column tracking not implemented yet, but structure ready
                 Error::ontology_parsing_detailed(message, None, None, None, token)
@@ -373,11 +371,7 @@ impl FunctionalParser {
     /// Skip over Annotation(...) sequences that can precede axioms
     /// Returns the new position after all annotations
     #[inline(always)]
-    fn skip_annotations(
-        &self,
-        tokens: &[String],
-        mut position: usize,
-    ) -> usize {
+    fn skip_annotations(&self, tokens: &[String], mut position: usize) -> usize {
         // Skip any number of Annotation(...) constructs
         while position < tokens.len() && tokens[position] == "Annotation" {
             // Check if next token is "(" - if not, this is not an Annotation construct
@@ -385,10 +379,10 @@ impl FunctionalParser {
                 // Not an Annotation(...) - stop skipping
                 break;
             }
-            
+
             position += 1; // Skip "Annotation"
             position += 1; // Skip "("
-            
+
             // Count parentheses to find the matching closing paren
             let mut paren_count = 1;
             while position < tokens.len() && paren_count > 0 {
@@ -405,19 +399,15 @@ impl FunctionalParser {
 
     /// Parse SWRL rule with minimal overhead
     /// Uses simple validation - just checks basic structure
-    fn parse_swrl_rule(
-        &self,
-        tokens: &[String],
-        mut position: usize,
-    ) -> Result<usize> {
+    fn parse_swrl_rule(&self, tokens: &[String], mut position: usize) -> Result<usize> {
         position += 1; // Skip "DLSafeRule"
-        
+
         if position < tokens.len() && tokens[position] == "(" {
             position += 1; // Skip "("
-            
+
             // Count parentheses to find the matching closing paren
             let mut paren_count = 1;
-            
+
             while position < tokens.len() && paren_count > 0 {
                 if tokens[position] == "(" {
                     paren_count += 1;
@@ -426,7 +416,7 @@ impl FunctionalParser {
                 }
                 position += 1;
             }
-            
+
             // Minimal validation only in Detailed mode
             if matches!(self.config.error_verbosity, ErrorVerbosity::Detailed) {
                 // Check that we found the closing paren
@@ -437,7 +427,7 @@ impl FunctionalParser {
                 }
             }
         }
-        
+
         Ok(position)
     }
 
@@ -1545,7 +1535,7 @@ impl FunctionalParser {
                         token
                     )));
                 }
-                
+
                 // Default: treat as a named class (IRI)
                 let class_iri = self.expand_iri(token, prefixes)?;
                 let class = crate::ontology::Class {
@@ -1627,7 +1617,8 @@ impl FunctionalParser {
 
             if position < tokens.len() {
                 // Parse class expression (can be simple IRI or complex expression like ObjectSomeValuesFrom)
-                let (class_expr, new_pos) = self.parse_class_expression(tokens, position, prefixes)?;
+                let (class_expr, new_pos) =
+                    self.parse_class_expression(tokens, position, prefixes)?;
                 position = new_pos;
 
                 // Parse individual IRI
@@ -1810,7 +1801,7 @@ impl FunctionalParser {
             // Already a full IRI - extract content without validation
             return Ok(iri[1..iri.len() - 1].to_string());
         }
-        
+
         // Validate that non-bracketed tokens are not OWL keywords
         if is_owl_keyword(iri) {
             return Err(Error::ontology_parsing(format!(
@@ -1818,7 +1809,7 @@ impl FunctionalParser {
                 iri
             )));
         }
-        
+
         if iri.starts_with(':') {
             // Relative IRI with default prefix (e.g., ":Employee")
             let local = &iri[1..];
@@ -1851,14 +1842,20 @@ impl FunctionalParser {
             } else {
                 // Prefix not found - if it looks like it might be a URL scheme, return as-is
                 // Otherwise, it's an error (e.g., undefined prefix)
-                if prefix.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.') && local.starts_with("//") {
+                if prefix
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
+                    && local.starts_with("//")
+                {
                     // Looks like a URL with scheme (e.g., http://, https://, ftp://)
                     Ok(iri.to_string())
                 } else {
                     // Undefined prefix - create a more informative error
                     Err(Error::ontology_parsing(format!(
                         "Undefined prefix '{}' in IRI '{}'. Available prefixes: {:?}",
-                        prefix, iri, prefixes.keys().collect::<Vec<_>>()
+                        prefix,
+                        iri,
+                        prefixes.keys().collect::<Vec<_>>()
                     )))
                 }
             }
@@ -1867,7 +1864,8 @@ impl FunctionalParser {
             // This should have a default base IRI to resolve against
             Err(Error::ontology_parsing(format!(
                 "Relative IRI '{}' without a prefix or base IRI. Available prefixes: {:?}",
-                iri, prefixes.keys().collect::<Vec<_>>()
+                iri,
+                prefixes.keys().collect::<Vec<_>>()
             )))
         }
     }

@@ -73,7 +73,10 @@ impl TableauExecutor {
 
         // Detect clashes in initial state (only needed if there are Nominal nodes with ClassAssertions)
         // This is an expensive operation, so we skip it if there are no individuals
-        let has_nominal_nodes = tableau.nodes.iter().any(|n| n.node_type == NodeType::Nominal);
+        let has_nominal_nodes = tableau
+            .nodes
+            .iter()
+            .any(|n| n.node_type == NodeType::Nominal);
         if has_nominal_nodes {
             Self::detect_clashes(tableau)?;
             if tableau.clash_detector.has_clashes() {
@@ -403,17 +406,11 @@ impl TableauExecutor {
                             },
                             nodes: vec![i],
                             dependencies: Arc::new(DependencySet::new()),
-                            explanation: format!(
-                                "Node {} has a concept and its complement",
-                                i
-                            ),
+                            explanation: format!("Node {} has a concept and its complement", i),
                         };
                         tableau.clash_detector.add_clash(clash);
                         tableau.statistics.increment_clashes();
-                        log::warn!(
-                            "Complement clash detected at node {}: C and ¬C",
-                            i
-                        );
+                        log::warn!("Complement clash detected at node {}: C and ¬C", i);
                     }
                 }
             }
@@ -445,7 +442,7 @@ impl TableauExecutor {
                 // Check all pairs of concepts on this node
                 let has_eq_closure = checker.equivalence_closure().is_some();
                 let has_disj_map = checker.disjointness_map().is_some();
-                
+
                 if !has_eq_closure || !has_disj_map {
                     continue; // Skip if we don't have the necessary data structures
                 }
@@ -460,7 +457,7 @@ impl TableauExecutor {
                             .disjointness_map()
                             .map(|disj| disj.are_disjoint(c1, c2))
                             .unwrap_or(false);
-                        
+
                         if !are_disjoint {
                             continue; // Not disjoint, can't have the clash
                         }
@@ -488,7 +485,11 @@ impl TableauExecutor {
                             tableau.statistics.increment_clashes();
                             log::warn!(
                                 "Equivalence-disjointness clash detected at node {}: {:?} ≡ {:?} but {:?} ⊥ {:?}",
-                                i, c1, c2, c1, c2
+                                i,
+                                c1,
+                                c2,
+                                c1,
+                                c2
                             );
                             return Ok(()); // Found a clash, no need to continue
                         }

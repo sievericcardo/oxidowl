@@ -2,16 +2,16 @@
 
 use oxidowl::{
     Result,
-    ontology::{Ontology, IRI},
-    core::reasoner::Reasoner,
     config::ReasonerConfig,
+    core::reasoner::Reasoner,
+    ontology::{IRI, Ontology},
 };
 
 #[test]
 fn test_insert_class_assertion() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -34,7 +34,7 @@ fn test_insert_class_assertion() -> Result<()> {
 fn test_insert_multiple_triples() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -59,7 +59,7 @@ fn test_insert_multiple_triples() -> Result<()> {
 fn test_insert_object_property() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -82,7 +82,7 @@ fn test_insert_object_property() -> Result<()> {
 fn test_insert_data_property() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -105,7 +105,7 @@ fn test_insert_data_property() -> Result<()> {
 fn test_delete_triple() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -136,7 +136,7 @@ fn test_delete_triple() -> Result<()> {
 fn test_delete_nonexistent_triple() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -159,7 +159,7 @@ fn test_delete_nonexistent_triple() -> Result<()> {
 fn test_insert_then_query() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -191,7 +191,7 @@ fn test_insert_then_query() -> Result<()> {
 fn test_insert_delete_cycle() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;
@@ -225,7 +225,7 @@ fn test_insert_delete_cycle() -> Result<()> {
 fn test_invalid_insert_query() {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config).unwrap();
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology).unwrap();
@@ -245,7 +245,7 @@ fn test_invalid_insert_query() {
 fn test_insert_with_semicolons() -> Result<()> {
     let config = ReasonerConfig::default();
     let mut reasoner = Reasoner::new(config)?;
-    
+
     let mut ontology = Ontology::new();
     ontology.set_iri(IRI::new("http://example.org/test#"));
     reasoner.load_ontology(ontology)?;

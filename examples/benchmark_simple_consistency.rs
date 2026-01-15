@@ -1,5 +1,5 @@
-use oxidowl::prelude::*;
 use oxidowl::Reasoner;
+use oxidowl::prelude::*;
 use std::time::Instant;
 
 fn main() -> Result<()> {
@@ -22,7 +22,10 @@ fn main() -> Result<()> {
     }
 
     println!("Testing consistency check performance on simple ontology");
-    println!("Ontology has {} axioms, 0 individuals", ontology.axioms().len());
+    println!(
+        "Ontology has {} axioms, 0 individuals",
+        ontology.axioms().len()
+    );
     println!();
 
     // Warm up
@@ -33,22 +36,22 @@ fn main() -> Result<()> {
     // Benchmark
     let iterations = 100;
     let start = Instant::now();
-    
+
     for _ in 0..iterations {
         let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
         reasoner.load_ontology(ontology.clone())?;
         let is_consistent = reasoner.is_consistent()?;
         assert!(is_consistent);
     }
-    
+
     let elapsed = start.elapsed();
     let avg_ms = elapsed.as_millis() as f64 / iterations as f64;
-    
+
     println!("Ran {} iterations", iterations);
     println!("Total time: {:?}", elapsed);
     println!("Average time per consistency check: {:.2} ms", avg_ms);
     println!();
-    
+
     if avg_ms < 10.0 {
         println!("✓ Performance is good (< 10ms per check)");
     } else if avg_ms < 50.0 {

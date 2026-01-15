@@ -1,5 +1,5 @@
-use oxidowl::prelude::*;
 use oxidowl::Reasoner;
+use oxidowl::prelude::*;
 use std::time::Instant;
 
 fn main() -> Result<()> {
@@ -31,7 +31,16 @@ fn main() -> Result<()> {
 
         println!("Test 1: Simple ontology (50 SubClassOf axioms, no individuals)");
         println!("  Average time: {:.2} ms", avg_ms);
-        println!("  Status: {}", if avg_ms < 10.0 { "✓ Excellent" } else if avg_ms < 50.0 { "⚠ Acceptable" } else { "✗ Slow" });
+        println!(
+            "  Status: {}",
+            if avg_ms < 10.0 {
+                "✓ Excellent"
+            } else if avg_ms < 50.0 {
+                "⚠ Acceptable"
+            } else {
+                "✗ Slow"
+            }
+        );
         println!();
     }
 
@@ -41,7 +50,7 @@ fn main() -> Result<()> {
         for i in 0..10 {
             let class_a = Class::new(IRI::new(&format!("http://example.org/A{}", i)));
             let class_b = Class::new(IRI::new(&format!("http://example.org/B{}", i)));
-            
+
             ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
                 id: (i * 2) as u64,
                 classes: vec![
@@ -50,7 +59,7 @@ fn main() -> Result<()> {
                 ],
                 annotations: vec![],
             }));
-            
+
             let class_c = Class::new(IRI::new(&format!("http://example.org/C{}", i)));
             ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
                 id: (i * 2 + 1) as u64,
@@ -74,7 +83,16 @@ fn main() -> Result<()> {
 
         println!("Test 2: With EquivalentClasses & DisjointClasses (20 axioms, no individuals)");
         println!("  Average time: {:.2} ms", avg_ms);
-        println!("  Status: {}", if avg_ms < 20.0 { "✓ Excellent" } else if avg_ms < 100.0 { "⚠ Acceptable" } else { "✗ Slow" });
+        println!(
+            "  Status: {}",
+            if avg_ms < 20.0 {
+                "✓ Excellent"
+            } else if avg_ms < 100.0 {
+                "⚠ Acceptable"
+            } else {
+                "✗ Slow"
+            }
+        );
         println!();
     }
 
@@ -83,7 +101,7 @@ fn main() -> Result<()> {
         let mut ontology = Ontology::new();
         let class_a = Class::new(IRI::new("http://example.org/A"));
         let class_b = Class::new(IRI::new("http://example.org/B"));
-        
+
         ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
             id: 1,
             classes: vec![
@@ -92,7 +110,7 @@ fn main() -> Result<()> {
             ],
             annotations: vec![],
         }));
-        
+
         ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
             id: 2,
             classes: vec![
@@ -122,7 +140,16 @@ fn main() -> Result<()> {
 
         println!("Test 3: With individual causing equivalence-disjointness clash");
         println!("  Average time: {:.2} ms", avg_ms);
-        println!("  Status: {}", if avg_ms < 20.0 { "✓ Excellent" } else if avg_ms < 100.0 { "⚠ Acceptable" } else { "✗ Slow" });
+        println!(
+            "  Status: {}",
+            if avg_ms < 20.0 {
+                "✓ Excellent"
+            } else if avg_ms < 100.0 {
+                "⚠ Acceptable"
+            } else {
+                "✗ Slow"
+            }
+        );
         println!();
     }
 
