@@ -157,7 +157,13 @@ pub enum Error {
 impl Clone for Error {
     fn clone(&self) -> Self {
         match self {
-            Error::OntologyParsing { message, line, column, context, token } => Error::OntologyParsing {
+            Error::OntologyParsing {
+                message,
+                line,
+                column,
+                context,
+                token,
+            } => Error::OntologyParsing {
                 message: message.clone(),
                 line: *line,
                 column: *column,
@@ -257,7 +263,7 @@ fn format_ontology_parsing_error(
     token: &Option<String>,
 ) -> String {
     let mut result = format!("Ontology parsing error: {}", message);
-    
+
     if let Some(l) = line {
         if let Some(c) = column {
             result.push_str(&format!(" at line {}, column {}", l, c));
@@ -265,15 +271,15 @@ fn format_ontology_parsing_error(
             result.push_str(&format!(" at line {}", l));
         }
     }
-    
+
     if let Some(t) = token {
         result.push_str(&format!(" (token: '{}')", t));
     }
-    
+
     if let Some(ctx) = context {
         result.push_str(&format!("\nContext: {}", ctx));
     }
-    
+
     result
 }
 

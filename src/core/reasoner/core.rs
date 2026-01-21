@@ -49,12 +49,16 @@ struct OWLlinkRequest {
 /// SPARQL query structure
 #[derive(Debug, Clone)]
 struct SparqlQuery {
-    /// Query type (SELECT, ASK, CONSTRUCT, DESCRIBE)
+    /// Query type (SELECT, ASK, CONSTRUCT, DESCRIBE, INSERT, DELETE)
     query_type: String,
     /// Variables to select
     variables: Vec<String>,
     /// Triple patterns in WHERE clause
     patterns: Vec<TriplePattern>,
+    /// Triple patterns to insert (for INSERT operations)
+    insert_patterns: Vec<TriplePattern>,
+    /// Triple patterns to delete (for DELETE operations)
+    delete_patterns: Vec<TriplePattern>,
     /// Original query string
     original_query: String,
 }
@@ -1368,6 +1372,8 @@ impl Reasoner {
             "ASK" => self.execute_sparql_ask(&parsed_query),
             "CONSTRUCT" => self.execute_sparql_construct(&parsed_query),
             "DESCRIBE" => self.execute_sparql_describe(&parsed_query),
+            "INSERT" => self.execute_sparql_insert(&parsed_query),
+            "DELETE" => self.execute_sparql_delete(&parsed_query),
             _ => Err(Error::reasoning(&format!(
                 "Unsupported SPARQL query type: {}",
                 parsed_query.query_type
@@ -1379,7 +1385,11 @@ impl Reasoner {
     fn parse_sparql_query(&self, query: &str) -> Result<SparqlQuery> {
         let query_upper = query.to_uppercase();
 
-        let query_type = if query_upper.contains("SELECT") {
+        let query_type = if query_upper.contains("INSERT") {
+            "INSERT"
+        } else if query_upper.contains("DELETE") {
+            "DELETE"
+        } else if query_upper.contains("SELECT") {
             "SELECT"
         } else if query_upper.contains("ASK") {
             "ASK"
@@ -1437,10 +1447,24 @@ impl Reasoner {
             }
         }
 
+        // Extract INSERT DATA patterns
+        let mut insert_patterns = Vec::new();
+        if query_type == "INSERT" {
+            insert_patterns = self.extract_insert_delete_patterns(query, "INSERT")?;
+        }
+
+        // Extract DELETE DATA patterns
+        let mut delete_patterns = Vec::new();
+        if query_type == "DELETE" {
+            delete_patterns = self.extract_insert_delete_patterns(query, "DELETE")?;
+        }
+
         Ok(SparqlQuery {
             query_type: query_type.to_string(),
             variables,
             patterns,
+            insert_patterns,
+            delete_patterns,
             original_query: query.to_string(),
         })
     }
@@ -1598,6 +1622,226 @@ impl Reasoner {
             }
         })
         .to_string())
+    }
+
+    /// Execute SPARQL INSERT DATA query
+    fn execute_sparql_insert(&self, query: &SparqlQuery) -> Result<String> {
+        let ontology = self
+            .ontology
+            .as_ref()
+            .ok_or_else(|| Error::reasoning("No ontology loaded"))?;
+
+        let mut ontology_guard =
+            write_lock(ontology, "core: writing ontology for execute_sparql_insert")?;
+
+        let mut inserted_count = 0;
+
+        // Convert triple patterns to axioms and add to ontology
+        for pattern in &query.insert_patterns {
+            let axiom = self.triple_pattern_to_axiom(pattern)?;
+            ontology_guard.add_axiom(axiom);
+            inserted_count += 1;
+        }
+
+        Ok(serde_json::json!({
+            "status": "success",
+            "message": format!("Inserted {} triples", inserted_count),
+            "inserted": inserted_count
+        })
+        .to_string())
+    }
+
+    /// Execute SPARQL DELETE DATA query
+    fn execute_sparql_delete(&self, query: &SparqlQuery) -> Result<String> {
+        let ontology = self
+            .ontology
+            .as_ref()
+            .ok_or_else(|| Error::reasoning("No ontology loaded"))?;
+
+        let mut ontology_guard =
+            write_lock(ontology, "core: writing ontology for execute_sparql_delete")?;
+
+        let mut deleted_count = 0;
+        let initial_count = ontology_guard.axioms().len();
+
+        // Convert triple patterns to axioms and remove from ontology
+        for pattern in &query.delete_patterns {
+            let axiom = self.triple_pattern_to_axiom(pattern)?;
+            // Remove the axiom
+            ontology_guard.remove_axiom(&axiom);
+        }
+
+        // Calculate how many were actually deleted
+        deleted_count = initial_count - ontology_guard.axioms().len();
+
+        Ok(serde_json::json!({
+            "status": "success",
+            "message": format!("Deleted {} triples", deleted_count),
+            "deleted": deleted_count
+        })
+        .to_string())
+    }
+
+    /// Extract INSERT or DELETE DATA patterns from query
+    fn extract_insert_delete_patterns(
+        &self,
+        query: &str,
+        operation: &str,
+    ) -> Result<Vec<TriplePattern>> {
+        let mut patterns = Vec::new();
+        let query_upper = query.to_uppercase();
+
+        // Look for "INSERT DATA" or "DELETE DATA" followed by braces
+        let keyword = format!("{} DATA", operation);
+        if let Some(start) = query_upper.find(&keyword) {
+            // Find the opening brace after the keyword
+            let search_from = start + keyword.len();
+            let remaining_query = &query[search_from..];
+
+            if let Some(brace_start) = remaining_query.find('{') {
+                let content_start = search_from + brace_start + 1;
+                let remaining_after_brace = &query[content_start..];
+
+                if let Some(brace_end) = remaining_after_brace.find('}') {
+                    let data_content = &query[content_start..content_start + brace_end];
+
+                    // Parse triple patterns line by line
+                    // Each line can contain one triple pattern
+                    // Lines can end with . or ; or just a newline
+                    let lines: Vec<&str> = data_content.lines().collect();
+
+                    for line in lines {
+                        let line = line.trim();
+
+                        // Skip empty lines
+                        if line.is_empty() {
+                            continue;
+                        }
+
+                        // Remove trailing . or ; if present
+                        let line_clean = line.trim_end_matches('.').trim_end_matches(';').trim();
+
+                        if line_clean.is_empty() {
+                            continue;
+                        }
+
+                        // Parse statement into triple pattern
+                        // Split by whitespace to get subject, predicate, object
+                        let parts: Vec<&str> = line_clean.split_whitespace().collect();
+
+                        if parts.len() >= 3 {
+                            let subject = parts[0];
+                            let predicate = parts[1];
+                            // Object might have spaces (e.g., literals)
+                            let object = parts[2..].join(" ");
+
+                            patterns.push(TriplePattern {
+                                subject: subject.to_string(),
+                                predicate: predicate.to_string(),
+                                object,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        if patterns.is_empty() {
+            return Err(Error::reasoning(&format!(
+                "No patterns found in {} query. Data content might be malformed.",
+                operation
+            )));
+        }
+
+        Ok(patterns)
+    }
+
+    /// Convert a triple pattern to an OWL axiom
+    fn triple_pattern_to_axiom(&self, pattern: &TriplePattern) -> Result<crate::ontology::Axiom> {
+        use crate::ontology::{
+            Class, ClassExpression, DataProperty, DataPropertyExpression, IRI, Individual, Literal,
+            ObjectProperty, ObjectPropertyExpression,
+            axioms::{
+                Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom,
+                ObjectPropertyAssertionAxiom,
+            },
+        };
+
+        // Remove angle brackets from IRIs
+        let subject = pattern.subject.trim_matches(|c| c == '<' || c == '>');
+        let predicate = pattern.predicate.trim_matches(|c| c == '<' || c == '>');
+        let object_raw = pattern.object.trim();
+
+        // Generate axiom ID (using a simple hash for now)
+        let axiom_id = self.generate_axiom_id(pattern);
+
+        // Check if predicate is rdf:type (class assertion)
+        if predicate.contains("type") || predicate.ends_with("#type") {
+            let object = object_raw.trim_matches(|c| c == '<' || c == '>');
+            let individual = Individual::named(IRI::new(subject));
+            let class = ClassExpression::Class(Class::new(IRI::new(object)));
+            return Ok(Axiom::ClassAssertion(ClassAssertionAxiom {
+                id: axiom_id,
+                individual,
+                class,
+                annotations: Vec::new(),
+            }));
+        }
+
+        // Check if object is a literal (data property assertion)
+        if object_raw.starts_with('"') {
+            let individual = Individual::named(IRI::new(subject));
+            let property = DataPropertyExpression::DataProperty(DataProperty {
+                iri: IRI::new(predicate),
+            });
+
+            // Parse literal value
+            let value = if let Some(quote_end) = object_raw[1..].find('"') {
+                object_raw[1..quote_end + 1].to_string()
+            } else {
+                object_raw.trim_matches('"').to_string()
+            };
+
+            let literal = Literal::new(value);
+
+            return Ok(Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+                id: axiom_id,
+                individual,
+                property,
+                value: literal,
+                annotations: Vec::new(),
+            }));
+        }
+
+        // Otherwise, it's an object property assertion
+        let object = object_raw.trim_matches(|c| c == '<' || c == '>');
+        let source = Individual::named(IRI::new(subject));
+        let target = Individual::named(IRI::new(object));
+        let property = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+            iri: IRI::new(predicate),
+        });
+
+        Ok(Axiom::ObjectPropertyAssertion(
+            ObjectPropertyAssertionAxiom {
+                id: axiom_id,
+                source,
+                target,
+                property,
+                annotations: Vec::new(),
+            },
+        ))
+    }
+
+    /// Generate a unique axiom ID from a triple pattern
+    fn generate_axiom_id(&self, pattern: &TriplePattern) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        pattern.subject.hash(&mut hasher);
+        pattern.predicate.hash(&mut hasher);
+        pattern.object.hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Get DL clauses as string

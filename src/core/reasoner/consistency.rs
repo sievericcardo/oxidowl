@@ -61,7 +61,7 @@ impl PreConsistencyChecker {
 
         // Currently, there are no fast pre-consistency checks that can detect
         // actual inconsistencies (as opposed to incoherence/unsatisfiable classes).
-        // 
+        //
         // Future checks could include:
         // - Direct contradictory assertions about individuals
         // - Violations of functional properties

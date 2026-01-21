@@ -607,22 +607,24 @@ impl Ontology {
         // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
         let mut ontology = adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)?;
-        
+
         // Try to extract ontology IRI from the file by re-reading it
         // This is a workaround since horned-owl's API is complex
         let file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
         let mut file_reader = BufReader::new(file);
         let mut file_contents = String::new();
-        file_reader.read_to_string(&mut file_contents).map_err(|e| Error::io(e.to_string()))?;
-        
+        file_reader
+            .read_to_string(&mut file_contents)
+            .map_err(|e| Error::io(e.to_string()))?;
+
         // Look for patterns like: <http://...> rdf:type owl:Ontology
         if let Some(iri) = Self::extract_ontology_iri_from_content(&file_contents) {
             ontology.set_ontology_iri(Some(iri));
         }
-        
+
         Ok(ontology)
     }
-    
+
     /// Extract ontology IRI from file content (Turtle/RDF format)
     fn extract_ontology_iri_from_content(content: &str) -> Option<IRI> {
         // Match pattern: <http://...> rdf:type owl:Ontology

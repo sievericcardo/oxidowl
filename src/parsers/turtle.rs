@@ -217,7 +217,7 @@ impl TurtleParser {
 
         Ok(ontology)
     }
-    
+
     /// Extract ontology IRI from Turtle content
     fn extract_ontology_iri_from_content(content: &str) -> Option<IRI> {
         // Match pattern: <http://...> rdf:type owl:Ontology
@@ -2444,14 +2444,20 @@ impl TurtleParser {
                 Ok(result)
             } else {
                 // Handle unknown prefixes - this should be an error for proper Turtle parsing
-                return Err(Error::ontology_parsing(format!("Undefined prefix: {}", prefix)));
+                return Err(Error::ontology_parsing(format!(
+                    "Undefined prefix: {}",
+                    prefix
+                )));
             }
         } else if let Some(base) = &state.base_uri {
             let result = format!("{base}{name}");
             Ok(result)
         } else {
             // Relative URI without base - this should be an error
-            Err(Error::ontology_parsing(format!("Relative URI without base: {}", name)))
+            Err(Error::ontology_parsing(format!(
+                "Relative URI without base: {}",
+                name
+            )))
         }
     }
 

@@ -2130,10 +2130,10 @@ impl SyntaxValidator {
             // Skip SWRL validation entirely for standard OWL 2 declarations and Functional Syntax
             // SWRL rules in Functional Syntax use DLSafeRule(Body(...) Head(...)) - no arrows
             // SWRL rules in human-readable syntax have arrows but also have variables (?x, ?y, etc.)
-            let looks_like_owl_construct = trimmed.starts_with("Ontology(") 
-                || trimmed.starts_with("Prefix(") 
-                || trimmed.starts_with("Import(") 
-                || trimmed.starts_with("Declaration(") 
+            let looks_like_owl_construct = trimmed.starts_with("Ontology(")
+                || trimmed.starts_with("Prefix(")
+                || trimmed.starts_with("Import(")
+                || trimmed.starts_with("Declaration(")
                 || trimmed.starts_with("Annotation(")
                 || trimmed.starts_with("SubClassOf(")
                 || trimmed.starts_with("EquivalentClasses(")
@@ -2168,8 +2168,12 @@ impl SyntaxValidator {
 
                 // Arrow-based validation
                 if has_arrow || has_brackets {
-                    let arrow = if content_to_validate.contains("->") { "->" } else { ":-" };
-                    
+                    let arrow = if content_to_validate.contains("->") {
+                        "->"
+                    } else {
+                        ":-"
+                    };
+
                     // For bracketed rules without arrows, skip validation
                     if !content_to_validate.contains("->") && !content_to_validate.contains(":-") {
                         if has_brackets {
@@ -2232,7 +2236,9 @@ impl SyntaxValidator {
 
                     // For bracketed rules, check rule name format
                     if has_brackets {
-                        let arrow_pos = content_to_validate.find("->").or_else(|| content_to_validate.find(":-"));
+                        let arrow_pos = content_to_validate
+                            .find("->")
+                            .or_else(|| content_to_validate.find(":-"));
                         if let Some(arrow_idx) = arrow_pos {
                             let before_arrow = &content_to_validate[..arrow_idx];
 
@@ -2245,7 +2251,8 @@ impl SyntaxValidator {
                                     // Rule name should be followed by ':'
                                     if !potential_rule_name.ends_with(':') {
                                         // Check if it looks like a rule name (alphanumeric)
-                                        if potential_rule_name.chars().any(|c| c.is_alphanumeric()) {
+                                        if potential_rule_name.chars().any(|c| c.is_alphanumeric())
+                                        {
                                             return Err(Error::ontology_parsing(format!(
                                                 "Line {}: SWRL rule name '{}' must be followed by ':' (e.g., '{}:')",
                                                 line_num + 1,

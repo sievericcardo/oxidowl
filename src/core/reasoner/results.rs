@@ -33,15 +33,18 @@ pub struct ClassificationResult {
 impl ClassificationResult {
     #[must_use]
     pub fn new(hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>) -> Self {
-        Self { 
+        Self {
             hierarchy,
             ontology_iri: None,
         }
     }
 
     #[must_use]
-    pub fn new_with_iri(hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>, ontology_iri: Option<String>) -> Self {
-        Self { 
+    pub fn new_with_iri(
+        hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>,
+        ontology_iri: Option<String>,
+    ) -> Self {
+        Self {
             hierarchy,
             ontology_iri,
         }
@@ -89,7 +92,10 @@ impl ClassificationResult {
     /// Write hierarchy in HermiT-style functional syntax format
     pub fn write_hermit_style_hierarchy<W: Write>(&self, writer: &mut W) -> Result<()> {
         // Start with ontology declaration matching HermiT output
-        let ontology_iri = self.ontology_iri.as_deref().unwrap_or("http://example.org/ontology");
+        let ontology_iri = self
+            .ontology_iri
+            .as_deref()
+            .unwrap_or("http://example.org/ontology");
         writeln!(writer, "Prefix(:=<{ontology_iri}#>)")?;
         writeln!(writer)?;
         writeln!(writer, "Ontology(<{ontology_iri}>")?;

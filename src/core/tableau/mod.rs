@@ -407,7 +407,7 @@ impl Tableau {
                         if let Some(eq_closure) = checker.equivalence_closure() {
                             let concept_id = equivalence::ConceptId(class.iri.to_string());
                             let equiv_class = eq_closure.get_equivalence_class(&concept_id);
-                            
+
                             // Only add equivalent concepts if there are any (skip if just the original concept)
                             if equiv_class.len() > 1 {
                                 for equiv_concept_id in equiv_class {
@@ -415,7 +415,7 @@ impl Tableau {
                                     if equiv_concept_id.0 == class.iri.to_string() {
                                         continue;
                                     }
-                                    
+
                                     // Add the equivalent concept to the node
                                     let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
                                     let equiv_class = crate::ontology::Class::new(equiv_iri);
