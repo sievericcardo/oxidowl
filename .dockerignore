@@ -1,0 +1,67 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+test_*.rs
+test_*.owl
+test_*.ttl
+test_*.ofn
+test_*.owx
+*_test.rs
+
+# Ontology files in root (not needed in build)
+*.ttl
+*.owl
+*.ofn
+*.owx
+greenhouse*
+
+# ML models (not needed for basic functionality)
+ml_models/
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Coverage reports
+coverage/
+*.profraw
+*.profdata
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+*.lock
+!Cargo.lock
+
+# Generated files
+generated/
+
+# Docker files (to avoid recursion)
+Dockerfile
+.dockerignore
+docker-compose.yml
+DOCKER.md

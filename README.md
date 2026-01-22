@@ -49,6 +49,8 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 
 ## Installation
 
+For usage with Docker, see [DOCKER.md](DOCKER.md).
+
 ### Prerequisites
 
 - Rust 1.88 or higher

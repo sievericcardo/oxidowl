@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  oxidowl:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: oxidowl:latest
+    container_name: oxidowl
+    volumes:
+      # Mount your local ontologies directory
+      - ./ontologies:/ontologies
+      # Or mount the entire project (for output files, configs, etc.)
+      # - .:/ontologies
+    # Override command with your specific reasoning task
+    # Examples:
+    # command: ["-k", "/ontologies/myontology.owl"]
+    # command: ["-c", "-P", "/ontologies/greenhouse.ttl"]
+    # command: ["--help"]
+    command: ["--help"]
+    
+    # Optional: Resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 4G
+    #     reservations:
+    #       cpus: '1.0'
+    #       memory: 2G
+
+  # Example: Server mode (uncomment to use)
+  # oxidowl-server:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   image: oxidowl:latest
+  #   container_name: oxidowl-server
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./ontologies:/ontologies
+  #   command: ["server", "--host", "0.0.0.0", "--port", "8080"]
