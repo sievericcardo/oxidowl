@@ -62,6 +62,12 @@ fn is_owl_keyword(token: &str) -> bool {
     OWL_KEYWORDS.contains(token)
 }
 
+/// Check if a token is a structural token that should not be expanded as an IRI
+#[inline(always)]
+fn is_structural_token(token: &str) -> bool {
+    token == "(" || token == ")" || is_owl_keyword(token)
+}
+
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1042,15 +1048,21 @@ impl FunctionalParser {
                     let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                     position += 1;
 
-                    // Parse filler class expression
-                    if position >= tokens.len() {
-                        return Err(Error::ontology_parsing(
-                            "Expected class expression in ObjectMinCardinality".to_string(),
-                        ));
-                    }
-                    let (filler, new_pos) =
-                        self.parse_class_expression(tokens, position, prefixes)?;
-                    position = new_pos;
+                    // Parse optional filler class expression
+                    // If the next token is ")", filler is omitted and defaults to owl:Thing
+                    let filler = if position < tokens.len() && tokens[position] != ")" {
+                        let (expr, new_pos) =
+                            self.parse_class_expression(tokens, position, prefixes)?;
+                        position = new_pos;
+                        expr
+                    } else {
+                        // Default filler is owl:Thing
+                        ClassExpression::Class(crate::ontology::Class {
+                            iri: url::Url::parse("http://www.w3.org/2002/07/owl#Thing")
+                                .expect("Failed to parse owl:Thing IRI")
+                                .into(),
+                        })
+                    };
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -1106,15 +1118,21 @@ impl FunctionalParser {
                     let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                     position += 1;
 
-                    // Parse filler class expression
-                    if position >= tokens.len() {
-                        return Err(Error::ontology_parsing(
-                            "Expected class expression in ObjectMaxCardinality".to_string(),
-                        ));
-                    }
-                    let (filler, new_pos) =
-                        self.parse_class_expression(tokens, position, prefixes)?;
-                    position = new_pos;
+                    // Parse optional filler class expression
+                    // If the next token is ")", filler is omitted and defaults to owl:Thing
+                    let filler = if position < tokens.len() && tokens[position] != ")" {
+                        let (expr, new_pos) =
+                            self.parse_class_expression(tokens, position, prefixes)?;
+                        position = new_pos;
+                        expr
+                    } else {
+                        // Default filler is owl:Thing
+                        ClassExpression::Class(crate::ontology::Class {
+                            iri: url::Url::parse("http://www.w3.org/2002/07/owl#Thing")
+                                .expect("Failed to parse owl:Thing IRI")
+                                .into(),
+                        })
+                    };
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -1170,15 +1188,21 @@ impl FunctionalParser {
                     let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                     position += 1;
 
-                    // Parse filler class expression
-                    if position >= tokens.len() {
-                        return Err(Error::ontology_parsing(
-                            "Expected class expression in ObjectExactCardinality".to_string(),
-                        ));
-                    }
-                    let (filler, new_pos) =
-                        self.parse_class_expression(tokens, position, prefixes)?;
-                    position = new_pos;
+                    // Parse optional filler class expression
+                    // If the next token is ")", filler is omitted and defaults to owl:Thing
+                    let filler = if position < tokens.len() && tokens[position] != ")" {
+                        let (expr, new_pos) =
+                            self.parse_class_expression(tokens, position, prefixes)?;
+                        position = new_pos;
+                        expr
+                    } else {
+                        // Default filler is owl:Thing
+                        ClassExpression::Class(crate::ontology::Class {
+                            iri: url::Url::parse("http://www.w3.org/2002/07/owl#Thing")
+                                .expect("Failed to parse owl:Thing IRI")
+                                .into(),
+                        })
+                    };
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -1528,10 +1552,10 @@ impl FunctionalParser {
                 }
             }
             _ => {
-                // Check if this is an OWL keyword that shouldn't be treated as a class IRI
-                if is_owl_keyword(token) {
+                // Check if this is a structural token (parentheses) or OWL keyword
+                if is_structural_token(token) {
                     return Err(Error::ontology_parsing(format!(
-                        "Unexpected keyword '{}' in class expression context. Keywords cannot be used as class names.",
+                        "Unexpected token '{}' while parsing class expression. Expected a class IRI or class expression.",
                         token
                     )));
                 }
@@ -1802,10 +1826,18 @@ impl FunctionalParser {
             return Ok(iri[1..iri.len() - 1].to_string());
         }
 
-        // Validate that non-bracketed tokens are not OWL keywords
-        if is_owl_keyword(iri) {
+        // Handle blank nodes (_:nodeID)
+        if iri.starts_with("_:") {
+            // Blank nodes are represented as-is in functional syntax
+            // They are local identifiers within the ontology
+            // Convert to a unique IRI in the blank node namespace
+            return Ok(format!("http://www.w3.org/2002/07/owl#blank{}", &iri[2..]));
+        }
+
+        // Validate that non-bracketed tokens are not structural tokens or OWL keywords
+        if is_structural_token(iri) {
             return Err(Error::ontology_parsing(format!(
-                "Cannot use OWL keyword '{}' as an IRI",
+                "Unexpected structural token '{}' where IRI was expected. This may indicate a malformed construct or empty element.",
                 iri
             )));
         }
