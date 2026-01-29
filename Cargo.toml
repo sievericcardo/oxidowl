@@ -25,7 +25,10 @@ path = "src/bin/performance_tests.rs"
 tokio = { version = "1.45", features = ["full"] }
 rayon = {  version = "1.10", optional = true }
 dashmap = { version = "6.1", optional = true }
-# Immutable data structures
+# Lock-free concurrency
+arc-swap = "1.7"
+# Immutable persistent data structures
+im = "15.1"
 thiserror = "2.0"
 num_cpus = "1.17"
 crossbeam = { version = "0.8", optional = true }
@@ -53,6 +56,17 @@ phf = { version = "0.11", features = ["macros"] }
 
 # Performance profiling (optional)
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
+dhat = { version = "0.3", optional = true }
+
+# High-performance memory allocator
+mimalloc = { version = "0.1", default-features = false, optional = true }
+
+# NUMA awareness for multi-socket systems
+hwloc = { version = "0.5", optional = true }
+
+# SIMD operations for vectorized batch processing
+# Note: packed_simd is experimental, using portable_simd features instead
+# We'll enable SIMD via std::simd when stable
 
 # OWL integration and reasoning infrastructure
 horned-owl = "1.1.0"  # Core OWL ontology model and parsing
@@ -102,10 +116,11 @@ tempfile = "3.5"
 reqwest = { version = "0.12", features = ["json"] }
 
 [features]
-default = ["parallel", "cache"]
-profiling = ["pprof"]
+default = ["parallel", "cache", "high-performance"]
+profiling = ["pprof", "dhat"]
 parallel = ["rayon", "crossbeam"]
 cache = ["dashmap"]
+high-performance = ["mimalloc", "hwloc"]
 debug = []
 server = ["warp", "tokio-tungstenite", "bytes", "futures"]
 sparql = ["oxigraph"]
@@ -123,6 +138,10 @@ harness = false
 
 [[bench]]
 name = "hypertableau_benchmark"
+harness = false
+
+[[bench]]
+name = "konclude_comparison"
 harness = false
 
 [profile.release]

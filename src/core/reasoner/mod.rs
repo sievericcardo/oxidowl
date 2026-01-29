@@ -19,6 +19,7 @@ pub mod core;
 pub mod datatype_validation;
 pub mod explanation;
 pub mod hypertableau_adapter;
+pub mod parallel_classification;
 pub mod queries;
 pub mod results;
 pub mod statistics;
@@ -34,6 +35,7 @@ pub use self::{
     datatype_validation::DatatypeValidator,
     explanation::ExplanationService,
     hypertableau_adapter::HypertableauRunner,
+    parallel_classification::{ParallelClassificationScheduler, SubsumptionTask, SubsumptionResult},
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},
     results::{
         ClassificationResult, PropertyClassificationResult, RealizationResult, ReasoningResult,
