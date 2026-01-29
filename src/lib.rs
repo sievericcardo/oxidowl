@@ -37,6 +37,7 @@
 //! ```
 
 pub mod cache;
+pub mod cache_lockfree; // Lock-free cache using DashMap
 pub mod cache_strategies; // Advanced cache eviction strategies (LRU, LFU)
 pub mod config;
 pub mod core;
@@ -50,6 +51,7 @@ pub mod prelude; // Common imports and type aliases for internal use // Import m
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
 pub mod distributed;
 pub mod ontology;
+// pub mod ontology_lockfree; // Lock-free ontology access using ArcSwap - TODO: Create file
 pub mod parsers;
 pub mod profiles; // OWL 2 profiles support and validation
 pub mod query;
