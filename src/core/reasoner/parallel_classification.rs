@@ -265,7 +265,7 @@ impl<T> Default for WorkStealingQueue<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::Class;
+    use crate::ontology::{Class, IRI};
     use std::sync::Mutex;
 
     #[test]
@@ -274,9 +274,9 @@ mod tests {
         let scheduler = ParallelClassificationScheduler::new(config);
 
         let classes = vec![
-            ClassExpression::Class(Class { iri: "A".into() }),
-            ClassExpression::Class(Class { iri: "B".into() }),
-            ClassExpression::Class(Class { iri: "C".into() }),
+            ClassExpression::Class(Class { iri: IRI::new("A") }),
+            ClassExpression::Class(Class { iri: IRI::new("B") }),
+            ClassExpression::Class(Class { iri: IRI::new("C") }),
         ];
 
         let told_subsumers = HashMap::new();
@@ -293,8 +293,8 @@ mod tests {
         let scheduler = ParallelClassificationScheduler::new(config);
 
         let classes = vec![
-            ClassExpression::Class(Class { iri: "A".into() }),
-            ClassExpression::Class(Class { iri: "B".into() }),
+            ClassExpression::Class(Class { iri: IRI::new("A") }),
+            ClassExpression::Class(Class { iri: IRI::new("B") }),
         ];
 
         let told_subsumers = HashMap::new();
@@ -319,9 +319,9 @@ mod tests {
         let config = PerformanceConfig::default();
         let scheduler = ParallelClassificationScheduler::new(config);
 
-        let class_a = ClassExpression::Class(Class { iri: "A".into() });
-        let class_b = ClassExpression::Class(Class { iri: "B".into() });
-        let class_c = ClassExpression::Class(Class { iri: "C".into() });
+        let class_a = ClassExpression::Class(Class { iri: IRI::new("A") });
+        let class_b = ClassExpression::Class(Class { iri: IRI::new("B") });
+        let class_c = ClassExpression::Class(Class { iri: IRI::new("C") });
 
         let classes = vec![class_a.clone(), class_b.clone(), class_c.clone()];
 

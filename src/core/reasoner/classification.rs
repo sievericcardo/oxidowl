@@ -6,10 +6,12 @@
 use crate::{
     Result,
     cache::CacheManager,
+    config::PerformanceConfig,
     core::{
         lock_helpers::{read_lock, write_lock},
         reasoner::{
             datatype_validation::DatatypeValidator,
+            parallel_classification::ParallelClassificationScheduler,
             results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
             statistics::ReasoningStatistics,
             tasks::ReasoningTaskService,
@@ -155,16 +157,60 @@ impl ClassificationService {
         // Store length before consuming tableau_pairs
         let total_tableau_pairs = tableau_pairs.len();
 
-        // Perform tableau expansion for remaining pairs
-        for (subclass, superclass) in tableau_pairs {
-            if self.check_subsumption_from_axioms(&subclass, &superclass, &ontology_guard)? {
-                let entry = hierarchy.entry(subclass).or_insert_with(HashSet::new);
-                entry.insert(superclass);
+        // Get performance configuration for parallel execution
+        let perf_config = PerformanceConfig::from_env();
+        let use_parallel = perf_config.enable_lock_free && total_tableau_pairs > 100;
+        
+        if use_parallel {
+            info!("Using parallel classification for {} subsumption checks", total_tableau_pairs);
+            
+            // Create parallel scheduler
+            let scheduler = ParallelClassificationScheduler::new(perf_config);
+            
+            // Build told subsumers map for dependency tracking
+            let mut told_subsumers = std::collections::HashMap::new();
+            for (subclass, superclasses) in &hierarchy {
+                told_subsumers.insert(subclass.clone(), superclasses.clone());
             }
-            tableau_checks += 1;
+            
+            // Schedule all tasks with priority ordering
+            let tasks = scheduler.schedule_classification_tasks(&classes, &told_subsumers);
+            
+            // Filter to only the pairs that need tableau expansion
+            let filtered_tasks: Vec<_> = tasks.into_iter()
+                .filter(|task| {
+                    tableau_pairs.iter().any(|(s, p)| s == &task.subclass && p == &task.superclass)
+                })
+                .collect();
+            
+            // Execute parallel subsumption checks
+            let results = scheduler.execute_parallel(filtered_tasks, |sub, sup| {
+                self.check_subsumption_from_axioms(&sub, &sup, &ontology_guard)
+            })?;
+            
+            // Collect results into hierarchy
+            for result in results {
+                if result.holds {
+                    let entry = hierarchy.entry(result.subclass).or_insert_with(HashSet::new);
+                    entry.insert(result.superclass);
+                }
+            }
+            
+            tableau_checks = total_tableau_pairs;
+        } else {
+            info!("Using sequential classification for {} subsumption checks", total_tableau_pairs);
+            
+            // Perform tableau expansion for remaining pairs (sequential fallback)
+            for (subclass, superclass) in tableau_pairs {
+                if self.check_subsumption_from_axioms(&subclass, &superclass, &ontology_guard)? {
+                    let entry = hierarchy.entry(subclass).or_insert_with(HashSet::new);
+                    entry.insert(superclass);
+                }
+                tableau_checks += 1;
 
-            if tableau_checks % 100 == 0 {
-                debug!("Tableau checks progress: {}/{}", tableau_checks, total_tableau_pairs);
+                if tableau_checks % 100 == 0 {
+                    debug!("Tableau checks progress: {}/{}", tableau_checks, total_tableau_pairs);
+                }
             }
         }
 

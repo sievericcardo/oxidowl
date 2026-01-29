@@ -403,14 +403,14 @@ impl LockFreeCacheManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::Class;
+    use crate::ontology::{Class, IRI};
 
     #[test]
     fn test_lock_free_concept_cache() {
         let config = LockFreeCacheConfig::default();
         let cache = LockFreeConceptCache::new(config);
 
-        let concept = ClassExpression::Class(Class { iri: "test".into() });
+        let concept = ClassExpression::Class(Class { iri: IRI::new("test") });
 
         assert_eq!(cache.get(&concept), None);
 
@@ -427,8 +427,8 @@ mod tests {
         let config = LockFreeCacheConfig::default();
         let cache = LockFreeSubsumptionCache::new(config);
 
-        let sub = ClassExpression::Class(Class { iri: "A".into() });
-        let sup = ClassExpression::Class(Class { iri: "B".into() });
+        let sub = ClassExpression::Class(Class { iri: IRI::new("A") });
+        let sup = ClassExpression::Class(Class { iri: IRI::new("B") });
 
         assert_eq!(cache.get(&sub, &sup), None);
 
