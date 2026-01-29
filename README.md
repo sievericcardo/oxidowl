@@ -1,4 +1,4 @@
-# <img src="oxidowl.webp" alt="Oxidowl Logo generated with Google Gemini" width="35"/> Oxidowl
+# <img src="oxidowl.webp" alt="OxidOWL Logo generated with Google Gemini" width="35"/> OxidOWL
 
 A high-performance Description Logic reasoner for OWL 2 DL ontologies, implemented in Rust with advanced tableau algorithms, saturation-based reasoning, parallel computation, and integrated horned-owl support.
 
@@ -8,7 +8,7 @@ A high-performance Description Logic reasoner for OWL 2 DL ontologies, implement
 
 ## Overview
 
-Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms with a three-tier classification architecture, saturation-based optimizations, and incremental reasoning support—all while leveraging Rust's memory safety and performance characteristics.
+OxidOWL is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms with a three-tier classification architecture, saturation-based optimizations, and incremental reasoning support—all while leveraging Rust's memory safety and performance characteristics.
 
 ### Key Features
 
@@ -204,7 +204,7 @@ let parser = FunctionalParser::with_config(config);
 
 ### Algorithm Selection: Traditional vs Hypertableau
 
-Oxidowl provides two tableau-based reasoning algorithms optimized for different ontology characteristics:
+OxidOWL provides two tableau-based reasoning algorithms optimized for different ontology characteristics:
 
 #### Traditional Tableau (Default)
 - Classic tableau expansion with blocking
@@ -243,11 +243,11 @@ config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
 
 ## Features (Latest)
 
-Oxidowl has been significantly enhanced with improvements that bring it up to competitive standards with major OWL reasoners while adding unique capabilities.
+OxidOWL has been significantly enhanced with improvements that bring it up to competitive standards with major OWL reasoners while adding unique capabilities.
 
 ### EL Profile Optimization
 
-For ontologies that conform to the OWL 2 EL profile, Oxidowl provides specialized polynomial-time reasoning:
+For ontologies that conform to the OWL 2 EL profile, OxidOWL provides specialized polynomial-time reasoning:
 
 ```rust
 use oxidowl::{
@@ -302,7 +302,7 @@ println!("Proof Tree:\n{}", proof_tree);
 
 ### Multi-Protocol Server Support
 
-Run Oxidowl as a server with multiple protocol interfaces. **Note:** By default, the reasoner runs without servers. Use the `--enable-server` flags to start web services.
+Run OxidOWL as a server with multiple protocol interfaces. **Note:** By default, the reasoner runs without servers. Use the `--enable-server` flags to start web services.
 
 #### Starting the Server
 
@@ -425,7 +425,7 @@ let imported_ontology = resolver
 
 ### Configuration
 
-Oxidowl supports extensive configuration options:
+OxidOWL supports extensive configuration options:
 
 ```rust
 use oxidowl::config::{ReasonerConfig, TableauAlgorithm};
@@ -456,7 +456,7 @@ let swrl_config = SWRLConfig {
 
 ## Architecture
 
-Oxidowl implements a sophisticated three-tier reasoning architecture optimized for both correctness and performance. For comprehensive documentation, see [docs/REASONER_ARCHITECTURE.md](docs/REASONER_ARCHITECTURE.md).
+OxidOWL implements a sophisticated three-tier reasoning architecture optimized for both correctness and performance. For comprehensive documentation, see [docs/REASONER_ARCHITECTURE.md](docs/REASONER_ARCHITECTURE.md).
 
 ### Core Components
 
@@ -521,7 +521,7 @@ Oxidowl implements a sophisticated three-tier reasoning architecture optimized f
 
 #### Tableau Algorithm
 
-Oxidowl implements an efficient tableau algorithm that provides:
+OxidOWL implements an efficient tableau algorithm that provides:
 
 - **Systematic Expansion**: Sound and complete reasoning through node expansion
 - **Optimized Rule Application**: Smart ordering and caching of tableau rules
@@ -637,7 +637,7 @@ reasoning_service.set_swrl_rule_priority(rule_id, 10).await?;  // Set priority
 
 ### SWRL Built-in Predicates
 
-Oxidowl supports 30+ SWRL built-in predicates across multiple categories:
+OxidOWL supports 30+ SWRL built-in predicates across multiple categories:
 
 ```rust
 // Mathematical built-ins
