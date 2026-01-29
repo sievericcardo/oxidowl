@@ -5,6 +5,7 @@
 
 use super::change_tracking::{ABoxChange, ChangeTracker, TBoxChange};
 use crate::{
+    core::saturation::{SaturationEngine, SaturationResult},
     error::Result,
     ontology::{
         Ontology,
@@ -36,6 +37,10 @@ pub struct ReasoningDelta {
     pub estimated_cost: f64,
     /// Whether a full reasoning pass is recommended instead
     pub recommend_full_reasoning: bool,
+    /// Concepts affected by changes that need re-saturation
+    pub saturation_updates: HashSet<ClassExpression>,
+    /// Whether to use incremental saturation instead of full re-saturation
+    pub use_incremental_saturation: bool,
 }
 
 impl ReasoningDelta {
@@ -48,6 +53,8 @@ impl ReasoningDelta {
             cache_invalidations: HashSet::new(),
             estimated_cost: 0.0,
             recommend_full_reasoning: false,
+            saturation_updates: HashSet::new(),
+            use_incremental_saturation: true,
         }
     }
 
@@ -55,6 +62,7 @@ impl ReasoningDelta {
     pub fn is_empty(&self) -> bool {
         self.concepts_to_recheck.is_empty()
             && self.hierarchy_updates.is_empty()
+            && self.saturation_updates.is_empty()
             && self.individual_updates.is_empty()
             && self.cache_invalidations.is_empty()
     }
@@ -65,7 +73,9 @@ impl ReasoningDelta {
         self.hierarchy_updates.extend(other.hierarchy_updates);
         self.individual_updates.extend(other.individual_updates);
         self.cache_invalidations.extend(other.cache_invalidations);
+        self.saturation_updates.extend(other.saturation_updates);
         self.estimated_cost += other.estimated_cost;
+        self.use_incremental_saturation &= other.use_incremental_saturation;
         self.recommend_full_reasoning |= other.recommend_full_reasoning;
     }
 
@@ -73,6 +83,7 @@ impl ReasoningDelta {
     pub fn complexity_score(&self) -> usize {
         self.concepts_to_recheck.len() * 10
             + self.hierarchy_updates.len() * 5
+            + self.saturation_updates.len() * 2
             + self.individual_updates.len() * 3
             + self.cache_invalidations.len()
     }
@@ -159,6 +170,10 @@ pub struct DeltaComputationConfig {
     pub enable_optimizations: bool,
     /// Maximum number of changes to process in one delta computation
     pub max_changes_per_batch: usize,
+    /// Enable saturation-aware delta computation
+    pub enable_saturation_deltas: bool,
+    /// Threshold for incremental vs full re-saturation (% of concepts affected)
+    pub saturation_incremental_threshold: f64,
 }
 
 impl Default for DeltaComputationConfig {
@@ -170,6 +185,8 @@ impl Default for DeltaComputationConfig {
             individual_cost_weight: 3.0,
             enable_optimizations: true,
             max_changes_per_batch: 100,
+            enable_saturation_deltas: true,
+            saturation_incremental_threshold: 0.3, // 30% of concepts
         }
     }
 }
@@ -186,6 +203,10 @@ pub struct DeltaComputer {
     config: DeltaComputationConfig,
     /// Performance statistics
     statistics: RwLock<DeltaComputationStatistics>,
+    /// Optional saturation engine for incremental saturation
+    saturation_engine: Option<Arc<SaturationEngine>>,
+    /// Cached saturation result for incremental updates
+    cached_saturation: RwLock<Option<SaturationResult>>,
 }
 
 /// Statistics for delta computation performance monitoring
@@ -217,7 +238,41 @@ impl DeltaComputer {
             reasoning_service,
             config: config.unwrap_or_default(),
             statistics: RwLock::new(DeltaComputationStatistics::default()),
+            saturation_engine: None,
+            cached_saturation: RwLock::new(None),
         }
+    }
+
+    /// Create a new delta computer with saturation engine
+    pub fn with_saturation(
+        ontology: Arc<Ontology>,
+        change_tracker: Arc<ChangeTracker>,
+        reasoning_service: Arc<ReasoningService>,
+        saturation_engine: Arc<SaturationEngine>,
+        config: Option<DeltaComputationConfig>,
+    ) -> Self {
+        Self {
+            ontology,
+            change_tracker,
+            reasoning_service,
+            config: config.unwrap_or_default(),
+            statistics: RwLock::new(DeltaComputationStatistics::default()),
+            saturation_engine: Some(saturation_engine),
+            cached_saturation: RwLock::new(None),
+        }
+    }
+
+    /// Set the cached saturation result for incremental updates
+    pub fn set_cached_saturation(&self, result: SaturationResult) -> Result<()> {
+        if let Ok(mut cache) = self.cached_saturation.write() {
+            *cache = Some(result);
+        }
+        Ok(())
+    }
+
+    /// Get the cached saturation result
+    pub fn get_cached_saturation(&self) -> Option<SaturationResult> {
+        self.cached_saturation.read().ok()?.clone()
     }
 
     /// Compute reasoning delta for recent changes
@@ -906,6 +961,160 @@ impl DeltaComputer {
         }
 
         Ok(())
+    }
+
+    /// Compute affected saturation nodes from TBox changes
+    pub fn compute_affected_saturation_nodes(
+        &self,
+        tbox_changes: &[TBoxChange],
+    ) -> Result<HashSet<ClassExpression>> {
+        let mut affected = HashSet::new();
+
+        for change in tbox_changes {
+            let changed_concepts = match change {
+                TBoxChange::AxiomAdded { axiom, .. } | TBoxChange::AxiomRemoved { axiom, .. } => {
+                    self.extract_concepts_from_axiom(axiom)
+                }
+                TBoxChange::ClassAdded { class, .. } | TBoxChange::ClassRemoved { class, .. } => {
+                    vec![ClassExpression::Class(class.clone())]
+                }
+                TBoxChange::ObjectPropertyAdded { .. }
+                | TBoxChange::ObjectPropertyRemoved { .. }
+                | TBoxChange::DataPropertyAdded { .. }
+                | TBoxChange::DataPropertyRemoved { .. } => {
+                    // Property changes may affect all concepts with restrictions
+                    // For now, mark as affecting nothing specific
+                    vec![]
+                }
+            };
+
+            affected.extend(changed_concepts);
+        }
+
+        // If we have a cached saturation result, compute transitive dependencies
+        if let Some(cached) = self.get_cached_saturation() {
+            affected = self.compute_transitive_affected(&affected, &cached);
+        }
+
+        Ok(affected)
+    }
+
+    /// Compute affected saturation nodes from ABox changes
+    pub fn compute_affected_saturation_from_abox(
+        &self,
+        abox_changes: &[ABoxChange],
+    ) -> Result<HashSet<ClassExpression>> {
+        let mut affected = HashSet::new();
+
+        for change in abox_changes {
+            match change {
+                ABoxChange::ClassAssertionAdded { class, .. }
+                | ABoxChange::ClassAssertionRemoved { class, .. } => {
+                    affected.insert(class.clone());
+                }
+                _ => {}
+            }
+        }
+
+        Ok(affected)
+    }
+
+    /// Compute transitive dependencies from changed concepts
+    fn compute_transitive_affected(
+        &self,
+        changed: &HashSet<ClassExpression>,
+        saturation: &SaturationResult,
+    ) -> HashSet<ClassExpression> {
+        let mut affected = changed.clone();
+        let mut to_process: Vec<_> = changed.iter().cloned().collect();
+
+        while let Some(concept) = to_process.pop() {
+            // Find all concepts that depend on this concept
+            for (other_concept, node) in &saturation.nodes {
+                if node.saturated_concepts.contains(&concept)
+                    || node.direct_subsumers.contains(&concept)
+                    || node.all_subsumers.contains(&concept)
+                {
+                    if affected.insert(other_concept.clone()) {
+                        to_process.push(other_concept.clone());
+                    }
+                }
+            }
+        }
+
+        affected
+    }
+
+    /// Apply saturation-aware delta computation
+    pub async fn compute_saturation_delta(
+        &self,
+        tbox_changes: &[TBoxChange],
+        abox_changes: &[ABoxChange],
+    ) -> Result<ReasoningDelta> {
+        if !self.config.enable_saturation_deltas || self.saturation_engine.is_none() {
+            // Fall back to standard delta computation
+            return self
+                .compute_reasoning_delta_for_changes(tbox_changes, abox_changes)
+                .await;
+        }
+
+        let mut delta = ReasoningDelta::new();
+
+        // Compute affected saturation nodes
+        let tbox_affected = self.compute_affected_saturation_nodes(tbox_changes)?;
+        let abox_affected = self.compute_affected_saturation_from_abox(abox_changes)?;
+
+        delta.saturation_updates.extend(tbox_affected);
+        delta.saturation_updates.extend(abox_affected);
+
+        // Compute standard delta components
+        for change in tbox_changes {
+            let change_delta = self.compute_tbox_change_delta(change).await?;
+            delta.merge(change_delta);
+        }
+
+        for change in abox_changes {
+            let change_delta = self.compute_abox_change_delta(change).await?;
+            delta.merge(change_delta);
+        }
+
+        // Determine if incremental saturation is appropriate
+        let total_concepts = if let Some(cached) = self.get_cached_saturation() {
+            cached.nodes.len()
+        } else {
+            100 // Default estimate
+        };
+
+        let affected_ratio =
+            delta.saturation_updates.len() as f64 / total_concepts.max(1) as f64;
+        delta.use_incremental_saturation =
+            affected_ratio <= self.config.saturation_incremental_threshold;
+
+        // Update cost estimate
+        delta.estimated_cost = self.estimate_delta_cost(&delta);
+
+        Ok(delta)
+    }
+
+    /// Extract concepts from an axiom
+    fn extract_concepts_from_axiom(&self, axiom: &Axiom) -> Vec<ClassExpression> {
+        match axiom {
+            Axiom::SubClassOf(ax) => {
+                vec![ax.subclass.clone(), ax.superclass.clone()]
+            }
+            Axiom::EquivalentClasses(ax) => ax.classes.clone(),
+            Axiom::DisjointClasses(ax) => ax.classes.clone(),
+            Axiom::DisjointUnion(ax) => {
+                let mut concepts = ax.disjoint_classes.clone();
+                concepts.push(ax.class.clone());
+                concepts
+            }
+            Axiom::ClassAssertion(ax) => vec![ax.class.clone()],
+            Axiom::ObjectPropertyDomain(ax) => vec![ax.domain.clone()],
+            Axiom::ObjectPropertyRange(ax) => vec![ax.range.clone()],
+            Axiom::DataPropertyDomain(ax) => vec![ax.domain.clone()],
+            _ => vec![],
+        }
     }
 }
 
