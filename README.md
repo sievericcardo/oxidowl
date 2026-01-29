@@ -1,6 +1,6 @@
-# <img src="oxidowl.webp" alt="Oxidowl Logo generated with Google Gemini" width="35"/> Oxidowl
+# <img src="oxidowl.webp" alt="OxidOWL Logo generated with Google Gemini" width="35"/> OxidOWL
 
-A high-performance Description Logic reasoner for OWL 2 DL ontologies, implemented in Rust with advanced tableau algorithms, parallel computation, and integrated horned-owl support.
+A high-performance Description Logic reasoner for OWL 2 DL ontologies, implemented in Rust with advanced tableau algorithms, saturation-based reasoning, parallel computation, and integrated horned-owl support.
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Rust](https://img.shields.io/badge/rust-1.88+-orange.svg)](https://www.rust-lang.org)
@@ -8,13 +8,13 @@ A high-performance Description Logic reasoner for OWL 2 DL ontologies, implement
 
 ## Overview
 
-Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms while leveraging Rust's memory safety and performance characteristics.
+OxidOWL is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms with a three-tier classification architecture, saturation-based optimizations, and incremental reasoning support—all while leveraging Rust's memory safety and performance characteristics.
 
 ### Key Features
 
 #### Core Reasoning Engine
 
-- 🚀 **High Performance**: Advanced tableau algorithms with parallel computation
+- 🚀 **High Performance**: Advanced tableau algorithms with saturation-based pre-computation (50-100x speedup potential)
 - 🔧 **Complete OWL 2 DL Support**: Handles SROIQV(D) description logic with DisjointUnion axioms
 - 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, classification, and instance checking
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
@@ -22,6 +22,14 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - ⚡ **Dual Tableau Algorithms**: Traditional and Hypertableau (3-9x faster for disjointness reasoning)
 - 🎨 **Structural Sharing**: Hypergraph-based reasoning with reduced memory usage
 - 🦀 **Horned-OWL Integration**: Built on proven OWL parsing and modeling foundation
+
+#### Advanced Optimization Features
+
+- 🔥 **Saturation Engine**: Deterministic rule-based pre-computation for efficient classification
+- 📈 **Three-Tier Classification**: Told subsumers → Saturation → Tableau fallback architecture
+- 🗂️ **Hash-Based Blocking**: O(1) blocker lookup with signature indexing
+- 💾 **Tiered Graph Caching**: Hot/Warm/Cold completion graph cache with LRU eviction
+- 🔄 **Incremental Reasoning**: Delta computation for efficient ontology updates
 
 #### Enhancements
 
@@ -31,7 +39,16 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 📥 **Advanced Import Resolution**: Recursive imports, cycle detection, and IRI mapping
 - 🧪 **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
 
-#### v0.8.0 Highlights (Latest)
+#### v0.9.0 Highlights (Latest)
+
+- 🔥 **Saturation Engine**: New three-tier architecture with deterministic rule application
+- 📊 **Completion Graph Cache**: Tiered LRU caching (Hot/Warm/Cold) with configurable memory limits
+- ⚡ **Indexed Blocking Strategy**: O(1) blocker candidate lookup via signature hashing
+- 🔄 **Saturation-Aware Incremental Reasoning**: Delta computation with saturation engine integration
+- 🚀 **Parallel Saturation**: Rayon-based parallel processing for concept saturation
+- 📝 **Extended Configuration**: SaturationConfig, completion graph memory limits, indexed blocking
+
+#### v0.8.0 Highlights
 
 - 🔥 **Zero-Overhead Parser State**: Compile-time optimizations with no runtime cost for successful parsing
 - ⚡ **O(1) Keyword Validation**: Perfect hash tables for comprehensive OWL keyword checking
@@ -42,7 +59,8 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 
 #### Competitive Advantages
 
-- **Performance**: EL reasoning with polynomial complexity vs exponential in full DL
+- **Performance**: Three-tier classification with saturation pre-computation for massive speedups
+- **Incremental Support**: Efficient delta computation for ontology updates without full re-computation
 - **Ecosystem Integration**: SPARQL endpoint for Semantic Web compatibility
 - **Developer Experience**: RESTful APIs, comprehensive explanations, and detailed error reporting
 - **Standards Compliance**: OWLlink protocol support for interoperability with existing tools
@@ -186,7 +204,7 @@ let parser = FunctionalParser::with_config(config);
 
 ### Algorithm Selection: Traditional vs Hypertableau
 
-Oxidowl provides two tableau-based reasoning algorithms optimized for different ontology characteristics:
+OxidOWL provides two tableau-based reasoning algorithms optimized for different ontology characteristics:
 
 #### Traditional Tableau (Default)
 - Classic tableau expansion with blocking
@@ -225,11 +243,11 @@ config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
 
 ## Features (Latest)
 
-Oxidowl has been significantly enhanced with improvements that bring it up to competitive standards with major OWL reasoners while adding unique capabilities.
+OxidOWL has been significantly enhanced with improvements that bring it up to competitive standards with major OWL reasoners while adding unique capabilities.
 
 ### EL Profile Optimization
 
-For ontologies that conform to the OWL 2 EL profile, Oxidowl provides specialized polynomial-time reasoning:
+For ontologies that conform to the OWL 2 EL profile, OxidOWL provides specialized polynomial-time reasoning:
 
 ```rust
 use oxidowl::{
@@ -284,7 +302,7 @@ println!("Proof Tree:\n{}", proof_tree);
 
 ### Multi-Protocol Server Support
 
-Run Oxidowl as a server with multiple protocol interfaces. **Note:** By default, the reasoner runs without servers. Use the `--enable-server` flags to start web services.
+Run OxidOWL as a server with multiple protocol interfaces. **Note:** By default, the reasoner runs without servers. Use the `--enable-server` flags to start web services.
 
 #### Starting the Server
 
@@ -407,7 +425,7 @@ let imported_ontology = resolver
 
 ### Configuration
 
-Oxidowl supports extensive configuration options:
+OxidOWL supports extensive configuration options:
 
 ```rust
 use oxidowl::config::{ReasonerConfig, TableauAlgorithm};
@@ -438,11 +456,28 @@ let swrl_config = SWRLConfig {
 
 ## Architecture
 
+OxidOWL implements a sophisticated three-tier reasoning architecture optimized for both correctness and performance. For comprehensive documentation, see [docs/REASONER_ARCHITECTURE.md](docs/REASONER_ARCHITECTURE.md).
+
 ### Core Components
 
 - **`core`** - Core reasoning engine with tableau algorithms
-  - `reasoner.rs` - Main reasoner interface
-  - `tableau.rs` - Tableau implementation with node and edge management
+  - **`reasoner/`** - Main reasoner interface and reasoning tasks
+    - `core.rs` - Reasoner coordination
+    - `classification.rs` - Three-tier classification (told → saturation → tableau)
+    - `consistency.rs` - Ontology consistency checking
+    - `tableau.rs` - Tableau creation and management
+  - **`saturation/`** - Saturation-based reasoning engine
+    - `engine.rs` - Core saturation computation
+    - `node.rs` - Saturation nodes and status tracking
+    - `rules.rs` - Deterministic saturation rules
+    - `config.rs` - Saturation configuration
+  - **`tableau/`** - Full tableau implementation
+    - `node.rs`, `edge.rs` - Tableau graph structures
+    - `executor.rs` - Tableau rule execution
+    - `absorption.rs` - Axiom absorption optimization
+  - **`hypergraph/`** - Hypertableau structural sharing
+  - `blocking.rs` - Blocking strategies (Anywhere, Indexed, Pairwise)
+  - `dependency.rs` - Dependency tracking and backjumping
 
 - **`ontology`** - Ontology representation and management (built on horned-owl)
   - `axioms.rs` - Axiom structures and operations including DisjointUnion
@@ -457,36 +492,59 @@ let swrl_config = SWRLConfig {
   - `turtle.rs` - Turtle format parser
 
 - **`reasoning`** - High-level reasoning coordination
+  - **`incremental/`** - Incremental reasoning support
+    - `service.rs` - Incremental reasoning service
+    - `change_tracking.rs` - Ontology change detection
+    - `delta_computation.rs` - Saturation-aware delta computation
+    - `cache_management.rs` - Incremental cache invalidation
+
+- **`cache.rs`** - Advanced caching infrastructure
+  - `CacheManager` - Multi-level result caching
+  - `CompletionGraphCache` - Tiered (Hot/Warm/Cold) graph caching
+  - `CacheStatistics` - Hit rate and memory monitoring
+
 - **`query`** - DL query engine with Manchester Syntax and union query support
 - **`swrl`** - SWRL (Semantic Web Rule Language) implementation
-  - `engine.rs` - SWRL rule execution engine with multiple strategies
+  - `engine/` - SWRL rule execution engine with multiple strategies
   - `interpreter.rs` - Individual rule interpretation and execution
   - `parser.rs` - SWRL syntax parsing
   - `builtins.rs` - Core built-in predicates (math, string, boolean)
   - `datetime_builtins.rs` - Date/time built-in predicates
   - `regex_builtins.rs` - Regular expression built-in predicates
   - `validation.rs` - SWRL rule validation
+- **`profiles`** - OWL 2 profile support and validation (EL, QL, RL, DL)
 - **`adapter`** - Horned-OWL integration layer for enhanced parsing and modeling
 - **`config`** - Configuration management and optimization
+- **`server`** - Multi-protocol server support (REST, OWLlink, SPARQL)
 
 ### Algorithms
 
 #### Tableau Algorithm
 
-Oxidowl implements an efficient tableau algorithm that provides:
+OxidOWL implements an efficient tableau algorithm that provides:
 
 - **Systematic Expansion**: Sound and complete reasoning through node expansion
 - **Optimized Rule Application**: Smart ordering and caching of tableau rules
-- **Advanced Blocking**: Anywhere blocking with cycle detection for termination
+- **Advanced Blocking**: Anywhere, Pairwise, and Indexed blocking strategies
 - **Dependency Tracking**: Intelligent backtracking and conflict resolution
 - **Memory Management**: Efficient data structures for large ontologies
 
+#### Saturation Algorithm
+
+The saturation engine provides deterministic pre-computation:
+
+- **Rule-Based Inference**: 9 deterministic rules (conjunction, subclass, universal, etc.)
+- **Status Tracking**: Complete/Partial/NonDeterministic/RequiresFullTableau
+- **Branch Counting**: Track non-determinism with configurable threshold
+- **Incremental Updates**: Support for efficient ontology change propagation
+
 #### Performance Optimizations
 
-- **Parallel Processing**: Multi-threaded reasoning for large ontologies
-- **Caching**: LRU caches for frequent operations
-- **Memory Management**: Optimized data structures and memory pools
-- **Incremental Reasoning**: Support for ontology updates
+- **Parallel Processing**: Rayon-based multi-threaded saturation and reasoning
+- **Tiered Caching**: Hot/Warm/Cold completion graph cache with LRU eviction
+- **Indexed Blocking**: O(1) blocker lookup via concept signature hashing
+- **Incremental Reasoning**: Delta computation for ontology updates
+- **Memory Management**: Configurable memory limits, compressed graph storage
 
 ## Examples
 
@@ -579,7 +637,7 @@ reasoning_service.set_swrl_rule_priority(rule_id, 10).await?;  // Set priority
 
 ### SWRL Built-in Predicates
 
-Oxidowl supports 30+ SWRL built-in predicates across multiple categories:
+OxidOWL supports 30+ SWRL built-in predicates across multiple categories:
 
 ```rust
 // Mathematical built-ins
@@ -711,22 +769,29 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 ### Nice features to add in the future
 
 - [ ] OWL 2 RL profile support
-- [ ] Incremental classification
-- [ ] Distributed reasoning
+- [ ] Distributed reasoning cluster
 - [ ] WebAssembly compilation
 - [ ] Python bindings
 - [ ] Docker containerization
 
-### Recently Implemented
+### Recently Implemented (v0.9.0)
+
+- [x] **Saturation Engine** - Three-tier classification with deterministic rule pre-computation
+- [x] **Completion Graph Cache** - Tiered LRU caching (Hot/Warm/Cold) for graph reuse
+- [x] **Indexed Blocking Strategy** - O(1) blocker lookup via signature hashing
+- [x] **Incremental Saturation** - Delta computation with saturation-aware updates
+- [x] **Parallel Saturation** - Rayon-based parallel concept processing
+
+### Previously Implemented (v0.8.x)
 
 - [x] **SWRL rule support** - Complete implementation with 30+ built-in predicates
 - [x] **DisjointUnion axiom support** - Full support in DL queries and reasoning
 - [x] **Advanced DL Query Engine** - Manchester Syntax with union query optimization
+- [x] **Advanced caching strategies** - Multi-level caching infrastructure
 
 ### Performance Improvements
 
 - [ ] GPU acceleration for large-scale reasoning
-- [ ] Advanced caching strategies
 - [ ] Streaming ontology processing
 - [ ] Memory-mapped storage backends
 

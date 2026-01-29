@@ -100,6 +100,8 @@ pub enum BlockingStrategy {
     Core,
     /// Optimal blocking (HermiT-style)
     Optimal,
+    /// Indexed anywhere blocking (O(1) lookup with hash-based index)
+    Indexed,
 }
 
 /// Existential expansion strategy for the tableau

@@ -12,7 +12,7 @@ use crate::{
 };
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
@@ -61,6 +61,8 @@ pub struct CacheConfig {
     pub enable_satisfiability_cache: bool,
     pub enable_classification_cache: bool,
     pub enable_realization_cache: bool,
+    pub enable_completion_graph_cache: bool,
+    pub completion_graph_max_memory_mb: usize,
 }
 
 impl Default for CacheConfig {
@@ -71,6 +73,8 @@ impl Default for CacheConfig {
             enable_concept_cache: true,
             enable_subsumption_cache: true,
             enable_satisfiability_cache: true,
+            enable_completion_graph_cache: true,
+            completion_graph_max_memory_mb: 512,
             enable_classification_cache: true,
             enable_realization_cache: true,
         }
@@ -189,10 +193,350 @@ impl ConceptSatisfiabilityCache {
     }
 }
 
+/// Compressed completion graph for caching
+#[derive(Debug, Clone)]
+pub struct CompletedGraph {
+    /// Unique signature hash for this graph
+    pub signature: u64,
+
+    /// Compressed node data (shared via Arc)
+    pub nodes: Arc<Vec<CompressedNode>>,
+
+    /// Compressed edge data (shared via Arc)
+    pub edges: Arc<Vec<CompressedEdge>>,
+
+    /// Graph metadata
+    pub metadata: GraphMetadata,
+
+    /// Estimated memory size in bytes
+    pub memory_size: usize,
+}
+
+/// Compressed node representation
+#[derive(Debug, Clone)]
+pub struct CompressedNode {
+    pub id: usize,
+    pub concepts: Arc<Vec<String>>, // Shared concept strings
+    pub is_blocked: bool,
+}
+
+/// Compressed edge representation
+#[derive(Debug, Clone)]
+pub struct CompressedEdge {
+    pub from: usize,
+    pub to: usize,
+    pub label: Arc<String>, // Shared label strings
+}
+
+/// Metadata for a completion graph
+#[derive(Debug, Clone)]
+pub struct GraphMetadata {
+    pub node_count: usize,
+    pub edge_count: usize,
+    pub max_depth: usize,
+    pub is_complete: bool,
+    pub timestamp: Instant,
+}
+
+/// Tier for cache eviction
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CacheTier {
+    Hot,   // Frequently accessed
+    Warm,  // Moderately accessed
+    Cold,  // Rarely accessed
+}
+
+/// Entry in the completion graph cache
+#[derive(Debug, Clone)]
+struct CompletionGraphEntry {
+    graph: Arc<CompletedGraph>,
+    tier: CacheTier,
+    access_count: u64,
+    last_access: Instant,
+}
+
+/// Completion graph cache with tiered LRU eviction
+#[derive(Debug, Clone)]
+pub struct CompletionGraphCache {
+    /// Cache storage
+    cache: Arc<RwLock<HashMap<u64, CompletionGraphEntry>>>,
+
+    /// Hot tier (most frequently accessed)
+    hot_tier: Arc<RwLock<VecDeque<u64>>>,
+
+    /// Warm tier
+    warm_tier: Arc<RwLock<VecDeque<u64>>>,
+
+    /// Cold tier
+    cold_tier: Arc<RwLock<VecDeque<u64>>>,
+
+    /// Configuration
+    config: CacheConfig,
+
+    /// Current memory usage in bytes
+    memory_usage: Arc<RwLock<usize>>,
+
+    /// Memory pressure threshold (bytes)
+    memory_threshold: usize,
+
+    /// Statistics
+    metrics: Arc<RwLock<CacheMetrics>>,
+}
+
+impl CompletionGraphCache {
+    pub fn new(config: CacheConfig) -> Self {
+        let memory_threshold = config.completion_graph_max_memory_mb * 1024 * 1024;
+
+        Self {
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            hot_tier: Arc::new(RwLock::new(VecDeque::new())),
+            warm_tier: Arc::new(RwLock::new(VecDeque::new())),
+            cold_tier: Arc::new(RwLock::new(VecDeque::new())),
+            config,
+            memory_usage: Arc::new(RwLock::new(0)),
+            memory_threshold,
+            metrics: Arc::new(RwLock::new(CacheMetrics::default())),
+        }
+    }
+
+    /// Get a completion graph from cache
+    pub fn get(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
+        if !self.config.enable_completion_graph_cache {
+            return None;
+        }
+
+        if let Ok(mut cache) = self.cache.write() {
+            if let Some(entry) = cache.get_mut(&signature) {
+                entry.access_count += 1;
+                entry.last_access = Instant::now();
+
+                // Update metrics
+                if let Ok(mut metrics) = self.metrics.write() {
+                    metrics.hits += 1;
+                }
+
+                // Promote to higher tier if needed
+                self.promote_tier(signature, entry.access_count);
+
+                return Some(Arc::clone(&entry.graph));
+            }
+        }
+
+        // Update miss metrics
+        if let Ok(mut metrics) = self.metrics.write() {
+            metrics.misses += 1;
+        }
+
+        None
+    }
+
+    /// Store a completion graph in cache
+    pub fn put(&self, graph: Arc<CompletedGraph>) {
+        if !self.config.enable_completion_graph_cache {
+            return;
+        }
+
+        let signature = graph.signature;
+        let memory_size = graph.memory_size;
+
+        // Check memory pressure and evict if necessary
+        if let Ok(current_usage) = self.memory_usage.read() {
+            if *current_usage + memory_size > self.memory_threshold {
+                self.evict_to_fit(memory_size);
+            }
+        }
+
+        // Create entry in cold tier initially
+        let entry = CompletionGraphEntry {
+            graph,
+            tier: CacheTier::Cold,
+            access_count: 0,
+            last_access: Instant::now(),
+        };
+
+        if let Ok(mut cache) = self.cache.write() {
+            cache.insert(signature, entry);
+        }
+
+        if let Ok(mut cold_tier) = self.cold_tier.write() {
+            cold_tier.push_back(signature);
+        }
+
+        // Update memory usage
+        if let Ok(mut usage) = self.memory_usage.write() {
+            *usage += memory_size;
+        }
+    }
+
+    /// Promote an entry to a higher tier based on access count
+    fn promote_tier(&self, signature: u64, access_count: u64) {
+        // Hot tier: >10 accesses
+        // Warm tier: 3-10 accesses
+        // Cold tier: <3 accesses
+
+        if let Ok(mut cache) = self.cache.write() {
+            if let Some(entry) = cache.get_mut(&signature) {
+                let old_tier = entry.tier;
+                let new_tier = if access_count > 10 {
+                    CacheTier::Hot
+                } else if access_count > 3 {
+                    CacheTier::Warm
+                } else {
+                    CacheTier::Cold
+                };
+
+                if old_tier != new_tier {
+                    entry.tier = new_tier;
+
+                    // Move between tier queues
+                    self.move_between_tiers(signature, old_tier, new_tier);
+                }
+            }
+        }
+    }
+
+    /// Move an entry between tier queues
+    fn move_between_tiers(&self, signature: u64, old_tier: CacheTier, new_tier: CacheTier) {
+        // Remove from old tier
+        match old_tier {
+            CacheTier::Hot => {
+                if let Ok(mut hot) = self.hot_tier.write() {
+                    hot.retain(|&s| s != signature);
+                }
+            }
+            CacheTier::Warm => {
+                if let Ok(mut warm) = self.warm_tier.write() {
+                    warm.retain(|&s| s != signature);
+                }
+            }
+            CacheTier::Cold => {
+                if let Ok(mut cold) = self.cold_tier.write() {
+                    cold.retain(|&s| s != signature);
+                }
+            }
+        }
+
+        // Add to new tier
+        match new_tier {
+            CacheTier::Hot => {
+                if let Ok(mut hot) = self.hot_tier.write() {
+                    hot.push_back(signature);
+                }
+            }
+            CacheTier::Warm => {
+                if let Ok(mut warm) = self.warm_tier.write() {
+                    warm.push_back(signature);
+                }
+            }
+            CacheTier::Cold => {
+                if let Ok(mut cold) = self.cold_tier.write() {
+                    cold.push_back(signature);
+                }
+            }
+        }
+    }
+
+    /// Evict entries to make room for new entry
+    fn evict_to_fit(&self, required_space: usize) {
+        let mut freed_space = 0;
+
+        // Evict from cold tier first
+        while freed_space < required_space {
+            if let Ok(mut cold) = self.cold_tier.write() {
+                if let Some(signature) = cold.pop_front() {
+                    freed_space += self.evict_entry(signature);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        // Evict from warm tier if needed
+        while freed_space < required_space {
+            if let Ok(mut warm) = self.warm_tier.write() {
+                if let Some(signature) = warm.pop_front() {
+                    freed_space += self.evict_entry(signature);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        // Evict from hot tier as last resort
+        while freed_space < required_space {
+            if let Ok(mut hot) = self.hot_tier.write() {
+                if let Some(signature) = hot.pop_front() {
+                    freed_space += self.evict_entry(signature);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Evict a single entry and return freed memory
+    fn evict_entry(&self, signature: u64) -> usize {
+        if let Ok(mut cache) = self.cache.write() {
+            if let Some(entry) = cache.remove(&signature) {
+                let freed = entry.graph.memory_size;
+
+                // Update memory usage
+                if let Ok(mut usage) = self.memory_usage.write() {
+                    *usage = usage.saturating_sub(freed);
+                }
+
+                // Update metrics
+                if let Ok(mut metrics) = self.metrics.write() {
+                    metrics.evictions += 1;
+                }
+
+                return freed;
+            }
+        }
+        0
+    }
+
+    /// Get current memory usage
+    pub fn memory_usage(&self) -> usize {
+        self.memory_usage.read().map(|u| *u).unwrap_or(0)
+    }
+
+    /// Get cache statistics
+    pub fn get_metrics(&self) -> CacheMetrics {
+        self.metrics.read().map(|m| m.clone()).unwrap_or_default()
+    }
+
+    /// Clear the cache
+    pub fn clear(&self) {
+        if let Ok(mut cache) = self.cache.write() {
+            cache.clear();
+        }
+        if let Ok(mut hot) = self.hot_tier.write() {
+            hot.clear();
+        }
+        if let Ok(mut warm) = self.warm_tier.write() {
+            warm.clear();
+        }
+        if let Ok(mut cold) = self.cold_tier.write() {
+            cold.clear();
+        }
+        if let Ok(mut usage) = self.memory_usage.write() {
+            *usage = 0;
+        }
+    }
+}
+
 /// Cache manager that coordinates different caches
 #[derive(Debug, Clone)]
 pub struct CacheManager {
     concept_cache: ConceptSatisfiabilityCache,
+    completion_graph_cache: CompletionGraphCache,
     config: CacheConfig,
     memory_tracker: Option<Arc<MemoryTracker>>,
 }
@@ -202,6 +546,7 @@ impl CacheManager {
     pub fn new(config: CacheConfig) -> Self {
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
+            completion_graph_cache: CompletionGraphCache::new(config.clone()),
             config,
             memory_tracker: None,
         }
@@ -212,6 +557,7 @@ impl CacheManager {
     pub fn with_memory_tracking(config: CacheConfig, memory_tracker: Arc<MemoryTracker>) -> Self {
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
+            completion_graph_cache: CompletionGraphCache::new(config.clone()),
             config,
             memory_tracker: Some(memory_tracker),
         }
@@ -365,9 +711,19 @@ impl CacheManager {
             0.0
         };
 
+        let graph_metrics = self.completion_graph_cache.get_metrics();
+        let graph_total_accesses = graph_metrics.hits + graph_metrics.misses;
+        let graph_hit_rate = if graph_total_accesses > 0 {
+            graph_metrics.hits as f64 / graph_total_accesses as f64
+        } else {
+            0.0
+        };
+
         CacheStats {
             concept_cache_size: self.concept_cache.size(),
             concept_cache_hit_rate: hit_rate,
+            completion_graph_cache_memory: self.completion_graph_cache.memory_usage(),
+            completion_graph_cache_hit_rate: graph_hit_rate,
             total_memory_bytes: self.estimated_memory_usage(),
             hit_count: metrics.hits,
             miss_count: metrics.misses,
@@ -379,6 +735,27 @@ impl CacheManager {
     #[must_use]
     pub fn concept_cache(&self) -> &ConceptSatisfiabilityCache {
         &self.concept_cache
+    }
+
+    /// Get the completion graph cache
+    #[must_use]
+    pub fn completion_graph_cache(&self) -> &CompletionGraphCache {
+        &self.completion_graph_cache
+    }
+
+    /// Get a completion graph from cache
+    pub fn get_completion_graph(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
+        self.completion_graph_cache.get(signature)
+    }
+
+    /// Store a completion graph in cache
+    pub fn store_completion_graph(&self, graph: Arc<CompletedGraph>) {
+        self.completion_graph_cache.put(graph);
+    }
+
+    /// Get completion graph cache memory usage
+    pub fn completion_graph_memory_usage(&self) -> usize {
+        self.completion_graph_cache.memory_usage()
     }
 }
 
@@ -393,6 +770,8 @@ impl Default for CacheManager {
 pub struct CacheStats {
     pub concept_cache_size: usize,
     pub concept_cache_hit_rate: f64,
+    pub completion_graph_cache_memory: usize,
+    pub completion_graph_cache_hit_rate: f64,
     pub total_memory_bytes: usize,
     pub hit_count: u64,
     pub miss_count: u64,

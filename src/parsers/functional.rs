@@ -1555,7 +1555,7 @@ impl FunctionalParser {
                 // Check if this is a structural token (parentheses) or OWL keyword
                 if is_structural_token(token) {
                     return Err(Error::ontology_parsing(format!(
-                        "Unexpected token '{}' while parsing class expression. Expected a class IRI or class expression.",
+                        "OWL keyword '{}' cannot be used as a class name. Expected a class IRI or class expression.",
                         token
                     )));
                 }
@@ -1837,7 +1837,7 @@ impl FunctionalParser {
         // Validate that non-bracketed tokens are not structural tokens or OWL keywords
         if is_structural_token(iri) {
             return Err(Error::ontology_parsing(format!(
-                "Unexpected structural token '{}' where IRI was expected. This may indicate a malformed construct or empty element.",
+                "OWL keyword '{}' cannot be used as an IRI. This may indicate a malformed construct or empty element.",
                 iri
             )));
         }
