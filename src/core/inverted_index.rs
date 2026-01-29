@@ -230,6 +230,13 @@ impl ConceptIndex {
         
         Ok(result)
     }
+    
+    /// Get the number of indexed concepts
+    pub fn size(&self) -> usize {
+        self.hash_to_concept.read()
+            .map(|map| map.len())
+            .unwrap_or(0)
+    }
 
     /// Clear the index
     pub fn clear(&self) -> crate::Result<()> {

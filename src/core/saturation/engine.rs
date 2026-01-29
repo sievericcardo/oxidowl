@@ -9,7 +9,12 @@ use super::{
     node::{SaturationNode, SaturationStatus},
     rules::SaturationRuleSet,
 };
-use crate::core::persistent_collections::ConceptSet;
+use crate::core::{
+    persistent_collections::ConceptSet,
+    completion_cache::CompletionGraphCache,
+    incremental::IncrementalClassifier,
+    inverted_index::ConceptIndex,
+};
 use log::{debug, info, warn};
 use std::{
     collections::HashMap,
@@ -124,6 +129,15 @@ pub struct SaturationEngine {
 
     /// Cache of saturation results
     cache: Arc<RwLock<HashMap<ClassExpression, SaturationNode>>>,
+    
+    /// Completion graph cache for incremental reasoning
+    completion_cache: Arc<CompletionGraphCache>,
+    
+    /// Incremental classifier for ontology updates
+    incremental: Arc<IncrementalClassifier>,
+    
+    /// Concept index for fast IRI lookups
+    concept_index: Arc<RwLock<ConceptIndex>>,
 }
 
 impl SaturationEngine {
@@ -133,12 +147,30 @@ impl SaturationEngine {
             config,
             rule_set: Arc::new(SaturationRuleSet::new_owl2_dl()),
             cache: Arc::new(RwLock::new(HashMap::new())),
+            completion_cache: Arc::new(CompletionGraphCache::new()),
+            incremental: Arc::new(IncrementalClassifier::new()),
+            concept_index: Arc::new(RwLock::new(ConceptIndex::new())),
         }
     }
 
     /// Create an engine with default configuration
     pub fn default() -> Self {
         Self::new(SaturationConfig::default())
+    }
+    
+    /// Get completion graph cache
+    pub fn completion_cache(&self) -> &CompletionGraphCache {
+        &self.completion_cache
+    }
+    
+    /// Get incremental classifier
+    pub fn incremental_classifier(&self) -> &IncrementalClassifier {
+        &self.incremental
+    }
+    
+    /// Get concept index
+    pub fn concept_index(&self) -> Arc<RwLock<ConceptIndex>> {
+        Arc::clone(&self.concept_index)
     }
 
     /// Saturate an entire ontology
