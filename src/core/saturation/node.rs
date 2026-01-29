@@ -1,7 +1,8 @@
 //! Saturation node data structures
 
 use crate::ontology::{ClassExpression, IRI};
-use std::collections::{HashMap, HashSet};
+use crate::core::persistent_collections::ConceptSet;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 /// Status of a saturation node
@@ -33,13 +34,13 @@ pub struct SaturationNode {
     pub concept: ClassExpression,
 
     /// All concepts that are saturated into this node (deterministic consequences)
-    pub saturated_concepts: HashSet<ClassExpression>,
+    pub saturated_concepts: ConceptSet,
 
     /// Direct subsumers discovered through saturation
-    pub direct_subsumers: HashSet<ClassExpression>,
+    pub direct_subsumers: ConceptSet,
 
     /// All subsumers (transitive closure)
-    pub all_subsumers: HashSet<ClassExpression>,
+    pub all_subsumers: ConceptSet,
 
     /// Existential restrictions that must hold
     pub existentials: Vec<ExistentialRestriction>,
@@ -83,7 +84,7 @@ pub struct UniversalRestriction {
 impl SaturationNode {
     /// Create a new saturation node for a concept
     pub fn new(concept: ClassExpression) -> Self {
-        let mut saturated_concepts = HashSet::new();
+        let mut saturated_concepts = ConceptSet::new();
         saturated_concepts.insert(concept.clone());
 
         let signature = Self::compute_signature(&saturated_concepts);
@@ -91,8 +92,8 @@ impl SaturationNode {
         Self {
             concept,
             saturated_concepts,
-            direct_subsumers: HashSet::new(),
-            all_subsumers: HashSet::new(),
+            direct_subsumers: ConceptSet::new(),
+            all_subsumers: ConceptSet::new(),
             existentials: Vec::new(),
             universals: Vec::new(),
             status: SaturationStatus::Unprocessed,
@@ -106,7 +107,8 @@ impl SaturationNode {
 
     /// Add a saturated concept to this node
     pub fn add_saturated_concept(&mut self, concept: ClassExpression) -> bool {
-        if self.saturated_concepts.insert(concept) {
+        if !self.saturated_concepts.contains(&concept) {
+            self.saturated_concepts = self.saturated_concepts.update(concept);
             self.signature = Self::compute_signature(&self.saturated_concepts);
             true
         } else {
@@ -118,7 +120,8 @@ impl SaturationNode {
     pub fn add_saturated_concepts(&mut self, concepts: impl IntoIterator<Item = ClassExpression>) {
         let mut changed = false;
         for concept in concepts {
-            if self.saturated_concepts.insert(concept) {
+            if !self.saturated_concepts.contains(&concept) {
+                self.saturated_concepts = self.saturated_concepts.update(concept);
                 changed = true;
             }
         }
@@ -191,7 +194,7 @@ impl SaturationNode {
     }
 
     /// Compute a hash signature for a set of concepts
-    fn compute_signature(concepts: &HashSet<ClassExpression>) -> u64 {
+    fn compute_signature(concepts: &ConceptSet) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         let mut hasher = DefaultHasher::new();
         

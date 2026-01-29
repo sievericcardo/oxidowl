@@ -229,7 +229,7 @@ impl Reasoner {
         if let Some(ontology) = &self.ontology {
             let ontology_ref = read_lock(ontology, "core: reading ontology for consistency check")?;
 
-            // PHASE 1: Pre-consistency check (fast detection of certain inconsistencies)
+            // Pre-consistency check (fast detection of certain inconsistencies)
             log::info!("Running pre-consistency check");
             let mut pre_checker =
                 crate::core::reasoner::PreConsistencyChecker::new(&*ontology_ref)?;

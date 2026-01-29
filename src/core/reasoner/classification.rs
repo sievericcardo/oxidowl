@@ -110,10 +110,10 @@ impl ClassificationService {
 
         info!("Classifying {} classes", classes.len());
 
-        // === PHASE 1: Extract told subsumers from axioms ===
+        // === Extract told subsumers from axioms ===
         let phase1_start = Instant::now();
         let mut hierarchy = self.extract_told_subsumers(&classes, &ontology_guard)?;
-        info!("Phase 1 (told subsumers) completed in {:?}", phase1_start.elapsed());
+        info!("(told subsumers) completed in {:?}", phase1_start.elapsed());
 
         // === PHASE 2: Saturation-based subsumption ===
         let phase2_start = Instant::now();
@@ -243,7 +243,7 @@ impl ClassificationService {
         Ok(result)
     }
 
-    /// Phase 1: Extract told subsumers directly from axioms
+    /// Extract told subsumers directly from axioms
     fn extract_told_subsumers(
         &self,
         classes: &[ClassExpression],

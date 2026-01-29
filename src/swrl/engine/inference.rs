@@ -344,8 +344,8 @@ impl HybridReasoning {
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
 
-        // Phase 1: Forward chaining to establish base facts
-        info!("Hybrid reasoning - Phase 1: Forward chaining");
+        // Forward chaining to establish base facts
+        info!("Hybrid reasoning - Forward chaining");
         let forward_result = self
             .forward_engine
             .execute(rules, known_facts, ontology, context)?;

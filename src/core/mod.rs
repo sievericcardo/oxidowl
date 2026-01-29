@@ -9,6 +9,7 @@ pub mod dependency;
 pub mod expansion;
 pub mod hypergraph;
 pub mod lock_helpers;
+pub mod persistent_collections;
 pub mod reasoner;
 pub mod saturation;
 pub mod tableau;
@@ -25,6 +26,7 @@ pub use hypergraph::{
     EdgeType, HyperEdge, HyperNode, Hypergraph, NodeId, NodeSignature,
     expansion::{ExpansionState, ExpansionStatistics, HypertableauExpansion},
 };
+pub use persistent_collections::{ConceptSet, ConceptSetPool, ConceptSetPoolStats};
 pub use lock_helpers::{read_lock, write_lock};
 pub use reasoner::Reasoner;
 pub use saturation::{
