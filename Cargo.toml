@@ -22,44 +22,42 @@ path = "src/bin/performance_tests.rs"
 
 [dependencies]
 # Core dependencies
-tokio = { version = "1.45", features = ["full"] }
-rayon = {  version = "1.10", optional = true }
+tokio = { version = "1.49.0", features = ["full"] }
+rayon = {  version = "1.11", optional = true }
 dashmap = { version = "6.1", optional = true }
-# Lock-free concurrency
-arc-swap = "1.7"
 # Immutable persistent data structures
 im = "15.1"
-thiserror = "2.0"
+thiserror = "2.0.18"
 num_cpus = "1.17"
-crossbeam = { version = "0.8", optional = true }
+crossbeam = { version = "0.8.4", optional = true }
 
 # Serialization
-serde = { version = "1.0", features = ["derive", "rc"] }
-serde_json = "1.0"
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+serde_json = "1.0.149"
 
 # Logging and tracing
-log = "0.4"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+log = "0.4.29"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 
 # CLI (for binary)
-clap = { version = "4.5", features = ["derive"] }
-chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5.55", features = ["derive"] }
+chrono = { version = "0.4.43", features = ["serde"] }
 iso8601-duration = "0.2"
 
 # Hash computation and advanced data structures
 # Compressed bitmaps for efficient set operations
-lru = "0.16"     # LRU cache for blocking candidates
+lru = "0.16.3"     # LRU cache for blocking candidates
 
 # Compile-time perfect hash for keyword lookup
-phf = { version = "0.11", features = ["macros"] }
+phf = { version = "0.13.1", features = ["macros"] }
 
 # Performance profiling (optional)
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
-dhat = { version = "0.3", optional = true }
+dhat = { version = "0.3.3", optional = true }
 
 # High-performance memory allocator
-mimalloc = { version = "0.1", default-features = false, optional = true }
+mimalloc = { version = "0.1.48", default-features = false, optional = true }
 
 # NUMA awareness for multi-socket systems
 hwloc = { version = "0.5", optional = true }
@@ -69,33 +67,32 @@ hwloc = { version = "0.5", optional = true }
 # We'll enable SIMD via std::simd when stable
 
 # OWL integration and reasoning infrastructure
-horned-owl = "1.1.0"  # Core OWL ontology model and parsing
+horned-owl = "1.4.0"  # Core OWL ontology model and parsing
 curie = "0.1.4"         # Prefix mapping support for horned-owl
 # sophia = { version = "0.8", optional = true }   # May need specific version
 
 # SPARQL and RDF graph support
-oxigraph = { version = "0.5.0", features = ["rocksdb"], optional = true }
+oxigraph = { version = "0.5.4", features = ["rocksdb"], optional = true }
 
 # String handling and utilities
-regex = "1.11"
-uuid = { version = "1.17", features = ["v4", "serde"] }
-url = { version = "2.3", features = ["serde"] }
-lazy_static = "1.4"
+regex = "1.12.2"
+uuid = { version = "1.20.0", features = ["v4", "serde"] }
+url = { version = "2.5.8", features = ["serde"] }
+lazy_static = "1.5.0"
 
 # File I/O and path handling
 tempfile = "3.5"
 
 # Machine Learning - Candle framework
-candle-core = { version = "0.9", optional = true }
-candle-nn = { version = "0.9", optional = true }
-bincode = "2.0.1"
+candle-core = { version = "0.9.1", optional = true }
+candle-nn = { version = "0.9.1", optional = true }
 
 # Server interfaces and web support
 tokio-tungstenite = { version = "0.28", optional = true }
 warp = { version = "0.4.2", features = ["server"], optional = true }
-bytes = { version = "1.5", optional = true }
-futures = { version = "0.3", optional = true }
-quick-xml = { version = "0.38.3", features = ["serialize"] }
+bytes = { version = "1.11.0", optional = true }
+futures = { version = "0.3.31", optional = true }
+quick-xml = { version = "0.39.0", features = ["serialize"] }
 
 # JSON and XML parsing for ontology formats
 roxmltree = "0.21.1"
@@ -110,10 +107,10 @@ windows = { version = "0.58", features = [
 ] }
 
 [dev-dependencies]
-criterion = { version = "0.7.0", features = ["html_reports"] }
-env_logger = "0.11"
-tempfile = "3.5"
-reqwest = { version = "0.12", features = ["json"] }
+criterion = { version = "0.8.1", features = ["html_reports"] }
+env_logger = "0.11.8"
+tempfile = "3.24"
+reqwest = { version = "0.12.24", features = ["json"] }
 
 [features]
 default = ["parallel", "cache", "high-performance"]
@@ -138,10 +135,6 @@ harness = false
 
 [[bench]]
 name = "hypertableau_benchmark"
-harness = false
-
-[[bench]]
-name = "konclude_comparison"
 harness = false
 
 [profile.release]

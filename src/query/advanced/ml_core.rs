@@ -1418,7 +1418,7 @@ impl CostPredictionModel {
 
 /// Execution strategy types for query processing
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, bincode::Encode, bincode::Decode,
+    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,
 )]
 pub enum ExecutionStrategy {
     /// Use indexes for efficient lookups
@@ -1487,7 +1487,7 @@ pub enum QueryPattern {
 
 /// Scalability characteristics
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, bincode::Encode, bincode::Decode,
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub enum ScalabilityClass {
     Constant,     // O(1)
@@ -1499,7 +1499,7 @@ pub enum ScalabilityClass {
 }
 
 /// Performance profile for a strategy
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceProfile {
     /// Expected execution time (ms)
     pub expected_time: f64,
@@ -1512,7 +1512,7 @@ pub struct PerformanceProfile {
 }
 
 /// Resource requirements for a strategy
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceRequirements {
     /// Minimum memory required (MB)
     pub min_memory: f64,
@@ -1525,7 +1525,7 @@ pub struct ResourceRequirements {
 }
 
 /// Applicability conditions for a strategy
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicabilityConditions {
     /// Minimum selectivity (0.0 - 1.0)
     pub min_selectivity: f64,
@@ -1538,7 +1538,7 @@ pub struct ApplicabilityConditions {
 }
 
 /// Metadata for an execution strategy
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyMetadata {
     /// Strategy identifier
     pub strategy: ExecutionStrategy,
@@ -1576,7 +1576,7 @@ pub struct StrategyRecommendation {
 }
 
 /// Strategy selection model with decision tree
-#[derive(Debug, Clone, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategySelectionModel {
     /// Strategy metadata registry
     strategy_registry: std::collections::HashMap<ExecutionStrategy, StrategyMetadata>,
@@ -2047,8 +2047,8 @@ impl ModelStorage {
     }
 
     pub fn save_strategy_selector(&self, model: &StrategySelectionModel) -> Result<(), Error> {
-        let path = self.storage_dir.join("strategy_selector.bin");
-        let data = bincode::encode_to_vec(model, bincode::config::standard()).map_err(|e| {
+        let path = self.storage_dir.join("strategy_selector.json");
+        let data = serde_json::to_vec_pretty(model).map_err(|e| {
             Error::Internal {
                 message: format!("Failed to serialize model: {}", e),
             }
@@ -2062,17 +2062,16 @@ impl ModelStorage {
     }
 
     pub fn load_strategy_selector(&self) -> Result<StrategySelectionModel, Error> {
-        let path = self.storage_dir.join("strategy_selector.bin");
+        let path = self.storage_dir.join("strategy_selector.json");
         let data = std::fs::read(path).map_err(|e| Error::Internal {
             message: format!("Failed to read model: {}", e),
         })?;
 
-        let (model, _) =
-            bincode::decode_from_slice(&data, bincode::config::standard()).map_err(|e| {
-                Error::Internal {
-                    message: format!("Failed to deserialize model: {}", e),
-                }
-            })?;
+        let model = serde_json::from_slice(&data).map_err(|e| {
+            Error::Internal {
+                message: format!("Failed to deserialize model: {}", e),
+            }
+        })?;
         Ok(model)
     }
 }
