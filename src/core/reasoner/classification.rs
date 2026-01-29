@@ -14,6 +14,7 @@ use crate::{
             statistics::ReasoningStatistics,
             tasks::ReasoningTaskService,
         },
+        saturation::{SaturationConfig, SaturationEngine, SaturationStatus},
     },
     ontology::{
         ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
@@ -33,6 +34,7 @@ pub struct ClassificationService {
     task_service: ReasoningTaskService,
     cache_manager: Arc<RwLock<CacheManager>>,
     datatype_validator: DatatypeValidator,
+    saturation_engine: SaturationEngine,
 }
 
 impl ClassificationService {
@@ -45,6 +47,21 @@ impl ClassificationService {
             task_service,
             cache_manager,
             datatype_validator: DatatypeValidator::new(),
+            saturation_engine: SaturationEngine::new(SaturationConfig::default()),
+        }
+    }
+
+    /// Create a new classification service with custom saturation config
+    pub fn with_saturation_config(
+        task_service: ReasoningTaskService,
+        cache_manager: Arc<RwLock<CacheManager>>,
+        saturation_config: SaturationConfig,
+    ) -> Self {
+        Self {
+            task_service,
+            cache_manager,
+            datatype_validator: DatatypeValidator::new(),
+            saturation_engine: SaturationEngine::new(saturation_config),
         }
     }
 
@@ -56,7 +73,7 @@ impl ClassificationService {
     ) -> Result<ClassificationResult> {
         let start_time = Instant::now();
 
-        info!("Starting classification");
+        info!("Starting classification with saturation-based optimization");
 
         // Check if we have a cached classification result
         if let Some(cached_result) =
@@ -89,53 +106,70 @@ impl ClassificationService {
         let inferred_classes = self.discover_inferred_classes(&ontology_guard)?;
         classes.extend(inferred_classes);
 
-        let mut hierarchy = HashMap::new();
-        let total_pairs = classes.len() * classes.len();
-        let mut checked_pairs = 0;
+        info!("Classifying {} classes", classes.len());
 
+        // === PHASE 1: Extract told subsumers from axioms ===
+        let phase1_start = Instant::now();
+        let mut hierarchy = self.extract_told_subsumers(&classes, &ontology_guard)?;
+        info!("Phase 1 (told subsumers) completed in {:?}", phase1_start.elapsed());
+
+        // === PHASE 2: Saturation-based subsumption ===
+        let phase2_start = Instant::now();
+        let saturation_result = self.saturation_engine.saturate_ontology(&ontology_guard)?;
         info!(
-            "Classifying {} classes ({} subsumption checks)",
-            classes.len(),
-            total_pairs
+            "Phase 2 (saturation) completed in {:?} - {} concepts complete, {} require tableau",
+            phase2_start.elapsed(),
+            saturation_result.statistics.concepts_complete,
+            saturation_result.statistics.concepts_requiring_tableau
         );
 
-        // Debug: Log all SubClassOf axioms in the ontology
-        let mut subclass_count = 0;
-        for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                subclass_count += 1;
-                log::debug!(
-                    "Found SubClassOf axiom {}: {:?} ⊑ {:?}",
-                    subclass_count,
-                    subclass_axiom.subclass,
-                    subclass_axiom.superclass
-                );
-            }
+        // Add subsumers discovered through saturation
+        for (concept, subsumers) in &saturation_result.subsumptions {
+            let entry = hierarchy.entry(concept.clone()).or_insert_with(HashSet::new);
+            entry.extend(subsumers.clone());
         }
-        info!("Found {} SubClassOf axioms in ontology", subclass_count);
 
-        // Build hierarchy using axiom-based reasoning
+        // === PHASE 3: Tableau expansion for complex cases ===
+        let phase3_start = Instant::now();
+        let mut tableau_checks = 0;
+        let mut tableau_pairs = Vec::new();
+
+        // Identify pairs that need tableau expansion
         for subclass in &classes {
-            let mut superclasses = HashSet::new();
-
-            for superclass in &classes {
-                if subclass != superclass {
-                    // Use proper subsumption checking based on ontology axioms
-                    if self.check_subsumption_from_axioms(subclass, superclass, &ontology_guard)? {
-                        superclasses.insert(superclass.clone());
+            if let Some(node) = saturation_result.get_node(subclass) {
+                if node.status == SaturationStatus::RequiresFullTableau || node.status == SaturationStatus::NonDeterministic {
+                    for superclass in &classes {
+                        if subclass != superclass {
+                            // Check if not already determined by saturation
+                            if !saturation_result.subsumes(superclass, subclass) {
+                                tableau_pairs.push((subclass.clone(), superclass.clone()));
+                            }
+                        }
                     }
                 }
-                checked_pairs += 1;
-
-                if checked_pairs % 1000 == 0 {
-                    info!(
-                        "Classification progress: {checked_pairs}/{total_pairs} checks completed"
-                    );
-                }
             }
-
-            hierarchy.insert(subclass.clone(), superclasses);
         }
+
+        info!("Phase 3: {} pairs require tableau expansion", tableau_pairs.len());
+
+        // Store length before consuming tableau_pairs
+        let total_tableau_pairs = tableau_pairs.len();
+
+        // Perform tableau expansion for remaining pairs
+        for (subclass, superclass) in tableau_pairs {
+            if self.check_subsumption_from_axioms(&subclass, &superclass, &ontology_guard)? {
+                let entry = hierarchy.entry(subclass).or_insert_with(HashSet::new);
+                entry.insert(superclass);
+            }
+            tableau_checks += 1;
+
+            if tableau_checks % 100 == 0 {
+                debug!("Tableau checks progress: {}/{}", tableau_checks, total_tableau_pairs);
+            }
+        }
+
+        info!("Phase 3 (tableau expansion) completed in {:?} with {} checks", 
+              phase3_start.elapsed(), tableau_checks);
 
         // Extract ontology IRI before dropping the read lock
         let ontology_iri = ontology_guard.iri.as_ref().map(|iri| iri.to_string());
@@ -155,8 +189,67 @@ impl ClassificationService {
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
 
-        info!("Classification completed in {reasoning_time:?}");
+        info!(
+            "Classification completed in {:?} ({}x speedup expected from saturation)",
+            reasoning_time,
+            if tableau_checks > 0 { classes.len() * classes.len() / tableau_checks } else { 1 }
+        );
         Ok(result)
+    }
+
+    /// Phase 1: Extract told subsumers directly from axioms
+    fn extract_told_subsumers(
+        &self,
+        classes: &[ClassExpression],
+        ontology: &Ontology,
+    ) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
+        let mut hierarchy = HashMap::new();
+
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
+                    // Direct told subsumption
+                    if classes.contains(&subclass_axiom.subclass) {
+                        let entry = hierarchy
+                            .entry(subclass_axiom.subclass.clone())
+                            .or_insert_with(HashSet::new);
+                        entry.insert(subclass_axiom.superclass.clone());
+                    }
+                }
+                crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) => {
+                    // Equivalent classes are mutual subsumers
+                    for class1 in &equiv_axiom.classes {
+                        if classes.contains(class1) {
+                            let entry = hierarchy.entry(class1.clone()).or_insert_with(HashSet::new);
+                            for class2 in &equiv_axiom.classes {
+                                if class1 != class2 {
+                                    entry.insert(class2.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                crate::ontology::axioms::Axiom::DisjointUnion(disjoint_union) => {
+                    // Disjoint union members are subclasses of the union
+                    for disjoint_class in &disjoint_union.disjoint_classes {
+                        if classes.contains(disjoint_class) {
+                            let entry = hierarchy
+                                .entry(disjoint_class.clone())
+                                .or_insert_with(HashSet::new);
+                            entry.insert(disjoint_union.class.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Ensure all classes have an entry (even if empty)
+        for class in classes {
+            hierarchy.entry(class.clone()).or_insert_with(HashSet::new);
+        }
+
+        Ok(hierarchy)
     }
 
     /// Classify object properties

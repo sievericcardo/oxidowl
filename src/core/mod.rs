@@ -10,6 +10,7 @@ pub mod expansion;
 pub mod hypergraph;
 pub mod lock_helpers;
 pub mod reasoner;
+pub mod saturation;
 pub mod tableau;
 
 pub use blocking::{BlockingChecker, BlockingStrategy};
@@ -26,4 +27,7 @@ pub use hypergraph::{
 };
 pub use lock_helpers::{read_lock, write_lock};
 pub use reasoner::Reasoner;
+pub use saturation::{
+    SaturationConfig, SaturationEngine, SaturationNode, SaturationResult, SaturationStatus,
+};
 pub use tableau::{Tableau, TableauState};
