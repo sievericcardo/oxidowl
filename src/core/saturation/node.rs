@@ -195,18 +195,7 @@ impl SaturationNode {
 
     /// Compute a hash signature for a set of concepts
     fn compute_signature(concepts: &ConceptSet) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        let mut hasher = DefaultHasher::new();
-        
-        // Sort concepts for deterministic hashing
-        let mut sorted_concepts: Vec<_> = concepts.iter().collect();
-        sorted_concepts.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
-        
-        for concept in sorted_concepts {
-            format!("{:?}", concept).hash(&mut hasher);
-        }
-        
-        hasher.finish()
+        crate::core::fast_hashing::compute_fast_signature(concepts)
     }
 
     /// Get the signature hash

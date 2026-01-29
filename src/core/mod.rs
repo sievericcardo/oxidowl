@@ -10,6 +10,8 @@ pub mod expansion;
 pub mod hypergraph;
 pub mod lock_helpers;
 pub mod persistent_collections;
+pub mod fast_hashing;
+pub mod inverted_index;
 pub mod reasoner;
 pub mod saturation;
 pub mod tableau;
@@ -27,6 +29,8 @@ pub use hypergraph::{
     expansion::{ExpansionState, ExpansionStatistics, HypertableauExpansion},
 };
 pub use persistent_collections::{ConceptSet, ConceptSetPool, ConceptSetPoolStats};
+pub use fast_hashing::{compute_fast_signature, hash_concept, FastConceptHasher};
+pub use inverted_index::{ConceptIndex, IndexStatistics};
 pub use lock_helpers::{read_lock, write_lock};
 pub use reasoner::Reasoner;
 pub use saturation::{
