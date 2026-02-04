@@ -917,8 +917,23 @@ impl Reasoner {
 
                 match extension.to_lowercase().as_str() {
                     "owl" | "owx" => {
-                        let parser = owl_xml::OwlXmlParser::new();
-                        parser.parse(&parsed_content)?
+                        // Content-based detection for .owl files
+                        // Some files like "*_functional.owl" are actually in Functional Syntax
+                        // but have .owl extension, so we need to check the content
+                        let trimmed = parsed_content.trim_start();
+                        if trimmed.starts_with("Prefix(") || trimmed.starts_with("Ontology(") {
+                            // This is Functional Syntax
+                            let parser = functional::FunctionalParser::new();
+                            parser.parse(&parsed_content)?
+                        } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
+                            // This is OWL/XML
+                            let parser = owl_xml::OwlXmlParser::new();
+                            parser.parse(&parsed_content)?
+                        } else {
+                            // Default to OWL/XML for .owl files
+                            let parser = owl_xml::OwlXmlParser::new();
+                            parser.parse(&parsed_content)?
+                        }
                     }
                     "xml" | "rdf" => {
                         // Try to detect XML type from content
