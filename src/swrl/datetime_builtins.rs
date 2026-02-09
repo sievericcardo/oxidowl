@@ -73,7 +73,7 @@ impl DateTimeBuiltInRegistry {
             builtins: HashMap::new(),
         };
 
-        // Register essential date/time built-ins (Phase 1)
+        // Register essential date/time built-ins
         registry.register_builtin(
             "http://www.w3.org/2003/11/swrlb#dateTimeEqual",
             Box::new(DateTimeEqualBuiltIn),

@@ -768,6 +768,22 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
 
         if !cli.quiet {
             println!("Ontology loading completed");
+            
+            // Display axiom counts by type
+            if let Some(ontology) = reasoner.get_ontology() {
+                let ontology_guard = ontology.read().map_err(|e| {
+                    oxidowl::Error::reasoning(format!("Failed to read ontology: {e}"))
+                })?;
+                let axiom_counts = ontology_guard.count_axioms_by_type();
+                
+                // Sort by axiom type name for consistent output
+                let mut sorted_counts: Vec<_> = axiom_counts.iter().collect();
+                sorted_counts.sort_by_key(|(axiom_type, _)| format!("{:?}", axiom_type));
+                
+                for (axiom_type, count) in sorted_counts {
+                    println!("{:?}:{}", axiom_type, count);
+                }
+            }
         }
     }
 

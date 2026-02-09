@@ -9,9 +9,15 @@ use super::{
     node::{SaturationNode, SaturationStatus},
     rules::SaturationRuleSet,
 };
+use crate::core::{
+    persistent_collections::ConceptSet,
+    completion_cache::CompletionGraphCache,
+    incremental::IncrementalClassifier,
+    inverted_index::ConceptIndex,
+};
 use log::{debug, info, warn};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, RwLock},
     time::Instant,
 };
@@ -29,7 +35,7 @@ pub struct SaturationResult {
     pub statistics: SaturationStatistics,
 
     /// Computed subsumption relationships
-    pub subsumptions: HashMap<ClassExpression, HashSet<ClassExpression>>,
+    pub subsumptions: HashMap<ClassExpression, ConceptSet>,
 }
 
 /// Statistics collected during saturation
@@ -95,7 +101,7 @@ impl SaturationResult {
     }
 
     /// Get direct subsumers for a concept
-    pub fn get_direct_subsumers(&self, concept: &ClassExpression) -> HashSet<ClassExpression> {
+    pub fn get_direct_subsumers(&self, concept: &ClassExpression) -> ConceptSet {
         self.nodes
             .get(concept)
             .map(|node| node.direct_subsumers.clone())
@@ -123,6 +129,15 @@ pub struct SaturationEngine {
 
     /// Cache of saturation results
     cache: Arc<RwLock<HashMap<ClassExpression, SaturationNode>>>,
+    
+    /// Completion graph cache for incremental reasoning
+    completion_cache: Arc<CompletionGraphCache>,
+    
+    /// Incremental classifier for ontology updates
+    incremental: Arc<IncrementalClassifier>,
+    
+    /// Concept index for fast IRI lookups
+    concept_index: Arc<RwLock<ConceptIndex>>,
 }
 
 impl SaturationEngine {
@@ -132,12 +147,30 @@ impl SaturationEngine {
             config,
             rule_set: Arc::new(SaturationRuleSet::new_owl2_dl()),
             cache: Arc::new(RwLock::new(HashMap::new())),
+            completion_cache: Arc::new(CompletionGraphCache::new()),
+            incremental: Arc::new(IncrementalClassifier::new()),
+            concept_index: Arc::new(RwLock::new(ConceptIndex::new())),
         }
     }
 
     /// Create an engine with default configuration
     pub fn default() -> Self {
         Self::new(SaturationConfig::default())
+    }
+    
+    /// Get completion graph cache
+    pub fn completion_cache(&self) -> &CompletionGraphCache {
+        &self.completion_cache
+    }
+    
+    /// Get incremental classifier
+    pub fn incremental_classifier(&self) -> &IncrementalClassifier {
+        &self.incremental
+    }
+    
+    /// Get concept index
+    pub fn concept_index(&self) -> Arc<RwLock<ConceptIndex>> {
+        Arc::clone(&self.concept_index)
     }
 
     /// Saturate an entire ontology
@@ -329,7 +362,7 @@ impl SaturationEngine {
         debug!("Computing transitive closure of subsumers");
 
         // Build adjacency list
-        let mut subsumption_graph: HashMap<ClassExpression, HashSet<ClassExpression>> =
+        let mut subsumption_graph: HashMap<ClassExpression, ConceptSet> =
             HashMap::new();
 
         for (concept, node) in &nodes {
@@ -343,17 +376,18 @@ impl SaturationEngine {
             if let Some(node) = nodes.get_mut(concept) {
                 let mut all_subsumers = node.direct_subsumers.clone();
                 let mut to_process: Vec<_> = node.direct_subsumers.iter().cloned().collect();
-                let mut visited = HashSet::new();
+                let mut visited = ConceptSet::new();
 
                 while let Some(subsumer) = to_process.pop() {
                     if visited.contains(&subsumer) {
                         continue;
                     }
-                    visited.insert(subsumer.clone());
+                    visited = visited.update(subsumer.clone());
 
                     if let Some(indirect_subsumers) = subsumption_graph.get(&subsumer) {
                         for indirect in indirect_subsumers {
-                            if all_subsumers.insert(indirect.clone()) {
+                            if !all_subsumers.contains(indirect) {
+                                all_subsumers = all_subsumers.update(indirect.clone());
                                 to_process.push(indirect.clone());
                             }
                         }
@@ -393,14 +427,14 @@ impl SaturationEngine {
         &self,
         concept: &ClassExpression,
         result: &SaturationResult,
-    ) -> HashSet<ClassExpression> {
+    ) -> ConceptSet {
         result.get_direct_subsumers(concept)
     }
 
     /// Update saturation incrementally based on a set of changed concepts
     pub fn update_incremental(
         &self,
-        changed_concepts: &HashSet<ClassExpression>,
+        changed_concepts: &ConceptSet,
         ontology: &Ontology,
         previous_result: &SaturationResult,
     ) -> Result<SaturationResult> {
@@ -432,9 +466,9 @@ impl SaturationEngine {
     /// Compute concepts affected by changes (transitively)
     fn compute_affected_concepts(
         &self,
-        changed: &HashSet<ClassExpression>,
+        changed: &ConceptSet,
         nodes: &HashMap<ClassExpression, SaturationNode>,
-    ) -> HashSet<ClassExpression> {
+    ) -> ConceptSet {
         let mut affected = changed.clone();
         let mut to_process: Vec<_> = changed.iter().cloned().collect();
 
@@ -444,7 +478,8 @@ impl SaturationEngine {
                 if node.saturated_concepts.contains(&concept)
                     || node.direct_subsumers.contains(&concept)
                 {
-                    if affected.insert(other_concept.clone()) {
+                    if !affected.contains(other_concept) {
+                        affected = affected.update(other_concept.clone());
                         to_process.push(other_concept.clone());
                     }
                 }

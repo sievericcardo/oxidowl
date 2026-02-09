@@ -229,16 +229,169 @@ pub enum LogLevel {
 /// Performance configuration for the reasoner
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceConfig {
-    /// Number of threads for parallel reasoning
+    /// Performance profile (Low/Medium/High/Ultra)
+    pub profile: PerformanceProfile,
+    /// Number of threads for parallel reasoning (overrides profile default)
     pub worker_threads: Option<usize>,
-    /// Enable or disable tableau expansion
+    /// Enable or disable parallel tableau expansion
     pub enable_parallel_expansion: bool,
-    /// Enable or disable optimisations
+    /// Enable or disable SIMD optimizations
     pub enable_simd: bool,
+    /// Enable NUMA-aware allocation
+    pub enable_numa_awareness: bool,
     /// Memory pool in MB
     pub memory_pool_size_mb: u64,
     /// Garbage collection threshold
     pub gc_threshold: f64,
+    /// Maximum classification parallelism (concurrent subsumption tests)
+    pub max_parallel_classification_tasks: Option<usize>,
+    /// Enable lock-free concurrent data structures
+    pub enable_lock_free: bool,
+    /// Enable persistent data structures for structural sharing
+    pub enable_persistent_collections: bool,
+}
+
+/// Performance profile presets for different resource levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PerformanceProfile {
+    /// Low: Minimal resources (1-2 cores, basic caching, minimal memory)
+    /// Good for: Embedded systems, resource-constrained environments
+    Low,
+    /// Medium: Balanced resources (4-8 cores, standard caching, moderate memory)
+    /// Good for: Desktop applications, typical servers
+    Medium,
+    /// High: Performance-focused (16+ cores, aggressive caching, SIMD, optimized memory)
+    /// Good for: High-performance servers, classification workloads [DEFAULT]
+    High,
+    /// Ultra: Maximum performance (all cores, NUMA-aware, maximum caching, maximum memory)
+    /// Good for: Multi-socket servers, very large ontologies (100K+ concepts)
+    Ultra,
+}
+
+impl PerformanceProfile {
+    /// Get the recommended number of worker threads for this profile
+    pub fn worker_threads(&self) -> usize {
+        match self {
+            Self::Low => 2,
+            Self::Medium => num_cpus::get().min(8),
+            Self::High => num_cpus::get().min(32),
+            Self::Ultra => num_cpus::get(),
+        }
+    }
+
+    /// Get the recommended cache size in MB for this profile
+    pub fn cache_size_mb(&self) -> u64 {
+        match self {
+            Self::Low => 50,
+            Self::Medium => 200,
+            Self::High => 1024,
+            Self::Ultra => 4096,
+        }
+    }
+
+    /// Get the memory pool size in MB for this profile
+    pub fn memory_pool_size_mb(&self) -> u64 {
+        match self {
+            Self::Low => 128,
+            Self::Medium => 512,
+            Self::High => 2048,
+            Self::Ultra => 8192,
+        }
+    }
+
+    /// Whether SIMD should be enabled for this profile
+    pub fn enable_simd(&self) -> bool {
+        matches!(self, Self::High | Self::Ultra)
+    }
+
+    /// Whether NUMA awareness should be enabled for this profile
+    pub fn enable_numa_awareness(&self) -> bool {
+        matches!(self, Self::Ultra)
+    }
+
+    /// Whether lock-free data structures should be enabled
+    pub fn enable_lock_free(&self) -> bool {
+        matches!(self, Self::High | Self::Ultra)
+    }
+
+    /// Whether persistent collections should be enabled
+    pub fn enable_persistent_collections(&self) -> bool {
+        matches!(self, Self::High | Self::Ultra)
+    }
+
+    /// Maximum parallel classification tasks
+    pub fn max_parallel_classification_tasks(&self) -> usize {
+        match self {
+            Self::Low => 4,
+            Self::Medium => 64,
+            Self::High => 1024,
+            Self::Ultra => 10000,
+        }
+    }
+}
+
+impl Default for PerformanceProfile {
+    fn default() -> Self {
+        // Default to High performance profile
+        Self::High
+    }
+}
+
+impl Default for PerformanceConfig {
+    fn default() -> Self {
+        let profile = PerformanceProfile::default();
+        Self {
+            profile,
+            worker_threads: None, // Will use profile default
+            enable_parallel_expansion: true,
+            enable_simd: profile.enable_simd(),
+            enable_numa_awareness: profile.enable_numa_awareness(),
+            memory_pool_size_mb: profile.memory_pool_size_mb(),
+            gc_threshold: 0.75,
+            max_parallel_classification_tasks: Some(profile.max_parallel_classification_tasks()),
+            enable_lock_free: profile.enable_lock_free(),
+            enable_persistent_collections: profile.enable_persistent_collections(),
+        }
+    }
+}
+
+impl PerformanceConfig {
+    /// Create a configuration from a performance profile
+    pub fn from_profile(profile: PerformanceProfile) -> Self {
+        Self {
+            profile,
+            worker_threads: None,
+            enable_parallel_expansion: true,
+            enable_simd: profile.enable_simd(),
+            enable_numa_awareness: profile.enable_numa_awareness(),
+            memory_pool_size_mb: profile.memory_pool_size_mb(),
+            gc_threshold: 0.75,
+            max_parallel_classification_tasks: Some(profile.max_parallel_classification_tasks()),
+            enable_lock_free: profile.enable_lock_free(),
+            enable_persistent_collections: profile.enable_persistent_collections(),
+        }
+    }
+
+    /// Get the effective number of worker threads
+    pub fn get_worker_threads(&self) -> usize {
+        self.worker_threads.unwrap_or_else(|| self.profile.worker_threads())
+    }
+
+    /// Set performance profile from environment variable
+    pub fn from_env() -> Self {
+        let profile = std::env::var("OXIDOWL_PERFORMANCE_PROFILE")
+            .ok()
+            .and_then(|s| match s.to_lowercase().as_str() {
+                "low" => Some(PerformanceProfile::Low),
+                "medium" => Some(PerformanceProfile::Medium),
+                "high" => Some(PerformanceProfile::High),
+                "ultra" => Some(PerformanceProfile::Ultra),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        Self::from_profile(profile)
+    }
 }
 
 /// Configuration specific to tableau reasoning
@@ -338,13 +491,7 @@ impl Default for ReasonerConfig {
                 log_rotation_size_mb: 100, // 100 MB
                 max_log_files: 5,
             },
-            performance: PerformanceConfig {
-                worker_threads: Some(4), // Default to 4 threads
-                enable_parallel_expansion: true,
-                enable_simd: true,
-                memory_pool_size_mb: 512, // 512 MB
-                gc_threshold: 0.75,       // 75% threshold for GC
-            },
+            performance: PerformanceConfig::default(),
         }
     }
 }

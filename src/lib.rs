@@ -37,6 +37,7 @@
 //! ```
 
 pub mod cache;
+pub mod cache_lockfree; // Lock-free cache using DashMap
 pub mod cache_strategies; // Advanced cache eviction strategies (LRU, LFU)
 pub mod config;
 pub mod core;
@@ -44,11 +45,13 @@ pub mod dl_clauses; // DL clause generation and dumping
 pub mod error;
 pub mod import;
 pub mod performance; // Performance monitoring and profiling
+pub mod profiling; // Flamegraph and heap profiling infrastructure
 pub mod prelude; // Common imports and type aliases for internal use // Import management and dependency resolution
 // pub mod network;
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
 pub mod distributed;
 pub mod ontology;
+// pub mod ontology_lockfree; // Lock-free ontology access using ArcSwap - TODO: Create file
 pub mod parsers;
 pub mod profiles; // OWL 2 profiles support and validation
 pub mod query;
@@ -111,7 +114,7 @@ pub use crate::distributed::{
 };
 
 // Re-export error types
-pub use crate::config::{ReasonerConfig, TableauAlgorithm};
+pub use crate::config::{ReasonerConfig, TableauAlgorithm, PerformanceConfig, PerformanceProfile};
 pub use crate::core::reasoner::{ReasoningResult, ReasoningTask};
 pub use crate::error::{Error, Result};
 pub use crate::ontology::{
@@ -125,7 +128,7 @@ pub const DESCRIPTION: &str = "Rust OWL 2 DL reasoner";
 /// Build information
 #[must_use]
 pub fn version_info() -> String {
-    format!("{NAME} - {DESCRIPTION}, Version {VERSION} (Rust port)")
+    format!("{NAME} - {DESCRIPTION}, Version {VERSION}")
 }
 
 /// Get supported description logic expressivities

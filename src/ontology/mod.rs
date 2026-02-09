@@ -425,6 +425,15 @@ impl Ontology {
         &self.axioms
     }
 
+    /// Count axioms by type
+    pub fn count_axioms_by_type(&self) -> std::collections::HashMap<axioms::AxiomType, usize> {
+        let mut counts = std::collections::HashMap::new();
+        for axiom in &self.axioms {
+            *counts.entry(axiom.axiom_type()).or_insert(0) += 1;
+        }
+        counts
+    }
+
     /// Get the signature of the ontology
     pub fn signature(&self) -> Result<Signature> {
         let mut signature = Signature::new();
