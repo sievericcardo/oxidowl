@@ -194,11 +194,42 @@ impl FunctionalParser {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
         let mut in_iri = false;
+        let mut in_string = false;
         let mut paren_depth = 0;
+        let mut chars = content.chars().peekable();
 
-        for ch in content.chars() {
+        while let Some(ch) = chars.next() {
             match ch {
-                '<' if !in_iri => {
+                '"' if !in_iri => {
+                    // Handle quoted strings
+                    if in_string {
+                        // End of string
+                        current_token.push(ch);
+                        tokens.push(current_token.clone());
+                        current_token.clear();
+                        in_string = false;
+                        
+                        // Check for ^^ after the string
+                        if chars.peek() == Some(&'^') {
+                            chars.next(); // consume first ^
+                            if chars.peek() == Some(&'^') {
+                                chars.next(); // consume second ^
+                                tokens.push("^^".to_string());
+                            } else {
+                                current_token.push('^');
+                            }
+                        }
+                    } else {
+                        // Start of string
+                        if !current_token.is_empty() {
+                            tokens.push(current_token.trim().to_string());
+                            current_token.clear();
+                        }
+                        in_string = true;
+                        current_token.push(ch);
+                    }
+                }
+                '<' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
                         tokens.push(current_token.trim().to_string());
                         current_token.clear();
@@ -206,13 +237,13 @@ impl FunctionalParser {
                     in_iri = true;
                     current_token.push(ch);
                 }
-                '>' if in_iri => {
+                '>' if in_iri && !in_string => {
                     current_token.push(ch);
                     tokens.push(current_token.trim().to_string());
                     current_token.clear();
                     in_iri = false;
                 }
-                '(' | ')' if !in_iri => {
+                '(' | ')' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
                         tokens.push(current_token.trim().to_string());
                         current_token.clear();
@@ -224,7 +255,7 @@ impl FunctionalParser {
                         paren_depth -= 1;
                     }
                 }
-                ' ' | '\t' | '\n' | '\r' if !in_iri => {
+                ' ' | '\t' | '\n' | '\r' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
                         tokens.push(current_token.trim().to_string());
                         current_token.clear();
