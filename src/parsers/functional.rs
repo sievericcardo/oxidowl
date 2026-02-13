@@ -595,6 +595,79 @@ impl FunctionalParser {
         Ok(position)
     }
 
+    /// Parse an object property expression from tokens
+    #[inline(always)]
+    fn parse_object_property_expression(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<(crate::ontology::ObjectPropertyExpression, usize)> {
+        if position >= tokens.len() {
+            return Err(Error::ontology_parsing(
+                "Unexpected end of tokens while parsing object property expression".to_string(),
+            ));
+        }
+
+        let token = &tokens[position];
+
+        // Handle ObjectInverseOf
+        if token == "ObjectInverseOf" {
+            position += 1; // Skip "ObjectInverseOf"
+            if position < tokens.len() && tokens[position] == "(" {
+                position += 1; // Skip "("
+
+                // Parse the property inside
+                if position >= tokens.len() {
+                    return Err(Error::ontology_parsing(
+                        "Expected object property inside ObjectInverseOf".to_string(),
+                    ));
+                }
+
+                let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                position += 1;
+
+                if position < tokens.len() && tokens[position] == ")" {
+                    position += 1; // Skip ")"
+                }
+
+                let property = crate::ontology::ObjectProperty {
+                    iri: url::Url::parse(&property_iri)
+                        .map_err(|e| {
+                            Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                        })?
+                        .into(),
+                };
+
+                Ok((
+                    crate::ontology::ObjectPropertyExpression::InverseObjectProperty(property),
+                    position,
+                ))
+            } else {
+                Err(Error::ontology_parsing(
+                    "Expected '(' after ObjectInverseOf".to_string(),
+                ))
+            }
+        } else {
+            // Simple object property IRI
+            let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+            position += 1;
+
+            let property = crate::ontology::ObjectProperty {
+                iri: url::Url::parse(&property_iri)
+                    .map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                    })?
+                    .into(),
+            };
+
+            Ok((
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
+                position,
+            ))
+        }
+    }
+
     /// Parse a data range from tokens
     #[inline(always)]
     fn parse_data_range(
@@ -1138,14 +1211,15 @@ impl FunctionalParser {
                 if position < tokens.len() && tokens[position] == "(" {
                     position += 1; // Skip "("
 
-                    // Parse object property
+                    // Parse object property expression using helper function
                     if position >= tokens.len() {
                         return Err(Error::ontology_parsing(
                             "Expected object property after ObjectSomeValuesFrom(".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse filler class expression
                     if position >= tokens.len() {
@@ -1161,16 +1235,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectSomeValuesFrom {
@@ -1190,14 +1254,15 @@ impl FunctionalParser {
                 if position < tokens.len() && tokens[position] == "(" {
                     position += 1; // Skip "("
 
-                    // Parse object property
+                    // Parse object property expression using helper function
                     if position >= tokens.len() {
                         return Err(Error::ontology_parsing(
                             "Expected object property after ObjectAllValuesFrom(".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse filler class expression
                     if position >= tokens.len() {
@@ -1213,16 +1278,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectAllValuesFrom {
