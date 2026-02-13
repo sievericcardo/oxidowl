@@ -549,8 +549,24 @@ impl From<InputFormat> for OntologyFormat {
     }
 }
 
+// Main entry point - spawns execution on a thread with large stack for deeply nested ontologies
+fn main() -> Result<()> {
+    // Stack size of 32 MB to handle deeply nested class expressions in functional syntax
+    // Default stack size is typically 2MB on macOS/Linux and 1MB on Windows
+    const STACK_SIZE: usize = 32 * 1024 * 1024; // 32 MB
+    
+    std::thread::Builder::new()
+        .stack_size(STACK_SIZE)
+        .spawn(|| {
+            run_with_tokio()
+        })
+        .expect("Failed to spawn main thread")
+        .join()
+        .expect("Main thread panicked")
+}
+
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn run_with_tokio() -> Result<()> {
     let cli = Cli::parse();
 
     // Determine if we're in HermiT mode (using individual flags vs subcommands)
