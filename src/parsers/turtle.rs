@@ -2482,6 +2482,7 @@ impl TurtleParser {
                     value: decoded,
                     datatype: None,
                     language: None,
+                    direction: None,
                 })
             }
             Token::Keyword(keyword) => {

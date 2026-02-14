@@ -138,6 +138,9 @@ pub enum RdfTerm {
         value: String,
         datatype: Option<Url>,
         language: Option<String>,
+        /// Base direction for dirLangString (RDF 1.2)
+        /// Valid values: "ltr" (left-to-right) or "rtl" (right-to-left)
+        direction: Option<String>,
     },
     /// Quoted triple (RDF-star support)
     /// Allows triples to be used as subjects or objects
@@ -163,6 +166,7 @@ impl RdfTerm {
             value: value.to_string(),
             datatype: None,
             language: None,
+            direction: None,
         }
     }
 
@@ -175,6 +179,7 @@ impl RdfTerm {
                     .map_err(|e| Error::ontology_parsing(format!("Invalid datatype IRI: {}", e)))?,
             ),
             language: None,
+            direction: None,
         })
     }
 
@@ -184,7 +189,30 @@ impl RdfTerm {
             value: value.to_string(),
             datatype: None,
             language: Some(language.to_string()),
+            direction: None,
         }
+    }
+
+    /// Create a dirLangString literal (RDF 1.2)
+    /// Direction must be "ltr" or "rtl"
+    pub fn dir_lang_string(value: &str, language: &str, direction: &str) -> Result<Self> {
+        // Validate direction
+        if direction != "ltr" && direction != "rtl" {
+            return Err(Error::ontology_parsing(format!(
+                "Invalid direction for dirLangString: '{}'. Must be 'ltr' or 'rtl'",
+                direction
+            )));
+        }
+        
+        Ok(RdfTerm::Literal {
+            value: value.to_string(),
+            datatype: Some(
+                Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString")
+                    .expect("Valid RDF dirLangString IRI"),
+            ),
+            language: Some(language.to_string()),
+            direction: Some(direction.to_string()),
+        })
     }
 
     /// Check if term is an IRI
@@ -637,8 +665,17 @@ impl std::fmt::Display for RdfTerm {
                 value,
                 datatype,
                 language,
+                direction,
             } => {
-                if let Some(lang) = language {
+                if let Some(dir) = direction {
+                    // RDF 1.2 dirLangString: "value"@lang--dir
+                    if let Some(lang) = language {
+                        write!(f, "\"{}\"@{}--{}", value, lang, dir)
+                    } else {
+                        // dirLangString requires language tag
+                        write!(f, "\"{}\"", value)
+                    }
+                } else if let Some(lang) = language {
                     write!(f, "\"{}\"@{}", value, lang)
                 } else if let Some(dt) = datatype {
                     write!(f, "\"{}\"^^<{}>", value, dt)
@@ -738,5 +775,68 @@ mod tests {
             .expect("Failed to create RDF IRI term from valid URI string");
         let matches = graph.find_triples(Some(&other_subject), None, None);
         assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn test_dir_lang_string_creation() {
+        // Test creating dirLangString with valid direction
+        let term_ltr = RdfTerm::dir_lang_string("Hello", "en", "ltr");
+        assert!(term_ltr.is_ok());
+        
+        let term_rtl = RdfTerm::dir_lang_string("مرحبا", "ar", "rtl");
+        assert!(term_rtl.is_ok());
+        
+        // Test invalid direction
+        let term_invalid = RdfTerm::dir_lang_string("Hello", "en", "invalid");
+        assert!(term_invalid.is_err());
+    }
+
+    #[test]
+    fn test_dir_lang_string_display() {
+        // Test display format for dirLangString: "value"@lang--dir
+        let term = RdfTerm::dir_lang_string("Hello", "en", "ltr")
+            .expect("Valid dirLangString");
+        let display = format!("{}", term);
+        assert_eq!(display, "\"Hello\"@en--ltr");
+        
+        let term_rtl = RdfTerm::dir_lang_string("مرحبا", "ar", "rtl")
+            .expect("Valid dirLangString");
+        let display_rtl = format!("{}", term_rtl);
+        assert_eq!(display_rtl, "\"مرحبا\"@ar--rtl");
+    }
+
+    #[test]
+    fn test_dir_lang_string_has_correct_datatype() {
+        let term = RdfTerm::dir_lang_string("Hello", "en", "ltr")
+            .expect("Valid dirLangString");
+        
+        match term {
+            RdfTerm::Literal { datatype, language, direction, .. } => {
+                assert_eq!(
+                    datatype.as_ref().map(|u| u.as_str()),
+                    Some("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString")
+                );
+                assert_eq!(language.as_deref(), Some("en"));
+                assert_eq!(direction.as_deref(), Some("ltr"));
+            }
+            _ => panic!("Expected Literal term"),
+        }
+    }
+
+    #[test]
+    fn test_regular_language_literal_vs_dir_lang_string() {
+        // Regular language tag without direction
+        let regular = RdfTerm::language_literal("Hello", "en");
+        let regular_display = format!("{}", regular);
+        assert_eq!(regular_display, "\"Hello\"@en");
+        
+        // dirLangString with direction
+        let dir_lang = RdfTerm::dir_lang_string("Hello", "en", "ltr")
+            .expect("Valid dirLangString");
+        let dir_lang_display = format!("{}", dir_lang);
+        assert_eq!(dir_lang_display, "\"Hello\"@en--ltr");
+        
+    // These should be different
+        assert_ne!(regular_display, dir_lang_display);
     }
 }

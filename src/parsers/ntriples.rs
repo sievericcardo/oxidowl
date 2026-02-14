@@ -287,6 +287,7 @@ impl NTriplesParser {
             value,
             datatype,
             language,
+            direction: None,
         })
     }
 

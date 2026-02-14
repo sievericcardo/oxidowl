@@ -71,6 +71,7 @@ impl RdfSimpleInterpretation {
                 value,
                 datatype,
                 language,
+                ..
             } => {
                 // Literals are interpreted according to their datatype
                 let literal_key = if let Some(dt) = datatype {

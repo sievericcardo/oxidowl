@@ -156,6 +156,7 @@ impl Interpretation {
                 value,
                 datatype,
                 language,
+                ..
             } => {
                 let literal_key = if let Some(dt) = datatype {
                     format!("{}^^{}", value, dt)

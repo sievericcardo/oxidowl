@@ -11,6 +11,25 @@ pub mod rdf_xml;
 pub mod turtle;
 pub mod validation;
 
+/// RDF compatibility mode for parsing RDF-based formats
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RdfCompatibilityMode {
+    /// RDF 1.1 mode - standard reification only
+    RDF11,
+    /// RDF 1.2 mode - rdf:reifies support
+    RDF12,
+    /// RDF-star mode - quoted triples with << >>
+    RDFStar,
+    /// Auto-detect based on content
+    Auto,
+}
+
+impl Default for RdfCompatibilityMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 /// Error verbosity level for parser error messages
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorVerbosity {
@@ -279,6 +298,44 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
     Ok(OntologyFormat::Functional)
 }
 
+/// Detect RDF version from content based on syntactic markers
+fn detect_rdf_version_from_content(content: &str) -> RdfCompatibilityMode {
+    // Check for RDF-star syntax (quoted triples with << >>)
+    // Look for << followed by content and >> on the same or nearby lines
+    if content.contains("<<") && content.contains(">>") {
+        // More robust check: ensure these are not just in comments or strings
+        let lines: Vec<&str> = content.lines().collect();
+        for line in &lines {
+            let trimmed = line.trim();
+            // Skip comment lines
+            if trimmed.starts_with('#') {
+                continue;
+            }
+            // Check for << >> pattern that looks like RDF-star
+            if trimmed.contains("<<") && trimmed.contains(">>") {
+                return RdfCompatibilityMode::RDFStar;
+            }
+        }
+    }
+    
+    // Check for RDF 1.2 rdf:reifies predicate
+    if content.contains("rdf:reifies") || content.contains("<rdf:reifies") {
+        return RdfCompatibilityMode::RDF12;
+    }
+    
+    // Check for RDF 1.1 standard reification vocabulary
+    // These alone don't indicate RDF 1.2, so default to RDF 1.1
+    if content.contains("rdf:Statement") 
+        || content.contains("rdf:subject")
+        || content.contains("rdf:predicate")
+        || content.contains("rdf:object") {
+        return RdfCompatibilityMode::RDF11;
+    }
+    
+    // Default to auto-detection (let the parser decide)
+    RdfCompatibilityMode::Auto
+}
+
 /// Auto-detect format and parse file
 pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let path = path.as_ref();
@@ -306,8 +363,11 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let parsed_content = if content.trim().starts_with("###") {
         extract_first_crosssyntax_section(&content)
     } else {
-        content
+        content.clone()
     };
+
+    // Detect RDF version for RDF-based formats
+    let rdf_version = detect_rdf_version_from_content(&content);
 
     match format {
         OntologyFormat::OwlXml => {
@@ -319,15 +379,63 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
             parser.parse(&parsed_content)
         }
         OntologyFormat::RdfXml => {
-            let parser = rdf_xml::RdfXmlParser::new();
+            // Configure parser based on detected RDF version
+            let config = match rdf_version {
+                RdfCompatibilityMode::RDF11 => rdf_xml::RdfXmlParserConfig {
+                    rdf_version: rdf_xml::RdfVersionMode::RDF11,
+                    ..Default::default()
+                },
+                RdfCompatibilityMode::RDF12 => rdf_xml::RdfXmlParserConfig {
+                    rdf_version: rdf_xml::RdfVersionMode::RDF12,
+                    parse_rdf_reifies: true,
+                    ..Default::default()
+                },
+                RdfCompatibilityMode::RDFStar => rdf_xml::RdfXmlParserConfig {
+                    rdf_version: rdf_xml::RdfVersionMode::RDF12,
+                    reification_mode: rdf_xml::ReificationMode::ConvertToQuotedTriples,
+                    ..Default::default()
+                },
+                RdfCompatibilityMode::Auto => rdf_xml::RdfXmlParserConfig::default(),
+            };
+            let parser = rdf_xml::RdfXmlParser::with_config(config);
             parser.parse(&parsed_content)
         }
         OntologyFormat::Turtle => {
-            let parser = turtle::TurtleParser::new();
+            // Configure parser based on detected RDF version
+            let config = match rdf_version {
+                RdfCompatibilityMode::RDF11 => turtle::TurtleParserConfig {
+                    rdf_version: turtle::RdfVersionMode::RDF11,
+                    parse_rdf_star: false,
+                    strict_rdf11_mode: true,
+                    ..Default::default()
+                },
+                RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => turtle::TurtleParserConfig {
+                    rdf_version: turtle::RdfVersionMode::RDFStar,
+                    parse_rdf_star: true,
+                    strict_rdf11_mode: false,
+                    ..Default::default()
+                },
+                RdfCompatibilityMode::Auto => turtle::TurtleParserConfig::default(),
+            };
+            let parser = turtle::TurtleParser::with_config(config);
             parser.parse(&parsed_content)
         }
         OntologyFormat::NTriples => {
-            let parser = ntriples::NTriplesParser::new();
+            // Configure parser based on detected RDF version
+            let config = match rdf_version {
+                RdfCompatibilityMode::RDF11 => ntriples::NTriplesConfig {
+                    rdf_version: ntriples::RdfVersionMode::RDF11,
+                    parse_rdf_star: false,
+                    strict_rdf11_mode: true,
+                },
+                RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => ntriples::NTriplesConfig {
+                    rdf_version: ntriples::RdfVersionMode::RDFStar,
+                    parse_rdf_star: true,
+                    strict_rdf11_mode: false,
+                },
+                RdfCompatibilityMode::Auto => ntriples::NTriplesConfig::default(),
+            };
+            let parser = ntriples::NTriplesParser::with_config(config);
             parser.parse(&parsed_content)
         }
         OntologyFormat::Manchester => {
@@ -383,12 +491,75 @@ pub struct ParserFactory;
 impl ParserFactory {
     /// Create a parser for the specified format
     pub fn create_parser(format: OntologyFormat) -> Result<Box<dyn Parser>> {
+        Self::create_parser_with_rdf_version(format, RdfCompatibilityMode::Auto)
+    }
+
+    /// Create a parser for the specified format with RDF version mode
+    pub fn create_parser_with_rdf_version(
+        format: OntologyFormat,
+        rdf_version: RdfCompatibilityMode,
+    ) -> Result<Box<dyn Parser>> {
         match format {
             OntologyFormat::OwlXml => Ok(Box::new(OwlXmlParser::new())),
             OntologyFormat::Functional => Ok(Box::new(FunctionalParser::new())),
-            OntologyFormat::RdfXml => Ok(Box::new(RdfXmlParser::new())),
-            OntologyFormat::Turtle => Ok(Box::new(TurtleParser::new())),
-            OntologyFormat::NTriples => Ok(Box::new(NTriplesParser::new())),
+            OntologyFormat::RdfXml => {
+                let config = match rdf_version {
+                    RdfCompatibilityMode::RDF11 => rdf_xml::RdfXmlParserConfig {
+                        rdf_version: rdf_xml::RdfVersionMode::RDF11,
+                        ..Default::default()
+                    },
+                    RdfCompatibilityMode::RDF12 => rdf_xml::RdfXmlParserConfig {
+                        rdf_version: rdf_xml::RdfVersionMode::RDF12,
+                        parse_rdf_reifies: true,
+                        ..Default::default()
+                    },
+                    RdfCompatibilityMode::RDFStar => rdf_xml::RdfXmlParserConfig {
+                        rdf_version: rdf_xml::RdfVersionMode::RDF12,
+                        reification_mode: rdf_xml::ReificationMode::ConvertToQuotedTriples,
+                        ..Default::default()
+                    },
+                    RdfCompatibilityMode::Auto => rdf_xml::RdfXmlParserConfig::default(),
+                };
+                Ok(Box::new(rdf_xml::RdfXmlParser::with_config(config)))
+            }
+            OntologyFormat::Turtle => {
+                let config = match rdf_version {
+                    RdfCompatibilityMode::RDF11 => turtle::TurtleParserConfig {
+                        rdf_version: turtle::RdfVersionMode::RDF11,
+                        parse_rdf_star: false,
+                        strict_rdf11_mode: true,
+                        ..Default::default()
+                    },
+                    RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => {
+                        turtle::TurtleParserConfig {
+                            rdf_version: turtle::RdfVersionMode::RDFStar,
+                            parse_rdf_star: true,
+                            strict_rdf11_mode: false,
+                            ..Default::default()
+                        }
+                    }
+                    RdfCompatibilityMode::Auto => turtle::TurtleParserConfig::default(),
+                };
+                Ok(Box::new(turtle::TurtleParser::with_config(config)))
+            }
+            OntologyFormat::NTriples => {
+                let config = match rdf_version {
+                    RdfCompatibilityMode::RDF11 => ntriples::NTriplesConfig {
+                        rdf_version: ntriples::RdfVersionMode::RDF11,
+                        parse_rdf_star: false,
+                        strict_rdf11_mode: true,
+                    },
+                    RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => {
+                        ntriples::NTriplesConfig {
+                            rdf_version: ntriples::RdfVersionMode::RDFStar,
+                            parse_rdf_star: true,
+                            strict_rdf11_mode: false,
+                        }
+                    }
+                    RdfCompatibilityMode::Auto => ntriples::NTriplesConfig::default(),
+                };
+                Ok(Box::new(ntriples::NTriplesParser::with_config(config)))
+            }
             OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
                 ManchesterParserConfig::default(),
             ))),
@@ -396,6 +567,11 @@ impl ParserFactory {
                 "Auto format should be resolved before creating parser",
             )),
         }
+    }
+
+    /// Detect RDF version from content
+    pub fn detect_rdf_version(content: &str) -> RdfCompatibilityMode {
+        detect_rdf_version_from_content(content)
     }
 }
 
@@ -480,5 +656,85 @@ impl Parser for ManchesterParser {
         let content = std::fs::read_to_string(path)
             .map_err(|e| Error::ontology_parsing(&format!("Failed to read file: {}", e)))?;
         self.parse(&content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_rdf_star_syntax() {
+        let content = r#"
+            @prefix ex: <http://example.org/> .
+            << ex:Alice ex:knows ex:Bob >> ex:certainty "high" .
+        "#;
+        let version = detect_rdf_version_from_content(content);
+        assert_eq!(version, RdfCompatibilityMode::RDFStar);
+    }
+
+    #[test]
+    fn test_detect_rdf_12_reifies() {
+        let content = r##"
+            <?xml version="1.0"?>
+            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+              <rdf:Description rdf:about="http://example.org/statement1">
+                <rdf:reifies rdf:resource="#triple1"/>
+              </rdf:Description>
+            </rdf:RDF>
+        "##;
+        let version = detect_rdf_version_from_content(content);
+        assert_eq!(version, RdfCompatibilityMode::RDF12);
+    }
+
+    #[test]
+    fn test_detect_rdf_11_reification() {
+        let content = r##"
+            <?xml version="1.0"?>
+            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+              <rdf:Statement rdf:about="#stmt1">
+                <rdf:subject rdf:resource="http://example.org/alice"/>
+                <rdf:predicate rdf:resource="http://example.org/knows"/>
+                <rdf:object rdf:resource="http://example.org/bob"/>
+              </rdf:Statement>
+            </rdf:RDF>
+        "##;
+        let version = detect_rdf_version_from_content(content);
+        assert_eq!(version, RdfCompatibilityMode::RDF11);
+    }
+
+    #[test]
+    fn test_parser_factory_with_rdf_version() {
+        // Test that parser factory can create parsers with different RDF versions
+        let turtle_parser = ParserFactory::create_parser_with_rdf_version(
+            OntologyFormat::Turtle,
+            RdfCompatibilityMode::RDFStar,
+        );
+        assert!(turtle_parser.is_ok());
+
+        let rdf_xml_parser = ParserFactory::create_parser_with_rdf_version(
+            OntologyFormat::RdfXml,
+            RdfCompatibilityMode::RDF12,
+        );
+        assert!(rdf_xml_parser.is_ok());
+
+        let ntriples_parser = ParserFactory::create_parser_with_rdf_version(
+            OntologyFormat::NTriples,
+            RdfCompatibilityMode::RDF11,
+        );
+        assert!(ntriples_parser.is_ok());
+    }
+
+    #[test]
+    fn test_detect_rdf_version_ignores_comments() {
+        // Ensure << >> in comments doesn't trigger RDF-star detection
+        let content = r#"
+            # This is a comment with << fake quoted triple >>
+            @prefix ex: <http://example.org/> .
+            ex:Alice ex:knows ex:Bob .
+        "#;
+        let version = detect_rdf_version_from_content(content);
+        // Should be Auto since there's no actual RDF-star syntax
+        assert_eq!(version, RdfCompatibilityMode::Auto);
     }
 }
