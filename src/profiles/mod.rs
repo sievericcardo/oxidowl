@@ -14,6 +14,12 @@ pub mod el;
 pub mod ql;
 pub mod rl;
 pub mod validator;
+pub mod el_reasoner;
+pub mod rl_reasoner;
+
+// Re-export reasoners for easier access
+pub use el_reasoner::ELReasoner;
+pub use rl_reasoner::RLReasoner;
 
 /// OWL 2 Profile types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
