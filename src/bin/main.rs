@@ -794,10 +794,10 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                 
                 // Sort by axiom type name for consistent output
                 let mut sorted_counts: Vec<_> = axiom_counts.iter().collect();
-                sorted_counts.sort_by_key(|(axiom_type, _)| format!("{:?}", axiom_type));
+                sorted_counts.sort_by_key(|(axiom_type, _)| format!("{axiom_type:?}"));
                 
                 for (axiom_type, count) in sorted_counts {
-                    println!("{:?}:{}", axiom_type, count);
+                    println!("{axiom_type:?}:{count}");
                 }
             }
         }
