@@ -16,6 +16,7 @@ use crate::{
             SubClassOfAxiom,
         },
     },
+    semantics::{RdfTerm, Triple as RdfTriple},
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
 
@@ -77,6 +78,28 @@ pub struct TurtleParserConfig {
 
     /// Whether to handle multi-line statements (default: true)
     pub handle_multiline: bool,
+
+    /// RDF version to parse (default: Auto-detect)
+    pub rdf_version: RdfVersionMode,
+
+    /// Whether to parse RDF-star quoted triples (default: true)
+    pub parse_rdf_star: bool,
+
+    /// Strict RDF 1.1 mode - reject RDF-star/1.2 features (default: false)
+    pub strict_rdf11_mode: bool,
+}
+
+/// RDF version mode for parsing
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RdfVersionMode {
+    /// RDF 1.1 only (no RDF-star features)
+    RDF11,
+    /// RDF 1.2 (includes directionality, rdf:reifies)
+    RDF12,
+    /// RDF-star (includes quoted triples)
+    RDFStar,
+    /// Auto-detect based on syntax (default)
+    Auto,
 }
 
 impl Default for TurtleParserConfig {
@@ -90,6 +113,9 @@ impl Default for TurtleParserConfig {
             strict_mode: false,
             parse_owl_constructs: true,
             handle_multiline: true,
+            rdf_version: RdfVersionMode::Auto,
+            parse_rdf_star: true,
+            strict_rdf11_mode: false,
         }
     }
 }
@@ -115,6 +141,12 @@ enum Token {
     Semicolon,
     Period,
     Keyword(String),
+    /// RDF-star: << to start quoted triple
+    LeftAngleBrackets,
+    /// RDF-star: >> to end quoted triple
+    RightAngleBrackets,
+    /// RDF-star: quoted triple as a term
+    QuotedTriple(Box<RdfTriple>),
 }
 
 /// Parser state for handling complex structures
@@ -428,6 +460,7 @@ impl TurtleParser {
 
         // Parse standard triple
         let tokens = self.tokenize_statement(statement)?;
+        let tokens = self.process_quoted_triples(tokens, state)?;
 
         // Handle semicolon-separated predicates, blank nodes, or collections
         // Also route to parse_semicolon_statement if object is a collection or blank node
@@ -2144,20 +2177,49 @@ impl TurtleParser {
 
             match ch {
                 '<' if !in_literal => {
-                    if !current_token.is_empty() {
-                        self.add_token_from_string(&current_token, &mut tokens);
-                        current_token.clear();
+                    // Check for << (RDF-star quoted triple start)
+                    if self.config.parse_rdf_star
+                        && i + 1 < chars.len()
+                        && chars[i + 1] == '<'
+                        && !in_iri
+                    {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::LeftAngleBrackets);
+                        i += 1; // Skip the second <
+                    } else {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        in_iri = true;
+                        current_token.push(ch);
                     }
-                    in_iri = true;
-                    current_token.push(ch);
                 }
-                '>' if in_iri => {
-                    current_token.push(ch);
-                    tokens.push(Token::IRI(
-                        current_token[1..current_token.len() - 1].to_string(),
-                    ));
-                    current_token.clear();
-                    in_iri = false;
+                '>' if !in_literal => {
+                    if in_iri {
+                        current_token.push(ch);
+                        tokens.push(Token::IRI(
+                            current_token[1..current_token.len() - 1].to_string(),
+                        ));
+                        current_token.clear();
+                        in_iri = false;
+                    } else if self.config.parse_rdf_star && i + 1 < chars.len() && chars[i + 1] == '>' {
+                        // Check for >> (RDF-star quoted triple end)
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::RightAngleBrackets);
+                        i += 1; // Skip the second >
+                    } else {
+                        // Standalone >, treat as error or part of current token
+                        if !current_token.is_empty() {
+                            current_token.push(ch);
+                        }
+                    }
                 }
                 '"' => {
                     if in_literal {
@@ -2285,6 +2347,62 @@ impl TurtleParser {
         Ok(tokens)
     }
 
+    /// Process tokens to convert << ... >> into QuotedTriple tokens
+    /// Supports recursive quoted triples
+    fn process_quoted_triples(&self, tokens: Vec<Token>, state: &ParseState) -> Result<Vec<Token>> {
+        if !self.config.parse_rdf_star {
+            return Ok(tokens);
+        }
+
+        let mut processed = Vec::new();
+        let mut i = 0;
+
+        while i < tokens.len() {
+            if matches!(tokens[i], Token::LeftAngleBrackets) {
+                // Find the matching RightAngleBrackets
+                let start = i + 1;
+                let mut depth = 1;
+                let mut end = start;
+
+                while end < tokens.len() && depth > 0 {
+                    match &tokens[end] {
+                        Token::LeftAngleBrackets => depth += 1,
+                        Token::RightAngleBrackets => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+
+                if depth != 0 {
+                    return Err(Error::ontology_parsing(
+                        "Unmatched quoted triple delimiters << >>".to_string(),
+                    ));
+                }
+
+                // Recursively process inner tokens first (for nested quoted triples)
+                let inner_tokens = tokens[start..end].to_vec();
+                let processed_inner = self.process_quoted_triples(inner_tokens, state)?;
+
+                // Parse the processed tokens into a quoted triple
+                let triple = self.parse_quoted_triple(&processed_inner, state)?;
+                processed.push(Token::QuotedTriple(Box::new(triple)));
+
+                i = end + 1; // Skip past the >>
+            } else {
+                processed.push(tokens[i].clone());
+                i += 1;
+            }
+        }
+
+        Ok(processed)
+    }
+
+
     /// Helper to add token from string
     fn add_token_from_string(&self, token_str: &str, tokens: &mut Vec<Token>) {
         // Check for blank node labels (e.g., _:b0)
@@ -2304,6 +2422,88 @@ impl TurtleParser {
             }
         } else {
             tokens.push(Token::Keyword(token_str.to_string()));
+        }
+    }
+
+    /// Parse a quoted triple from tokens between << and >>
+    /// Supports recursive quoted triples
+    fn parse_quoted_triple(&self, tokens: &[Token], state: &ParseState) -> Result<RdfTriple> {
+        if tokens.len() < 3 {
+            return Err(Error::ontology_parsing(
+                "Quoted triple must have at least subject, predicate, and object".to_string(),
+            ));
+        }
+
+        // Recursively resolve tokens to RdfTerms
+        let subject_term = self.token_to_rdf_term(&tokens[0], state)?;
+        let predicate_term = self.token_to_rdf_term(&tokens[1], state)?;
+        let object_term = self.token_to_rdf_term(&tokens[2], state)?;
+
+        Ok(RdfTriple {
+            subject: subject_term,
+            predicate: predicate_term,
+            object: object_term,
+        })
+    }
+
+    /// Convert a token to an RdfTerm, handling recursive quoted triples
+    fn token_to_rdf_term(&self, token: &Token, state: &ParseState) -> Result<RdfTerm> {
+        match token {
+            Token::QuotedTriple(triple) => {
+                // Recursive case: quoted triple contains another quoted triple
+                Ok(RdfTerm::QuotedTriple(triple.clone()))
+            }
+            Token::IRI(iri) => {
+                let decoded = self.decode_escape_sequences(iri);
+                let url = url::Url::parse(&decoded).map_err(|e| {
+                    Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                })?;
+                Ok(RdfTerm::Iri(url))
+            }
+            Token::PrefixedName(prefix, local) => {
+                let expanded = self.expand_prefixed_name(&format!("{prefix}:{local}"), state)?;
+                let url = url::Url::parse(&expanded).map_err(|e| {
+                    Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                })?;
+                Ok(RdfTerm::Iri(url))
+            }
+            Token::BlankNode(id) => {
+                let node_id = if id.starts_with("_:") {
+                    id.clone()
+                } else {
+                    format!("_:{id}")
+                };
+                Ok(RdfTerm::BlankNode(node_id))
+            }
+            Token::Literal(lit) => {
+                // Parse literal with optional datatype or language tag
+                let decoded = self.decode_escape_sequences(lit);
+                Ok(RdfTerm::Literal {
+                    value: decoded,
+                    datatype: None,
+                    language: None,
+                })
+            }
+            Token::Keyword(keyword) => {
+                // Try to expand as prefixed name if it contains ':'
+                if keyword.contains(':') {
+                    let expanded = self.expand_prefixed_name(keyword, state)?;
+                    let url = url::Url::parse(&expanded).map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                    })?;
+                    Ok(RdfTerm::Iri(url))
+                } else {
+                    // Treat as IRI for simplicity
+                    let url = url::Url::parse(keyword).map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                    })?;
+                    Ok(RdfTerm::Iri(url))
+                }
+            }
+            _ => Err(Error::ontology_parsing(format!(
+                "Cannot convert token {:?} to RdfTerm",
+                token
+            ))),
         }
     }
 

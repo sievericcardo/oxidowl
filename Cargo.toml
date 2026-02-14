@@ -69,7 +69,7 @@ curie = "0.1.4"         # Prefix mapping support for horned-owl
 # sophia = { version = "0.8", optional = true }   # May need specific version
 
 # SPARQL and RDF graph support
-oxigraph = { version = "0.5.4", features = ["rocksdb"], optional = true }
+oxigraph = { version = "0.5.5", features = ["rocksdb"], optional = true }
 
 # String handling and utilities
 regex = "1.12.2"

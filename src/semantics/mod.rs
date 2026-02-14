@@ -31,7 +31,102 @@ pub struct Triple {
     pub object: RdfTerm,
 }
 
-/// RDF Term (IRI, Blank Node, or Literal)
+impl Triple {
+    /// Create a new triple
+    pub fn new(subject: RdfTerm, predicate: RdfTerm, object: RdfTerm) -> Self {
+        Triple {
+            subject,
+            predicate,
+            object,
+        }
+    }
+
+    /// Calculate the nesting depth of this triple
+    /// Returns 0 for flat triples, >0 for nested quoted triples
+    pub fn depth(&self) -> usize {
+        let subject_depth = match &self.subject {
+            RdfTerm::QuotedTriple(t) => 1 + t.depth(),
+            _ => 0,
+        };
+        let object_depth = match &self.object {
+            RdfTerm::QuotedTriple(t) => 1 + t.depth(),
+            _ => 0,
+        };
+        // Predicates typically shouldn't be quoted triples, but check anyway
+        let predicate_depth = match &self.predicate {
+            RdfTerm::QuotedTriple(t) => 1 + t.depth(),
+            _ => 0,
+        };
+        subject_depth.max(object_depth).max(predicate_depth)
+    }
+
+    /// Flatten this triple to extract all nested triples
+    /// Returns a vector containing this triple and all nested quoted triples
+    pub fn flatten(&self) -> Vec<Triple> {
+        let mut result = vec![self.clone()];
+        
+        // Extract from subject
+        if let RdfTerm::QuotedTriple(t) = &self.subject {
+            result.extend(t.flatten());
+        }
+        
+        // Extract from predicate (unusual but possible)
+        if let RdfTerm::QuotedTriple(t) = &self.predicate {
+            result.extend(t.flatten());
+        }
+        
+        // Extract from object
+        if let RdfTerm::QuotedTriple(t) = &self.object {
+            result.extend(t.flatten());
+        }
+        
+        result
+    }
+
+    /// Convert to RDF 1.1 reification pattern
+    /// Returns a vector of triples representing the reification
+    pub fn to_rdf11_reification(&self, statement_id: &str) -> Result<Vec<Triple>> {
+        let stmt_node = RdfTerm::BlankNode(statement_id.to_string());
+        let rdf_type = RdfTerm::Iri(
+            Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+                .map_err(|e| Error::internal(format!("Invalid RDF type IRI: {}", e)))?,
+        );
+        let rdf_statement = RdfTerm::Iri(
+            Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement")
+                .map_err(|e| Error::internal(format!("Invalid RDF Statement IRI: {}", e)))?,
+        );
+        let rdf_subject = RdfTerm::Iri(
+            Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#subject")
+                .map_err(|e| Error::internal(format!("Invalid RDF subject IRI: {}", e)))?,
+        );
+        let rdf_predicate = RdfTerm::Iri(
+            Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate")
+                .map_err(|e| Error::internal(format!("Invalid RDF predicate IRI: {}", e)))?,
+        );
+        let rdf_object = RdfTerm::Iri(
+            Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#object")
+                .map_err(|e| Error::internal(format!("Invalid RDF object IRI: {}", e)))?,
+        );
+
+        Ok(vec![
+            Triple::new(stmt_node.clone(), rdf_type, rdf_statement),
+            Triple::new(stmt_node.clone(), rdf_subject, self.subject.to_rdf11()),
+            Triple::new(stmt_node.clone(), rdf_predicate, self.predicate.to_rdf11()),
+            Triple::new(stmt_node, rdf_object, self.object.to_rdf11()),
+        ])
+    }
+
+    /// Generate a hash-based identifier for this triple
+    fn hash_id(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+/// RDF Term (IRI, Blank Node, Literal, or Quoted Triple for RDF-star)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RdfTerm {
     /// IRI reference
@@ -44,6 +139,9 @@ pub enum RdfTerm {
         datatype: Option<Url>,
         language: Option<String>,
     },
+    /// Quoted triple (RDF-star support)
+    /// Allows triples to be used as subjects or objects
+    QuotedTriple(Box<Triple>),
 }
 
 impl RdfTerm {
@@ -104,6 +202,11 @@ impl RdfTerm {
         matches!(self, RdfTerm::Literal { .. })
     }
 
+    /// Check if term is a quoted triple (RDF-star)
+    pub fn is_quoted_triple(&self) -> bool {
+        matches!(self, RdfTerm::QuotedTriple(_))
+    }
+
     /// Get IRI if this is an IRI term
     pub fn as_iri(&self) -> Option<&Url> {
         match self {
@@ -112,30 +215,96 @@ impl RdfTerm {
         }
     }
 
+    /// Get quoted triple if this is a quoted triple term
+    pub fn as_quoted_triple(&self) -> Option<&Triple> {
+        match self {
+            RdfTerm::QuotedTriple(triple) => Some(triple),
+            _ => None,
+        }
+    }
+
+    /// Create a quoted triple term
+    pub fn quoted_triple(triple: Triple) -> Self {
+        RdfTerm::QuotedTriple(Box::new(triple))
+    }
+
     /// Get string representation of the term
     pub fn as_str(&self) -> Option<&str> {
         match self {
             RdfTerm::Iri(iri) => Some(iri.as_str()),
             RdfTerm::BlankNode(id) => Some(id),
             RdfTerm::Literal { value, .. } => Some(value),
+            RdfTerm::QuotedTriple(_) => None, // Quoted triples don't have simple string representation
+        }
+    }
+
+    /// Convert to RDF 1.1 compatible term by stripping RDF-star features
+    /// Quoted triples are converted to blank nodes
+    pub fn to_rdf11(&self) -> Self {
+        match self {
+            RdfTerm::QuotedTriple(triple) => {
+                // Convert quoted triple to a blank node for RDF 1.1 compatibility
+                // The actual reification should be done at the graph level
+                RdfTerm::BlankNode(format!("_:qt_{}", triple.hash_id()))
+            }
+            other => other.clone(),
         }
     }
 }
 
-/// RDF Graph - a set of RDF triples
+/// RDF Graph - a set of RDF triples with RDF-star support
 #[derive(Debug, Clone)]
 pub struct RdfGraph {
     triples: HashSet<Triple>,
     blank_node_counter: u64,
+    /// Track RDF version for compatibility
+    rdf_version: RdfVersion,
+}
+
+/// RDF Version for compatibility tracking
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RdfVersion {
+    /// RDF 1.1 (no RDF-star features)
+    RDF11,
+    /// RDF 1.2 (includes directionality, rdf:reifies)
+    RDF12,
+    /// RDF-star (includes quoted triples)
+    RDFStar,
+}
+
+impl Default for RdfVersion {
+    fn default() -> Self {
+        RdfVersion::RDFStar // Default to most feature-complete version
+    }
 }
 
 impl RdfGraph {
-    /// Create a new empty RDF graph
+    /// Create a new empty RDF graph with RDF-star support
     pub fn new() -> Self {
         Self {
             triples: HashSet::new(),
             blank_node_counter: 0,
+            rdf_version: RdfVersion::default(),
         }
+    }
+
+    /// Create a new RDF graph with specified version
+    pub fn with_version(version: RdfVersion) -> Self {
+        Self {
+            triples: HashSet::new(),
+            blank_node_counter: 0,
+            rdf_version: version,
+        }
+    }
+
+    /// Get the RDF version of this graph
+    pub fn rdf_version(&self) -> RdfVersion {
+        self.rdf_version
+    }
+
+    /// Set the RDF version of this graph
+    pub fn set_rdf_version(&mut self, version: RdfVersion) {
+        self.rdf_version = version;
     }
 
     /// Add a triple to the graph
@@ -195,6 +364,132 @@ impl RdfGraph {
                     && (object.is_none() || Some(&triple.object) == object)
             })
             .collect()
+    }
+
+    /// Extract all quoted triples from the graph (including nested ones)
+    pub fn extract_quoted_triples(&self) -> Vec<Triple> {
+        let mut result = Vec::new();
+        for triple in &self.triples {
+            // Check subject
+            if let RdfTerm::QuotedTriple(qt) = &triple.subject {
+                result.extend(qt.flatten());
+            }
+            // Check predicate (unusual but possible)
+            if let RdfTerm::QuotedTriple(qt) = &triple.predicate {
+                result.extend(qt.flatten());
+            }
+            // Check object
+            if let RdfTerm::QuotedTriple(qt) = &triple.object {
+                result.extend(qt.flatten());
+            }
+        }
+        result
+    }
+
+    /// Replace a quoted triple with another
+    pub fn replace_quoted_triple(&mut self, old: &Triple, new: Triple) -> bool {
+        let mut replaced = false;
+        let mut triples_to_remove = Vec::new();
+        let mut triples_to_add = Vec::new();
+
+        for t in &self.triples {
+            let mut updated = t.clone();
+            let mut needs_update = false;
+
+            if let RdfTerm::QuotedTriple(qt) = &updated.subject {
+                if qt.as_ref() == old {
+                    updated.subject = RdfTerm::quoted_triple(new.clone());
+                    needs_update = true;
+                }
+            }
+            if let RdfTerm::QuotedTriple(qt) = &updated.object {
+                if qt.as_ref() == old {
+                    updated.object = RdfTerm::quoted_triple(new.clone());
+                    needs_update = true;
+                }
+            }
+
+            if needs_update {
+                replaced = true;
+                triples_to_remove.push(t.clone());
+                triples_to_add.push(updated);
+            }
+        }
+
+        for old_triple in triples_to_remove {
+            self.triples.remove(&old_triple);
+        }
+        for new_triple in triples_to_add {
+            self.triples.insert(new_triple);
+        }
+
+        replaced
+    }
+
+    /// Count quoted triples in the graph
+    pub fn quoted_triple_count(&self) -> usize {
+        self.extract_quoted_triples().len()
+    }
+
+    /// Convert this graph to RDF 1.1 by stripping RDF-star features
+    /// Returns a new graph with quoted triples converted to reification
+    pub fn to_rdf11(&self) -> Result<RdfGraph> {
+        let mut result = RdfGraph::with_version(RdfVersion::RDF11);
+        let mut reification_counter = 0u64;
+
+        for triple in &self.triples {
+            // Check if triple contains quoted triples
+            let has_quoted = triple.subject.is_quoted_triple()
+                || triple.predicate.is_quoted_triple()
+                || triple.object.is_quoted_triple();
+
+            if !has_quoted {
+                // Simple triple, just add it
+                result.add_triple(triple.clone());
+            } else {
+                // Complex triple with quoted components
+                // Need to reify the quoted triples
+                let new_subject = if let RdfTerm::QuotedTriple(qt) = &triple.subject {
+                    let stmt_id = format!("_:stmt{}", reification_counter);
+                    reification_counter += 1;
+                    let reified = qt.to_rdf11_reification(&stmt_id)?;
+                    for t in reified {
+                        result.add_triple(t);
+                    }
+                    RdfTerm::BlankNode(stmt_id)
+                } else {
+                    triple.subject.to_rdf11()
+                };
+
+                let new_object = if let RdfTerm::QuotedTriple(qt) = &triple.object {
+                    let stmt_id = format!("_:stmt{}", reification_counter);
+                    reification_counter += 1;
+                    let reified = qt.to_rdf11_reification(&stmt_id)?;
+                    for t in reified {
+                        result.add_triple(t);
+                    }
+                    RdfTerm::BlankNode(stmt_id)
+                } else {
+                    triple.object.to_rdf11()
+                };
+
+                result.add_triple(Triple::new(
+                    new_subject,
+                    triple.predicate.to_rdf11(),
+                    new_object,
+                ));
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Reify all quoted triples in this graph (in-place conversion toward RDF 1.1)
+    pub fn reify_quoted_triples(&mut self) -> Result<()> {
+        let rdf11_graph = self.to_rdf11()?;
+        self.triples = rdf11_graph.triples;
+        self.rdf_version = RdfVersion::RDF11;
+        Ok(())
     }
 
     /// Merge another graph into this one
@@ -351,7 +646,17 @@ impl std::fmt::Display for RdfTerm {
                     write!(f, "\"{}\"", value)
                 }
             }
+            RdfTerm::QuotedTriple(triple) => {
+                // Turtle-star syntax: << subject predicate object >>
+                write!(f, "<< {} {} {} >>", triple.subject, triple.predicate, triple.object)
+            }
         }
+    }
+}
+
+impl std::fmt::Display for Triple {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {} {}", self.subject, self.predicate, self.object)
     }
 }
 

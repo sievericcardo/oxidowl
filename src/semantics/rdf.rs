@@ -86,6 +86,15 @@ impl RdfSimpleInterpretation {
                     .cloned()
                     .or_else(|| Some(literal_key)) // Default interpretation
             }
+            RdfTerm::QuotedTriple(triple) => {
+                // RDF-star: quoted triples are interpreted as resources representing the triple
+                // Use a canonical form as identifier
+                let triple_id = format!("<<{}>>", triple);
+                self.resource_interpretation
+                    .get(&triple_id)
+                    .cloned()
+                    .or_else(|| Some(triple_id))
+            }
         }
     }
 

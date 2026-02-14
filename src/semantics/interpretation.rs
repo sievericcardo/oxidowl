@@ -170,6 +170,11 @@ impl Interpretation {
                     .cloned()
                     .or_else(|| Some(literal_key)) // Default interpretation
             }
+            RdfTerm::QuotedTriple(triple) => {
+                // RDF-star: quoted triples interpreted as resources
+                let triple_id = format!("<<{}>>", triple);
+                Some(triple_id)
+            }
         }
     }
 

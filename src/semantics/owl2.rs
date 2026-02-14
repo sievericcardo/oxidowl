@@ -1097,6 +1097,11 @@ impl SemanticInterpretation for Owl2Interpretation {
                 .cloned(),
             RdfTerm::BlankNode(id) => self.individual_interpretation.get(id).cloned(),
             RdfTerm::Literal { value, .. } => Some(value.clone()),
+            RdfTerm::QuotedTriple(triple) => {
+                // RDF-star: quoted triples as individuals
+                let triple_id = format!("<<{}>>", triple);
+                Some(triple_id)
+            }
         }
     }
 
