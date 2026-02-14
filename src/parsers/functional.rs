@@ -25,6 +25,7 @@ static OWL_KEYWORDS: phf::Set<&'static str> = phf_set! {
     "ObjectOneOf", "ObjectSomeValuesFrom", "ObjectAllValuesFrom",
     "ObjectHasValue", "ObjectHasSelf", "ObjectMinCardinality",
     "ObjectMaxCardinality", "ObjectExactCardinality",
+    "ObjectInverseOf",
 
     // Data ranges and restrictions
     "DataSomeValuesFrom", "DataAllValuesFrom", "DataHasValue",
@@ -194,11 +195,42 @@ impl FunctionalParser {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
         let mut in_iri = false;
+        let mut in_string = false;
         let mut paren_depth = 0;
+        let mut chars = content.chars().peekable();
 
-        for ch in content.chars() {
+        while let Some(ch) = chars.next() {
             match ch {
-                '<' if !in_iri => {
+                '"' if !in_iri => {
+                    // Handle quoted strings
+                    if in_string {
+                        // End of string
+                        current_token.push(ch);
+                        tokens.push(current_token.clone());
+                        current_token.clear();
+                        in_string = false;
+                        
+                        // Check for ^^ after the string
+                        if chars.peek() == Some(&'^') {
+                            chars.next(); // consume first ^
+                            if chars.peek() == Some(&'^') {
+                                chars.next(); // consume second ^
+                                tokens.push("^^".to_string());
+                            } else {
+                                current_token.push('^');
+                            }
+                        }
+                    } else {
+                        // Start of string
+                        if !current_token.is_empty() {
+                            tokens.push(current_token.trim().to_string());
+                            current_token.clear();
+                        }
+                        in_string = true;
+                        current_token.push(ch);
+                    }
+                }
+                '<' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
                         tokens.push(current_token.trim().to_string());
                         current_token.clear();
@@ -206,13 +238,13 @@ impl FunctionalParser {
                     in_iri = true;
                     current_token.push(ch);
                 }
-                '>' if in_iri => {
+                '>' if in_iri && !in_string => {
                     current_token.push(ch);
                     tokens.push(current_token.trim().to_string());
                     current_token.clear();
                     in_iri = false;
                 }
-                '(' | ')' if !in_iri => {
+                '(' | ')' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
                         tokens.push(current_token.trim().to_string());
                         current_token.clear();
@@ -224,7 +256,7 @@ impl FunctionalParser {
                         paren_depth -= 1;
                     }
                 }
-                ' ' | '\t' | '\n' | '\r' if !in_iri => {
+                ' ' | '\t' | '\n' | '\r' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
                         tokens.push(current_token.trim().to_string());
                         current_token.clear();
@@ -563,6 +595,319 @@ impl FunctionalParser {
         Ok(position)
     }
 
+    /// Parse an object property expression from tokens
+    #[inline(always)]
+    fn parse_object_property_expression(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<(crate::ontology::ObjectPropertyExpression, usize)> {
+        if position >= tokens.len() {
+            return Err(Error::ontology_parsing(
+                "Unexpected end of tokens while parsing object property expression".to_string(),
+            ));
+        }
+
+        let token = &tokens[position];
+
+        // Handle ObjectInverseOf
+        if token == "ObjectInverseOf" {
+            position += 1; // Skip "ObjectInverseOf"
+            if position < tokens.len() && tokens[position] == "(" {
+                position += 1; // Skip "("
+
+                // Parse the property inside
+                if position >= tokens.len() {
+                    return Err(Error::ontology_parsing(
+                        "Expected object property inside ObjectInverseOf".to_string(),
+                    ));
+                }
+
+                let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                position += 1;
+
+                if position < tokens.len() && tokens[position] == ")" {
+                    position += 1; // Skip ")"
+                }
+
+                let property = crate::ontology::ObjectProperty {
+                    iri: url::Url::parse(&property_iri)
+                        .map_err(|e| {
+                            Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                        })?
+                        .into(),
+                };
+
+                Ok((
+                    crate::ontology::ObjectPropertyExpression::InverseObjectProperty(property),
+                    position,
+                ))
+            } else {
+                Err(Error::ontology_parsing(
+                    "Expected '(' after ObjectInverseOf".to_string(),
+                ))
+            }
+        } else {
+            // Simple object property IRI
+            let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+            position += 1;
+
+            let property = crate::ontology::ObjectProperty {
+                iri: url::Url::parse(&property_iri)
+                    .map_err(|e| {
+                        Error::ontology_parsing(format!("Invalid property IRI: {e}"))
+                    })?
+                    .into(),
+            };
+
+            Ok((
+                crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
+                position,
+            ))
+        }
+    }
+
+    /// Parse a data range from tokens
+    #[inline(always)]
+    fn parse_data_range(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<(crate::ontology::DataRange, usize)> {
+        if position >= tokens.len() {
+            return Err(Error::ontology_parsing(
+                "Unexpected end of tokens while parsing data range".to_string(),
+            ));
+        }
+
+        let token = &tokens[position];
+
+        // Handle complex data ranges
+        match token.as_str() {
+            "DataIntersectionOf" => {
+                position += 1; // Skip "DataIntersectionOf"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    let mut ranges = Vec::new();
+                    while position < tokens.len() && tokens[position] != ")" {
+                        let (range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                        ranges.push(range);
+                        position = new_pos;
+                    }
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+
+                    Ok((crate::ontology::DataRange::DataIntersectionOf(ranges), position))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataIntersectionOf".to_string(),
+                    ))
+                }
+            }
+            "DataUnionOf" => {
+                position += 1; // Skip "DataUnionOf"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    let mut ranges = Vec::new();
+                    while position < tokens.len() && tokens[position] != ")" {
+                        let (range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                        ranges.push(range);
+                        position = new_pos;
+                    }
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+
+                    Ok((crate::ontology::DataRange::DataUnionOf(ranges), position))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataUnionOf".to_string(),
+                    ))
+                }
+            }
+            "DataComplementOf" => {
+                position += 1; // Skip "DataComplementOf"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    let (range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                    position = new_pos;
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+
+                    Ok((crate::ontology::DataRange::DataComplementOf(Box::new(range)), position))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataComplementOf".to_string(),
+                    ))
+                }
+            }
+            "DataOneOf" => {
+                position += 1; // Skip "DataOneOf"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    let mut literals = Vec::new();
+                    while position < tokens.len() && tokens[position] != ")" {
+                        let literal_token = &tokens[position];
+                        position += 1;
+
+                        // Parse the literal - check for typed literals (^^datatype)
+                        let literal = if position < tokens.len() && tokens[position] == "^^" {
+                            position += 1; // Skip "^^"
+                            if position >= tokens.len() {
+                                return Err(Error::ontology_parsing(
+                                    "Expected datatype after ^^".to_string(),
+                                ));
+                            }
+                            let datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
+                            position += 1;
+
+                            crate::ontology::Literal {
+                                value: literal_token.trim_matches('"').to_string(),
+                                language: None,
+                                datatype: Some(url::Url::parse(&datatype_iri).map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?),
+                            }
+                        } else {
+                            // Untyped literal or language-tagged literal
+                            crate::ontology::Literal {
+                                value: literal_token.trim_matches('"').to_string(),
+                                language: None,
+                                datatype: None,
+                            }
+                        };
+
+                        literals.push(literal);
+                    }
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+
+                    Ok((crate::ontology::DataRange::DataOneOf(literals), position))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DataOneOf".to_string(),
+                    ))
+                }
+            }
+            "DatatypeRestriction" => {
+                position += 1; // Skip "DatatypeRestriction"
+                if position < tokens.len() && tokens[position] == "(" {
+                    position += 1; // Skip "("
+
+                    // Parse base datatype
+                    if position >= tokens.len() {
+                        return Err(Error::ontology_parsing(
+                            "Expected base datatype in DatatypeRestriction".to_string(),
+                        ));
+                    }
+                    let base_datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
+                    position += 1;
+
+                    // Parse facet-value pairs
+                    let mut restrictions = Vec::new();
+                    while position < tokens.len() && tokens[position] != ")" {
+                        // Parse facet IRI
+                        let facet_iri = self.expand_iri(&tokens[position], prefixes)?;
+                        position += 1;
+
+                        // Parse literal value
+                        if position >= tokens.len() {
+                            return Err(Error::ontology_parsing(
+                                "Expected literal value after facet in DatatypeRestriction".to_string(),
+                            ));
+                        }
+                        let literal_token = &tokens[position];
+                        position += 1;
+
+                        // Parse literal with potential datatype
+                        let literal = if position < tokens.len() && tokens[position] == "^^" {
+                            position += 1; // Skip "^^"
+                            if position >= tokens.len() {
+                                return Err(Error::ontology_parsing(
+                                    "Expected datatype after ^^".to_string(),
+                                ));
+                            }
+                            let datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
+                            position += 1;
+
+                            crate::ontology::Literal {
+                                value: literal_token.trim_matches('"').to_string(),
+                                language: None,
+                                datatype: Some(url::Url::parse(&datatype_iri).map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?),
+                            }
+                        } else {
+                            crate::ontology::Literal {
+                                value: literal_token.trim_matches('"').to_string(),
+                                language: None,
+                                datatype: None,
+                            }
+                        };
+
+                        restrictions.push(crate::ontology::FacetRestriction {
+                            facet: url::Url::parse(&facet_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid facet IRI: {e}"))
+                                })?
+                                .into(),
+                            value: literal,
+                        });
+                    }
+
+                    if position < tokens.len() && tokens[position] == ")" {
+                        position += 1; // Skip ")"
+                    }
+
+                    Ok((
+                        crate::ontology::DataRange::DatatypeRestriction {
+                            datatype: url::Url::parse(&base_datatype_iri)
+                                .map_err(|e| {
+                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                                })?
+                                .into(),
+                            restrictions,
+                        },
+                        position,
+                    ))
+                } else {
+                    Err(Error::ontology_parsing(
+                        "Expected '(' after DatatypeRestriction".to_string(),
+                    ))
+                }
+            }
+            _ => {
+                // Simple datatype IRI
+                let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
+                position += 1;
+
+                Ok((
+                    crate::ontology::DataRange::Datatype(
+                        url::Url::parse(&datarange_iri)
+                            .map_err(|e| {
+                                Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
+                            })?
+                            .into(),
+                    ),
+                    position,
+                ))
+            }
+        }
+    }
+
     /// Parse a class expression from tokens
     #[inline(always)]
     fn parse_class_expression(
@@ -673,66 +1018,15 @@ impl FunctionalParser {
                     let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                     position += 1;
 
-                    // Parse data range
+                    // Parse data range using the helper function
                     if position >= tokens.len() {
                         return Err(Error::ontology_parsing(
                             "Expected data range in DataSomeValuesFrom".to_string(),
                         ));
                     }
 
-                    // Check if it's a DatatypeRestriction
-                    let filler = if tokens[position] == "DatatypeRestriction" {
-                        // Parse DatatypeRestriction(baseType facet1 value1 facet2 value2 ...)
-                        position += 1; // Skip "DatatypeRestriction"
-                        if position < tokens.len() && tokens[position] == "(" {
-                            position += 1; // Skip "("
-
-                            // Parse base datatype
-                            if position >= tokens.len() {
-                                return Err(Error::ontology_parsing(
-                                    "Expected base datatype in DatatypeRestriction".to_string(),
-                                ));
-                            }
-                            let base_datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
-                            position += 1;
-
-                            // Skip facet-value pairs until closing ")"
-                            // For now, we'll just use the base datatype and ignore facets
-                            while position < tokens.len() && tokens[position] != ")" {
-                                position += 1;
-                            }
-
-                            if position < tokens.len() && tokens[position] == ")" {
-                                position += 1; // Skip ")"
-                            }
-
-                            crate::ontology::DataRange::Datatype(
-                                url::Url::parse(&base_datatype_iri)
-                                    .map_err(|e| {
-                                        Error::ontology_parsing(format!(
-                                            "Invalid datatype IRI: {e}"
-                                        ))
-                                    })?
-                                    .into(),
-                            )
-                        } else {
-                            return Err(Error::ontology_parsing(
-                                "Expected '(' after DatatypeRestriction".to_string(),
-                            ));
-                        }
-                    } else {
-                        // Simple datatype IRI
-                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                        position += 1;
-
-                        crate::ontology::DataRange::Datatype(
-                            url::Url::parse(&datarange_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                                })?
-                                .into(),
-                        )
-                    };
+                    let (filler, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -773,14 +1067,15 @@ impl FunctionalParser {
                     let property_iri = self.expand_iri(&tokens[position], prefixes)?;
                     position += 1;
 
-                    // Parse data range
+                    // Parse data range using the helper function
                     if position >= tokens.len() {
                         return Err(Error::ontology_parsing(
                             "Expected data range in DataAllValuesFrom".to_string(),
                         ));
                     }
-                    let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+
+                    let (filler, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
@@ -795,14 +1090,6 @@ impl FunctionalParser {
                                 })?
                                 .into(),
                         },
-                    );
-
-                    let filler = crate::ontology::DataRange::Datatype(
-                        url::Url::parse(&datarange_iri)
-                            .map_err(|e| {
-                                Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                            })?
-                            .into(),
                     );
 
                     Ok((
@@ -924,14 +1211,15 @@ impl FunctionalParser {
                 if position < tokens.len() && tokens[position] == "(" {
                     position += 1; // Skip "("
 
-                    // Parse object property
+                    // Parse object property expression using helper function
                     if position >= tokens.len() {
                         return Err(Error::ontology_parsing(
                             "Expected object property after ObjectSomeValuesFrom(".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse filler class expression
                     if position >= tokens.len() {
@@ -947,16 +1235,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectSomeValuesFrom {
@@ -976,14 +1254,15 @@ impl FunctionalParser {
                 if position < tokens.len() && tokens[position] == "(" {
                     position += 1; // Skip "("
 
-                    // Parse object property
+                    // Parse object property expression using helper function
                     if position >= tokens.len() {
                         return Err(Error::ontology_parsing(
                             "Expected object property after ObjectAllValuesFrom(".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse filler class expression
                     if position >= tokens.len() {
@@ -999,16 +1278,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectAllValuesFrom {
