@@ -365,6 +365,9 @@ pub struct Ontology {
     pub imports: Vec<IRI>,
     /// Next axiom ID
     next_id: u64,
+    /// RDF graph for RDF-star and RDF 1.2 support
+    /// Contains triples that may include quoted triples (RDF-star) or RDF 1.2 features
+    pub rdf_graph: Option<crate::semantics::RdfGraph>,
 }
 
 impl Ontology {
@@ -378,6 +381,7 @@ impl Ontology {
             version_iri: None,
             imports: Vec::new(),
             next_id: 1,
+            rdf_graph: None,
         }
     }
 
@@ -407,6 +411,53 @@ impl Ontology {
     #[must_use]
     pub fn get_iri(&self) -> Option<&IRI> {
         self.iri.as_ref()
+    }
+
+    /// Get the RDF graph (if present)
+    #[must_use]
+    pub fn get_rdf_graph(&self) -> Option<&crate::semantics::RdfGraph> {
+        self.rdf_graph.as_ref()
+    }
+
+    /// Get mutable reference to the RDF graph (if present)
+    #[must_use]
+    pub fn get_rdf_graph_mut(&mut self) -> Option<&mut crate::semantics::RdfGraph> {
+        self.rdf_graph.as_mut()
+    }
+
+    /// Set the RDF graph
+    pub fn set_rdf_graph(&mut self, graph: crate::semantics::RdfGraph) {
+        self.rdf_graph = Some(graph);
+    }
+
+    /// Get or create the RDF graph
+    pub fn get_or_create_rdf_graph(&mut self) -> &mut crate::semantics::RdfGraph {
+        if self.rdf_graph.is_none() {
+            self.rdf_graph = Some(crate::semantics::RdfGraph::new());
+        }
+        self.rdf_graph.as_mut().unwrap()
+    }
+
+    /// Add an RDF triple to the ontology's RDF graph
+    pub fn add_rdf_triple(&mut self, triple: crate::semantics::Triple) {
+        self.get_or_create_rdf_graph().add_triple(triple);
+    }
+
+    /// Check if ontology contains RDF-star features (quoted triples)
+    pub fn has_rdf_star_features(&self) -> bool {
+        if let Some(graph) = &self.rdf_graph {
+            graph.quoted_triple_count() > 0
+        } else {
+            false
+        }
+    }
+
+    /// Convert RDF graph to RDF 1.1 by reifying quoted triples
+    pub fn reify_rdf_star(&mut self) -> crate::Result<()> {
+        if let Some(graph) = &mut self.rdf_graph {
+            graph.reify_quoted_triples()?;
+        }
+        Ok(())
     }
 
     /// Add an axiom to the ontology
