@@ -13,7 +13,7 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::Ontology,
-    semantics::{RdfTerm, Triple as RdfTriple},
+    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
 };
 
 /// RDF version mode for N-Triples parsing
@@ -38,6 +38,8 @@ pub struct NTriplesConfig {
     pub parse_rdf_star: bool,
     /// Strict RDF 1.1 mode - reject RDF-star syntax
     pub strict_rdf11_mode: bool,
+    /// IRI validation mode (default: RFC3987 for RDF 1.2)
+    pub iri_validation_mode: IriValidationMode,
 }
 
 impl Default for NTriplesConfig {
@@ -46,6 +48,7 @@ impl Default for NTriplesConfig {
             rdf_version: RdfVersionMode::Auto,
             parse_rdf_star: true,
             strict_rdf11_mode: false,
+            iri_validation_mode: IriValidationMode::RFC3987,
         }
     }
 }
@@ -463,6 +466,7 @@ mod tests {
             rdf_version: RdfVersionMode::RDF11,
             parse_rdf_star: false,
             strict_rdf11_mode: true,
+            iri_validation_mode: IriValidationMode::RFC3986,
         };
         let parser = NTriplesParser::with_config(config);
         let result = parser.parse_string(content);

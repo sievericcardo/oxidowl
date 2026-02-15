@@ -14,7 +14,7 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::Ontology,
-    semantics::{RdfTerm, Triple as RdfTriple},
+    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
 };
 
 /// RDF version mode for RDF/XML parsing
@@ -74,6 +74,9 @@ pub struct RdfXmlParserConfig {
 
     /// Strict RDF 1.1 mode - reject RDF 1.2 features (default: false)
     pub strict_rdf11_mode: bool,
+
+    /// IRI validation mode (default: RFC3987 for RDF 1.2)
+    pub iri_validation_mode: IriValidationMode,
 }
 
 impl Default for RdfXmlParserConfig {
@@ -90,6 +93,7 @@ impl Default for RdfXmlParserConfig {
             reification_mode: ReificationMode::Auto,
             parse_rdf_reifies: true,
             strict_rdf11_mode: false,
+            iri_validation_mode: IriValidationMode::RFC3987,
         }
     }
 }

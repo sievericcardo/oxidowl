@@ -16,7 +16,7 @@ use crate::{
             SubClassOfAxiom,
         },
     },
-    semantics::{RdfTerm, Triple as RdfTriple},
+    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
 
@@ -87,6 +87,9 @@ pub struct TurtleParserConfig {
 
     /// Strict RDF 1.1 mode - reject RDF-star/1.2 features (default: false)
     pub strict_rdf11_mode: bool,
+
+    /// IRI validation mode (default: RFC3987 for RDF 1.2)
+    pub iri_validation_mode: IriValidationMode,
 }
 
 /// RDF version mode for parsing
@@ -116,6 +119,7 @@ impl Default for TurtleParserConfig {
             rdf_version: RdfVersionMode::Auto,
             parse_rdf_star: true,
             strict_rdf11_mode: false,
+            iri_validation_mode: IriValidationMode::RFC3987, // RDF 1.2 default
         }
     }
 }

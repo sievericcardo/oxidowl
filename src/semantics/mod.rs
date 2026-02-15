@@ -10,6 +10,7 @@ pub mod rdf;
 // pub mod rdfs;  // Temporarily disabled due to type system mismatch after changes
 pub mod entailment;
 pub mod interpretation;
+pub mod iri_validation;
 pub mod owl2;
 
 // Re-export main types for convenience
@@ -17,6 +18,7 @@ pub use rdf::{RdfSimpleEntailment, RdfSimpleInterpretation};
 // pub use rdfs::{RdfsEntailmentEngine, RdfsInterpretation};  // Temporarily disabled
 pub use entailment::{EntailmentChecker, EntailmentRegime, Owl2RlEngine};
 pub use interpretation::{Interpretation, InterpretationBuilder, InterpretationFactory};
+pub use iri_validation::{IriValidationMode, IriValidator};
 pub use owl2::{Owl2Interpretation, Owl2ReasoningEngine};
 
 use crate::{Error, Result};
