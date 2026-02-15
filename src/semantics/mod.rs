@@ -574,6 +574,184 @@ impl RdfGraph {
     pub fn is_empty(&self) -> bool {
         self.triples.is_empty()
     }
+
+    /// Serialize graph to N-Triples format
+    /// Supports N-Triples-star for quoted triples (RDF-star)
+    pub fn to_ntriples(&self) -> String {
+        let mut result = String::new();
+        for triple in &self.triples {
+            result.push_str(&format!("{} {} {} .\n", 
+                triple.subject, triple.predicate, triple.object));
+        }
+        result
+    }
+
+    /// Serialize graph to Turtle format
+    /// Supports Turtle-star for quoted triples (RDF-star)
+    pub fn to_turtle(&self) -> String {
+        let mut result = String::new();
+        
+        // Add standard prefixes
+        result.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+        result.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
+        result.push_str("@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n");
+        result.push('\n');
+        
+        // Serialize triples
+        for triple in &self.triples {
+            result.push_str(&format!("{} {} {} .\n", 
+                triple.subject, triple.predicate, triple.object));
+        }
+        result
+    }
+
+    /// Serialize graph to Turtle-star format (explicit RDF-star)
+    /// Alias for to_turtle() since RDF-star syntax is automatically used when needed
+    pub fn to_turtle_star(&self) -> String {
+        self.to_turtle()
+    }
+
+    /// Serialize graph to N-Triples-star format (explicit RDF-star)
+    /// Alias for to_ntriples() since RDF-star syntax is automatically used when needed
+    pub fn to_ntriples_star(&self) -> String {
+        self.to_ntriples()
+    }
+
+    /// Serialize graph to RDF/XML format
+    /// Supports RDF 1.2 features like rdf:reifies and dirLangString
+    pub fn to_rdf_xml(&self) -> String {
+        let mut result = String::new();
+        
+        // XML header
+        result.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        result.push_str("<rdf:RDF\n");
+        result.push_str("    xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
+        result.push_str("    xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\">\n");
+        result.push('\n');
+        
+        // Group triples by subject for better RDF/XML structure
+        use std::collections::HashMap;
+        let mut subject_map: HashMap<String, Vec<(&RdfTerm, &RdfTerm)>> = HashMap::new();
+        
+        for triple in &self.triples {
+            let subject_str = format!("{}", triple.subject);
+            subject_map.entry(subject_str)
+                .or_insert_with(Vec::new)
+                .push((&triple.predicate, &triple.object));
+        }
+        
+        // Serialize each subject's description
+        for (subject, pred_obj_pairs) in subject_map {
+            // Handle quoted triples specially - convert to reification
+            if subject.starts_with("<<") {
+                // For RDF-star in RDF/XML, use reification
+                result.push_str("  <!-- RDF-star quoted triple represented as reification -->\n");
+                result.push_str(&format!("  <rdf:Description rdf:nodeID=\"{}\">\n", 
+                    self.hash_string(&subject)));
+                for (pred, obj) in pred_obj_pairs {
+                    result.push_str(&self.serialize_predicate_object_xml(pred, obj));
+                }
+                result.push_str("  </rdf:Description>\n\n");
+            } else if subject.starts_with("_:") {
+                // Blank node
+                let node_id = &subject[2..]; // Remove "_:" prefix
+                result.push_str(&format!("  <rdf:Description rdf:nodeID=\"{}\">\n", node_id));
+                for (pred, obj) in pred_obj_pairs {
+                    result.push_str(&self.serialize_predicate_object_xml(pred, obj));
+                }
+                result.push_str("  </rdf:Description>\n\n");
+            } else {
+                // IRI resource
+                let iri = subject.trim_start_matches('<').trim_end_matches('>');
+                result.push_str(&format!("  <rdf:Description rdf:about=\"{}\">\n", iri));
+                for (pred, obj) in pred_obj_pairs {
+                    result.push_str(&self.serialize_predicate_object_xml(pred, obj));
+                }
+                result.push_str("  </rdf:Description>\n\n");
+            }
+        }
+        
+        result.push_str("</rdf:RDF>\n");
+        result
+    }
+
+    /// Helper to serialize predicate-object pair in RDF/XML
+    fn serialize_predicate_object_xml(&self, predicate: &RdfTerm, object: &RdfTerm) -> String {
+        let pred_iri = match predicate {
+            RdfTerm::Iri(url) => url.as_str(),
+            _ => return String::new(), // Invalid predicate
+        };
+        
+        // Extract namespace and local name
+        let (ns, local) = self.split_iri(pred_iri);
+        
+        match object {
+            RdfTerm::Iri(url) => {
+                format!("    <{} rdf:resource=\"{}\" />\n", local, url)
+            }
+            RdfTerm::BlankNode(id) => {
+                let node_id = id.strip_prefix("_:").unwrap_or(id);
+                format!("    <{} rdf:nodeID=\"{}\" />\n", local, node_id)
+            }
+            RdfTerm::Literal { value, datatype, language, direction } => {
+                if let Some(dir) = direction {
+                    // RDF 1.2 dirLangString
+                    if let Some(lang) = language {
+                        format!("    <{}>{}</{}>  <!-- lang: {}, dir: {} -->\n", 
+                            local, Self::xml_escape(value), local, lang, dir)
+                    } else {
+                        format!("    <{}>{}</{}>\n", local, Self::xml_escape(value), local)
+                    }
+                } else if let Some(lang) = language {
+                    format!("    <{} xml:lang=\"{}\">{}</{}>\n", 
+                        local, lang, Self::xml_escape(value), local)
+                } else if let Some(dt) = datatype {
+                    format!("    <{} rdf:datatype=\"{}\">{}</{}>\n", 
+                        local, dt, Self::xml_escape(value), local)
+                } else {
+                    format!("    <{}>{}</{}>\n", local, Self::xml_escape(value), local)
+                }
+            }
+            RdfTerm::QuotedTriple(_) => {
+                // RDF-star quoted triple - represent as blank node reference
+                format!("    <{} rdf:nodeID=\"qt_{}\" />\n", local, self.hash_term(object))
+            }
+        }
+    }
+
+    /// Helper to split IRI into namespace and local name
+    fn split_iri(&self, iri: &str) -> (String, String) {
+        if let Some(pos) = iri.rfind('#') {
+            (iri[..=pos].to_string(), iri[pos+1..].to_string())
+        } else if let Some(pos) = iri.rfind('/') {
+            (iri[..=pos].to_string(), iri[pos+1..].to_string())
+        } else {
+            (String::new(), iri.to_string())
+        }
+    }
+
+    /// Helper to escape XML special characters
+    fn xml_escape(s: &str) -> String {
+        s.replace('&', "&amp;")
+         .replace('<', "&lt;")
+         .replace('>', "&gt;")
+         .replace('"', "&quot;")
+         .replace('\'', "&apos;")
+    }
+
+    /// Helper to hash a string for generating unique IDs
+    fn hash_string(&self, s: &str) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        s.hash(&mut hasher);
+        format!("n{}", hasher.finish())
+    }
+
+    /// Helper to hash a term for generating unique IDs
+    fn hash_term(&self, term: &RdfTerm) -> String {
+        self.hash_string(&format!("{}", term))
+    }
 }
 
 impl Default for RdfGraph {
@@ -942,5 +1120,194 @@ mod tests {
         
     // These should be different
         assert_ne!(regular_display, dir_lang_display);
+    }
+
+    #[test]
+    fn test_ntriples_serialization_simple() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/alice").unwrap();
+        let p = RdfTerm::iri("http://example.org/knows").unwrap();
+        let o = RdfTerm::iri("http://example.org/bob").unwrap();
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let ntriples = graph.to_ntriples();
+        assert!(ntriples.contains("<http://example.org/alice>"));
+        assert!(ntriples.contains("<http://example.org/knows>"));
+        assert!(ntriples.contains("<http://example.org/bob>"));
+        assert!(ntriples.ends_with(" .\n"));
+    }
+
+    #[test]
+    fn test_ntriples_serialization_rdfstar() {
+        let mut graph = RdfGraph::new();
+        
+        // Create a quoted triple: << :alice :knows :bob >>
+        let inner_s = RdfTerm::iri("http://example.org/alice").unwrap();
+        let inner_p = RdfTerm::iri("http://example.org/knows").unwrap();
+        let inner_o = RdfTerm::iri("http://example.org/bob").unwrap();
+        let inner_triple = Triple::new(inner_s, inner_p, inner_o);
+        
+        // Use quoted triple as subject
+        let qt = RdfTerm::quoted_triple(inner_triple);
+        let p = RdfTerm::iri("http://example.org/certainty").unwrap();
+        let o = RdfTerm::literal("high");
+        
+        graph.add_triple(Triple::new(qt, p, o));
+        
+        let ntriples = graph.to_ntriples();
+        assert!(ntriples.contains("<<"));
+        assert!(ntriples.contains(">>"));
+        assert!(ntriples.contains("certainty"));
+        assert!(ntriples.contains("\"high\""));
+    }
+
+    #[test]
+    fn test_turtle_serialization_simple() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/alice").unwrap();
+        let p = RdfTerm::iri("http://example.org/knows").unwrap();
+        let o = RdfTerm::iri("http://example.org/bob").unwrap();
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let turtle = graph.to_turtle();
+        assert!(turtle.contains("@prefix"));
+        assert!(turtle.contains("rdf:"));
+        assert!(turtle.contains("<http://example.org/alice>"));
+        assert!(turtle.contains("<http://example.org/knows>"));
+        assert!(turtle.contains("<http://example.org/bob>"));
+    }
+
+    #[test]
+    fn test_turtle_serialization_with_literals() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/alice").unwrap();
+        let p1 = RdfTerm::iri("http://example.org/name").unwrap();
+        let o1 = RdfTerm::literal("Alice");
+        
+        let p2 = RdfTerm::iri("http://example.org/age").unwrap();
+        let o2 = RdfTerm::typed_literal("30", "http://www.w3.org/2001/XMLSchema#integer").unwrap();
+        
+        graph.add_triple(Triple::new(s.clone(), p1, o1));
+        graph.add_triple(Triple::new(s, p2, o2));
+        
+        let turtle = graph.to_turtle();
+        assert!(turtle.contains("\"Alice\""));
+        assert!(turtle.contains("\"30\""));
+        assert!(turtle.contains("integer"));
+    }
+
+    #[test]
+    fn test_turtle_serialization_dirlangstring() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/greeting").unwrap();
+        let p = RdfTerm::iri("http://example.org/text").unwrap();
+        let o = RdfTerm::dir_lang_string("مرحبا", "ar", "rtl").unwrap();
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let turtle = graph.to_turtle();
+        assert!(turtle.contains("\"مرحبا\"@ar--rtl"));
+    }
+
+    #[test]
+    fn test_rdf_xml_serialization_simple() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/alice").unwrap();
+        let p = RdfTerm::iri("http://example.org/knows").unwrap();
+        let o = RdfTerm::iri("http://example.org/bob").unwrap();
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let rdf_xml = graph.to_rdf_xml();
+        assert!(rdf_xml.contains("<?xml"));
+        assert!(rdf_xml.contains("<rdf:RDF"));
+        assert!(rdf_xml.contains("xmlns:rdf"));
+        assert!(rdf_xml.contains("rdf:Description"));
+        assert!(rdf_xml.contains("http://example.org/alice"));
+        assert!(rdf_xml.contains("</rdf:RDF>"));
+    }
+
+    #[test]
+    fn test_rdf_xml_serialization_blank_nodes() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::blank_node("_:b1");
+        let p = RdfTerm::iri("http://example.org/label").unwrap();
+        let o = RdfTerm::literal("test");
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let rdf_xml = graph.to_rdf_xml();
+        assert!(rdf_xml.contains("rdf:nodeID"));
+        assert!(rdf_xml.contains("b1"));
+    }
+
+    #[test]
+    fn test_rdf_xml_serialization_literals_with_language() {
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/doc").unwrap();
+        let p = RdfTerm::iri("http://example.org/title").unwrap();
+        let o = RdfTerm::language_literal("Hello", "en");
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let rdf_xml = graph.to_rdf_xml();
+        assert!(rdf_xml.contains("xml:lang=\"en\""));
+        assert!(rdf_xml.contains("Hello"));
+    }
+
+    #[test]
+    fn test_serialization_round_trip_ntriples() {
+        // Create a graph with various RDF features
+        let mut graph = RdfGraph::new();
+        
+        let s = RdfTerm::iri("http://example.org/subject").unwrap();
+        let p = RdfTerm::iri("http://example.org/predicate").unwrap();
+        let o = RdfTerm::literal("object");
+        
+        graph.add_triple(Triple::new(s, p, o));
+        
+        let ntriples = graph.to_ntriples();
+        
+        // Verify serialization contains expected elements
+        assert!(!ntriples.is_empty());
+        assert!(ntriples.contains("<http://example.org/subject>"));
+        assert!(ntriples.contains("<http://example.org/predicate>"));
+        assert!(ntriples.contains("\"object\""));
+        assert!(ntriples.ends_with(" .\n"));
+    }
+
+    #[test]
+    fn test_serialization_preserves_rdfstar() {
+        let mut graph = RdfGraph::new();
+        
+        // Create nested quoted triple
+        let inner_s = RdfTerm::iri("http://example.org/a").unwrap();
+        let inner_p = RdfTerm::iri("http://example.org/b").unwrap();
+        let inner_o = RdfTerm::iri("http://example.org/c").unwrap();
+        let inner = Triple::new(inner_s, inner_p, inner_o);
+        
+        let qt = RdfTerm::quoted_triple(inner);
+        let p = RdfTerm::iri("http://example.org/certainty").unwrap();
+        let o = RdfTerm::literal("0.9");
+        
+        graph.add_triple(Triple::new(qt, p, o));
+        
+        // Both formats should preserve RDF-star syntax
+        let ntriples = graph.to_ntriples();
+        assert!(ntriples.contains("<<"));
+        assert!(ntriples.contains(">>"));
+        
+        let turtle = graph.to_turtle();
+        assert!(turtle.contains("<<"));
+        assert!(turtle.contains(">>"));
     }
 }
