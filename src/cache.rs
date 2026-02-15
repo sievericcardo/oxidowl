@@ -2,13 +2,14 @@
 //!
 //! This module implements efficient caching strategies for ontology reasoning,
 //! including concept and role satisfiability caches, subsumption caches,
-//! and inference caches.
+//! inference caches, and RDF-star quoted triple optimizations.
 
 use crate::{
     core::lock_helpers::{read_lock, write_lock},
     ontology::{ClassExpression, Individual, OntologyRef},
     performance::MemoryTracker,
     reasoning::{ClassificationResult, RealizationResult},
+    semantics::quoted_triple_optimizer::{QuotedTripleOptimizer, QuotedTripleOptimizerConfig},
 };
 
 use std::{
@@ -62,6 +63,7 @@ pub struct CacheConfig {
     pub enable_classification_cache: bool,
     pub enable_realization_cache: bool,
     pub enable_completion_graph_cache: bool,
+    pub enable_quoted_triple_cache: bool, // RDF-star quoted triple optimization
     pub completion_graph_max_memory_mb: usize,
 }
 
@@ -74,6 +76,7 @@ impl Default for CacheConfig {
             enable_subsumption_cache: true,
             enable_satisfiability_cache: true,
             enable_completion_graph_cache: true,
+            enable_quoted_triple_cache: true, // Enable RDF-star optimization by default
             completion_graph_max_memory_mb: 512,
             enable_classification_cache: true,
             enable_realization_cache: true,
@@ -537,6 +540,7 @@ impl CompletionGraphCache {
 pub struct CacheManager {
     concept_cache: ConceptSatisfiabilityCache,
     completion_graph_cache: CompletionGraphCache,
+    quoted_triple_optimizer: QuotedTripleOptimizer,
     config: CacheConfig,
     memory_tracker: Option<Arc<MemoryTracker>>,
 }
@@ -544,9 +548,17 @@ pub struct CacheManager {
 impl CacheManager {
     #[must_use]
     pub fn new(config: CacheConfig) -> Self {
+        // Create optimizer config based on cache config
+        let optimizer_config = if config.enable_quoted_triple_cache {
+            QuotedTripleOptimizerConfig::default()
+        } else {
+            QuotedTripleOptimizerConfig::rdf11_mode()
+        };
+
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             completion_graph_cache: CompletionGraphCache::new(config.clone()),
+            quoted_triple_optimizer: QuotedTripleOptimizer::new(optimizer_config),
             config,
             memory_tracker: None,
         }
@@ -555,9 +567,17 @@ impl CacheManager {
     /// Create a new cache manager with memory tracking
     #[must_use]
     pub fn with_memory_tracking(config: CacheConfig, memory_tracker: Arc<MemoryTracker>) -> Self {
+        // Create optimizer config based on cache config
+        let optimizer_config = if config.enable_quoted_triple_cache {
+            QuotedTripleOptimizerConfig::default()
+        } else {
+            QuotedTripleOptimizerConfig::rdf11_mode()
+        };
+
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             completion_graph_cache: CompletionGraphCache::new(config.clone()),
+            quoted_triple_optimizer: QuotedTripleOptimizer::new(optimizer_config),
             config,
             memory_tracker: Some(memory_tracker),
         }
@@ -574,6 +594,8 @@ impl CacheManager {
     /// Clear all caches
     pub fn clear_all(&self) {
         self.concept_cache.clear();
+        self.completion_graph_cache.clear();
+        self.quoted_triple_optimizer.clear();
     }
 
     /// Get consistency result from cache
@@ -719,11 +741,17 @@ impl CacheManager {
             0.0
         };
 
+        // Get quoted triple optimizer stats
+        let qt_stats = self.quoted_triple_optimizer.stats();
+
         CacheStats {
             concept_cache_size: self.concept_cache.size(),
             concept_cache_hit_rate: hit_rate,
             completion_graph_cache_memory: self.completion_graph_cache.memory_usage(),
             completion_graph_cache_hit_rate: graph_hit_rate,
+            quoted_triple_cache_hit_rate: qt_stats.hit_rate(),
+            quoted_triple_intern_pool_size: qt_stats.intern_pool.pool_size,
+            quoted_triple_memory_saved_bytes: qt_stats.intern_pool.memory_saved_bytes,
             total_memory_bytes: self.estimated_memory_usage(),
             hit_count: metrics.hits,
             miss_count: metrics.misses,
@@ -741,6 +769,12 @@ impl CacheManager {
     #[must_use]
     pub fn completion_graph_cache(&self) -> &CompletionGraphCache {
         &self.completion_graph_cache
+    }
+
+    /// Get the quoted triple optimizer (RDF-star)
+    #[must_use]
+    pub fn quoted_triple_optimizer(&self) -> &QuotedTripleOptimizer {
+        &self.quoted_triple_optimizer
     }
 
     /// Get a completion graph from cache
@@ -772,6 +806,9 @@ pub struct CacheStats {
     pub concept_cache_hit_rate: f64,
     pub completion_graph_cache_memory: usize,
     pub completion_graph_cache_hit_rate: f64,
+    pub quoted_triple_cache_hit_rate: f64,
+    pub quoted_triple_intern_pool_size: usize,
+    pub quoted_triple_memory_saved_bytes: u64,
     pub total_memory_bytes: usize,
     pub hit_count: u64,
     pub miss_count: u64,

@@ -26,7 +26,7 @@ impl TripleHash {
 
 /// Interning pool for quoted triples
 /// Deduplicates identical quoted triples to save memory
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QuotedTripleInternPool {
     /// Map from triple hash to interned triple
     pool: Arc<RwLock<HashMap<TripleHash, Arc<Triple>>>>,
@@ -145,7 +145,7 @@ impl QuotedTripleInternPool {
 }
 
 /// Cache for quoted triple operations
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QuotedTripleCache {
     /// Cache for depth calculations
     depth_cache: Arc<RwLock<HashMap<TripleHash, usize>>>,
@@ -359,7 +359,7 @@ impl QuotedTripleOptimizerConfig {
 }
 
 /// Comprehensive optimizer for quoted triples
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QuotedTripleOptimizer {
     intern_pool: QuotedTripleInternPool,
     cache: QuotedTripleCache,
