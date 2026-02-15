@@ -217,7 +217,7 @@ async fn handle_owllink_request(
     body: bytes::Bytes,
     reasoning_service: Arc<ReasoningService>,
     knowledge_bases: Arc<tokio::sync::RwLock<HashMap<String, KnowledgeBase>>>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     let request_xml = String::from_utf8(body.to_vec())
         .map_err(|e| warp::reject::custom(OWLlinkError(format!("Invalid UTF-8: {}", e))))?;
 

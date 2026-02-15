@@ -276,7 +276,7 @@ pub struct ClassificationResponse {
 
 async fn get_reasoner_status(
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     let status = ReasonerStatus {
         name: "Oxidowl".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -296,7 +296,7 @@ async fn get_reasoner_status(
 
 async fn check_consistency(
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     match reasoning_service.is_consistent().await {
         Ok(is_consistent) => Ok(warp::reply::json(&ApiResponse::success(
             serde_json::json!({
@@ -310,7 +310,7 @@ async fn check_consistency(
 async fn check_satisfiability(
     request: SatisfiabilityRequest,
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     // Parse class expression
     let class_expr = match parse_class_expression(&request.class_expression) {
         Ok(expr) => expr,
@@ -331,7 +331,7 @@ async fn check_satisfiability(
 async fn check_subsumption(
     request: SubsumptionRequest,
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     // Parse class expressions
     let sub_expr = match parse_class_expression(&request.sub_class) {
         Ok(expr) => expr,
@@ -360,7 +360,7 @@ async fn check_subsumption(
 
 async fn classify_ontology(
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     let start_time = std::time::Instant::now();
 
     match reasoning_service.classify().await {
@@ -382,7 +382,7 @@ async fn classify_ontology(
 async fn get_subclasses(
     request: ClassQueryRequest,
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     let class_expr = match parse_class_expression(&request.class_expression) {
         Ok(expr) => expr,
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
@@ -411,7 +411,7 @@ async fn get_subclasses(
 async fn get_superclasses(
     request: ClassQueryRequest,
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     let class_expr = match parse_class_expression(&request.class_expression) {
         Ok(expr) => expr,
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
@@ -442,7 +442,7 @@ async fn get_superclasses(
 async fn get_instances(
     request: ClassQueryRequest,
     reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     let class_expr = match parse_class_expression(&request.class_expression) {
         Ok(expr) => expr,
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
@@ -470,7 +470,7 @@ async fn get_instances(
 async fn explain_inference(
     request: ExplanationRequest,
     explanation_service: Arc<ExplanationService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     // For now, return a mock explanation - would integrate with actual explanation service
     Ok(warp::reply::json(&ApiResponse::success(
         serde_json::json!({
@@ -487,7 +487,7 @@ async fn explain_inference(
 async fn load_ontology_endpoint(
     request: LoadOntologyRequest,
     _reasoning_service: Arc<ReasoningService>,
-) -> Result<impl Reply, warp::Rejection> {
+) -> std::result::Result<impl Reply, warp::Rejection> {
     // For now, just acknowledge - would implement actual loading
     Ok(warp::reply::json(&ApiResponse::success(
         serde_json::json!({
@@ -507,7 +507,7 @@ fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
 }
 
 /// Handle warp rejections
-async fn handle_rejection(err: warp::Rejection) -> Result<impl Reply, std::convert::Infallible> {
+async fn handle_rejection(err: warp::Rejection) -> std::result::Result<impl Reply, std::convert::Infallible> {
     let code;
     let message;
 
