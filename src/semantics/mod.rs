@@ -7,7 +7,7 @@
 //! - OWL 2 Direct Semantics: https://www.w3.org/TR/owl2-direct-semantics/
 
 pub mod rdf;
-// pub mod rdfs;  // Temporarily disabled due to type system mismatch after changes
+pub mod rdfs;  // Re-enabled after fixing type system issues
 pub mod entailment;
 pub mod interpretation;
 pub mod iri_validation;
@@ -16,7 +16,7 @@ pub mod quoted_triple_optimizer;
 
 // Re-export main types for convenience
 pub use rdf::{RdfSimpleEntailment, RdfSimpleInterpretation};
-// pub use rdfs::{RdfsEntailmentEngine, RdfsInterpretation};  // Temporarily disabled
+pub use rdfs::{RdfsEntailmentEngine, RdfsInterpretation};  // Re-enabled
 pub use entailment::{EntailmentChecker, EntailmentRegime, Owl2RlEngine};
 pub use interpretation::{Interpretation, InterpretationBuilder, InterpretationFactory};
 pub use iri_validation::{IriValidationMode, IriValidator};

@@ -198,6 +198,7 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
                                 println!("   Error testing individual class satisfiability for {} and {}", name1, name2);
                             }
                         }
+                    }
                 }
             }
         }

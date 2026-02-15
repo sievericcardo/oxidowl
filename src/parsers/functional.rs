@@ -101,11 +101,21 @@ impl ParseContext {
     }
 }
 
+/// Token with position information for better error reporting
+#[derive(Debug, Clone)]
+struct TokenWithPosition {
+    token: String,
+    line: u32,
+    column: u32,
+}
+
 /// Functional Syntax Parser
 #[derive(Debug, Clone)]
 pub struct FunctionalParser {
     /// Parser configuration
     config: ParserConfig,
+    /// Token positions for error reporting (cache from last parse)
+    token_positions: std::rc::Rc<std::cell::RefCell<Vec<TokenWithPosition>>>,
 }
 
 impl FunctionalParser {
@@ -114,13 +124,17 @@ impl FunctionalParser {
     pub fn new() -> Self {
         Self {
             config: ParserConfig::default(),
+            token_positions: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
         }
     }
 
     /// Create a new functional syntax parser with custom configuration
     #[must_use]
     pub fn with_config(config: ParserConfig) -> Self {
-        Self { config }
+        Self { 
+            config,
+            token_positions: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
+        }
     }
 
     /// Construct an error with appropriate verbosity
@@ -131,14 +145,36 @@ impl FunctionalParser {
         match self.config.error_verbosity {
             ErrorVerbosity::Minimal => Error::ontology_parsing(message),
             ErrorVerbosity::Standard => {
-                // Line/column tracking not implemented yet, but structure ready
-                Error::ontology_parsing_detailed(message, None, None, None, token)
+                // Try to find position for the given token
+                let (line, column) = if let Some(ref tok) = token {
+                    self.find_token_position(tok)
+                } else {
+                    (None, None)
+                };
+                Error::ontology_parsing_detailed(message, line, column, None, token)
             }
             ErrorVerbosity::Detailed => {
-                // Full context available
-                Error::ontology_parsing_detailed(message, None, None, None, token)
+                // Full context with position information
+                let (line, column) = if let Some(ref tok) = token {
+                    self.find_token_position(tok)
+                } else {
+                    (None, None)
+                };
+                Error::ontology_parsing_detailed(message, line, column, None, token)
             }
         }
+    }
+
+    /// Find position information for a token
+    fn find_token_position(&self, token_str: &str) -> (Option<usize>, Option<usize>) {
+        if let Ok(positions) = self.token_positions.try_borrow() {
+            for twp in positions.iter() {
+                if twp.token == token_str {
+                    return (Some(twp.line as usize), Some(twp.column as usize));
+                }
+            }
+        }
+        (None, None)
     }
 }
 
@@ -163,9 +199,16 @@ impl FunctionalParser {
 
         let mut ontology = Ontology::new();
 
-        // Handle placeholder or empty content
+        // Handle placeholder or empty content more robustly
         let trimmed = content.trim();
-        if trimmed == "(placeholder)" || trimmed.is_empty() {
+        if trimmed.is_empty() {
+            // Empty content is valid - return empty ontology
+            return Ok(ontology);
+        }
+        
+        // Check for various placeholder formats and minimal ontologies
+        if trimmed == "(placeholder)" || trimmed == "Ontology()" || trimmed == "Ontology( )" {
+            // These are valid minimal ontologies
             return Ok(ontology);
         }
 
@@ -193,11 +236,28 @@ impl FunctionalParser {
     #[inline(always)]
     pub fn tokenize(&self, content: &str) -> Result<Vec<String>> {
         let mut tokens = Vec::new();
+        let mut token_positions_vec = Vec::new();
         let mut current_token = String::new();
         let mut in_iri = false;
         let mut in_string = false;
-        let mut paren_depth = 0;
+        let mut _paren_depth = 0; // Track depth for validation (currently unused)
         let mut chars = content.chars().peekable();
+        let mut ctx = ParseContext::new();
+        let mut token_start_line = 1u32;
+        let mut token_start_column = 1u32;
+        
+        // Helper closure to push token with position tracking
+        let push_token = |tok: String, line: u32, col: u32, tokens: &mut Vec<String>, positions: &mut Vec<TokenWithPosition>| {
+            if !tok.trim().is_empty() {
+                let trimmed = tok.trim().to_string();
+                positions.push(TokenWithPosition {
+                    token: trimmed.clone(),
+                    line,
+                    column: col,
+                });
+                tokens.push(trimmed);
+            }
+        };
 
         while let Some(ch) = chars.next() {
             match ch {
@@ -206,16 +266,20 @@ impl FunctionalParser {
                     if in_string {
                         // End of string
                         current_token.push(ch);
-                        tokens.push(current_token.clone());
+                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                         current_token.clear();
                         in_string = false;
                         
                         // Check for ^^ after the string
                         if chars.peek() == Some(&'^') {
+                            token_start_line = ctx.line;
+                            token_start_column = ctx.column;
                             chars.next(); // consume first ^
+                            ctx.update('^');
                             if chars.peek() == Some(&'^') {
                                 chars.next(); // consume second ^
-                                tokens.push("^^".to_string());
+                                ctx.update('^');
+                                push_token("^^".to_string(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                             } else {
                                 current_token.push('^');
                             }
@@ -223,53 +287,72 @@ impl FunctionalParser {
                     } else {
                         // Start of string
                         if !current_token.is_empty() {
-                            tokens.push(current_token.trim().to_string());
+                            push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                             current_token.clear();
                         }
+                        token_start_line = ctx.line;
+                        token_start_column = ctx.column;
                         in_string = true;
                         current_token.push(ch);
                     }
                 }
                 '<' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
-                        tokens.push(current_token.trim().to_string());
+                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                         current_token.clear();
                     }
+                    token_start_line = ctx.line;
+                    token_start_column = ctx.column;
                     in_iri = true;
                     current_token.push(ch);
                 }
                 '>' if in_iri && !in_string => {
                     current_token.push(ch);
-                    tokens.push(current_token.trim().to_string());
+                    push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                     current_token.clear();
                     in_iri = false;
                 }
                 '(' | ')' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
-                        tokens.push(current_token.trim().to_string());
+                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                         current_token.clear();
                     }
-                    tokens.push(ch.to_string());
+                    token_start_line = ctx.line;
+                    token_start_column = ctx.column;
+                    push_token(ch.to_string(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                     if ch == '(' {
-                        paren_depth += 1;
+                        _paren_depth += 1;
                     } else {
-                        paren_depth -= 1;
+                        _paren_depth -= 1;
                     }
                 }
                 ' ' | '\t' | '\n' | '\r' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
-                        tokens.push(current_token.trim().to_string());
+                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
                         current_token.clear();
                     }
+                    // Reset token start position for next token
+                    token_start_line = ctx.line;
+                    token_start_column = ctx.column + 1;
                 }
                 _ => {
+                    if current_token.is_empty() {
+                        token_start_line = ctx.line;
+                        token_start_column = ctx.column;
+                    }
                     current_token.push(ch);
                 }
             }
+            ctx.update(ch);
         }
 
         if !current_token.is_empty() {
-            tokens.push(current_token.trim().to_string());
+            push_token(current_token, token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+        }
+        
+        // Store positions for error reporting
+        if let Ok(mut positions) = self.token_positions.try_borrow_mut() {
+            *positions = token_positions_vec;
         }
 
         Ok(tokens)

@@ -359,6 +359,12 @@ impl RoleLabel {
     }
 }
 
+impl std::fmt::Display for RoleLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
 impl TableauNode {
     /// Create a new tableau node
     pub fn new(id: NodeId, node_type: NodeType) -> Self {

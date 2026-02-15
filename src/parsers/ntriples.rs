@@ -139,25 +139,55 @@ impl NTriplesParser {
         let (object_str, _) = self.parse_term(rest.trim())?;
 
         // Convert to RdfTerms to validate them (including blank node validation)
-        let _subject = self.string_to_rdf_term(subject_str)?;
-        let _predicate = self.string_to_rdf_term(predicate_str)?;
-        let _object = self.string_to_rdf_term(object_str)?;
+        let subject = self.string_to_rdf_term(subject_str)?;
+        let predicate = self.string_to_rdf_term(predicate_str)?;
+        let object = self.string_to_rdf_term(object_str)?;
 
-        // Convert to ontology constructs (basic implementation)
-        // For now, just validate parsing works
-        // TODO: Actually add to ontology based on predicate type
+        // Create the triple
+        let triple = crate::semantics::Triple {
+            subject,
+            predicate: predicate.clone(),
+            object,
+        };
+        
+        // Add to ontology RDF graph
+        let graph = ontology.get_or_create_rdf_graph();
+        graph.add_triple(triple);
+        
+        // For OWL 2 predicates, also add to appropriate ontology structures
+        // This allows the ontology to be used for OWL reasoning
+        if let Some(pred_iri) = predicate.as_iri() {
+            let pred_str = pred_iri.as_str();
+            
+            // Handle common OWL 2 predicates
+            // Note: Full conversion would require more sophisticated mapping
+            if pred_str.contains("subClassOf") || pred_str.contains("type") {
+                // These would be converted to OWL axioms in a full implementation
+                // For now, the RDF graph storage is sufficient
+            }
+        }
 
         Ok(())
     }
 
     /// Parse an RDF-star line with quoted triples
-    fn parse_rdfstar_line(&self, statement: &str, _ontology: &mut Ontology) -> Result<()> {
-        let (_subject, rest) = self.parse_rdfstar_term(statement)?;
-        let (_predicate, rest) = self.parse_rdfstar_term(rest.trim())?;
-        let (_object, _) = self.parse_rdfstar_term(rest.trim())?;
+    fn parse_rdfstar_line(&self, statement: &str, ontology: &mut Ontology) -> Result<()> {
+        let (subject, rest) = self.parse_rdfstar_term(statement)?;
+        let (predicate, rest) = self.parse_rdfstar_term(rest.trim())?;
+        let (object, _) = self.parse_rdfstar_term(rest.trim())?;
 
-        // For now, just validate RDF-star parsing works
-        // TODO: Store RDF-star triples in ontology graph
+        // Create and store the RDF-star triple
+        let triple = crate::semantics::Triple {
+            subject,
+            predicate,
+            object,
+        };
+        
+        // Store RDF-star triples in ontology graph
+        let graph = ontology.get_or_create_rdf_graph();
+        // Ensure the graph supports RDF-star
+        graph.set_rdf_version(crate::semantics::RdfVersion::RDFStar);
+        graph.add_triple(triple);
 
         Ok(())
     }

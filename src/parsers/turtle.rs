@@ -28,28 +28,47 @@ fn generate_axiom_id() -> u64 {
 }
 
 /// Parse an IRI from a string, handling both absolute and relative URIs
+/// 
+/// If a base URI is provided, relative IRIs will be resolved against it.
+/// Otherwise, relative IRIs without schemes will result in an error.
 fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
+    parse_iri_to_url_with_base(uri_str, None)
+}
+
+/// Parse an IRI with optional base URI for relative resolution
+fn parse_iri_to_url_with_base(uri_str: &str, base: Option<&str>) -> Result<url::Url> {
     // Try to parse as absolute URL first
     if let Ok(url) = url::Url::parse(uri_str) {
-        Ok(url)
-    } else {
-        // If it's not a valid absolute URL, treat it as a simple IRI string
-        // This handles relative URIs and other IRI formats
-        if uri_str.is_empty() {
-            Err(Error::ontology_parsing("Empty IRI string"))
-        } else {
-            // Create a simple URL-like structure for the IRI
-            // Use a dummy base for relative URIs to make them parseable
-            let full_uri = if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
-                uri_str.to_string()
-            } else {
-                format!("http://example.org/{}", uri_str.trim_start_matches('#'))
-            };
-
-            url::Url::parse(&full_uri)
-                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))
+        return Ok(url);
+    }
+    
+    // If it's not a valid absolute URL, handle as relative URI
+    if uri_str.is_empty() {
+        return Err(Error::ontology_parsing("Empty IRI string"));
+    }
+    
+    // If we have a base URI, resolve relative URIs against it
+    if let Some(base_uri) = base {
+        if let Ok(base_url) = url::Url::parse(base_uri) {
+            // Resolve relative URI against base
+            return base_url.join(uri_str)
+                .map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{}' against base '{}': {}", uri_str, base_uri, e)));
         }
     }
+    
+    // No base URI provided - check if it looks like it has a scheme
+    if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
+        // Has a scheme but failed to parse - this is an error
+        return url::Url::parse(uri_str)
+            .map_err(|e| Error::ontology_parsing(format!("Invalid absolute IRI: {}", e)));
+    }
+    
+    // Relative URI without base - require explicit base for proper resolution
+    // This is more correct than using a dummy base
+    Err(Error::ontology_parsing(format!(
+        "Relative IRI '{}' requires a base URI. Use @base directive or provide an absolute IRI.",
+        uri_str
+    )))
 }
 
 /// Enhanced configuration for the Turtle parser

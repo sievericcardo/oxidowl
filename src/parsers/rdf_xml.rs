@@ -203,7 +203,7 @@ impl RdfXmlParser {
     }
 
     /// Extract namespace declarations from RDF/XML
-    fn extract_namespaces(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+    fn extract_namespaces(&self, content: &str, _ontology: &mut Ontology) -> Result<()> {
         // Look for xmlns declarations
         for line in content.lines() {
             if line.contains("xmlns") {
@@ -461,7 +461,7 @@ impl RdfXmlParser {
     }
 
     /// Extract subclass axioms
-    fn extract_subclass_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+    fn extract_subclass_axioms(&self, content: &str, _ontology: &mut Ontology) -> Result<()> {
         // Look for rdfs:subClassOf relationships
         let subclass_pattern = r#"<rdfs:subClassOf rdf:resource="([^"]+)""#;
 
@@ -482,14 +482,14 @@ impl RdfXmlParser {
     }
 
     /// Extract property assertions
-    fn extract_property_assertions(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
+    fn extract_property_assertions(&self, _content: &str, _ontology: &mut Ontology) -> Result<()> {
         // This would involve more complex parsing to extract property assertions
         // from the RDF/XML structure
         Ok(())
     }
 
     /// Extract reification patterns and rdf:reifies
-    fn extract_reifications(&self, content: &str, _ontology: &mut Ontology) -> Result<()> {
+    fn extract_reifications(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Check for strict RDF 1.1 mode - reject RDF 1.2 features
         if self.config.strict_rdf11_mode && content.contains("rdf:reifies") {
             return Err(Error::ontology_parsing(
@@ -523,10 +523,20 @@ impl RdfXmlParser {
         // Parse rdf:reifies if present and enabled
         if has_rdf_reifies && self.config.parse_rdf_reifies {
             let reified_triples = self.extract_rdf_reifies(content)?;
-            // TODO: Store reified triples in ontology graph
-            // For now, just validate parsing works
-            for _triple in reified_triples {
-                // Would store in ontology when RDF graph storage is implemented
+            
+            // Store reified triples in ontology RDF graph
+            let graph = ontology.get_or_create_rdf_graph();
+            for (reifier_id, triple) in reified_triples {
+                // Add the reified triple to the graph
+                graph.add_triple(triple.clone());
+                
+                // Add the reifier resource as metadata
+                // Create a quoted triple term for RDF-star representation
+                let quoted_triple_term = crate::semantics::RdfTerm::QuotedTriple(Box::new(triple));
+                
+                // You could add additional triples linking the reifier to the quoted triple
+                // This is implementation-specific based on your needs
+                let _ = (reifier_id, quoted_triple_term); // Placeholder for future implementation
             }
         }
 
@@ -537,23 +547,92 @@ impl RdfXmlParser {
             match reification_mode {
                 ReificationMode::ConvertToQuotedTriples => {
                     // Convert RDF 1.1 reification to quoted triples
+                    let graph = ontology.get_or_create_rdf_graph();
+                    
                     for (stmt_id, triple) in reifications {
-                        let _quoted_triple = RdfTerm::QuotedTriple(Box::new(triple));
-                        // TODO: Store quoted triple and associate with reification ID
-                        // Store in ontology when graph representation is ready
-                        let _ = stmt_id; // Suppress unused warning
+                        // Create a quoted triple for RDF-star representation
+                        let quoted_triple = crate::semantics::RdfTerm::QuotedTriple(Box::new(triple.clone()));
+                        
+                        // Store the original triple in the graph
+                        graph.add_triple(triple);
+                        
+                        // Store association between reification ID and quoted triple
+                        // This can be used later for querying
+                        // Create a meta-triple linking the statement ID to the quoted triple
+                        let stmt_iri = crate::semantics::RdfTerm::Iri(
+                            url::Url::parse(&format!("_:stmt_{}", stmt_id))
+                                .unwrap_or_else(|_| url::Url::parse("http://example.org/stmt").unwrap())
+                        );
+                        let reifies_pred = crate::semantics::RdfTerm::Iri(
+                            url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#reifies")
+                                .unwrap()
+                        );
+                        
+                        let meta_triple = crate::semantics::Triple {
+                            subject: stmt_iri,
+                            predicate: reifies_pred,
+                            object: quoted_triple,
+                        };
+                        graph.add_triple(meta_triple);
                     }
                 }
                 ReificationMode::Preserve => {
-                    // Keep RDF 1.1 reification as-is
-                    // TODO: Store reification quads in ontology
-                    for (_stmt_id, _triple) in reifications {
-                        // Would preserve reification structure in ontology
+                    // Keep RDF 1.1 reification as-is in the graph
+                    let graph = ontology.get_or_create_rdf_graph();
+                    
+                    for (stmt_id, triple) in reifications {
+                        // Store the reification pattern as separate triples
+                        let stmt_iri = crate::semantics::RdfTerm::Iri(
+                            url::Url::parse(&format!("http://example.org/stmt/{}", stmt_id))
+                                .unwrap_or_else(|_| url::Url::parse("http://example.org/stmt").unwrap())
+                        );
+                        
+                        let rdf_ns = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+                        
+                        // rdf:type rdf:Statement
+                        graph.add_triple(crate::semantics::Triple {
+                            subject: stmt_iri.clone(),
+                            predicate: crate::semantics::RdfTerm::Iri(
+                                url::Url::parse(&format!("{}type", rdf_ns)).unwrap()
+                            ),
+                            object: crate::semantics::RdfTerm::Iri(
+                                url::Url::parse(&format!("{}Statement", rdf_ns)).unwrap()
+                            ),
+                        });
+                        
+                        // rdf:subject
+                        graph.add_triple(crate::semantics::Triple {
+                            subject: stmt_iri.clone(),
+                            predicate: crate::semantics::RdfTerm::Iri(
+                                url::Url::parse(&format!("{}subject", rdf_ns)).unwrap()
+                            ),
+                            object: triple.subject.clone(),
+                        });
+                        
+                        // rdf:predicate
+                        graph.add_triple(crate::semantics::Triple {
+                            subject: stmt_iri.clone(),
+                            predicate: crate::semantics::RdfTerm::Iri(
+                                url::Url::parse(&format!("{}predicate", rdf_ns)).unwrap()
+                            ),
+                            object: triple.predicate.clone(),
+                        });
+                        
+                        // rdf:object
+                        graph.add_triple(crate::semantics::Triple {
+                            subject: stmt_iri,
+                            predicate: crate::semantics::RdfTerm::Iri(
+                                url::Url::parse(&format!("{}object", rdf_ns)).unwrap()
+                            ),
+                            object: triple.object.clone(),
+                        });
                     }
                 }
                 ReificationMode::Auto => {
-                    // Already handled above
-                    unreachable!()
+                    // This case should already be handled above in mode selection
+                    return Err(crate::Error::ontology_parsing(
+                        "Auto reification mode should have been resolved before this point".to_string()
+                    ));
                 }
             }
         }
