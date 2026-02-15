@@ -80,6 +80,10 @@ pub enum ProfileViolationType {
     UnsupportedFeature(String),
     /// Complex construct exceeds profile limits
     ComplexityViolation(String),
+    /// RDF-star: Quoted triple not supported in this profile
+    QuotedTripleNotSupported(String),
+    /// RDF-star: Excessive quoted triple nesting for profile
+    ExcessiveNestingForProfile(String),
 }
 
 impl std::fmt::Display for ProfileViolationType {
@@ -102,6 +106,12 @@ impl std::fmt::Display for ProfileViolationType {
             }
             ProfileViolationType::ComplexityViolation(msg) => {
                 write!(f, "Complexity violation: {}", msg)
+            }
+            ProfileViolationType::QuotedTripleNotSupported(msg) => {
+                write!(f, "Quoted triple not supported in profile: {}", msg)
+            }
+            ProfileViolationType::ExcessiveNestingForProfile(msg) => {
+                write!(f, "Excessive nesting for profile: {}", msg)
             }
         }
     }
