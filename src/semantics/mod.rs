@@ -157,9 +157,45 @@ impl RdfTerm {
         })?))
     }
 
-    /// Create a blank node term
+    /// Create a blank node term (lenient - accepts any string)
     pub fn blank_node(id: &str) -> Self {
         RdfTerm::BlankNode(id.to_string())
+    }
+
+    /// Create a blank node term with validation (RDF 1.2 well-formedness)
+    /// Blank node labels must match: _:[A-Za-z0-9]+
+    pub fn blank_node_validated(id: &str) -> Result<Self> {
+        if id.starts_with("_:") {
+            let label = &id[2..];
+            if Self::is_valid_blank_node_label(label) {
+                Ok(RdfTerm::BlankNode(id.to_string()))
+            } else {
+                Err(Error::ontology_parsing(format!(
+                    "Invalid blank node label: '{}'. Must contain only [A-Za-z0-9] characters",
+                    id
+                )))
+            }
+        } else {
+            Err(Error::ontology_parsing(format!(
+                "Invalid blank node format: '{}'. Must start with '_:'",
+                id
+            )))
+        }
+    }
+
+    /// Validate a blank node label (without the _: prefix)
+    /// RDF 1.2 requires labels to contain only [A-Za-z0-9]
+    pub fn is_valid_blank_node_label(label: &str) -> bool {
+        !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric())
+    }
+
+    /// Validate a full blank node identifier (with _: prefix)
+    pub fn is_valid_blank_node(id: &str) -> bool {
+        if let Some(label) = id.strip_prefix("_:") {
+            Self::is_valid_blank_node_label(label)
+        } else {
+            false
+        }
     }
 
     /// Create a literal term
@@ -805,6 +841,72 @@ mod tests {
             .expect("Valid dirLangString");
         let display_rtl = format!("{}", term_rtl);
         assert_eq!(display_rtl, "\"مرحبا\"@ar--rtl");
+    }
+
+    #[test]
+    fn test_blank_node_validation_valid() {
+        // Test valid blank node labels (RDF 1.2 well-formedness)
+        assert!(RdfTerm::is_valid_blank_node("_:node1"));
+        assert!(RdfTerm::is_valid_blank_node("_:a"));
+        assert!(RdfTerm::is_valid_blank_node("_:Z"));
+        assert!(RdfTerm::is_valid_blank_node("_:node123"));
+        assert!(RdfTerm::is_valid_blank_node("_:ABC123xyz"));
+        
+        // Test label validation (without _: prefix)
+        assert!(RdfTerm::is_valid_blank_node_label("node1"));
+        assert!(RdfTerm::is_valid_blank_node_label("a"));
+        assert!(RdfTerm::is_valid_blank_node_label("123"));
+        
+        // Test validated constructor
+        assert!(RdfTerm::blank_node_validated("_:valid123").is_ok());
+    }
+
+    #[test]
+    fn test_blank_node_validation_invalid() {
+        // Test invalid blank node labels (RDF 1.2 well-formedness)
+        assert!(!RdfTerm::is_valid_blank_node("_:node-1")); // Hyphen not allowed
+        assert!(!RdfTerm::is_valid_blank_node("_:node_1")); // Underscore not allowed
+        assert!(!RdfTerm::is_valid_blank_node("_:node.1")); // Dot not allowed
+        assert!(!RdfTerm::is_valid_blank_node("_:node:1")); // Colon not allowed
+        assert!(!RdfTerm::is_valid_blank_node("_:")); // Empty label
+        assert!(!RdfTerm::is_valid_blank_node("node1")); // Missing _: prefix
+        assert!(!RdfTerm::is_valid_blank_node("_:café")); // Non-ASCII
+        
+        // Test label validation
+        assert!(!RdfTerm::is_valid_blank_node_label("")); // Empty
+        assert!(!RdfTerm::is_valid_blank_node_label("node-1")); // Hyphen
+        assert!(!RdfTerm::is_valid_blank_node_label("node_1")); // Underscore
+        
+        // Test validated constructor
+        assert!(RdfTerm::blank_node_validated("_:invalid-node").is_err());
+        assert!(RdfTerm::blank_node_validated("_:").is_err());
+        assert!(RdfTerm::blank_node_validated("invalid").is_err());
+    }
+
+    #[test]
+    fn test_blank_node_lenient_constructor() {
+        // The lenient blank_node() constructor should accept any string
+        // This is for RDF 1.1 backward compatibility
+        let node1 = RdfTerm::blank_node("_:node-with-hyphens");
+        assert!(node1.is_blank_node());
+        
+        let node2 = RdfTerm::blank_node("_:node_with_underscores");
+        assert!(node2.is_blank_node());
+    }
+
+    #[test]
+    fn test_blank_node_validated_error_messages() {
+        // Test that error messages are informative
+        let result = RdfTerm::blank_node_validated("_:invalid-node");
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("Invalid blank node label"));
+        assert!(err_msg.contains("A-Za-z0-9"));
+        
+        let result2 = RdfTerm::blank_node_validated("invalid");
+        assert!(result2.is_err());
+        let err_msg2 = format!("{}", result2.unwrap_err());
+        assert!(err_msg2.contains("Must start with '_:'"));
     }
 
     #[test]

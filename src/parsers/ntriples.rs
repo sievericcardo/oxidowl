@@ -40,6 +40,8 @@ pub struct NTriplesConfig {
     pub strict_rdf11_mode: bool,
     /// IRI validation mode (default: RFC3987 for RDF 1.2)
     pub iri_validation_mode: IriValidationMode,
+    /// Validate blank node labels for RDF 1.2 well-formedness (default: false)
+    pub validate_blank_nodes: bool,
 }
 
 impl Default for NTriplesConfig {
@@ -49,6 +51,7 @@ impl Default for NTriplesConfig {
             parse_rdf_star: true,
             strict_rdf11_mode: false,
             iri_validation_mode: IriValidationMode::RFC3987,
+            validate_blank_nodes: false, // Lenient for backward compatibility
         }
     }
 }
@@ -131,9 +134,14 @@ impl NTriplesParser {
         }
 
         // Parse standard N-Triples triple
-        let (_subject, rest) = self.parse_term(statement)?;
-        let (_predicate, rest) = self.parse_term(rest.trim())?;
-        let (_object, _) = self.parse_term(rest.trim())?;
+        let (subject_str, rest) = self.parse_term(statement)?;
+        let (predicate_str, rest) = self.parse_term(rest.trim())?;
+        let (object_str, _) = self.parse_term(rest.trim())?;
+
+        // Convert to RdfTerms to validate them (including blank node validation)
+        let _subject = self.string_to_rdf_term(subject_str)?;
+        let _predicate = self.string_to_rdf_term(predicate_str)?;
+        let _object = self.string_to_rdf_term(object_str)?;
 
         // Convert to ontology constructs (basic implementation)
         // For now, just validate parsing works
@@ -218,7 +226,13 @@ impl NTriplesParser {
             Ok(RdfTerm::Iri(url))
         } else if s.starts_with("_:") {
             // Blank node
-            Ok(RdfTerm::BlankNode(s.to_string()))
+            if self.config.validate_blank_nodes {
+                // Validate blank node label for RDF 1.2 well-formedness
+                RdfTerm::blank_node_validated(s)
+            } else {
+                // Lenient mode for backward compatibility
+                Ok(RdfTerm::BlankNode(s.to_string()))
+            }
         } else if s.starts_with('"') {
             // Literal
             self.parse_literal(s)
@@ -467,6 +481,7 @@ mod tests {
             parse_rdf_star: false,
             strict_rdf11_mode: true,
             iri_validation_mode: IriValidationMode::RFC3986,
+            validate_blank_nodes: false,
         };
         let parser = NTriplesParser::with_config(config);
         let result = parser.parse_string(content);
@@ -504,5 +519,72 @@ _:b1 <http://example.org/predicate> <http://example.org/object> .
         let parser = NTriplesParser::new();
         let result = parser.parse_string(content);
         assert!(result.is_ok(), "Blank node should parse");
+    }
+
+    #[test]
+    fn test_blank_node_validation_lenient_mode() {
+        // Default mode should accept any blank node label (RDF 1.1 compatible)
+        let content = r#"
+_:node-with-hyphens <http://example.org/pred> <http://example.org/obj> .
+_:node_with_underscores <http://example.org/pred> <http://example.org/obj> .
+_:node.with.dots <http://example.org/pred> <http://example.org/obj> .
+"#;
+        
+        let parser = NTriplesParser::with_config(NTriplesConfig {
+            validate_blank_nodes: false,
+            ..Default::default()
+        });
+        
+        let result = parser.parse_string(content);
+        assert!(result.is_ok(), "Lenient mode should accept any blank node labels");
+    }
+
+    #[test]
+    fn test_blank_node_validation_strict_mode_valid() {
+        // Strict mode should accept RDF 1.2 well-formed blank nodes
+        let content = r#"
+_:node1 <http://example.org/pred> <http://example.org/obj1> .
+_:a <http://example.org/pred> <http://example.org/obj2> .
+_:Z <http://example.org/pred> <http://example.org/obj3> .
+_:node123ABC <http://example.org/pred> <http://example.org/obj4> .
+"#;
+        
+        let parser = NTriplesParser::with_config(NTriplesConfig {
+            validate_blank_nodes: true,
+            ..Default::default()
+        });
+        
+        let result = parser.parse_string(content);
+        assert!(result.is_ok(), "Strict mode should accept well-formed blank nodes");
+    }
+
+    #[test]
+    fn test_blank_node_validation_strict_mode_invalid() {
+        // Strict mode should reject non-alphanumeric characters
+        let invalid_cases = vec![
+            "_:node-with-hyphens",
+            "_:node_with_underscores",
+            "_:node.with.dots",
+            "_:node:with:colons",
+        ];
+        
+        for invalid_label in invalid_cases {
+            let content = format!(
+                "{} <http://example.org/pred> <http://example.org/obj> .",
+                invalid_label
+            );
+            
+            let parser = NTriplesParser::with_config(NTriplesConfig {
+                validate_blank_nodes: true,
+                ..Default::default()
+            });
+            
+            let result = parser.parse_string(&content);
+            assert!(
+                result.is_err(),
+                "Strict mode should reject invalid blank node: {}",
+                invalid_label
+            );
+        }
     }
 }

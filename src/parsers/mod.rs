@@ -428,12 +428,14 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
                     parse_rdf_star: false,
                     strict_rdf11_mode: true,
                     iri_validation_mode: crate::semantics::IriValidationMode::RFC3986,
+                    validate_blank_nodes: false, // Lenient for compatibility
                 },
                 RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => ntriples::NTriplesConfig {
                     rdf_version: ntriples::RdfVersionMode::RDFStar,
                     parse_rdf_star: true,
                     strict_rdf11_mode: false,
                     iri_validation_mode: crate::semantics::IriValidationMode::RFC3987,
+                    validate_blank_nodes: false, // Lenient for compatibility
                 },
                 RdfCompatibilityMode::Auto => ntriples::NTriplesConfig::default(),
             };
@@ -551,6 +553,7 @@ impl ParserFactory {
                         parse_rdf_star: false,
                         strict_rdf11_mode: true,
                         iri_validation_mode: crate::semantics::IriValidationMode::RFC3986,
+                        validate_blank_nodes: false, // Lenient for compatibility
                     },
                     RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => {
                         ntriples::NTriplesConfig {
@@ -558,6 +561,7 @@ impl ParserFactory {
                             parse_rdf_star: true,
                             strict_rdf11_mode: false,
                             iri_validation_mode: crate::semantics::IriValidationMode::RFC3987,
+                            validate_blank_nodes: false, // Lenient for compatibility
                         }
                     }
                     RdfCompatibilityMode::Auto => ntriples::NTriplesConfig::default(),

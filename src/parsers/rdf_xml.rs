@@ -77,6 +77,9 @@ pub struct RdfXmlParserConfig {
 
     /// IRI validation mode (default: RFC3987 for RDF 1.2)
     pub iri_validation_mode: IriValidationMode,
+
+    /// Validate blank node labels for RDF 1.2 well-formedness (default: false)
+    pub validate_blank_nodes: bool,
 }
 
 impl Default for RdfXmlParserConfig {
@@ -94,6 +97,7 @@ impl Default for RdfXmlParserConfig {
             parse_rdf_reifies: true,
             strict_rdf11_mode: false,
             iri_validation_mode: IriValidationMode::RFC3987,
+            validate_blank_nodes: false, // Lenient for backward compatibility
         }
     }
 }

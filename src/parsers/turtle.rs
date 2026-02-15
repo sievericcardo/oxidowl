@@ -90,6 +90,10 @@ pub struct TurtleParserConfig {
 
     /// IRI validation mode (default: RFC3987 for RDF 1.2)
     pub iri_validation_mode: IriValidationMode,
+
+    /// Validate blank node labels for RDF 1.2 well-formedness (default: false for compatibility)
+    /// When true, only allows [A-Za-z0-9] in blank node labels
+    pub validate_blank_nodes: bool,
 }
 
 /// RDF version mode for parsing
@@ -120,6 +124,7 @@ impl Default for TurtleParserConfig {
             parse_rdf_star: true,
             strict_rdf11_mode: false,
             iri_validation_mode: IriValidationMode::RFC3987, // RDF 1.2 default
+            validate_blank_nodes: false, // Default to lenient for backward compatibility
         }
     }
 }
