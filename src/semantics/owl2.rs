@@ -3,6 +3,8 @@
 //! This module implements OWL 2 DL semantics according to:
 //! https://www.w3.org/TR/owl2-direct-semantics/
 //! https://www.w3.org/TR/owl2-primer/
+//!
+//! Extended to support RDF-star semantics with configurable quoted triple reasoning.
 
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
 use crate::{
@@ -13,6 +15,51 @@ use crate::{
     },
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+
+/// Configuration for OWL 2 DL interpretation with RDF-star support
+#[derive(Debug, Clone)]
+pub struct Owl2Config {
+    /// RDF 1.1 compatibility mode - disables RDF-star features
+    pub rdf11_mode: bool,
+    /// Maximum depth for reasoning over nested quoted triples
+    /// 0 = no quoted triple reasoning
+    /// 1 = reason over quoted triples at top level only
+    /// n = reason over quoted triples nested up to n levels
+    pub quoted_triple_reasoning_depth: usize,
+    /// Map quoted triples to annotation axioms
+    /// When true, << s p o >> :q :r is treated as an annotation on the axiom "s p o"
+    pub quoted_triples_as_annotations: bool,
+}
+
+impl Default for Owl2Config {
+    fn default() -> Self {
+        Self {
+            rdf11_mode: false,
+            quoted_triple_reasoning_depth: 2,
+            quoted_triples_as_annotations: true,
+        }
+    }
+}
+
+impl Owl2Config {
+    /// Create configuration for RDF 1.1 compatibility
+    pub fn rdf11() -> Self {
+        Self {
+            rdf11_mode: true,
+            quoted_triple_reasoning_depth: 0,
+            quoted_triples_as_annotations: false,
+        }
+    }
+
+    /// Create configuration for RDF-star with specified reasoning depth
+    pub fn rdfstar(depth: usize) -> Self {
+        Self {
+            rdf11_mode: false,
+            quoted_triple_reasoning_depth: depth,
+            quoted_triples_as_annotations: true,
+        }
+    }
+}
 
 /// Local tableau node structure for proper reasoning
 #[derive(Debug, Clone)]
@@ -25,6 +72,7 @@ struct LocalTableauNode {
 /// OWL 2 DL Interpretation
 ///
 /// Implements the formal semantics for OWL 2 DL according to the direct semantics specification.
+/// Extended to support RDF-star quoted triples when enabled.
 #[derive(Debug, Clone)]
 pub struct Owl2Interpretation {
     /// Domain of interpretation - set of individuals
@@ -39,6 +87,11 @@ pub struct Owl2Interpretation {
     individual_interpretation: HashMap<String, String>,
     /// Datatype interpretation
     datatype_interpretation: HashMap<String, HashSet<String>>,
+    /// Configuration for RDF-star support
+    config: Owl2Config,
+    /// Quoted triple to annotation mapping
+    /// Maps quoted triples to their associated annotation axioms
+    quoted_triple_annotations: HashMap<String, Vec<(String, String)>>,
 }
 
 /// Type of cardinality restriction
@@ -50,8 +103,18 @@ enum CardinalityType {
 }
 
 impl Owl2Interpretation {
-    /// Create a new OWL 2 DL interpretation
+    /// Create a new OWL 2 DL interpretation with default configuration
     pub fn new() -> Self {
+        Self::with_config(Owl2Config::default())
+    }
+
+    /// Create a new OWL 2 DL interpretation with RDF 1.1 compatibility
+    pub fn new_rdf11() -> Self {
+        Self::with_config(Owl2Config::rdf11())
+    }
+
+    /// Create a new OWL 2 DL interpretation with specified configuration
+    pub fn with_config(config: Owl2Config) -> Self {
         let mut interpretation = Self {
             domain: HashSet::new(),
             class_interpretation: HashMap::new(),
@@ -59,11 +122,23 @@ impl Owl2Interpretation {
             data_property_interpretation: HashMap::new(),
             individual_interpretation: HashMap::new(),
             datatype_interpretation: HashMap::new(),
+            config,
+            quoted_triple_annotations: HashMap::new(),
         };
 
         // Initialize OWL built-in vocabulary
         interpretation.initialize_owl_vocabulary();
         interpretation
+    }
+
+    /// Get the configuration
+    pub fn config(&self) -> &Owl2Config {
+        &self.config
+    }
+
+    /// Set the configuration
+    pub fn set_config(&mut self, config: Owl2Config) {
+        self.config = config;
     }
 
     /// Initialize OWL built-in vocabulary
@@ -113,6 +188,105 @@ impl Owl2Interpretation {
     pub fn set_individual_interpretation(&mut self, individual: String, domain_element: String) {
         self.individual_interpretation
             .insert(individual, domain_element);
+    }
+
+    /// Add annotation for a quoted triple
+    /// Maps << s p o >> to its annotations (annotation_property, annotation_value)
+    pub fn add_quoted_triple_annotation(
+        &mut self,
+        quoted_triple_id: String,
+        annotation_property: String,
+        annotation_value: String,
+    ) {
+        self.quoted_triple_annotations
+            .entry(quoted_triple_id)
+            .or_insert_with(Vec::new)
+            .push((annotation_property, annotation_value));
+    }
+
+    /// Get annotations for a quoted triple
+    pub fn get_quoted_triple_annotations(&self, quoted_triple_id: &str) -> Option<&Vec<(String, String)>> {
+        self.quoted_triple_annotations.get(quoted_triple_id)
+    }
+
+    /// Process RDF graph to extract quoted triple axioms
+    ///
+    /// Converts RDF-star triples like << :s :p :o >> :q :r into OWL annotation axioms
+    /// Only processes if RDF-star mode is enabled and reasoning depth allows it
+    pub fn process_rdf_graph_for_quoted_triples(&mut self, graph: &RdfGraph) -> Result<()> {
+        if self.config.rdf11_mode || self.config.quoted_triple_reasoning_depth == 0 {
+            // Skip processing in RDF 1.1 mode or when quoted triple reasoning is disabled
+            return Ok(());
+        }
+
+        // Extract quoted triples and their annotations
+        for triple in graph.triples() {
+            self.process_triple_for_quoted_semantics(triple, 1)?;
+        }
+
+        Ok(())
+    }
+
+    /// Recursively process a triple for quoted triple semantics
+    fn process_triple_for_quoted_semantics(&mut self, triple: &Triple, depth: usize) -> Result<()> {
+        if depth > self.config.quoted_triple_reasoning_depth {
+            return Ok(());
+        }
+
+        // Check if subject is a quoted triple
+        if let RdfTerm::QuotedTriple(quoted) = &triple.subject {
+            if self.config.quoted_triples_as_annotations {
+                // Map << s p o >> :q :r to: the axiom "s p o" has annotation :q :r
+                let quoted_id = self.quoted_triple_to_id(quoted);
+                
+                if let RdfTerm::Iri(pred_iri) = &triple.predicate {
+                    let annotation_value = self.rdf_term_to_string(&triple.object);
+                    self.add_quoted_triple_annotation(
+                        quoted_id,
+                        pred_iri.to_string(),
+                        annotation_value,
+                    );
+                }
+            }
+
+            // Recursively process the quoted triple
+            self.process_triple_for_quoted_semantics(quoted, depth + 1)?;
+        }
+
+        // Check if object is a quoted triple
+        if let RdfTerm::QuotedTriple(quoted) = &triple.object {
+            self.process_triple_for_quoted_semantics(quoted, depth + 1)?;
+        }
+
+        Ok(())
+    }
+
+    /// Convert a quoted triple to a canonical identifier
+    fn quoted_triple_to_id(&self, triple: &Triple) -> String {
+        format!(
+            "<<{} {} {}>>",
+            self.rdf_term_to_string(&triple.subject),
+            self.rdf_term_to_string(&triple.predicate),
+            self.rdf_term_to_string(&triple.object)
+        )
+    }
+
+    /// Convert an RDF term to string representation
+    fn rdf_term_to_string(&self, term: &RdfTerm) -> String {
+        match term {
+            RdfTerm::Iri(iri) => iri.to_string(),
+            RdfTerm::BlankNode(id) => format!("_:{}", id),
+            RdfTerm::Literal { value, datatype, language, .. } => {
+                if let Some(dt) = datatype {
+                    format!("\"{}\"^^<{}>", value, dt)
+                } else if let Some(lang) = language {
+                    format!("\"{}\"@{}", value, lang)
+                } else {
+                    format!("\"{}\"", value)
+                }
+            }
+            RdfTerm::QuotedTriple(quoted) => self.quoted_triple_to_id(quoted),
+        }
     }
 
     /// Interpret a class expression in this interpretation
@@ -1500,5 +1674,142 @@ mod tests {
             .is_satisfiable(&person_class)
             .expect("Failed to check if class expression is satisfiable");
         assert!(satisfiable);
+    }
+
+    #[test]
+    fn test_owl2_config_rdf11() {
+        let config = Owl2Config::rdf11();
+        assert!(config.rdf11_mode);
+        assert_eq!(config.quoted_triple_reasoning_depth, 0);
+        assert!(!config.quoted_triples_as_annotations);
+    }
+
+    #[test]
+    fn test_owl2_config_rdfstar() {
+        let config = Owl2Config::rdfstar(3);
+        assert!(!config.rdf11_mode);
+        assert_eq!(config.quoted_triple_reasoning_depth, 3);
+        assert!(config.quoted_triples_as_annotations);
+    }
+
+    #[test]
+    fn test_owl2_interpretation_with_config() {
+        let config = Owl2Config::rdfstar(2);
+        let interp = Owl2Interpretation::with_config(config.clone());
+
+        assert_eq!(interp.config().quoted_triple_reasoning_depth, 2);
+        assert!(!interp.config().rdf11_mode);
+    }
+
+    #[test]
+    fn test_process_rdf_graph_with_quoted_triples() {
+        let mut interp = Owl2Interpretation::new();
+
+        // Create an RDF graph with a quoted triple
+        let mut graph = RdfGraph::new();
+
+        // << :alice :knows :bob >> :certainty "high"
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        let outer_triple = Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        };
+
+        graph.add_triple(outer_triple);
+
+        // Process the graph
+        interp.process_rdf_graph_for_quoted_triples(&graph).unwrap();
+
+        // Check that annotations were extracted
+        let quoted_id = interp.quoted_triple_to_id(&inner_triple);
+        let annotations = interp.get_quoted_triple_annotations(&quoted_id);
+
+        assert!(annotations.is_some());
+        let annots = annotations.unwrap();
+        assert_eq!(annots.len(), 1);
+        assert_eq!(annots[0].0, "http://example.org/certainty");
+        assert_eq!(annots[0].1, "\"high\"");
+    }
+
+    #[test]
+    fn test_rdf11_mode_skips_quoted_triple_processing() {
+        let mut interp = Owl2Interpretation::new_rdf11();
+
+        let mut graph = RdfGraph::new();
+
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        graph.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        });
+
+        // Process should succeed but not extract annotations in RDF 1.1 mode
+        interp.process_rdf_graph_for_quoted_triples(&graph).unwrap();
+
+        let quoted_id = interp.quoted_triple_to_id(&inner_triple);
+        assert!(interp.get_quoted_triple_annotations(&quoted_id).is_none());
+    }
+
+    #[test]
+    fn test_nested_quoted_triple_depth_limit() {
+        let config = Owl2Config::rdfstar(1); // Only depth 1
+        let mut interp = Owl2Interpretation::with_config(config);
+
+        let mut graph = RdfGraph::new();
+
+        // Nested: << << :a :b :c >> :d :e >> :f :g
+        let inner_inner = Triple {
+            subject: RdfTerm::iri("http://example.org/a").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/b").unwrap(),
+            object: RdfTerm::iri("http://example.org/c").unwrap(),
+        };
+
+        let inner = Box::new(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_inner)),
+            predicate: RdfTerm::iri("http://example.org/d").unwrap(),
+            object: RdfTerm::iri("http://example.org/e").unwrap(),
+        });
+
+        graph.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(inner.clone()),
+            predicate: RdfTerm::iri("http://example.org/f").unwrap(),
+            object: RdfTerm::literal("g"),
+        });
+
+        // Process with depth limit of 1
+        interp.process_rdf_graph_for_quoted_triples(&graph).unwrap();
+
+        // The outer level should be processed
+        let outer_id = interp.quoted_triple_to_id(&inner);
+        assert!(interp.get_quoted_triple_annotations(&outer_id).is_some());
+    }
+
+    #[test]
+    fn test_quoted_triple_to_id_canonical_form() {
+        let interp = Owl2Interpretation::new();
+
+        let triple = Triple {
+            subject: RdfTerm::iri("http://example.org/s").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/p").unwrap(),
+            object: RdfTerm::literal("o"),
+        };
+
+        let id = interp.quoted_triple_to_id(&triple);
+        assert!(id.starts_with("<<"));
+        assert!(id.ends_with(">>"));
+        assert!(id.contains("http://example.org/s"));
+        assert!(id.contains("http://example.org/p"));
     }
 }

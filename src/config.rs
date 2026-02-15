@@ -405,6 +405,10 @@ pub struct TableauConfig {
     pub blocking_enabled: bool,
     /// Enable/disable general optimizations
     pub optimization_enabled: bool,
+    /// RDF 1.1 compatibility mode (disables RDF-star features)
+    pub rdf11_mode: bool,
+    /// Maximum depth for quoted triple reasoning (0 = disabled)
+    pub quoted_triple_reasoning_depth: usize,
 }
 
 impl Default for TableauConfig {
@@ -414,6 +418,8 @@ impl Default for TableauConfig {
             timeout: Some(Duration::from_secs(300)),
             blocking_enabled: true,
             optimization_enabled: true,
+            rdf11_mode: false,              // RDF-star enabled by default
+            quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
         }
     }
 }

@@ -167,6 +167,8 @@ impl Tableau {
                 timeout: config.timeout,
                 blocking_enabled: true,
                 optimization_enabled: true,
+                rdf11_mode: false,              // RDF-star enabled by default
+                quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
             },
             pending_queue: VecDeque::new(),
             completion_strategy: CompletionStrategy::default(),

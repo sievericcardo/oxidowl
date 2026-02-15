@@ -181,6 +181,8 @@ impl TableauExecutor {
             CompletionRule::Unfold => Self::apply_unfold_rule(tableau, rule_app)?,
             CompletionRule::PropertyChain => Self::apply_property_chain_rule(tableau, rule_app)?,
             CompletionRule::Guess => Self::apply_guess_rule(tableau, rule_app)?,
+            CompletionRule::QuotedTriple => Self::apply_quoted_triple_rule(tableau, rule_app)?,
+            CompletionRule::MetaAssertion => Self::apply_meta_assertion_rule(tableau, rule_app)?,
         }
 
         Ok(())
@@ -277,6 +279,59 @@ impl TableauExecutor {
     fn apply_guess_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
         // Implementation for guess rule
         // This would handle non-deterministic guessing
+        Ok(())
+    }
+
+    /// Apply the QUOTED TRIPLE rule (RDF-star)
+    /// This rule expands a quoted triple << s p o >> into its component structure:
+    /// 1. Creates nodes for subject, predicate, object if they don't exist
+    /// 2. Establishes the relationship between them
+    /// 3. Creates a reified node representing the quoted triple itself
+    fn apply_quoted_triple_rule(
+        tableau: &mut super::Tableau,
+        rule_app: RuleApplication,
+    ) -> Result<()> {
+        // Check if RDF-star reasoning is disabled (RDF 1.1 mode)
+        if tableau.config.rdf11_mode {
+            trace!("Skipping quoted triple rule - RDF 1.1 mode enabled");
+            return Ok(());
+        }
+
+        // Extract the quoted triple ID from the rule application
+        // For now, this is a placeholder implementation
+        // In a full implementation, we would:
+        // 1. Parse the quoted triple structure from the node's concepts
+        // 2. Create nodes for s, p, o components
+        // 3. Create edges representing the quoted triple relationship
+        // 4. Link meta-assertions to the quoted triple node
+
+        debug!("Applied quoted triple expansion rule for node: {}", rule_app.node);
+        Ok(())
+    }
+
+    /// Apply the META ASSERTION rule (RDF-star)
+    /// This rule handles assertions about quoted triples, such as:
+    /// << :alice :knows :bob >> :certainty "0.95"
+    /// The meta-assertion (:certainty "0.95") is processed and linked to the quoted triple
+    fn apply_meta_assertion_rule(
+        tableau: &mut super::Tableau,
+        rule_app: RuleApplication,
+    ) -> Result<()> {
+        // Check if RDF-star reasoning is disabled (RDF 1.1 mode)
+        if tableau.config.rdf11_mode {
+            trace!("Skipping meta assertion rule - RDF 1.1 mode enabled");
+            return Ok(());
+        }
+
+        // Extract the meta-assertion from the rule application
+        // For now, this is a placeholder implementation
+        // In a full implementation, we would:
+        // 1. Identify the quoted triple this assertion is about
+        // 2. Extract the property and value of the meta-assertion
+        // 3. Add the meta-assertion as an annotation to the quoted triple
+        // 4. Check for meta-level clashes (e.g., contradictory certainty values)
+
+        debug!("Applied meta assertion rule for node: {}", rule_app.node);
         Ok(())
     }
 

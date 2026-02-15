@@ -47,6 +47,12 @@ pub enum CompletionRule {
     PropertyChain,
     /// Guess rule
     Guess,
+    /// RDF-star quoted triple expansion rule
+    /// Expands << s p o >> into component nodes and edges
+    QuotedTriple,
+    /// RDF-star meta-assertion rule
+    /// Handles assertions about quoted triples (annotations)
+    MetaAssertion,
 }
 
 /// Strategy for applying completion rules
@@ -60,14 +66,16 @@ pub struct CompletionStrategy {
 
 impl Default for CompletionStrategy {
     fn default() -> Self {
-        let mut rule_priorities = HashMap::with_capacity(13);
+        let mut rule_priorities = HashMap::with_capacity(15);
         rule_priorities.insert(CompletionRule::And, RulePriority::High);
         rule_priorities.insert(CompletionRule::All, RulePriority::High);
         rule_priorities.insert(CompletionRule::Some, RulePriority::Normal);
         rule_priorities.insert(CompletionRule::Or, RulePriority::Low);
         rule_priorities.insert(CompletionRule::Choose, RulePriority::Low);
+        rule_priorities.insert(CompletionRule::QuotedTriple, RulePriority::Normal);
+        rule_priorities.insert(CompletionRule::MetaAssertion, RulePriority::Normal);
 
-        let mut enabled_rules = HashMap::with_capacity(13);
+        let mut enabled_rules = HashMap::with_capacity(15);
         for rule in [
             CompletionRule::And,
             CompletionRule::Or,
@@ -82,6 +90,8 @@ impl Default for CompletionStrategy {
             CompletionRule::Unfold,
             CompletionRule::PropertyChain,
             CompletionRule::Guess,
+            CompletionRule::QuotedTriple,
+            CompletionRule::MetaAssertion,
         ] {
             enabled_rules.insert(rule, true);
         }
@@ -461,6 +471,8 @@ impl CompletionRuleSet {
             CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
             CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
             CompletionRule::Guess => false,         // Applied by strategy
+            CompletionRule::QuotedTriple => false,  // Applied based on RDF-star quoted triples, not OWL concepts
+            CompletionRule::MetaAssertion => false, // Applied based on RDF-star meta-assertions, not OWL concepts
         }
     }
 
@@ -480,6 +492,8 @@ impl CompletionRuleSet {
             CompletionRule::Unfold => self.apply_unfold_rule(&application),
             CompletionRule::PropertyChain => self.apply_property_chain_rule(&application),
             CompletionRule::Guess => self.apply_guess_rule(&application),
+            CompletionRule::QuotedTriple => self.apply_quoted_triple_rule(&application),
+            CompletionRule::MetaAssertion => self.apply_meta_assertion_rule(&application),
         }
     }
 
@@ -934,6 +948,30 @@ impl CompletionRuleSet {
         Ok(result)
     }
 
+    /// Apply quoted triple rule (RDF-star)
+    /// This handles expansion of << s p o >> quoted triple concepts
+    fn apply_quoted_triple_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
+        // Placeholder implementation for RDF-star quoted triple expansion
+        // In a full implementation, this would:
+        // 1. Extract the quoted triple structure from the concept
+        // 2. Create nodes for subject, predicate, object
+        // 3. Establish the relationship between them
+        // 4. Create a reified node representing the quoted triple itself
+        Ok(RuleResult::empty())
+    }
+
+    /// Apply meta-assertion rule (RDF-star)
+    /// This handles assertions about quoted triples (annotations)
+    fn apply_meta_assertion_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
+        // Placeholder implementation for RDF-star meta-assertion handling
+        // In a full implementation, this would:
+        // 1. Identify the quoted triple this assertion is about
+        // 2. Extract the property and value of the meta-assertion
+        // 3. Add the meta-assertion as an annotation to the quoted triple
+        // 4. Check for meta-level clashes (e.g., contradictory certainty values)
+        Ok(RuleResult::empty())
+    }
+
     /// Apply property chain rule: R1 ∘ R2 ∘ ... ∘ Rn ⊑ S
     /// If we have edges a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
     fn apply_property_chain_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
@@ -1191,6 +1229,8 @@ impl fmt::Display for CompletionRule {
             CompletionRule::Unfold => write!(f, "Unfold"),
             CompletionRule::PropertyChain => write!(f, "Chain"),
             CompletionRule::Guess => write!(f, "Guess"),
+            CompletionRule::QuotedTriple => write!(f, "QuotedTriple"),
+            CompletionRule::MetaAssertion => write!(f, "MetaAssertion"),
         }
     }
 }

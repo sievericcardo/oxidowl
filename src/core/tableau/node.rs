@@ -84,6 +84,19 @@ pub enum ConceptLabel {
 
     /// Union of concepts (disjunction)  
     Union(Vec<ConceptLabel>),
+
+    /// Quoted triple assertion (RDF-star)
+    /// Represents << s p o >> as a concept that can be reasoned about
+    /// The string contains a canonical identifier for the quoted triple
+    QuotedTriple(String),
+
+    /// Meta-assertion about a quoted triple
+    /// Represents properties about << s p o >> like certainty, provenance, etc.
+    MetaAssertion {
+        quoted_triple_id: String,
+        property: String,
+        value: String,
+    },
 }
 
 /// Role label in the tableau
@@ -215,6 +228,12 @@ impl ConceptLabel {
         match (self, other) {
             (ConceptLabel::Atomic(name1), ConceptLabel::NegatedAtomic(name2)) => name1 == name2,
             (ConceptLabel::NegatedAtomic(name1), ConceptLabel::Atomic(name2)) => name1 == name2,
+            // RDF-star concepts: QuotedTriple and MetaAssertion cannot be directly negated
+            // They represent meta-level statements that don't have simple complements
+            (ConceptLabel::QuotedTriple(_), _) => false,
+            (_, ConceptLabel::QuotedTriple(_)) => false,
+            (ConceptLabel::MetaAssertion { .. }, _) => false,
+            (_, ConceptLabel::MetaAssertion { .. }) => false,
             _ => false,
         }
     }
@@ -297,6 +316,18 @@ impl ConceptLabel {
             }
             ConceptLabel::Nominal(individual) => {
                 format!("{{{}}}", individual) // Nominals are shown in curly braces
+            }
+            ConceptLabel::QuotedTriple(id) => {
+                // RDF-star quoted triple shown with angle brackets
+                id.clone()
+            }
+            ConceptLabel::MetaAssertion {
+                quoted_triple_id,
+                property,
+                value,
+            } => {
+                // Meta-assertion shown as property-value pair about quoted triple
+                format!("{} {}={}", quoted_triple_id, property, value)
             }
         }
     }
@@ -406,5 +437,145 @@ impl TableauNode {
     /// Get the dependency set for a concept
     pub fn get_concept_dependency(&self, concept: &ConceptLabel) -> Option<&DependencySet> {
         self.concept_dependencies.get(concept)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_concept_label_quoted_triple() {
+        let qt_id = "<<http://example.org/alice http://example.org/knows http://example.org/bob>>".to_string();
+        let qt_concept = ConceptLabel::QuotedTriple(qt_id.clone());
+        
+        assert_eq!(qt_concept, ConceptLabel::QuotedTriple(qt_id));
+    }
+
+    #[test]
+    fn test_concept_label_meta_assertion() {
+        let qt_id = "<<http://ex.org/s http://ex.org/p http://ex.org/o>>".to_string();
+        let meta = ConceptLabel::MetaAssertion {
+            quoted_triple_id: qt_id.clone(),
+            property: "http://example.org/certainty".to_string(),
+            value: "0.95".to_string(),
+        };
+        
+        match meta {
+            ConceptLabel::MetaAssertion { quoted_triple_id, property, value } => {
+                assert_eq!(quoted_triple_id, qt_id);
+                assert_eq!(property, "http://example.org/certainty");
+                assert_eq!(value, "0.95");
+            }
+            _ => panic!("Expected MetaAssertion variant"),
+        }
+    }
+
+    #[test]
+    fn test_tableau_node_with_quoted_triple() {
+        let mut node = TableauNode::new(0, NodeType::Individual);
+        let qt_id = "<<http://example.org/alice http://example.org/knows http://example.org/bob>>".to_string();
+        let qt_concept = ConceptLabel::QuotedTriple(qt_id);
+        
+        node.add_concept(qt_concept.clone());
+        assert!(node.has_concept(&qt_concept));
+        assert_eq!(node.concepts.len(), 1);
+    }
+
+    #[test]
+    fn test_tableau_node_with_meta_assertion() {
+        let mut node = TableauNode::new(1, NodeType::Individual);
+        let qt_id = "<<http://ex.org/s http://ex.org/p http://ex.org/o>>".to_string();
+        
+        let meta = ConceptLabel::MetaAssertion {
+            quoted_triple_id: qt_id.clone(),
+            property: "http://example.org/certainty".to_string(),
+            value: "0.95".to_string(),
+        };
+        
+        node.add_concept(meta.clone());
+        assert!(node.has_concept(&meta));
+        assert_eq!(node.concepts.len(), 1);
+    }
+
+    #[test]
+    fn test_quoted_triple_with_meta_assertion_combination() {
+        let mut node = TableauNode::new(2, NodeType::Individual);
+        let qt_id = "<<http://example.org/doc1 http://example.org/author \"Smith\">>".to_string();
+        
+        // Add the quoted triple concept
+        let qt_concept = ConceptLabel::QuotedTriple(qt_id.clone());
+        node.add_concept(qt_concept.clone());
+        
+        // Add meta-assertions about the quoted triple
+        let provenance = ConceptLabel::MetaAssertion {
+            quoted_triple_id: qt_id.clone(),
+            property: "http://example.org/source".to_string(),
+            value: "http://example.org/archive23".to_string(),
+        };
+        node.add_concept(provenance.clone());
+        
+        let timestamp = ConceptLabel::MetaAssertion {
+            quoted_triple_id: qt_id.clone(),
+            property: "http://example.org/timestamp".to_string(),
+            value: "2024-01-15".to_string(),
+        };
+        node.add_concept(timestamp.clone());
+        
+        // Verify all concepts are present
+        assert!(node.has_concept(&qt_concept));
+        assert!(node.has_concept(&provenance));
+        assert!(node.has_concept(&timestamp));
+        assert_eq!(node.concepts.len(), 3);
+    }
+
+    #[test]
+    fn test_nested_quoted_triple() {
+        // Test nested quoted triple structure
+        // << << :a :b :c >> :d :e >> :f :g
+        let inner_qt_id = "<<http://ex.org/a http://ex.org/b http://ex.org/c>>".to_string();
+        let outer_qt_id = format!("<<{} http://ex.org/d http://ex.org/e>>", inner_qt_id);
+        
+        let mut node = TableauNode::new(3, NodeType::Individual);
+        
+        // Add inner quoted triple
+        let inner_qt = ConceptLabel::QuotedTriple(inner_qt_id.clone());
+        node.add_concept(inner_qt.clone());
+        
+        // Add outer quoted triple
+        let outer_qt = ConceptLabel::QuotedTriple(outer_qt_id.clone());
+        node.add_concept(outer_qt.clone());
+        
+        // Add meta-assertion about outer quoted triple
+        let meta = ConceptLabel::MetaAssertion {
+            quoted_triple_id: outer_qt_id.clone(),
+            property: "http://ex.org/confidence".to_string(),
+            value: "0.85".to_string(),
+        };
+        node.add_concept(meta.clone());
+        
+        assert!(node.has_concept(&inner_qt));
+        assert!(node.has_concept(&outer_qt));
+        assert!(node.has_concept(&meta));
+        assert_eq!(node.concepts.len(), 3);
+    }
+
+    #[test]
+    fn test_rdf11_vs_rdfstar_concepts() {
+        // Test that regular OWL concepts work alongside RDF-star concepts
+        let mut node = TableauNode::new(4, NodeType::Individual);
+        
+        // Add regular atomic concept
+        let person = ConceptLabel::Atomic("http://example.org/Person".to_string());
+        node.add_concept(person.clone());
+        
+        // Add RDF-star quoted triple
+        let qt_id = "<<http://ex.org/john http://ex.org/knows http://ex.org/mary>>".to_string();
+        let qt = ConceptLabel::QuotedTriple(qt_id);
+        node.add_concept(qt.clone());
+        
+        assert!(node.has_concept(&person));
+        assert!(node.has_concept(&qt));
+        assert_eq!(node.concepts.len(), 2);
     }
 }
