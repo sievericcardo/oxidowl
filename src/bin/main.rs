@@ -135,6 +135,26 @@ struct Cli {
     #[arg(long, value_name = "PORT")]
     sparql_port: Option<u16>,
 
+    /// RDF version to use (default: auto-detect)
+    #[arg(long, value_enum)]
+    rdf_version: Option<RdfVersion>,
+
+    /// Strict RDF 1.1 mode (reject RDF-star and RDF 1.2 features)
+    #[arg(long)]
+    strict_rdf11: bool,
+
+    /// Export format version for output
+    #[arg(long, value_enum)]
+    export_format_version: Option<RdfVersion>,
+
+    /// Convert RDF 1.1 reification patterns to RDF-star quoted triples
+    #[arg(long)]
+    convert_reification: bool,
+
+    /// Downgrade to RDF 1.1 for legacy export (may lose information)
+    #[arg(long)]
+    downgrade_to_rdf11: bool,
+
     /// Use legacy subcommand mode (for backward compatibility)
     #[command(subcommand)]
     command: Option<Commands>,
@@ -546,6 +566,29 @@ impl From<InputFormat> for OntologyFormat {
             InputFormat::Manchester => OntologyFormat::Manchester,
             InputFormat::Auto => OntologyFormat::Auto,
         }
+    }
+}
+
+/// RDF version specification
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum RdfVersion {
+    /// RDF 1.1 (no RDF-star or RDF 1.2 features)
+    #[value(name = "1.1")]
+    Rdf11,
+    /// RDF 1.2 (includes all new features)
+    #[value(name = "1.2")]
+    Rdf12,
+    /// RDF-star (quoted triples)
+    #[value(name = "star")]
+    RdfStar,
+    /// Auto-detect based on ontology content (default)
+    #[value(name = "auto")]
+    Auto,
+}
+
+impl Default for RdfVersion {
+    fn default() -> Self {
+        Self::Auto
     }
 }
 
