@@ -12,6 +12,7 @@ pub mod entailment;
 pub mod interpretation;
 pub mod iri_validation;
 pub mod owl2;
+pub mod quoted_triple_optimizer;
 
 // Re-export main types for convenience
 pub use rdf::{RdfSimpleEntailment, RdfSimpleInterpretation};
@@ -20,6 +21,10 @@ pub use entailment::{EntailmentChecker, EntailmentRegime, Owl2RlEngine};
 pub use interpretation::{Interpretation, InterpretationBuilder, InterpretationFactory};
 pub use iri_validation::{IriValidationMode, IriValidator};
 pub use owl2::{Owl2Interpretation, Owl2ReasoningEngine};
+pub use quoted_triple_optimizer::{
+    QuotedTripleCache, QuotedTripleInternPool, QuotedTripleOptimizer, 
+    QuotedTripleOptimizerConfig, OptimizerStats,
+};
 
 use crate::{Error, Result};
 use std::collections::HashSet;
