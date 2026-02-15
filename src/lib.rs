@@ -74,6 +74,7 @@ pub mod explanation;
 // pub mod utils;
 
 // Re-export main types for convenience
+pub use crate::adapter::{HornedOwlAdapter, RdfStarCapable};
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
 pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
