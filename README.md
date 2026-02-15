@@ -31,14 +31,20 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 📥 **Advanced Import Resolution**: Recursive imports, cycle detection, and IRI mapping
 - 🧪 **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
 
-#### v0.8.0 Highlights (Latest)
+#### v0.10.0 Highlights (Latest)
+
+- ⭐ **RDF-star Support**: Full implementation of quoted triples (`<< >>` syntax) for meta-level statements
+- 🔄 **RDF 1.2 Compliance**: Directional literals (`rdf:dirLangString`), well-formedness rules
+- 🔁 **Automatic Reification**: Bidirectional conversion between RDF-star and RDF 1.1 reification
+- 🎯 **SPARQL-star**: Query quoted triples with `<< ?s ?p ?o >>` patterns
+- 🔍 **RDF-star Validation**: Structural constraints, nesting limits, position rules
+- 📚 **Comprehensive Documentation**: Complete guides for RDF-star features and migration
+
+#### v0.8.0 Highlights
 
 - 🔥 **Zero-Overhead Parser State**: Compile-time optimizations with no runtime cost for successful parsing
 - ⚡ **O(1) Keyword Validation**: Perfect hash tables for comprehensive OWL keyword checking
 - 📝 **Configurable Error Verbosity**: Three levels (Minimal/Standard/Detailed) for performance tuning
-- 🔧 **SWRL Validation**: Basic parsing support for DLSafeRule constructs
-- 🚀 **Performance Improvements**: <2% overhead for minimal verbosity, inline hot paths
-- 🎨 **Enhanced Error Messages**: Optional line/column/context information for debugging
 
 #### Competitive Advantages
 
@@ -656,6 +662,124 @@ server.start().await?;
 // Server now accepts OWLlink requests at http://localhost:8080
 ```
 
+## RDF 1.2 and RDF-star Support
+
+Oxidowl provides comprehensive support for [RDF-star](https://w3c.github.io/rdf-star/) and [RDF 1.2](https://www.w3.org/TR/rdf12-concepts/) specifications, enabling direct representation of metadata about statements without cumbersome reification.
+
+### Key Features
+
+#### 1. Quoted Triples
+
+Use `<< >>` syntax to quote triples for meta-level statements:
+
+```rust
+use oxidowl::semantics::{RdfGraph, RdfTerm, Triple};
+
+// Create a quoted triple: << :alice :knows :bob >>
+let alice = RdfTerm::iri("http://example.org/alice")?;
+let knows = RdfTerm::iri("http://example.org/knows")?;
+let bob = RdfTerm::iri("http://example.org/bob")?;
+
+let base_triple = Triple::new(alice, knows, bob);
+let quoted = RdfTerm::QuotedTriple(Box::new(base_triple));
+
+// Add metadata: << :alice :knows :bob >> :confidence 0.95
+let confidence = RdfTerm::iri("http://example.org/confidence")?;
+let value = RdfTerm::literal("0.95");
+
+graph.add_triple(Triple::new(quoted, confidence, value));
+```
+
+#### 2. SPARQL-star Queries
+
+Query quoted triples using SPARQL-star syntax:
+
+```sparql
+PREFIX ex: <http://example.org/>
+
+SELECT ?s ?conf WHERE {
+  << ?s ex:knows ex:bob >> ex:confidence ?conf .
+  FILTER(?conf > 0.8)
+}
+```
+
+#### 3. Nested Structures
+
+Support for deeply nested quoted triples (up to 5 levels by default):
+
+```rust
+// 2-level nesting: << << :a :b :c >> :d :e >> :f :g
+let inner = Triple::new(a, b, c);
+let inner_quoted = RdfTerm::QuotedTriple(Box::new(inner));
+let middle = Triple::new(inner_quoted, d, e);
+let middle_quoted = RdfTerm::QuotedTriple(Box::new(middle));
+let outer = Triple::new(middle_quoted, f, g);
+```
+
+#### 4. RDF 1.1 Compatibility
+
+Automatic bidirectional conversion between RDF-star and RDF 1.1 reification:
+
+```rust
+use oxidowl::adapter::HornedOwlAdapter;
+
+let mut adapter = HornedOwlAdapter::new();
+adapter.set_rdf11_mode(true);
+
+// Automatically converts quoted triples to reification vocabulary
+let (reified_term, reification_triples) = adapter.reify_rdf_term(&quoted)?;
+```
+
+#### 5. RDF 1.2 Features
+
+- **Directional Literals**: `rdf:dirLangString` for RTL/LTR text direction
+- **Well-Formedness Rules**: Strict validation of blank node labels
+- **Semantic Extensions**: Support for `rdf:reifies` predicate
+
+### Use Cases
+
+- **Provenance Tracking**: Record source and timestamp of statements
+- **Confidence Scores**: Annotate statements with certainty levels
+- **Named Graphs Metadata**: Add metadata about entire graphs
+- **Temporal Information**: Track when statements become valid/invalid
+- **Access Control**: Attach permissions to specific statements
+
+### Documentation
+
+- [RDF-star Guide](docs/RDF_STAR_GUIDE.md) - Comprehensive usage guide
+- [RDF Compatibility Guide](docs/RDF_COMPATIBILITY.md) - Migration and conversion details
+- [SPARQL-star Documentation](docs/SPARQL_UPDATE.md) - Query and update operations
+- [API Reference](docs/MODULE_REFERENCE.md) - Complete API documentation
+
+### Examples
+
+- [examples/rdf_star_example.rs](examples/rdf_star_example.rs) - Basic RDF-star usage
+- [examples/rdf11_legacy_example.rs](examples/rdf11_legacy_example.rs) - Legacy interoperability
+- [tests/rdf_star_integration_tests.rs](tests/rdf_star_integration_tests.rs) - Integration tests
+
+### Validation
+
+oxidowl validates RDF-star structures according to W3C specifications:
+
+- ✅ Quoted triples in subject/object positions
+- ❌ Quoted triples in predicate position (forbidden)
+- ✅ Configurable nesting depth limits (default: 5)
+- ✅ Well-formed blank node labels
+- ✅ Directional literal validation
+
+```rust
+use oxidowl::validation::owl2_dl::OWL2DLValidator;
+
+let validator = OWL2DLValidator::new();
+let result = validator.validate(&ontology)?;
+
+if !result.is_valid() {
+    for error in result.errors() {
+        eprintln!("Validation error: {:?}", error);
+    }
+}
+```
+
 ## Testing
 
 ### Test Categories
@@ -665,10 +789,12 @@ server.start().await?;
   - Ontology operations
   - Parser functionality
   - Configuration management
+  - RDF-star semantics
 
 - **Integration Tests**: End-to-end testing
   - Real ontology processing
   - Algorithm comparison
+  - RDF-star workflows (19 tests)
 
 ### Test Execution
 
@@ -676,7 +802,7 @@ server.start().await?;
 # Quick test suite
 cargo test quick
 
-# Full test suite
+# Full test suite (450+ tests)
 cargo test
 
 # Performance tests (slower)
@@ -685,6 +811,9 @@ cargo test --release performance
 # Specific test categories
 cargo test unit::reasoning
 cargo test integration::greenhouse
+
+# RDF-star integration tests
+cargo test --test rdf_star_integration_tests
 ```
 
 ## Contributing
@@ -719,6 +848,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ### Recently Implemented
 
+- [x] **RDF-star and RDF 1.2 support** - Complete quoted triple implementation with SPARQL-star
 - [x] **SWRL rule support** - Complete implementation with 30+ built-in predicates
 - [x] **DisjointUnion axiom support** - Full support in DL queries and reasoning
 - [x] **Advanced DL Query Engine** - Manchester Syntax with union query optimization

@@ -151,6 +151,43 @@ pub enum Error {
     /// System operation failed
     #[error("System error: {message}")]
     SystemError { message: String },
+
+    /// RDF-star syntax error with optional position information
+    #[error("{}", format_rdf_star_syntax_error(.message, .line, .column, .context))]
+    RdfStarSyntax {
+        message: String,
+        line: Option<usize>,
+        column: Option<usize>,
+        context: Option<String>,
+    },
+
+    /// Quoted triple in predicate position (forbidden by RDF-star spec)
+    #[error("RDF-star error: Quoted triples are not allowed in predicate position")]
+    QuotedTripleInPredicatePosition,
+
+    /// Excessive quoted triple nesting
+    #[error("RDF-star error: Quoted triple nesting depth {depth} exceeds maximum {max}")]
+    ExcessiveQuotedTripleNesting { depth: usize, max: usize },
+
+    /// Invalid quoted triple structure
+    #[error("RDF-star error: Invalid quoted triple structure: {message}")]
+    InvalidQuotedTripleStructure { message: String },
+
+    /// RDF 1.2 directional literal error
+    #[error("RDF 1.2 error: Invalid directional literal: {message}")]
+    InvalidDirectionalLiteral { message: String },
+
+    /// RDF version incompatibility
+    #[error("RDF version error: {feature} requires {required_version}, but graph is in {current_version} mode")]
+    RdfVersionIncompatibility {
+        feature: String,
+        required_version: String,
+        current_version: String,
+    },
+
+    /// Reification conversion error
+    #[error("Reification error: {message}")]
+    ReificationError { message: String },
 }
 
 // Manual Clone implementation because Backtrace doesn't implement Clone
@@ -250,6 +287,44 @@ impl Clone for Error {
             Error::SystemError { message } => Error::SystemError {
                 message: message.clone(),
             },
+            Error::RdfStarSyntax {
+                message,
+                line,
+                column,
+                context,
+            } => Error::RdfStarSyntax {
+                message: message.clone(),
+                line: *line,
+                column: *column,
+                context: context.clone(),
+            },
+            Error::QuotedTripleInPredicatePosition => Error::QuotedTripleInPredicatePosition,
+            Error::ExcessiveQuotedTripleNesting { depth, max } => {
+                Error::ExcessiveQuotedTripleNesting {
+                    depth: *depth,
+                    max: *max,
+                }
+            }
+            Error::InvalidQuotedTripleStructure { message } => {
+                Error::InvalidQuotedTripleStructure {
+                    message: message.clone(),
+                }
+            }
+            Error::InvalidDirectionalLiteral { message } => Error::InvalidDirectionalLiteral {
+                message: message.clone(),
+            },
+            Error::RdfVersionIncompatibility {
+                feature,
+                required_version,
+                current_version,
+            } => Error::RdfVersionIncompatibility {
+                feature: feature.clone(),
+                required_version: required_version.clone(),
+                current_version: current_version.clone(),
+            },
+            Error::ReificationError { message } => Error::ReificationError {
+                message: message.clone(),
+            },
         }
     }
 }
@@ -278,6 +353,35 @@ fn format_ontology_parsing_error(
 
     if let Some(ctx) = context {
         result.push_str(&format!("\nContext: {}", ctx));
+    }
+
+    result
+}
+
+/// Format RDF-star syntax error with position information
+fn format_rdf_star_syntax_error(
+    message: &str,
+    line: &Option<usize>,
+    column: &Option<usize>,
+    context: &Option<String>,
+) -> String {
+    let mut result = format!("RDF-star syntax error: {}", message);
+
+    if let Some(l) = line {
+        if let Some(c) = column {
+            result.push_str(&format!(" at line {}, column {}", l, c));
+        } else {
+            result.push_str(&format!(" at line {}", l));
+        }
+    }
+
+    if let Some(ctx) = context {
+        result.push_str(&format!("\nContext: {}", ctx));
+    }
+
+    // Add helpful hint for common RDF-star errors
+    if message.contains("<<") || message.contains(">>") {
+        result.push_str("\nHint: Quoted triples use << >> syntax and require RDF-star mode");
     }
 
     result
@@ -485,6 +589,77 @@ impl Error {
     pub fn parse_error<S: Into<String>>(message: S) -> Self {
         Self::ParseError(message.into())
     }
+
+    /// RDF-star syntax error constructor (minimal)
+    pub fn rdf_star_syntax<S: Into<String>>(message: S) -> Self {
+        Self::RdfStarSyntax {
+            message: message.into(),
+            line: None,
+            column: None,
+            context: None,
+        }
+    }
+
+    /// RDF-star syntax error constructor with detailed context
+    pub fn rdf_star_syntax_detailed<S: Into<String>>(
+        message: S,
+        line: Option<usize>,
+        column: Option<usize>,
+        context: Option<String>,
+    ) -> Self {
+        Self::RdfStarSyntax {
+            message: message.into(),
+            line,
+            column,
+            context,
+        }
+    }
+
+    /// Quoted triple in predicate position error
+    #[must_use]
+    pub fn quoted_triple_in_predicate_position() -> Self {
+        Self::QuotedTripleInPredicatePosition
+    }
+
+    /// Excessive quoted triple nesting error
+    #[must_use]
+    pub fn excessive_quoted_triple_nesting(depth: usize, max: usize) -> Self {
+        Self::ExcessiveQuotedTripleNesting { depth, max }
+    }
+
+    /// Invalid quoted triple structure error
+    pub fn invalid_quoted_triple_structure<S: Into<String>>(message: S) -> Self {
+        Self::InvalidQuotedTripleStructure {
+            message: message.into(),
+        }
+    }
+
+    /// Invalid directional literal error
+    pub fn invalid_directional_literal<S: Into<String>>(message: S) -> Self {
+        Self::InvalidDirectionalLiteral {
+            message: message.into(),
+        }
+    }
+
+    /// RDF version incompatibility error
+    pub fn rdf_version_incompatibility<S: Into<String>>(
+        feature: S,
+        required_version: S,
+        current_version: S,
+    ) -> Self {
+        Self::RdfVersionIncompatibility {
+            feature: feature.into(),
+            required_version: required_version.into(),
+            current_version: current_version.into(),
+        }
+    }
+
+    /// Reification error constructor
+    pub fn reification_error<S: Into<String>>(message: S) -> Self {
+        Self::ReificationError {
+            message: message.into(),
+        }
+    }
 }
 
 impl From<std::io::Error> for Error {
@@ -551,6 +726,13 @@ impl Error {
             Error::ImportError { .. } => ErrorCategory::Input,
             Error::ReasoningError(_) => ErrorCategory::Reasoning,
             Error::ConfigurationError(_) => ErrorCategory::Config,
+            Error::RdfStarSyntax { .. }
+            | Error::QuotedTripleInPredicatePosition
+            | Error::ExcessiveQuotedTripleNesting { .. }
+            | Error::InvalidQuotedTripleStructure { .. }
+            | Error::InvalidDirectionalLiteral { .. }
+            | Error::RdfVersionIncompatibility { .. } => ErrorCategory::Input,
+            Error::ReificationError { .. } => ErrorCategory::Internal,
         }
     }
 
@@ -591,6 +773,13 @@ impl Error {
             Error::ImportError { .. } => false,
             Error::ReasoningError(_) => true,
             Error::ConfigurationError(_) => false,
+            Error::RdfStarSyntax { .. }
+            | Error::QuotedTripleInPredicatePosition
+            | Error::ExcessiveQuotedTripleNesting { .. }
+            | Error::InvalidQuotedTripleStructure { .. }
+            | Error::InvalidDirectionalLiteral { .. }
+            | Error::RdfVersionIncompatibility { .. }
+            | Error::ReificationError { .. } => false,
         }
     }
 }
