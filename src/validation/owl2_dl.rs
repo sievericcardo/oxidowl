@@ -853,10 +853,14 @@ impl OWL2DLValidator {
     /// 
     /// Returns the configured max depth for quoted triple nesting.
     /// Default is 5 levels, which should be sufficient for most use cases.
+    /// 
+    /// Note: In future, this should be exposed in ReasoningConfig or ValidationConfig
     fn get_max_nesting_depth(&self) -> usize {
-        // TODO: Get from config when configuration system is integrated
-        // For now, use a reasonable default
-        5
+        // Use default value of 5 - appropriate for most RDF-star use cases
+        // This balances expressiveness with computational complexity
+        // Can be made configurable when ValidationConfig is added to ReasonerConfig
+        const DEFAULT_MAX_NESTING: usize = 5;
+        DEFAULT_MAX_NESTING
     }
 
     /// Analyze property hierarchy to build internal structures

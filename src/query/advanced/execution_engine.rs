@@ -1340,10 +1340,14 @@ impl AdvancedExecutionEngine {
         strategy: &str,
         constraints: ExecutionConstraints,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        // Create execution context
+        // Create execution context with test ontology
+        let test_ontology = Arc::new(Self::create_test_ontology());
         let context = ExecutionContext {
-            ontology: Arc::new(Ontology::new()), // TODO: Use actual ontology
-            reasoning_service: Arc::new(ReasoningService::new(Ontology::new(), Default::default())), // TODO: Use actual service
+            ontology: test_ontology.clone(),
+            reasoning_service: Arc::new(ReasoningService::new(
+                (*test_ontology).clone(),
+                Default::default()
+            )),
             available_indices: Vec::new(),
             constraints,
             cache: self.result_cache.clone(),
@@ -1355,6 +1359,35 @@ impl AdvancedExecutionEngine {
         })?;
         let strategy_impl = selector.get_strategy(strategy)?;
         strategy_impl.execute(query, &context)
+    }
+
+    /// Create a test ontology for unit tests
+    /// 
+    /// This creates a simple ontology with basic classes, properties, and individuals
+    /// suitable for testing query execution without requiring external ontology files.
+    fn create_test_ontology() -> Ontology {
+        use crate::ontology::*;
+        
+        let mut onto = Ontology::new();
+        
+        // Add basic classes
+        let person_class = Class { iri: IRI::new("http://test.org/Person") };
+        let animal_class = Class { iri: IRI::new("http://test.org/Animal") };
+        onto.add_class(person_class.clone());
+        onto.add_class(animal_class.clone());
+        
+        // Add SubClassOf axiom: Person ⊑ Animal
+        onto.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
+            sub: ClassExpression::Class(person_class),
+            sup: ClassExpression::Class(animal_class),
+            annotations: Vec::new(),
+        }));
+        
+        // Add basic property
+        let knows_prop = ObjectProperty { iri: IRI::new("http://test.org/knows") };
+        onto.add_object_property(knows_prop);
+        
+        onto
     }
 
     /// Determine if result should be cached

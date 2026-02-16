@@ -223,6 +223,9 @@ pub struct CompletionRuleSet {
         CompletionRule,
         Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>,
     >,
+
+    /// Reference to the ontology for querying axioms
+    ontology: Option<std::sync::Arc<crate::ontology::Ontology>>,
 }
 
 impl std::fmt::Debug for CompletionRuleSet {
@@ -235,6 +238,7 @@ impl std::fmt::Debug for CompletionRuleSet {
                 &self.applicability.keys().collect::<Vec<_>>(),
             )
             .field("handlers", &self.handlers.keys().collect::<Vec<_>>())
+            .field("ontology", &self.ontology.as_ref().map(|_| "Arc<Ontology>"))
             .finish()
     }
 }
@@ -385,14 +389,35 @@ impl CompletionRuleSet {
             rules: Vec::new(),
             priorities: HashMap::new(),
             applicability: HashMap::new(),
-            handlers: HashMap::new(),
+            ontology: None,
         };
 
         rule_set.add_standard_rules();
         rule_set
     }
 
+    /// Create a completion rule set with ontology reference
+    #[must_use]
+    pub fn with_ontology(ontology: std::sync::Arc<crate::ontology::Ontology>) -> Self {
+        let mut rule_set = Self {
+            rules: Vec::new(),
+            priorities: HashMap::new(),
+            applicability: HashMap::new(),
+            handlers: HashMap::new(),
+            ontology: Some(ontology),
+        };
+
+        rule_set.add_standard_rules();
+        rule_set
+    }
+
+    /// Set the ontology reference
+    pub fn set_ontology(&mut self, ontology: std::sync::Arc<crate::ontology::Ontology>) {
+        self.ontology = Some(ontology);
+    }
+
     /// Add standard OWL 2 DL completion rules to the set
+    fn add_standard_rules(&mut self) {
     fn add_standard_rules(&mut self) {
         // Deterministic rules (highest priority)
         self.add_rule(CompletionRule::And, RulePriority::Highest);
@@ -950,26 +975,65 @@ impl CompletionRuleSet {
 
     /// Apply quoted triple rule (RDF-star)
     /// This handles expansion of << s p o >> quoted triple concepts
-    fn apply_quoted_triple_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
-        // Placeholder implementation for RDF-star quoted triple expansion
-        // In a full implementation, this would:
-        // 1. Extract the quoted triple structure from the concept
-        // 2. Create nodes for subject, predicate, object
-        // 3. Establish the relationship between them
-        // 4. Create a reified node representing the quoted triple itself
-        Ok(RuleResult::empty())
+    fn apply_quoted_triple_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        // Extract quoted triple from the concept or context
+        // RDF-star quoted triples represent statements about statements
+        // They need to be expanded into a reified representation in the tableau
+        
+        if let RuleContext::Concept { concept, dependencies } = &application.context {
+            // Check if this is a quoted triple pattern
+            // In a full implementation, we would:
+            // 1. Extract the subject, predicate, object from the quoted triple
+            // 2. Create a reification node for the statement
+            // 3. Add rdf:subject, rdf:predicate, rdf:object edges
+            // 4. Use the reification node for meta-assertions
+            
+            // For now, log that we encountered a quoted triple
+            log::debug!(
+                "Quoted triple rule application at node {}: concept = {:?}",
+                application.node,
+                concept
+            );
+            
+            // The actual implementation would check for specific patterns
+            // and create appropriate reification structures
+            // This is a placeholder for the complete RDF-star reasoning
+        }
+
+        Ok(result)
     }
 
     /// Apply meta-assertion rule (RDF-star)
     /// This handles assertions about quoted triples (annotations)
-    fn apply_meta_assertion_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
-        // Placeholder implementation for RDF-star meta-assertion handling
-        // In a full implementation, this would:
-        // 1. Identify the quoted triple this assertion is about
-        // 2. Extract the property and value of the meta-assertion
-        // 3. Add the meta-assertion as an annotation to the quoted triple
-        // 4. Check for meta-level clashes (e.g., contradictory certainty values)
-        Ok(RuleResult::empty())
+    fn apply_meta_assertion_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        // Handle meta-assertions (statements about statements)
+        // For example: << :alice :knows :bob >> :certainty 0.9
+        // This means the statement ":alice :knows :bob" has certainty 0.9
+        
+        if let RuleContext::Concept { concept, dependencies } = &application.context {
+            // In a full implementation, we would:
+            // 1. Identify the quoted triple this assertion is about
+            // 2. Extract the meta-property (e.g., :certainty) and meta-value (e.g., 0.9)
+            // 3. Add the meta-assertion as an annotation to the quoted triple
+            // 4. Check for meta-level consistency (e.g., certainty in [0,1])
+            // 5. Propagate meta-level inference rules if any
+            
+            log::debug!(
+                "Meta-assertion rule application at node {}: concept = {:?}",
+                application.node,
+                concept
+            );
+            
+            // For clash detection: check for contradictory meta-assertions
+            // Example: If we have both certainty > 0.8 and certainty < 0.2
+            // This would be a meta-level clash
+        }
+
+        Ok(result)
     }
 
     /// Apply property chain rule: R1 ∘ R2 ∘ ... ∘ Rn ⊑ S
@@ -1026,21 +1090,16 @@ impl CompletionRuleSet {
         &self,
         named_class: &crate::ontology::Class,
     ) -> Option<ClassExpression> {
-        // Simple implementation: look for equivalent class axioms in the ontology
-        // In a full implementation, this would be optimized with indexing
-
-        // For now, we'll check if there are any equivalent class axioms
-        // that define this class in terms of other expressions
-
-        // Placeholder: return a simple equivalent definition if it's a common pattern
-        let class_name = &named_class.iri.to_string();
-
-        // Example: if class is "Person", might be equivalent to "Human"
-        if class_name.contains("Person") {
-            Some(ClassExpression::Class(crate::ontology::Class {
-                iri: crate::ontology::IRI::from("Human".to_string()),
-            }))
+        // Query the ontology for equivalent class definitions
+        if let Some(ontology) = &self.ontology {
+            ontology.get_concept_definition(named_class)
         } else {
+            // No ontology available - this is for backward compatibility
+            // In production, ontology should always be available
+            log::warn!(
+                "No ontology reference in CompletionRuleSet - cannot unfold concept {}",
+                named_class.iri
+            );
             None
         }
     }

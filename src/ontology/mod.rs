@@ -942,6 +942,117 @@ impl Ontology {
 
         properties
     }
+
+    /// Query for property chain axioms and return super property if chain matches
+    ///
+    /// This method searches for SubObjectPropertyOf axioms with property chains
+    /// that match the given first and second roles. If found, it returns the
+    /// super property that can be inferred from the chain.
+    ///
+    /// Example: If we have R ∘ S ⊑ T and we query with (R, S), returns Some(T)
+    #[must_use]
+    pub fn get_property_chain_super(
+        &self,
+        first_role: &str,
+        second_role: &str,
+    ) -> Option<String> {
+        for axiom in &self.axioms {
+            if let axioms::Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom {
+                // Check if the sub_property is a property chain
+                if let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property {
+                    // Check if this chain matches our (first_role, second_role) pattern
+                    if chain.len() == 2 {
+                        let first_matches = match &chain[0] {
+                            ObjectPropertyExpression::ObjectProperty(prop) => {
+                                prop.iri.as_str().ends_with(first_role)
+                                    || prop.iri.as_str() == first_role
+                            }
+                            _ => false,
+                        };
+
+                        let second_matches = match &chain[1] {
+                            ObjectPropertyExpression::ObjectProperty(prop) => {
+                                prop.iri.as_str().ends_with(second_role)
+                                    || prop.iri.as_str() == second_role
+                            }
+                            _ => false,
+                        };
+
+                        if first_matches && second_matches {
+                            // Extract the super property name
+                            if let ObjectPropertyExpression::ObjectProperty(super_prop) =
+                                &sub_prop_axiom.super_property
+                            {
+                                return Some(super_prop.iri.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Get concept definition from EquivalentClasses axioms
+    ///
+    /// This method searches for EquivalentClasses axioms containing the given
+    /// named class and returns an equivalent definition if found.
+    ///
+    /// Example: If Person ≡ Human ⊓ ∃hasParent.Person, returns Some(Human ⊓ ∃hasParent.Person)
+    #[must_use]
+    pub fn get_concept_definition(&self, named_class: &concepts::Class) -> Option<ClassExpression> {
+        for axiom in &self.axioms {
+            if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                // Check if this equivalence contains our target class
+                let contains_target = equiv_axiom.class_expressions.iter().any(|ce| {
+                    matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri)
+                });
+
+                if contains_target {
+                    // Return the first non-trivial equivalent definition
+                    for ce in &equiv_axiom.class_expressions {
+                        // Skip the trivial self-reference
+                        if matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri) {
+                            continue;
+                        }
+                        // Return the first complex definition found
+                        return Some(ce.clone());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Get all equivalent classes for a given class
+    ///
+    /// Returns all class expressions that are declared equivalent to the given class.
+    #[must_use]
+    pub fn get_equivalent_classes(&self, named_class: &concepts::Class) -> Vec<ClassExpression> {
+        let mut equivalents = Vec::new();
+
+        for axiom in &self.axioms {
+            if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                // Check if this equivalence contains our target class
+                let contains_target = equiv_axiom.class_expressions.iter().any(|ce| {
+                    matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri)
+                });
+
+                if contains_target {
+                    // Collect all non-self equivalent expressions
+                    for ce in &equiv_axiom.class_expressions {
+                        if !matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri) {
+                            equivalents.push(ce.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        equivalents
+    }
 }
 
 impl Default for Ontology {

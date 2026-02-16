@@ -149,11 +149,29 @@ impl IriValidator {
         })
     }
 
-    /// Normalize an IRI (basic normalization for RDF 1.2)
+    /// Normalize an IRI according to RFC 3986 and RFC 3987
+    /// 
+    /// Performs IRI normalization including:
+    /// - Scheme and host lowercasing
+    /// - Percent-encoding normalization
+    /// - Path segment normalization (removing . and ..)
+    /// - Default port removal
     pub fn normalize(&self, iri: &str) -> String {
-        // For now, perform basic normalization
-        // TODO: Add full IRI normalization (scheme/host lowercasing, path normalization, etc.)
-        iri.to_string()
+        // Parse IRI using url crate
+        if let Ok(mut url) = url::Url::parse(iri) {
+            // URL crate automatically:
+            // - Lowercases scheme and host
+            // - Normalizes percent-encoding
+            // - Removes default ports
+            // - Normalizes path (. and .. segments)
+            
+            // Return normalized URL as string
+            url.to_string()
+        } else {
+            // If parsing fails, return original (may be relative IRI or invalid)
+            log::warn!("Failed to parse IRI for normalization: {}", iri);
+            iri.to_string()
+        }
     }
 
     /// Check if an IRI is absolute (contains a scheme)

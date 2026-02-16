@@ -16,6 +16,26 @@ use crate::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 
+/// Helper function to create horned_owl IRI from string
+/// 
+/// This wraps the creation of horned_owl IRI objects, handling proper namespace separation.
+fn create_horned_iri(iri_str: &str) -> horned_owl::model::IRI {
+    // horned_owl IRI construction - use the Build trait
+    // Split at common delimiters to separate namespace from local name
+    if let Some(hash_pos) = iri_str.rfind('#') {
+        let namespace = &iri_str[..=hash_pos];
+        let local = &iri_str[hash_pos + 1..];
+        horned_owl::model::IRI::from((namespace, local))
+    } else if let Some(slash_pos) = iri_str.rfind('/') {
+        let namespace = &iri_str[..=slash_pos];
+        let local = &iri_str[slash_pos + 1..];
+        horned_owl::model::IRI::from((namespace, local))
+    } else {
+        // No clear delimiter, use full IRI as local name with empty namespace
+        horned_owl::model::IRI::from(("", iri_str))
+    }
+}
+
 /// Configuration for OWL 2 DL interpretation with RDF-star support
 #[derive(Debug, Clone)]
 pub struct Owl2Config {
@@ -907,14 +927,12 @@ impl Owl2Interpretation {
                             lang: language.clone(),
                         }
                     } else if let Some(datatype) = &restriction.value.datatype {
-                        // For now, use Simple literal since IRI constructor is private
-                        // TODO: Find proper way to create horned_owl IRI from datatype URL
-                        horned_owl::model::Literal::Simple {
-                            literal: format!(
-                                "{}^^{}",
-                                restriction.value.value,
-                                datatype.to_string()
-                            ),
+                        // Create horned_owl IRI from datatype URL
+                        // Use Datatype variant which properly wraps the IRI
+                        let datatype_str = datatype.to_string();
+                        horned_owl::model::Literal::Datatype {
+                            literal: restriction.value.value.clone(),
+                            datatype_iri: create_horned_iri(&datatype_str),
                         }
                     } else {
                         horned_owl::model::Literal::Simple {

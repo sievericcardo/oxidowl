@@ -798,22 +798,33 @@ impl TableauExecutor {
             
             // Check each potential chain
             for (target_node, second_role) in second_hop_edges {
-                // In a full implementation, we would look up property chain axioms
-                // from the ontology to see if first_role ∘ second_role ⊑ super_role
-                //
-                // For now, we log discovered chains. The actual chain axioms would
-                // come from SubObjectPropertyOf axioms with PropertyChain expressions.
+                // Query the ontology for property chain axioms
+                // If we have first_role ∘ second_role ⊑ super_role, create implied edge
                 
                 debug!(
                     "Found potential chain: node {} --{}--> {} --{}--> {}",
                     node_id, first_role, intermediate_node, second_role, target_node
                 );
                 
-                // TODO: Query ontology for property chain axioms matching (first_role, second_role)
-                // If found, create implied edge:
-                // let super_role = RoleLabel::Atomic(super_role_name);
-                // tableau.add_edge(node_id, target_node, super_role)?;
-                // chains_created += 1;
+                // Query ontology for property chain axioms matching (first_role, second_role)
+                if let Some(super_role_iri) = tableau.ontology.get_property_chain_super(&first_role, &second_role) {
+                    // Extract the local name from the IRI for the role label
+                    let super_role_name = super_role_iri
+                        .rsplit_once(['#', '/'])
+                        .map(|(_, local)| local)
+                        .unwrap_or(&super_role_iri);
+                    
+                    let super_role = RoleLabel::Atomic(super_role_name.to_string());
+                    
+                    // Create the implied edge
+                    tableau.add_edge(node_id, target_node, super_role)?;
+                    chains_created += 1;
+                    
+                    debug!(
+                        "Applied property chain: {} ∘ {} ⊑ {} (created edge {} -> {})",
+                        first_role, second_role, super_role_name, node_id, target_node
+                    );
+                }
             }
         }
         

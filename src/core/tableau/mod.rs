@@ -80,6 +80,9 @@ pub struct Tableau {
     /// Clause checker for DL clause validation (optional)
     pub clause_checker: Option<ClauseChecker>,
 
+    /// Reference to the ontology for querying axioms during reasoning
+    pub ontology: Arc<Ontology>,
+
     /// Concept cache for performance
     concept_cache: HashMap<String, ConceptLabel>,
 
@@ -154,8 +157,8 @@ pub struct SavedState {
 }
 
 impl Tableau {
-    /// Create a new tableau with the given configuration
-    pub fn new(config: ReasoningConfig) -> Self {
+    /// Create a new tableau with the given configuration and ontology
+    pub fn new(config: ReasoningConfig, ontology: Arc<Ontology>) -> Self {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
@@ -175,6 +178,7 @@ impl Tableau {
             blocking_strategy: BlockingStrategy,
             expansion_strategy: DefaultExpansionStrategy::default(),
             clause_checker: None, // Will be populated when ontology is loaded
+            ontology,
             concept_cache: HashMap::new(),
             role_cache: HashMap::new(),
             individual_map: HashMap::new(),
@@ -183,7 +187,8 @@ impl Tableau {
     }
 
     /// Initialize tableau from ontology
-    pub fn from_ontology(ontology: &Ontology, config: ReasoningConfig) -> Result<Self> {
+    pub fn fontology_arc = Arc::new(ontology.clone());
+        let mut tableau = Self::new(config, ontology_arcgy, config: ReasoningConfig) -> Result<Self> {
         let mut tableau = Self::new(config);
         tableau.load_ontology(ontology)?;
         Ok(tableau)

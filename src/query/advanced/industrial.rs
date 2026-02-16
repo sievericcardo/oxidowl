@@ -591,24 +591,67 @@ impl IndustrialOptimizer {
         namespaces.len()
     }
 
-    fn estimate_module_complexity(&self, _concepts: &[ClassExpression]) -> f64 {
-        // Placeholder complexity estimation
-        1.0
+    fn estimate_module_complexity(&self, concepts: &[ClassExpression]) -> f64 {
+        let mut complexity = 0.0;
+        
+        for concept in concepts {
+            complexity += match concept {
+                ClassExpression::Class(_) => 1.0,
+                ClassExpression::ObjectIntersectionOf(ops) => 2.0 + (ops.len() as f64 * 0.5),
+                ClassExpression::ObjectUnionOf(ops) => 3.0 + (ops.len() as f64 * 0.7),
+                ClassExpression::ObjectSomeValuesFrom(..) => 5.0,
+                ClassExpression::ObjectAllValuesFrom(..) => 5.0,
+                ClassExpression::ObjectMinCardinality(n, ..) |ClassExpression::ObjectMaxCardinality(n, ..) =>
+                    10.0 + (*n as f64 * 2.0),
+                ClassExpression::ObjectExactCardinality(n, ..) => 12.0 + (*n as f64 * 2.0),
+                ClassExpression::ObjectOneOf(inds) => 3.0 + (inds.len() as f64 * 0.5),
+                _ => 2.0,
+            };
+        }
+        
+        // Apply logarithmic scaling for very large values
+        if complexity > 100.0 {
+            100.0 + (complexity - 100.0).ln() * 10.0
+        } else {
+            complexity
+        }
     }
 
-    fn axiom_defines_superclass(&self, _class_iri: &IRI, _axiom: &crate::ontology::Axiom) -> bool {
-        // Placeholder - would check if axiom defines superclass relationship
-        false
+    fn axiom_defines_superclass(&self, class_iri: &IRI, axiom: &crate::ontology::Axiom) -> bool {
+        match axiom {
+            crate::ontology::Axiom::SubClassOf(sub_axiom) => {
+                // Check if this axiom has our class as the subclass
+                matches!(&sub_axiom.sub, ClassExpression::Class(c) if &c.iri == class_iri)
+            }
+            crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
+                // Check if our class is in the equivalence set
+                equiv_axiom.class_expressions.iter().any(|ce| {
+                    matches!(ce, ClassExpression::Class(c) if &c.iri == class_iri)
+                })
+            }
+            _ => false,
+        }
     }
 
     fn find_direct_subclasses(
         &self,
-        _concept: &ClassExpression,
+        concept: &ClassExpression,
         ontology: &Ontology,
     ) -> Vec<ClassExpression> {
-        // Placeholder - would find direct subclasses
-        // For now, return empty to avoid infinite loops
-        Vec::new()
+        let mut subclasses = Vec::new();
+        
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
+                // Check if the superclass matches our concept
+                if &sub_axiom.sup == concept {
+                    subclasses.push(sub_axiom.sub.clone());
+                }
+            }
+        }
+        
+        // Limit recursion to prevent infinite loops
+        subclasses.truncate(100);
+        subclasses
     }
 
     fn create_chunk_ontology(
@@ -949,8 +992,30 @@ impl DistributedProcessingCoordinator {
         &self,
         result: &DistributedClassificationResult,
     ) -> Result<DistributedClassificationResult, OptimizationError> {
-        // Placeholder for result merging
-        Ok(DistributedClassificationResult::new())
+        // Merge all partition results into a single result
+        let mut merged = DistributedClassificationResult::new();
+        
+        for partition_result in &result.partition_results {
+            // Merge subsumption relationships
+            for (class, supers) in &partition_result.subsumptions {
+                merged.subsumptions
+                    .entry(class.clone())
+                    .or_insert_with(Vec::new)
+                    .extend(supers.iter().cloned());
+            }
+            
+            // Aggregate performance metrics
+            merged.total_time += partition_result.time_ms;
+            merged.partition_count += 1;
+        }
+        
+        // Deduplicate subsumptions
+        for supers in merged.subsumptions.values_mut() {
+            supers.sort();
+            supers.dedup();
+        }
+        
+        Ok(merged)
     }
 }
 

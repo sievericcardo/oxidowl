@@ -155,8 +155,8 @@ impl TableauBuilder {
     }
 
     /// Build the tableau
-    pub fn build(self) -> Result<super::Tableau> {
-        let mut tableau = super::Tableau::new(self.config);
+    pub fn build(self, ontology: Arc<Ontology>) -> Result<super::Tableau> {
+        let mut tableau = super::Tableau::new(self.config, ontology);
 
         // Add root node
         let root_id = tableau.add_node(NodeType::Root)?;

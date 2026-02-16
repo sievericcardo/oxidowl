@@ -131,20 +131,49 @@ _:stmt a rdf:Statement ;
 
 ### RDF 1.1 → RDF-star (Dereification)
 
-⚠️ **Limited Support**: Automatic dereification is not fully implemented.
+✅ **Now Implemented**: Automatic dereification with heuristic pattern matching.
 
 ```rust
 let adapter = HornedOwlAdapter::new();
-// dereify_triples() currently returns NotImplemented
+// dereify_triples() converts RDF 1.1 reification to RDF-star quoted triples
 let result = adapter.dereify_triples(&horned_ont);
-// TODO: Implement heuristic-based dereification
 ```
 
+**Implementation Details** (see `src/adapter.rs:316`):
+
+1. **Pattern Identification**: Find all blank nodes with `rdf:type rdf:Statement`
+2. **Component Extraction**: For each statement node, collect:
+   - `rdf:subject` → subject of quoted triple
+   - `rdf:predicate` → predicate of quoted triple
+   - `rdf:object` → object of quoted triple
+3. **Validation**: Ensure complete reification (all 4 triples present)
+4. **Quoted Triple Creation**: Build `RdfTerm::QuotedTriple(Box<Triple>)`
+5. **Cleanup**: Remove the 4 reification triples from graph
+6. **Reference Replacement**: Substitute blank node references with quoted triples
+
+**Example**:
+```turtle
+# Input (RDF 1.1 reification):
+_:stmt rdf:type rdf:Statement .
+_:stmt rdf:subject :alice .
+_:stmt rdf:predicate :knows .
+_:stmt rdf:object :bob .
+_:stmt :certainty "0.95"^^xsd:decimal .
+
+# Output (RDF-star):
+<< :alice :knows :bob >> :certainty "0.95"^^xsd:decimal .
+```
+
+**Heuristics**:
+- **Strict matching**: Only complete 4-triple patterns are converted
+- **Blank node preservation**: Non-reification blank nodes are preserved
+- **Ambiguity handling**: Multiple statements sharing components are kept separate
+- **Vocabulary flexibility**: Supports both `rdf:Statement` and `owl:Axiom` types
+
 **Challenges**:
-- Ambiguous blank node patterns
-- Multiple statements sharing components
-- Incomplete reification patterns
-- Custom reification vocabularies
+- Ambiguous blank node patterns (mitigated by strict 4-tuple matching)
+- Custom reification vocabularies (partially supported)
+- Incomplete patterns (left as-is, not converted)
 
 ### RDF 1.2 ↔ RDF-star
 
