@@ -48,7 +48,7 @@ struct QueryCache {
 
 /// Cache performance statistics
 #[derive(Debug, Default)]
-struct CacheStatistics {
+pub struct CacheStatistics {
     hits: u64,
     misses: u64,
     evictions: u64,

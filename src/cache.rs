@@ -28,7 +28,7 @@ pub struct CacheEntry<T> {
 
 /// Internal cache statistics tracking
 #[derive(Debug, Clone, Default)]
-struct CacheMetrics {
+pub struct CacheMetrics {
     hits: u64,
     misses: u64,
     evictions: u64,
@@ -541,7 +541,9 @@ pub struct CacheManager {
     concept_cache: ConceptSatisfiabilityCache,
     completion_graph_cache: CompletionGraphCache,
     quoted_triple_optimizer: QuotedTripleOptimizer,
+    #[allow(dead_code)]
     config: CacheConfig,
+    #[allow(dead_code)]
     memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
