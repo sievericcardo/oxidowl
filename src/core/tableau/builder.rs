@@ -17,6 +17,7 @@ use crate::{
     ontology::{ClassExpression, Ontology},
 };
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Tableau builder for constructing configured tableau instances
 #[derive(Debug)]
@@ -129,7 +130,7 @@ impl TableauBuilder {
                     let inclusion = PropertyInclusion {
                         sub_property: RoleLabel::Atomic(sub_name),
                         super_property: RoleLabel::Atomic(super_name),
-                        dependencies: DependencySet::new(),
+                        dependencies: Arc::new(DependencySet::new()),
                     };
                     self.property_inclusions.push(inclusion);
                 }

@@ -117,7 +117,7 @@ pub struct ExistentialCandidate {
     pub filler: ClassExpression,
 
     /// Dependencies for this candidate
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 
     /// Potential witness
     pub potential_witnesses: Vec<String>,
@@ -191,7 +191,7 @@ pub struct ExpansionResult {
     pub success: bool,
 
     /// Dependencies generated during expansion
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 /// Record of a completed expansion
@@ -446,7 +446,7 @@ impl ExpansionManager {
             new_concepts: vec![(witness, candidate.filler.clone())],
             rule_applications: Vec::new(),
             success: true,
-            dependencies: candidate.dependencies.clone(),
+            dependencies: Arc::clone(&candidate.dependencies),
         };
 
         // Create rule application for adding filler concept
@@ -454,7 +454,7 @@ impl ExpansionManager {
             CompletionRule::Some,
             candidate.node.clone(),
             candidate.existential.clone(),
-            Arc::new(candidate.dependencies.clone()),
+            Arc::clone(&candidate.dependencies),
         );
         result.rule_applications.push(rule_app);
 
@@ -480,7 +480,7 @@ impl ExpansionManager {
             new_concepts: vec![(new_individual, candidate.filler.clone())],
             rule_applications: Vec::new(),
             success: true,
-            dependencies: candidate.dependencies.clone(),
+            dependencies: Arc::clone(&candidate.dependencies),
         };
 
         // Create rule application
@@ -488,7 +488,7 @@ impl ExpansionManager {
             CompletionRule::Some,
             candidate.node.clone(),
             candidate.existential.clone(),
-            Arc::new(candidate.dependencies.clone()),
+            Arc::clone(&candidate.dependencies),
         );
         result.rule_applications.push(rule_app);
 
@@ -676,7 +676,7 @@ impl ExistentialCandidate {
     pub fn new(
         node: String,
         existential: ClassExpression,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     ) -> Result<Self> {
         let (role, filler) = match &existential {
             ClassExpression::ObjectSomeValuesFrom {

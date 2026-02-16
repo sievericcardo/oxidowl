@@ -9,6 +9,7 @@ use crate::{
     ontology::{ClassExpression, Role},
 };
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Unique identifier for tableau nodes
 pub type NodeId = usize;
@@ -29,7 +30,7 @@ pub struct TableauNode {
     pub blocking_info: BlockingInfo,
 
     /// Dependency information for concepts
-    pub concept_dependencies: HashMap<ConceptLabel, DependencySet>,
+    pub concept_dependencies: HashMap<ConceptLabel, Arc<DependencySet>>,
 
     /// Role successors for this node
     pub role_successors: HashMap<String, HashSet<NodeId>>,
@@ -388,7 +389,7 @@ impl TableauNode {
     pub fn add_concept_with_dependency(
         &mut self,
         concept: ConceptLabel,
-        dependency: DependencySet,
+        dependency: Arc<DependencySet>,
     ) {
         self.concepts.insert(concept.clone());
         self.concept_dependencies.insert(concept, dependency);
@@ -441,7 +442,7 @@ impl TableauNode {
     }
 
     /// Get the dependency set for a concept
-    pub fn get_concept_dependency(&self, concept: &ConceptLabel) -> Option<&DependencySet> {
+    pub fn get_concept_dependency(&self, concept: &ConceptLabel) -> Option<&Arc<DependencySet>> {
         self.concept_dependencies.get(concept)
     }
 }

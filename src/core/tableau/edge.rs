@@ -62,7 +62,7 @@ impl TableauEdge {
             from: self.to,
             to: self.from,
             role: inverse_role,
-            dependencies: self.dependencies.clone(),
+            dependencies: Arc::clone(&self.dependencies),
         }
     }
 }
@@ -77,5 +77,5 @@ pub struct PropertyInclusion {
     pub super_property: RoleLabel,
 
     /// Dependencies for this inclusion
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }

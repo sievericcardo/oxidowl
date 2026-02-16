@@ -109,7 +109,7 @@ pub struct BacktrackPoint {
     pub saved_state: SavedState,
 
     /// Dependencies at this point
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 /// Types of non-deterministic choices

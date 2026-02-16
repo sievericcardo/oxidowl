@@ -504,7 +504,7 @@ impl TableauExecutor {
                 edge_count: tableau.edges.len(),
                 pending_queue: tableau.pending_queue.clone(),
             },
-            dependencies: DependencySet::new(),
+            dependencies: Arc::new(DependencySet::new()),
         };
         
         tableau.backtrack_stack.push(backtrack_point);
@@ -600,7 +600,7 @@ impl TableauExecutor {
                     edge_count: tableau.edges.len(),
                     pending_queue: tableau.pending_queue.clone(),
                 },
-                dependencies: (**dependencies).clone(),
+                dependencies: Arc::clone(dependencies),
             };
             
             tableau.backtrack_stack.push(backtrack_point);
