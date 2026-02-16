@@ -416,11 +416,11 @@ impl JustificationComputer {
         Ok(minimal_set)
     }
 
-    /// Simplified check for inconsistency (placeholder for proper reasoner check)
+    /// Check for inconsistency using structural analysis
     fn is_inconsistent(&self, axioms: &[Axiom]) -> bool {
         // Check for obvious contradictions
 
-        // Check for disjoint classes being asserted equivalent
+        // 1. Check for disjoint classes being asserted equivalent
         for axiom in axioms {
             if let Axiom::EquivalentClasses(equiv_data) = axiom {
                 for other_axiom in axioms {
@@ -441,12 +441,61 @@ impl JustificationComputer {
             }
         }
 
-        // Check for class being subclass of its complement
+        // 2. Check for class being subclass of its complement
         for axiom in axioms {
             if let Axiom::SubClassOf(axiom_data) = axiom {
                 if let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass {
                     if &axiom_data.subclass == inner.as_ref() {
                         return true;
+                    }
+                }
+            }
+        }
+
+        // 3. Check for empty intersections (A ⊓ ¬A ⊑ ⊥)
+        for axiom in axioms {
+            if let Axiom::SubClassOf(axiom_data) = axiom {
+                if let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass {
+                    // Check if intersection contains both a class and its complement
+                    for (i, c1) in classes.iter().enumerate() {
+                        for c2 in classes.iter().skip(i + 1) {
+                            if let ClassExpression::ObjectComplementOf(inner) = c2 {
+                                if c1 == inner.as_ref() {
+                                    return true;
+                                }
+                            }
+                            if let ClassExpression::ObjectComplementOf(inner) = c1 {
+                                if c2 == inner.as_ref() {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Check for cardinality contradictions (≥n and ≤m where n > m)
+        for axiom in axioms {
+            if let Axiom::SubClassOf(axiom_data) = axiom {
+                if let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass {
+                    let mut min_card = None;
+                    let mut max_card = None;
+                    
+                    for cls in classes {
+                        if let ClassExpression::ObjectMinCardinality(n, prop, _) = cls {
+                            min_card = Some((*n, prop));
+                        }
+                        if let ClassExpression::ObjectMaxCardinality(m, prop2, _) = cls {
+                            max_card = Some((*m, prop2));
+                        }
+                    }
+                    
+                    // Check if min > max for same property
+                    if let (Some((min, prop1)), Some((max, prop2))) = (min_card, max_card) {
+                        if prop1 == prop2 && min > max {
+                            return true;
+                        }
                     }
                 }
             }

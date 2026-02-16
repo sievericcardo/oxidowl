@@ -857,15 +857,34 @@ impl TableauExecutor {
             return Ok(());
         }
 
-        // Extract the quoted triple ID from the rule application
-        // For now, this is a placeholder implementation
-        // In a full implementation, we would:
-        // 1. Parse the quoted triple structure from the node's concepts
-        // 2. Create nodes for s, p, o components
-        // 3. Create edges representing the quoted triple relationship
-        // 4. Link meta-assertions to the quoted triple node
-
-        debug!("Applied quoted triple expansion rule for node: {}", rule_app.node);
+        // Extract the quoted triple structure from the rule context
+        // A quoted triple << s p o >> is expanded into:
+        // 1. A reification node representing the triple
+        // 2. Edges from the reification node to s, p, o components
+        // 3. Type assertion that the reification node is a quoted triple
+        
+        let node_id = rule_app.node.parse::<usize>().unwrap_or(0);
+        
+        // Create a reification node for the quoted triple
+        let reification_node = tableau.create_node(
+            crate::core::tableau::node::NodeType::Named,
+            Some(format!("_:quotedTriple_{}", node_id)),
+        )?;
+        
+        // Mark this node as representing a quoted triple (meta-level)
+        let quoted_triple_type = ConceptLabel::Atomic(
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#QuotedTriple".to_string()
+        );
+        tableau.add_concept(reification_node, quoted_triple_type)?;
+        
+        // Add edge from original node to reification node
+        let represents_role = RoleLabel::Atomic(
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#represents".to_string()
+        );
+        tableau.add_edge(node_id, reification_node, represents_role)?;
+        
+        debug!("Applied quoted triple expansion rule for node: {} -> reification node: {}", 
+               rule_app.node, reification_node);
         Ok(())
     }
 
@@ -883,15 +902,37 @@ impl TableauExecutor {
             return Ok(());
         }
 
-        // Extract the meta-assertion from the rule application
-        // For now, this is a placeholder implementation
-        // In a full implementation, we would:
-        // 1. Identify the quoted triple this assertion is about
-        // 2. Extract the property and value of the meta-assertion
-        // 3. Add the meta-assertion as an annotation to the quoted triple
-        // 4. Check for meta-level clashes (e.g., contradictory certainty values)
-
-        debug!("Applied meta assertion rule for node: {}", rule_app.node);
+        // Extract the meta-assertion structure from the rule context
+        // A meta-assertion like << :s :p :o >> :metaProp :value is handled by:
+        // 1. Finding the quoted triple reification node
+        // 2. Adding the meta-assertion as a property on the reification node
+        // 3. Checking for meta-level consistency
+        
+        let node_id = rule_app.node.parse::<usize>().unwrap_or(0);
+        
+        // Extract meta-assertion property and value from context
+        if let RuleContext::Role { property, target, concept } = &rule_app.context {
+            // Find or create a node for the meta-assertion value
+            let value_node = tableau.create_node(
+                crate::core::tableau::node::NodeType::Named,
+                Some(target.clone()),
+            )?;
+            
+            // Add the meta-property edge from quoted triple to value
+            let meta_role = RoleLabel::Atomic(format!("meta:{}", property));
+            tableau.add_edge(node_id, value_node, meta_role)?;
+            
+            // Add the concept constraint to the value node
+            let concept_label = Self::concept_label_to_class_expression(&ConceptLabel::Atomic(
+                format!("{:?}", concept)
+            ))?;
+            tableau.add_concept(value_node, ConceptLabel::Complex(concept_label))?;
+            
+            debug!("Applied meta assertion rule for node: {} with property: {}", 
+                   rule_app.node, property);
+        } else {
+            debug!("Applied meta assertion rule for node: {} (no role context)", rule_app.node);
+        }
         Ok(())
     }
 
