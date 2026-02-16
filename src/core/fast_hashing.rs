@@ -3,7 +3,7 @@
 //! This module provides optimized hashing functions that directly hash the structure
 //! of class expressions without expensive Debug formatting or string conversions.
 
-use crate::ontology::{ClassExpression, ObjectPropertyExpression, DataPropertyExpression, DataRange, Individual, Literal, IRI};
+use crate::ontology::{ClassExpression, ObjectPropertyExpression, DataPropertyExpression, DataRange, Individual, Literal};
 use crate::core::persistent_collections::ConceptSet;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
@@ -168,6 +168,292 @@ impl Default for FastConceptHasher {
     }
 }
 
+/// Compare two concepts structurally (faster than Debug formatting)
+///
+/// Precondition: Both concepts must be the same variant (same discriminant)
+fn compare_concepts(a: &ClassExpression, b: &ClassExpression) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    use ClassExpression::*;
+    
+    match (a, b) {
+        (Class(ca), Class(cb)) => ca.iri.as_str().cmp(cb.iri.as_str()),
+        
+        (ObjectIntersectionOf(ea), ObjectIntersectionOf(eb)) => {
+            compare_concept_lists(ea, eb)
+        }
+        (ObjectUnionOf(ea), ObjectUnionOf(eb)) => {
+            compare_concept_lists(ea, eb)
+        }
+        
+        (ObjectOneOf(ia), ObjectOneOf(ib)) => {
+            // Compare individual lists
+            ia.len().cmp(&ib.len())
+                .then_with(|| {
+                    for (ind_a, ind_b) in ia.iter().zip(ib.iter()) {
+                        match compare_individuals(ind_a, ind_b) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    }
+                    Ordering::Equal
+                })
+        }
+        
+        (ObjectSomeValuesFrom { property: pa, filler: fa }, 
+         ObjectSomeValuesFrom { property: pb, filler: fb }) => {
+            compare_object_properties(pa, pb)
+                .then_with(|| compare_concepts(fa, fb))
+        }
+        
+        (ObjectAllValuesFrom { property: pa, filler: fa }, 
+         ObjectAllValuesFrom { property: pb, filler: fb }) => {
+            compare_object_properties(pa, pb)
+                .then_with(|| compare_concepts(fa, fb))
+        }
+        
+        (ObjectHasValue { property: pa, value: va }, 
+         ObjectHasValue { property: pb, value: vb }) => {
+            compare_object_properties(pa, pb)
+                .then_with(|| compare_individuals(va, vb))
+        }
+        
+        (ObjectHasSelf { property: pa }, 
+         ObjectHasSelf { property: pb }) => {
+            compare_object_properties(pa, pb)
+        }
+        
+        (ObjectMinCardinality { property: pa, cardinality: ca, filler: fa }, 
+         ObjectMinCardinality { property: pb, cardinality: cb, filler: fb }) => {
+            compare_object_properties(pa, pb)
+                .then_with(|| ca.cmp(cb))
+                .then_with(|| compare_concepts(fa, fb))
+        }
+        
+        (ObjectMaxCardinality { property: pa, cardinality: ca, filler: fa }, 
+         ObjectMaxCardinality { property: pb, cardinality: cb, filler: fb }) => {
+            compare_object_properties(pa, pb)
+                .then_with(|| ca.cmp(cb))
+                .then_with(|| compare_concepts(fa, fb))
+        }
+        
+        (ObjectExactCardinality { property: pa, cardinality: ca, filler: fa }, 
+         ObjectExactCardinality { property: pb, cardinality: cb, filler: fb }) => {
+            compare_object_properties(pa, pb)
+                .then_with(|| ca.cmp(cb))
+                .then_with(|| compare_concepts(fa, fb))
+        }
+        
+        (DataSomeValuesFrom { property: pa, filler: fa }, 
+         DataSomeValuesFrom { property: pb, filler: fb }) => {
+            compare_data_properties(pa, pb)
+                .then_with(|| compare_data_ranges(fa, fb))
+        }
+        
+        (DataAllValuesFrom { property: pa, filler: fa }, 
+         DataAllValuesFrom { property: pb, filler: fb }) => {
+            compare_data_properties(pa, pb)
+                .then_with(|| compare_data_ranges(fa, fb))
+        }
+        
+        (DataHasValue { property: pa, value: va }, 
+         DataHasValue { property: pb, value: vb }) => {
+            compare_data_properties(pa, pb)
+                .then_with(|| compare_literals(va, vb))
+        }
+        
+        (DataMinCardinality { property: pa, cardinality: ca, filler: fa }, 
+         DataMinCardinality { property: pb, cardinality: cb, filler: fb }) => {
+            compare_data_properties(pa, pb)
+                .then_with(|| ca.cmp(cb))
+                .then_with(|| compare_data_ranges(fa, fb))
+        }
+        
+        (DataMaxCardinality { property: pa, cardinality: ca, filler: fa }, 
+         DataMaxCardinality { property: pb, cardinality: cb, filler: fb }) => {
+            compare_data_properties(pa, pb)
+                .then_with(|| ca.cmp(cb))
+                .then_with(|| compare_data_ranges(fa, fb))
+        }
+        
+        (DataExactCardinality { property: pa, cardinality: ca, filler: fa }, 
+         DataExactCardinality { property: pb, cardinality: cb, filler: fb }) => {
+            compare_data_properties(pa, pb)
+                .then_with(|| ca.cmp(cb))
+                .then_with(|| compare_data_ranges(fa, fb))
+        }
+        
+        (ObjectComplementOf(ea), ObjectComplementOf(eb)) => {
+            compare_concepts(ea, eb)
+        }
+        
+        // This should never happen since we check discriminants first
+        _ => Ordering::Equal,
+    }
+}
+
+/// Compare two lists of concepts
+fn compare_concept_lists(a: &[ClassExpression], b: &[ClassExpression]) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    
+    a.len().cmp(&b.len())
+        .then_with(|| {
+            for (ca, cb) in a.iter().zip(b.iter()) {
+                match compare_concepts(ca, cb) {
+                    Ordering::Equal => continue,
+                    other => return other,
+                }
+            }
+            Ordering::Equal
+        })
+}
+
+/// Compare two object properties
+fn compare_object_properties(
+    a: &ObjectPropertyExpression,
+    b: &ObjectPropertyExpression,
+) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    
+    let a_disc = std::mem::discriminant(a);
+    let b_disc = std::mem::discriminant(b);
+    
+    if a_disc != b_disc {
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
+    
+    match (a, b) {
+        (ObjectPropertyExpression::ObjectProperty(pa), 
+         ObjectPropertyExpression::ObjectProperty(pb)) => {
+            pa.iri.as_str().cmp(pb.iri.as_str())
+        }
+        (ObjectPropertyExpression::InverseObjectProperty(pa), 
+         ObjectPropertyExpression::InverseObjectProperty(pb)) => {
+            pa.iri.as_str().cmp(pb.iri.as_str())
+        }
+        (ObjectPropertyExpression::PropertyChain(ca), 
+         ObjectPropertyExpression::PropertyChain(cb)) => {
+            ca.len().cmp(&cb.len())
+                .then_with(|| {
+                    for (prop_a, prop_b) in ca.iter().zip(cb.iter()) {
+                        match compare_object_properties(prop_a, prop_b) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    }
+                    Ordering::Equal
+                })
+        }
+        _ => Ordering::Equal,
+    }
+}
+
+/// Compare two data properties
+fn compare_data_properties(
+    a: &DataPropertyExpression,
+    b: &DataPropertyExpression,
+) -> std::cmp::Ordering {
+    match (a, b) {
+        (DataPropertyExpression::DataProperty(pa), 
+         DataPropertyExpression::DataProperty(pb)) => {
+            pa.iri.as_str().cmp(pb.iri.as_str())
+        }
+    }
+}
+
+/// Compare two data ranges
+fn compare_data_ranges(a: &DataRange, b: &DataRange) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    
+    let a_disc = std::mem::discriminant(a);
+    let b_disc = std::mem::discriminant(b);
+    
+    if a_disc != b_disc {
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
+    
+    match (a, b) {
+        (DataRange::Datatype(ia), DataRange::Datatype(ib)) => {
+            ia.as_str().cmp(ib.as_str())
+        }
+        (DataRange::DataIntersectionOf(ra), DataRange::DataIntersectionOf(rb)) => {
+            ra.len().cmp(&rb.len())
+                .then_with(|| {
+                    for (range_a, range_b) in ra.iter().zip(rb.iter()) {
+                        match compare_data_ranges(range_a, range_b) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    }
+                    Ordering::Equal
+                })
+        }
+        (DataRange::DataUnionOf(ra), DataRange::DataUnionOf(rb)) => {
+            ra.len().cmp(&rb.len())
+                .then_with(|| {
+                    for (range_a, range_b) in ra.iter().zip(rb.iter()) {
+                        match compare_data_ranges(range_a, range_b) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    }
+                    Ordering::Equal
+                })
+        }
+        (DataRange::DataComplementOf(ra), DataRange::DataComplementOf(rb)) => {
+            compare_data_ranges(ra, rb)
+        }
+        (DataRange::DataOneOf(la), DataRange::DataOneOf(lb)) => {
+            la.len().cmp(&lb.len())
+                .then_with(|| {
+                    for (lit_a, lit_b) in la.iter().zip(lb.iter()) {
+                        match compare_literals(lit_a, lit_b) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    }
+                    Ordering::Equal
+                })
+        }
+        (DataRange::DatatypeRestriction { datatype: da, restrictions: ra }, 
+         DataRange::DatatypeRestriction { datatype: db, restrictions: rb }) => {
+            da.as_str().cmp(db.as_str())
+                .then_with(|| ra.len().cmp(&rb.len()))
+                // Note: FacetRestriction comparison would need implementation
+                // For now just compare by length
+        }
+        _ => Ordering::Equal,
+    }
+}
+
+/// Compare two individuals
+fn compare_individuals(a: &Individual, b: &Individual) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    
+    let a_disc = std::mem::discriminant(a);
+    let b_disc = std::mem::discriminant(b);
+    
+    if a_disc != b_disc {
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
+    
+    match (a, b) {
+        (Individual::Named(na), Individual::Named(nb)) => {
+            na.iri.as_str().cmp(nb.iri.as_str())
+        }
+        (Individual::Anonymous(aa), Individual::Anonymous(ab)) => {
+            aa.id.cmp(&ab.id)
+        }
+        _ => Ordering::Equal,
+    }
+}
+
+/// Compare two literals
+fn compare_literals(a: &Literal, b: &Literal) -> std::cmp::Ordering {
+    a.value.cmp(&b.value)
+        .then_with(|| a.datatype.cmp(&b.datatype))
+        .then_with(|| a.language.cmp(&b.language))
+}
+
 /// Compute a fast structural hash for a concept set
 ///
 /// This function is 5-10x faster than the string-based approach because it:
@@ -190,9 +476,8 @@ pub fn compute_fast_signature(concepts: &ConceptSet) -> u64 {
             // Different variants - use discriminant ordering
             format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc))
         } else {
-            // Same variant - compare by content (fallback to Debug for now)
-            // TODO: Implement proper structural comparison
-            format!("{:?}", a).cmp(&format!("{:?}", b))
+            // Same variant - compare by content using structural comparison
+            compare_concepts(a, b)
         }
     });
     

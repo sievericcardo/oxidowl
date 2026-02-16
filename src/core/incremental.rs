@@ -150,15 +150,62 @@ impl IncrementalClassifier {
     /// Initialize with an ontology (full classification)
     pub fn initialize(&self, ontology: &Ontology) -> Result<()> {
         // Extract all concepts and build index
-        let mut index = self.concept_index.write()
+        let index = self.concept_index.write()
             .map_err(|e| Error::Internal { 
                 message: format!("IncrementalClassifier index lock poisoned: {}", e) 
             })?;
         
-        // Index all axioms
+        // Index all axioms - extract concepts and index them
+        use crate::ontology::Axiom;
+        
         for axiom in ontology.axioms() {
-            // TODO: Extract concepts from axiom and index them
-            // This would use the axiom visitor pattern
+            match axiom {
+                // Class axioms
+                Axiom::SubClassOf(ax) => {
+                    index.index_concept(&ax.subclass)?;
+                    index.index_concept(&ax.superclass)?;
+                }
+                Axiom::EquivalentClasses(ax) => {
+                    for concept in &ax.classes {
+                        index.index_concept(concept)?;
+                    }
+                }
+                Axiom::DisjointClasses(ax) => {
+                    for concept in &ax.classes {
+                        index.index_concept(concept)?;
+                    }
+                }
+                Axiom::DisjointUnion(ax) => {
+                    index.index_concept(&ax.class)?;
+                    for concept in &ax.disjoint_classes {
+                        index.index_concept(concept)?;
+                    }
+                }
+                
+                // Property domain/range axioms
+                Axiom::ObjectPropertyDomain(ax) => {
+                    index.index_concept(&ax.domain)?;
+                }
+                Axiom::ObjectPropertyRange(ax) => {
+                    index.index_concept(&ax.range)?;
+                }
+                Axiom::DataPropertyDomain(ax) => {
+                    index.index_concept(&ax.domain)?;
+                }
+                
+                // Individual axioms
+                Axiom::ClassAssertion(ax) => {
+                    index.index_concept(&ax.class)?;
+                }
+                
+                // Annotation property domain
+                Axiom::AnnotationPropertyDomain(ax) => {
+                    index.index_concept(&ax.domain)?;
+                }
+                
+                // Other axioms don't contain concepts
+                _ => {}
+            }
         }
         
         // Update stats

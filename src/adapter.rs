@@ -313,16 +313,116 @@ impl HornedOwlAdapter {
     /// # Returns
     /// A new set of triples with reifications converted to quoted triples
     pub fn dereify_triples(&self, triples: &[Triple]) -> Result<Vec<Triple>> {
-        // TODO: Implement dereification logic
-        // This is a complex operation that requires:
-        // 1. Finding all blank nodes with rdf:type rdf:Statement
-        // 2. Finding their corresponding rdf:subject/predicate/object triples
-        // 3. Creating QuotedTriple terms from those patterns
-        // 4. Replacing references to those blank nodes with quoted triples
+        use std::collections::{HashMap, HashSet};
         
-        // For now, return triples as-is
-        // This will be implemented in a future enhancement
-        Ok(triples.to_vec())
+        // RDF vocabulary IRIs - convert to Url for comparison
+        let rdf_type_term = RdfTerm::iri("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")?;
+        let rdf_statement_term = RdfTerm::iri("http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement")?;
+        let rdf_subject_term = RdfTerm::iri("http://www.w3.org/1999/02/22-rdf-syntax-ns#subject")?;
+        let rdf_predicate_term = RdfTerm::iri("http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate")?;
+        let rdf_object_term = RdfTerm::iri("http://www.w3.org/1999/02/22-rdf-syntax-ns#object")?;
+        
+        // Extract Urls for comparison
+        let (rdf_type, rdf_statement, rdf_subject, rdf_predicate, rdf_object) = 
+            match (&rdf_type_term, &rdf_statement_term, &rdf_subject_term, &rdf_predicate_term, &rdf_object_term) {
+                (RdfTerm::Iri(t), RdfTerm::Iri(s), RdfTerm::Iri(sub), RdfTerm::Iri(pred), RdfTerm::Iri(obj)) => {
+                    (t, s, sub, pred, obj)
+                }
+                _ => unreachable!("RdfTerm::iri always returns Iri variant"),
+            };
+        
+        // Step 1: Find all blank nodes that are rdf:Statements
+        let mut statement_nodes = HashSet::new();
+        for triple in triples {
+            if let (RdfTerm::BlankNode(bn), RdfTerm::Iri(pred), RdfTerm::Iri(obj)) = 
+                (&triple.subject, &triple.predicate, &triple.object) {
+                if pred == rdf_type && obj == rdf_statement {
+                    statement_nodes.insert(bn.clone());
+                }
+            }
+        }
+        
+        // Step 2: For each statement node, find its subject/predicate/object
+        let mut reifications = HashMap::new();
+        for bn in &statement_nodes {
+            let mut subj = None;
+            let mut pred = None;
+            let mut obj = None;
+            
+            for triple in triples {
+                if let RdfTerm::BlankNode(triple_bn) = &triple.subject {
+                    if triple_bn == bn {
+                        match &triple.predicate {
+                            RdfTerm::Iri(iri) if iri == rdf_subject => {
+                                subj = Some(triple.object.clone());
+                            }
+                            RdfTerm::Iri(iri) if iri == rdf_predicate => {
+                                pred = Some(triple.object.clone());
+                            }
+                            RdfTerm::Iri(iri) if iri == rdf_object => {
+                                obj = Some(triple.object.clone());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            
+            // If we found all three components, create a quoted triple
+            if let (Some(s), Some(p), Some(o)) = (subj, pred, obj) {
+                let quoted_triple = RdfTerm::QuotedTriple(Box::new(Triple::new(s, p, o)));
+                reifications.insert(bn.clone(), quoted_triple);
+            }
+        }
+        
+        // Step 3: Remove reification pattern triples and replace blank node references
+        let triples_to_skip: HashSet<_> = triples.iter()
+            .filter(|triple| {
+                // Skip if it's part of a reification pattern
+                if let RdfTerm::BlankNode(bn) = &triple.subject {
+                    if statement_nodes.contains(bn) {
+                        if let RdfTerm::Iri(pred) = &triple.predicate {
+                            return pred == rdf_type 
+                                || pred == rdf_subject 
+                                || pred == rdf_predicate 
+                                || pred == rdf_object;
+                        }
+                    }
+                }
+                false
+            })
+            .collect();
+        
+        // Replace blank node references with quoted triples
+        let mut result = Vec::new();
+        for triple in triples {
+            if !triples_to_skip.contains(triple) {
+                let new_subject = match &triple.subject {
+                    RdfTerm::BlankNode(bn) if reifications.contains_key(bn) => {
+                        reifications[bn].clone()
+                    }
+                    _ => triple.subject.clone(),
+                };
+                
+                let new_predicate = match &triple.predicate {
+                    RdfTerm::BlankNode(bn) if reifications.contains_key(bn) => {
+                        reifications[bn].clone()
+                    }
+                    _ => triple.predicate.clone(),
+                };
+                
+                let new_object = match &triple.object {
+                    RdfTerm::BlankNode(bn) if reifications.contains_key(bn) => {
+                        reifications[bn].clone()
+                    }
+                    _ => triple.object.clone(),
+                };
+                
+                result.push(Triple::new(new_subject, new_predicate, new_object));
+            }
+        }
+        
+        Ok(result)
     }
 
     /// Convert horned-owl ontology to oxidowl ontology (basic conversion)
