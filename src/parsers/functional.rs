@@ -1397,8 +1397,8 @@ impl FunctionalParser {
                             "Expected object property in ObjectMinCardinality".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse optional filler class expression
                     // If the next token is ")", filler is omitted and defaults to owl:Thing
@@ -1420,16 +1420,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectMinCardinality {
@@ -1467,8 +1457,8 @@ impl FunctionalParser {
                             "Expected object property in ObjectMaxCardinality".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse optional filler class expression
                     // If the next token is ")", filler is omitted and defaults to owl:Thing
@@ -1490,16 +1480,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectMaxCardinality {
@@ -1537,8 +1517,8 @@ impl FunctionalParser {
                             "Expected object property in ObjectExactCardinality".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse optional filler class expression
                     // If the next token is ")", filler is omitted and defaults to owl:Thing
@@ -1560,16 +1540,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((
                         ClassExpression::ObjectExactCardinality {
@@ -1596,8 +1566,8 @@ impl FunctionalParser {
                             "Expected object property after ObjectHasValue(".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Parse individual
                     if position >= tokens.len() {
@@ -1612,16 +1582,6 @@ impl FunctionalParser {
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     let individual =
                         crate::ontology::Individual::Named(crate::ontology::NamedIndividual {
@@ -1656,23 +1616,13 @@ impl FunctionalParser {
                             "Expected object property after ObjectHasSelf(".to_string(),
                         ));
                     }
-                    let property_iri = self.expand_iri(&tokens[position], prefixes)?;
-                    position += 1;
+                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    position = new_pos;
 
                     // Skip closing ")"
                     if position < tokens.len() && tokens[position] == ")" {
                         position += 1;
                     }
-
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: url::Url::parse(&property_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                                })?
-                                .into(),
-                        },
-                    );
 
                     Ok((ClassExpression::ObjectHasSelf { property }, position))
                 } else {
@@ -1709,15 +1659,9 @@ impl FunctionalParser {
                     // Skip closing ")" or parse optional data range filler
                     let filler = if position < tokens.len() && tokens[position] != ")" {
                         // Has a data range filler
-                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                        position += 1;
-                        crate::ontology::DataRange::Datatype(
-                            url::Url::parse(&datarange_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                                })?
-                                .into(),
-                        )
+                        let (range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                        position = new_pos;
+                        range
                     } else {
                         // No filler, use rdfs:Literal as default
                         crate::ontology::DataRange::Datatype(
@@ -1783,15 +1727,9 @@ impl FunctionalParser {
                     // Skip closing ")" or parse optional data range filler
                     let filler = if position < tokens.len() && tokens[position] != ")" {
                         // Has a data range filler
-                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                        position += 1;
-                        crate::ontology::DataRange::Datatype(
-                            url::Url::parse(&datarange_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                                })?
-                                .into(),
-                        )
+                        let (range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                        position = new_pos;
+                        range
                     } else {
                         // No filler, use rdfs:Literal as default
                         crate::ontology::DataRange::Datatype(
@@ -1857,15 +1795,9 @@ impl FunctionalParser {
                     // Skip closing ")" or parse optional data range filler
                     let filler = if position < tokens.len() && tokens[position] != ")" {
                         // Has a data range filler
-                        let datarange_iri = self.expand_iri(&tokens[position], prefixes)?;
-                        position += 1;
-                        crate::ontology::DataRange::Datatype(
-                            url::Url::parse(&datarange_iri)
-                                .map_err(|e| {
-                                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                                })?
-                                .into(),
-                        )
+                        let (range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+                        position = new_pos;
+                        range
                     } else {
                         // No filler, use rdfs:Literal as default
                         crate::ontology::DataRange::Datatype(

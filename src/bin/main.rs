@@ -1008,7 +1008,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                     println!("Class hierarchy saved to {}", output_path.display());
                 }
             }
-            if let Some(_hierarchy) = &obj_prop_hierarchy {
+            if let Some(hierarchy) = &obj_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!(
                     "{}_object_properties.txt",
                     output_path
@@ -1016,14 +1016,13 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                         .expect("Failed to get file stem from output path")
                         .to_string_lossy()
                 ));
-                // TODO: Implement save_to_file for ObjectPropertyHierarchy
-                // hierarchy.save_to_file(&prop_output)?;
+                hierarchy.save_to_file(&prop_output)?;
                 println!(
-                    "Object property hierarchy would be saved to {}",
+                    "Object property hierarchy saved to {}",
                     prop_output.display()
                 );
             }
-            if let Some(_hierarchy) = &data_prop_hierarchy {
+            if let Some(hierarchy) = &data_prop_hierarchy {
                 let prop_output = output_path.with_file_name(format!(
                     "{}_data_properties.txt",
                     output_path
@@ -1031,10 +1030,9 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                         .expect("Failed to get file stem from output path")
                         .to_string_lossy()
                 ));
-                // TODO: Implement save_to_file for DataPropertyHierarchy
-                // hierarchy.save_to_file(&prop_output)?;
+                hierarchy.save_to_file(&prop_output)?;
                 println!(
-                    "Data property hierarchy would be saved to {}",
+                    "Data property hierarchy saved to {}",
                     prop_output.display()
                 );
             }
