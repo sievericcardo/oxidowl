@@ -922,13 +922,25 @@ impl ClassificationService {
 
     /// Recursively extract all class IRIs from a union expression (handling nested unions)
     fn extract_all_union_classes(&self, expr: &ClassExpression, result: &mut HashSet<String>) {
+        self.extract_all_union_classes_with_depth(expr, result, 0);
+    }
+    
+    /// Maximum recursion depth for union extraction to prevent stack overflow
+    const MAX_UNION_EXTRACTION_DEPTH: usize = 500;
+    
+    fn extract_all_union_classes_with_depth(&self, expr: &ClassExpression, result: &mut HashSet<String>, depth: usize) {
+        // Prevent stack overflow on deeply nested unions
+        if depth > Self::MAX_UNION_EXTRACTION_DEPTH {
+            return;
+        }
+        
         match expr {
             ClassExpression::Class(class) => {
                 result.insert(class.iri.to_string());
             }
             ClassExpression::ObjectUnionOf(union_classes) => {
                 for nested_expr in union_classes {
-                    self.extract_all_union_classes(nested_expr, result);
+                    self.extract_all_union_classes_with_depth(nested_expr, result, depth + 1);
                 }
             }
             _ => {

@@ -172,17 +172,43 @@ impl Default for FastConceptHasher {
 ///
 /// Precondition: Both concepts must be the same variant (same discriminant)
 fn compare_concepts(a: &ClassExpression, b: &ClassExpression) -> std::cmp::Ordering {
+    compare_concepts_with_depth(a, b, 0)
+}
+
+/// Maximum recursion depth for comparison to prevent stack overflow
+const MAX_COMPARISON_DEPTH: usize = 500;
+
+fn compare_concepts_with_depth(a: &ClassExpression, b: &ClassExpression, depth: usize) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     use ClassExpression::*;
     
+    // Prevent stack overflow on deeply nested expressions
+    if depth > MAX_COMPARISON_DEPTH {
+        // Fall back to discriminant-only comparison for very deep structures
+        let a_disc = std::mem::discriminant(a);
+        let b_disc = std::mem::discriminant(b);
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
+    
+    // CRITICAL: Check discriminants first to ensure total order
+    // This prevents different variants from being considered equal
+    let a_disc = std::mem::discriminant(a);
+    let b_disc = std::mem::discriminant(b);
+    
+    if a_disc != b_disc {
+        // Different variants - use discriminant ordering for total order
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
+    
+    // Same variant - compare by content
     match (a, b) {
         (Class(ca), Class(cb)) => ca.iri.as_str().cmp(cb.iri.as_str()),
         
         (ObjectIntersectionOf(ea), ObjectIntersectionOf(eb)) => {
-            compare_concept_lists(ea, eb)
+            compare_concept_lists_with_depth(ea, eb, depth + 1)
         }
         (ObjectUnionOf(ea), ObjectUnionOf(eb)) => {
-            compare_concept_lists(ea, eb)
+            compare_concept_lists_with_depth(ea, eb, depth + 1)
         }
         
         (ObjectOneOf(ia), ObjectOneOf(ib)) => {
@@ -201,58 +227,58 @@ fn compare_concepts(a: &ClassExpression, b: &ClassExpression) -> std::cmp::Order
         
         (ObjectSomeValuesFrom { property: pa, filler: fa }, 
          ObjectSomeValuesFrom { property: pb, filler: fb }) => {
-            compare_object_properties(pa, pb)
-                .then_with(|| compare_concepts(fa, fb))
+            compare_object_properties_with_depth(pa, pb, depth + 1)
+                .then_with(|| compare_concepts_with_depth(fa, fb, depth + 1))
         }
         
         (ObjectAllValuesFrom { property: pa, filler: fa }, 
          ObjectAllValuesFrom { property: pb, filler: fb }) => {
-            compare_object_properties(pa, pb)
-                .then_with(|| compare_concepts(fa, fb))
+            compare_object_properties_with_depth(pa, pb, depth + 1)
+                .then_with(|| compare_concepts_with_depth(fa, fb, depth + 1))
         }
         
         (ObjectHasValue { property: pa, value: va }, 
          ObjectHasValue { property: pb, value: vb }) => {
-            compare_object_properties(pa, pb)
+            compare_object_properties_with_depth(pa, pb, depth + 1)
                 .then_with(|| compare_individuals(va, vb))
         }
         
         (ObjectHasSelf { property: pa }, 
          ObjectHasSelf { property: pb }) => {
-            compare_object_properties(pa, pb)
+            compare_object_properties_with_depth(pa, pb, depth + 1)
         }
         
         (ObjectMinCardinality { property: pa, cardinality: ca, filler: fa }, 
          ObjectMinCardinality { property: pb, cardinality: cb, filler: fb }) => {
-            compare_object_properties(pa, pb)
+            compare_object_properties_with_depth(pa, pb, depth + 1)
                 .then_with(|| ca.cmp(cb))
-                .then_with(|| compare_concepts(fa, fb))
+                .then_with(|| compare_concepts_with_depth(fa, fb, depth + 1))
         }
         
         (ObjectMaxCardinality { property: pa, cardinality: ca, filler: fa }, 
          ObjectMaxCardinality { property: pb, cardinality: cb, filler: fb }) => {
-            compare_object_properties(pa, pb)
+            compare_object_properties_with_depth(pa, pb, depth + 1)
                 .then_with(|| ca.cmp(cb))
-                .then_with(|| compare_concepts(fa, fb))
+                .then_with(|| compare_concepts_with_depth(fa, fb, depth + 1))
         }
         
         (ObjectExactCardinality { property: pa, cardinality: ca, filler: fa }, 
          ObjectExactCardinality { property: pb, cardinality: cb, filler: fb }) => {
-            compare_object_properties(pa, pb)
+            compare_object_properties_with_depth(pa, pb, depth + 1)
                 .then_with(|| ca.cmp(cb))
-                .then_with(|| compare_concepts(fa, fb))
+                .then_with(|| compare_concepts_with_depth(fa, fb, depth + 1))
         }
         
         (DataSomeValuesFrom { property: pa, filler: fa }, 
          DataSomeValuesFrom { property: pb, filler: fb }) => {
             compare_data_properties(pa, pb)
-                .then_with(|| compare_data_ranges(fa, fb))
+                .then_with(|| compare_data_ranges_with_depth(fa, fb, depth + 1))
         }
         
         (DataAllValuesFrom { property: pa, filler: fa }, 
          DataAllValuesFrom { property: pb, filler: fb }) => {
             compare_data_properties(pa, pb)
-                .then_with(|| compare_data_ranges(fa, fb))
+                .then_with(|| compare_data_ranges_with_depth(fa, fb, depth + 1))
         }
         
         (DataHasValue { property: pa, value: va }, 
@@ -265,40 +291,44 @@ fn compare_concepts(a: &ClassExpression, b: &ClassExpression) -> std::cmp::Order
          DataMinCardinality { property: pb, cardinality: cb, filler: fb }) => {
             compare_data_properties(pa, pb)
                 .then_with(|| ca.cmp(cb))
-                .then_with(|| compare_data_ranges(fa, fb))
+                .then_with(|| compare_data_ranges_with_depth(fa, fb, depth + 1))
         }
         
         (DataMaxCardinality { property: pa, cardinality: ca, filler: fa }, 
          DataMaxCardinality { property: pb, cardinality: cb, filler: fb }) => {
             compare_data_properties(pa, pb)
                 .then_with(|| ca.cmp(cb))
-                .then_with(|| compare_data_ranges(fa, fb))
+                .then_with(|| compare_data_ranges_with_depth(fa, fb, depth + 1))
         }
         
         (DataExactCardinality { property: pa, cardinality: ca, filler: fa }, 
          DataExactCardinality { property: pb, cardinality: cb, filler: fb }) => {
             compare_data_properties(pa, pb)
                 .then_with(|| ca.cmp(cb))
-                .then_with(|| compare_data_ranges(fa, fb))
+                .then_with(|| compare_data_ranges_with_depth(fa, fb, depth + 1))
         }
         
         (ObjectComplementOf(ea), ObjectComplementOf(eb)) => {
-            compare_concepts(ea, eb)
+            compare_concepts_with_depth(ea, eb, depth + 1)
         }
         
-        // This should never happen since we check discriminants first
+        // This should never be reached since we checked discriminants above
         _ => Ordering::Equal,
     }
 }
 
 /// Compare two lists of concepts
 fn compare_concept_lists(a: &[ClassExpression], b: &[ClassExpression]) -> std::cmp::Ordering {
+    compare_concept_lists_with_depth(a, b, 0)
+}
+
+fn compare_concept_lists_with_depth(a: &[ClassExpression], b: &[ClassExpression], depth: usize) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     
     a.len().cmp(&b.len())
         .then_with(|| {
             for (ca, cb) in a.iter().zip(b.iter()) {
-                match compare_concepts(ca, cb) {
+                match compare_concepts_with_depth(ca, cb, depth) {
                     Ordering::Equal => continue,
                     other => return other,
                 }
@@ -312,7 +342,22 @@ fn compare_object_properties(
     a: &ObjectPropertyExpression,
     b: &ObjectPropertyExpression,
 ) -> std::cmp::Ordering {
+    compare_object_properties_with_depth(a, b, 0)
+}
+
+fn compare_object_properties_with_depth(
+    a: &ObjectPropertyExpression,
+    b: &ObjectPropertyExpression,
+    depth: usize,
+) -> std::cmp::Ordering {
     use std::cmp::Ordering;
+    
+    // Prevent stack overflow on deeply nested property chains
+    if depth > MAX_COMPARISON_DEPTH {
+        let a_disc = std::mem::discriminant(a);
+        let b_disc = std::mem::discriminant(b);
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
     
     let a_disc = std::mem::discriminant(a);
     let b_disc = std::mem::discriminant(b);
@@ -335,7 +380,7 @@ fn compare_object_properties(
             ca.len().cmp(&cb.len())
                 .then_with(|| {
                     for (prop_a, prop_b) in ca.iter().zip(cb.iter()) {
-                        match compare_object_properties(prop_a, prop_b) {
+                        match compare_object_properties_with_depth(prop_a, prop_b, depth + 1) {
                             Ordering::Equal => continue,
                             other => return other,
                         }
@@ -362,7 +407,18 @@ fn compare_data_properties(
 
 /// Compare two data ranges
 fn compare_data_ranges(a: &DataRange, b: &DataRange) -> std::cmp::Ordering {
+    compare_data_ranges_with_depth(a, b, 0)
+}
+
+fn compare_data_ranges_with_depth(a: &DataRange, b: &DataRange, depth: usize) -> std::cmp::Ordering {
     use std::cmp::Ordering;
+    
+    // Prevent stack overflow on deeply nested data ranges
+    if depth > MAX_COMPARISON_DEPTH {
+        let a_disc = std::mem::discriminant(a);
+        let b_disc = std::mem::discriminant(b);
+        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+    }
     
     let a_disc = std::mem::discriminant(a);
     let b_disc = std::mem::discriminant(b);
@@ -379,7 +435,7 @@ fn compare_data_ranges(a: &DataRange, b: &DataRange) -> std::cmp::Ordering {
             ra.len().cmp(&rb.len())
                 .then_with(|| {
                     for (range_a, range_b) in ra.iter().zip(rb.iter()) {
-                        match compare_data_ranges(range_a, range_b) {
+                        match compare_data_ranges_with_depth(range_a, range_b, depth + 1) {
                             Ordering::Equal => continue,
                             other => return other,
                         }
@@ -391,7 +447,7 @@ fn compare_data_ranges(a: &DataRange, b: &DataRange) -> std::cmp::Ordering {
             ra.len().cmp(&rb.len())
                 .then_with(|| {
                     for (range_a, range_b) in ra.iter().zip(rb.iter()) {
-                        match compare_data_ranges(range_a, range_b) {
+                        match compare_data_ranges_with_depth(range_a, range_b, depth + 1) {
                             Ordering::Equal => continue,
                             other => return other,
                         }
@@ -400,7 +456,7 @@ fn compare_data_ranges(a: &DataRange, b: &DataRange) -> std::cmp::Ordering {
                 })
         }
         (DataRange::DataComplementOf(ra), DataRange::DataComplementOf(rb)) => {
-            compare_data_ranges(ra, rb)
+            compare_data_ranges_with_depth(ra, rb, depth + 1)
         }
         (DataRange::DataOneOf(la), DataRange::DataOneOf(lb)) => {
             la.len().cmp(&lb.len())

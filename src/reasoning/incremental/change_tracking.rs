@@ -433,15 +433,22 @@ impl DependencyGraph {
 
     /// Recursively collect all classes that depend on the given class
     fn collect_class_dependents(&self, class: &Class, visited: &mut HashSet<Class>) {
-        if visited.contains(class) {
-            return; // Avoid cycles
+        self.collect_class_dependents_with_depth(class, visited, 0);
+    }
+    
+    /// Maximum recursion depth to prevent stack overflow
+    const MAX_DEPENDENT_DEPTH: usize = 500;
+    
+    fn collect_class_dependents_with_depth(&self, class: &Class, visited: &mut HashSet<Class>, depth: usize) {
+        if visited.contains(class) || depth > Self::MAX_DEPENDENT_DEPTH {
+            return; // Avoid cycles and stack overflow
         }
         visited.insert(class.clone());
 
         // Find all classes that directly depend on this class
         for (dependent, dependencies) in &self.class_dependencies {
             if dependencies.contains(class) && !visited.contains(dependent) {
-                self.collect_class_dependents(dependent, visited);
+                self.collect_class_dependents_with_depth(dependent, visited, depth + 1);
             }
         }
     }
@@ -661,6 +668,18 @@ impl ChangeTracker {
 /// Extract all atomic classes from a class expression
 pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<Class> {
     let mut classes = HashSet::new();
+    extract_classes_from_class_expression_with_depth(expr, &mut classes, 0);
+    classes
+}
+
+/// Maximum recursion depth for extraction to prevent stack overflow
+const MAX_CLASS_EXTRACTION_DEPTH: usize = 500;
+
+fn extract_classes_from_class_expression_with_depth(expr: &ClassExpression, classes: &mut HashSet<Class>, depth: usize) {
+    // Prevent stack overflow on deeply nested expressions
+    if depth > MAX_CLASS_EXTRACTION_DEPTH {
+        return;
+    }
 
     match expr {
         ClassExpression::Class(class) => {
@@ -669,15 +688,15 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
         ClassExpression::ObjectIntersectionOf(expressions)
         | ClassExpression::ObjectUnionOf(expressions) => {
             for sub_expr in expressions {
-                classes.extend(extract_classes_from_class_expression(sub_expr));
+                extract_classes_from_class_expression_with_depth(sub_expr, classes, depth + 1);
             }
         }
         ClassExpression::ObjectComplementOf(inner) => {
-            classes.extend(extract_classes_from_class_expression(inner));
+            extract_classes_from_class_expression_with_depth(inner, classes, depth + 1);
         }
         ClassExpression::ObjectSomeValuesFrom { filler, .. }
         | ClassExpression::ObjectAllValuesFrom { filler, .. } => {
-            classes.extend(extract_classes_from_class_expression(filler));
+            extract_classes_from_class_expression_with_depth(filler, classes, depth + 1);
         }
         ClassExpression::ObjectHasValue { .. } => {
             // No classes in HasValue restrictions
@@ -685,7 +704,7 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
         ClassExpression::ObjectMinCardinality { filler, .. }
         | ClassExpression::ObjectMaxCardinality { filler, .. }
         | ClassExpression::ObjectExactCardinality { filler, .. } => {
-            classes.extend(extract_classes_from_class_expression(filler));
+            extract_classes_from_class_expression_with_depth(filler, classes, depth + 1);
         }
         ClassExpression::ObjectHasSelf { .. } => {
             // No classes in HasSelf restrictions
@@ -702,8 +721,6 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
             // Data property restrictions don't directly involve classes
         }
     }
-
-    classes
 }
 
 /// Extract all classes mentioned in an axiom

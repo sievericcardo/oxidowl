@@ -35,11 +35,23 @@ pub enum QueryError {
 
 /// Helper function to recursively extract all individual classes from a union expression
 fn extract_union_classes(expr: &ClassExpression, result: &mut HashSet<ClassExpression>) {
+    extract_union_classes_with_depth(expr, result, 0);
+}
+
+/// Maximum recursion depth to prevent stack overflow
+const MAX_UNION_EXTRACTION_DEPTH: usize = 500;
+
+fn extract_union_classes_with_depth(expr: &ClassExpression, result: &mut HashSet<ClassExpression>, depth: usize) {
+    // Prevent stack overflow on deeply nested unions
+    if depth > MAX_UNION_EXTRACTION_DEPTH {
+        return;
+    }
+    
     match expr {
         ClassExpression::ObjectUnionOf(union_classes) => {
             // Recursively extract from nested unions
             for class_expr in union_classes {
-                extract_union_classes(class_expr, result);
+                extract_union_classes_with_depth(class_expr, result, depth + 1);
             }
         }
         _ => {

@@ -136,14 +136,22 @@ impl ConceptIndex {
     /// Extract all IRIs referenced by a concept
     fn extract_iris(&self, concept: &ClassExpression) -> Vec<String> {
         let mut iris = Vec::new();
-        self.extract_iris_recursive(concept, &mut iris);
+        self.extract_iris_recursive(concept, &mut iris, 0);
         iris.sort();
         iris.dedup();
         iris
     }
 
+    /// Maximum recursion depth for extraction to prevent stack overflow
+    const MAX_EXTRACTION_DEPTH: usize = 500;
+
     /// Recursively extract IRIs from a concept expression
-    fn extract_iris_recursive(&self, concept: &ClassExpression, iris: &mut Vec<String>) {
+    fn extract_iris_recursive(&self, concept: &ClassExpression, iris: &mut Vec<String>, depth: usize) {
+        // Prevent stack overflow on deeply nested expressions
+        if depth > Self::MAX_EXTRACTION_DEPTH {
+            return;
+        }
+        
         match concept {
             ClassExpression::Class(class) => {
                 iris.push(class.iri.as_str().to_string());
@@ -151,7 +159,7 @@ impl ConceptIndex {
             ClassExpression::ObjectIntersectionOf(exprs) 
             | ClassExpression::ObjectUnionOf(exprs) => {
                 for expr in exprs {
-                    self.extract_iris_recursive(expr, iris);
+                    self.extract_iris_recursive(expr, iris, depth + 1);
                 }
             }
             ClassExpression::ObjectOneOf(individuals) => {
@@ -163,23 +171,23 @@ impl ConceptIndex {
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler }
             | ClassExpression::ObjectAllValuesFrom { property, filler } => {
-                self.extract_property_iris(property, iris);
-                self.extract_iris_recursive(filler, iris);
+                self.extract_property_iris(property, iris, depth + 1);
+                self.extract_iris_recursive(filler, iris, depth + 1);
             }
             ClassExpression::ObjectHasValue { property, value } => {
-                self.extract_property_iris(property, iris);
+                self.extract_property_iris(property, iris, depth + 1);
                 if let crate::ontology::Individual::Named(named) = value {
                     iris.push(named.iri.as_str().to_string());
                 }
             }
             ClassExpression::ObjectHasSelf { property } => {
-                self.extract_property_iris(property, iris);
+                self.extract_property_iris(property, iris, depth + 1);
             }
             ClassExpression::ObjectMinCardinality { property, filler, .. }
             | ClassExpression::ObjectMaxCardinality { property, filler, .. }
             | ClassExpression::ObjectExactCardinality { property, filler, .. } => {
-                self.extract_property_iris(property, iris);
-                self.extract_iris_recursive(filler, iris);
+                self.extract_property_iris(property, iris, depth + 1);
+                self.extract_iris_recursive(filler, iris, depth + 1);
             }
             ClassExpression::DataSomeValuesFrom { property, .. }
             | ClassExpression::DataAllValuesFrom { property, .. }
@@ -191,12 +199,17 @@ impl ConceptIndex {
                 iris.push(property.to_string());
             }
             ClassExpression::ObjectComplementOf(expr) => {
-                self.extract_iris_recursive(expr, iris);
+                self.extract_iris_recursive(expr, iris, depth + 1);
             }
         }
     }
 
-    fn extract_property_iris(&self, prop: &ObjectPropertyExpression, iris: &mut Vec<String>) {
+    fn extract_property_iris(&self, prop: &ObjectPropertyExpression, iris: &mut Vec<String>, depth: usize) {
+        // Prevent stack overflow on deeply nested property chains
+        if depth > Self::MAX_EXTRACTION_DEPTH {
+            return;
+        }
+        
         match prop {
             ObjectPropertyExpression::ObjectProperty(p) => {
                 iris.push(p.iri.as_str().to_string());
@@ -206,7 +219,7 @@ impl ConceptIndex {
             }
             ObjectPropertyExpression::PropertyChain(chain) => {
                 for p in chain {
-                    self.extract_property_iris(p, iris);
+                    self.extract_property_iris(p, iris, depth + 1);
                 }
             }
         }
