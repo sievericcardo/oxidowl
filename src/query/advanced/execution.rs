@@ -10,7 +10,7 @@ use super::rewriting::QueryRewriter;
 use crate::ontology::{Individual, Literal, Ontology};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -487,9 +487,149 @@ impl QueryEngine {
                     }
                 }
             }
-            _ => {
-                // Simplified - other atom types would be handled similarly
-                Ok(vec![QueryBinding::new()])
+            QueryAtom::ObjectPropertyAtom {
+                subject,
+                property,
+                object,
+            } => {
+                // Get property assertions
+                if let Ok(assertions) = self
+                    .reasoning_service
+                    .get_object_property_assertions_sync(property)
+                {
+                    let mut results = Vec::new();
+                    
+                    for (subj, obj) in assertions {
+                        // Check if bindings are compatible
+                        let mut compatible = true;
+                        
+                        if let Some(bound_subj) = binding.get_binding(subject) {
+                            if let BoundValue::Individual(bound_individual) = bound_subj {
+                                if bound_individual != &subj {
+                                    compatible = false;
+                                }
+                            }
+                        }
+                        
+                        if let Some(bound_obj) = binding.get_binding(object) {
+                            if let BoundValue::Individual(bound_individual) = bound_obj {
+                                if bound_individual != &obj {
+                                    compatible = false;
+                                }
+                            }
+                        }
+                        
+                        if compatible {
+                            let mut new_binding = QueryBinding::new();
+                            new_binding.bind_variable(subject.clone(), BoundValue::Individual(subj));
+                            new_binding.bind_variable(object.clone(), BoundValue::Individual(obj));
+                            results.push(new_binding);
+                        }
+                    }
+                    
+                    Ok(results)
+                } else {
+                    Ok(vec![])
+                }
+            }
+            QueryAtom::DataPropertyAtom {
+                subject,
+                property,
+                literal,
+            } => {
+                // NOTE: This is simplified - in production would use dedicated data property assertion method
+                // For now, return empty results as data property handling needs full implementation
+                let _ = (subject, property, literal); // Silence unused warnings
+                Ok(vec![])
+            }
+            QueryAtom::SameIndividualAtom { left, right } => {
+                // Check if two variables refer to the same individual
+                let left_value = binding.get_binding(left);
+                let right_value = binding.get_binding(right);
+                
+                match (left_value, right_value) {
+                    (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
+                        // Both bound - check if same
+                        if l == r {
+                            Ok(vec![QueryBinding::new()])
+                        } else {
+                            Ok(vec![])
+                        }
+                    }
+                    (Some(BoundValue::Individual(ind)), None) | (None, Some(BoundValue::Individual(ind))) => {
+                        // One bound - bind the other to same value
+                        let mut new_binding = QueryBinding::new();
+                        let var = if left_value.is_some() { right } else { left };
+                        new_binding.bind_variable(var.clone(), BoundValue::Individual(ind.clone()));
+                        Ok(vec![new_binding])
+                    }
+                    (None, None) => {
+                        // Both free - not determinable without more info
+                        Ok(vec![QueryBinding::new()])
+                    }
+                    _ => Ok(vec![]),
+                }
+            }
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                // Check if two variables refer to different individuals
+                let left_value = binding.get_binding(left);
+                let right_value = binding.get_binding(right);
+                
+                match (left_value, right_value) {
+                    (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
+                        // Both bound - check if different
+                        if l != r {
+                            Ok(vec![QueryBinding::new()])
+                        } else {
+                            Ok(vec![])
+                        }
+                    }
+                    _ => {
+                        // At least one unbound - constraint will be checked later
+                        Ok(vec![QueryBinding::new()])
+                    }
+                }
+            }
+            QueryAtom::ConcreteIndividualAtom {
+                variable,
+                individual,
+            } => {
+                // Bind variable to concrete individual
+                if let Some(bound_value) = binding.get_binding(variable) {
+                    // Check if compatible with existing binding
+                    if let BoundValue::Individual(bound_ind) = bound_value {
+                        if bound_ind == individual {
+                            Ok(vec![QueryBinding::new()])
+                        } else {
+                            Ok(vec![])
+                        }
+                    } else {
+                        Ok(vec![])
+                    }
+                } else {
+                    let mut new_binding = QueryBinding::new();
+                    new_binding.bind_variable(variable.clone(), BoundValue::Individual(individual.clone()));
+                    Ok(vec![new_binding])
+                }
+            }
+            QueryAtom::ConcreteLiteralAtom { variable, literal } => {
+                // Bind variable to concrete literal
+                if let Some(bound_value) = binding.get_binding(variable) {
+                    // Check if compatible with existing binding
+                    if let BoundValue::Literal(bound_lit) = bound_value {
+                        if bound_lit == literal {
+                            Ok(vec![QueryBinding::new()])
+                        } else {
+                            Ok(vec![])
+                        }
+                    } else {
+                        Ok(vec![])
+                    }
+                } else {
+                    let mut new_binding = QueryBinding::new();
+                    new_binding.bind_variable(variable.clone(), BoundValue::Literal(literal.clone()));
+                    Ok(vec![new_binding])
+                }
             }
         }
     }
@@ -498,10 +638,67 @@ impl QueryEngine {
     fn apply_constraints(
         &self,
         bindings: &[QueryBinding],
-        _constraints: &QueryConstraints,
+        constraints: &QueryConstraints,
     ) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
-        // Simplified - in practice would apply distinct, type, and value constraints
-        Ok(bindings.to_vec())
+        let mut filtered_bindings = bindings.to_vec();
+
+        // Apply DISTINCT constraint - remove duplicate bindings
+        // distinct_variables is a Vec<Vec<QueryVariable>> representing sets of variables that must be distinct
+        for distinct_set in &constraints.distinct_variables {
+            let mut seen = HashSet::new();
+            filtered_bindings.retain(|binding| {
+                let distinct_sig: Vec<_> = distinct_set
+                    .iter()
+                    .map(|var| format!("{:?}", binding.get_binding(var)))
+                    .collect();
+                let sig = format!("{:?}", distinct_sig);
+                seen.insert(sig)
+            });
+        }
+
+        // Apply type constraints - ensure variables match required types
+        for (variable, required_types) in &constraints.type_constraints {
+            filtered_bindings.retain(|binding| {
+                if let Some(bound_value) = binding.get_binding(variable) {
+                    // Check if bound value satisfies at least one of the required type expressions
+                    // This is simplified - production would use full reasoning
+                    match bound_value {
+                        BoundValue::Individual(_) => !required_types.is_empty(),
+                        BoundValue::Literal(_) => false, // Literals don't match class expressions
+                        BoundValue::Class(_) => true,
+                        BoundValue::Property(_) => false, // Properties don't match class expressions
+                    }
+                } else {
+                    true // Unbound variables pass type checks
+                }
+            });
+        }
+
+        // Apply value constraints - ensure variables match specific values
+        for (variable, required_value) in &constraints.value_constraints {
+            filtered_bindings.retain(|binding| {
+                if let Some(bound_value) = binding.get_binding(variable) {
+                    match (bound_value, required_value) {
+                        (BoundValue::Literal(lit), super::conjunctive::ValueConstraint::ExactValue(required_lit)) => {
+                            lit == required_lit
+                        }
+                        (BoundValue::Literal(lit), super::conjunctive::ValueConstraint::ValueSet(allowed_values)) => {
+                            allowed_values.contains(lit)
+                        }
+                        (BoundValue::Literal(_lit), super::conjunctive::ValueConstraint::StringPattern(pattern)) => {
+                            // Would use regex matching in production
+                            let _ = pattern;
+                            true // Simplified
+                        }
+                        _ => true, // Other constraint types not fully implemented
+                    }
+                } else {
+                    true // Unbound variables pass value checks
+                }
+            });
+        }
+
+        Ok(filtered_bindings)
     }
 
     /// Validate that a query is well-formed and executable

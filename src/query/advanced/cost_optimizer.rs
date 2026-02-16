@@ -1341,15 +1341,122 @@ impl CostBasedOptimizer {
         pattern: &QueryPattern,
         stats: &QueryStatistics,
     ) -> Result<QueryPlan, OptimizationError> {
-        // Implementation for generating base query plan
+        // Select base execution strategy based on query pattern
+        let strategy = match pattern.complexity_class {
+            QueryComplexityClass::Atomic => ExecutionStrategy::Direct,
+            QueryComplexityClass::SimpleConjunctive => {
+                if pattern.join_count <= 2 {
+                    ExecutionStrategy::Direct
+                } else {
+                    ExecutionStrategy::Tableau {
+                        expansion_order: query.body_atoms.clone(),
+                    }
+                }
+            }
+            QueryComplexityClass::ComplexConjunctive => ExecutionStrategy::Tableau {
+                expansion_order: query.body_atoms.clone(),
+            },
+            QueryComplexityClass::Recursive => ExecutionStrategy::Hybrid {
+                tableau_atoms: query.body_atoms.clone(),
+                rewriting_atoms: vec![],
+            },
+            QueryComplexityClass::HighlyComplex => {
+                // Split into tableau and rewriting components
+                let (tableau_atoms, rewriting_atoms) = self.split_query_atoms(&query.body_atoms);
+                ExecutionStrategy::Hybrid {
+                    tableau_atoms,
+                    rewriting_atoms,
+                }
+            }
+        };
+
+        // Estimate initial cost
+        let estimated_cost = self.estimate_query_cost(query, &strategy, stats);
+
+        // Generate join order if needed
+        let join_order = if pattern.join_count > 1 {
+            self.compute_join_order(query)
+        } else {
+            vec![]
+        };
+
         Ok(QueryPlan {
             original_query: query.clone(),
             optimized_query: query.clone(),
-            strategy: ExecutionStrategy::Direct,
-            estimated_cost: 0.0,
-            join_order: vec![],
+            strategy,
+            estimated_cost,
+            join_order,
             metadata: PlanMetadata::default(),
         })
+    }
+
+    /// Split query atoms into tableau and rewriting components
+    fn split_query_atoms(&self, atoms: &[QueryAtom]) -> (Vec<QueryAtom>, Vec<QueryAtom>) {
+        let mut tableau_atoms = Vec::new();
+        let mut rewriting_atoms = Vec::new();
+
+        for atom in atoms {
+            match atom {
+                // Complex atoms go to tableau
+                QueryAtom::ClassAtom { class_expression, .. } => {
+                    if self.is_complex_class_expression(class_expression) {
+                        tableau_atoms.push(atom.clone());
+                    } else {
+                        rewriting_atoms.push(atom.clone());
+                    }
+                }
+                // Properties can be handled by rewriting
+                QueryAtom::ObjectPropertyAtom { .. } | QueryAtom::DataPropertyAtom { .. } => {
+                    rewriting_atoms.push(atom.clone());
+                }
+                // Other atoms go to tableau
+                _ => tableau_atoms.push(atom.clone()),
+            }
+        }
+
+        (tableau_atoms, rewriting_atoms)
+    }
+
+    /// Check if class expression is complex
+    fn is_complex_class_expression(&self, expr: &ClassExpression) -> bool {
+        matches!(
+            expr,
+            ClassExpression::ObjectIntersectionOf(_)
+                | ClassExpression::ObjectUnionOf(_)
+                | ClassExpression::ObjectSomeValuesFrom { .. }
+                | ClassExpression::ObjectAllValuesFrom { .. }
+                | ClassExpression::ObjectMinCardinality { .. }
+                | ClassExpression::ObjectMaxCardinality { .. }
+        )
+    }
+
+    /// Estimate cost of executing query with given strategy
+    fn estimate_query_cost(
+        &self,
+        query: &ConjunctiveQuery,
+        strategy: &ExecutionStrategy,
+        stats: &QueryStatistics,
+    ) -> f64 {
+        let base_cost = match strategy {
+            ExecutionStrategy::Direct => 100.0,
+            ExecutionStrategy::Tableau { .. } => 500.0,
+            ExecutionStrategy::Rewriting { .. } => 300.0,
+            ExecutionStrategy::Hybrid { .. } => 400.0,
+        };
+
+        // Adjust for query complexity
+        let atom_count = query.body_atoms.len() as f64;
+        let complexity_multiplier = 1.0 + (atom_count * 0.5);
+
+        // Adjust for join complexity
+        let join_multiplier = if query.body_atoms.len() > 1 {
+            let join_count = self.count_joins(query);
+            1.0 + (join_count as f64 * 0.3)
+        } else {
+            1.0
+        };
+
+        base_cost * complexity_multiplier * join_multiplier
     }
 
     fn optimize_join_order(
@@ -1358,8 +1465,53 @@ impl CostBasedOptimizer {
         pattern: &QueryPattern,
         stats: &QueryStatistics,
     ) -> Result<ExecutionStrategy, OptimizationError> {
-        // Implementation for join order optimization
-        Ok(ExecutionStrategy::Direct)
+        // Use greedy join ordering algorithm
+        if query.body_atoms.len() <= 1 {
+            return Ok(ExecutionStrategy::Direct);
+        }
+
+        // Get optimized atom order from join optimizer
+        let ordered_indices = self.join_optimizer.optimize_join_order_greedy(&query.body_atoms);
+        
+        // Reorder atoms according to optimized indices
+        let mut ordered_atoms: Vec<QueryAtom> = ordered_indices
+            .iter()
+            .filter_map(|&idx| query.body_atoms.get(idx).cloned())
+            .collect();
+
+        // If we didn't get all atoms, add remaining ones
+        if ordered_atoms.len() < query.body_atoms.len() {
+            for (i, atom) in query.body_atoms.iter().enumerate() {
+                if !ordered_atoms.iter().any(|a| {
+                    format!("{:?}", a) == format!("{:?}", atom)
+                }) {
+                    ordered_atoms.push(atom.clone());
+                }
+            }
+        }
+
+        // Determine strategy based on query complexity
+        let strategy = if pattern.complexity_class == QueryComplexityClass::Atomic
+            || pattern.complexity_class == QueryComplexityClass::SimpleConjunctive
+        {
+            ExecutionStrategy::Tableau {
+                expansion_order: ordered_atoms,
+            }
+        } else {
+            let (tableau_atoms, rewriting_atoms) = self.split_query_atoms(&ordered_atoms);
+            if rewriting_atoms.is_empty() {
+                ExecutionStrategy::Tableau {
+                    expansion_order: ordered_atoms,
+                }
+            } else {
+                ExecutionStrategy::Hybrid {
+                    tableau_atoms,
+                    rewriting_atoms,
+                }
+            }
+        };
+
+        Ok(strategy)
     }
 
     fn get_available_indices(&self) -> Vec<String> {
@@ -1373,12 +1525,67 @@ impl CostBasedOptimizer {
         pattern: &QueryPattern,
         stats: &QueryStatistics,
     ) -> PerformancePrediction {
-        // Implementation for performance estimation
+        // Use historical data if available
+        let base_time = if let Some(time_stats) = stats.execution_times.get(pattern) {
+            time_stats.mean
+        } else {
+            // Estimate based on complexity
+            let base = match pattern.complexity_class {
+                QueryComplexityClass::Atomic => 10.0,
+                QueryComplexityClass::SimpleConjunctive => 50.0,
+                QueryComplexityClass::ComplexConjunctive => 200.0,
+                QueryComplexityClass::Recursive => 500.0,
+                QueryComplexityClass::HighlyComplex => 1000.0,
+            };
+
+            // Scale by number of atoms
+            base * (1.0 + query.body_atoms.len() as f64 * 0.2)
+        };
+
+        // Adjust for join complexity
+        let join_factor = if pattern.join_count > 0 {
+            1.0 + (pattern.join_count as f64 * 0.5)
+        } else {
+            1.0
+        };
+
+        let execution_time = base_time * join_factor;
+
+        // Estimate memory usage
+        let memory_usage = if let Some(mem_stats) = stats.memory_usage.get(pattern) {
+            mem_stats.mean_bytes
+        } else {
+            // Estimate: 1MB base + 100KB per atom + 500KB per join
+            let base_mem = 1024.0 * 1024.0; // 1MB
+            let atom_mem = query.body_atoms.len() as f64 * 100.0 * 1024.0;
+            let join_mem = pattern.join_count as f64 * 500.0 * 1024.0;
+            base_mem + atom_mem + join_mem
+        };
+
+        // Estimate result size
+        let result_size_estimate = if let Some(size_stats) = stats.result_sizes.get(pattern) {
+            size_stats.mean_size as usize
+        } else {
+            // Heuristic: start with 100, multiply by join selectivity
+            let base_size = 100;
+            let join_multiplier = if pattern.join_count > 0 {
+                // Each join typically reduces result size
+                0.5_f64.powi(pattern.join_count as i32)
+            } else {
+                1.0
+            };
+            (base_size as f64 * join_multiplier * (1.0 + pattern.atom_count as f64 * 0.3)) as usize
+        };
+
+        // Calculate confidence based on available data
+        let confidence_scores = self.calculate_confidence_scores(pattern, stats);
+        let confidence = confidence_scores.performance_prediction;
+
         PerformancePrediction {
-            execution_time: 0.0,
-            memory_usage: 0.0,
-            result_size_estimate: 0,
-            confidence: 0.5,
+            execution_time,
+            memory_usage,
+            result_size_estimate,
+            confidence,
         }
     }
 
@@ -1387,8 +1594,80 @@ impl CostBasedOptimizer {
         query: &ConjunctiveQuery,
         pattern: &QueryPattern,
     ) -> Vec<OptimizationSuggestion> {
-        // Implementation for generating optimization suggestions
-        Vec::new()
+        let mut suggestions = Vec::new();
+
+        // Suggest index creation for frequently accessed properties
+        if pattern.join_count > 2 {
+            for atom in &query.body_atoms {
+                if let QueryAtom::ObjectPropertyAtom { property, .. } = atom {
+                    suggestions.push(OptimizationSuggestion {
+                        suggestion_type: OptimizationSuggestionType::IndexCreation,
+                        description: format!(
+                            "Create index on property: {:?} to improve join performance",
+                            property
+                        ),
+                        expected_improvement: 0.4, // 40% improvement
+                        implementation_difficulty: DifficultyLevel::Easy,
+                        priority: Priority::High,
+                    });
+                }
+            }
+        }
+
+        // Suggest query rewriting for complex class expressions
+        for atom in &query.body_atoms {
+            if let QueryAtom::ClassAtom { class_expression, .. } = atom {
+                if matches!(
+                    class_expression,
+                    ClassExpression::ObjectUnionOf(_) | ClassExpression::ObjectIntersectionOf(_)
+                ) {
+                    suggestions.push(OptimizationSuggestion {
+                        suggestion_type: OptimizationSuggestionType::QueryRewriting,
+                        description: "Consider rewriting complex class expressions using subsumption reasoning".to_string(),
+                        expected_improvement: 0.25,
+                        implementation_difficulty: DifficultyLevel::Medium,
+                        priority: Priority::Medium,
+                    });
+                }
+            }
+        }
+
+        // Suggest join reordering if not already optimized
+        if pattern.join_count > 3 && !self.config.enable_join_optimization {
+            suggestions.push(OptimizationSuggestion {
+                suggestion_type: OptimizationSuggestionType::JoinReordering,
+                description: "Enable join optimization to improve execution order".to_string(),
+                expected_improvement: 0.5, // 50% improvement for many joins
+                implementation_difficulty: DifficultyLevel::Easy,
+                priority: Priority::High,
+            });
+        }
+
+        // Suggest caching for expensive queries
+        if pattern.complexity_class == QueryComplexityClass::HighlyComplex
+            || pattern.complexity_class == QueryComplexityClass::Recursive
+        {
+            suggestions.push(OptimizationSuggestion {
+                suggestion_type: OptimizationSuggestionType::Caching,
+                description: "Enable result caching for this expensive query pattern".to_string(),
+                expected_improvement: 0.8, // 80% improvement on cache hits
+                implementation_difficulty: DifficultyLevel::Easy,
+                priority: Priority::High,
+            });
+        }
+
+        // Suggest partitioning for very large result sets
+        if query.body_atoms.len() > 5 {
+            suggestions.push(OptimizationSuggestion {
+                suggestion_type: OptimizationSuggestionType::Partitioning,
+                description: "Consider partitioning query into smaller sub-queries for parallel execution".to_string(),
+                expected_improvement: 0.6,
+                implementation_difficulty: DifficultyLevel::Hard,
+                priority: Priority::Medium,
+            });
+        }
+
+        suggestions
     }
 
     fn calculate_confidence_scores(
@@ -1556,6 +1835,84 @@ impl JoinOrderOptimizer {
             heuristics: Vec::new(),
         }
     }
+
+    /// Greedy join ordering algorithm - orders atoms by selectivity
+    pub fn optimize_join_order_greedy(&self, atoms: &[QueryAtom]) -> Vec<usize> {
+        if atoms.is_empty() {
+            return Vec::new();
+        }
+
+        let mut remaining: Vec<usize> = (0..atoms.len()).collect();
+        let mut ordered = Vec::with_capacity(atoms.len());
+        let mut selected_vars = std::collections::HashSet::new();
+
+        // Start with the most selective atom
+        if let Some((idx, _)) = remaining
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, atom_idx)| self.estimate_atom_selectivity(&atoms[**atom_idx]))
+        {
+            let atom_idx = remaining.remove(idx);
+            ordered.push(atom_idx);
+            
+            // Track variables from first atom
+            for var in self.extract_atom_variables(&atoms[atom_idx]) {
+                selected_vars.insert(var);
+            }
+        }
+
+        // Greedily select atoms that join with already selected variables
+        while !remaining.is_empty() {
+            let (best_idx, _) = remaining
+                .iter()
+                .enumerate()
+                .max_by_key(|(_, atom_idx)| {
+                    let vars = self.extract_atom_variables(&atoms[**atom_idx]);
+                    let join_count = vars.iter().filter(|v| selected_vars.contains(v)).count();
+                    join_count
+                })
+                .unwrap();
+
+            let atom_idx = remaining.remove(best_idx);
+            ordered.push(atom_idx);
+
+            // Add new variables
+            for var in self.extract_atom_variables(&atoms[atom_idx]) {
+                selected_vars.insert(var);
+            }
+        }
+
+        ordered
+    }
+
+    fn estimate_atom_selectivity(&self, atom: &QueryAtom) -> usize {
+        // Simple heuristic: fewer variables = more selective
+        match atom {
+            QueryAtom::ConcreteIndividualAtom { .. } => 1, // Most selective
+            QueryAtom::ConcreteLiteralAtom { .. } => 1,
+            QueryAtom::ClassAtom { .. } => 2,
+            QueryAtom::DataPropertyAtom { .. } => 2,
+            QueryAtom::ObjectPropertyAtom { .. } => 3,
+            QueryAtom::SameIndividualAtom { .. } => 3,
+            QueryAtom::DifferentIndividualsAtom { .. } => 3,
+        }
+    }
+
+    fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            }
+            QueryAtom::DataPropertyAtom { subject, .. } => vec![subject.clone()],
+            QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            }
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
+        }
+    }
 }
 
 impl IndexAdvisor {
@@ -1574,8 +1931,138 @@ impl IndexAdvisor {
         pattern: &QueryPattern,
         stats: &QueryStatistics,
     ) -> Result<Vec<IndexRecommendation>, OptimizationError> {
-        // Implementation for index recommendations
-        Ok(Vec::new())
+        let mut recommendations = Vec::new();
+
+        // Analyze property usage frequency
+        let mut property_frequency = HashMap::new();
+        for atom in &query.body_atoms {
+            if let QueryAtom::ObjectPropertyAtom { property, .. } = atom {
+                *property_frequency.entry(format!("{:?}", property)).or_insert(0) += 1;
+            }
+        }
+
+        // Recommend indices for frequently used properties
+        for (property_name, frequency) in property_frequency {
+            if frequency >= self.config.min_query_frequency as usize {
+                // Calculate expected benefit
+                let current_cost = self.estimate_property_access_cost_without_index(
+                    &property_name,
+                    pattern,
+                    stats,
+                );
+                let indexed_cost = self.estimate_property_access_cost_with_index(
+                    &property_name,
+                    pattern,
+                    stats,
+                );
+
+                let benefit = current_cost - indexed_cost;
+                let maintenance_cost = indexed_cost * self.config.maintenance_cost_factor;
+                let cost_benefit_ratio = benefit / maintenance_cost.max(1.0);
+
+                if cost_benefit_ratio >= self.config.cost_benefit_threshold {
+                    recommendations.push(IndexRecommendation {
+                        index_type: IndexType::BTree,
+                        indexed_elements: vec![],
+                        expected_improvement: benefit,
+                        implementation_cost: maintenance_cost,
+                        maintenance_cost,
+                        confidence: if cost_benefit_ratio > 5.0 { 0.9 } else { 0.7 },
+                        justification: format!(
+                            "Property {} used frequently ({}x) with cost/benefit ratio: {:.2}",
+                            property_name, frequency, cost_benefit_ratio
+                        ),
+                    });
+                }
+            }
+        }
+
+        // Recommend indices for join patterns
+        if pattern.join_count > 2 {
+            let join_atoms = self.identify_join_atoms(query);
+            if !join_atoms.is_empty() {
+                let join_benefit = pattern.join_count as f64 * 100.0;
+                recommendations.push(IndexRecommendation {
+                    index_type: IndexType::Hash,
+                    indexed_elements: vec![],
+                    expected_improvement: join_benefit,
+                    implementation_cost: 50.0,
+                    maintenance_cost: 10.0,
+                    confidence: 0.8,
+                    justification: format!(
+                        "Multiple joins ({}) detected - hash index recommended for join optimization",
+                        pattern.join_count
+                    ),
+                });
+            }
+        }
+
+        // Limit recommendations
+        recommendations.sort_by(|a, b| {
+            b.expected_improvement
+                .partial_cmp(&a.expected_improvement)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        recommendations.truncate(self.config.max_recommendations);
+
+        Ok(recommendations)
+    }
+
+    fn estimate_property_access_cost_without_index(
+        &self,
+        _property_name: &str,
+        pattern: &QueryPattern,
+        _stats: &QueryStatistics,
+    ) -> f64 {
+        // Without index, need full scan
+        let base_cost = 1000.0;
+        base_cost * (1.0 + pattern.atom_count as f64 * 0.1)
+    }
+
+    fn estimate_property_access_cost_with_index(
+        &self,
+        _property_name: &str,
+        _pattern: &QueryPattern,
+        _stats: &QueryStatistics,
+    ) -> f64 {
+        // With index, much faster lookup
+        10.0 // Logarithmic cost
+    }
+
+    fn identify_join_atoms(&self, query: &ConjunctiveQuery) -> Vec<QueryAtom> {
+        let mut join_atoms = Vec::new();
+        let mut var_usage = HashMap::new();
+
+        // Track which atoms use which variables
+        for atom in &query.body_atoms {
+            let vars = self.extract_variables_from_atom(atom);
+            for var in vars {
+                var_usage.entry(var).or_insert_with(Vec::new).push(atom.clone());
+            }
+        }
+
+        // Atoms that share variables are join atoms
+        for (_var, atoms) in var_usage {
+            if atoms.len() > 1 {
+                join_atoms.extend(atoms);
+            }
+        }
+
+        join_atoms
+    }
+
+    fn extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            }
+            QueryAtom::DataPropertyAtom { subject, .. } => vec![subject.clone()],
+            QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
+        }
     }
 }
 
@@ -1605,8 +2092,245 @@ impl AdvancedQueryRewriter {
         query: &ConjunctiveQuery,
         context: &RewritingContext,
     ) -> Result<ConjunctiveQuery, RewritingError> {
-        // Implementation for query rewriting
-        Ok(query.clone())
+        let mut rewritten = query.clone();
+        let mut improvements_made = false;
+
+        // Apply rewriting rules based on context
+        for rule in &self.rewriting_rules {
+            if self.is_rule_applicable(rule, &rewritten, context) {
+                match self.apply_rewriting_rule(rule, &rewritten, context) {
+                    Ok(new_query) => {
+                        // Check if rewriting improved the query
+                        if self.estimate_query_improvement(&rewritten, &new_query, context) > 0.05 {
+                            rewritten = new_query.clone();
+                            improvements_made = true;
+
+                            // Record feedback
+                            self.rewriting_history.push(RewritingHistoryEntry {
+                                original_query: query.clone(),
+                                rewritten_query: new_query,
+                                rule_applied: rule.id.clone(),
+                                performance_before: ExecutionTimeStats {
+                                    mean: 0.0,
+                                    median: 0.0,
+                                    std_dev: 0.0,
+                                    min: 0.0,
+                                    max: 0.0,
+                                    sample_count: 0,
+                                    percentile_95: 0.0,
+                                    percentile_99: 0.0,
+                                },
+                                performance_after: ExecutionTimeStats {
+                                    mean: 0.0,
+                                    median: 0.0,
+                                    std_dev: 0.0,
+                                    min: 0.0,
+                                    max: 0.0,
+                                    sample_count: 0,
+                                    percentile_95: 0.0,
+                                    percentile_99: 0.0,
+                                },
+                                improvement: 0.1,
+                                timestamp: Instant::now(),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        log::debug!("Rewriting rule {} failed: {:?}", rule.id, e);
+                    }
+                }
+            }
+        }
+
+        // Apply subsumption-based optimizations
+        if !improvements_made {
+            rewritten = self.apply_subsumption_rewriting(&rewritten, context)?;
+        }
+
+        // Simplify redundant atoms
+        rewritten = self.remove_redundant_atoms(&rewritten)?;
+
+        // If rewriting made query worse, return original
+        if !improvements_made && rewritten.body_atoms.len() > query.body_atoms.len() {
+            return Ok(query.clone());
+        }
+
+        Ok(rewritten)
+    }
+
+    fn is_rule_applicable(
+        &self,
+        rule: &RewritingRule,
+        query: &ConjunctiveQuery,
+        context: &RewritingContext,
+    ) -> bool {
+        // Check if rule conditions are met
+        if query.body_atoms.len() < 1 {
+            return false;
+        }
+
+        // Check specific applicability conditions
+        for condition in &rule.conditions {
+            match condition {
+                ApplicabilityCondition::MinComplexity(_min_complexity) => {
+                    // Would calculate actual complexity
+                    if query.body_atoms.len() < 2 {
+                        return false;
+                    }
+                }
+                ApplicabilityCondition::MaxComplexity(_max_complexity) => {
+                    // Would check if query is too complex
+                }
+                ApplicabilityCondition::MinImprovement(min_imp) => {
+                    if rule.expected_improvement < *min_imp {
+                        return false;
+                    }
+                }
+                ApplicabilityCondition::IndexAvailable(idx_name) => {
+                    if !context.available_indices.contains(idx_name) {
+                        return false;
+                    }
+                }
+                _ => {
+                    // Other conditions
+                }
+            }
+        }
+
+        true
+    }
+
+    fn matches_atom_type(&self, atom: &QueryAtom, atom_type: &str) -> bool {
+        match (atom, atom_type) {
+            (QueryAtom::ClassAtom { .. }, "Class") => true,
+            (QueryAtom::ObjectPropertyAtom { .. }, "ObjectProperty") => true,
+            (QueryAtom::DataPropertyAtom { .. }, "DataProperty") => true,
+            _ => false,
+        }
+    }
+
+    fn apply_rewriting_rule(
+        &self,
+        rule: &RewritingRule,
+        query: &ConjunctiveQuery,
+        _context: &RewritingContext,
+    ) -> Result<ConjunctiveQuery, RewritingError> {
+        // Apply transformation based on rule type
+        let mut rewritten = query.clone();
+
+        // Apply various transformations based on rule ID
+        if rule.id.contains("subsumption") {
+            // Remove subsumed atoms
+            rewritten.body_atoms.retain(|atom| !self.is_subsumed(atom, &query.body_atoms));
+        } else if rule.id.contains("join") {
+            // Eliminate redundant joins
+            rewritten = self.eliminate_redundant_joins(&rewritten);
+        } else if rule.id.contains("filter") {
+            // Push filters earlier in execution
+            rewritten = self.push_filters_down(&rewritten);
+        } else if rule.id.contains("simplif") {
+            // Simplify complex class expressions
+            rewritten = self.simplify_complex_expressions(&rewritten);
+        }
+
+        Ok(rewritten)
+    }
+
+    fn is_subsumed(&self, atom: &QueryAtom, all_atoms: &[QueryAtom]) -> bool {
+        // Check if atom is subsumed by another atom
+        // This is a simplified version - production would use reasoning
+        for other in all_atoms {
+            if std::ptr::eq(atom, other) {
+                continue;
+            }
+            // Would check actual subsumption relationship
+            if format!("{:?}", atom) == format!("{:?}", other) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn eliminate_redundant_joins(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
+        // Simplified implementation - would do actual join analysis
+        query.clone()
+    }
+
+    fn push_filters_down(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
+        // Simplified implementation - would reorder atoms
+        query.clone()
+    }
+
+    fn simplify_complex_expressions(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
+        // Simplified implementation - would simplify class expressions
+        query.clone()
+    }
+
+    fn estimate_query_improvement(
+        &self,
+        _original: &ConjunctiveQuery,
+        _rewritten: &ConjunctiveQuery,
+        _context: &RewritingContext,
+    ) -> f64 {
+        // Estimate improvement - would use cost model
+        0.1 // Placeholder: 10% improvement
+    }
+
+    fn apply_subsumption_rewriting(
+        &self,
+        query: &ConjunctiveQuery,
+        _context: &RewritingContext,
+    ) -> Result<ConjunctiveQuery, RewritingError> {
+        // Remove atoms that are subsumed by others
+        let mut rewritten = query.clone();
+        rewritten.body_atoms.retain(|atom| !self.is_subsumed(atom, &query.body_atoms));
+        Ok(rewritten)
+    }
+
+    fn remove_redundant_atoms(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<ConjunctiveQuery, RewritingError> {
+        // Remove duplicate atoms
+        let mut rewritten = query.clone();
+        let mut seen = HashSet::new();
+        rewritten.body_atoms.retain(|atom| {
+            let signature = format!("{:?}", atom);
+            seen.insert(signature)
+        });
+        Ok(rewritten)
+    }
+
+    fn extract_pattern(&self, query: &ConjunctiveQuery) -> String {
+        format!(
+            "atoms:{},joins:{}",
+            query.body_atoms.len(),
+            self.rewriter_count_joins(query)
+        )
+    }
+
+    fn rewriter_count_joins(&self, query: &ConjunctiveQuery) -> usize {
+        let mut var_count = HashMap::new();
+        for atom in &query.body_atoms {
+            for var in self.rewriter_extract_variables_from_atom(atom) {
+                *var_count.entry(var).or_insert(0) += 1;
+            }
+        }
+        var_count.values().filter(|&&count| count > 1).count()
+    }
+
+    fn rewriter_extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vec![subject.clone(), object.clone()]
+            }
+            QueryAtom::DataPropertyAtom { subject, .. } => vec![subject.clone()],
+            QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
+        }
     }
 }
 

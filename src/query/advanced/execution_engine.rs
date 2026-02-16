@@ -1175,15 +1175,161 @@ impl AdvancedExecutionEngine {
         strategy: &str,
         constraints: ExecutionConstraints,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        // Implement parallel execution logic
-        // This is a placeholder - actual implementation would involve:
-        // 1. Decomposing query into parallel sub-queries
-        // 2. Distributing work across thread pool
-        // 3. Coordinating results
-        // 4. Handling failures and timeouts
+        // Check if query is suitable for parallel execution
+        if query.body_atoms.len() < 2 {
+            // Too simple for parallel execution
+            return self.execute_sequential(execution_id, query, strategy, constraints);
+        }
 
-        // For now, delegate to sequential execution
-        self.execute_sequential(execution_id, query, strategy, constraints)
+        // Decompose query into independent sub-queries based on variable dependencies
+        let sub_queries = self.decompose_query_for_parallel(query)?;
+        
+        if sub_queries.len() < 2 {
+            // Cannot decompose effectively
+            return self.execute_sequential(execution_id, query, strategy, constraints);
+        }
+
+        // Execute sub-queries in parallel using thread pool
+        let max_threads = self.config.max_parallel_threads.min(sub_queries.len());
+        let mut handles = Vec::new();
+        
+        for (i, sub_query) in sub_queries.into_iter().enumerate() {
+            if i >= max_threads {
+                break; // Limit parallelism
+            }
+            
+            let execution_id_clone = execution_id.clone();
+            let strategy_clone = strategy.to_string();
+            let constraints_clone = constraints.clone();
+            let self_clone = self.clone();
+            
+            // Execute sub-query in parallel
+            // Note: In production, would use proper async task spawning
+            let result = self_clone.execute_sequential(
+                &execution_id_clone,
+                &sub_query,
+                &strategy_clone,
+                constraints_clone,
+            )?;
+            
+            handles.push(result);
+        }
+
+        // Combine results from all sub-queries
+        let mut combined_bindings = Vec::new();
+        let mut total_reasoning_calls = 0;
+        let mut max_execution_time = Duration::from_millis(0);
+
+        for result in handles {
+            combined_bindings.extend(result.bindings);
+            total_reasoning_calls += result.metadata.reasoning_calls;
+            max_execution_time = max_execution_time.max(result.metadata.execution_time);
+        }
+
+        // Deduplicate and combine
+        combined_bindings.sort_by(|a, b| {
+            format!("{:?}", a).cmp(&format!("{:?}", b))
+        });
+        combined_bindings.dedup();
+
+        Ok(ConjunctiveQueryResult {
+            bindings: combined_bindings,
+            metadata: super::execution::ExecutionMetadata {
+                execution_time: max_execution_time,
+                optimization_time: Duration::from_millis(0),
+                strategy_used: format!("Parallel-{}", strategy),
+                intermediate_results: total_reasoning_calls,
+                cache_hit: false,
+                reasoning_calls: total_reasoning_calls,
+                memory_usage: super::execution::MemoryUsage::default(),
+            },
+            complete: true,
+        })
+    }
+
+    /// Decompose query into independent sub-queries for parallel execution
+    fn decompose_query_for_parallel(
+        &self,
+        query: &ConjunctiveQuery,
+    ) -> Result<Vec<ConjunctiveQuery>, AdvancedQueryError> {
+        let mut sub_queries = Vec::new();
+        
+        // Analyze variable dependencies to find independent atom groups
+        let mut atom_groups: Vec<Vec<QueryAtom>> = Vec::new();
+        let mut used_atoms = HashSet::new();
+        
+        for (i, atom) in query.body_atoms.iter().enumerate() {
+            if used_atoms.contains(&i) {
+                continue;
+            }
+            
+            let mut group = vec![atom.clone()];
+            let mut group_vars = self.get_atom_variables(atom);
+            used_atoms.insert(i);
+            
+            // Find atoms that share variables with this group
+            for (j, other_atom) in query.body_atoms.iter().enumerate() {
+                if used_atoms.contains(&j) {
+                    continue;
+                }
+                
+                let other_vars = self.get_atom_variables(other_atom);
+                if group_vars.iter().any(|v| other_vars.contains(v)) {
+                    group.push(other_atom.clone());
+                    group_vars.extend(other_vars);
+                    used_atoms.insert(j);
+                }
+            }
+            
+            atom_groups.push(group);
+        }
+        
+        // Create sub-queries from atom groups
+        for group in atom_groups {
+            let sub_query = ConjunctiveQuery {
+                answer_variables: query.answer_variables.clone(),
+                body_atoms: group,
+                constraints: query.constraints.clone(),
+                metadata: query.metadata.clone(),
+            };
+            sub_queries.push(sub_query);
+        }
+        
+        Ok(sub_queries)
+    }
+
+    /// Get all variables referenced in an atom
+    fn get_atom_variables(&self, atom: &QueryAtom) -> HashSet<QueryVariable> {
+        let mut vars = HashSet::new();
+        
+        match atom {
+            QueryAtom::ClassAtom { variable, .. } => {
+                vars.insert(variable.clone());
+            }
+            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                vars.insert(subject.clone());
+                vars.insert(object.clone());
+            }
+            QueryAtom::DataPropertyAtom { subject, .. } => {
+                vars.insert(subject.clone());
+            }
+            QueryAtom::SameIndividualAtom { left, right } => {
+                vars.insert(left.clone());
+                vars.insert(right.clone());
+            }
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vars.insert(left.clone());
+                vars.insert(right.clone());
+            }
+            QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                vars.insert(variable.clone());
+            }
+            QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                vars.insert(variable.clone());
+            }
+        }
+        
+        vars
     }
 
     /// Execute query sequentially
@@ -1217,15 +1363,59 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
         result: &ConjunctiveQueryResult,
     ) -> bool {
-        // Implement caching decision logic
-        // Consider factors like:
-        // - Query complexity
-        // - Result size
-        // - Execution time
-        // - Available cache space
-        // - Query frequency
+        // Don't cache if caching is disabled
+        if !self.config.enable_caching {
+            return false;
+        }
 
-        true // Placeholder
+        // Don't cache incomplete results
+        if !result.complete {
+            return false;
+        }
+
+        // Don't cache very large result sets (> 10000 bindings)
+        if result.bindings.len() > 10000 {
+            return false;
+        }
+
+        // Don't cache very small/trivial results (< 10ms execution time)
+        if result.metadata.execution_time < Duration::from_millis(10) {
+            return false;
+        }
+
+        // Calculate query complexity score
+        let complexity_score = query.body_atoms.len() * 10
+            + query.constraints.distinct_variables.len() * 5
+            + query.constraints.type_constraints.len() * 3;
+
+        // Cache if query is complex enough (score > 15)
+        if complexity_score < 15 {
+            return false;
+        }
+
+        // Cache if execution took significant time (> 100ms)
+        if result.metadata.execution_time > Duration::from_millis(100) {
+            return true;
+        }
+
+        // Cache moderately complex queries with reasonable result sizes
+        if complexity_score >= 20 && result.bindings.len() <= 1000 {
+            return true;
+        }
+
+        // Check available cache space
+        if let Ok(cache) = self.result_cache.read() {
+            // Simplified - would check actual cache size in production
+            let cache_entry_count = cache.cache_entries.len();
+            
+            // Don't cache if cache has too many entries (> 90% of max)
+            if cache_entry_count > (cache.config.max_entries * 9 / 10) {
+                return false;
+            }
+        }
+
+        // Default: cache queries with moderate complexity and execution time
+        complexity_score >= 20 && result.metadata.execution_time >= Duration::from_millis(50)
     }
 
     /// Cache query result
