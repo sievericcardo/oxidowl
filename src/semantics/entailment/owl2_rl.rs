@@ -3,6 +3,8 @@
 //! This module implements the OWL 2 RL profile rules as defined in:
 //! https://www.w3.org/TR/owl2-profiles/\#OWL_2_RL
 
+#![allow(dead_code)]
+
 use crate::semantics::{RdfGraph, RdfTerm, Triple};
 use crate::{Error, Result};
 

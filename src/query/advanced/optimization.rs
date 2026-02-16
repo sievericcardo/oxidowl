@@ -6,6 +6,8 @@
 //! - Index-based optimization
 //! - Cost-based query planning
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use crate::ontology::{ClassExpression, ObjectPropertyExpression, Ontology};
 use crate::reasoning::ReasoningService;

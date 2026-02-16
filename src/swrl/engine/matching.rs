@@ -283,7 +283,6 @@ impl UnificationEngine {
                 crate::ontology::DataPropertyExpression::DataProperty(p1),
                 crate::ontology::DataPropertyExpression::DataProperty(p2),
             ) => p1.iri.as_str() == p2.iri.as_str(),
-            _ => false,
         }
     }
 

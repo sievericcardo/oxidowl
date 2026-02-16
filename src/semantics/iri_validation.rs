@@ -4,7 +4,6 @@
 //! to enable RDF 1.1 and RDF 1.2 compatibility.
 
 use crate::{Error, Result};
-use std::str::FromStr;
 
 /// IRI validation mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,7 +157,7 @@ impl IriValidator {
     /// - Default port removal
     pub fn normalize(&self, iri: &str) -> String {
         // Parse IRI using url crate
-        if let Ok(mut url) = url::Url::parse(iri) {
+        if let Ok(url) = url::Url::parse(iri) {
             // URL crate automatically:
             // - Lowercases scheme and host
             // - Normalizes percent-encoding

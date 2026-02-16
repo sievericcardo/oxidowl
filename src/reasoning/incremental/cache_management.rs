@@ -4,6 +4,8 @@
 //! invalidation, selective updates, and consistency management for efficient
 //! reasoning with ontology changes.
 
+#![allow(dead_code)]
+
 use super::{
     change_tracking::InvalidationEvent,
     delta_computation::{QueryDelta, ReasoningDelta},

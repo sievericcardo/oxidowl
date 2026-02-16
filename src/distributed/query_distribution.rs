@@ -358,7 +358,7 @@ impl QueryDistributor {
 
         // Create partitions for each concept group
         let mut node_index = 0;
-        for (concept, atoms) in concept_groups {
+        for (_concept, atoms) in concept_groups {
             if atoms.is_empty() {
                 continue;
             }

@@ -2,6 +2,8 @@
 //!
 //! This module implements validation logic for SWRL rules and goal satisfaction checking.
 
+#![allow(dead_code)]
+
 use crate::core::lock_helpers::read_lock;
 use crate::ontology::{Axiom, ClassExpression, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule};
@@ -214,7 +216,7 @@ impl GoalChecker {
     /// Check if a goal is satisfied by current facts in the ontology
     pub fn is_goal_satisfied(&mut self, engine: &SWRLRuleEngine, goal: &SWRLAtom) -> Result<bool> {
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = read_lock(
+            let _ontology_guard = read_lock(
                 ontology,
                 "SWRL validation: reading ontology for goal satisfaction",
             )?;
@@ -532,7 +534,6 @@ impl GoalChecker {
                 crate::ontology::DataPropertyExpression::DataProperty(p1),
                 crate::ontology::DataPropertyExpression::DataProperty(p2),
             ) => p1.iri == p2.iri,
-            _ => false,
         }
     }
 }

@@ -14,7 +14,7 @@
 use crate::core::tableau::disjointness::DisjointnessMap;
 use crate::core::tableau::equivalence::EquivalenceClosure;
 use crate::ontology::Ontology;
-use crate::{Error, Result};
+use crate::Result;
 
 /// Performs pre-consistency checks before running tableau
 ///

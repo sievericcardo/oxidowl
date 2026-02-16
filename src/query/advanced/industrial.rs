@@ -7,6 +7,8 @@
 //! - Gene Ontology
 //! - Large synthetic ontologies
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryConstraints, QueryMetadata};
 use super::optimization::OptimizationError;
 use super::optimizer::AdvancedQueryOptimizer;

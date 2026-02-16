@@ -4,9 +4,8 @@
 //! using DashMap for lock-free concurrent access patterns inspired by Konclude's approach.
 
 use crate::{
-    ontology::{ClassExpression, Individual, OntologyRef},
-    performance::MemoryTracker,
-    reasoning::{ClassificationResult, RealizationResult},
+    ontology::ClassExpression,
+    reasoning::ClassificationResult,
 };
 
 use dashmap::DashMap;

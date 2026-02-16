@@ -13,7 +13,7 @@ use oxidowl::{
     ontology::{DataPropertyExpression, ObjectPropertyExpression},
 };
 use std::{fs, path::PathBuf, sync::Arc, time::Instant};
-use tracing::{Level, error, info};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
@@ -2196,9 +2196,9 @@ async fn execute_entailment_check(
     reasoner.load_ontology_from_file(&premise, _ontology_format)?;
     
     info!("Loading conclusion ontology from: {}", conclusion.display());
-    let conclusion_ontology = oxidowl::parsers::owl::parse_ontology_from_file(
+    let _conclusion_ontology = oxidowl::ontology::Ontology::from_file(
         &conclusion,
-        _ontology_format,
+        None, // Auto-detect format based on file extension
     )?;
 
     // Perform entailment check using the reasoner

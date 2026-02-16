@@ -3,6 +3,8 @@
 //! This module implements RDF simple entailment as defined in:
 //! https://www.w3.org/TR/rdf11-mt/#simple-entailment
 
+#![allow(dead_code)]
+
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple};
 use crate::Result;
 use std::collections::{HashMap, HashSet};

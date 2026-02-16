@@ -595,7 +595,7 @@ impl QueryProcessor {
                             if let crate::ontology::Individual::Named(object) = &assertion.target {
                                 let property_iri = match &assertion.property {
                                     crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str(),
-                                    crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                                    crate::ontology::ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                                         // Handle inverse properties
                                         return Err(crate::Error::reasoning("Inverse property not yet handled"));
                                     },
@@ -858,7 +858,7 @@ impl QueryProcessor {
     fn handle_get_subclasses(
         &self,
         request: &OwllinkRequest,
-        ontology: &Ontology,
+        _ontology: &Ontology,
     ) -> Result<String> {
         // Enhanced subclass retrieval for OWLlink requests
         let mut class_elements = String::new();
@@ -890,7 +890,7 @@ impl QueryProcessor {
     fn handle_get_superclasses(
         &self,
         request: &OwllinkRequest,
-        ontology: &Ontology,
+        _ontology: &Ontology,
     ) -> Result<String> {
         // Enhanced superclass retrieval for OWLlink requests
         let mut class_elements = String::new();
@@ -922,7 +922,7 @@ impl QueryProcessor {
     fn handle_get_equivalent_classes(
         &self,
         request: &OwllinkRequest,
-        ontology: &Ontology,
+        _ontology: &Ontology,
     ) -> Result<String> {
         // Enhanced equivalent class retrieval for OWLlink requests
         let mut class_elements = String::new();
@@ -953,7 +953,7 @@ impl QueryProcessor {
     fn handle_get_instances(
         &self,
         request: &OwllinkRequest,
-        ontology: &Ontology,
+        _ontology: &Ontology,
     ) -> Result<String> {
         // Enhanced instance retrieval for OWLlink requests
         let mut individual_elements = String::new();
@@ -992,7 +992,7 @@ impl QueryProcessor {
     }
 
     /// Handle get types request
-    fn handle_get_types(&self, request: &OwllinkRequest, ontology: &Ontology) -> Result<String> {
+    fn handle_get_types(&self, request: &OwllinkRequest, _ontology: &Ontology) -> Result<String> {
         // Enhanced type retrieval for OWLlink requests
         let mut class_elements = String::new();
 

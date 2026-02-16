@@ -599,13 +599,13 @@ impl CacheManager {
     }
 
     /// Get consistency result from cache
-    pub fn get_consistency_result(&self, ontology: &OntologyRef) -> Option<bool> {
+    pub fn get_consistency_result(&self, _ontology: &OntologyRef) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store consistency result in cache
-    pub fn cache_consistency_result(&self, ontology: &OntologyRef, result: bool) {
+    pub fn cache_consistency_result(&self, _ontology: &OntologyRef, _result: bool) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -624,8 +624,8 @@ impl CacheManager {
     #[must_use]
     pub fn get_subsumption_result(
         &self,
-        sub: &ClassExpression,
-        sup: &ClassExpression,
+        _sub: &ClassExpression,
+        _sup: &ClassExpression,
     ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
@@ -634,9 +634,9 @@ impl CacheManager {
     /// Store subsumption result in cache
     pub fn cache_subsumption_result(
         &self,
-        sub: ClassExpression,
-        sup: ClassExpression,
-        result: bool,
+        _sub: ClassExpression,
+        _sup: ClassExpression,
+        _result: bool,
     ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
@@ -644,7 +644,7 @@ impl CacheManager {
     /// Get classification result from cache
     pub fn get_classification_result(
         &self,
-        ontology: &OntologyRef,
+        _ontology: &OntologyRef,
     ) -> Option<ClassificationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
@@ -653,20 +653,20 @@ impl CacheManager {
     /// Store classification result in cache
     pub fn store_classification_result(
         &self,
-        ontology: &OntologyRef,
-        result: ClassificationResult,
+        _ontology: &OntologyRef,
+        _result: ClassificationResult,
     ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get realization result from cache
-    pub fn get_realization_result(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
+    pub fn get_realization_result(&self, _ontology: &OntologyRef) -> Option<RealizationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store realization result in cache
-    pub fn store_realization_result(&self, ontology: &OntologyRef, result: RealizationResult) {
+    pub fn store_realization_result(&self, _ontology: &OntologyRef, _result: RealizationResult) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -674,8 +674,8 @@ impl CacheManager {
     #[must_use]
     pub fn get_instance_result(
         &self,
-        individual: &Individual,
-        class: &ClassExpression,
+        _individual: &Individual,
+        _class: &ClassExpression,
     ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
@@ -684,9 +684,9 @@ impl CacheManager {
     /// Store instance result in cache
     pub fn store_instance_result(
         &self,
-        individual: Individual,
-        class: ClassExpression,
-        result: bool,
+        _individual: Individual,
+        _class: ClassExpression,
+        _result: bool,
     ) {
         // Simple implementation - would need more sophisticated caching in practice
     }

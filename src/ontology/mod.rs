@@ -784,7 +784,7 @@ impl Ontology {
     }
 
     /// Add an individual and its declaration axiom
-    pub fn add_individual(&mut self, subject: IRI, individual: individuals::Individual) {
+    pub fn add_individual(&mut self, _subject: IRI, individual: individuals::Individual) {
         // Add a declaration axiom for the individual
         let declaration = axioms::DeclarationAxiom {
             id: self.next_axiom_id(),
@@ -871,12 +871,6 @@ impl Ontology {
                         {
                             individuals.push((named.iri.clone(), assertion.target.clone()));
                         }
-                    }
-                }
-                axioms::Axiom::ClassAssertion(class_assertion) => {
-                    // Extract individual from class assertion
-                    if let Individual::Named(named) = &class_assertion.individual {
-                        individuals.push((named.iri.clone(), class_assertion.individual.clone()));
                     }
                 }
                 axioms::Axiom::DataPropertyAssertion(data_assertion) => {

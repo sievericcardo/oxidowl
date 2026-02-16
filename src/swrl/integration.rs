@@ -6,7 +6,7 @@
 
 use crate::ontology::IRI;
 use crate::swrl::{
-    builtins::{SWRLBuiltIn, SWRLBuiltInRegistry, SWRLValue},
+    builtins::{SWRLBuiltInRegistry, SWRLValue},
     datetime_builtins::DateTimeBuiltInRegistry,
     extended_builtins::register_extended_builtins,
     regex_builtins::RegexBuiltInRegistry,

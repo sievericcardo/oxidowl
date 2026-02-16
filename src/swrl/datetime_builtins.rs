@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 use crate::ontology::Literal;
 use crate::swrl::temporal::{TemporalError, TemporalValue, utils};
 use crate::swrl::{SWRLBuiltIn, SWRLValue};
-use chrono::{Datelike, NaiveDate, Timelike};
+use chrono::{NaiveDate, Timelike};
 use std::collections::HashMap;
 
 /// Parse a day-time duration from a string

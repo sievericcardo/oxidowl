@@ -6,6 +6,8 @@
 //! - Parallel execution coordination
 //! - Real-time performance monitoring
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use super::cost_optimizer::CostBasedOptimizer;
 use super::execution::{AdvancedQueryError, ConjunctiveQueryResult};
@@ -19,7 +21,7 @@ use crate::performance::{QueryProfiler, QueryTiming};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -1000,7 +1002,7 @@ impl AdvancedExecutionEngine {
         primary_strategy: &str,
         ml_recommendation: &Option<StrategyRecommendation>,
         constraints: ExecutionConstraints,
-        start_time: Instant,
+        _start_time: Instant,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         // Try primary strategy first
         let result = self
@@ -1057,7 +1059,7 @@ impl AdvancedExecutionEngine {
         strategy_used: &str,
         result: &ConjunctiveQueryResult,
         start_time: Instant,
-        ml_recommendation: &Option<StrategyRecommendation>,
+        _ml_recommendation: &Option<StrategyRecommendation>,
     ) -> Result<(), AdvancedQueryError> {
         let ml_engine = self.ml_engine.read().map_err(|e| {
             AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {}", e))
@@ -1201,7 +1203,7 @@ impl AdvancedExecutionEngine {
             let execution_id_clone = execution_id.clone();
             let strategy_clone = strategy.to_string();
             let constraints_clone = constraints.clone();
-            let self_clone = self.clone();
+            let self_clone = self;
             
             // Execute sub-query in parallel
             // Note: In production, would use proper async task spawning
@@ -1335,7 +1337,7 @@ impl AdvancedExecutionEngine {
     /// Execute query sequentially
     fn execute_sequential(
         &self,
-        execution_id: &ExecutionId,
+        _execution_id: &ExecutionId,
         query: &ConjunctiveQuery,
         strategy: &str,
         constraints: ExecutionConstraints,
@@ -1468,7 +1470,7 @@ impl AdvancedExecutionEngine {
     /// Update performance history with execution results
     async fn update_performance_history(
         &self,
-        execution_id: &ExecutionId,
+        _execution_id: &ExecutionId,
         query: &ConjunctiveQuery,
         strategy: &str,
         result: &ConjunctiveQueryResult,
@@ -1757,7 +1759,7 @@ impl LruTracker {
 
     /// Remove an entry from tracking
     pub fn remove(&mut self, hash: &QueryHash) {
-        if let Some(pos) = self.position_map.remove(hash) {
+        if let Some(_pos) = self.position_map.remove(hash) {
             self.access_order.retain(|h| h != hash);
             self.update_positions();
         }
@@ -2072,9 +2074,9 @@ impl ExecutionStrategySelector {
 
     pub fn update_performance_history(
         &mut self,
-        strategy: &str,
-        query: &ConjunctiveQuery,
-        result: &ConjunctiveQueryResult,
+        _strategy: &str,
+        _query: &ConjunctiveQuery,
+        _result: &ConjunctiveQueryResult,
     ) {
         // Update performance history for learning
     }

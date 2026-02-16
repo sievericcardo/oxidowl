@@ -4,6 +4,8 @@
 //! that wrap the core tableau algorithm and provide convenient APIs for
 //! common reasoning tasks.
 
+#![allow(dead_code)]
+
 // Incremental reasoning framework
 pub mod incremental;
 
@@ -436,7 +438,7 @@ impl ReasoningService {
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -466,7 +468,7 @@ impl ReasoningService {
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -544,7 +546,7 @@ impl ReasoningService {
         // Check cache
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -574,7 +576,7 @@ impl ReasoningService {
         // Cache the result if caching is enabled
         if self.config.cache.enable_satisfiability_cache {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -1067,7 +1069,7 @@ impl ReasoningService {
     /// Get object property assertions (for advanced query processing)
     pub fn get_object_property_assertions_sync(
         &self,
-        property: &ObjectPropertyExpression,
+        _property: &ObjectPropertyExpression,
     ) -> Result<Vec<(Individual, Individual)>> {
         // This is a simplified implementation - in practice would query the reasoner
         // For now, return empty results to avoid compilation errors
@@ -1081,7 +1083,7 @@ impl ReasoningService {
 
     /// Invalidate all caches (useful for incremental reasoning)
     pub async fn invalidate_all_caches(&self) -> Result<()> {
-        if let Ok(cache) = self.cache_manager.write() {
+        if let Ok(_cache) = self.cache_manager.write() {
             // Invalidate caches - the actual implementation would depend on CacheManager
             tracing::debug!("All caches invalidated");
         }

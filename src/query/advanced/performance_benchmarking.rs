@@ -4,6 +4,8 @@
 //! and other large real-world ontologies with systematic performance validation
 //! and competitive analysis.
 
+#![allow(dead_code)]
+
 use super::conjunctive::{
     ConjunctiveQuery, QueryAtom, QueryConstraints, QueryMetadata, QueryVariable,
 };

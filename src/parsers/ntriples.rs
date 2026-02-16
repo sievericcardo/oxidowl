@@ -393,7 +393,7 @@ impl NTriplesParser {
             }
 
             let term: String = chars[..end].iter().collect();
-            let rest: String = chars[end..].iter().collect();
+            let _rest: String = chars[end..].iter().collect();
             // We need to return string slices from the original input
             // Find the position in the original string
             let term_len = term.len();
@@ -446,7 +446,7 @@ impl OntologySerializer for NTriplesSerializer {
             content.push_str(&format!("{} rdf:type {} .\n", subject, class.iri));
         }
 
-        for (subject, individual) in ontology.individuals() {
+        for (_subject, individual) in ontology.individuals() {
             if let Some(iri) = individual.iri() {
                 content.push_str(&format!("{iri} rdf:type Individual .\n"));
             }

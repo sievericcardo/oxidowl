@@ -511,7 +511,7 @@ impl DLQueryFeatureExtractor {
         }
     }
 
-    fn count_cardinality_restrictions(&self, query: &ConjunctiveQuery) -> usize {
+    fn count_cardinality_restrictions(&self, _query: &ConjunctiveQuery) -> usize {
         // Placeholder - would count ObjectMinCardinality, ObjectMaxCardinality, etc.
         // These would be added to the ClassExpression enum if not already present
         0
@@ -572,7 +572,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
 
         // Cache the result if caching is enabled
         if self.config.enable_caching {
-            let query_hash = self.query_hash(query);
+            let _query_hash = self.query_hash(query);
             // Note: In a real implementation, we'd need mutable access to cache
             // This would require interior mutability (RefCell/Mutex)
         }

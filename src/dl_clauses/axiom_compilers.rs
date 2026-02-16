@@ -595,7 +595,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
         let var_y = self.fresh_variable();
 
         match &axiom.sub_property {
-            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(_prop) => {
                 // Simple case: P(x,y) → Q(x,y)
                 let sub_prop_name = self.object_property_expression_to_string(&axiom.sub_property);
                 let super_prop_name =

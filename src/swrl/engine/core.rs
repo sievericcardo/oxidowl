@@ -3,6 +3,8 @@
 //! This module contains the main SWRLRuleEngine struct and its public API.
 //! The core coordinates rule execution by delegating to specialized modules.
 
+#![allow(dead_code)]
+
 use crate::core::lock_helpers::{read_lock, write_lock};
 use crate::ontology::{Axiom, Ontology};
 use crate::swrl::{

@@ -8,6 +8,8 @@
 //! - Model persistence and loading
 //! - Online learning capabilities
 
+#![allow(dead_code)]
+
 use crate::error::Error;
 use crate::ontology::Ontology;
 use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
@@ -1870,7 +1872,7 @@ impl StrategySelectionModel {
     fn get_alternative_strategies(
         &self,
         primary: &ExecutionStrategy,
-        features: &QueryFeatures,
+        _features: &QueryFeatures,
     ) -> Vec<(ExecutionStrategy, f64)> {
         let mut alternatives = Vec::new();
 

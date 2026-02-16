@@ -149,7 +149,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
     fn create_nominal_atom(
         &mut self,
         value: &str,
-        property: &str,
+        _property: &str,
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
@@ -653,7 +653,7 @@ impl super::generator::DLClauseGenerator {
     fn create_nominal_atom(
         &mut self,
         value: &str,
-        property: &str,
+        _property: &str,
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {

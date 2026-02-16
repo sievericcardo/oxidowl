@@ -2,6 +2,8 @@
 //!
 //! This module implements list manipulation built-in predicates for SWRL.
 
+#![allow(dead_code)]
+
 use crate::swrl::builtins::{SWRLBuiltIn, SWRLValue};
 use crate::{Error, Result};
 

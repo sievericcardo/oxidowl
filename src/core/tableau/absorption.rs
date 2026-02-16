@@ -30,7 +30,7 @@
 //! - **Speedup**: 1.5-2x additional improvement (on top of indexing + caching)
 //! - **Combined**: With Parts 1+2+3, expect 7-18x total speedup
 
-use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
+use crate::dl_clauses::{DLClause, DLClauseSet};
 use std::collections::{HashMap, HashSet};
 
 /// Types of absorption patterns that can be identified

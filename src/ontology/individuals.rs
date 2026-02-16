@@ -418,8 +418,8 @@ impl IndividualStore {
     /// Validate class assertion
     fn is_valid_class_assertion(
         &self,
-        individual: &Individual,
-        class: &crate::ontology::ClassExpression,
+        _individual: &Individual,
+        _class: &crate::ontology::ClassExpression,
     ) -> bool {
         // Basic validation - can be extended with more sophisticated checks
         true
@@ -428,9 +428,9 @@ impl IndividualStore {
     /// Validate object property assertion
     fn is_valid_object_property_assertion(
         &self,
-        subject: &Individual,
-        object: &Individual,
-        property: &crate::ontology::ObjectPropertyExpression,
+        _subject: &Individual,
+        _object: &Individual,
+        _property: &crate::ontology::ObjectPropertyExpression,
     ) -> bool {
         // Basic validation - can be extended with more sophisticated checks
         true
@@ -439,9 +439,9 @@ impl IndividualStore {
     /// Validate data property assertion
     fn is_valid_data_property_assertion(
         &self,
-        subject: &Individual,
-        value: &crate::ontology::Literal,
-        property: &crate::ontology::DataPropertyExpression,
+        _subject: &Individual,
+        _value: &crate::ontology::Literal,
+        _property: &crate::ontology::DataPropertyExpression,
     ) -> bool {
         // Basic validation - can be extended with more sophisticated checks
         true

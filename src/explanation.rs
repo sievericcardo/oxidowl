@@ -3,6 +3,8 @@
 //! This module provides comprehensive explanation services for reasoning results,
 //! including proof tracking, justification computation, and explanation formatting.
 
+#![allow(dead_code)]
+
 use crate::{
     Result,
     core::tableau::NodeId,

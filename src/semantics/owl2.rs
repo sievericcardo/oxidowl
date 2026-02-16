@@ -6,6 +6,8 @@
 //!
 //! Extended to support RDF-star semantics with configurable quoted triple reasoning.
 
+#![allow(dead_code)]
+
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
 use crate::{
     Error, Result,
@@ -15,7 +17,6 @@ use crate::{
     },
 };
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
 
 
 /// Configuration for OWL 2 DL interpretation with RDF-star support
@@ -886,16 +887,12 @@ impl Owl2Interpretation {
                     .cloned()
                     .collect())
             }
-            DataRange::DataOneOf(literals) => Ok(literals
-                .iter()
-                .map(|lit| self.literal_to_string(lit))
-                .collect()),
             DataRange::DatatypeRestriction {
                 datatype,
                 restrictions,
             } => {
                 // Start with all values of the base datatype
-                let values = self.get_datatype_values(&datatype.to_string());
+                let _values = self.get_datatype_values(&datatype.to_string());
 
                 // Proper facet restriction application - check restriction type compatibility
                 let base_values = self.get_datatype_values(datatype.as_str());

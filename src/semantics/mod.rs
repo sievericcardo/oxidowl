@@ -688,7 +688,7 @@ impl RdfGraph {
         };
         
         // Extract namespace and local name
-        let (ns, local) = self.split_iri(pred_iri);
+        let (_ns, local) = self.split_iri(pred_iri);
         
         match object {
             RdfTerm::Iri(url) => {

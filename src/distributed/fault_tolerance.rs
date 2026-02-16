@@ -821,7 +821,7 @@ impl FailureDetector {
     /// Start failure detection
     pub async fn start(
         &mut self,
-        event_sender: mpsc::UnboundedSender<FaultToleranceEvent>,
+        _event_sender: mpsc::UnboundedSender<FaultToleranceEvent>,
     ) -> Result<()> {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         self.shutdown_tx = Some(shutdown_tx);

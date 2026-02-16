@@ -68,7 +68,7 @@ impl SWRLInterpreter {
     fn find_satisfying_bindings(
         &self,
         rule: &SWRLRule,
-        context: &mut SWRLExecutionContext,
+        _context: &mut SWRLExecutionContext,
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut satisfying_bindings = Vec::new();

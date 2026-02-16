@@ -4,15 +4,17 @@
 //! selection and performance optimization, targeting 40-60% reduction in reasoning
 //! times through learned optimization patterns.
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom};
 use super::ml_models::{EnsembleModel, NeuralNetworkModel};
 use super::optimizer::{
-    PerformancePredictionModel, QueryFeatureExtractor, QueryPerformanceDataPoint,
+    PerformancePredictionModel, QueryPerformanceDataPoint,
 };
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 /// Expansion order item for tableau reasoning
@@ -286,7 +288,7 @@ impl MLHeuristicsEngine {
     fn extract_node_features(
         &self,
         node: &TableauNode,
-        ontology: &Ontology,
+        _ontology: &Ontology,
     ) -> Result<Vec<f64>, MLError> {
         let mut features = Vec::new();
 
@@ -484,7 +486,7 @@ impl StrategySelectionModel {
 
     fn calculate_prediction_confidence(
         &self,
-        features: &[f64],
+        _features: &[f64],
         strategy: &ReasoningStrategy,
     ) -> f64 {
         // Base confidence from model accuracy
@@ -739,7 +741,7 @@ impl PerformancePatternLearner {
             ontology.classes().len() as f64,
             ontology.object_properties().len() as f64,
         ];
-        let ontology_patterns = self.ontology_patterns.detect_patterns(&ontology_features)?;
+        let _ontology_patterns = self.ontology_patterns.detect_patterns(&ontology_features)?;
 
         let mut recommendations = Vec::new();
 

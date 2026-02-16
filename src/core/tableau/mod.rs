@@ -36,7 +36,7 @@ use crate::{
         blocking::BlockingStrategy,
         completion::{CompletionStrategy, RuleApplication},
         dependency::DependencySet,
-        expansion::{DefaultExpansionStrategy, ExpansionStrategy},
+        expansion::DefaultExpansionStrategy,
     },
     ontology::{ClassExpression, Ontology},
 };
@@ -188,7 +188,7 @@ impl Tableau {
 
     /// Initialize tableau from ontology
     pub fn from_ontology(ontology: Arc<Ontology>, config: ReasoningConfig) -> Result<Self> {
-        let mut tableau = Self::new(config, ontology);
+        let tableau = Self::new(config, ontology);
         Ok(tableau)
     }
 

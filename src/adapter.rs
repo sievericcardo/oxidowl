@@ -96,7 +96,6 @@
 use crate::Result;
 use crate::ontology::{Class, IRI, axioms::AxiomId};
 use crate::semantics::{RdfTerm, Triple};
-use horned_owl::model::MutableOntology;
 use std::collections::HashMap;
 
 #[cfg(test)]

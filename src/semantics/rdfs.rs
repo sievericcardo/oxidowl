@@ -5,6 +5,8 @@
 //!
 //! RDFS entailment rules (rdfs1-rdfs13) are implemented according to the specification.
 
+#![allow(dead_code)]
+
 use super::{RdfGraph, RdfTerm, Triple, SemanticInterpretation, vocabulary::*};
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
@@ -39,7 +41,7 @@ impl RdfsInterpretation {
     /// Initialize RDFS vocabulary with proper interpretations
     fn initialize_rdfs_vocabulary(&mut self) {
         // Initialize rdfs:Resource as the universal class
-        let mut resource_class = HashSet::new();
+        let resource_class = HashSet::new();
         // In a complete implementation, this would contain all resources in the domain
         self.class_interpretation.insert(RDFS_RESOURCE.to_string(), resource_class);
 
@@ -682,7 +684,7 @@ impl RdfsEntailmentEngine {
     }
 
     /// Rule rdfs12: (xxx rdf:type rdfs:ContainerMembershipProperty) => (xxx rdfs:subPropertyOf rdfs:member)
-    fn apply_rdfs12(&mut self, graph: &RdfGraph) -> Result<()> {
+    fn apply_rdfs12(&mut self, _graph: &RdfGraph) -> Result<()> {
         // Note: rdfs:ContainerMembershipProperty is not in our basic vocabulary
         // This rule handles rdf:_1, rdf:_2, etc. properties
         // For now, we'll skip this rule as it requires more complex handling

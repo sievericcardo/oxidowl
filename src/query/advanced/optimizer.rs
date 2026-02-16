@@ -6,6 +6,8 @@
 //! - Advanced indexing strategies for SROIQV(D) constructs
 //! - Real-time performance monitoring and optimization
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom};
 use super::optimization::{OptimizationError, QueryOptimizer, QueryPlan};
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};

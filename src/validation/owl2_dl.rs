@@ -1,8 +1,9 @@
+#![allow(dead_code)]
+
 use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::concepts::ClassExpression;
 use crate::ontology::{ObjectPropertyExpression, Ontology, axioms::*};
 use crate::{Error, error::OxidowlError};
-use horned_owl::model::*;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1287,7 +1288,6 @@ impl OWL2DLValidator {
                 crate::ontology::DataPropertyExpression::DataProperty(p1),
                 crate::ontology::DataPropertyExpression::DataProperty(p2),
             ) => Ok(p1.iri == p2.iri),
-            _ => Ok(false), // Other property expression types not implemented yet
         }
     }
 
@@ -1515,7 +1515,7 @@ impl OWL2DLValidator {
     }
 
     /// Validate literal value for OWL 2 DL
-    fn validate_literal_value(&self, literal: &crate::ontology::Literal) -> bool {
+    fn validate_literal_value(&self, _literal: &crate::ontology::Literal) -> bool {
         // For now, just return true - proper validation would check the literal format
         true
     }

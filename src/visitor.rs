@@ -653,7 +653,7 @@ pub trait OntologyVisitor<R = ()> {
         // Note: The data_range field uses horned_owl types, so we can't visit it with our local visitor methods
         // In a full implementation, you'd need a separate visitor or conversion mechanism
         // For now, just visit the annotations
-        for annotation in &axiom.annotations {
+        for _annotation in &axiom.annotations {
             // Note: These are horned_owl Annotation<String> types, not our local types
             // In a real implementation, you'd need conversion or separate handling
         }

@@ -3,6 +3,8 @@
 //! This module contains the main EntailmentChecker struct and EntailmentRegime enum
 //! for checking various types of entailment relationships.
 
+#![allow(dead_code)]
+
 use crate::Result;
 use crate::semantics::RdfGraph;
 use std::collections::HashMap;

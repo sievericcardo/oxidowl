@@ -254,8 +254,8 @@ impl Reasoner {
             let state = tableau.run()?;
 
             // Update statistics
-            let node_count = tableau.get_node_count();
-            let backtrack_count = tableau.get_backtrack_count();
+            let _node_count = tableau.get_node_count();
+            let _backtrack_count = tableau.get_backtrack_count();
 
             Ok(state == TableauState::Satisfiable)
         } else {
@@ -276,7 +276,7 @@ impl Reasoner {
             // Create a tableau for satisfiability checking
             let ontology_ref =
                 read_lock(ontology, "core: reading ontology for satisfiability check")?;
-            let tableau = self
+            let _tableau = self
                 .tableau_factory
                 .create_for_consistency(&*ontology_ref)?;
 
@@ -1096,7 +1096,7 @@ impl Reasoner {
     /// Get unsatisfiable classes
     pub fn get_unsatisfiable_classes(&self) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = read_lock(
+            let _ontology = read_lock(
                 ontology_ref,
                 "core: reading ontology for get_unsatisfiable_classes",
             )?;
@@ -1956,7 +1956,7 @@ impl Reasoner {
     /// Get all inferred superclasses through transitive closure
     fn get_all_inferred_superclasses(
         &self,
-        class: &ClassExpression,
+        _class: &ClassExpression,
         direct_superclasses: Vec<ClassExpression>,
     ) -> Result<Vec<ClassExpression>> {
         let mut all_superclasses = direct_superclasses;
@@ -1998,7 +1998,7 @@ impl Reasoner {
     /// Get all inferred subclasses through transitive closure
     fn get_all_inferred_subclasses(
         &self,
-        class: &ClassExpression,
+        _class: &ClassExpression,
         direct_subclasses: Vec<ClassExpression>,
     ) -> Result<Vec<ClassExpression>> {
         let mut all_subclasses = direct_subclasses;

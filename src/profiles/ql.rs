@@ -349,7 +349,7 @@ impl QLValidator {
     fn is_ql_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
         match expr {
             ObjectPropertyExpression::ObjectProperty(_) => true,
-            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+            ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                 // Inverse of basic property is allowed
                 true // prop is already an ObjectProperty, so it's basic
             }
@@ -361,7 +361,7 @@ impl QLValidator {
     fn is_ql_basic_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
         match expr {
             ObjectPropertyExpression::ObjectProperty(_) => true,
-            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+            ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                 true // prop is already an ObjectProperty, so it's basic
             }
             _ => false,

@@ -1352,7 +1352,6 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 match &axiom.property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 },
                 serialize_individual_xml(&axiom.individual),
                 serialize_literal_xml(&axiom.value)
@@ -1364,12 +1363,10 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 match &axiom.sub_property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 },
                 match &axiom.super_property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 }
             )
         }
@@ -1379,7 +1376,6 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 match &axiom.property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 }
             )
         }

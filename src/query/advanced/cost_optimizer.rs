@@ -4,6 +4,8 @@
 //! capabilities that build upon the existing foundation to deliver industry-leading
 //! performance and intelligent query processing.
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use super::optimization::{ExecutionStrategy, OptimizationError, PlanMetadata, QueryPlan};
 use super::optimizer::AdvancedQueryPlan;
@@ -705,8 +707,8 @@ impl std::error::Error for RewritingError {}
 impl CostBasedOptimizer {
     /// Create a new cost-based optimizer
     pub fn new(
-        ontology: Arc<Ontology>,
-        reasoning_service: Arc<ReasoningService>,
+        _ontology: Arc<Ontology>,
+        _reasoning_service: Arc<ReasoningService>,
         config: CostBasedOptimizerConfig,
     ) -> Self {
         let statistics = Arc::new(RwLock::new(QueryStatistics::new()));
@@ -749,7 +751,7 @@ impl CostBasedOptimizer {
         };
 
         // Step 4: Generate index recommendations
-        let index_recommendations = if self.config.enable_index_recommendations {
+        let _index_recommendations = if self.config.enable_index_recommendations {
             let stats = self.statistics.read().map_err(|e| {
                 OptimizationError::internal(format!("Failed to read statistics: {}", e))
             })?;
@@ -775,7 +777,7 @@ impl CostBasedOptimizer {
         let performance_prediction = self.estimate_performance(&rewritten_query, &pattern, &stats);
 
         // Step 7: Generate optimization suggestions
-        let optimization_suggestions =
+        let _optimization_suggestions =
             self.generate_optimization_suggestions(&rewritten_query, &pattern);
 
         // Step 8: Calculate confidence scores
@@ -1435,7 +1437,7 @@ impl CostBasedOptimizer {
         &self,
         query: &ConjunctiveQuery,
         strategy: &ExecutionStrategy,
-        stats: &QueryStatistics,
+        _stats: &QueryStatistics,
     ) -> f64 {
         let base_cost = match strategy {
             ExecutionStrategy::Direct => 100.0,
@@ -1463,7 +1465,7 @@ impl CostBasedOptimizer {
         &self,
         query: &ConjunctiveQuery,
         pattern: &QueryPattern,
-        stats: &QueryStatistics,
+        _stats: &QueryStatistics,
     ) -> Result<ExecutionStrategy, OptimizationError> {
         // Use greedy join ordering algorithm
         if query.body_atoms.len() <= 1 {
@@ -1481,7 +1483,7 @@ impl CostBasedOptimizer {
 
         // If we didn't get all atoms, add remaining ones
         if ordered_atoms.len() < query.body_atoms.len() {
-            for (i, atom) in query.body_atoms.iter().enumerate() {
+            for (_i, atom) in query.body_atoms.iter().enumerate() {
                 if !ordered_atoms.iter().any(|a| {
                     format!("{:?}", a) == format!("{:?}", atom)
                 }) {

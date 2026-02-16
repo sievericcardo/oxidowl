@@ -4,6 +4,8 @@
 //! integrating change tracking, delta computation, and cache management
 //! with the existing reasoning infrastructure.
 
+#![allow(dead_code)]
+
 use super::{
     IncrementalConfig, IncrementalStatistics,
     cache_management::{ConsistencyReport, IncrementalCacheManager},
@@ -224,7 +226,7 @@ impl IncrementalReasoningService {
 
         // Add assertion to ontology (this would need to be implemented in Ontology)
         {
-            let ontology = self.ontology.write().await;
+            let _ontology = self.ontology.write().await;
             // ontology.add_class_assertion(individual.clone(), class.clone());
             // For now, we'll just track the change
         }

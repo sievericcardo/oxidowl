@@ -2,6 +2,8 @@
 //!
 //! This module implements constructor built-ins for creating date, time, and duration values.
 
+#![allow(dead_code)]
+
 use crate::error::{Error, Result};
 use crate::ontology::{IRI, Literal};
 use crate::swrl::{SWRLBuiltIn, SWRLValue};

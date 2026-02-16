@@ -284,11 +284,11 @@ impl ClassExpression {
                 // ObjectHasValue has an individual value, not a class expression
                 // No classes to collect from individuals
             }
-            ClassExpression::DataSomeValuesFrom { filler, .. }
-            | ClassExpression::DataAllValuesFrom { filler, .. }
-            | ClassExpression::DataMinCardinality { filler, .. }
-            | ClassExpression::DataMaxCardinality { filler, .. }
-            | ClassExpression::DataExactCardinality { filler, .. } => {
+            ClassExpression::DataSomeValuesFrom { filler: _, .. }
+            | ClassExpression::DataAllValuesFrom { filler: _, .. }
+            | ClassExpression::DataMinCardinality { filler: _, .. }
+            | ClassExpression::DataMaxCardinality { filler: _, .. }
+            | ClassExpression::DataExactCardinality { filler: _, .. } => {
                 // Data ranges do not contain named classes
             }
             ClassExpression::ObjectComplementOf(expr) => {
@@ -397,11 +397,11 @@ impl ClassExpression {
                 // Cardinality restrictions are in NNF if filler is in NNF
                 filler.is_nnf()
             }
-            ClassExpression::DataSomeValuesFrom { filler, .. }
-            | ClassExpression::DataAllValuesFrom { filler, .. }
-            | ClassExpression::DataMinCardinality { filler, .. }
-            | ClassExpression::DataMaxCardinality { filler, .. }
-            | ClassExpression::DataExactCardinality { filler, .. } => {
+            ClassExpression::DataSomeValuesFrom { filler: _, .. }
+            | ClassExpression::DataAllValuesFrom { filler: _, .. }
+            | ClassExpression::DataMinCardinality { filler: _, .. }
+            | ClassExpression::DataMaxCardinality { filler: _, .. }
+            | ClassExpression::DataExactCardinality { filler: _, .. } => {
                 // Data ranges do not contain negations
                 true
             }

@@ -8,6 +8,8 @@
 //!
 //! The query language follows Manchester Syntax for class expressions.
 
+#![allow(dead_code)]
+
 use crate::{
     Error, Result,
     ontology::{Class, ClassExpression, IRI, Individual, ObjectProperty, ObjectPropertyExpression},

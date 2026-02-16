@@ -836,7 +836,7 @@ impl TableauExecutor {
     }
 
     /// Apply the GUESS rule
-    fn apply_guess_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
+    fn apply_guess_rule(_tableau: &mut super::Tableau, _rule_app: RuleApplication) -> Result<()> {
         // Implementation for guess rule
         // This would handle non-deterministic guessing
         Ok(())
@@ -910,7 +910,7 @@ impl TableauExecutor {
         let node_id = rule_app.node.parse::<usize>().unwrap_or(0);
         
         // Extract meta-assertion property and value from context
-        if let RuleContext::Role { role, target, concept, .. } = &rule_app.context {
+        if let RuleContext::Role { role, target: _, concept, .. } = &rule_app.context {
             // Find or create a node for the meta-assertion value
             let value_node = tableau.add_node(
                 crate::core::tableau::node::NodeType::Generated
@@ -935,7 +935,7 @@ impl TableauExecutor {
     }
 
     /// Update blocking information for all nodes
-    fn update_blocking(tableau: &mut super::Tableau) -> Result<()> {
+    fn update_blocking(_tableau: &mut super::Tableau) -> Result<()> {
         // Implementation for blocking update
         // This would use the blocking strategy to update node blocking status
         Ok(())

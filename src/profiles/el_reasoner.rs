@@ -14,7 +14,7 @@ use crate::{
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, RwLock, Mutex},
+    sync::{Arc, Mutex},
     time::Instant,
 };
 

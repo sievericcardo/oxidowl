@@ -432,7 +432,7 @@ impl ExpansionManager {
     fn expand_with_witness(
         &self,
         candidate: &ExistentialCandidate,
-        context: &ExpansionContext,
+        _context: &ExpansionContext,
     ) -> Result<ExpansionResult> {
         let witness = candidate.potential_witnesses[0].clone(); // Use first witness
 
@@ -465,7 +465,7 @@ impl ExpansionManager {
     fn expand_with_new_individual(
         &self,
         candidate: &ExistentialCandidate,
-        context: &ExpansionContext,
+        _context: &ExpansionContext,
     ) -> Result<ExpansionResult> {
         let uuid_str = uuid::Uuid::new_v4().to_string();
         let new_individual = format!("_exist_{}_{}", candidate.node, &uuid_str[..8]);

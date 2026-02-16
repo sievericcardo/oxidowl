@@ -17,12 +17,13 @@ use crate::{
     explanation::{ExplanationService, Explanation},
 };
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, RwLock},
+    collections::{HashMap, HashSet},
+    sync::Arc,
     time::Instant,
 };
 
 #[cfg(feature = "rayon")]
+#[allow(unused_imports)]
 use rayon::prelude::*;
 
 /// OWL 2 RL reasoner with forward-chaining materialization
@@ -126,7 +127,7 @@ impl RLReasoner {
     }
 
     /// Get explanation for an inferred fact
-    pub fn explain_fact(&self, axiom: &Axiom) -> Result<Option<Explanation>> {
+    pub fn explain_fact(&self, _axiom: &Axiom) -> Result<Option<Explanation>> {
         if let Some(ref explanation_service) = self.explanation_service {
             let explanation = explanation_service.explain_subsumption(
                 &ClassExpression::Class(crate::ontology::Class::new(crate::ontology::IRI::new("http://example.org/dummy"))),

@@ -554,7 +554,7 @@ impl CompletionRuleSet {
 
         if let RuleContext::Concept {
             concept,
-            dependencies,
+            dependencies: _,
         } = &application.context
         {
             // Extract disjuncts from union

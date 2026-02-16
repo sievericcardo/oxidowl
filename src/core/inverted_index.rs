@@ -5,7 +5,7 @@
 //! - "Which nodes have existential restrictions on this property?"
 //! - "What are all the subclass axioms involving this concept?"
 
-use crate::ontology::{ClassExpression, ObjectPropertyExpression, IRI};
+use crate::ontology::{ClassExpression, ObjectPropertyExpression};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 

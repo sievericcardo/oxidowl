@@ -6,7 +6,6 @@
 
 use crate::ontology::IRI;
 use crate::ontology::axioms::{SWRLAtom, SWRLDArgument, SWRLIArgument};
-use crate::swrl::SWRLVariable;
 use log::debug;
 use std::collections::HashMap;
 

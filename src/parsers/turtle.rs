@@ -2703,7 +2703,7 @@ impl TurtleParser {
                 match object.as_str() {
                     "http://www.w3.org/2002/07/owl#Class" => {
                         // Class declaration
-                        let class = Class::new(IRI::new(&subject));
+                        let _class = Class::new(IRI::new(&subject));
                         let decl_axiom = DeclarationAxiom {
                             id: generate_axiom_id(),
                             entity: Entity::Class(IRI::new(&subject)),
@@ -2712,7 +2712,7 @@ impl TurtleParser {
                     }
                     "http://www.w3.org/2002/07/owl#ObjectProperty" => {
                         // Object property declaration
-                        let property = ObjectProperty::new(IRI::new(&subject));
+                        let _property = ObjectProperty::new(IRI::new(&subject));
                         let decl_axiom = DeclarationAxiom {
                             id: generate_axiom_id(),
                             entity: Entity::ObjectProperty(IRI::new(&subject)),

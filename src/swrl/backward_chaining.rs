@@ -1,7 +1,9 @@
 //! Backward Chaining Implementation for SWRL
 
+#![allow(dead_code)]
+
 use crate::ontology::{
-    ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
+    ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression,
 };
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLValue, SWRLVariable};
 use crate::{Error, Result};
@@ -382,7 +384,7 @@ impl BackwardChainingEngine {
         body: &[SWRLAtom],
         bindings: &VariableBindings,
         solutions: &mut Vec<VariableBindings>,
-        proof_trees: &mut Vec<ProofTree>,
+        _proof_trees: &mut Vec<ProofTree>,
         depth: usize,
     ) -> Result<bool> {
         if body.is_empty() {
@@ -847,10 +849,10 @@ impl BackwardChainingEngine {
     fn apply_bindings_to_dargument(
         &self,
         arg: &crate::swrl::SWRLDArgument,
-        bindings: &VariableBindings,
+        _bindings: &VariableBindings,
     ) -> crate::swrl::SWRLDArgument {
         match arg {
-            crate::swrl::SWRLDArgument::Variable(var) => {
+            crate::swrl::SWRLDArgument::Variable(_var) => {
                 // For simplicity, assume data variables are not bound in this context
                 arg.clone()
             }

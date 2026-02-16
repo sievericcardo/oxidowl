@@ -4,6 +4,8 @@
 //! that transforms conjunctive queries into unions of conjunctive queries
 //! that can be answered using database-style query evaluation.
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use crate::ontology::{ClassExpression, ObjectPropertyExpression, Ontology, axioms::Axiom};
 use crate::profiles::ql::QLValidator;

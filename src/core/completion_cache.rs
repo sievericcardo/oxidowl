@@ -6,7 +6,7 @@
 use crate::{
     Error, Result,
     ontology::ClassExpression,
-    core::{hash_concept, ConceptIndex},
+    core::hash_concept,
 };
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

@@ -3,6 +3,8 @@
 //! This module implements algorithms for computing minimal reasoning updates
 //! based on ontology changes, avoiding expensive full re-reasoning operations.
 
+#![allow(dead_code)]
+
 use super::change_tracking::{ABoxChange, ChangeTracker, TBoxChange};
 use crate::{
     core::saturation::{SaturationEngine, SaturationResult},
@@ -333,7 +335,7 @@ impl DeltaComputer {
         query: &ConjunctiveQuery,
         since: Instant,
     ) -> Result<QueryDelta> {
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
 
         // Get recent changes
         let tbox_changes = self.change_tracker.get_tbox_changes_since(since);

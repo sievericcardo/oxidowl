@@ -267,8 +267,8 @@ impl BackwardChaining {
         &mut self,
         rules: &[SWRLRule],
         known_facts: &mut Vec<SWRLAtom>,
-        ontology: &Arc<Ontology>,
-        context: &mut SWRLExecutionContext,
+        _ontology: &Arc<Ontology>,
+        _context: &mut SWRLExecutionContext,
         goal: &SWRLAtom,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();

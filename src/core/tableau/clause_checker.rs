@@ -13,7 +13,7 @@ use crate::core::tableau::incremental_checker::{
 };
 use crate::core::tableau::node::{ConceptLabel, TableauNode};
 use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Configuration for clause checking optimizations
 #[derive(Debug, Clone)]

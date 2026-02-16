@@ -595,7 +595,7 @@ impl HealthMonitor {
         self.shutdown_tx = Some(shutdown_tx);
 
         // Start periodic health check task
-        let config = self.config.clone();
+        let _config = self.config.clone();
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(30)); // 30-second health checks
 
