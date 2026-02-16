@@ -2268,12 +2268,66 @@ impl AdvancedQueryRewriter {
 
     fn estimate_query_improvement(
         &self,
-        _original: &ConjunctiveQuery,
-        _rewritten: &ConjunctiveQuery,
-        _context: &RewritingContext,
+        original: &ConjunctiveQuery,
+        rewritten: &ConjunctiveQuery,
+        context: &RewritingContext,
     ) -> f64 {
-        // Estimate improvement - would use cost model
-        0.1 // Placeholder: 10% improvement
+        // Estimate improvement using cost model analysis
+        let original_cost = self.estimate_query_cost(original, context);
+        let rewritten_cost = self.estimate_query_cost(rewritten, context);
+        
+        if original_cost > 0.0 {
+            // Calculate relative improvement
+            let improvement = (original_cost - rewritten_cost) / original_cost;
+            // Clamp between -1.0 and 1.0
+            improvement.max(-1.0).min(1.0)
+        } else {
+            // If we can't estimate original cost, assume modest improvement
+            0.1
+        }
+    }
+    
+    fn estimate_query_cost(
+        &self,
+        query: &ConjunctiveQuery,
+        context: &RewritingContext,
+    ) -> f64 {
+        let mut cost = 0.0;
+        
+        // Atom count contributes to cost
+        cost += query.body_atoms.len() as f64 * 10.0;
+        
+        // Join complexity
+        let num_joins = query.body_atoms.len().saturating_sub(1);
+        cost += (num_joins as f64).powi(2) * 5.0;
+        
+        // Variable count increases cost
+        let mut variables = std::collections::HashSet::new();
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, .. } => {
+                    variables.insert(variable.name.clone());
+                }
+                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                    variables.insert(subject.name.clone());
+                    variables.insert(object.name.clone());
+                }
+                _ => {}
+            }
+        }
+        cost += variables.len() as f64 * 3.0;
+        
+        // Selectivity factor from context statistics
+        // Note: statistics is Arc<RwLock<QueryStatistics>>, needs to be locked
+        if let Ok(stats) = context.statistics.read() {
+            if stats.total_queries > 0 {
+                // Use query count as proxy for concept selectivity
+                let selectivity = variables.len() as f64 / (stats.total_queries as f64 + 1.0);
+                cost *= 1.0 + selectivity.min(2.0); // Cap selectivity impact
+            }
+        }
+        
+        cost
     }
 
     fn apply_subsumption_rewriting(

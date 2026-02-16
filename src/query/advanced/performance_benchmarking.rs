@@ -10,7 +10,7 @@ use super::conjunctive::{
 use super::industrial::IndustrialOptimizer;
 use super::ml_heuristics::{MLHeuristicsEngine, ReasoningStrategy};
 use super::optimizer::AdvancedQueryOptimizer;
-use crate::ontology::{Class, ClassExpression, IRI, Ontology, ObjectProperty, ObjectPropertyExpression};
+use crate::ontology::{Class, ClassExpression, IRI, Ontology};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -192,8 +192,8 @@ impl PerformanceBenchmarkingSystem {
     pub async fn run_synthetic_benchmarks(
         &mut self,
         optimizer: &mut AdvancedQueryOptimizer,
-        industrial_optimizer: &mut IndustrialOptimizer,
-        ml_heuristics: &mut MLHeuristicsEngine,
+        _industrial_optimizer: &mut IndustrialOptimizer,
+        _ml_heuristics: &mut MLHeuristicsEngine,
     ) -> Result<IndustrialBenchmarkReport, BenchmarkError> {
         // For testing purposes, run a simplified version of industrial benchmarks
         println!("Running synthetic benchmarks...");
@@ -219,10 +219,15 @@ impl PerformanceBenchmarkingSystem {
             .await?;
         results.push(small_result);
 
+        // Calculate total duration from all result execution times
+        let total_duration = results.iter()
+            .map(|r| r.total_benchmark_time)
+            .sum();
+
         // Generate report
         let report = self.report_generator.generate_industrial_report(
             results,
-            Duration::from_secs(1), // Placeholder duration
+            total_duration,
         )?;
 
         Ok(report)
@@ -486,7 +491,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Query benchmarks
         let mut query_results = Vec::new();
-        for (i, (query_id, query)) in benchmark_queries.iter().enumerate() {
+        for (_i, (query_id, query)) in benchmark_queries.iter().enumerate() {
             let query_metrics = self
                 .benchmark_query(
                     query_id,
@@ -1236,7 +1241,7 @@ impl BenchmarkSuiteManager {
     /// Generate synthetic queries for an ontology
     fn generate_synthetic_queries(
         &self,
-        ontology: &Ontology,
+        _ontology: &Ontology,
         query_count: usize,
     ) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
         println!("Generating {} synthetic queries", query_count);
@@ -1271,8 +1276,31 @@ impl PerformanceMetricsCollector {
     }
 
     fn get_memory_usage(&self) -> f64 {
-        // Placeholder: Get actual memory usage
-        1024.0 * 1024.0 * 512.0 // 512 MB
+        // Try to get actual memory usage, fallback to estimation
+        
+        #[cfg(target_os = "linux")]
+        {
+            // Read from /proc/self/statm on Linux
+            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm") {
+                if let Some(resident) = contents.split_whitespace().nth(1) {
+                    if let Ok(pages) = resident.parse::<usize>() {
+                        // Convert pages to bytes (typically 4KB per page)
+                        let bytes = pages * 4096;
+                        return bytes as f64;
+                    }
+                }
+            }
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            // On macOS, we could use mach API or ps command
+            // For now, use a reasonable estimation
+        }
+        
+        // Fallback: estimate based on allocator stats or default
+        // In production, would use a proper memory profiling library
+        1024.0 * 1024.0 * 512.0 // 512 MB default estimation
     }
 
     fn collect_system_metrics(&self) -> SystemMetrics {

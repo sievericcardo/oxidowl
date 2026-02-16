@@ -653,15 +653,75 @@ impl AdvancedQueryOptimizer {
         &self,
         query: &ConjunctiveQuery,
     ) -> Result<PerformancePrediction, OptimizationError> {
-        // Placeholder implementation - will be enhanced with actual ML models
+        // Enhanced implementation with better heuristics
+        // In production, this would use trained ML models
+        
+        let num_atoms = query.body_atoms.len();
+        let num_variables = self.count_unique_variables(query);
+        
+        // Estimate execution time based on query complexity
+        let base_time_ms = 50;
+        let atom_factor = num_atoms * 10;
+        let variable_factor = num_variables * 5;
+        
+        // Count complex atoms (unions, intersections, restrictions)
+        let complex_atoms = query.body_atoms.iter()
+            .filter(|atom| self.is_complex_atom(atom))
+            .count();
+        let complexity_factor = complex_atoms * 20;
+        
+        let estimated_time_ms = base_time_ms + atom_factor + variable_factor + complexity_factor;
+        
+        // Estimate memory usage
+        let base_memory = 1024 * 1024; // 1 MB base
+        let atom_memory = num_atoms * 1024; // 1 KB per atom
+        let variable_memory = num_variables * 512; // 512 bytes per variable
+        let result_memory = (num_atoms * num_variables) * 128; // estimated result size
+        
+        let estimated_memory = base_memory + atom_memory + variable_memory + result_memory;
+        
+        // Estimate result size
+        let estimated_results = (num_atoms * 10).min(1000);
+        
+        // Confidence decreases with complexity
+        let confidence = (0.95 - (complex_atoms as f64 * 0.05)).max(0.5);
+        
         Ok(PerformancePrediction {
-            estimated_execution_time: Duration::from_millis(
-                50 + query.body_atoms.len() as u64 * 10,
-            ),
-            estimated_memory_usage: 1024 * 1024 + query.body_atoms.len() * 1024,
-            estimated_result_size: 50,
-            confidence_level: 0.75,
+            estimated_execution_time: Duration::from_millis(estimated_time_ms as u64),
+            estimated_memory_usage: estimated_memory,
+            estimated_result_size: estimated_results,
+            confidence_level: confidence,
         })
+    }
+    
+    fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
+        let mut variables = std::collections::HashSet::new();
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, .. } => {
+                    variables.insert(&variable.name);
+                }
+                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                    variables.insert(&subject.name);
+                    variables.insert(&object.name);
+                }
+                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                    variables.insert(&subject.name);
+                    variables.insert(&literal.name);
+                }
+                _ => {}
+            }
+        }
+        variables.len()
+    }
+    
+    fn is_complex_atom(&self, atom: &QueryAtom) -> bool {
+        match atom {
+            QueryAtom::ClassAtom { class_expression, .. } => {
+                !matches!(class_expression, ClassExpression::Class(_))
+            }
+            _ => false,
+        }
     }
 
     /// Recommend indices for optimal query performance
@@ -861,18 +921,41 @@ impl PerformanceMonitor {
         &mut self,
         ontology: &Ontology,
     ) -> Result<Vec<(String, String)>, OptimizationError> {
-        // Placeholder implementation for advanced classification
-        // In a real implementation, this would use the ML models and advanced reasoning
+        // Enhanced classification with hierarchy analysis
         let mut results = Vec::new();
-
-        // For now, return a simple classification result
-        for class in ontology.classes() {
-            results.push((
-                class.1.iri.to_string(),
-                "owl:Thing".to_string(), // Placeholder parent class
-            ));
+        
+        // Build subsumption hierarchy
+        for (class_iri, _class) in ontology.classes() {
+            let class_str = class_iri.to_string();
+            
+            // Find direct superclasses from SubClassOf axioms
+            let mut superclasses = Vec::new();
+            
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
+                    // Check if our class is the subclass
+                    if let ClassExpression::Class(c) = &sub_axiom.subclass {
+                        if c.iri == class_iri {
+                            // Extract superclass
+                            if let ClassExpression::Class(super_c) = &sub_axiom.superclass {
+                                superclasses.push(super_c.iri.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // If no explicit superclasses, default to owl:Thing
+            if superclasses.is_empty() {
+                superclasses.push("http://www.w3.org/2002/07/owl#Thing".to_string());
+            }
+            
+            // Add all subsumption relationships
+            for superclass in superclasses {
+                results.push((class_str.clone(), superclass));
+            }
         }
-
+        
         Ok(results)
     }
 }
@@ -880,7 +963,6 @@ impl PerformanceMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::{Class, IRI};
 
     #[test]
     fn test_advanced_optimizer_creation() {
