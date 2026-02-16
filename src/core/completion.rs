@@ -997,9 +997,22 @@ impl CompletionRuleSet {
                 concept
             );
             
-            // The actual implementation would check for specific patterns
-            // and create appropriate reification structures
-            // This is a placeholder for the complete RDF-star reasoning
+            // Extract RDF-star quoted triple and create reification
+            // Check if the concept mentions a quoted triple that needs expansion
+            // In a full RDF-star implementation, we would:
+            // 1. Create a fresh blank node for the reification
+            // 2. Add rdf:type rdf:Statement
+            // 3. Add rdf:subject, rdf:predicate, rdf:object triples
+            // 4. Return the reification node for use in meta-assertions
+            
+            // For now, we create minimal reification structure
+            let reification_node = format!("_:reif_{}", application.node);
+            result.new_individuals.push((
+                reification_node.clone(),
+                Arc::clone(dependencies),
+            ));
+            
+            log::debug!("Created reification node: {}", reification_node);
         }
 
         Ok(result)
@@ -1008,13 +1021,13 @@ impl CompletionRuleSet {
     /// Apply meta-assertion rule (RDF-star)
     /// This handles assertions about quoted triples (annotations)
     fn apply_meta_assertion_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
-        let mut result = RuleResult::empty();
+        let result = RuleResult::empty();
 
         // Handle meta-assertions (statements about statements)
         // For example: << :alice :knows :bob >> :certainty 0.9
         // This means the statement ":alice :knows :bob" has certainty 0.9
         
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+        if let RuleContext::Concept { concept, dependencies: _ } = &application.context {
             // In a full implementation, we would:
             // 1. Identify the quoted triple this assertion is about
             // 2. Extract the meta-property (e.g., :certainty) and meta-value (e.g., 0.9)

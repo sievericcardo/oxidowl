@@ -900,11 +900,19 @@ impl PerformanceMonitor {
     }
 
     fn record_execution(&mut self, query_hash: u64, execution_time: Duration, memory_used: usize) {
+        // Estimate result size based on memory usage
+        // Assuming average result row is ~100 bytes
+        let estimated_result_size = if memory_used > 1024 {
+            (memory_used - 1024) / 100 // Subtract overhead, divide by row size
+        } else {
+            0
+        };
+        
         let record = QueryExecutionRecord {
             query_hash,
             execution_time,
             memory_used,
-            result_size: 0, // Placeholder
+            result_size: estimated_result_size,
             optimization_strategy: "default".to_string(),
             indices_used: Vec::new(),
             error_occurred: None,

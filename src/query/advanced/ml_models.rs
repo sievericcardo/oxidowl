@@ -473,10 +473,35 @@ impl NeuralNetworkModel {
         let mae = errors.iter().sum::<f64>() / errors.len() as f64;
         let mse = errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64;
 
+        // Calculate correlation coefficient between predictions and actual values
+        let mean_actual = data.iter().map(|p| p.execution_time).sum::<f64>() / data.len() as f64;
+        let mean_pred = data.iter().map(|p| {
+            let features = &p.query_features;
+            self.predict_execution_time(features)
+        }).sum::<f64>() / data.len() as f64;
+        
+        let mut covariance = 0.0;
+        let mut var_actual = 0.0;
+        let mut var_pred = 0.0;
+        
+        for point in data {
+            let features = &point.query_features;
+            let pred = self.predict_execution_time(features);
+            covariance += (point.execution_time - mean_actual) * (pred - mean_pred);
+            var_actual += (point.execution_time - mean_actual).powi(2);
+            var_pred += (pred - mean_pred).powi(2);
+        }
+        
+        let correlation = if var_actual > 0.0 && var_pred > 0.0 {
+            covariance / (var_actual.sqrt() * var_pred.sqrt())
+        } else {
+            0.0
+        };
+        
         self.accuracy_metrics = AccuracyMetrics {
             mean_absolute_error: mae,
             root_mean_square_error: mse.sqrt(),
-            correlation_coefficient: 0.7, // Placeholder
+            correlation_coefficient: correlation.abs(),
             prediction_count: data.len(),
         };
     }
@@ -639,10 +664,33 @@ impl PerformancePredictionModel for EnsembleModel {
             let mae = errors.iter().sum::<f64>() / errors.len() as f64;
             let mse = errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64;
 
+            // Calculate correlation coefficient between predictions and actual execution times
+            let mean_actual_exec = training_data.iter().map(|p| p.execution_time).sum::<f64>() / training_data.len() as f64;
+            let mean_pred_exec = training_data.iter().map(|p| {
+                self.predict_execution_time(&p.query_features)
+            }).sum::<f64>() / training_data.len() as f64;
+            
+            let mut covariance = 0.0;
+            let mut var_actual = 0.0;
+            let mut var_pred = 0.0;
+            
+            for point in training_data {
+                let pred_exec = self.predict_execution_time(&point.query_features);
+                covariance += (point.execution_time - mean_actual_exec) * (pred_exec - mean_pred_exec);
+                var_actual += (point.execution_time - mean_actual_exec).powi(2);
+                var_pred += (pred_exec - mean_pred_exec).powi(2);
+            }
+            
+            let correlation = if var_actual > 0.0 && var_pred > 0.0 {
+                covariance / (var_actual.sqrt() * var_pred.sqrt())
+            } else {
+                0.0
+            };
+            
             self.accuracy_metrics = AccuracyMetrics {
                 mean_absolute_error: mae,
                 root_mean_square_error: mse.sqrt(),
-                correlation_coefficient: 0.8, // Placeholder
+                correlation_coefficient: correlation.abs().min(1.0),
                 prediction_count: training_data.len(),
             };
         }
