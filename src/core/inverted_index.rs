@@ -290,7 +290,7 @@ impl Default for ConceptIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::Class;
+    use crate::ontology::{Class, IRI};
 
     #[test]
     fn test_concept_index_basic() {

@@ -433,7 +433,7 @@ impl UnificationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::{Class, ClassExpression, IRI, Individual, ObjectProperty};
+    use crate::ontology::{Class, ClassExpression, IRI, Individual, SWRLVariable};
 
     fn make_variable(name: &str) -> SWRLVariable {
         SWRLVariable {

@@ -1,10 +1,9 @@
 use oxidowl::{
     adapter::HornedOwlAdapter,
     reasoning::ReasoningService,
-    config::{ReasonerConfig, ReasoningConfig, CacheConfig},
-    ontology::{Ontology, ClassExpression, Class, IRI, Axiom, DisjointClassesAxiom, AxiomId},
-    ontology::individuals::{Individual, NamedIndividual},
-    core::reasoner::{Reasoner, TableauRunner},
+    config::ReasonerConfig,
+    ontology::{Ontology, ClassExpression, Class, IRI},
+    core::reasoner::Reasoner,
     Result,
 };
 
@@ -38,9 +37,9 @@ async fn test_disjoint_classes_greenhouse_integration() -> Result<()> {
     
     // Test individual class satisfiability
     println!("Checking individual class satisfiability...");
-    for (iri, _class) in ontology.classes().iter().take(3) {
-        let class_iri = iri.to_string();
-        let is_satisfiable = reasoner.is_class_satisfiable(&class_iri)?;
+    for (iri, class) in ontology.classes().iter().take(3) {
+        let class_expr = ClassExpression::Class(class.clone());
+        let is_satisfiable = reasoner.is_class_satisfiable(&class_expr)?;
         let name = iri.as_str().split('#').last().unwrap_or("unknown");
         println!("   Class {} is satisfiable: {}", name, if is_satisfiable { "YES" } else { "NO" });
         assert!(is_satisfiable, "Class {} should be satisfiable", name);
@@ -123,23 +122,23 @@ fn test_disjoint_class_reasoning(reasoner: &mut Reasoner, ontology: &Ontology) -
         
         // For now, just test individual class satisfiability since 
         // the current API doesn't support complex class expressions
-        let class1_iri = class1_iri.to_string();
-        let class2_iri = class2_iri.to_string();
         
         println!("   Testing individual classes:");
-        let is_sat1 = reasoner.is_class_satisfiable(&class1_iri)?;
-        let is_sat2 = reasoner.is_class_satisfiable(&class2_iri)?;
+        let class1_expr = ClassExpression::Class(class1.clone());
+        let class2_expr = ClassExpression::Class(class2.clone());
+        let is_sat1 = reasoner.is_class_satisfiable(&class1_expr)?;
+        let is_sat2 = reasoner.is_class_satisfiable(&class2_expr)?;
         
         println!("     {} is satisfiable: {}", 
-            class1_iri.split('#').last().unwrap_or("class1"), is_sat1);
+            class1_iri.as_str().split('#').last().unwrap_or("class1"), is_sat1);
         println!("     {} is satisfiable: {}", 
-            class2_iri.split('#').last().unwrap_or("class2"), is_sat2);
+            class2_iri.as_str().split('#').last().unwrap_or("class2"), is_sat2);
         
         // Both individual classes should be satisfiable
         assert!(is_sat1, "Individual class {} should be satisfiable", 
-            class1_iri.split('#').last().unwrap_or("class1"));
+            class1_iri.as_str().split('#').last().unwrap_or("class1"));
         assert!(is_sat2, "Individual class {} should be satisfiable", 
-            class2_iri.split('#').last().unwrap_or("class2"));
+            class2_iri.as_str().split('#').last().unwrap_or("class2"));
     }
     
     // Test specific greenhouse DisjointUnion scenarios
@@ -164,12 +163,10 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
                 let (iri1, class1) = health_classes[i];
                 let (iri2, class2) = health_classes[j];
                 
-                let intersection = ClassExpression::ObjectIntersectionOf {
-                    operands: vec![
-                        ClassExpression::Class(class1.clone()),
-                        ClassExpression::Class(class2.clone()),
-                    ]
-                };
+                let intersection = ClassExpression::ObjectIntersectionOf(vec![
+                    ClassExpression::Class(class1.clone()),
+                    ClassExpression::Class(class2.clone()),
+                ]);
                 
                 // Implement complex class expression satisfiability testing
                 let name1 = iri1.as_str().split('#').last().unwrap_or("unknown");
@@ -188,7 +185,9 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
                         println!("   Error testing intersection satisfiability for {} and {}: {}", name1, name2, e);
                         
                         // Fallback: test individual class satisfiability
-                        match (reasoner.is_class_satisfiable(iri1.as_str()), reasoner.is_class_satisfiable(iri2.as_str())) {
+                        let class1_expr = ClassExpression::Class(class1.clone());
+                        let class2_expr = ClassExpression::Class(class2.clone());
+                        match (reasoner.is_class_satisfiable(&class1_expr), reasoner.is_class_satisfiable(&class2_expr)) {
                             (Ok(sat1), Ok(sat2)) => {
                                 if sat1 && sat2 {
                                     println!("   {} and {} are both satisfiable individually", name1, name2);
@@ -211,19 +210,14 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
 fn test_intersection_satisfiability(
     reasoner: &Reasoner,
     intersection: &ClassExpression,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<bool> {
     // For complex class expressions, we need to create a temporary individual
     // and test if it can be an instance of the intersection
-    
-    // Create a test individual
-    let test_individual = Individual::Named(NamedIndividual {
-        iri: IRI::new("http://test.example.org/testIndividual"),
-    });
     
     // Try to determine if the intersection is satisfiable by checking
     // if there could be an instance of both classes simultaneously
     match intersection {
-        ClassExpression::ObjectIntersectionOf { operands } if operands.len() == 2 => {
+        ClassExpression::ObjectIntersectionOf(operands) if operands.len() == 2 => {
             // For two-class intersection, test if both classes are satisfiable
             // and if there's no explicit disjointness
             
@@ -237,8 +231,10 @@ fn test_intersection_satisfiability(
             
             if class_iris.len() == 2 {
                 // Check if both classes are individually satisfiable
-                let sat1 = reasoner.is_class_satisfiable(&class_iris[0])?;
-                let sat2 = reasoner.is_class_satisfiable(&class_iris[1])?;
+                let expr1 = ClassExpression::class(IRI::new(&class_iris[0]));
+                let expr2 = ClassExpression::class(IRI::new(&class_iris[1]));
+                let sat1 = reasoner.is_class_satisfiable(&expr1)?;
+                let sat2 = reasoner.is_class_satisfiable(&expr2)?;
                 
                 if !sat1 || !sat2 {
                     return Ok(false); // If either class is unsatisfiable, intersection is unsatisfiable
@@ -260,7 +256,7 @@ fn test_intersection_satisfiability(
     }
 }
 
-fn test_pump_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) -> Result<()> {
+fn test_pump_disjointness(_reasoner: &mut Reasoner, ontology: &Ontology) -> Result<()> {
     println!("⚙️  Testing Pump DisjointUnion scenarios...");
     
     let all_classes = ontology.classes();
@@ -281,7 +277,7 @@ fn test_pump_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) -> Resul
                 let (iri1, class1) = pump_classes[i];
                 let (iri2, class2) = pump_classes[j];
                 
-                let intersection = ClassExpression::intersection_of(vec![
+                let _intersection = ClassExpression::intersection_of(vec![
                     ClassExpression::Class(class1.clone()),
                     ClassExpression::Class(class2.clone()),
                 ]);

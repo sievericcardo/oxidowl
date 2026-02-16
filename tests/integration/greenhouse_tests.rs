@@ -92,7 +92,7 @@ async fn test_basic_greenhouse_reasoning() {
 async fn test_pump1_classification_concept() {
     let ontology = create_test_ontology();
     let config = ReasonerConfig::test_config();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let _reasoning_service = ReasoningService::new(ontology, config);
 
     // Create class expressions for pump and operational concepts
     let _pump_iri = IRI::new("http://www.smolang.org/greenhouseDT#pump1");

@@ -15,7 +15,7 @@ fn test_modules_accessible() {
     println!("Testing module accessibility...");
 
     // Test industrial optimization module
-    let ontology = Ontology::new();
+    let _ontology = Ontology::new();
 
     // This test validates that all components are properly exported
     // and can be imported and instantiated

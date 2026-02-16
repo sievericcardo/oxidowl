@@ -4,7 +4,7 @@ use oxidowl::swrl::*;
 #[test]
 fn test_new_built_ins_integration() {
     // Create a simple ontology
-    let ontology = Ontology::new();
+    let _ontology = Ontology::new();
 
     // Create SWRL variables (using IRI)
     let x = SWRLVariable::new(IRI::new("http://example.org/x"));
