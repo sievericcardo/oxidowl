@@ -242,14 +242,14 @@ impl RdfXmlParser {
         // reader.trim_text(true); // Removed as this method doesn't exist in current quick-xml
 
         let mut buf: Vec<u8> = Vec::new();
-        let mut current_element = None;
+        let mut _current_element = None;
         let mut current_attributes = std::collections::HashMap::new();
 
         loop {
             match reader.read_event() {
                 Ok(Event::Start(ref e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    current_element = Some(name.clone());
+                    _current_element = Some(name.clone());
 
                     // Parse attributes
                     current_attributes.clear();
@@ -931,23 +931,17 @@ impl OntologySerializer for RdfXmlSerializer {
         for axiom in ontology.axioms() {
             match axiom {
                 crate::ontology::Axiom::DataPropertyAssertion(assertion) => {
-                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
-                        &assertion.property
-                    {
-                        data_properties.insert(prop.clone());
-                    }
+                    let crate::ontology::DataPropertyExpression::DataProperty(prop) =
+                        &assertion.property;
+                    data_properties.insert(prop.clone());
                 }
                 crate::ontology::Axiom::SubDataPropertyOf(sub_prop) => {
-                    if let crate::ontology::DataPropertyExpression::DataProperty(sub) =
-                        &sub_prop.sub_property
-                    {
-                        data_properties.insert(sub.clone());
-                    }
-                    if let crate::ontology::DataPropertyExpression::DataProperty(super_prop) =
-                        &sub_prop.super_property
-                    {
-                        data_properties.insert(super_prop.clone());
-                    }
+                    let crate::ontology::DataPropertyExpression::DataProperty(sub) =
+                        &sub_prop.sub_property;
+                    data_properties.insert(sub.clone());
+                    let crate::ontology::DataPropertyExpression::DataProperty(super_prop) =
+                        &sub_prop.super_property;
+                    data_properties.insert(super_prop.clone());
                 }
                 _ => {}
             }

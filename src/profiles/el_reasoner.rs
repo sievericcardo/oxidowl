@@ -795,23 +795,22 @@ impl CompletionRule for SubsumptionRule {
     fn apply(&self, inference: &Inference, state: &mut CompletionState) -> Result<Vec<Inference>> {
         let mut new_inferences = Vec::new();
         
-        if let Inference::Subsumption { sub, sup } = inference {
-            // Find all concepts that sup subsumes
-            for (existing_sub, existing_sup) in &state.subsumptions {
-                if existing_sub == sup {
-                    // sub ⊑ sup, sup ⊑ existing_sup ⟹ sub ⊑ existing_sup
-                    new_inferences.push(Inference::Subsumption {
-                        sub: sub.clone(),
-                        sup: existing_sup.clone(),
-                    });
-                }
-                if existing_sup == sub {
-                    // existing_sub ⊑ sub, sub ⊑ sup ⟹ existing_sub ⊑ sup
-                    new_inferences.push(Inference::Subsumption {
-                        sub: existing_sub.clone(),
-                        sup: sup.clone(),
-                    });
-                }
+        let Inference::Subsumption { sub, sup } = inference;
+        // Find all concepts that sup subsumes
+        for (existing_sub, existing_sup) in &state.subsumptions {
+            if existing_sub == sup {
+                // sub ⊑ sup, sup ⊑ existing_sup ⟹ sub ⊑ existing_sup
+                new_inferences.push(Inference::Subsumption {
+                    sub: sub.clone(),
+                    sup: existing_sup.clone(),
+                });
+            }
+            if existing_sup == sub {
+                // existing_sub ⊑ sub, sub ⊑ sup ⟹ existing_sub ⊑ sup
+                new_inferences.push(Inference::Subsumption {
+                    sub: existing_sub.clone(),
+                    sup: sup.clone(),
+                });
             }
         }
         
@@ -827,14 +826,13 @@ impl CompletionRule for ConjunctionRule {
     fn apply(&self, inference: &Inference, _state: &mut CompletionState) -> Result<Vec<Inference>> {
         let mut new_inferences = Vec::new();
         
-        if let Inference::Subsumption { sub, sup } = inference {
-            if let ELConcept::Conjunction(concepts) = sup {
-                for concept in concepts {
-                    new_inferences.push(Inference::Subsumption {
-                        sub: sub.clone(),
-                        sup: concept.clone(),
-                    });
-                }
+        let Inference::Subsumption { sub, sup } = inference;
+        if let ELConcept::Conjunction(concepts) = sup {
+            for concept in concepts {
+                new_inferences.push(Inference::Subsumption {
+                    sub: sub.clone(),
+                    sup: concept.clone(),
+                });
             }
         }
         
@@ -850,20 +848,19 @@ impl CompletionRule for ExistentialRule {
     fn apply(&self, inference: &Inference, state: &mut CompletionState) -> Result<Vec<Inference>> {
         let mut new_inferences = Vec::new();
         
-        if let Inference::Subsumption { sub: filler_sub, sup: filler_sup } = inference {
-            // Look for existential restrictions with this filler
-            for (existing_sub, existing_sup) in &state.subsumptions {
-                if let ELConcept::Existential { role, filler } = existing_sup {
-                    if filler.as_ref() == filler_sub {
-                        // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
-                        new_inferences.push(Inference::Subsumption {
-                            sub: existing_sub.clone(),
-                            sup: ELConcept::Existential {
-                                role: role.clone(),
-                                filler: Box::new(filler_sup.clone()),
-                            },
-                        });
-                    }
+        let Inference::Subsumption { sub: filler_sub, sup: filler_sup } = inference;
+        // Look for existential restrictions with this filler
+        for (existing_sub, existing_sup) in &state.subsumptions {
+            if let ELConcept::Existential { role, filler } = existing_sup {
+                if filler.as_ref() == filler_sub {
+                    // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
+                    new_inferences.push(Inference::Subsumption {
+                        sub: existing_sub.clone(),
+                        sup: ELConcept::Existential {
+                            role: role.clone(),
+                            filler: Box::new(filler_sup.clone()),
+                        },
+                    });
                 }
             }
         }

@@ -1163,10 +1163,9 @@ impl ClassificationService {
             if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
                 if let crate::ontology::Individual::Named(subj) = &assertion.individual {
                     if subj.iri.as_str() == individual {
-                        if let DataPropertyExpression::DataProperty(prop) = &assertion.property {
-                            if prop.iri.as_str() == property {
-                                values.push(assertion.value.to_string());
-                            }
+                        let DataPropertyExpression::DataProperty(prop) = &assertion.property;
+                        if prop.iri.as_str() == property {
+                            values.push(assertion.value.to_string());
                         }
                     }
                 }
