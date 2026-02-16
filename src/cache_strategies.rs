@@ -71,7 +71,7 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     /// Create a new LRU cache with the specified capacity
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: HashMap::with_capacity(capacity),
             access_order: VecDeque::new(),
             capacity,
             hits: 0,
@@ -167,7 +167,7 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     /// Create a new LFU cache with the specified capacity
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: HashMap::with_capacity(capacity),
             capacity,
             hits: 0,
             misses: 0,

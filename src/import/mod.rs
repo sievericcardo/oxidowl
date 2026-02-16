@@ -398,7 +398,6 @@ impl ImportManager {
         &self,
         ontology: &mut Ontology,
     ) -> Result<Vec<ImportResolutionResult>, OxidowlError> {
-        let mut results = Vec::new();
         let ontology_iri = ontology
             .get_iri()
             .cloned()
@@ -406,6 +405,7 @@ impl ImportManager {
 
         // Get import declarations from ontology
         let import_declarations = self.extract_import_declarations(ontology);
+        let mut results = Vec::with_capacity(import_declarations.len());
 
         for import_decl in import_declarations {
             let result = self.resolve_single_import(&ontology_iri, &import_decl, 0)?;
