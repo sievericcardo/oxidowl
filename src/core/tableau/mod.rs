@@ -187,10 +187,8 @@ impl Tableau {
     }
 
     /// Initialize tableau from ontology
-    pub fn fontology_arc = Arc::new(ontology.clone());
-        let mut tableau = Self::new(config, ontology_arcgy, config: ReasoningConfig) -> Result<Self> {
-        let mut tableau = Self::new(config);
-        tableau.load_ontology(ontology)?;
+    pub fn from_ontology(ontology: Arc<Ontology>, config: ReasoningConfig) -> Result<Self> {
+        let mut tableau = Self::new(config, ontology);
         Ok(tableau)
     }
 

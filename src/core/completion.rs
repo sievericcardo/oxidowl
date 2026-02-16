@@ -389,6 +389,7 @@ impl CompletionRuleSet {
             rules: Vec::new(),
             priorities: HashMap::new(),
             applicability: HashMap::new(),
+            handlers: HashMap::new(),
             ontology: None,
         };
 
@@ -417,7 +418,6 @@ impl CompletionRuleSet {
     }
 
     /// Add standard OWL 2 DL completion rules to the set
-    fn add_standard_rules(&mut self) {
     fn add_standard_rules(&mut self) {
         // Deterministic rules (highest priority)
         self.add_rule(CompletionRule::And, RulePriority::Highest);

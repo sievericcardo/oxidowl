@@ -599,11 +599,11 @@ impl IndustrialOptimizer {
                 ClassExpression::Class(_) => 1.0,
                 ClassExpression::ObjectIntersectionOf(ops) => 2.0 + (ops.len() as f64 * 0.5),
                 ClassExpression::ObjectUnionOf(ops) => 3.0 + (ops.len() as f64 * 0.7),
-                ClassExpression::ObjectSomeValuesFrom(..) => 5.0,
-                ClassExpression::ObjectAllValuesFrom(..) => 5.0,
-                ClassExpression::ObjectMinCardinality(n, ..) |ClassExpression::ObjectMaxCardinality(n, ..) =>
-                    10.0 + (*n as f64 * 2.0),
-                ClassExpression::ObjectExactCardinality(n, ..) => 12.0 + (*n as f64 * 2.0),
+                ClassExpression::ObjectSomeValuesFrom { .. } => 5.0,
+                ClassExpression::ObjectAllValuesFrom { .. } => 5.0,
+                ClassExpression::ObjectMinCardinality { cardinality, .. } | ClassExpression::ObjectMaxCardinality { cardinality, .. } =>
+                    10.0 + (*cardinality as f64 * 2.0),
+                ClassExpression::ObjectExactCardinality { cardinality, .. } => 12.0 + (*cardinality as f64 * 2.0),
                 ClassExpression::ObjectOneOf(inds) => 3.0 + (inds.len() as f64 * 0.5),
                 _ => 2.0,
             };
@@ -621,11 +621,11 @@ impl IndustrialOptimizer {
         match axiom {
             crate::ontology::Axiom::SubClassOf(sub_axiom) => {
                 // Check if this axiom has our class as the subclass
-                matches!(&sub_axiom.sub, ClassExpression::Class(c) if &c.iri == class_iri)
+                matches!(&sub_axiom.subclass, ClassExpression::Class(c) if &c.iri == class_iri)
             }
             crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
                 // Check if our class is in the equivalence set
-                equiv_axiom.class_expressions.iter().any(|ce| {
+                equiv_axiom.classes.iter().any(|ce| {
                     matches!(ce, ClassExpression::Class(c) if &c.iri == class_iri)
                 })
             }
@@ -643,8 +643,8 @@ impl IndustrialOptimizer {
         for axiom in ontology.axioms() {
             if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
                 // Check if the superclass matches our concept
-                if &sub_axiom.sup == concept {
-                    subclasses.push(sub_axiom.sub.clone());
+                if &sub_axiom.superclass == concept {
+                    subclasses.push(sub_axiom.subclass.clone());
                 }
             }
         }
@@ -669,19 +669,19 @@ impl IndustrialOptimizer {
         for axiom in ontology.axioms() {
             match axiom {
                 crate::ontology::Axiom::SubClassOf(ax) => {
-                    if chunk.contains(&ax.sub) || chunk.contains(&ax.sup) {
+                    if chunk.contains(&ax.subclass) || chunk.contains(&ax.superclass) {
                         // Add related concepts
-                        if !concepts.contains(&ax.sub) {
-                            concepts.push(ax.sub.clone());
+                        if !concepts.contains(&ax.subclass) {
+                            concepts.push(ax.subclass.clone());
                         }
-                        if !concepts.contains(&ax.sup) {
-                            concepts.push(ax.sup.clone());
+                        if !concepts.contains(&ax.superclass) {
+                            concepts.push(ax.superclass.clone());
                         }
                     }
                 }
                 crate::ontology::Axiom::EquivalentClasses(ax) => {
-                    if ax.class_expressions.iter().any(|c| chunk.contains(c)) {
-                        for class_expr in &ax.class_expressions {
+                    if ax.classes.iter().any(|c| chunk.contains(c)) {
+                        for class_expr in &ax.classes {
                             if !concepts.contains(class_expr) {
                                 concepts.push(class_expr.clone());
                             }
@@ -708,7 +708,7 @@ impl IndustrialOptimizer {
             .iter()
             .filter_map(|ce| {
                 if let ClassExpression::Class(c) = ce {
-                    Some(c.iri.clone())
+                    Some(c.iri.to_string())
                 } else {
                     None
                 }
@@ -929,6 +929,7 @@ impl ModularClassificationResult {
             module_id: module.module_id,
             concept_count: module.concept_count,
             processing_time: time,
+            subsumptions: HashMap::new(), // Placeholder
         });
         self.modules_processed += 1;
     }
@@ -939,6 +940,8 @@ pub struct ModuleResult {
     pub module_id: String,
     pub concept_count: usize,
     pub processing_time: Duration,
+    // Placeholder: Subsumption relationships discovered in this module
+    pub subsumptions: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug)]
@@ -946,6 +949,12 @@ pub struct DistributedClassificationResult {
     pub partitions: Vec<PartitionResult>,
     pub merge_time: Duration,
     pub total_processing_time: Duration,
+    // Placeholder: Merged subsumption relationships across all partitions
+    pub subsumptions: HashMap<String, Vec<String>>,
+    // Placeholder: Total time across all partitions
+    pub total_time: u64,
+    // Placeholder: Number of partitions processed
+    pub partition_count: usize,
 }
 
 impl DistributedClassificationResult {
@@ -954,6 +963,9 @@ impl DistributedClassificationResult {
             partitions: Vec::new(),
             merge_time: Duration::from_secs(0),
             total_processing_time: Duration::from_secs(0),
+            subsumptions: HashMap::new(),
+            total_time: 0,
+            partition_count: 0,
         }
     }
 
@@ -967,6 +979,8 @@ impl DistributedClassificationResult {
             partition_id: partition.partition_id,
             concept_count: partition.concept_count,
             processing_time: time,
+            subsumptions: HashMap::new(), // Placeholder
+            time_ms: time.as_millis() as u64,
         });
         self.total_processing_time += time;
     }
@@ -977,6 +991,10 @@ pub struct PartitionResult {
     pub partition_id: String,
     pub concept_count: usize,
     pub processing_time: Duration,
+    // Placeholder: Subsumption relationships in this partition
+    pub subsumptions: HashMap<String, Vec<String>>,
+    // Placeholder: Processing time in milliseconds
+    pub time_ms: u64,
 }
 
 #[derive(Debug)]
@@ -1115,7 +1133,7 @@ impl DistributedProcessingCoordinator {
         // Merge all partition results into a single result
         let mut merged = DistributedClassificationResult::new();
         
-        for partition_result in &result.partition_results {
+        for partition_result in &result.partitions {
             // Merge subsumption relationships
             for (class, supers) in &partition_result.subsumptions {
                 merged.subsumptions

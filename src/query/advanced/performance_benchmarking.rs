@@ -10,7 +10,7 @@ use super::conjunctive::{
 use super::industrial::IndustrialOptimizer;
 use super::ml_heuristics::{MLHeuristicsEngine, ReasoningStrategy};
 use super::optimizer::AdvancedQueryOptimizer;
-use crate::ontology::{ClassExpression, IRI, Ontology};
+use crate::ontology::{Class, ClassExpression, IRI, Ontology, ObjectProperty, ObjectPropertyExpression};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -1166,12 +1166,14 @@ impl BenchmarkSuiteManager {
             
             ontology.add_axiom(crate::ontology::Axiom::SubClassOf(
                 crate::ontology::SubClassOfAxiom {
-                    sub: ClassExpression::Class(Class {
-                        iri: format!("http://example.org/{}/Concept{}", name.replace(' ', "_"), i),
+                    id: 0,
+                    subclass: ClassExpression::Class(Class {
+                        iri: IRI::from(format!("http://example.org/{}/Concept{}", name.replace(' ', "_"), i)),
                     }),
-                    sup: ClassExpression::Class(Class {
-                        iri: format!("http://example.org/{}/Concept{}", name.replace(' ', "_"), parent_id),
+                    superclass: ClassExpression::Class(Class {
+                        iri: IRI::from(format!("http://example.org/{}/Concept{}", name.replace(' ', "_"), parent_id)),
                     }),
+                    annotations: Vec::new(),
                 }
             ));
         }

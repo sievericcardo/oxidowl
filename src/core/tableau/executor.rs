@@ -782,7 +782,7 @@ impl TableauExecutor {
         }
         
         // Find all outgoing edges from the current node
-        let chains_created = 0;
+        let mut chains_created = 0;
         let outgoing_edges: Vec<(NodeId, String)> = tableau.edges.iter()
             .filter(|e| e.from == node_id)
             .map(|e| (e.to, e.role.to_string()))
@@ -866,16 +866,15 @@ impl TableauExecutor {
         let node_id = rule_app.node.parse::<usize>().unwrap_or(0);
         
         // Create a reification node for the quoted triple
-        let reification_node = tableau.create_node(
-            crate::core::tableau::node::NodeType::Named,
-            Some(format!("_:quotedTriple_{}", node_id)),
+        let reification_node = tableau.add_node(
+            crate::core::tableau::node::NodeType::Generated
         )?;
         
         // Mark this node as representing a quoted triple (meta-level)
         let quoted_triple_type = ConceptLabel::Atomic(
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#QuotedTriple".to_string()
         );
-        tableau.add_concept(reification_node, quoted_triple_type)?;
+        tableau.add_concept_to_node(reification_node, quoted_triple_type)?;
         
         // Add edge from original node to reification node
         let represents_role = RoleLabel::Atomic(
@@ -911,25 +910,24 @@ impl TableauExecutor {
         let node_id = rule_app.node.parse::<usize>().unwrap_or(0);
         
         // Extract meta-assertion property and value from context
-        if let RuleContext::Role { property, target, concept } = &rule_app.context {
+        if let RuleContext::Role { role, target, concept, .. } = &rule_app.context {
             // Find or create a node for the meta-assertion value
-            let value_node = tableau.create_node(
-                crate::core::tableau::node::NodeType::Named,
-                Some(target.clone()),
+            let value_node = tableau.add_node(
+                crate::core::tableau::node::NodeType::Generated
             )?;
             
             // Add the meta-property edge from quoted triple to value
-            let meta_role = RoleLabel::Atomic(format!("meta:{}", property));
+            let meta_role = RoleLabel::Atomic(format!("meta:{:?}", role));
             tableau.add_edge(node_id, value_node, meta_role)?;
             
             // Add the concept constraint to the value node
             let concept_label = Self::concept_label_to_class_expression(&ConceptLabel::Atomic(
                 format!("{:?}", concept)
             ))?;
-            tableau.add_concept(value_node, ConceptLabel::Complex(concept_label))?;
+            tableau.add_concept_to_node(value_node, ConceptLabel::Complex(Box::new(concept_label)))?;
             
-            debug!("Applied meta assertion rule for node: {} with property: {}", 
-                   rule_app.node, property);
+            debug!("Applied meta assertion rule for node: {} with role: {:?}", 
+                   rule_app.node, role);
         } else {
             debug!("Applied meta assertion rule for node: {} (no role context)", rule_app.node);
         }

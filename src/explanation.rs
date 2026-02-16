@@ -483,10 +483,10 @@ impl JustificationComputer {
                     let mut max_card = None;
                     
                     for cls in classes {
-                        if let ClassExpression::ObjectMinCardinality(n, prop, _) = cls {
+                        if let ClassExpression::ObjectMinCardinality { cardinality: n, property: prop, .. } = cls {
                             min_card = Some((*n, prop));
                         }
-                        if let ClassExpression::ObjectMaxCardinality(m, prop2, _) = cls {
+                        if let ClassExpression::ObjectMaxCardinality { cardinality: m, property: prop2, .. } = cls {
                             max_card = Some((*m, prop2));
                         }
                     }

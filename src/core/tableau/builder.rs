@@ -255,7 +255,7 @@ impl TableauBuilder {
     /// Build a tableau for consistency checking
     pub fn build_for_consistency(&self, ontology: &Ontology) -> Result<super::Tableau> {
         // Build tableau configured for consistency checking
-        super::Tableau::from_ontology(ontology, self.config.clone())
+        super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())
     }
 
     /// Build a tableau for subsumption checking  
@@ -269,7 +269,7 @@ impl TableauBuilder {
         let negated_super = format!("not({})", super_str);
         let conjunction = format!("and({}, {})", sub_str, negated_super);
         let concept_label = ConceptLabel::parse(&conjunction);
-        let mut tableau = super::Tableau::from_ontology(ontology, self.config.clone())?;
+        let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
         // Add the conjunction A ⊓ ¬B to check subsumption
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
@@ -286,7 +286,7 @@ impl TableauBuilder {
     ) -> Result<super::Tableau> {
         // Parse the class expression and build tableau
         let concept_label = ConceptLabel::parse(class_str);
-        let mut tableau = super::Tableau::from_ontology(ontology, self.config.clone())?;
+        let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
         // Add the class expression as an initial concept to check satisfiability
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
@@ -306,7 +306,7 @@ impl TableauBuilder {
         // If unsatisfiable, then individual ∈ C
         let negated_class = format!("not({})", class_str);
         let concept_label = ConceptLabel::parse(&negated_class);
-        let mut tableau = super::Tableau::from_ontology(ontology, self.config.clone())?;
+        let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
         // Add the negated class assertion to check instance membership
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;

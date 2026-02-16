@@ -742,7 +742,7 @@ impl QualityAssessor {
         for binding in bindings {
             for (var, val) in &binding.variable_bindings {
                 variable_values
-                    .entry(var.clone())
+                    .entry(var.to_string())
                     .or_insert_with(std::collections::HashSet::new)
                     .insert(val.to_string());
             }

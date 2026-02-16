@@ -1378,8 +1378,9 @@ impl AdvancedExecutionEngine {
         
         // Add SubClassOf axiom: Person ⊑ Animal
         onto.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-            sub: ClassExpression::Class(person_class),
-            sup: ClassExpression::Class(animal_class),
+            id: 0,
+            subclass: ClassExpression::Class(person_class),
+            superclass: ClassExpression::Class(animal_class),
             annotations: Vec::new(),
         }));
         

@@ -1005,13 +1005,13 @@ impl Ontology {
         for axiom in &self.axioms {
             if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
                 // Check if this equivalence contains our target class
-                let contains_target = equiv_axiom.class_expressions.iter().any(|ce| {
+                let contains_target = equiv_axiom.classes.iter().any(|ce| {
                     matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri)
                 });
 
                 if contains_target {
                     // Return the first non-trivial equivalent definition
-                    for ce in &equiv_axiom.class_expressions {
+                    for ce in &equiv_axiom.classes {
                         // Skip the trivial self-reference
                         if matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri) {
                             continue;
@@ -1036,13 +1036,13 @@ impl Ontology {
         for axiom in &self.axioms {
             if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
                 // Check if this equivalence contains our target class
-                let contains_target = equiv_axiom.class_expressions.iter().any(|ce| {
+                let contains_target = equiv_axiom.classes.iter().any(|ce| {
                     matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri)
                 });
 
                 if contains_target {
                     // Collect all non-self equivalent expressions
-                    for ce in &equiv_axiom.class_expressions {
+                    for ce in &equiv_axiom.classes {
                         if !matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri) {
                             equivalents.push(ce.clone());
                         }
