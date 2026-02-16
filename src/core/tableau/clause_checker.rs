@@ -971,6 +971,7 @@ impl ClauseChecker {
 mod tests {
     use super::*;
     use crate::core::tableau::node::{BlockingInfo, NodeStatus, NodeType};
+    use std::collections::HashMap;
 
     fn create_test_node(id: usize, concepts: Vec<&str>) -> TableauNode {
         let mut node = TableauNode::new(id, NodeType::Individual);

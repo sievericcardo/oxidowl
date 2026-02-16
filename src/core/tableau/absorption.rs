@@ -463,7 +463,9 @@ impl ClauseAbsorber {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dl_clauses::DLAtom;
     use crate::ontology::ClassExpression;
+    use std::collections::HashSet;
 
     fn concept_label(name: &str) -> ClassExpression {
         ClassExpression::Class(crate::ontology::Class {

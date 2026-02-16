@@ -1145,7 +1145,7 @@ impl fmt::Display for QueryResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::Class;
+    use crate::ontology::{Class, IRI};
 
     #[test]
     fn test_backward_chaining_engine_creation() {
