@@ -218,11 +218,42 @@ impl UnificationEngine {
     /// Check if two data ranges match
     fn data_ranges_match(
         &self,
-        _range1: &crate::ontology::DataRange,
-        _range2: &crate::ontology::DataRange,
+        range1: &crate::ontology::DataRange,
+        range2: &crate::ontology::DataRange,
     ) -> bool {
-        // Placeholder - implement data range matching
-        false
+        use crate::ontology::DataRange;
+        
+        match (range1, range2) {
+            // Same datatype
+            (DataRange::Datatype(dt1), DataRange::Datatype(dt2)) => {
+                dt1.as_str() == dt2.as_str()
+            }
+            // Datatype restrictions - check base datatype and facets
+            (DataRange::DatatypeRestriction { datatype: dt1, restrictions: r1 },
+             DataRange::DatatypeRestriction { datatype: dt2, restrictions: r2 }) => {
+                dt1.as_str() == dt2.as_str() && r1 == r2
+            }
+            // Data intersections - check if sets of ranges are equal
+            (DataRange::DataIntersectionOf(ranges1), DataRange::DataIntersectionOf(ranges2)) => {
+                ranges1.len() == ranges2.len() &&
+                ranges1.iter().zip(ranges2.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
+            }
+            // Data unions - check if sets of ranges are equal
+            (DataRange::DataUnionOf(ranges1), DataRange::DataUnionOf(ranges2)) => {
+                ranges1.len() == ranges2.len() &&
+                ranges1.iter().zip(ranges2.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
+            }
+            // Data complements - check if complemented ranges match
+            (DataRange::DataComplementOf(r1), DataRange::DataComplementOf(r2)) => {
+                self.data_ranges_match(r1, r2)
+            }
+            // Data oneOf - check if literal lists are equal
+            (DataRange::DataOneOf(literals1), DataRange::DataOneOf(literals2)) => {
+                literals1 == literals2
+            }
+            // Different types don't match
+            _ => false,
+        }
     }
 
     /// Check if two object properties match

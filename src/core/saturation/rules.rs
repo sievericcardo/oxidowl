@@ -270,7 +270,7 @@ impl SaturationRule for DomainRule {
                 }
                 Axiom::DataPropertyDomain(domain_axiom) => {
                     // Similar handling for data properties
-                    if let Some(property_iri) = extract_data_property_iri(&domain_axiom.property) {
+                    if let Some(_property_iri) = extract_data_property_iri(&domain_axiom.property) {
                         // Check data property usage
                         if !node.saturated_concepts.contains(&domain_axiom.domain) {
                             // Add domain if property is used
@@ -345,10 +345,39 @@ impl SaturationRule for TransitivePropertyRule {
         ontology.axioms().iter().any(|a| matches!(a, Axiom::TransitiveObjectProperty(_)))
     }
 
-    fn apply(&self, _node: &mut SaturationNode, _ontology: &Ontology) -> Result<bool> {
-        // Transitive property handling requires edge processing
-        // This is a placeholder for the full implementation
-        Ok(false)
+    fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
+        // For transitive properties, if we have ∃R.C and ∃R.D, we can infer additional consequences
+        // This implements a limited version that propagates universal restrictions
+        let mut changed = false;
+
+        // Get all transitive properties
+        let transitive_props: Vec<IRI> = ontology.axioms().iter()
+            .filter_map(|a| {
+                if let Axiom::TransitiveObjectProperty(axiom) = a {
+                    extract_property_iri(&axiom.property)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // For each transitive property, propagate universal restrictions
+        for trans_prop in &transitive_props {
+            // If we have ∀R.C where R is transitive, and ∃R.D, then D must satisfy C
+            let universals_for_prop: Vec<_> = node.universals.iter()
+                .filter(|u| &u.property == trans_prop)
+                .cloned()
+                .collect();
+
+            for universal in universals_for_prop {
+                // Apply the universal restriction's filler to the node
+                if node.add_saturated_concept(universal.filler.clone()) {
+                    changed = true;
+                }
+            }
+        }
+
+        Ok(changed)
     }
 
     fn determinism_level(&self) -> u8 {
@@ -369,10 +398,50 @@ impl SaturationRule for PropertyChainRule {
         ontology.axioms().iter().any(|a| matches!(a, Axiom::SubObjectPropertyOf(_)))
     }
 
-    fn apply(&self, _node: &mut SaturationNode, _ontology: &Ontology) -> Result<bool> {
-        // Property chain handling requires edge processing
-        // This is a placeholder for the full implementation
-        Ok(false)
+    fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
+        // For property chains R₁∘R₂⊑R, propagate existential restrictions
+        let mut changed = false;
+
+        // Extract property chain axioms
+        let property_chains: Vec<(Vec<IRI>, IRI)> = ontology.axioms().iter()
+            .filter_map(|a| {
+                if let Axiom::SubObjectPropertyOf(axiom) = a {
+                    use crate::ontology::ObjectPropertyExpression;
+                    // Check if sub_property is a chain
+                    if let ObjectPropertyExpression::PropertyChain(chain) = &axiom.sub_property {
+                        let chain_iris: Vec<IRI> = chain.iter()
+                            .filter_map(|prop| extract_property_iri(prop))
+                            .collect();
+                        let super_iri = extract_property_iri(&axiom.super_property)?;
+                        return Some((chain_iris, super_iri));
+                    }
+                }
+                None
+            })
+            .collect();
+
+        // For simplicity, handle chains of length 2: R₁∘R₂⊑R
+        for (chain, super_prop) in property_chains {
+            if chain.len() == 2 {
+                // If we have ∀R₁.C and ∀R₂.D, we can infer ∀R.E
+                // This is a simplified implementation
+                let has_first = node.universals.iter().any(|u| u.property == chain[0]);
+                let has_second = node.universals.iter().any(|u| u.property == chain[1]);
+
+                if has_first && has_second {
+                    // Mark that this super property is relevant
+                    // In a full implementation, we would propagate through the chain
+                    // For now, we just note it by adding a universal restriction with top concept
+                    use crate::ontology::ClassExpression;
+                    node.add_universal(super_prop.clone(), ClassExpression::Class(
+                        crate::ontology::Class { iri: IRI::new("http://www.w3.org/2002/07/owl#Thing") }
+                    ));
+                    changed = true;
+                }
+            }
+        }
+
+        Ok(changed)
     }
 
     fn determinism_level(&self) -> u8 {
@@ -393,10 +462,54 @@ impl SaturationRule for InversePropertyRule {
         ontology.axioms().iter().any(|a| matches!(a, Axiom::InverseObjectProperties(_)))
     }
 
-    fn apply(&self, _node: &mut SaturationNode, _ontology: &Ontology) -> Result<bool> {
-        // Inverse property handling requires edge processing
-        // This is a placeholder for the full implementation
-        Ok(false)
+    fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
+        // For inverse properties, track symmetric relationships
+        let mut changed = false;
+
+        // Build inverse property map
+        let mut inverse_map: std::collections::HashMap<IRI, IRI> = std::collections::HashMap::new();
+        for axiom in ontology.axioms() {
+            if let Axiom::InverseObjectProperties(inv_axiom) = axiom {
+                if let (Some(iri1), Some(iri2)) = (
+                    extract_property_iri(&inv_axiom.property1),
+                    extract_property_iri(&inv_axiom.property2),
+                ) {
+                    inverse_map.insert(iri1.clone(), iri2.clone());
+                    inverse_map.insert(iri2, iri1);
+                }
+            }
+        }
+
+        // For each existential restriction ∃R.C where R has inverse S,
+        // we track this for potential inverse reasoning
+        let existentials_clone = node.existentials.clone();
+        for existential in &existentials_clone {
+            if let Some(inverse_prop) = inverse_map.get(&existential.property) {
+                // In a full implementation with individuals, we would create an inverse edge
+                // For concept-level reasoning, we can note the inverse relationship exists
+                // by adding a universal restriction for the inverse property
+                // This is a simplified approach that marks the inverse as relevant
+                use crate::ontology::ClassExpression;
+                node.add_universal(inverse_prop.clone(), ClassExpression::Class(
+                    crate::ontology::Class { iri: IRI::new("http://www.w3.org/2002/07/owl#Thing") }
+                ));
+                changed = true;
+            }
+        }
+
+        // Similarly for universal restrictions
+        let universals_clone = node.universals.clone();
+        for universal in &universals_clone {
+            if let Some(inverse_prop) = inverse_map.get(&universal.property) {
+                // Track inverse relationship
+                node.add_existential(inverse_prop.clone(), ClassExpression::Class(
+                    crate::ontology::Class { iri: IRI::new("http://www.w3.org/2002/07/owl#Thing") }
+                ));
+                changed = true;
+            }
+        }
+
+        Ok(changed)
     }
 
     fn determinism_level(&self) -> u8 {
