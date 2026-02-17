@@ -189,7 +189,9 @@ impl Tableau {
 
     /// Initialize tableau from ontology
     pub fn from_ontology(ontology: Arc<Ontology>, config: ReasoningConfig) -> Result<Self> {
-        let tableau = Self::new(config, ontology);
+        let mut tableau = Self::new(config, ontology.clone());
+        // Load the ontology to initialize clause_checker, equivalence closure, and disjointness map
+        tableau.load_ontology(&ontology)?;
         Ok(tableau)
     }
 

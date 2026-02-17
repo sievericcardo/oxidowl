@@ -3,14 +3,14 @@
 //! Tests for configuration management and caching functionality.
 
 use oxidowl::{
-    cache::{CacheConfig, CacheManager, ConceptSatisfiabilityCache},
+    cache::{CacheConfig, CacheFeature, CacheManager, ConceptSatisfiabilityCache},
     ontology::{Ontology, OntologyRef},
 };
 
 #[test]
 fn test_cache_configuration() {
     let config = CacheConfig::default();
-    assert!(config.enable_concept_cache);
+    assert!(config.is_enabled(CacheFeature::Concept));
     assert_eq!(config.max_size, 10000);
 }
 
