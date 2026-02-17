@@ -386,7 +386,7 @@ impl Ontology {
     }
 
     /// Generate next axiom ID
-    fn next_axiom_id(&mut self) -> u64 {
+    pub fn next_axiom_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         id
@@ -668,7 +668,11 @@ impl Ontology {
 
         // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
-        let mut ontology = adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)?;
+        let mut ontology = adapter.convert_basic_ontology::<
+            std::rc::Rc<str>,
+            std::rc::Rc<str>,
+            _
+        >(&result.0)?;
 
         // Try to extract ontology IRI from the file by re-reading it
         // This is a workaround since horned-owl's API is complex
@@ -716,7 +720,7 @@ impl Ontology {
         A: horned_owl::model::ForIRI + Clone + std::fmt::Display + std::hash::Hash + Eq,
     {
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
-        adapter.convert_ontology_with_swrl::<std::rc::Rc<str>>(&horned_ontology)
+        adapter.convert_ontology_with_swrl::<A, A, _>(&horned_ontology)
     }
 
     /// Load an ontology from a file

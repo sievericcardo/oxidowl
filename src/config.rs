@@ -532,6 +532,8 @@ pub struct TableauConfig {
     pub rdf11_mode: bool,
     /// Maximum depth for quoted triple reasoning (0 = disabled)
     pub quoted_triple_reasoning_depth: usize,
+    /// Enable preemptive clause querying optimization
+    pub enable_clause_optimization: bool,
 }
 
 impl Default for TableauConfig {
@@ -543,6 +545,7 @@ impl Default for TableauConfig {
             optimization_enabled: true,
             rdf11_mode: false,                // RDF-star enabled by default
             quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
+            enable_clause_optimization: true, // Enable clause optimization by default
         }
     }
 }

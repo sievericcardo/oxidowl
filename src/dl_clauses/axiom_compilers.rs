@@ -623,11 +623,49 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
 
                 Ok(vec![clause])
             }
-            // Handle property chains if they exist in the ontology model
-            _ => {
-                // For now, return empty for unsupported cases
-                // In a full implementation, this would handle property chains
-                Ok(Vec::new())
+            // Handle property chains: R₁ ∘ R₂ ∘ ... ∘ Rₙ ⊑ S
+            // Generates: R₁(x,y₁) ∧ R₂(y₁,y₂) ∧ ... ∧ Rₙ(yₙ₋₁,z) → S(x,z)
+            crate::ontology::ObjectPropertyExpression::PropertyChain(chain) => {
+                if chain.is_empty() {
+                    return Ok(Vec::new());
+                }
+
+                // Create variables for the chain: x, y₁, y₂, ..., yₙ₋₁, z
+                let var_x = self.fresh_variable();
+                let var_z = self.fresh_variable();
+                
+                // Create intermediate variables for chain links
+                let mut intermediate_vars = Vec::new();
+                for _ in 0..(chain.len().saturating_sub(1)) {
+                    intermediate_vars.push(self.fresh_variable());
+                }
+
+                // Build body atoms for each property in the chain
+                let mut body_atoms = Vec::new();
+                for (i, prop_expr) in chain.iter().enumerate() {
+                    let prop_name = self.object_property_expression_to_string(prop_expr);
+                    
+                    let subject = if i == 0 {
+                        var_x.clone()
+                    } else {
+                        intermediate_vars[i - 1].clone()
+                    };
+                    
+                    let object = if i == chain.len() - 1 {
+                        var_z.clone()
+                    } else {
+                        intermediate_vars[i].clone()
+                    };
+                    
+                    body_atoms.push(DLAtom::role_assertion(&prop_name, &subject, &object));
+                }
+
+                // Build head atom for super property
+                let super_prop_name = self.object_property_expression_to_string(&axiom.super_property);
+                let head_atom = DLAtom::role_assertion(&super_prop_name, &var_x, &var_z);
+
+                let clause = DLClause::new(vec![head_atom], body_atoms, self.next_clause_id());
+                Ok(vec![clause])
             }
         }
     }

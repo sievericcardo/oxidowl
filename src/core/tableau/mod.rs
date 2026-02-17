@@ -80,6 +80,9 @@ pub struct Tableau {
     /// Clause checker for DL clause validation (optional)
     pub clause_checker: Option<ClauseChecker>,
 
+    /// Clause index for fast lookup (optional)
+    pub clause_index: Option<ClauseIndex>,
+
     /// Reference to the ontology for querying axioms during reasoning
     pub ontology: Arc<Ontology>,
 
@@ -173,12 +176,14 @@ impl Tableau {
                 optimization_enabled: true,
                 rdf11_mode: false,                // RDF-star enabled by default
                 quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
+                enable_clause_optimization: true, // Enable clause optimization by default
             },
             pending_queue: VecDeque::new(),
             completion_strategy: CompletionStrategy::default(),
             blocking_strategy: BlockingStrategy,
             expansion_strategy: DefaultExpansionStrategy::default(),
             clause_checker: None, // Will be populated when ontology is loaded
+            clause_index: None,   // Will be populated when ontology is loaded
             ontology,
             concept_cache: HashMap::new(),
             role_cache: HashMap::new(),
@@ -241,31 +246,21 @@ impl Tableau {
             self.add_node(NodeType::Root)?;
         }
 
-        // Process deterministic clauses to extract initial concepts and constraints
-        // For consistency checking, we add concepts to the root node that represent
-        // the ontology axioms. Key axioms to process:
-        // 1. EquivalentClasses - bidirectional implications
-        // 2. DisjointUnion - coverage and disjointness constraints
-        // 3. DisjointClasses - disjointness constraints
-        // 4. SubClassOf - subsumption constraints
-
-        // For now, we note that DL clauses have been generated
-        // The actual tableau expansion should use these clauses via the
-        // completion rules that process them
-
-        // Store reference to the ontology's clauses for use during expansion
-        // This is a simplified implementation - a full implementation would
-        // convert DL clauses into tableau concepts and rules
-
-        // Process axioms directly to ensure they are applied to the tableau
-        // For consistency checking, we only need to process ClassAssertion axioms
-        // Other axioms (EquivalentClasses, DisjointClasses, SubClassOf) are handled
-        // via the DL clause generation and don't need explicit processing here
+        // Process all axioms to ensure they are applied to the tableau
+        // The DL clauses generated above provide a normalized representation,
+        // but we also need to process axioms directly to initialize the tableau state
+        // with the appropriate concepts and constraints.
+        //
+        // Key axiom processing:
+        // 1. EquivalentClasses - bidirectional implications (C1 ≡ C2)
+        // 2. DisjointUnion - coverage and pairwise disjointness
+        // 3. DisjointClasses - pairwise disjointness constraints
+        // 4. SubClassOf - subsumption constraints (A ⊑ B)
+        // 5. ClassAssertion - individual concept membership (a : C)
+        //
+        // All axiom types are now processed to ensure complete tableau initialization
         for axiom in ontology.axioms() {
-            // Only process axioms that affect the tableau state
-            if matches!(axiom, crate::ontology::Axiom::ClassAssertion(_)) {
-                self.process_axiom(axiom)?;
-            }
+            self.process_axiom(axiom)?;
         }
 
         Ok(())

@@ -9,7 +9,7 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::{Annotation, AnnotationValue, IRI, Ontology};
-use log::warn;
+use log::{info, warn};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -77,6 +77,8 @@ pub struct ImportManagerConfig {
     pub validate_imports: bool,
     /// Whether to merge imported axioms
     pub merge_imports: bool,
+    /// HTTP timeout for remote ontology fetching
+    pub timeout: Option<std::time::Duration>,
 }
 
 impl Default for ImportManagerConfig {
@@ -88,6 +90,7 @@ impl Default for ImportManagerConfig {
             url_mappings: HashMap::new(),
             validate_imports: true,
             merge_imports: true,
+            timeout: Some(std::time::Duration::from_secs(30)),
         }
     }
 }
@@ -570,31 +573,116 @@ impl ImportManager {
             return Ok(None);
         }
 
-        // For security and simplicity, we'll only support well-known ontology URLs
-        // In a full implementation, this would make HTTP requests
-        match url_str {
-            "http://www.w3.org/2002/07/owl#" => {
-                // Return a basic OWL ontology with core definitions
-                let mut ontology = Ontology::new();
-                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
-                Ok(Some(ontology))
+        #[cfg(feature = "http-imports")]
+        {
+            // Full HTTP import implementation with reqwest
+            use std::time::Duration;
+            
+            info!("Fetching ontology from URL: {}", url_str);
+            
+            // Create HTTP client with timeout
+            let timeout = self.config.timeout.unwrap_or(Duration::from_secs(30));
+            let client = reqwest::blocking::Client::builder()
+                .timeout(timeout)
+                .user_agent("OxidOWL/0.10.0")
+                .redirect(reqwest::redirect::Policy::limited(5))
+                .build()
+                .map_err(|e| OxidowlError::ImportError { 
+                    message: format!("Failed to create HTTP client: {}", e)
+                })?;
+            
+            // Make request with content negotiation
+            let response = client
+                .get(url_str)
+                .header("Accept", "application/rdf+xml, text/turtle, application/owl+xml, application/x-turtle, */*")
+                .send()
+                .map_err(|e| OxidowlError::ImportError { 
+                    message: format!("HTTP request failed: {}", e)
+                })?;
+            
+            // Check status
+            if !response.status().is_success() {
+                return Err(OxidowlError::ImportError {
+                    message: format!(
+                        "HTTP request failed with status: {}",
+                        response.status()
+                    )
+                });
             }
-            "http://www.w3.org/2000/01/rdf-schema#" => {
-                // Return a basic RDFS ontology
-                let mut ontology = Ontology::new();
-                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
-                Ok(Some(ontology))
-            }
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => {
-                // Return a basic RDF ontology
-                let mut ontology = Ontology::new();
-                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
-                Ok(Some(ontology))
-            }
-            _ => {
-                // For unknown URLs, log a warning and return None
-                warn!("Cannot load remote ontology from URL: {url_str}");
-                Ok(None)
+            
+            // Get content type to determine parser
+            let content_type = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "application/rdf+xml".to_string());
+            
+            // Download content
+            let content = response
+                .text()
+                .map_err(|e| OxidowlError::ImportError { 
+                    message: format!("Failed to read response: {}", e)
+                })?;
+            
+            // Parse based on content type
+            let ontology = match content_type.as_str() {
+                ct if ct.contains("turtle") || ct.contains("ttl") => {
+                    crate::parsers::turtle::parse(&content)?
+                }
+                ct if ct.contains("rdf+xml") || ct.contains("owl+xml") => {
+                    crate::parsers::owl_xml::parse(&content)?
+                }
+                ct if ct.contains("functional") => {
+                    crate::parsers::functional::parse(&content)?
+                }
+                _ => {
+                    // Try to auto-detect format
+                    if content.trim().starts_with("<?xml") {
+                        crate::parsers::owl_xml::parse(&content)?
+                    } else if content.trim().starts_with("@prefix") || content.trim().starts_with("PREFIX") {
+                        crate::parsers::turtle::parse(&content)?
+                    } else {
+                        return Err(OxidowlError::ParseError(format!(
+                            "Unknown content type: {}",
+                            content_type
+                        )));
+                    }
+                }
+            };
+            
+            info!("Successfully fetched and parsed ontology from {}", url_str);
+            Ok(Some(ontology))
+        }
+        
+        #[cfg(not(feature = "http-imports"))]
+        {
+            // Fallback to well-known ontology support when HTTP imports disabled
+            match url_str {
+                "http://www.w3.org/2002/07/owl#" => {
+                    // Return a basic OWL ontology with core definitions
+                    let mut ontology = Ontology::new();
+                    ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                    Ok(Some(ontology))
+                }
+                "http://www.w3.org/2000/01/rdf-schema#" => {
+                    // Return a basic RDFS ontology
+                    let mut ontology = Ontology::new();
+                    ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                    Ok(Some(ontology))
+                }
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => {
+                    // Return a basic RDF ontology
+                    let mut ontology = Ontology::new();
+                    ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                    Ok(Some(ontology))
+                }
+                _ => {
+                    // For unknown URLs, log a warning and return None
+                    warn!("HTTP imports disabled - cannot load remote ontology from URL: {}", url_str);
+                    warn!("Enable the 'http-imports' feature to support HTTP import fetching");
+                    Ok(None)
+                }
             }
         }
     }

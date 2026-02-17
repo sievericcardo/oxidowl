@@ -557,6 +557,107 @@ impl TableauExecutor {
         Ok(())
     }
 
+    /// Apply preemptive clause consequences for optimization
+    /// Query the clause checker to find clauses mentioning a class and add implied concepts
+    fn apply_preemptive_clause_consequences(
+        tableau: &mut super::Tableau,
+        node_id: NodeId,
+        class_iri: &IRI,
+    ) -> Result<()> {
+        // Query the clause index for clauses mentioning this class
+        // Clone the clauses to avoid borrow conflicts
+        let relevant_clauses: Vec<_> = if let Some(ref index) = tableau.clause_index {
+            index.get_candidate_clause_refs(&[class_iri.as_str().to_string()])
+                .into_iter()
+                .map(|c| c.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        debug!(
+            "Found {} relevant clauses for class {} at node {}",
+            relevant_clauses.len(),
+            class_iri,
+            node_id
+        );
+
+        // For each relevant clause, check if the body is satisfied
+        // If so, add the head consequences preemptively
+        for clause in &relevant_clauses {
+            // Check if this is a simple Horn clause: Body → Head
+            // where Body mentions the current class
+            if clause.body.iter().any(|atom| {
+                // Check if this is a concept atom (single argument) with matching predicate
+                atom.arguments.len() == 1 && atom.predicate == class_iri.as_str()
+            }) {
+                // Check if all body atoms are satisfied at this node
+                let body_satisfied = clause.body.iter().all(|atom| {
+                    Self::check_atom_satisfied(tableau, node_id, atom)
+                });
+
+                if body_satisfied {
+                    // Add head consequences
+                    for head_atom in &clause.head {
+                        // Check if this is a concept atom (single argument)
+                        if head_atom.arguments.len() == 1 {
+                            let concept_iri = &head_atom.predicate;
+                            
+                            // Add the implied concept to the node
+                            let implied_concept = ConceptLabel::Atomic(concept_iri.clone());
+                            
+                            // Check if already present to avoid duplicates
+                            if let Some(node) = tableau.nodes.get(node_id) {
+                                if !node.concepts.contains(&implied_concept) {
+                                    tableau.add_concept_to_node(node_id, implied_concept)?;
+                                    debug!(
+                                        "Preemptively added concept {} to node {} via clause {}",
+                                        concept_iri, node_id, clause.id
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if an atom is satisfied at a node
+    fn check_atom_satisfied(
+        tableau: &super::Tableau,
+        node_id: NodeId,
+        atom: &crate::dl_clauses::DLAtom,
+    ) -> bool {
+        // Check if this is a concept atom (single argument)
+        if atom.arguments.len() == 1 {
+            let concept_iri = &atom.predicate;
+            
+            // Check if the concept is in the node's concept set
+            if let Some(node) = tableau.nodes.get(node_id) {
+                node.concepts.iter().any(|c| match c {
+                    ConceptLabel::Atomic(name) => name == concept_iri,
+                    ConceptLabel::Complex(expr) => {
+                        if let ClassExpression::Class(class) = expr.as_ref() {
+                            class.iri.as_str() == concept_iri
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                })
+            } else {
+                false
+            }
+        } else {
+            // For role atoms (2 arguments) or other atom types, return false for now
+            // A full implementation would check role edges, data property assertions, etc.
+            false
+        }
+    }
+
     /// Apply the NOMINAL rule
     /// Handles nominal concepts {a} by ensuring the node represents the specific individual
     fn apply_nominal_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
@@ -802,11 +903,20 @@ impl TableauExecutor {
                             node_id, class.iri
                         );
 
-                        // Note: In a full implementation, we could query clause_checker here
-                        // to find all clauses mentioning this class and preemptively add
-                        // their consequences to speed up reasoning. However, the standard
-                        // approach is to let the completion rules discover these through
-                        // normal tableau expansion.
+                        // Query clause_checker to find all clauses mentioning this class
+                        // and preemptively add their consequences to speed up reasoning
+                        if tableau.clause_checker.is_some() && tableau.config.enable_clause_optimization {
+                            Self::apply_preemptive_clause_consequences(
+                                tableau,
+                                node_id,
+                                &class.iri,
+                            )?;
+                        } else {
+                            // Standard approach: let completion rules discover consequences
+                            debug!(
+                                "Clause optimization disabled or no clause checker - using standard tableau expansion"
+                            );
+                        }
                     } else {
                         debug!("UNFOLD rule: no clause checker available for unfolding");
                     }

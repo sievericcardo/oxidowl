@@ -793,22 +793,28 @@ impl QueryProcessor {
     fn handle_class_satisfiable(
         &self,
         request: &OwllinkRequest,
-        _ontology: &Ontology,
+        ontology: &Ontology,
     ) -> Result<String> {
         if let Some(class_expr) = &request.class_expression {
-            // For now, implement a basic satisfiability check
-            // In a full implementation, this would use tableau reasoning
+            // Use full tableau reasoning for satisfiability checking
             let is_satisfiable = match class_expr {
                 ClassExpression::Class(class) => {
-                    // Check if it's owl:Nothing (always unsatisfiable)
+                    // Quick checks for special cases
                     if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
                         false
+                    } else if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+                        true
                     } else {
-                        true // Assume satisfiable for now
+                        // Create tableau for full satisfiability check
+                        self.check_satisfiability_with_tableau(class_expr, ontology)?
                     }
                 }
-                _ => true, // For complex expressions, assume satisfiable for now
+                _ => {
+                    // For complex expressions, use tableau reasoning
+                    self.check_satisfiability_with_tableau(class_expr, ontology)?
+                }
             };
+            
             Ok(format!(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
 <BooleanResponse result="{is_satisfiable}" />"#
@@ -817,6 +823,70 @@ impl QueryProcessor {
             Err(Error::reasoning(
                 "No class expression provided in satisfiability request",
             ))
+        }
+    }
+
+    /// Check satisfiability using tableau reasoning
+    fn check_satisfiability_with_tableau(
+        &self,
+        class_expr: &ClassExpression,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        use crate::core::tableau::Tableau;
+        use crate::core::tableau::executor::TableauExecutor;
+        use crate::core::tableau::state::TableauState;
+        use crate::config::ReasoningConfig;
+
+        // Create tableau configuration
+        let config = ReasoningConfig::default();
+
+        // Create a new tableau with ontology reference
+        let ontology_arc = std::sync::Arc::new(ontology.clone());
+        let mut tableau = Tableau::new(config, ontology_arc.clone());
+
+        // Load the ontology into the tableau (generates DL clauses, etc.)
+        tableau.load_ontology(ontology)?;
+
+        // Add the class expression as a concept to the root node
+        // First create the root node if it doesn't exist
+        if tableau.nodes.is_empty() {
+            let root_id = tableau.add_node(crate::core::tableau::node::NodeType::Root)?;
+            
+            // Add the class expression to the root node
+            let concept_label = self.class_expression_to_concept_label(class_expr);
+            tableau.add_concept_to_node(root_id, concept_label)?;
+        }
+
+        // Run tableau expansion
+        let final_state = TableauExecutor::run(&mut tableau)?;
+
+        // Check the final state
+        match final_state {
+            TableauState::Satisfiable => Ok(true),
+            TableauState::Unsatisfiable => Ok(false),
+            TableauState::Unknown => {
+                // If unknown, be conservative and assume satisfiable
+                log::warn!("Tableau reasoning returned Unknown state for {:?}", class_expr);
+                Ok(true)
+            }
+        }
+    }
+
+    /// Convert ClassExpression to ConceptLabel for tableau
+    fn class_expression_to_concept_label(
+        &self,
+        class_expr: &ClassExpression,
+    ) -> crate::core::tableau::node::ConceptLabel {
+        use crate::core::tableau::node::ConceptLabel;
+        
+        match class_expr {
+            ClassExpression::Class(class) => {
+                ConceptLabel::Atomic(class.iri.as_str().to_string())
+            }
+            _ => {
+                // For complex expressions, wrap in Complex variant
+                ConceptLabel::Complex(Box::new(class_expr.clone()))
+            }
         }
     }
 

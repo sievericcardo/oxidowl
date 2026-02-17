@@ -145,9 +145,9 @@ impl NTriplesParser {
 
         // Create the triple
         let triple = crate::semantics::Triple {
-            subject,
+            subject: subject.clone(),
             predicate: predicate.clone(),
-            object,
+            object: object.clone(),
         };
 
         // Add to ontology RDF graph
@@ -159,11 +159,113 @@ impl NTriplesParser {
         if let Some(pred_iri) = predicate.as_iri() {
             let pred_str = pred_iri.as_str();
 
-            // Handle common OWL 2 predicates
-            // Note: Full conversion would require more sophisticated mapping
-            if pred_str.contains("subClassOf") || pred_str.contains("type") {
-                // These would be converted to OWL axioms in a full implementation
-                // For now, the RDF graph storage is sufficient
+            // Handle common OWL 2 and RDFS predicates - convert to axioms
+            match pred_str {
+                "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
+                    // rdfs:subClassOf → SubClassOf axiom
+                    if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
+                        let subclass = crate::ontology::Class::new(
+                            crate::ontology::IRI::new(subj_iri.as_str())
+                        );
+                        let superclass = crate::ontology::Class::new(
+                            crate::ontology::IRI::new(obj_iri.as_str())
+                        );
+                        let axiom = crate::ontology::Axiom::SubClassOf(
+                            crate::ontology::SubClassOfAxiom {
+                                id: ontology.next_axiom_id(),
+                                subclass: crate::ontology::ClassExpression::Class(subclass),
+                                superclass: crate::ontology::ClassExpression::Class(superclass),
+                                annotations: vec![],
+                            }
+                        );
+                        ontology.add_axiom(axiom);
+                    }
+                }
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => {
+                    // rdf:type with owl:Class → ClassAssertion or Declaration
+                    if let Some(obj_iri) = object.as_iri() {
+                        if obj_iri.as_str() == "http://www.w3.org/2002/07/owl#Class" {
+                            // Declare the subject as a class
+                            if let Some(subj_iri) = subject.as_iri() {
+                                let axiom = crate::ontology::Axiom::Declaration(
+                                    crate::ontology::DeclarationAxiom {
+                                        id: ontology.next_axiom_id(),
+                                        entity: crate::ontology::Entity::Class(
+                                            crate::ontology::IRI::new(subj_iri.as_str())
+                                        ),
+                                    }
+                                );
+                                ontology.add_axiom(axiom);
+                            }
+                        } else {
+                            // Class assertion: individual is instance of class
+                            if let Some(subj_iri) = subject.as_iri() {
+                                let individual = crate::ontology::Individual::named(
+                                    crate::ontology::IRI::new(subj_iri.as_str())
+                                );
+                                let class = crate::ontology::Class::new(
+                                    crate::ontology::IRI::new(obj_iri.as_str())
+                                );
+                                let axiom = crate::ontology::Axiom::ClassAssertion(
+                                    crate::ontology::ClassAssertionAxiom {
+                                        id: ontology.next_axiom_id(),
+                                        individual,
+                                        class: crate::ontology::ClassExpression::Class(class),
+                                        annotations: vec![],
+                                    }
+                                );
+                                ontology.add_axiom(axiom);
+                            }
+                        }
+                    }
+                }
+                "http://www.w3.org/2002/07/owl#equivalentClass" => {
+                    // owl:equivalentClass → EquivalentClasses axiom
+                    if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
+                        let class1 = crate::ontology::Class::new(
+                            crate::ontology::IRI::new(subj_iri.as_str())
+                        );
+                        let class2 = crate::ontology::Class::new(
+                            crate::ontology::IRI::new(obj_iri.as_str())
+                        );
+                        let axiom = crate::ontology::Axiom::EquivalentClasses(
+                            crate::ontology::EquivalentClassesAxiom {
+                                id: ontology.next_axiom_id(),
+                                classes: vec![
+                                    crate::ontology::ClassExpression::Class(class1),
+                                    crate::ontology::ClassExpression::Class(class2),
+                                ],
+                                annotations: vec![],
+                            }
+                        );
+                        ontology.add_axiom(axiom);
+                    }
+                }
+                "http://www.w3.org/2002/07/owl#disjointWith" => {
+                    // owl:disjointWith → DisjointClasses axiom
+                    if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
+                        let class1 = crate::ontology::Class::new(
+                            crate::ontology::IRI::new(subj_iri.as_str())
+                        );
+                        let class2 = crate::ontology::Class::new(
+                            crate::ontology::IRI::new(obj_iri.as_str())
+                        );
+                        let axiom = crate::ontology::Axiom::DisjointClasses(
+                            crate::ontology::DisjointClassesAxiom {
+                                id: ontology.next_axiom_id(),
+                                classes: vec![
+                                    crate::ontology::ClassExpression::Class(class1),
+                                    crate::ontology::ClassExpression::Class(class2),
+                                ],
+                                annotations: vec![],
+                            }
+                        );
+                        ontology.add_axiom(axiom);
+                    }
+                }
+                _ => {
+                    // For other predicates, RDF graph storage is sufficient
+                }
             }
         }
 

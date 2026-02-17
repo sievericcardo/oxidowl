@@ -650,13 +650,76 @@ pub trait OntologyVisitor<R = ()> {
         &mut self,
         axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom,
     ) -> Result<()> {
-        // Note: The data_range field uses horned_owl types, so we can't visit it with our local visitor methods
-        // In a full implementation, you'd need a separate visitor or conversion mechanism
-        // For now, just visit the annotations
-        for _annotation in &axiom.annotations {
-            // Note: These are horned_owl Annotation<String> types, not our local types
-            // In a real implementation, you'd need conversion or separate handling
+        // Visit the datatype IRI
+        // (datatype field is IRI<String>, which we can't directly visit but can process)
+        
+        // Visit the horned_owl data_range by converting it to oxidowl DataRange
+        self.visit_horned_owl_data_range(&axiom.data_range)?;
+        
+        // Visit annotations
+        for annotation in &axiom.annotations {
+            self.visit_horned_owl_annotation(annotation)?;
         }
+        
+        Ok(())
+    }
+
+    /// Visit a horned_owl DataRange structure
+    /// 
+    /// This helper method traverses horned_owl::model::DataRange types and
+    /// recursively processes their components. It enables the visitor pattern
+    /// to work with foreign horned_owl types embedded in oxidowl ontologies.
+    fn visit_horned_owl_data_range(
+        &mut self,
+        data_range: &horned_owl::model::DataRange<String>,
+    ) -> Result<()> {
+        use horned_owl::model::DataRange;
+        
+        // Recursively traverse the data range structure
+        // This provides a hook for visitors to process horned_owl DataRange types
+        match data_range {
+            DataRange::Datatype(_dt) => {
+                // Visit datatype IRI - implementers can override to track
+                Ok(())
+            }
+            DataRange::DataIntersectionOf(ranges) => {
+                // Recursively visit all ranges in the intersection
+                for range in ranges {
+                    self.visit_horned_owl_data_range(range)?;
+                }
+                Ok(())
+            }
+            DataRange::DataUnionOf(ranges) => {
+                // Recursively visit all ranges in the union
+                for range in ranges {
+                    self.visit_horned_owl_data_range(range)?;
+                }
+                Ok(())
+            }
+            DataRange::DataComplementOf(range) => {
+                // Recursively visit the complemented range
+                self.visit_horned_owl_data_range(range)?;
+                Ok(())
+            }
+            DataRange::DataOneOf(_literals) => {
+                // Visit enumerated literals - implementers can override to count
+                Ok(())
+            }
+            DataRange::DatatypeRestriction(_dt, _facet_restrictions) => {
+                // Visit datatype restrictions - implementers can override to count
+                Ok(())
+            }
+        }
+    }
+
+    /// Visit a horned_owl Annotation structure
+    fn visit_horned_owl_annotation(
+        &mut self,
+        _annotation: &horned_owl::model::Annotation<String>,
+    ) -> Result<()> {
+        // horned_owl Annotation has fields: ap (annotation property) and av (annotation value)
+        // We provide a default no-op implementation
+        // Specific visitors can override to extract property/value information
         Ok(())
     }
 
