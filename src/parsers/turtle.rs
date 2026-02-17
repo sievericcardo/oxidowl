@@ -158,7 +158,7 @@ pub struct TurtleParser {
 /// Token types for enhanced parsing
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
-    IRI(String),
+    Iri(String),
     PrefixedName(String, String), // prefix, local
     Literal(String),
     BlankNode(String),
@@ -1169,7 +1169,7 @@ impl TurtleParser {
 
             // Convert to token and resolve
             let subject_token = if subject_iri.starts_with('<') && subject_iri.ends_with('>') {
-                Token::IRI(subject_iri[1..subject_iri.len() - 1].to_string())
+                Token::Iri(subject_iri[1..subject_iri.len() - 1].to_string())
             } else if subject_iri.contains(':') {
                 let parts: Vec<&str> = subject_iri.splitn(2, ':').collect();
                 if parts.len() == 2 {
@@ -1254,7 +1254,7 @@ impl TurtleParser {
                                                     .starts_with('<')
                                                     && class_token_str.ends_with('>')
                                                 {
-                                                    Token::IRI(
+                                                    Token::Iri(
                                                         class_token_str
                                                             [1..class_token_str.len() - 1]
                                                             .to_string(),
@@ -1318,7 +1318,7 @@ impl TurtleParser {
                                     let class_token = if class_token_str.starts_with('<')
                                         && class_token_str.ends_with('>')
                                     {
-                                        Token::IRI(
+                                        Token::Iri(
                                             class_token_str[1..class_token_str.len() - 1]
                                                 .to_string(),
                                         )
@@ -1617,7 +1617,7 @@ impl TurtleParser {
                     Token::PrefixedName("owl".to_string(), "Thing".to_string())
                 }
             } else if class_name.starts_with('<') && class_name.ends_with('>') {
-                Token::IRI(class_name[1..class_name.len() - 1].to_string())
+                Token::Iri(class_name[1..class_name.len() - 1].to_string())
             } else {
                 return Err(Error::ontology_parsing(format!(
                     "Invalid class name: {}",
@@ -1989,7 +1989,7 @@ impl TurtleParser {
                 '>' if !in_literal => {
                     if in_iri {
                         current_token.push(ch);
-                        tokens.push(Token::IRI(
+                        tokens.push(Token::Iri(
                             current_token[1..current_token.len() - 1].to_string(),
                         ));
                         current_token.clear();
@@ -2241,7 +2241,7 @@ impl TurtleParser {
                 // Recursive case: quoted triple contains another quoted triple
                 Ok(RdfTerm::QuotedTriple(triple.clone()))
             }
-            Token::IRI(iri) => {
+            Token::Iri(iri) => {
                 let decoded = self.decode_escape_sequences(iri);
                 let url = url::Url::parse(&decoded).map_err(|e| {
                     Error::ontology_parsing(format!("Invalid IRI: {}", e))
@@ -2299,7 +2299,7 @@ impl TurtleParser {
     /// Resolve token to URI string
     fn resolve_token(&self, token: &Token, state: &ParseState) -> Result<String> {
         match token {
-            Token::IRI(iri) => Ok(self.decode_escape_sequences(iri)),
+            Token::Iri(iri) => Ok(self.decode_escape_sequences(iri)),
             Token::PrefixedName(prefix, local) => {
                 self.expand_prefixed_name(&format!("{prefix}:{local}"), state)
             }
