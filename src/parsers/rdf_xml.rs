@@ -357,11 +357,7 @@ impl RdfXmlParser {
         if uri.starts_with("http://") || uri.starts_with("https://") {
             uri.to_string()
         } else if let Some(base) = &self.config.base_uri {
-            if uri.starts_with('#') {
-                format!("{}{}", base, uri)
-            } else {
-                format!("{}{}", base, uri)
-            }
+            format!("{}{}", base, uri)
         } else {
             uri.to_string()
         }

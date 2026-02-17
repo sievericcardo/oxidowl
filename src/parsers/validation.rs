@@ -1694,8 +1694,8 @@ impl SyntaxValidator {
 
                 // Check for incomplete annotations BEFORE allowing them to continue
                 // This validation must run before the continue statement below
-                if trimmed.starts_with("Annotations:") {
-                    let after_keyword = trimmed[12..].trim();
+                if let Some(stripped) = trimmed.strip_prefix("Annotations:") {
+                    let after_keyword = stripped.trim();
                     let parts: Vec<&str> = after_keyword.split_whitespace().collect();
 
                     // Should have at least "property value" pattern

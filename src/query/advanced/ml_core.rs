@@ -1579,6 +1579,12 @@ pub struct StrategySelectionModel {
     default_strategy: ExecutionStrategy,
 }
 
+impl Default for StrategySelectionModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StrategySelectionModel {
     /// Create a new strategy selection model
     pub fn new() -> Self {

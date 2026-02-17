@@ -50,6 +50,12 @@ pub struct QueryStack {
     current_depth: usize,
 }
 
+impl Default for QueryStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Variable bindings for unification
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariableBindings {

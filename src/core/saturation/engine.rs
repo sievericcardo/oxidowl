@@ -152,11 +152,6 @@ impl SaturationEngine {
             concept_index: Arc::new(RwLock::new(ConceptIndex::new())),
         }
     }
-
-    /// Create an engine with default configuration
-    pub fn default() -> Self {
-        Self::new(SaturationConfig::default())
-    }
     
     /// Get completion graph cache
     pub fn completion_cache(&self) -> &CompletionGraphCache {

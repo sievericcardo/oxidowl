@@ -676,16 +676,12 @@ impl Reasoner {
                     for ont_axiom in ontology.axioms() {
                         match ont_axiom {
                             crate::ontology::Axiom::SubClassOf(ont_subclass) => {
-                                // Direct support
-                                if ont_subclass.subclass == subclass_axiom.subclass
-                                    && ont_subclass.superclass == subclass_axiom.superclass
+                                // Direct support or transitive support: A ⊑ B, B ⊑ C → A ⊑ C
+                                if (ont_subclass.subclass == subclass_axiom.subclass
+                                    && ont_subclass.superclass == subclass_axiom.superclass)
+                                    || ont_subclass.superclass == subclass_axiom.subclass
+                                    || ont_subclass.subclass == subclass_axiom.superclass
                                 {
-                                    explanation.push(ont_axiom.clone());
-                                }
-                                // Transitive support: A ⊑ B, B ⊑ C → A ⊑ C
-                                else if ont_subclass.superclass == subclass_axiom.subclass {
-                                    explanation.push(ont_axiom.clone());
-                                } else if ont_subclass.subclass == subclass_axiom.superclass {
                                     explanation.push(ont_axiom.clone());
                                 }
                             }
@@ -1790,15 +1786,15 @@ impl Reasoner {
         }
 
         // Check if object is a literal (data property assertion)
-        if object_raw.starts_with('"') {
+        if let Some(stripped) = object_raw.strip_prefix('"') {
             let individual = Individual::named(IRI::new(subject));
             let property = DataPropertyExpression::DataProperty(DataProperty {
                 iri: IRI::new(predicate),
             });
 
             // Parse literal value
-            let value = if let Some(quote_end) = object_raw[1..].find('"') {
-                object_raw[1..quote_end + 1].to_string()
+            let value = if let Some(quote_end) = stripped.find('"') {
+                stripped[..quote_end].to_string()
             } else {
                 object_raw.trim_matches('"').to_string()
             };

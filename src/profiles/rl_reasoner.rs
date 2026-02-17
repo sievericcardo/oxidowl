@@ -515,6 +515,12 @@ pub struct MaterializedKnowledgeBase {
     data_property_assertions: HashMap<(Individual, DataPropertyExpression), HashSet<String>>,
 }
 
+impl Default for MaterializedKnowledgeBase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MaterializedKnowledgeBase {
     /// Create a new knowledge base
     pub fn new() -> Self {
@@ -637,6 +643,12 @@ pub struct TBoxHierarchy {
     ranges: HashMap<ObjectPropertyExpression, HashSet<RLClassExpression>>,
 }
 
+impl Default for TBoxHierarchy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TBoxHierarchy {
     /// Create a new TBox hierarchy
     pub fn new() -> Self {
@@ -753,6 +765,12 @@ pub struct ForwardChainingEngine {
     max_iterations: usize,
     /// Rules fired counter
     rules_fired: usize,
+}
+
+impl Default for ForwardChainingEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ForwardChainingEngine {

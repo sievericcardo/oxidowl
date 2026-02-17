@@ -159,9 +159,7 @@ impl DLQueryEngine {
             let iri_string = ontology_iri.as_str();
             if !iri_string.is_empty() {
                 // Use the ontology IRI as the base for the default namespace
-                let namespace = if iri_string.ends_with('#') {
-                    iri_string.to_string()
-                } else if iri_string.ends_with('/') {
+                let namespace = if iri_string.ends_with('#') || iri_string.ends_with('/') {
                     iri_string.to_string()
                 } else {
                     format!("{}#", iri_string)

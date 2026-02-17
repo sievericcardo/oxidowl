@@ -388,6 +388,12 @@ impl ELConcept {
 #[derive(Debug)]
 pub struct ELNormalizer;
 
+impl Default for ELNormalizer {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl ELNormalizer {
     /// Create a new normalizer
     pub fn new() -> Self {
@@ -464,6 +470,12 @@ pub struct ConceptHierarchy {
     subsumptions: HashMap<ELConcept, HashSet<ELConcept>>,
     /// Transitive closure of subsumptions
     transitive_subsumptions: HashMap<ELConcept, HashSet<ELConcept>>,
+}
+
+impl Default for ConceptHierarchy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConceptHierarchy {
@@ -573,6 +585,12 @@ pub struct RoleHierarchy {
     transitive_inclusions: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
 }
 
+impl Default for RoleHierarchy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoleHierarchy {
     /// Create a new role hierarchy
     pub fn new() -> Self {
@@ -638,6 +656,12 @@ pub struct CompletionEngine {
     queue: VecDeque<Inference>,
     /// Statistics
     completion_steps: usize,
+}
+
+impl Default for CompletionEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CompletionEngine {
@@ -711,6 +735,12 @@ pub struct CompletionState {
     existential_fillers: HashMap<(ELConcept, ObjectPropertyExpression), HashSet<ELConcept>>,
     /// Role hierarchy reference
     role_hierarchy: Option<RoleHierarchy>,
+}
+
+impl Default for CompletionState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CompletionState {

@@ -2114,11 +2114,11 @@ impl FunctionalParser {
         }
 
         // Handle blank nodes (_:nodeID)
-        if iri.starts_with("_:") {
+        if let Some(stripped) = iri.strip_prefix("_:") {
             // Blank nodes are represented as-is in functional syntax
             // They are local identifiers within the ontology
             // Convert to a unique IRI in the blank node namespace
-            return Ok(format!("http://www.w3.org/2002/07/owl#blank{}", &iri[2..]));
+            return Ok(format!("http://www.w3.org/2002/07/owl#blank{}", stripped));
         }
 
         // Validate that non-bracketed tokens are not structural tokens or OWL keywords

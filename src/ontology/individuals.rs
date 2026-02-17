@@ -459,20 +459,14 @@ impl IndividualStore {
     ) -> Vec<&IndividualAssertion> {
         self.assertions
             .iter()
-            .filter_map(|assertion| {
-                if let IndividualAssertion::ClassAssertion {
-                    individual: ind,
-                    class: _,
-                } = assertion
-                {
-                    if ind == individual {
-                        Some(assertion)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            .filter(|assertion| {
+                matches!(
+                    assertion,
+                    IndividualAssertion::ClassAssertion {
+                        individual: ind,
+                        class: _,
+                    } if ind == individual
+                )
             })
             .collect()
     }

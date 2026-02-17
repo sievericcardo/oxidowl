@@ -519,9 +519,7 @@ impl QueryProcessor {
             // Extract resource URIs and variables
             for word in resource_part.split_whitespace() {
                 let word = word.trim_end_matches(&[',', '.', ';'][..]);
-                if word.starts_with('<') && word.ends_with('>') {
-                    resources.push(word.to_string());
-                } else if word.starts_with('?') {
+                if (word.starts_with('<') && word.ends_with('>')) || word.starts_with('?') {
                     resources.push(word.to_string());
                 }
             }
@@ -761,7 +759,7 @@ impl QueryProcessor {
                 format!("<{}>", prop.iri)
             }
             crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                format!("^{}", format!("<{}>", prop.iri))
+                format!("^<{}>", prop.iri)
             }
             // Add more cases as needed
             _ => "_:complex_property".to_string(),
