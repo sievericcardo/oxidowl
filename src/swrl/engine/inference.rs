@@ -216,7 +216,7 @@ impl BackwardChaining {
     pub fn execute(
         &mut self,
         rules: &[SWRLRule],
-        known_facts: &mut Vec<SWRLAtom>,
+        known_facts: &mut [SWRLAtom],
         ontology: &Arc<Ontology>,
         context: &mut SWRLExecutionContext,
     ) -> Result<SWRLExecutionResult> {
@@ -266,7 +266,7 @@ impl BackwardChaining {
     pub fn execute_with_goal(
         &mut self,
         rules: &[SWRLRule],
-        known_facts: &mut Vec<SWRLAtom>,
+        known_facts: &mut [SWRLAtom],
         _ontology: &Arc<Ontology>,
         _context: &mut SWRLExecutionContext,
         goal: &SWRLAtom,

@@ -35,16 +35,10 @@ impl ExplanationService {
                 for ontology_axiom in ontology.axioms() {
                     match ontology_axiom {
                         Axiom::SubClassOf(existing_axiom) => {
-                            // Direct match
+                            // Direct match or transitive support (simplified)
                             if existing_axiom.subclass == *subclass
-                                && existing_axiom.superclass == *superclass
+                                || existing_axiom.superclass == *superclass
                             {
-                                explanation.push(ontology_axiom.clone());
-                            }
-                            // Transitive support (simplified)
-                            else if existing_axiom.subclass == *subclass {
-                                explanation.push(ontology_axiom.clone());
-                            } else if existing_axiom.superclass == *superclass {
                                 explanation.push(ontology_axiom.clone());
                             }
                         }

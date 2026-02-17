@@ -498,9 +498,9 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "individual_class_{}_{}",
+                    "individual_class_{}_{:?}",
                     iri,
-                    format!("{:?}", class)
+                    class
                 ));
             }
             ABoxChange::ClassAssertionRemoved {
@@ -513,9 +513,9 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "individual_class_{}_{}",
+                    "individual_class_{}_{:?}",
                     iri,
-                    format!("{:?}", class)
+                    class
                 ));
             }
             ABoxChange::ObjectPropertyAssertionAdded {
@@ -535,9 +535,9 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "prop_{}_{}_{}",
+                    "prop_{}_{:?}_{}",
                     subject_iri,
-                    format!("{:?}", property),
+                    property,
                     object_iri
                 ));
             }
@@ -558,9 +558,9 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "prop_{}_{}_{}",
+                    "prop_{}_{:?}_{}",
                     subject_iri,
-                    format!("{:?}", property),
+                    property,
                     object_iri
                 ));
             }
@@ -576,9 +576,9 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "data_prop_{}_{}_{}",
+                    "data_prop_{}_{:?}_{}",
                     subject_iri,
-                    format!("{:?}", property),
+                    property,
                     value
                 ));
             }
@@ -594,9 +594,9 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "data_prop_{}_{}_{}",
+                    "data_prop_{}_{:?}_{}",
                     subject_iri,
-                    format!("{:?}", property),
+                    property,
                     value
                 ));
             }

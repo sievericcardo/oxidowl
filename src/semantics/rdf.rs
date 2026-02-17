@@ -144,7 +144,7 @@ impl RdfSimpleInterpretation {
     /// In RDF-star semantics, a quoted triple denotes a unique resource
     /// that represents the triple. This enables referential transparency:
     /// the same quoted triple always refers to the same resource.
-    pub fn interpret_quoted_triple(&self, triple: &Box<Triple>) -> Option<String> {
+    pub fn interpret_quoted_triple(&self, triple: &Triple) -> Option<String> {
         if self.rdf11_mode {
             return None;
         }

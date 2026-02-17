@@ -450,15 +450,11 @@ impl SWRLValidator {
 
         for atom in &rule.head {
             match atom {
-                SWRLAtom::ClassAtom { predicate, .. } => {
-                    if let ClassExpression::Class(class) = predicate {
-                        predicates.insert(class.iri.to_string());
-                    }
+                SWRLAtom::ClassAtom { predicate: ClassExpression::Class(class), .. } => {
+                    predicates.insert(class.iri.to_string());
                 }
-                SWRLAtom::ObjectPropertyAtom { predicate, .. } => {
-                    if let ObjectPropertyExpression::ObjectProperty(prop) = predicate {
-                        predicates.insert(prop.iri.to_string());
-                    }
+                SWRLAtom::ObjectPropertyAtom { predicate: ObjectPropertyExpression::ObjectProperty(prop), .. } => {
+                    predicates.insert(prop.iri.to_string());
                 }
                 SWRLAtom::DataPropertyAtom { predicate, .. } => {
                     // DataPropertyExpression always matches DataProperty in this context
@@ -478,15 +474,11 @@ impl SWRLValidator {
 
         for atom in &rule.body {
             match atom {
-                SWRLAtom::ClassAtom { predicate, .. } => {
-                    if let ClassExpression::Class(class) = predicate {
-                        predicates.insert(class.iri.to_string());
-                    }
+                SWRLAtom::ClassAtom { predicate: ClassExpression::Class(class), .. } => {
+                    predicates.insert(class.iri.to_string());
                 }
-                SWRLAtom::ObjectPropertyAtom { predicate, .. } => {
-                    if let ObjectPropertyExpression::ObjectProperty(prop) = predicate {
-                        predicates.insert(prop.iri.to_string());
-                    }
+                SWRLAtom::ObjectPropertyAtom { predicate: ObjectPropertyExpression::ObjectProperty(prop), .. } => {
+                    predicates.insert(prop.iri.to_string());
                 }
                 SWRLAtom::DataPropertyAtom { predicate, .. } => {
                     // DataPropertyExpression always matches DataProperty in this context

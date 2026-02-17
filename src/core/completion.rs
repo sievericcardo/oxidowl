@@ -527,21 +527,19 @@ impl CompletionRuleSet {
         let mut result = RuleResult::empty();
 
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::ObjectIntersectionOf(conjuncts),
             dependencies,
         } = &application.context
         {
             // Extract conjuncts from intersection
-            if let ClassExpression::ObjectIntersectionOf(conjuncts) = concept {
-                let individual = string_to_individual(application.node.clone());
-                for conjunct in conjuncts {
-                    // Add each conjunct to the same individual
-                    result.concept_additions.push((
-                        individual.clone(),
-                        conjunct.clone(),
-                        Arc::clone(dependencies),
-                    ));
-                }
+            let individual = string_to_individual(application.node.clone());
+            for conjunct in conjuncts {
+                // Add each conjunct to the same individual
+                result.concept_additions.push((
+                    individual.clone(),
+                    conjunct.clone(),
+                    Arc::clone(dependencies),
+                ));
             }
         }
 
@@ -553,23 +551,21 @@ impl CompletionRuleSet {
         let mut result = RuleResult::empty();
 
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::ObjectUnionOf(disjuncts),
             dependencies: _,
         } = &application.context
         {
             // Extract disjuncts from union
-            if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
-                // Create branching choices for each disjunct (simplified)
-                let mut choices = Vec::with_capacity(disjuncts.len());
-                for i in 0..disjuncts.len() {
-                    choices.push(format!("Disjunct {i}"));
-                }
-
-                // Create simple branching point
-                result
-                    .branching_points
-                    .push((String::from("GroundDisjunction"), choices));
+            // Create branching choices for each disjunct (simplified)
+            let mut choices = Vec::with_capacity(disjuncts.len());
+            for i in 0..disjuncts.len() {
+                choices.push(format!("Disjunct {i}"));
             }
+
+            // Create simple branching point
+            result
+                .branching_points
+                .push((String::from("GroundDisjunction"), choices));
         }
 
         Ok(result)
@@ -580,31 +576,29 @@ impl CompletionRuleSet {
         let mut result = RuleResult::empty();
 
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::ObjectSomeValuesFrom { property, filler },
             dependencies,
         } = &application.context
         {
             // Extract role and filler from existential restriction
-            if let ClassExpression::ObjectSomeValuesFrom { property, filler } = concept {
-                // Create a new individual as witness
-                let witness_individual = Individual::fresh();
-                let source_individual = string_to_individual(application.node.clone());
+            // Create a new individual as witness
+            let witness_individual = Individual::fresh();
+            let source_individual = string_to_individual(application.node.clone());
 
-                // Add role assertion between current individual and witness
-                result.role_additions.push((
-                    source_individual,
-                    witness_individual.clone(),
-                    property.clone(),
-                    Arc::clone(dependencies),
-                ));
+            // Add role assertion between current individual and witness
+            result.role_additions.push((
+                source_individual,
+                witness_individual.clone(),
+                property.clone(),
+                Arc::clone(dependencies),
+            ));
 
-                // Add filler concept to the witness individual
-                result.concept_additions.push((
-                    witness_individual,
-                    (**filler).clone(),
-                    Arc::clone(dependencies),
-                ));
-            }
+            // Add filler concept to the witness individual
+            result.concept_additions.push((
+                witness_individual,
+                (**filler).clone(),
+                Arc::clone(dependencies),
+            ));
         }
 
         Ok(result)
@@ -709,9 +703,9 @@ impl CompletionRuleSet {
                 let deps = Arc::clone(&application.dependencies);
                 let target = existing_successors[allowed - 1].clone();
 
-                for i in allowed..existing {
+                for successor in existing_successors.iter().skip(allowed).take(existing - allowed) {
                     result.merges.push((
-                        existing_successors[i].clone(),
+                        successor.clone(),
                         target.clone(),
                         Arc::clone(&deps),
                     ));
@@ -847,21 +841,19 @@ impl CompletionRuleSet {
 
         // Unfold concept definitions from TBox
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::Class(named_class),
             dependencies,
         } = &application.context
         {
             // Look for equivalent class axioms that define this concept
-            if let ClassExpression::Class(named_class) = concept {
-                // Check if we have a definition for this class
-                if let Some(definition) = self.get_concept_definition(named_class) {
-                    // Add the definition as a new concept assertion
-                    result.concept_additions.push((
-                        string_to_individual(application.node.clone()),
-                        definition,
-                        Arc::clone(dependencies),
-                    ));
-                }
+            // Check if we have a definition for this class
+            if let Some(definition) = self.get_concept_definition(named_class) {
+                // Add the definition as a new concept assertion
+                result.concept_additions.push((
+                    string_to_individual(application.node.clone()),
+                    definition,
+                    Arc::clone(dependencies),
+                ));
             }
         }
 

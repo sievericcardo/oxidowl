@@ -463,39 +463,31 @@ impl QLValidator {
         axiom: &Axiom,
         report: &mut ProfileValidationReport,
     ) {
-        match axiom {
-            Axiom::ObjectPropertyAssertion(prop_axiom) => {
-                if !self.is_property_expression_allowed(&prop_axiom.property) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedPropertyExpression(format!(
-                            "{:?}",
-                            prop_axiom.property
-                        )),
-                        "Property expression not allowed in OWL 2 QL profile".to_string(),
-                    ));
-                }
-            }
-            _ => {} // Other axioms checked elsewhere
-        }
+        if let Axiom::ObjectPropertyAssertion(prop_axiom) = axiom
+            && !self.is_property_expression_allowed(&prop_axiom.property) {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedPropertyExpression(format!(
+                        "{:?}",
+                        prop_axiom.property
+                    )),
+                    "Property expression not allowed in OWL 2 QL profile".to_string(),
+                ));
+            } // Other axioms checked elsewhere
     }
 
     /// Check data ranges within an axiom
     #[allow(dead_code)]
     fn check_data_ranges_in_axiom(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
-        match axiom {
-            Axiom::DataPropertyRange(range_axiom) => {
-                if !self.is_data_range_allowed(&range_axiom.range) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedDataRange(format!(
-                            "{:?}",
-                            range_axiom.range
-                        )),
-                        "Data range not allowed in OWL 2 QL profile".to_string(),
-                    ));
-                }
-            }
-            _ => {} // Other axioms checked elsewhere
-        }
+        if let Axiom::DataPropertyRange(range_axiom) = axiom
+            && !self.is_data_range_allowed(&range_axiom.range) {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedDataRange(format!(
+                        "{:?}",
+                        range_axiom.range
+                    )),
+                    "Data range not allowed in OWL 2 QL profile".to_string(),
+                ));
+            } // Other axioms checked elsewhere
     }
 }
 

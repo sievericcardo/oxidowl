@@ -1083,27 +1083,27 @@ impl CostBasedOptimizer {
         // Recommend indices for frequently accessed properties
         for atom in &query.body_atoms {
             match atom {
-                QueryAtom::ObjectPropertyAtom { property, .. } => {
-                    if let ObjectPropertyExpression::ObjectProperty(_prop) = property {
-                        recommendations.push(super::optimizer::IndexRecommendation {
-                            index_type: "Hash".to_string(),
-                            expected_improvement: 2.5,
-                            creation_cost: 1.0,
-                            maintenance_cost: 1.2,
-                        });
-                    }
+                QueryAtom::ObjectPropertyAtom {
+                    property: ObjectPropertyExpression::ObjectProperty(_prop),
+                    ..
+                } => {
+                    recommendations.push(super::optimizer::IndexRecommendation {
+                        index_type: "Hash".to_string(),
+                        expected_improvement: 2.5,
+                        creation_cost: 1.0,
+                        maintenance_cost: 1.2,
+                    });
                 }
                 QueryAtom::ClassAtom {
-                    class_expression, ..
+                    class_expression: ClassExpression::Class(_class),
+                    ..
                 } => {
-                    if let ClassExpression::Class(_class) = class_expression {
-                        recommendations.push(super::optimizer::IndexRecommendation {
-                            index_type: "BTree".to_string(),
-                            expected_improvement: 1.8,
-                            creation_cost: 0.8,
-                            maintenance_cost: 1.0,
-                        });
-                    }
+                    recommendations.push(super::optimizer::IndexRecommendation {
+                        index_type: "BTree".to_string(),
+                        expected_improvement: 1.8,
+                        creation_cost: 0.8,
+                        maintenance_cost: 1.0,
+                    });
                 }
                 _ => {}
             }
@@ -2220,12 +2220,12 @@ impl AdvancedQueryRewriter {
     }
 
     fn matches_atom_type(&self, atom: &QueryAtom, atom_type: &str) -> bool {
-        match (atom, atom_type) {
-            (QueryAtom::ClassAtom { .. }, "Class") => true,
-            (QueryAtom::ObjectPropertyAtom { .. }, "ObjectProperty") => true,
-            (QueryAtom::DataPropertyAtom { .. }, "DataProperty") => true,
-            _ => false,
-        }
+        matches!(
+            (atom, atom_type),
+            (QueryAtom::ClassAtom { .. }, "Class")
+                | (QueryAtom::ObjectPropertyAtom { .. }, "ObjectProperty")
+                | (QueryAtom::DataPropertyAtom { .. }, "DataProperty")
+        )
     }
 
     fn apply_rewriting_rule(
@@ -2299,7 +2299,7 @@ impl AdvancedQueryRewriter {
             // Calculate relative improvement
             let improvement = (original_cost - rewritten_cost) / original_cost;
             // Clamp between -1.0 and 1.0
-            improvement.max(-1.0).min(1.0)
+            improvement.clamp(-1.0, 1.0)
         } else {
             // If we can't estimate original cost, assume modest improvement
             0.1

@@ -2068,7 +2068,7 @@ impl OWL2DLValidator {
             "http://www.w3.org/2001/XMLSchema#pattern" => {
                 // Pattern facets are applicable to most datatypes
                 // Validate the regular expression
-                if let Err(_) = regex::Regex::new(&restriction.value.to_string()) {
+                if regex::Regex::new(&restriction.value.to_string()).is_err() {
                     errors.push(ValidationError::new(
                         ValidationErrorType::InvalidDatatype,
                         format!(

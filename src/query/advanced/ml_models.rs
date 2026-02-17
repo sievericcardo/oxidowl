@@ -373,25 +373,24 @@ impl NeuralNetworkModel {
                         };
 
                         // Compute gradients for this layer
-                        for j in 0..layer.output_size {
-                            for k in 0..layer.input_size {
+                        for (j, &d) in delta.iter().enumerate().take(layer.output_size) {
+                            for (k, &inp) in input.iter().enumerate().take(layer.input_size) {
                                 let weight_idx = j * layer.input_size + k;
-                                layer_gradients[i].weight_gradients[weight_idx] +=
-                                    delta[j] * input[k];
+                                layer_gradients[i].weight_gradients[weight_idx] += d * inp;
                             }
-                            layer_gradients[i].bias_gradients[j] += delta[j];
+                            layer_gradients[i].bias_gradients[j] += d;
                         }
 
                         // Propagate error to previous layer
                         if i > 0 {
                             let mut new_delta = vec![0.0; layer.input_size];
-                            for j in 0..layer.input_size {
-                                for k in 0..layer.output_size {
+                            for (j, nd) in new_delta.iter_mut().enumerate() {
+                                for (k, &d) in delta.iter().enumerate().take(layer.output_size) {
                                     let weight_idx = k * layer.input_size + j;
-                                    new_delta[j] += delta[k] * layer.weights[weight_idx];
+                                    *nd += d * layer.weights[weight_idx];
                                 }
                                 // Apply activation derivative
-                                new_delta[j] *= self.activation_derivative(
+                                *nd *= self.activation_derivative(
                                     activations[i - 1][j],
                                     &self.layers[i - 1].activation,
                                 );
@@ -558,11 +557,11 @@ impl Layer {
         let mut output = vec![0.0; self.output_size];
 
         // Matrix multiplication: output = weights * input + bias
-        for i in 0..self.output_size {
-            for j in 0..self.input_size {
-                output[i] += self.weights[i * self.input_size + j] * input[j];
+        for (i, out) in output.iter_mut().enumerate() {
+            for (j, &inp) in input.iter().enumerate() {
+                *out += self.weights[i * self.input_size + j] * inp;
             }
-            output[i] += self.biases[i];
+            *out += self.biases[i];
         }
 
         // Apply activation function
