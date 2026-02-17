@@ -359,6 +359,7 @@ impl ConstrainingFacet {
 /// Datatype manager for handling OWL 2 datatypes
 pub struct DatatypeManager {
     datatype_definitions: HashMap<url::Url, DatatypeDefinitionAxiom>,
+    #[allow(dead_code)]
     facet_restrictions: HashMap<url::Url, Vec<FacetRestriction>>,
     datatype_hierarchy: HashMap<OWL2Datatype, HashSet<OWL2Datatype>>,
 }

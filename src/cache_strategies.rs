@@ -62,6 +62,7 @@ impl<V> CacheEntry<V> {
         self.last_accessed = Instant::now();
     }
 
+    #[allow(dead_code)]
     fn age(&self) -> Duration {
         self.created_at.elapsed()
     }

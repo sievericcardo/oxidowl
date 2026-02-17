@@ -543,7 +543,7 @@ impl QueryFeatureExtractor {
         start: usize,
     ) -> usize {
         let mut stack = vec![start];
-        let mut component_size = 0;
+        let mut _component_size = 0;
         let mut join_count = 0;
 
         while let Some(node) = stack.pop() {
@@ -552,7 +552,7 @@ impl QueryFeatureExtractor {
             }
 
             visited[node] = true;
-            component_size += 1;
+            _component_size += 1;
             join_count += graph[node].len();
 
             for &neighbor in &graph[node] {

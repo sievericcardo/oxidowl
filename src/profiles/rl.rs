@@ -120,6 +120,7 @@ impl RLValidator {
     }
 
     /// Check if a data property expression is allowed in RL
+    #[allow(dead_code)]
     fn is_data_property_expression_allowed(&self, expr: &DataPropertyExpression) -> bool {
         match expr {
             DataPropertyExpression::DataProperty(_) => true,

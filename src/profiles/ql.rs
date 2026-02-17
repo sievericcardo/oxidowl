@@ -23,6 +23,7 @@ use std::collections::HashSet;
 /// OWL 2 QL restricts the language to ensure polynomial-time query answering.
 pub struct QLValidator {
     /// Prohibited constructs in QL
+    #[allow(dead_code)]
     prohibited_constructs: HashSet<String>,
 }
 
@@ -251,6 +252,7 @@ impl QLValidator {
     }
 
     /// Check for prohibited axiom types in QL
+    #[allow(dead_code)]
     fn validate_axiom_types(
         &self,
         ontology: &Ontology,
@@ -415,6 +417,7 @@ impl QLValidator {
     }
 
     /// Check class expressions within an axiom
+    #[allow(dead_code)]
     fn check_class_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -457,6 +460,7 @@ impl QLValidator {
     }
 
     /// Check property expressions within an axiom
+    #[allow(dead_code)]
     fn check_property_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -479,6 +483,7 @@ impl QLValidator {
     }
 
     /// Check data ranges within an axiom
+    #[allow(dead_code)]
     fn check_data_ranges_in_axiom(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
         match axiom {
             Axiom::DataPropertyRange(range_axiom) => {

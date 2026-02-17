@@ -271,7 +271,7 @@ impl ProfileValidator for GenericValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::{ClassExpression, IRI, Ontology};
+    use crate::ontology::{Ontology};
 
     #[test]
     fn test_profile_validator_creation() {

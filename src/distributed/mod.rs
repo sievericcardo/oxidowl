@@ -519,6 +519,7 @@ impl Default for LoadBalancingConfig {
 /// Main distributed query processing service
 pub struct DistributedQueryProcessor {
     /// Configuration for the distributed system
+    #[allow(dead_code)]
     config: DistributedConfig,
 
     /// Cluster management component

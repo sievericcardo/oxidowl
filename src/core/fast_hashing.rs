@@ -318,6 +318,7 @@ fn compare_concepts_with_depth(a: &ClassExpression, b: &ClassExpression, depth: 
 }
 
 /// Compare two lists of concepts
+#[allow(dead_code)]
 fn compare_concept_lists(a: &[ClassExpression], b: &[ClassExpression]) -> std::cmp::Ordering {
     compare_concept_lists_with_depth(a, b, 0)
 }
@@ -338,6 +339,7 @@ fn compare_concept_lists_with_depth(a: &[ClassExpression], b: &[ClassExpression]
 }
 
 /// Compare two object properties
+#[allow(dead_code)]
 fn compare_object_properties(
     a: &ObjectPropertyExpression,
     b: &ObjectPropertyExpression,
@@ -406,6 +408,7 @@ fn compare_data_properties(
 }
 
 /// Compare two data ranges
+#[allow(dead_code)]
 fn compare_data_ranges(a: &DataRange, b: &DataRange) -> std::cmp::Ordering {
     compare_data_ranges_with_depth(a, b, 0)
 }

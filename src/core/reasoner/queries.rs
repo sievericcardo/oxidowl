@@ -706,6 +706,7 @@ impl QueryProcessor {
     }
 
     /// Extract triples for describe queries
+    #[allow(dead_code)]
     fn extract_describe_triples(
         &self,
         target_iri: &str,

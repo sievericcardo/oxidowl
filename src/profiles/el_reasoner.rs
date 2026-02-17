@@ -713,6 +713,7 @@ pub struct CompletionState {
     /// All computed subsumptions
     subsumptions: HashSet<(ELConcept, ELConcept)>,
     /// Existential fillers for each concept-role pair
+    #[allow(dead_code)]
     existential_fillers: HashMap<(ELConcept, ObjectPropertyExpression), HashSet<ELConcept>>,
     /// Role hierarchy reference
     role_hierarchy: Option<RoleHierarchy>,

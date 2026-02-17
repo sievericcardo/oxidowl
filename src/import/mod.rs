@@ -821,6 +821,7 @@ fn collect_namespace_from_iri(
     }
 }
 
+#[allow(dead_code)]
 fn collect_namespace_from_url(url: &url::Url, namespaces: &mut std::collections::HashSet<String>) {
     let url_str = url.as_str();
 

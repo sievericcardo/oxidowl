@@ -43,6 +43,7 @@ impl TableauExecutor {
     }
 
     /// Helper to create RuleApplication with proper fields
+    #[allow(dead_code)]
     fn create_rule_application(
         rule: CompletionRule,
         node_id: NodeId,
@@ -1156,6 +1157,7 @@ impl TableauExecutor {
     }
 
     /// Queue applicable rules for a newly added concept
+    #[allow(dead_code)]
     fn queue_rules_for_concept(
         tableau: &mut super::Tableau,
         node_id: NodeId,
@@ -1214,6 +1216,7 @@ impl TableauExecutor {
     }
 
     /// Queue rules for a class expression
+    #[allow(dead_code)]
     fn queue_rules_for_class_expression(
         tableau: &mut super::Tableau,
         node_id: NodeId,

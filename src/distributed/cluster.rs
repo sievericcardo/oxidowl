@@ -703,6 +703,7 @@ impl HealthMonitor {
 /// Node discovery service
 pub struct DiscoveryService {
     config: crate::distributed::ClusterConfig,
+    #[allow(dead_code)]
     discovered_nodes: HashMap<NodeId, NodeInfo>,
     shutdown_tx: Option<mpsc::Sender<()>>,
 }

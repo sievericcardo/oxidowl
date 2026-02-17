@@ -263,6 +263,7 @@ impl ExplanationService {
     }
 
     /// Find a chain of subsumption relationships
+    #[allow(dead_code)]
     fn find_subsumption_chain(
         &self,
         subclass: &ClassExpression,
@@ -276,6 +277,7 @@ impl ExplanationService {
     }
 
     /// Recursively find a path from subclass to superclass
+    #[allow(dead_code)]
     fn find_subsumption_path(
         &self,
         current: &ClassExpression,

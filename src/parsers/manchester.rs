@@ -24,6 +24,7 @@ impl Default for ManchesterParserConfig {
 /// Implements parsing according to the Manchester OWL Syntax specification
 #[derive(Debug, Clone)]
 pub struct ManchesterParser {
+    #[allow(dead_code)]
     config: ManchesterParserConfig,
     prefixes: HashMap<String, String>,
     current_position: usize,
@@ -101,6 +102,7 @@ impl ManchesterParser {
     }
 
     /// Parse a class name
+    #[allow(dead_code)]
     fn parse_class_name(&self, name: &str) -> Result<crate::ontology::IRI, OxidowlError> {
         self.resolve_iri(name.trim())
     }

@@ -347,6 +347,7 @@ impl ClassificationResult {
 #[derive(Debug, Clone)]
 struct ClassNode {
     name: String,
+    #[allow(dead_code)]#[allow(dead_code)]
     iri: String,
     children: Vec<ClassNode>,
 }

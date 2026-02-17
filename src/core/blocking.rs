@@ -245,6 +245,7 @@ pub struct DynamicBlocking {
 #[derive(Debug, Default)]
 struct BlockingStatistics {
     blocked_nodes: usize,
+    #[allow(dead_code)]
     total_comparisons: usize,
     false_positives: usize,
 }
@@ -319,6 +320,7 @@ fn signatures_equal(sig1: &[ConceptLabel], sig2: &[ConceptLabel]) -> bool {
 }
 
 /// Compute signature similarity (for dynamic blocking)
+#[allow(dead_code)]
 fn signature_similarity(sig1: &[ConceptLabel], sig2: &[ConceptLabel]) -> f64 {
     if sig1.is_empty() && sig2.is_empty() {
         return 1.0;
@@ -482,6 +484,7 @@ pub struct OptimalBlocking {
 struct OptimalBlockingStats {
     nodes_blocked: usize,
     blocking_checks: usize,
+    #[allow(dead_code)]
     cache_hits: usize,
 }
 

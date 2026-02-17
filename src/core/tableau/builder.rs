@@ -315,6 +315,7 @@ impl TableauBuilder {
         Ok(tableau)
     }
 
+    #[allow(dead_code)]
     fn create_expansion_strategy(&self) -> Result<DefaultExpansionStrategy> {
         // Create expansion strategy based on configuration
         // For now, we'll just use the default expansion strategy

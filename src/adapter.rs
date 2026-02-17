@@ -122,6 +122,7 @@ pub trait RdfStarCapable {
 /// reified using standard RDF reification vocabulary.
 pub struct HornedOwlAdapter {
     iri_cache: HashMap<String, IRI>,
+    #[allow(dead_code)]
     axiom_counter: u64,
     /// Counter for generating unique blank node identifiers during reification
     blank_node_counter: u64,
@@ -177,6 +178,7 @@ impl HornedOwlAdapter {
         format!("_:reify{}", self.blank_node_counter)
     }
 
+    #[allow(dead_code)]
     fn next_axiom_id(&mut self) -> AxiomId {
         self.axiom_counter += 1;
         self.axiom_counter

@@ -31,11 +31,13 @@ fn generate_axiom_id() -> u64 {
 /// 
 /// If a base URI is provided, relative IRIs will be resolved against it.
 /// Otherwise, relative IRIs without schemes will result in an error.
+#[allow(dead_code)]
 fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
     parse_iri_to_url_with_base(uri_str, None)
 }
 
 /// Parse an IRI with optional base URI for relative resolution
+#[allow(dead_code)]
 fn parse_iri_to_url_with_base(uri_str: &str, base: Option<&str>) -> Result<url::Url> {
     // Try to parse as absolute URL first
     if let Ok(url) = url::Url::parse(uri_str) {
@@ -179,6 +181,7 @@ enum Token {
 
 /// Parser state for handling complex structures
 #[derive(Debug)]
+#[allow(dead_code)]
 struct ParseState {
     prefixes: HashMap<String, String>,
     base_uri: Option<String>,
@@ -1047,240 +1050,6 @@ impl TurtleParser {
         }
 
         Ok(first_node)
-    }
-
-    /// Parse statements with semicolon-separated predicates (OLD VERSION - REPLACED ABOVE)
-    fn parse_semicolon_statement_old(
-        &self,
-        tokens: &[Token],
-        ontology: &mut Ontology,
-        state: &mut ParseState,
-    ) -> Result<()> {
-        if tokens.is_empty() {
-            return Ok(());
-        }
-
-        // Check if the statement starts with a blank node (anonymous subject)
-        // These are complex structures we don't fully parse yet, so skip them
-        if matches!(tokens[0], Token::LeftBracket) {
-            return Ok(());
-        }
-
-        // First token should be the subject
-        let subject = self.resolve_token(&tokens[0], state).map_err(|e| {
-            Error::ontology_parsing(format!("Failed to resolve subject token: {}", e))
-        })?;
-
-        // Process predicate-object pairs separated by semicolons
-        let mut i = 1;
-        let mut current_predicate: Option<String> = None;
-
-        while i < tokens.len() {
-            // Skip semicolons (mark end of predicate-object list, reset current predicate)
-            if matches!(tokens[i], Token::Semicolon) {
-                i += 1;
-                current_predicate = None;
-                continue;
-            }
-
-            // Skip periods (end of statement)
-            if matches!(tokens[i], Token::Period) {
-                break;
-            }
-
-            // We need at least predicate and object
-            if i + 1 >= tokens.len() {
-                break;
-            }
-
-            // If we don't have a current predicate, this token should be a predicate
-            // If we have a current predicate and see a comma, skip it and continue with same predicate
-            if matches!(tokens[i], Token::Comma) {
-                i += 1;
-                // Continue with the same predicate for the next object
-                continue;
-            }
-
-            let predicate = if let Some(ref pred) = current_predicate {
-                // Reuse the current predicate for comma-separated objects
-                pred.clone()
-            } else {
-                // Parse new predicate
-                let pred = self.resolve_token(&tokens[i], state).map_err(|e| {
-                    Error::ontology_parsing(format!(
-                        "Failed to resolve predicate token at index {}: {}",
-                        i, e
-                    ))
-                })?;
-                i += 1; // Move past the predicate
-                current_predicate = Some(pred.clone());
-                pred
-            };
-
-            // Check if the object is a complex structure (blank node, list, etc.) that we should skip
-            if i < tokens.len() {
-                match &tokens[i] {
-                    Token::LeftBracket | Token::LeftParen => {
-                        // Skip complex structures (blank nodes, lists)
-                        let mut depth = 1;
-                        let is_bracket = matches!(tokens[i], Token::LeftBracket);
-                        i += 1; // Move past opening bracket/paren
-
-                        while i < tokens.len() && depth > 0 {
-                            match tokens[i] {
-                                Token::LeftBracket if is_bracket => depth += 1,
-                                Token::RightBracket if is_bracket => depth -= 1,
-                                Token::LeftParen if !is_bracket => depth += 1,
-                                Token::RightParen if !is_bracket => depth -= 1,
-                                _ => {}
-                            }
-                            i += 1;
-                        }
-                        // After closing bracket/paren, continue to check for comma or semicolon
-                        continue;
-                    }
-                    Token::Literal(lit_value) => {
-                        // Handle literal values as data property assertions
-                        let literal_value = lit_value.clone();
-                        i += 1; // Move past literal
-
-                        // Check if there's a type annotation (^^datatype)
-                        let datatype = if i < tokens.len() {
-                            let next_token = &tokens[i];
-                            match next_token {
-                                Token::Keyword(kw) if kw.starts_with("^^") => {
-                                    // Extract datatype IRI
-                                    let dt_str = kw[2..].to_string();
-                                    i += 1; // Skip the type annotation
-
-                                    // Resolve prefix if needed
-                                    let resolved_dt =
-                                        if dt_str.contains(':') && !dt_str.starts_with("http") {
-                                            if let Some(colon_pos) = dt_str.find(':') {
-                                                let prefix = &dt_str[..colon_pos];
-                                                let local = &dt_str[colon_pos + 1..];
-                                                if let Some(base) = state.prefixes.get(prefix) {
-                                                    format!("{}{}", base, local)
-                                                } else {
-                                                    dt_str
-                                                }
-                                            } else {
-                                                dt_str
-                                            }
-                                        } else {
-                                            dt_str
-                                        };
-
-                                    let dt_iri = IRI::new(&resolved_dt);
-                                    dt_iri.to_url().ok()
-                                }
-                                _ => None,
-                            }
-                        } else {
-                            None
-                        };
-
-                        // Create DataPropertyAssertion
-                        let subject_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let data_property = DataProperty {
-                            iri: IRI::new(&predicate),
-                        };
-                        let literal = Literal {
-                            value: literal_value.trim_matches('"').to_string(),
-                            language: None,
-                            datatype,
-                        };
-
-                        let axiom = DataPropertyAssertionAxiom {
-                            id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(
-                                data_property,
-                            ),
-                            individual: subject_ind,
-                            value: literal,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
-                        continue;
-                    }
-                    _ => {} // Continue with normal processing
-                }
-            }
-
-            // Try to resolve the object token for simple objects
-            let object = match self.resolve_token(&tokens[i], state) {
-                Ok(obj) => obj,
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
-                        i, e
-                    );
-                    // Skip to next statement
-                    while i < tokens.len() && !matches!(tokens[i], Token::Period | Token::Semicolon)
-                    {
-                        i += 1;
-                    }
-                    current_predicate = None;
-                    continue;
-                }
-            };
-
-            // Process this triple
-            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), object)?;
-
-            // Move to next object or predicate
-            i += 1;
-
-            // Handle comma-separated objects for the same predicate
-            // (Note: this is now mostly handled by the top-level comma check,
-            //  but we keep this for additional complex cases)
-            while i < tokens.len() && matches!(tokens[i], Token::Comma) {
-                i += 1; // Skip comma
-                if i < tokens.len() && !matches!(tokens[i], Token::Semicolon | Token::Period) {
-                    // Skip complex objects like blank nodes that start with [
-                    if matches!(tokens[i], Token::LeftBracket) {
-                        // Skip to the end of the blank node
-                        let mut bracket_depth = 1;
-                        i += 1;
-                        while i < tokens.len() && bracket_depth > 0 {
-                            match tokens[i] {
-                                Token::LeftBracket => bracket_depth += 1,
-                                Token::RightBracket => bracket_depth -= 1,
-                                _ => {}
-                            }
-                            i += 1;
-                        }
-                        continue;
-                    }
-
-                    // Only process simple objects
-                    match self.resolve_token(&tokens[i], state) {
-                        Ok(next_object) => {
-                            self.process_enhanced_triple(
-                                ontology,
-                                subject.clone(),
-                                predicate.clone(),
-                                next_object,
-                            )?;
-                            i += 1;
-                        }
-                        Err(_) => {
-                            // Skip problematic tokens instead of failing
-                            i += 1;
-                        }
-                    }
-                }
-            }
-
-            // Reset current predicate if we hit a semicolon or period
-            if i < tokens.len() && matches!(tokens[i], Token::Semicolon | Token::Period) {
-                current_predicate = None;
-            }
-        }
-
-        Ok(())
     }
 
     /// Parse OWL disjoint union constructs
@@ -2839,6 +2608,7 @@ impl TurtleParser {
 
 /// Represents a parsed RDF triple
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Triple {
     subject: String,
     predicate: String,
@@ -2847,6 +2617,7 @@ struct Triple {
 
 /// Object part of an RDF triple
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 enum TripleObject {
     Uri(String),
     Literal(String),

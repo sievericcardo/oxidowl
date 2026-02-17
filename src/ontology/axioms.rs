@@ -634,6 +634,7 @@ impl AxiomTrait for Axiom {
 pub struct AxiomStore {
     axioms: HashMap<AxiomId, Axiom>,
     axioms_by_type: HashMap<AxiomType, HashSet<AxiomId>>,
+    #[allow(dead_code)]
     next_id: AxiomId,
 }
 

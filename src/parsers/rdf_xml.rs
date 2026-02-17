@@ -1003,6 +1003,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
 }
 
 /// Serialize an axiom to RDF/XML format
+#[allow(dead_code)]
 fn serialize_axiom_to_rdf_xml<W: Write>(
     writer: &mut W,
     axiom: &crate::ontology::axioms::Axiom,

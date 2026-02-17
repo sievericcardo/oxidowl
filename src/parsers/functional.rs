@@ -103,6 +103,7 @@ impl ParseContext {
 
 /// Token with position information for better error reporting
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TokenWithPosition {
     token: String,
     line: u32,
@@ -141,6 +142,7 @@ impl FunctionalParser {
     /// Mark as cold to optimize branch prediction
     #[cold]
     #[inline(never)]
+    #[allow(dead_code)]
     fn make_error(&self, message: String, token: Option<String>) -> Error {
         match self.config.error_verbosity {
             ErrorVerbosity::Minimal => Error::ontology_parsing(message),
@@ -166,6 +168,7 @@ impl FunctionalParser {
     }
 
     /// Find position information for a token
+    #[allow(dead_code)]
     fn find_token_position(&self, token_str: &str) -> (Option<usize>, Option<usize>) {
         if let Ok(positions) = self.token_positions.try_borrow() {
             for twp in positions.iter() {

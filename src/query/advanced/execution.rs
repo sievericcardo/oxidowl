@@ -16,9 +16,11 @@ use std::time::{Duration, Instant};
 
 /// High-performance query execution engine
 pub struct QueryEngine {
+    #[allow(dead_code)]
     ontology: Arc<Ontology>,
     reasoning_service: Arc<ReasoningService>,
     optimizer: QueryOptimizer,
+    #[allow(dead_code)]
     rewriter: QueryRewriter,
     cache: QueryCache,
     config: ExecutionConfig,

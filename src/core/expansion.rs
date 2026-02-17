@@ -67,6 +67,7 @@ pub struct ExpansionManager {
     expansion_history: HashMap<String, ExpansionRecord>,
 
     /// Dependency tracker
+    #[allow(dead_code)]
     dependency_tracker: DependencyTracker,
 
     /// Configuration options
@@ -272,9 +273,11 @@ pub struct ComplexityStrategy {
 #[derive(Debug)]
 pub struct RoleDepthStrategy {
     /// Role depth cache
+    #[allow(dead_code)]
     role_depths: HashMap<Role, u32>,
 
     /// Prefer shallow or deep roles
+    #[allow(dead_code)]
     prefer_shallow: bool,
 }
 
@@ -282,12 +285,15 @@ pub struct RoleDepthStrategy {
 #[derive(Debug)]
 pub struct HybridStrategy {
     /// Primary strategy
+    #[allow(dead_code)]
     primary: Box<dyn ExpansionStrategy>,
 
     /// Fallback strategy
+    #[allow(dead_code)]
     fallbacks: Vec<Box<dyn ExpansionStrategy>>,
 
     /// Strategy selection criteria
+    #[allow(dead_code)]
     selection_criteria: StrategySelectionCriteria,
 }
 
@@ -1037,6 +1043,7 @@ pub struct HeuristicExpansionStrategy {
     /// Complexity weights
     complexity_weights: ComplexityWeights,
     /// Depth preference
+    #[allow(dead_code)]
     depth_preference: f64,
     /// Role preference mapping
     role_preferences: HashMap<String, f64>,

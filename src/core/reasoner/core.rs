@@ -37,10 +37,12 @@ struct OWLlinkRequest {
     /// Command name (Tell, IsClassSatisfiable, etc.)
     command: String,
     /// Axioms to add (for Tell command)
+    #[allow(dead_code)]
     axioms: Vec<crate::ontology::axioms::Axiom>,
     /// Class IRI for class-related queries
     class_iri: Option<url::Url>,
     /// Individual IRI for individual-related queries  
+    #[allow(dead_code)]
     individual_iri: Option<url::Url>,
     /// Direct flag for hierarchical queries
     direct: Option<bool>,
@@ -60,6 +62,7 @@ struct SparqlQuery {
     /// Triple patterns to delete (for DELETE operations)
     delete_patterns: Vec<TriplePattern>,
     /// Original query string
+    #[allow(dead_code)]
     original_query: String,
 }
 
@@ -78,6 +81,7 @@ struct TriplePattern {
 #[derive(Debug)]
 pub struct Reasoner {
     /// Reasoning configuration
+    #[allow(dead_code)]
     config: ReasonerConfig,
 
     /// Current ontology being reasoned over
@@ -99,9 +103,11 @@ pub struct Reasoner {
     classification_service: ClassificationService,
 
     /// Query processor for SPARQL and OWLlink
+    #[allow(dead_code)]
     query_processor: QueryProcessor,
 
     /// Explanation service
+    #[allow(dead_code)]
     explanation_service: ExplanationService,
 }
 
@@ -1676,6 +1682,7 @@ impl Reasoner {
         let mut ontology_guard =
             write_lock(ontology, "core: writing ontology for execute_sparql_delete")?;
 
+        #[allow(unused_assignments)]
         let mut deleted_count = 0;
         let initial_count = ontology_guard.axioms().len();
 
@@ -2038,6 +2045,7 @@ impl Reasoner {
     }
 
     /// Get all classes mentioned in the ontology
+    #[allow(dead_code)]
     fn get_all_classes_in_ontology(
         &self,
         _ontology: &crate::ontology::Ontology,

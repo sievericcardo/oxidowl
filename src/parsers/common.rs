@@ -133,7 +133,7 @@ mod tests {
         let serializer = MockSerializer;
         let ontology = Ontology::new();
 
-        let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file for test");
+        let temp_file = NamedTempFile::new().expect("Failed to create temporary file for test");
         let path = temp_file.path();
 
         // Test serialization to file

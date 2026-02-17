@@ -786,7 +786,9 @@ pub enum RecoveryStrategy {
 
 /// Failure detection service
 pub struct FailureDetector {
+    #[allow(dead_code)]
     config: crate::distributed::FaultToleranceConfig,
+    #[allow(dead_code)]
     monitored_nodes: HashMap<NodeId, NodeMonitor>,
     shutdown_tx: Option<mpsc::Sender<()>>,
 }
@@ -858,7 +860,9 @@ impl FailureDetector {
 
 /// Recovery management service
 pub struct RecoveryManager {
+    #[allow(dead_code)]
     config: crate::distributed::FaultToleranceConfig,
+    #[allow(dead_code)]
     active_recoveries: HashMap<Uuid, RecoverySession>,
     shutdown_tx: Option<mpsc::Sender<()>>,
 }

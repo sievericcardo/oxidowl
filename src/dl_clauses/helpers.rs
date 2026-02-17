@@ -22,6 +22,7 @@ pub trait HelperMethods {
     fn next_clause_id(&mut self) -> String;
 
     /// Generate a fresh definition name
+    #[allow(dead_code)]
     fn next_definition(&mut self) -> String;
 
     /// Compile a class expression to a DL atom
@@ -97,6 +98,7 @@ pub trait HelperMethods {
     ) -> Result<(DLAtom, Vec<DLClause>)>;
 
     /// Check if a class expression is a simple named class
+    #[allow(dead_code)]
     fn is_named_class(&self, expr: &ClassExpression) -> bool;
 
     /// Convert SWRL individual argument to string
@@ -626,6 +628,7 @@ impl super::generator::DLClauseGenerator {
         }
     }
 
+    #[allow(dead_code)]
     fn create_at_least_atom(
         &mut self,
         cardinality: u32,
@@ -638,6 +641,7 @@ impl super::generator::DLClauseGenerator {
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
+    #[allow(dead_code)]
     fn create_at_most_atom(
         &mut self,
         cardinality: u32,
@@ -650,6 +654,7 @@ impl super::generator::DLClauseGenerator {
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
+    #[allow(dead_code)]
     fn create_nominal_atom(
         &mut self,
         value: &str,

@@ -225,6 +225,7 @@ pub struct QueryDistributor {
     analyzer: Arc<RwLock<QueryAnalyzer>>,
 
     /// Partition scheduler
+    #[allow(dead_code)]
     scheduler: Arc<RwLock<PartitionScheduler>>,
 
     /// Cost estimator

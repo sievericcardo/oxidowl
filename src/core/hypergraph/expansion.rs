@@ -103,6 +103,7 @@ struct ExpansionTask {
     /// Rule to apply
     rule: CompletionRule,
     /// Priority (higher = sooner)
+    #[allow(dead_code)]
     priority: u32,
 }
 

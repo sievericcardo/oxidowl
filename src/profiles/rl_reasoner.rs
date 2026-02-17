@@ -38,6 +38,7 @@ pub struct RLReasoner {
     /// Forward-chaining rule engine
     rule_engine: ForwardChainingEngine,
     /// Configuration
+    #[allow(dead_code)]
     config: ReasonerConfig,
     /// Explanation service
     explanation_service: Option<Arc<ExplanationService>>,
@@ -273,6 +274,7 @@ impl RLReasoner {
         Ok(hierarchy)
     }
 
+    #[allow(dead_code)]
     fn get_reasoning_statistics(&self) -> HashMap<String, serde_json::Value> {
         let mut stats = HashMap::new();
         stats.insert("initialization_time".to_string(), serde_json::json!(self.statistics.initialization_time.as_millis()));
