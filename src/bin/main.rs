@@ -571,6 +571,7 @@ impl From<InputFormat> for OntologyFormat {
 
 /// RDF version specification
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 enum RdfVersion {
     /// RDF 1.1 (no RDF-star or RDF 1.2 features)
     #[value(name = "1.1")]
@@ -583,14 +584,10 @@ enum RdfVersion {
     RdfStar,
     /// Auto-detect based on ontology content (default)
     #[value(name = "auto")]
+    #[default]
     Auto,
 }
 
-impl Default for RdfVersion {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 // Main entry point - spawns execution on a thread with large stack for deeply nested ontologies
 fn main() -> Result<()> {
