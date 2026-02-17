@@ -207,6 +207,12 @@ pub enum RuleContext {
     },
 }
 
+/// Type alias for rule applicability checker functions
+type ApplicabilityChecker = Box<dyn Fn(&RuleApplication) -> bool + Send + Sync>;
+
+/// Type alias for rule application handler functions
+type RuleHandler = Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>;
+
 /// Set of completion rules with application strategies
 pub struct CompletionRuleSet {
     /// Available rules in priority order
@@ -216,13 +222,10 @@ pub struct CompletionRuleSet {
     priorities: HashMap<CompletionRule, RulePriority>,
 
     /// Rule applicability checkers
-    applicability: HashMap<CompletionRule, Box<dyn Fn(&RuleApplication) -> bool + Send + Sync>>,
+    applicability: HashMap<CompletionRule, ApplicabilityChecker>,
 
     /// Rule application handlers
-    handlers: HashMap<
-        CompletionRule,
-        Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>,
-    >,
+    handlers: HashMap<CompletionRule, RuleHandler>,
 
     /// Reference to the ontology for querying axioms
     ontology: Option<std::sync::Arc<crate::ontology::Ontology>>,

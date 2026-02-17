@@ -1809,8 +1809,8 @@ impl QueryStatistics {
     }
 }
 
-impl CostModel {
-    pub fn default() -> Self {
+impl Default for CostModel {
+    fn default() -> Self {
         let mut base_costs = HashMap::new();
         base_costs.insert(OperationType::AtomicQuery, 1.0);
         base_costs.insert(OperationType::Join, 5.0);

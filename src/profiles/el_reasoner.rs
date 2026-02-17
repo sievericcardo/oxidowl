@@ -43,6 +43,7 @@ pub struct ELReasoner {
 impl ELReasoner {
     /// Create a new EL reasoner
     pub fn new(config: ReasonerConfig) -> Self {
+        #[allow(clippy::arc_with_non_send_sync)]
         let explanation_service = if config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
             Some(Arc::new(ExplanationService::new()))
         } else {
