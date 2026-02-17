@@ -66,7 +66,6 @@ impl Hash for DependencySet {
 }
 
 /// Dependency set tracking concept derivations and branching dependencies
-
 /// Dependency node representing a reasoning step or choice point
 #[derive(Debug, Clone)]
 pub struct DependencyNode {

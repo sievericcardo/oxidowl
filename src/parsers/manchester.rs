@@ -129,8 +129,8 @@ impl ManchesterParser {
         }
 
         // Handle "not" (ObjectComplementOf)
-        if expr.starts_with("not ") {
-            let inner = self.parse_class_expr_internal(&expr[4..])?;
+        if let Some(stripped) = expr.strip_prefix("not ") {
+            let inner = self.parse_class_expr_internal(stripped)?;
             return Ok(crate::ontology::ClassExpression::ObjectComplementOf(
                 Box::new(inner),
             ));
@@ -283,18 +283,18 @@ impl ManchesterParser {
         // "exactly 1", "min 2", "max 5", "some", "only"
         let expr = expr.trim();
 
-        if expr.starts_with("exactly ") {
-            let num_str = &expr[8..].trim();
+        if let Some(stripped) = expr.strip_prefix("exactly ") {
+            let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
                 return Ok(format!("exactly_{}", num));
             }
-        } else if expr.starts_with("min ") {
-            let num_str = &expr[4..].trim();
+        } else if let Some(stripped) = expr.strip_prefix("min ") {
+            let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
                 return Ok(format!("min_{}", num));
             }
-        } else if expr.starts_with("max ") {
-            let num_str = &expr[4..].trim();
+        } else if let Some(stripped) = expr.strip_prefix("max ") {
+            let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
                 return Ok(format!("max_{}", num));
             }

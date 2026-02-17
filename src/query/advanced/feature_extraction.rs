@@ -214,7 +214,11 @@ impl DLQueryFeatureExtractor {
 
     /// Extract statistical features (would require ontology statistics)
     fn extract_statistical_features(&self, query: &ConjunctiveQuery) -> Vec<f64> {
-        let mut features = Vec::new();
+        let features = vec![
+            self.estimate_selectivity(query),
+            self.estimate_result_size(query),
+            self.estimate_join_cost(query),
+        ];
 
         // Placeholder for statistical features that would be computed from ontology
         // These would include:
@@ -222,11 +226,6 @@ impl DLQueryFeatureExtractor {
         // - Property selectivity estimates
         // - Hierarchy depth statistics
         // - Domain/range complexity
-
-        // For now, use heuristic estimates
-        features.push(self.estimate_selectivity(query));
-        features.push(self.estimate_result_size(query));
-        features.push(self.estimate_join_cost(query));
 
         features
     }

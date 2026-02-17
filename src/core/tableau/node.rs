@@ -252,53 +252,54 @@ impl ConceptLabel {
     /// Parse a concept from string representation
     pub fn parse(concept_str: &str) -> Self {
         // Simple parsing - in practice this would be more sophisticated
-        if concept_str.starts_with('!') {
-            ConceptLabel::NegatedAtomic(concept_str[1..].to_string())
+        if let Some(stripped) = concept_str.strip_prefix('!') {
+            ConceptLabel::NegatedAtomic(stripped.to_string())
         } else {
             ConceptLabel::Atomic(concept_str.to_string())
         }
     }
+}
 
-    /// Convert concept to string representation  
-    pub fn to_string(&self) -> String {
+impl std::fmt::Display for ConceptLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConceptLabel::Atomic(name) => name.clone(),
-            ConceptLabel::NegatedAtomic(name) => format!("!{}", name),
+            ConceptLabel::Atomic(name) => write!(f, "{}", name),
+            ConceptLabel::NegatedAtomic(name) => write!(f, "!{}", name),
             ConceptLabel::Intersection(concepts) => {
-                format!(
-                    "({})",
-                    concepts
-                        .iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ⊓ ")
-                )
+                write!(f, "(")?;
+                for (i, c) in concepts.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ⊓ ")?;
+                    }
+                    write!(f, "{}", c)?;
+                }
+                write!(f, ")")
             }
             ConceptLabel::Union(concepts) => {
-                format!(
-                    "({})",
-                    concepts
-                        .iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ⊔ ")
-                )
+                write!(f, "(")?;
+                for (i, c) in concepts.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ⊔ ")?;
+                    }
+                    write!(f, "{}", c)?;
+                }
+                write!(f, ")")
             }
             ConceptLabel::Existential { role, filler } => {
-                format!("∃{}.{}", role.to_string(), filler.to_string())
+                write!(f, "∃{}.{}", role, filler)
             }
             ConceptLabel::Universal { role, filler } => {
-                format!("∀{}.{}", role.to_string(), filler.to_string())
+                write!(f, "∀{}.{}", role, filler)
             }
             ConceptLabel::AtLeast {
                 cardinality,
                 role,
                 filler,
             } => {
-                if let Some(f) = filler {
-                    format!("≥{}{}.{}", cardinality, role.to_string(), f.to_string())
+                if let Some(fil) = filler {
+                    write!(f, "≥{}{}.{}", cardinality, role, fil)
                 } else {
-                    format!("≥{}{}", cardinality, role.to_string())
+                    write!(f, "≥{}{}", cardinality, role)
                 }
             }
             ConceptLabel::AtMost {
@@ -306,21 +307,21 @@ impl ConceptLabel {
                 role,
                 filler,
             } => {
-                if let Some(f) = filler {
-                    format!("≤{}{}.{}", cardinality, role.to_string(), f.to_string())
+                if let Some(fil) = filler {
+                    write!(f, "≤{}{}.{}", cardinality, role, fil)
                 } else {
-                    format!("≤{}{}", cardinality, role.to_string())
+                    write!(f, "≤{}{}", cardinality, role)
                 }
             }
             ConceptLabel::Complex(expr) => {
-                format!("Complex({:?})", expr)
+                write!(f, "Complex({:?})", expr)
             }
             ConceptLabel::Nominal(individual) => {
-                format!("{{{}}}", individual) // Nominals are shown in curly braces
+                write!(f, "{{{}}}", individual) // Nominals are shown in curly braces
             }
             ConceptLabel::QuotedTriple(id) => {
                 // RDF-star quoted triple shown with angle brackets
-                id.clone()
+                write!(f, "{}", id)
             }
             ConceptLabel::MetaAssertion {
                 quoted_triple_id,
@@ -328,7 +329,7 @@ impl ConceptLabel {
                 value,
             } => {
                 // Meta-assertion shown as property-value pair about quoted triple
-                format!("{} {}={}", quoted_triple_id, property, value)
+                write!(f, "{} {}={}", quoted_triple_id, property, value)
             }
         }
     }
@@ -344,25 +345,23 @@ impl RoleLabel {
             RoleLabel::Atomic(role_str.to_string())
         }
     }
-
-    /// Convert role to string representation
-    pub fn to_string(&self) -> String {
-        match self {
-            RoleLabel::Atomic(name) => name.clone(),
-            RoleLabel::Inverse(name) => format!("inv({})", name),
-            RoleLabel::Chain(roles) => roles
-                .iter()
-                .map(|r| r.to_string())
-                .collect::<Vec<_>>()
-                .join(" ∘ "),
-            RoleLabel::Complex(expr) => expr.clone(),
-        }
-    }
 }
 
 impl std::fmt::Display for RoleLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            RoleLabel::Atomic(name) => write!(f, "{}", name),
+            RoleLabel::Inverse(name) => write!(f, "inv({})", name),
+            RoleLabel::Chain(roles) => {
+                let chain_str = roles
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ∘ ");
+                write!(f, "{}", chain_str)
+            }
+            RoleLabel::Complex(expr) => write!(f, "{}", expr),
+        }
     }
 }
 

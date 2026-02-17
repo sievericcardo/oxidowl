@@ -473,7 +473,7 @@ impl OWL2DLValidator {
 
         // Check that only recognized datatypes are used
         // Clone axioms to avoid borrow checker issues
-        let axioms: Vec<_> = self.ontology.axioms().iter().cloned().collect();
+        let axioms: Vec<_> = self.ontology.axioms().to_vec();
         for axiom in &axioms {
             self.validate_datatype_usage_in_axiom(axiom, &mut errors)?;
         }

@@ -770,7 +770,6 @@ impl Default for AxiomStore {
 ///
 /// These structures implement SWRL rules as specified in the W3C User Submission
 /// <https://www.w3.org/Submission/SWRL>/
-
 /// SWRL Variable
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SWRLVariable {

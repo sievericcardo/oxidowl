@@ -704,13 +704,12 @@ impl Reasoner {
                 crate::ontology::Axiom::ClassAssertion(class_assertion) => {
                     // Look for axioms that support this class assertion
                     for ont_axiom in ontology.axioms() {
-                        if let crate::ontology::Axiom::ClassAssertion(ont_assertion) = ont_axiom {
-                            if ont_assertion.individual == class_assertion.individual
+                        if let crate::ontology::Axiom::ClassAssertion(ont_assertion) = ont_axiom
+                            && ont_assertion.individual == class_assertion.individual
                                 && ont_assertion.class == class_assertion.class
                             {
                                 explanation.push(ont_axiom.clone());
                             }
-                        }
                     }
                 }
                 _ => {

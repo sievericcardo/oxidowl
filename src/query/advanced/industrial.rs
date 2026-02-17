@@ -1006,11 +1006,10 @@ impl DistributedClassificationResult {
         for concept in &partition.concepts {
             if let ClassExpression::Class(c) = concept {
                 let concept_iri = c.iri.to_string();
-                let mut superclasses = Vec::new();
+                let superclasses = vec!["owl:Thing".to_string()];
                 
                 // Extract superclasses from query result
                 // In full implementation, analyze execution results
-                superclasses.push("owl:Thing".to_string());
                 
                 // Check join order and strategy to identify subsumptions
                 if let super::optimization::ExecutionStrategy::Tableau { expansion_order } = &result.base_plan.strategy {

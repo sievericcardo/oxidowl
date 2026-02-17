@@ -130,7 +130,7 @@ impl ExplanationService {
                 subclass: subclass.clone(),
                 superclass: superclass.clone(),
             },
-            premises: justification.iter().cloned().collect(),
+            premises: justification.to_vec(),
             children: vec![],
             rule_applied: InferenceRule::Subsumption,
         };
@@ -145,7 +145,7 @@ impl ExplanationService {
         let root = ProofNode {
             id: 0,
             inference: Inference::Inconsistency,
-            premises: justification.iter().cloned().collect(),
+            premises: justification.to_vec(),
             children: vec![],
             rule_applied: InferenceRule::Contradiction,
         };
@@ -166,7 +166,7 @@ impl ExplanationService {
             inference: Inference::Unsatisfiability {
                 class: class.clone(),
             },
-            premises: justification.iter().cloned().collect(),
+            premises: justification.to_vec(),
             children: vec![],
             rule_applied: InferenceRule::Unsatisfiability,
         };

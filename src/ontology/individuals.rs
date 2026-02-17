@@ -87,15 +87,6 @@ impl Individual {
         }
     }
 
-    /// Get a string representation of the individual.
-    #[must_use]
-    pub fn to_string(&self) -> String {
-        match self {
-            Individual::Named(named) => named.iri.to_string(),
-            Individual::Anonymous(anon) => format!("_:{}", anon.id),
-        }
-    }
-
     /// Get the IRI if this is a named individual
     #[must_use]
     pub fn iri(&self) -> Option<&crate::ontology::IRI> {

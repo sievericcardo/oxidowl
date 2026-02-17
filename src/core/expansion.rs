@@ -1165,15 +1165,20 @@ impl Default for HeuristicExpansionStrategy {
 
 /// Uuid generation for unique identifiers
 mod uuid {
+    use std::fmt;
+
     pub struct Uuid;
 
     impl Uuid {
         pub fn new_v4() -> Self {
             Self
         }
+    }
 
-        pub fn to_string(&self) -> String {
-            format!(
+    impl fmt::Display for Uuid {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                f,
                 "{:016x}",
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

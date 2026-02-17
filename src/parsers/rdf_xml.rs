@@ -813,9 +813,9 @@ impl RdfXmlParser {
             return Ok(());
         }
 
-        if tag_content.starts_with('/') {
+        if let Some(stripped) = tag_content.strip_prefix('/') {
             // Closing tag
-            let tag_name = tag_content[1..].split_whitespace().next().unwrap_or("");
+            let tag_name = stripped.split_whitespace().next().unwrap_or("");
             if let Some(last_tag) = tag_stack.pop() {
                 if last_tag != tag_name {
                     return Err(Error::xml_parsing(format!(
