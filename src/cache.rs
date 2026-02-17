@@ -35,6 +35,7 @@ pub struct CacheMetrics {
 }
 
 impl<T> CacheEntry<T> {
+    #[must_use]
     pub fn new(value: T) -> Self {
         Self {
             value,
@@ -188,7 +189,11 @@ impl ConceptSatisfiabilityCache {
             if entries == 0 {
                 0.0 // Avoid division by zero
             } else {
-                total_hits as f64 / cache.len() as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = total_hits as f64 / cache.len() as f64;
+                rate
             }
         } else {
             0.0
@@ -287,6 +292,7 @@ pub struct CompletionGraphCache {
 }
 
 impl CompletionGraphCache {
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         let memory_threshold = config.completion_graph_max_memory_mb * 1024 * 1024;
 
@@ -303,26 +309,25 @@ impl CompletionGraphCache {
     }
 
     /// Get a completion graph from cache
+    #[must_use]
     pub fn get(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
         if !self.config.enable_completion_graph_cache {
             return None;
         }
 
-        if let Ok(mut cache) = self.cache.write() {
-            if let Some(entry) = cache.get_mut(&signature) {
-                entry.access_count += 1;
-                entry.last_access = Instant::now();
+        if let Ok(mut cache) = self.cache.write() && let Some(entry) = cache.get_mut(&signature) {
+            entry.access_count += 1;
+            entry.last_access = Instant::now();
 
-                // Update metrics
-                if let Ok(mut metrics) = self.metrics.write() {
-                    metrics.hits += 1;
-                }
-
-                // Promote to higher tier if needed
-                self.promote_tier(signature, entry.access_count);
-
-                return Some(Arc::clone(&entry.graph));
+            // Update metrics
+            if let Ok(mut metrics) = self.metrics.write() {
+                metrics.hits += 1;
             }
+
+            // Promote to higher tier if needed
+            self.promote_tier(signature, entry.access_count);
+
+            return Some(Arc::clone(&entry.graph));
         }
 
         // Update miss metrics
@@ -343,10 +348,8 @@ impl CompletionGraphCache {
         let memory_size = graph.memory_size;
 
         // Check memory pressure and evict if necessary
-        if let Ok(current_usage) = self.memory_usage.read() {
-            if *current_usage + memory_size > self.memory_threshold {
-                self.evict_to_fit(memory_size);
-            }
+        if let Ok(current_usage) = self.memory_usage.read() && *current_usage + memory_size > self.memory_threshold {
+            self.evict_to_fit(memory_size);
         }
 
         // Create entry in cold tier initially
@@ -506,11 +509,13 @@ impl CompletionGraphCache {
     }
 
     /// Get current memory usage
+    #[must_use]
     pub fn memory_usage(&self) -> usize {
         self.memory_usage.read().map(|u| *u).unwrap_or(0)
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn get_metrics(&self) -> CacheMetrics {
         self.metrics.read().map(|m| m.clone()).unwrap_or_default()
     }
@@ -729,6 +734,9 @@ impl CacheManager {
     pub fn get_stats(&self) -> CacheStats {
         let metrics = self.concept_cache.get_metrics();
         let total_accesses = metrics.hits + metrics.misses;
+        // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+        // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+        #[allow(clippy::cast_precision_loss)]
         let hit_rate = if total_accesses > 0 {
             metrics.hits as f64 / total_accesses as f64
         } else {
@@ -737,6 +745,7 @@ impl CacheManager {
 
         let graph_metrics = self.completion_graph_cache.get_metrics();
         let graph_total_accesses = graph_metrics.hits + graph_metrics.misses;
+        #[allow(clippy::cast_precision_loss)]
         let graph_hit_rate = if graph_total_accesses > 0 {
             graph_metrics.hits as f64 / graph_total_accesses as f64
         } else {

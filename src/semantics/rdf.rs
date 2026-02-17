@@ -803,7 +803,7 @@ mod tests {
 
     #[test]
     fn test_quoted_triple_interpretation() {
-        let mut interp = RdfSimpleInterpretation::new();
+        let interp = RdfSimpleInterpretation::new();
 
         // Create a quoted triple
         let inner_triple = Triple {

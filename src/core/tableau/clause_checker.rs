@@ -970,7 +970,7 @@ impl ClauseChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::tableau::node::{BlockingInfo, NodeStatus, NodeType};
+    use crate::core::tableau::node::NodeType;
     use std::collections::HashMap;
 
     fn create_test_node(id: usize, concepts: Vec<&str>) -> TableauNode {

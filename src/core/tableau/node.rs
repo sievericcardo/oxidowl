@@ -436,9 +436,9 @@ impl TableauNode {
     }
 
     /// Set blocking status
-    pub fn set_blocked(&mut self, blocked: bool, blocker: Option<NodeId>) {
-        self.blocking_info.is_blocked = blocked;
-        self.blocking_info.blocker = blocker;
+    pub fn set_blocked(&mut self, is_blocked: bool, blocking_node: Option<NodeId>) {
+        self.blocking_info.is_blocked = is_blocked;
+        self.blocking_info.blocker = blocking_node;
     }
 
     /// Get the dependency set for a concept

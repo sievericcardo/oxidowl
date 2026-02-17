@@ -131,7 +131,11 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
             misses: self.misses,
             evictions: self.evictions,
             hit_rate: if self.hits + self.misses > 0 {
-                self.hits as f64 / (self.hits + self.misses) as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = self.hits as f64 / (self.hits + self.misses) as f64;
+                rate
             } else {
                 0.0
             },
@@ -222,7 +226,11 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
             misses: self.misses,
             evictions: self.evictions,
             hit_rate: if self.hits + self.misses > 0 {
-                self.hits as f64 / (self.hits + self.misses) as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = self.hits as f64 / (self.hits + self.misses) as f64;
+                rate
             } else {
                 0.0
             },
@@ -343,7 +351,11 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
             misses: self.misses,
             evictions: self.evictions,
             hit_rate: if self.hits + self.misses > 0 {
-                self.hits as f64 / (self.hits + self.misses) as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = self.hits as f64 / (self.hits + self.misses) as f64;
+                rate
             } else {
                 0.0
             },

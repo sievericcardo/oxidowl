@@ -604,7 +604,7 @@ impl ImportManager {
             .map(|s| s.to_lowercase());
 
         match extension.as_deref() {
-            Some("owl") | Some("owx") => {
+            Some("owl" | "owx") => {
                 // Try OWL/XML parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
@@ -618,7 +618,7 @@ impl ImportManager {
 
                 crate::parsers::turtle::parse(&content)
             }
-            Some("rdf") | Some("xml") => {
+            Some("rdf" | "xml") => {
                 // Try RDF/XML parser
                 let content = std::fs::read_to_string(path)
                     .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;

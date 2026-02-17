@@ -513,7 +513,7 @@ impl StrategySelectionModel {
         let time_score = 1000.0 / (session.execution_time.as_millis() as f64 + 1.0);
 
         // Memory efficiency score
-        let memory_score = 1000000.0 / (session.memory_used as f64 + 1.0);
+        let memory_score = 1_000_000.0 / (session.memory_used as f64 + 1.0);
 
         (time_score + memory_score) / 2.0
     }

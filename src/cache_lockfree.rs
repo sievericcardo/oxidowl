@@ -1,7 +1,7 @@
-//! Lock-Free Cache System using DashMap
+//! Lock-Free Cache System using `DashMap`
 //!
 //! This module provides high-performance concurrent caching without traditional locks,
-//! using DashMap for lock-free concurrent access patterns inspired by Konclude's approach.
+//! using `DashMap` for lock-free concurrent access patterns inspired by Konclude's approach.
 
 use crate::{
     ontology::ClassExpression,
@@ -36,6 +36,7 @@ impl<T: Clone> Clone for LockFreeCacheEntry<T> {
 }
 
 impl<T: Clone> LockFreeCacheEntry<T> {
+    #[must_use]
     pub fn new(value: T) -> Self {
         Self {
             value,
@@ -44,6 +45,7 @@ impl<T: Clone> LockFreeCacheEntry<T> {
         }
     }
 
+    #[must_use]
     pub fn is_expired(&self, ttl: Duration) -> bool {
         self.timestamp.elapsed() > ttl
     }
@@ -86,7 +88,11 @@ impl LockFreeCacheMetrics {
         if total == 0 {
             0.0
         } else {
-            hits as f64 / total as f64
+            // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+            // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+            #[allow(clippy::cast_precision_loss)]
+            let rate = hits as f64 / total as f64;
+            rate
         }
     }
 }
@@ -127,6 +133,7 @@ pub struct LockFreeConceptCache {
 }
 
 impl LockFreeConceptCache {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             cache: DashMap::with_capacity(config.max_size),
@@ -136,6 +143,7 @@ impl LockFreeConceptCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
         if !self.config.enable_satisfiability_cache {
             return None;
@@ -214,6 +222,7 @@ pub struct LockFreeSubsumptionCache {
 }
 
 impl LockFreeSubsumptionCache {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             cache: DashMap::with_capacity(config.max_size),
@@ -223,6 +232,7 @@ impl LockFreeSubsumptionCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Option<bool> {
         if !self.config.enable_subsumption_cache {
             return None;
@@ -300,6 +310,7 @@ pub struct LockFreeClassificationCache {
 }
 
 impl LockFreeClassificationCache {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             cache: DashMap::with_capacity(16), // Typically small number of ontologies
@@ -309,6 +320,7 @@ impl LockFreeClassificationCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, ontology_iri: &str) -> Option<ClassificationResult> {
         if !self.config.enable_classification_cache {
             return None;
@@ -369,6 +381,7 @@ pub struct LockFreeCacheManager {
 }
 
 impl LockFreeCacheManager {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             concept_cache: LockFreeConceptCache::new(config.clone()),

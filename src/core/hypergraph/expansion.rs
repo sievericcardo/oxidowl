@@ -765,7 +765,7 @@ mod tests {
         let result1 = expansion
             .apply_some_rule(&task1)
             .expect("Failed to apply SOME expansion rule to task");
-        let first_node_id = result1.new_nodes[0];
+        let _first_node_id = result1.new_nodes[0];
 
         // Create second ∃hasChild.Person - should reuse
         let task2 = ExpansionTask {

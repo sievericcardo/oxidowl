@@ -1690,7 +1690,7 @@ impl StrategySelectionModel {
                 },
                 conditions: ApplicabilityConditions {
                     min_selectivity: 0.0,
-                    max_result_size: 100000.0,
+                    max_result_size: 100_000.0,
                     max_join_count: None,
                 },
                 success_rate: 0.90,

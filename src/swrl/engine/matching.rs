@@ -132,14 +132,14 @@ impl UnificationEngine {
                     var.iri.to_string(),
                     SWRLIArgument::Individual(ind.clone()),
                 ),
-            (SWRLIArgument::Variable(var1), SWRLIArgument::Variable(var2)) => {
-                if var1.iri == var2.iri {
+            (SWRLIArgument::Variable(lhs_var), SWRLIArgument::Variable(rhs_var)) => {
+                if lhs_var.iri == rhs_var.iri {
                     true
                 } else {
                     // For now, assume different variables can unify
                     self.bind_individual_variable(
-                        var1.iri.to_string(),
-                        SWRLIArgument::Variable(var2.clone()),
+                        lhs_var.iri.to_string(),
+                        SWRLIArgument::Variable(rhs_var.clone()),
                     )
                 }
             }
@@ -158,14 +158,14 @@ impl UnificationEngine {
             (SWRLDArgument::Literal(lit), SWRLDArgument::Variable(var)) => {
                 self.bind_data_variable(var.iri.to_string(), SWRLDArgument::Literal(lit.clone()))
             }
-            (SWRLDArgument::Variable(var1), SWRLDArgument::Variable(var2)) => {
-                if var1.iri == var2.iri {
+            (SWRLDArgument::Variable(lhs_var), SWRLDArgument::Variable(rhs_var)) => {
+                if lhs_var.iri == rhs_var.iri {
                     true
                 } else {
                     // For now, assume different variables can unify
                     self.bind_data_variable(
-                        var1.iri.to_string(),
-                        SWRLDArgument::Variable(var2.clone()),
+                        lhs_var.iri.to_string(),
+                        SWRLDArgument::Variable(rhs_var.clone()),
                     )
                 }
             }
@@ -218,12 +218,12 @@ impl UnificationEngine {
     /// Check if two data ranges match
     fn data_ranges_match(
         &self,
-        range1: &crate::ontology::DataRange,
-        range2: &crate::ontology::DataRange,
+        lhs_range: &crate::ontology::DataRange,
+        rhs_range: &crate::ontology::DataRange,
     ) -> bool {
         use crate::ontology::DataRange;
         
-        match (range1, range2) {
+        match (lhs_range, rhs_range) {
             // Same datatype
             (DataRange::Datatype(dt1), DataRange::Datatype(dt2)) => {
                 dt1.as_str() == dt2.as_str()
@@ -234,14 +234,14 @@ impl UnificationEngine {
                 dt1.as_str() == dt2.as_str() && r1 == r2
             }
             // Data intersections - check if sets of ranges are equal
-            (DataRange::DataIntersectionOf(ranges1), DataRange::DataIntersectionOf(ranges2)) => {
-                ranges1.len() == ranges2.len() &&
-                ranges1.iter().zip(ranges2.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
+            (DataRange::DataIntersectionOf(lhs_ranges), DataRange::DataIntersectionOf(rhs_ranges)) => {
+                lhs_ranges.len() == rhs_ranges.len() &&
+                lhs_ranges.iter().zip(rhs_ranges.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
             }
             // Data unions - check if sets of ranges are equal
-            (DataRange::DataUnionOf(ranges1), DataRange::DataUnionOf(ranges2)) => {
-                ranges1.len() == ranges2.len() &&
-                ranges1.iter().zip(ranges2.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
+            (DataRange::DataUnionOf(lhs_ranges), DataRange::DataUnionOf(rhs_ranges)) => {
+                lhs_ranges.len() == rhs_ranges.len() &&
+                lhs_ranges.iter().zip(rhs_ranges.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
             }
             // Data complements - check if complemented ranges match
             (DataRange::DataComplementOf(r1), DataRange::DataComplementOf(r2)) => {

@@ -259,7 +259,7 @@ mod tests {
     fn test_rfc3986_rejects_unicode() {
         let validator = IriValidator::rfc3986();
         // url crate will reject or percent-encode Unicode, depending on position
-        let result = validator.validate("http://example.org/日本語");
+        let _result = validator.validate("http://example.org/日本語");
         // url crate handles this differently - it may parse or reject
         // The key is that RFC 3986 mode uses url crate validation
     }
