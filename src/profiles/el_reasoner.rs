@@ -43,7 +43,7 @@ pub struct ELReasoner {
 impl ELReasoner {
     /// Create a new EL reasoner
     pub fn new(config: ReasonerConfig) -> Self {
-        let explanation_service = if config.reasoning.enable_explanations {
+        let explanation_service = if config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
             Some(Arc::new(ExplanationService::new()))
         } else {
             None
@@ -87,7 +87,7 @@ impl ELReasoner {
         // Build concept hierarchy from completion results
         // Use concurrent classification if enabled and rayon is available
         #[cfg(feature = "rayon")]
-        if self.config.performance.enable_parallel_expansion {
+        if self.config.performance.is_enabled(crate::config::PerformanceFeature::ParallelExpansion) {
             self.build_concept_hierarchy_concurrent()?;
         } else {
             self.build_concept_hierarchy()?;

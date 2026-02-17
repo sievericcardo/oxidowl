@@ -12,11 +12,31 @@ use crate::{
     semantics::quoted_triple_optimizer::{QuotedTripleOptimizer, QuotedTripleOptimizerConfig},
 };
 
+use enumset::{EnumSet, EnumSetType};
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
+
+/// Cache feature flags for selective cache enabling
+#[derive(Debug, EnumSetType)]
+pub enum CacheFeature {
+    /// Cache for concept expressions
+    Concept,
+    /// Cache for subsumption relationships
+    Subsumption,
+    /// Cache for satisfiability checks
+    Satisfiability,
+    /// Cache for classification results
+    Classification,
+    /// Cache for realization results
+    Realization,
+    /// Cache for completion graphs
+    CompletionGraph,
+    /// Cache for RDF-star quoted triples
+    QuotedTriple,
+}
 
 /// Cache entry with Timetolive (TTL) support
 #[derive(Debug, Clone)]
@@ -58,14 +78,26 @@ impl<T> CacheEntry<T> {
 pub struct CacheConfig {
     pub max_size: usize, // Maximum number of entries in the cache
     pub ttl: Duration,   // Time to live for cache entries
-    pub enable_concept_cache: bool,
-    pub enable_subsumption_cache: bool,
-    pub enable_satisfiability_cache: bool,
-    pub enable_classification_cache: bool,
-    pub enable_realization_cache: bool,
-    pub enable_completion_graph_cache: bool,
-    pub enable_quoted_triple_cache: bool, // RDF-star quoted triple optimization
+    pub features: EnumSet<CacheFeature>,
     pub completion_graph_max_memory_mb: usize,
+}
+
+impl CacheConfig {
+    /// Check if a specific cache feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: CacheFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a cache feature
+    pub fn enable(&mut self, feature: CacheFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a cache feature
+    pub fn disable(&mut self, feature: CacheFeature) {
+        self.features.remove(feature);
+    }
 }
 
 impl Default for CacheConfig {
@@ -73,14 +105,14 @@ impl Default for CacheConfig {
         Self {
             max_size: 10000,                // Default maximum size
             ttl: Duration::from_secs(3600), // Default TTL of 1 hour
-            enable_concept_cache: true,
-            enable_subsumption_cache: true,
-            enable_satisfiability_cache: true,
-            enable_completion_graph_cache: true,
-            enable_quoted_triple_cache: true, // Enable RDF-star optimization by default
+            features: CacheFeature::Concept
+                | CacheFeature::Subsumption
+                | CacheFeature::Satisfiability
+                | CacheFeature::Classification
+                | CacheFeature::Realization
+                | CacheFeature::CompletionGraph
+                | CacheFeature::QuotedTriple,
             completion_graph_max_memory_mb: 512,
-            enable_classification_cache: true,
-            enable_realization_cache: true,
         }
     }
 }
@@ -105,7 +137,7 @@ impl ConceptSatisfiabilityCache {
 
     #[must_use]
     pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
-        if !self.config.enable_satisfiability_cache {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
             return None; // Cache is disabled
         }
 
@@ -134,7 +166,7 @@ impl ConceptSatisfiabilityCache {
     }
 
     pub fn put(&self, expression: ClassExpression, result: bool) {
-        if !self.config.enable_satisfiability_cache {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
             return; // Cache is disabled
         }
 
@@ -311,7 +343,7 @@ impl CompletionGraphCache {
     /// Get a completion graph from cache
     #[must_use]
     pub fn get(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
-        if !self.config.enable_completion_graph_cache {
+        if !self.config.is_enabled(CacheFeature::CompletionGraph) {
             return None;
         }
 
@@ -340,7 +372,7 @@ impl CompletionGraphCache {
 
     /// Store a completion graph in cache
     pub fn put(&self, graph: Arc<CompletedGraph>) {
-        if !self.config.enable_completion_graph_cache {
+        if !self.config.is_enabled(CacheFeature::CompletionGraph) {
             return;
         }
 
@@ -556,7 +588,7 @@ impl CacheManager {
     #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         // Create optimizer config based on cache config
-        let optimizer_config = if config.enable_quoted_triple_cache {
+        let optimizer_config = if config.is_enabled(CacheFeature::QuotedTriple) {
             QuotedTripleOptimizerConfig::default()
         } else {
             QuotedTripleOptimizerConfig::rdf11_mode()
@@ -575,7 +607,7 @@ impl CacheManager {
     #[must_use]
     pub fn with_memory_tracking(config: CacheConfig, memory_tracker: Arc<MemoryTracker>) -> Self {
         // Create optimizer config based on cache config
-        let optimizer_config = if config.enable_quoted_triple_cache {
+        let optimizer_config = if config.is_enabled(CacheFeature::QuotedTriple) {
             QuotedTripleOptimizerConfig::default()
         } else {
             QuotedTripleOptimizerConfig::rdf11_mode()

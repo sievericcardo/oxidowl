@@ -67,7 +67,7 @@ fn test_el_reasoner_concurrent() -> Result<()> {
     }
     
     let mut config = ReasonerConfig::default();
-    config.performance.enable_parallel_expansion = true;
+    config.performance.enable(oxidowl::config::PerformanceFeature::ParallelExpansion);
     
     let mut reasoner = ELReasoner::new(config);
     reasoner.initialize(&ontology)?;

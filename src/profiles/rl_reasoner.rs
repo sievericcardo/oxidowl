@@ -49,7 +49,7 @@ pub struct RLReasoner {
 impl RLReasoner {
     /// Create a new RL reasoner
     pub fn new(config: ReasonerConfig) -> Self {
-        let explanation_service = if config.reasoning.enable_explanations {
+        let explanation_service = if config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
             Some(Arc::new(ExplanationService::new()))
         } else {
             None

@@ -641,7 +641,7 @@ async fn run_with_tokio() -> Result<()> {
     let server_enabled = cli.enable_server || cli.enable_owllink || cli.enable_sparql;
 
     if cli.enable_server {
-        config.server.enable_server = true;
+        config.server.enable(oxidowl::config::ServerFeature::Server);
     }
     if let Some(port) = cli.server_port {
         config.server.port = port;
@@ -651,13 +651,13 @@ async fn run_with_tokio() -> Result<()> {
         config.server.bind_address = bind.clone();
     }
     if cli.enable_owllink {
-        config.server.enable_owllink = true;
+        config.server.enable(oxidowl::config::ServerFeature::OWLlink);
     }
     if let Some(port) = cli.owllink_port {
         config.server.owllink_port = port;
     }
     if cli.enable_sparql {
-        config.server.enable_sparql = true;
+        config.server.enable(oxidowl::config::ServerFeature::SPARQL);
     }
     if let Some(port) = cli.sparql_port {
         config.server.sparql_port = port;

@@ -59,12 +59,12 @@ async fn main() -> Result<()> {
     let mut config = ReasonerConfig::default();
 
     // Configure server settings
-    config.server.enable_server = true;
+    config.server.enable(oxidowl::config::ServerFeature::Server);
     config.server.rest_api_port = args.port;
     config.server.bind_address = args.bind.clone();
 
     if args.owllink {
-        config.server.enable_owllink = true;
+        config.server.enable(oxidowl::config::ServerFeature::OWLlink);
         config.server.owllink_port = args.owllink_port;
     }
 

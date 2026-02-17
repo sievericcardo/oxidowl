@@ -159,7 +159,7 @@ impl ClassificationService {
 
         // Get performance configuration for parallel execution
         let perf_config = PerformanceConfig::from_env();
-        let use_parallel = perf_config.enable_lock_free && total_tableau_pairs > 100;
+        let use_parallel = perf_config.is_enabled(crate::config::PerformanceFeature::LockFree) && total_tableau_pairs > 100;
         
         if use_parallel {
             info!("Using parallel classification for {} subsumption checks", total_tableau_pairs);

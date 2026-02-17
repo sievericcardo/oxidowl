@@ -4,8 +4,63 @@
 //! the behavior of the reasoning engine, servers, and other components.
 
 use crate::{Error, Result};
+use enumset::{EnumSet, EnumSetType};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, time::Duration};
+
+/// Features that can be enabled in reasoning
+#[derive(EnumSetType, Debug, Serialize, Deserialize)]
+pub enum ReasoningFeature {
+    /// Enable optimizations
+    Optimizations,
+    /// Enable explanation generation
+    Explanations,
+    /// Enable clash detection
+    ClashDetection,
+    /// Enable blockers cache (HermiT-style)
+    BlockersCache,
+}
+
+/// Features that can be enabled in the cache
+#[derive(EnumSetType, Debug, Serialize, Deserialize)]
+pub enum CacheFeature {
+    /// Enable satisfiability cache
+    Satisfiability,
+    /// Enable completion graph cache
+    CompletionGraph,
+    /// Enable unsatisfiability cache
+    Unsatisfiability,
+}
+
+/// Features that can be enabled on the server
+#[derive(EnumSetType, Debug, Serialize, Deserialize)]
+pub enum ServerFeature {
+    /// Enable server on startup
+    Server,
+    /// Enable CORS headers
+    Cors,
+    /// Enable OWLlink server
+    OWLlink,
+    /// Enable SPARQL endpoint
+    SPARQL,
+    /// Enable REST API
+    RestAPI,
+}
+
+/// Performance features that can be enabled
+#[derive(EnumSetType, Debug, Serialize, Deserialize)]
+pub enum PerformanceFeature {
+    /// Enable parallel tableau expansion
+    ParallelExpansion,
+    /// Enable SIMD optimizations
+    SIMD,
+    /// Enable NUMA-aware allocation
+    NumaAwareness,
+    /// Enable lock-free concurrent data structures
+    LockFree,
+    /// Enable persistent data structures for structural sharing
+    PersistentCollections,
+}
 
 /// Main configuration structure for Oxidowl
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,22 +86,16 @@ pub struct ReasoningConfig {
     pub blocking_strategy: BlockingStrategy,
     /// Strategy for expanding the tableau
     pub expansion_strategy: ExpansionStrategy,
-    /// Enable or disable optimisation
-    pub enable_optimisations: bool,
+    /// Enabled reasoning features
+    pub features: EnumSet<ReasoningFeature>,
     /// Maximum response time for reasoning tasks
     pub timeout: Option<Duration>,
     /// Maximum memory usage in MB for the reasoner
     pub max_memory_mb: Option<u64>,
     /// Enable incremental reasoning
     pub incremental_reasoning: bool,
-    /// Enable explanation generation
-    pub enable_explanations: bool,
     /// Maximum tableau expansion depth
     pub max_expansion_depth: u32,
-    /// Enable clash detection
-    pub enable_clash_detection: bool,
-    /// Cache blocking nodes for reuse (HermiT-style)
-    pub enable_blockers_cache: bool,
     /// Ignore unsupported datatypes
     pub ignore_unsupported_datatypes: bool,
     /// Dump DL clauses for debugging
@@ -55,6 +104,24 @@ pub struct ReasoningConfig {
     pub clause_dump_file: Option<String>,
     /// Target OWL profile for optimization
     pub target_profile: OWLProfile,
+}
+
+impl ReasoningConfig {
+    /// Check if a specific feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: ReasoningFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a specific feature
+    pub fn enable(&mut self, feature: ReasoningFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a specific feature
+    pub fn disable(&mut self, feature: ReasoningFeature) {
+        self.features.remove(feature);
+    }
 }
 
 /// Tableau algorithm types
@@ -122,12 +189,8 @@ pub enum ExpansionStrategy {
 /// Configuration for caching mechanisms
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheConfig {
-    /// Enable satisfiability cache
-    pub enable_satisfiability_cache: bool,
-    /// Enable completion graph caching
-    pub enable_completion_graph_cache: bool,
-    /// Enable unsatisfiability cache
-    pub enable_unsatisfiability_cache: bool,
+    /// Enabled cache features
+    pub features: EnumSet<CacheFeature>,
     /// Maximum size of the cache in MB
     pub max_cache_size_mb: u64,
     /// Time to live for cache entries
@@ -138,12 +201,32 @@ pub struct CacheConfig {
     pub persistence: bool,
 }
 
+impl CacheConfig {
+    /// Check if a specific feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: CacheFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a specific feature
+    pub fn enable(&mut self, feature: CacheFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a specific feature
+    pub fn disable(&mut self, feature: CacheFeature) {
+        self.features.remove(feature);
+    }
+}
+
 impl Default for CacheConfig {
     fn default() -> Self {
+        let mut features = EnumSet::new();
+        features.insert(CacheFeature::Satisfiability);
+        features.insert(CacheFeature::CompletionGraph);
+        
         Self {
-            enable_satisfiability_cache: true,
-            enable_completion_graph_cache: true,
-            enable_unsatisfiability_cache: true,
+            features,
             max_cache_size_mb: 100,
             cache_ttl: None,
             eviction_strategy: CacheEvictionStrategy::LRU,
@@ -168,8 +251,8 @@ pub enum CacheEvictionStrategy {
 /// Server configuration for the reasoning service
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
-    /// Enable server on startup (default: false for CLI usage, true for library usage)
-    pub enable_server: bool,
+    /// Enabled server features
+    pub features: EnumSet<ServerFeature>,
     /// Default port for the reasoning server
     pub port: u16,
     /// Default bind address for the server
@@ -178,22 +261,32 @@ pub struct ServerConfig {
     pub max_connections: usize,
     /// Request timeout duration
     pub request_timeout: Duration,
-    /// Enable CORS (Cross-Origin Resource Sharing) headers
-    pub enable_cors: bool,
     /// Maximum request size in bytes
     pub max_request_size: usize,
-    /// Enable OWLlink server
-    pub enable_owllink: bool,
     /// OWLlink server port
     pub owllink_port: u16,
-    /// Enable SPARQL endpoint
-    pub enable_sparql: bool,
     /// SPARQL endpoint port
     pub sparql_port: u16,
-    /// Enable REST API
-    pub enable_rest_api: bool,
     /// REST API port
     pub rest_api_port: u16,
+}
+
+impl ServerConfig {
+    /// Check if a specific feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: ServerFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a specific feature
+    pub fn enable(&mut self, feature: ServerFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a specific feature
+    pub fn disable(&mut self, feature: ServerFeature) {
+        self.features.remove(feature);
+    }
 }
 
 /// Logging configuration for the reasoner
@@ -233,22 +326,32 @@ pub struct PerformanceConfig {
     pub profile: PerformanceProfile,
     /// Number of threads for parallel reasoning (overrides profile default)
     pub worker_threads: Option<usize>,
-    /// Enable or disable parallel tableau expansion
-    pub enable_parallel_expansion: bool,
-    /// Enable or disable SIMD optimizations
-    pub enable_simd: bool,
-    /// Enable NUMA-aware allocation
-    pub enable_numa_awareness: bool,
+    /// Enabled performance features
+    pub features: EnumSet<PerformanceFeature>,
     /// Memory pool in MB
     pub memory_pool_size_mb: u64,
     /// Garbage collection threshold
     pub gc_threshold: f64,
     /// Maximum classification parallelism (concurrent subsumption tests)
     pub max_parallel_classification_tasks: Option<usize>,
-    /// Enable lock-free concurrent data structures
-    pub enable_lock_free: bool,
-    /// Enable persistent data structures for structural sharing
-    pub enable_persistent_collections: bool,
+}
+
+impl PerformanceConfig {
+    /// Check if a specific feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: PerformanceFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a specific feature
+    pub fn enable(&mut self, feature: PerformanceFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a specific feature
+    pub fn disable(&mut self, feature: PerformanceFeature) {
+        self.features.remove(feature);
+    }
 }
 
 /// Performance profile presets for different resource levels
@@ -319,6 +422,28 @@ impl PerformanceProfile {
         matches!(self, Self::High | Self::Ultra)
     }
 
+    /// Get the recommended performance features for this profile
+    #[must_use]
+    pub fn features(&self) -> EnumSet<PerformanceFeature> {
+        let mut features = EnumSet::new();
+        features.insert(PerformanceFeature::ParallelExpansion);
+        
+        if self.enable_simd() {
+            features.insert(PerformanceFeature::SIMD);
+        }
+        if self.enable_numa_awareness() {
+            features.insert(PerformanceFeature::NumaAwareness);
+        }
+        if self.enable_lock_free() {
+            features.insert(PerformanceFeature::LockFree);
+        }
+        if self.enable_persistent_collections() {
+            features.insert(PerformanceFeature::PersistentCollections);
+        }
+        
+        features
+    }
+
     /// Maximum parallel classification tasks
     pub fn max_parallel_classification_tasks(&self) -> usize {
         match self {
@@ -343,14 +468,10 @@ impl Default for PerformanceConfig {
         Self {
             profile,
             worker_threads: None, // Will use profile default
-            enable_parallel_expansion: true,
-            enable_simd: profile.enable_simd(),
-            enable_numa_awareness: profile.enable_numa_awareness(),
+            features: profile.features(),
             memory_pool_size_mb: profile.memory_pool_size_mb(),
             gc_threshold: 0.75,
             max_parallel_classification_tasks: Some(profile.max_parallel_classification_tasks()),
-            enable_lock_free: profile.enable_lock_free(),
-            enable_persistent_collections: profile.enable_persistent_collections(),
         }
     }
 }
@@ -361,14 +482,10 @@ impl PerformanceConfig {
         Self {
             profile,
             worker_threads: None,
-            enable_parallel_expansion: true,
-            enable_simd: profile.enable_simd(),
-            enable_numa_awareness: profile.enable_numa_awareness(),
+            features: profile.features(),
             memory_pool_size_mb: profile.memory_pool_size_mb(),
             gc_threshold: 0.75,
             max_parallel_classification_tasks: Some(profile.max_parallel_classification_tasks()),
-            enable_lock_free: profile.enable_lock_free(),
-            enable_persistent_collections: profile.enable_persistent_collections(),
         }
     }
 
@@ -426,18 +543,19 @@ impl Default for TableauConfig {
 
 impl Default for ReasoningConfig {
     fn default() -> Self {
+        let mut features = EnumSet::new();
+        features.insert(ReasoningFeature::Optimizations);
+        features.insert(ReasoningFeature::ClashDetection);
+        
         Self {
             tableau_algorithm: TableauAlgorithm::Traditional,
             blocking_strategy: BlockingStrategy::Anywhere,
             expansion_strategy: ExpansionStrategy::CreationOrder,
-            enable_optimisations: true,
+            features,
             timeout: Some(Duration::from_secs(300)), // 5 minutes
             max_memory_mb: Some(4096),               // 4 GB
             incremental_reasoning: false,
-            enable_explanations: false,
             max_expansion_depth: 100,
-            enable_clash_detection: true,
-            enable_blockers_cache: false,
             ignore_unsupported_datatypes: false,
             dump_clauses: false,
             clause_dump_file: None,
@@ -448,46 +566,49 @@ impl Default for ReasoningConfig {
 
 impl Default for ReasonerConfig {
     fn default() -> Self {
+        let mut reasoning_features = EnumSet::new();
+        reasoning_features.insert(ReasoningFeature::Optimizations);
+        reasoning_features.insert(ReasoningFeature::ClashDetection);
+        
+        let mut cache_features = EnumSet::new();
+        cache_features.insert(CacheFeature::Satisfiability);
+        cache_features.insert(CacheFeature::CompletionGraph);
+        
+        let mut server_features = EnumSet::new();
+        server_features.insert(ServerFeature::Cors);
+        server_features.insert(ServerFeature::RestAPI);
+        
         Self {
             reasoning: ReasoningConfig {
                 tableau_algorithm: TableauAlgorithm::Traditional,
                 blocking_strategy: BlockingStrategy::Anywhere,
                 expansion_strategy: ExpansionStrategy::CreationOrder,
-                enable_optimisations: true,
+                features: reasoning_features,
                 timeout: Some(Duration::from_secs(300)), // 5 minutes
                 max_memory_mb: Some(4096),               // 4 GB
                 incremental_reasoning: false,
-                enable_explanations: false,
                 max_expansion_depth: 100,
-                enable_clash_detection: true,
-                enable_blockers_cache: false,
                 ignore_unsupported_datatypes: false,
                 dump_clauses: false,
                 clause_dump_file: None,
                 target_profile: OWLProfile::Auto,
             },
             cache: CacheConfig {
-                enable_satisfiability_cache: true,
-                enable_completion_graph_cache: true,
-                enable_unsatisfiability_cache: false,
+                features: cache_features,
                 max_cache_size_mb: 1024, // 1 GB
                 cache_ttl: Some(Duration::from_secs(3600)),
                 eviction_strategy: CacheEvictionStrategy::LRU,
                 persistence: false,
             },
             server: ServerConfig {
-                enable_server: false, // Disabled by default for CLI usage
+                features: server_features,
                 port: 8080,
                 bind_address: "127.0.0.1".to_string(),
                 max_connections: 100,
                 request_timeout: Duration::from_secs(30),
-                enable_cors: true,
                 max_request_size: 50 * 1024 * 1024, // 50MB
-                enable_owllink: false,
                 owllink_port: 8081,
-                enable_sparql: false,
                 sparql_port: 8082,
-                enable_rest_api: true,
                 rest_api_port: 8080,
             },
             logging: LoggingConfig {
@@ -588,7 +709,7 @@ impl ReasonerConfig {
     /// Check if parallel processing is enabled
     #[must_use]
     pub fn is_parallel_processing_enabled(&self) -> bool {
-        self.performance.enable_parallel_expansion && self.worker_thread_count() > 1
+        self.performance.is_enabled(PerformanceFeature::ParallelExpansion) && self.worker_thread_count() > 1
     }
 }
 
@@ -603,7 +724,7 @@ impl ReasonerConfig {
         config.performance.memory_pool_size_mb = 1024; // 1 GB
         config.reasoning.timeout = Some(Duration::from_secs(1800)); // 30 minutes
         config.reasoning.max_expansion_depth = 200; // Increase depth for large ontologies
-        config.reasoning.enable_optimisations = true; // Enable optimisations
+        config.reasoning.enable(ReasoningFeature::Optimizations); // Enable optimisations
         config
     }
 
@@ -623,9 +744,9 @@ impl ReasonerConfig {
     pub fn debug_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Debug; // Set logging to debug level
-        config.reasoning.enable_explanations = true; // Enable explanations
-        config.reasoning.enable_clash_detection = false; // Disable clash detection for debugging
-        config.cache.enable_satisfiability_cache = false; // Disable satisfiability cache for debugging
+        config.reasoning.enable(ReasoningFeature::Explanations); // Enable explanations
+        config.reasoning.disable(ReasoningFeature::ClashDetection); // Disable clash detection for debugging
+        config.cache.disable(CacheFeature::Satisfiability); // Disable satisfiability cache for debugging
         config.performance.worker_threads = Some(1); // Use single thread for debugging
         config
     }
@@ -635,11 +756,11 @@ impl ReasonerConfig {
     pub fn production_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Info; // Set logging to info level
-        config.reasoning.enable_explanations = false; // Disable explanations in production
-        config.reasoning.enable_clash_detection = true; // Enable clash detection
-        config.cache.enable_satisfiability_cache = true; // Enable satisfiability cache
+        config.reasoning.disable(ReasoningFeature::Explanations); // Disable explanations in production
+        config.reasoning.enable(ReasoningFeature::ClashDetection); // Enable clash detection
+        config.cache.enable(CacheFeature::Satisfiability); // Enable satisfiability cache
         config.performance.worker_threads = Some(8); // Use multiple threads for production
-        config.performance.enable_parallel_expansion = true; // Enable parallel expansion
+        config.performance.enable(PerformanceFeature::ParallelExpansion); // Enable parallel expansion
         config
     }
 
@@ -648,11 +769,11 @@ impl ReasonerConfig {
     pub fn test_config() -> Self {
         let mut config = Self::default();
         config.logging.level = LogLevel::Debug; // Set logging to debug level for tests
-        config.reasoning.enable_explanations = true; // Enable explanations for tests
-        config.reasoning.enable_clash_detection = false; // Disable clash detection for tests
-        config.cache.enable_satisfiability_cache = true; // Enable satisfiability cache for tests
+        config.reasoning.enable(ReasoningFeature::Explanations); // Enable explanations for tests
+        config.reasoning.disable(ReasoningFeature::ClashDetection); // Disable clash detection for tests
+        config.cache.enable(CacheFeature::Satisfiability); // Enable satisfiability cache for tests
         config.performance.worker_threads = Some(2); // Use 2 threads for testing
-        config.performance.enable_parallel_expansion = false; // Disable parallel expansion for tests
+        config.performance.disable(PerformanceFeature::ParallelExpansion); // Disable parallel expansion for tests
         config
     }
 }

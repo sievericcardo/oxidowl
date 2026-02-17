@@ -467,6 +467,7 @@ mod tests {
     use crate::ontology::ClassExpression;
     use std::collections::HashSet;
 
+    #[allow(dead_code)]
     fn concept_label(name: &str) -> ClassExpression {
         ClassExpression::Class(crate::ontology::Class {
             iri: crate::ontology::IRI::new(name),

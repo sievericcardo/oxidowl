@@ -4,11 +4,13 @@
 //! using `DashMap` for lock-free concurrent access patterns inspired by Konclude's approach.
 
 use crate::{
+    cache::CacheFeature,
     ontology::ClassExpression,
     reasoning::ClassificationResult,
 };
 
 use dashmap::DashMap;
+use enumset::EnumSet;
 use std::{
     sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -102,11 +104,25 @@ impl LockFreeCacheMetrics {
 pub struct LockFreeCacheConfig {
     pub max_size: usize,
     pub ttl: Duration,
-    pub enable_concept_cache: bool,
-    pub enable_subsumption_cache: bool,
-    pub enable_satisfiability_cache: bool,
-    pub enable_classification_cache: bool,
-    pub enable_realization_cache: bool,
+    pub features: EnumSet<CacheFeature>,
+}
+
+impl LockFreeCacheConfig {
+    /// Check if a specific cache feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: CacheFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a cache feature
+    pub fn enable(&mut self, feature: CacheFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a cache feature
+    pub fn disable(&mut self, feature: CacheFeature) {
+        self.features.remove(feature);
+    }
 }
 
 impl Default for LockFreeCacheConfig {
@@ -114,11 +130,11 @@ impl Default for LockFreeCacheConfig {
         Self {
             max_size: 10000,
             ttl: Duration::from_secs(3600),
-            enable_concept_cache: true,
-            enable_subsumption_cache: true,
-            enable_satisfiability_cache: true,
-            enable_classification_cache: true,
-            enable_realization_cache: true,
+            features: CacheFeature::Concept
+                | CacheFeature::Subsumption
+                | CacheFeature::Satisfiability
+                | CacheFeature::Classification
+                | CacheFeature::Realization,
         }
     }
 }
@@ -145,7 +161,7 @@ impl LockFreeConceptCache {
 
     #[must_use]
     pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
-        if !self.config.enable_satisfiability_cache {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
             return None;
         }
 
@@ -169,7 +185,7 @@ impl LockFreeConceptCache {
     }
 
     pub fn put(&self, expression: ClassExpression, result: bool) {
-        if !self.config.enable_satisfiability_cache {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
             return;
         }
 
@@ -234,7 +250,7 @@ impl LockFreeSubsumptionCache {
 
     #[must_use]
     pub fn get(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Option<bool> {
-        if !self.config.enable_subsumption_cache {
+        if !self.config.is_enabled(CacheFeature::Subsumption) {
             return None;
         }
 
@@ -258,7 +274,7 @@ impl LockFreeSubsumptionCache {
     }
 
     pub fn put(&self, subclass: ClassExpression, superclass: ClassExpression, result: bool) {
-        if !self.config.enable_subsumption_cache {
+        if !self.config.is_enabled(CacheFeature::Subsumption) {
             return;
         }
 
@@ -322,7 +338,7 @@ impl LockFreeClassificationCache {
 
     #[must_use]
     pub fn get(&self, ontology_iri: &str) -> Option<ClassificationResult> {
-        if !self.config.enable_classification_cache {
+        if !self.config.is_enabled(CacheFeature::Classification) {
             return None;
         }
 
@@ -345,7 +361,7 @@ impl LockFreeClassificationCache {
     }
 
     pub fn put(&self, ontology_iri: String, result: ClassificationResult) {
-        if !self.config.enable_classification_cache {
+        if !self.config.is_enabled(CacheFeature::Classification) {
             return;
         }
 

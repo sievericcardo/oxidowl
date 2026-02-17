@@ -2352,7 +2352,7 @@ mod tests {
     #[test]
     fn test_simple_property_detection() {
         // Create test ontology with transitive property
-        let mut ontology = Ontology::new();
+        let ontology = Ontology::new();
         // Add test axioms...
 
         let mut validator = OWL2DLValidator::new(ontology);
@@ -2382,7 +2382,7 @@ mod tests {
     #[test]
     fn test_anonymous_individual_validation() {
         // Test that anonymous individuals are properly validated
-        let mut ontology = Ontology::new();
+        let ontology = Ontology::new();
         // Add test axioms with anonymous individuals...
 
         let mut validator = OWL2DLValidator::new(ontology);

@@ -77,7 +77,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -95,7 +95,7 @@ impl ReasoningService {
         let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             if let Some(ontology) = reasoner.get_ontology() {
                 cache_manager.cache_consistency_result(&ontology, result);
@@ -121,7 +121,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             if let Some(result) = cache_manager.get_satisfiability_result(expression) {
                 return Ok(result);
@@ -133,7 +133,7 @@ impl ReasoningService {
         let result = reasoner.is_class_satisfiable(expression)?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             cache_manager.cache_satisfiability_result(expression.clone(), result);
         }
@@ -161,7 +161,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             if let Some(result) = cache_manager.get_subsumption_result(subclass, superclass) {
                 return Ok(result);
@@ -172,7 +172,7 @@ impl ReasoningService {
         let result = reasoner.is_subsumed_by(subclass, superclass)?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
@@ -436,7 +436,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
@@ -466,7 +466,7 @@ impl ReasoningService {
         }
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
@@ -544,7 +544,7 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
@@ -574,7 +574,7 @@ impl ReasoningService {
         }
 
         // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
@@ -596,7 +596,7 @@ impl ReasoningService {
     ) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
-        if !self.config.reasoning.enable_explanations {
+        if !self.config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
             return Err(Error::Reasoning {
                 message: "Explanation is disabled in the configuration".into(),
             });
@@ -632,7 +632,7 @@ impl ReasoningService {
     pub async fn explain_inconsistency(&self) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
-        if !self.config.reasoning.enable_explanations {
+        if !self.config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
             return Err(Error::Reasoning {
                 message: "Explanation is disabled in the configuration".into(),
             });
@@ -692,7 +692,7 @@ impl ReasoningService {
         }
 
         // Clear relevant caches
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
         }
 
@@ -726,7 +726,7 @@ impl ReasoningService {
         }
 
         // Clear relevant caches
-        if self.config.cache.enable_satisfiability_cache {
+        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
             write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
         }
 

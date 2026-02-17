@@ -34,6 +34,7 @@ crossbeam = { version = "0.8.4", optional = true }
 # Serialization
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = "1.0.149"
+enumset = { version = "1.1.10", features = ["serde"] }  # Type-safe bitflag-like enums for configuration
 
 # Logging and tracing
 log = "0.4.29"
