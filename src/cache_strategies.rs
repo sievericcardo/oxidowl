@@ -70,7 +70,7 @@ impl<V> CacheEntry<V> {
 
 impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     /// Create a new LRU cache with the specified capacity
-    #[must_use] 
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self {
             cache: HashMap::with_capacity(capacity),
@@ -124,7 +124,7 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     }
 
     /// Get cache statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             size: self.cache.len(),
@@ -151,13 +151,13 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     }
 
     /// Get current size
-    #[must_use] 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if empty
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
@@ -174,7 +174,7 @@ pub struct LFUCache<K: Hash + Eq + Clone, V: Clone> {
 
 impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     /// Create a new LFU cache with the specified capacity
-    #[must_use] 
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self {
             cache: HashMap::with_capacity(capacity),
@@ -223,7 +223,7 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     }
 
     /// Get cache statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             size: self.cache.len(),
@@ -249,13 +249,13 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     }
 
     /// Get current size
-    #[must_use] 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if empty
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
@@ -274,7 +274,7 @@ pub struct SizeBasedCache<K: Hash + Eq + Clone, V: Clone> {
 
 impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
     /// Create a new size-based cache
-    #[must_use] 
+    #[must_use]
     pub fn new(max_size_bytes: usize, eviction_strategy: EvictionStrategy) -> Self {
         Self {
             cache: HashMap::new(),
@@ -344,14 +344,15 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
         };
 
         if let Some(key) = key_to_evict
-            && let Some(entry) = self.cache.remove(&key) {
-                self.total_size_bytes -= entry.size_bytes;
-                self.evictions += 1;
-            }
+            && let Some(entry) = self.cache.remove(&key)
+        {
+            self.total_size_bytes -= entry.size_bytes;
+            self.evictions += 1;
+        }
     }
 
     /// Get cache statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             size: self.cache.len(),
@@ -372,7 +373,7 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
     }
 
     /// Get total size in bytes
-    #[must_use] 
+    #[must_use]
     pub fn total_size_bytes(&self) -> usize {
         self.total_size_bytes
     }
@@ -384,13 +385,13 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
     }
 
     /// Get current size
-    #[must_use] 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if empty
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }

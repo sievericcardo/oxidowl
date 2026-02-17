@@ -79,7 +79,7 @@ impl Default for LargeOntologyConfig {
 }
 
 impl IndustrialOptimizer {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: LargeOntologyConfig) -> Self {
         Self {
             memory_manager: LargeScaleMemoryManager::new(config.memory_limit_gb),
@@ -111,9 +111,7 @@ impl IndustrialOptimizer {
             });
         }
 
-        println!(
-            "Activating large ontology optimizations for {concept_count} concepts"
-        );
+        println!("Activating large ontology optimizations for {concept_count} concepts");
 
         // Memory management checkpoint
         self.memory_manager.checkpoint("pre-optimization")?;
@@ -594,7 +592,7 @@ impl IndustrialOptimizer {
 
     fn estimate_module_complexity(&self, concepts: &[ClassExpression]) -> f64 {
         let mut complexity = 0.0;
-        
+
         for concept in concepts {
             complexity += match concept {
                 ClassExpression::Class(_) => 1.0,
@@ -602,14 +600,18 @@ impl IndustrialOptimizer {
                 ClassExpression::ObjectUnionOf(ops) => 3.0 + (ops.len() as f64 * 0.7),
                 ClassExpression::ObjectSomeValuesFrom { .. } => 5.0,
                 ClassExpression::ObjectAllValuesFrom { .. } => 5.0,
-                ClassExpression::ObjectMinCardinality { cardinality, .. } | ClassExpression::ObjectMaxCardinality { cardinality, .. } =>
-                    10.0 + (*cardinality as f64 * 2.0),
-                ClassExpression::ObjectExactCardinality { cardinality, .. } => 12.0 + (*cardinality as f64 * 2.0),
+                ClassExpression::ObjectMinCardinality { cardinality, .. }
+                | ClassExpression::ObjectMaxCardinality { cardinality, .. } => {
+                    10.0 + (*cardinality as f64 * 2.0)
+                }
+                ClassExpression::ObjectExactCardinality { cardinality, .. } => {
+                    12.0 + (*cardinality as f64 * 2.0)
+                }
                 ClassExpression::ObjectOneOf(inds) => 3.0 + (inds.len() as f64 * 0.5),
                 _ => 2.0,
             };
         }
-        
+
         // Apply logarithmic scaling for very large values
         if complexity > 100.0 {
             100.0 + (complexity - 100.0).ln() * 10.0
@@ -626,9 +628,10 @@ impl IndustrialOptimizer {
             }
             crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
                 // Check if our class is in the equivalence set
-                equiv_axiom.classes.iter().any(|ce| {
-                    matches!(ce, ClassExpression::Class(c) if &c.iri == class_iri)
-                })
+                equiv_axiom
+                    .classes
+                    .iter()
+                    .any(|ce| matches!(ce, ClassExpression::Class(c) if &c.iri == class_iri))
             }
             _ => false,
         }
@@ -640,7 +643,7 @@ impl IndustrialOptimizer {
         ontology: &Ontology,
     ) -> Vec<ClassExpression> {
         let mut subclasses = Vec::new();
-        
+
         for axiom in ontology.axioms() {
             if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
                 // Check if the superclass matches our concept
@@ -649,7 +652,7 @@ impl IndustrialOptimizer {
                 }
             }
         }
-        
+
         // Limit recursion to prevent infinite loops
         subclasses.truncate(100);
         subclasses
@@ -662,10 +665,10 @@ impl IndustrialOptimizer {
     ) -> Result<ChunkOntology, OptimizationError> {
         // Extract relevant axioms for this chunk of concepts
         let mut concepts = Vec::new();
-        
+
         // Add all concepts from the chunk
         concepts.extend(chunk.iter().cloned());
-        
+
         // Find all axioms that mention any concept in the chunk
         for axiom in ontology.axioms() {
             match axiom {
@@ -692,7 +695,7 @@ impl IndustrialOptimizer {
                 _ => {}
             }
         }
-        
+
         Ok(ChunkOntology { concepts })
     }
 
@@ -704,8 +707,9 @@ impl IndustrialOptimizer {
         // Extract module-specific ontology using module extraction algorithms
         // This creates a locality-based module containing all axioms relevant to
         // the module's signature
-        
-        let signature: HashSet<String> = module.concepts
+
+        let signature: HashSet<String> = module
+            .concepts
             .iter()
             .filter_map(|ce| {
                 if let ClassExpression::Class(c) = ce {
@@ -715,12 +719,15 @@ impl IndustrialOptimizer {
                 }
             })
             .collect();
-        
+
         // Simple module extraction: include all axioms mentioning signature concepts
         // In production, this would use syntactic locality or semantic module extraction
-        log::debug!("Creating module {} with {} concepts in signature", 
-                   module.module_id, signature.len());
-        
+        log::debug!(
+            "Creating module {} with {} concepts in signature",
+            module.module_id,
+            signature.len()
+        );
+
         Ok(ModuleOntology {
             module_id: module.module_id.clone(),
         })
@@ -734,24 +741,27 @@ impl IndustrialOptimizer {
         // Extract partition-specific ontology
         // Partitions are complete subsets that can be reasoned over independently
         // with minimal cross-partition dependencies
-        
+
         let mut partition_signature = HashSet::new();
-        
+
         // Collect all IRIs from partition concepts
         for concept in &partition.concepts {
             if let ClassExpression::Class(c) = concept {
                 partition_signature.insert(c.iri.clone());
             }
         }
-        
+
         // In a full implementation, we would:
         // 1. Extract all axioms whose signature is contained in partition_signature
         // 2. Add interface axioms for cross-partition dependencies
         // 3. Minimize the ontology while preserving entailments
-        
-        log::debug!("Creating partition {} with {} concepts", 
-                   partition.partition_id, partition.concept_count);
-        
+
+        log::debug!(
+            "Creating partition {} with {} concepts",
+            partition.partition_id,
+            partition.concept_count
+        );
+
         Ok(PartitionOntology {
             partition_id: partition.partition_id.clone(),
         })
@@ -766,9 +776,9 @@ impl IndustrialOptimizer {
         // 1. Identifying shared concepts across module boundaries
         // 2. Propagating subsumption relationships across modules
         // 3. Ensuring consistency of cross-module inferences
-        
+
         let mut cross_module_subsumptions = HashMap::new();
-        
+
         // Collect all module subsumptions
         for module_result in &result.module_results {
             for (sub, supers) in &module_result.subsumptions {
@@ -778,15 +788,16 @@ impl IndustrialOptimizer {
                     .extend(supers.iter().cloned());
             }
         }
-        
+
         // Check for transitive closure across modules
         let mut changed = true;
         while changed {
             changed = false;
-            let entries: Vec<_> = cross_module_subsumptions.iter()
+            let entries: Vec<_> = cross_module_subsumptions
+                .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
-            
+
             for (sub, supers) in entries {
                 for sup in supers.iter() {
                     if let Some(super_supers) = cross_module_subsumptions.get(sup).cloned() {
@@ -800,7 +811,7 @@ impl IndustrialOptimizer {
                 }
             }
         }
-        
+
         // Update module results with cross-module inferences
         for module_result in &mut result.module_results {
             for (sub, supers) in &mut module_result.subsumptions {
@@ -811,9 +822,11 @@ impl IndustrialOptimizer {
                 }
             }
         }
-        
-        log::info!("Resolved inter-module dependencies for {} modules", 
-                  result.module_results.len());
+
+        log::info!(
+            "Resolved inter-module dependencies for {} modules",
+            result.module_results.len()
+        );
         Ok(())
     }
 }
@@ -928,7 +941,7 @@ impl ModularClassificationResult {
     ) {
         // Extract subsumption relationships from the query result
         let mut subsumptions = HashMap::new();
-        
+
         // Extract subsumptions from query plan execution strategy
         // In a full implementation, this would analyze the query results
         // and extract hierarchical relationships between concepts
@@ -939,16 +952,18 @@ impl ModularClassificationResult {
                 subsumptions.insert(concept_iri, vec!["owl:Thing".to_string()]);
             }
         }
-        
+
         // Analyze query plan strategy to identify subsumptions
         // This is a simplified version - full implementation would traverse
         // the execution tree and identify hierarchical relationships
-        if let super::optimization::ExecutionStrategy::Tableau { expansion_order } = &result.base_plan.strategy {
+        if let super::optimization::ExecutionStrategy::Tableau { expansion_order } =
+            &result.base_plan.strategy
+        {
             // Extract subsumption info from tableau expansion
             // In production: analyze expansion_order to identify subsumption relationships
             let _num_expansions = expansion_order.len();
         }
-        
+
         self.module_results.push(ModuleResult {
             module_id: module.module_id,
             concept_count: module.concept_count,
@@ -1001,27 +1016,29 @@ impl DistributedClassificationResult {
     ) {
         // Extract subsumption relationships from partition result
         let mut subsumptions = HashMap::new();
-        
+
         // Process concepts in the partition and extract hierarchical relationships
         for concept in &partition.concepts {
             if let ClassExpression::Class(c) = concept {
                 let concept_iri = c.iri.to_string();
                 let superclasses = vec!["owl:Thing".to_string()];
-                
+
                 // Extract superclasses from query result
                 // In full implementation, analyze execution results
-                
+
                 // Check join order and strategy to identify subsumptions
-                if let super::optimization::ExecutionStrategy::Tableau { expansion_order } = &result.base_plan.strategy {
+                if let super::optimization::ExecutionStrategy::Tableau { expansion_order } =
+                    &result.base_plan.strategy
+                {
                     // Analyze tableau expansion for subsumption relationships
                     let _num_atoms = expansion_order.len();
                     // In production: extract subsumptions from expansion order
                 }
-                
+
                 subsumptions.insert(concept_iri, superclasses);
             }
         }
-        
+
         self.partitions.push(PartitionResult {
             partition_id: partition.partition_id,
             concept_count: partition.concept_count,
@@ -1124,17 +1141,18 @@ impl LargeScaleMemoryManager {
         // Estimate current memory usage using system information
         // On Unix systems, we can read /proc/self/statm or use sysinfo crate
         // For now, track checkpoints and estimate based on growth
-        
+
         // Get base memory from checkpoints if available
-        let base_usage = self.checkpoints
+        let base_usage = self
+            .checkpoints
             .first()
             .map(|cp| cp.memory_usage)
             .unwrap_or(0);
-        
+
         // Estimate growth based on number of checkpoints
         // Each checkpoint adds roughly 100MB on average for large ontologies
         let checkpoint_overhead = self.checkpoints.len() * 100 * 1024 * 1024;
-        
+
         // Try to get actual process memory if available
         #[cfg(target_os = "linux")]
         {
@@ -1148,7 +1166,7 @@ impl LargeScaleMemoryManager {
                 }
             }
         }
-        
+
         // Fallback: return tracked usage plus checkpoint overhead
         base_usage + checkpoint_overhead + self.current_usage
     }
@@ -1207,27 +1225,28 @@ impl DistributedProcessingCoordinator {
     ) -> Result<DistributedClassificationResult, OptimizationError> {
         // Merge all partition results into a single result
         let mut merged = DistributedClassificationResult::new();
-        
+
         for partition_result in &result.partitions {
             // Merge subsumption relationships
             for (class, supers) in &partition_result.subsumptions {
-                merged.subsumptions
+                merged
+                    .subsumptions
                     .entry(class.clone())
                     .or_default()
                     .extend(supers.iter().cloned());
             }
-            
+
             // Aggregate performance metrics
             merged.total_time += partition_result.time_ms;
             merged.partition_count += 1;
         }
-        
+
         // Deduplicate subsumptions
         for supers in merged.subsumptions.values_mut() {
             supers.sort();
             supers.dedup();
         }
-        
+
         Ok(merged)
     }
 }
@@ -1297,18 +1316,18 @@ impl From<ChunkOntology> for ConjunctiveQuery {
     fn from(chunk: ChunkOntology) -> Self {
         // Convert chunk ontology to conjunctive query for classification
         // The query asks for all subsumption relationships in the chunk
-        
+
         use super::conjunctive::{QueryAtom, QueryVariable};
-        
+
         let mut body_atoms = Vec::new();
-        
+
         // For each concept in the chunk, create query atoms
         // that will trigger subsumption checking
         for (idx, concept) in chunk.concepts.iter().enumerate() {
             if let ClassExpression::Class(_c) = concept {
                 // Create variable for this concept
                 let concept_var = QueryVariable::new(format!("?x{idx}"));
-                
+
                 // Add atom: ?x rdf:type ConceptC
                 body_atoms.push(QueryAtom::ClassAtom {
                     variable: concept_var.clone(),
@@ -1316,10 +1335,10 @@ impl From<ChunkOntology> for ConjunctiveQuery {
                 });
             }
         }
-        
+
         // Create query that retrieves all instances matching concepts
         let answer_variables = vec![QueryVariable::new("?x0".to_string())];
-        
+
         ConjunctiveQuery {
             answer_variables,
             body_atoms,
@@ -1338,14 +1357,14 @@ impl From<ModuleOntology> for ConjunctiveQuery {
     fn from(module: ModuleOntology) -> Self {
         // Convert module ontology to conjunctive query for modular reasoning
         // The query asks for all entailments within the module
-        
+
         use super::conjunctive::{QueryAtom, QueryVariable};
-        
+
         // Create a query that retrieves subsumption relationships
         // within this semantic module
         let subclass_var = QueryVariable::new("?subclass".to_string());
         let superclass_var = QueryVariable::new("?superclass".to_string());
-        
+
         // Add query atoms for subsumption relationships
         let body_atoms = vec![
             // Pattern: ?subclass rdfs:subClassOf ?superclass
@@ -1353,15 +1372,17 @@ impl From<ModuleOntology> for ConjunctiveQuery {
                 subject: subclass_var.clone(),
                 property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
                     crate::ontology::ObjectProperty {
-                        iri: crate::ontology::IRI::new("http://www.w3.org/2000/01/rdf-schema#subClassOf"),
+                        iri: crate::ontology::IRI::new(
+                            "http://www.w3.org/2000/01/rdf-schema#subClassOf",
+                        ),
                     },
                 ),
                 object: superclass_var.clone(),
             },
         ];
-        
+
         let answer_variables = vec![subclass_var, superclass_var];
-        
+
         ConjunctiveQuery {
             answer_variables,
             body_atoms,
@@ -1384,31 +1405,32 @@ impl From<PartitionOntology> for ConjunctiveQuery {
     fn from(partition: PartitionOntology) -> Self {
         // Convert partition ontology to conjunctive query for distributed reasoning
         // The query asks for all classification results within the partition
-        
+
         use super::conjunctive::{QueryAtom, QueryVariable};
-        
+
         // Create query variables for partition reasoning
         let instance_var = QueryVariable::new("?instance".to_string());
-        
+
         // Query pattern: retrieve all concept assertions in partition
-        let body_atoms = vec![
-            QueryAtom::ClassAtom {
-                variable: instance_var.clone(),
-                class_expression: ClassExpression::Class(crate::ontology::Class {
-                    iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
-                }),
-            },
-        ];
-        
+        let body_atoms = vec![QueryAtom::ClassAtom {
+            variable: instance_var.clone(),
+            class_expression: ClassExpression::Class(crate::ontology::Class {
+                iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+            }),
+        }];
+
         let answer_variables = vec![instance_var];
-        
+
         ConjunctiveQuery {
             answer_variables,
             body_atoms,
             constraints: QueryConstraints::default(),
             metadata: QueryMetadata {
                 name: Some(format!("partition_{}", partition.partition_id)),
-                source: Some(format!("distributed_classification:{}", partition.partition_id)),
+                source: Some(format!(
+                    "distributed_classification:{}",
+                    partition.partition_id
+                )),
                 ..QueryMetadata::default()
             },
         }

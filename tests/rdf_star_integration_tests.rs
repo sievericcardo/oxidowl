@@ -8,8 +8,8 @@
 //! - Reification round-trip tests
 //! - Performance and edge cases
 
-use oxidowl::semantics::{RdfGraph, RdfTerm, Triple};
 use oxidowl::Ontology;
+use oxidowl::semantics::{RdfGraph, RdfTerm, Triple};
 
 #[test]
 fn test_simple_quoted_triple_creation() {
@@ -51,10 +51,7 @@ fn test_quoted_triple_in_graph() {
     // Verify triple was added
     assert_eq!(graph.triples().len(), 1);
     let first_triple = graph.triples().iter().next().unwrap();
-    assert!(matches!(
-        first_triple.subject,
-        RdfTerm::QuotedTriple(_)
-    ));
+    assert!(matches!(first_triple.subject, RdfTerm::QuotedTriple(_)));
 }
 
 #[test]
@@ -126,10 +123,7 @@ fn test_quoted_triple_in_object_position() {
     let outer_triple = Triple::new(alice, believes, quoted_object);
 
     // Verify structure
-    assert!(matches!(
-        outer_triple.object,
-        RdfTerm::QuotedTriple(_)
-    ));
+    assert!(matches!(outer_triple.object, RdfTerm::QuotedTriple(_)));
     assert_eq!(outer_triple.depth(), 1);
 }
 
@@ -263,7 +257,13 @@ fn test_rdf11_ontology_without_rdf_star() {
     ontology.set_rdf_graph(graph);
 
     // Verify depth is 0 (no nesting)
-    let first_triple = ontology.get_rdf_graph().unwrap().triples().iter().next().unwrap();
+    let first_triple = ontology
+        .get_rdf_graph()
+        .unwrap()
+        .triples()
+        .iter()
+        .next()
+        .unwrap();
     assert_eq!(first_triple.depth(), 0);
 }
 

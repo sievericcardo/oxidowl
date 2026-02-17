@@ -1,13 +1,10 @@
 //! Saturation rules for deterministic consequence computation
 
+use super::node::SaturationNode;
 use crate::{
     Result,
-    ontology::{
-        ClassExpression, IRI, Ontology,
-        axioms::Axiom,
-    },
+    ontology::{ClassExpression, IRI, Ontology, axioms::Axiom},
 };
-use super::node::SaturationNode;
 
 /// Trait for saturation rules
 pub trait SaturationRule: Send + Sync {
@@ -39,7 +36,7 @@ impl std::fmt::Debug for SaturationRuleSet {
 
 impl SaturationRuleSet {
     /// Create a new rule set with standard OWL 2 DL saturation rules
-    #[must_use] 
+    #[must_use]
     pub fn new_owl2_dl() -> Self {
         let rules: Vec<Box<dyn SaturationRule>> = vec![
             Box::new(ConjunctionRule),
@@ -61,17 +58,16 @@ impl SaturationRuleSet {
         let mut changed = false;
 
         for rule in &self.rules {
-            if rule.is_applicable(node, ontology)
-                && rule.apply(node, ontology)? {
-                    changed = true;
-                }
+            if rule.is_applicable(node, ontology) && rule.apply(node, ontology)? {
+                changed = true;
+            }
         }
 
         Ok(changed)
     }
 
     /// Get all rules
-    #[must_use] 
+    #[must_use]
     pub fn rules(&self) -> &[Box<dyn SaturationRule>] {
         &self.rules
     }
@@ -87,7 +83,9 @@ impl SaturationRule for ConjunctionRule {
     }
 
     fn is_applicable(&self, node: &SaturationNode, _ontology: &Ontology) -> bool {
-        node.saturated_concepts.iter().any(|c| matches!(c, ClassExpression::ObjectIntersectionOf(_)))
+        node.saturated_concepts
+            .iter()
+            .any(|c| matches!(c, ClassExpression::ObjectIntersectionOf(_)))
     }
 
     fn apply(&self, node: &mut SaturationNode, _ontology: &Ontology) -> Result<bool> {
@@ -126,7 +124,10 @@ impl SaturationRule for SubClassOfRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(a, Axiom::SubClassOf(_)))
+        ontology
+            .axioms()
+            .iter()
+            .any(|a| matches!(a, Axiom::SubClassOf(_)))
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -136,10 +137,11 @@ impl SaturationRule for SubClassOfRule {
             if let Axiom::SubClassOf(subclass_axiom) = axiom {
                 // If the node contains the subclass, add the superclass
                 if node.saturated_concepts.contains(&subclass_axiom.subclass)
-                    && !node.saturated_concepts.contains(&subclass_axiom.superclass) {
-                        new_concepts.push(subclass_axiom.superclass.clone());
-                        node.add_direct_subsumer(subclass_axiom.superclass.clone());
-                    }
+                    && !node.saturated_concepts.contains(&subclass_axiom.superclass)
+                {
+                    new_concepts.push(subclass_axiom.superclass.clone());
+                    node.add_direct_subsumer(subclass_axiom.superclass.clone());
+                }
             }
         }
 
@@ -166,7 +168,10 @@ impl SaturationRule for EquivalentClassRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(a, Axiom::EquivalentClasses(_)))
+        ontology
+            .axioms()
+            .iter()
+            .any(|a| matches!(a, Axiom::EquivalentClasses(_)))
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -179,7 +184,9 @@ impl SaturationRule for EquivalentClassRule {
                     if node.saturated_concepts.contains(class) {
                         // Add all other equivalent classes
                         for other_class in &equiv_axiom.classes {
-                            if class != other_class && !node.saturated_concepts.contains(other_class) {
+                            if class != other_class
+                                && !node.saturated_concepts.contains(other_class)
+                            {
                                 new_concepts.push(other_class.clone());
                             }
                         }
@@ -211,7 +218,9 @@ impl SaturationRule for UniversalRestrictionRule {
     }
 
     fn is_applicable(&self, node: &SaturationNode, _ontology: &Ontology) -> bool {
-        node.saturated_concepts.iter().any(|c| matches!(c, ClassExpression::ObjectAllValuesFrom { .. }))
+        node.saturated_concepts
+            .iter()
+            .any(|c| matches!(c, ClassExpression::ObjectAllValuesFrom { .. }))
     }
 
     fn apply(&self, node: &mut SaturationNode, _ontology: &Ontology) -> Result<bool> {
@@ -245,10 +254,12 @@ impl SaturationRule for DomainRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(
-            a,
-            Axiom::ObjectPropertyDomain(_) | Axiom::DataPropertyDomain(_)
-        ))
+        ontology.axioms().iter().any(|a| {
+            matches!(
+                a,
+                Axiom::ObjectPropertyDomain(_) | Axiom::DataPropertyDomain(_)
+            )
+        })
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -261,9 +272,10 @@ impl SaturationRule for DomainRule {
                     if let Some(property_iri) = extract_property_iri(&domain_axiom.property) {
                         for existential in &node.existentials {
                             if existential.property == property_iri
-                                && !node.saturated_concepts.contains(&domain_axiom.domain) {
-                                    new_concepts.push(domain_axiom.domain.clone());
-                                }
+                                && !node.saturated_concepts.contains(&domain_axiom.domain)
+                            {
+                                new_concepts.push(domain_axiom.domain.clone());
+                            }
                         }
                     }
                 }
@@ -304,10 +316,12 @@ impl SaturationRule for RangeRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(
-            a,
-            Axiom::ObjectPropertyRange(_) | Axiom::DataPropertyRange(_)
-        ))
+        ontology.axioms().iter().any(|a| {
+            matches!(
+                a,
+                Axiom::ObjectPropertyRange(_) | Axiom::DataPropertyRange(_)
+            )
+        })
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -315,11 +329,12 @@ impl SaturationRule for RangeRule {
 
         for axiom in ontology.axioms() {
             if let Axiom::ObjectPropertyRange(range_axiom) = axiom
-                && let Some(property_iri) = extract_property_iri(&range_axiom.property) {
-                    // Add universal restriction for this property
-                    node.add_universal(property_iri, range_axiom.range.clone());
-                    changed = true;
-                }
+                && let Some(property_iri) = extract_property_iri(&range_axiom.property)
+            {
+                // Add universal restriction for this property
+                node.add_universal(property_iri, range_axiom.range.clone());
+                changed = true;
+            }
         }
 
         Ok(changed)
@@ -340,7 +355,10 @@ impl SaturationRule for TransitivePropertyRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(a, Axiom::TransitiveObjectProperty(_)))
+        ontology
+            .axioms()
+            .iter()
+            .any(|a| matches!(a, Axiom::TransitiveObjectProperty(_)))
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -349,7 +367,9 @@ impl SaturationRule for TransitivePropertyRule {
         let mut changed = false;
 
         // Get all transitive properties
-        let transitive_props: Vec<IRI> = ontology.axioms().iter()
+        let transitive_props: Vec<IRI> = ontology
+            .axioms()
+            .iter()
             .filter_map(|a| {
                 if let Axiom::TransitiveObjectProperty(axiom) = a {
                     extract_property_iri(&axiom.property)
@@ -362,7 +382,9 @@ impl SaturationRule for TransitivePropertyRule {
         // For each transitive property, propagate universal restrictions
         for trans_prop in &transitive_props {
             // If we have ∀R.C where R is transitive, and ∃R.D, then D must satisfy C
-            let universals_for_prop: Vec<_> = node.universals.iter()
+            let universals_for_prop: Vec<_> = node
+                .universals
+                .iter()
                 .filter(|u| &u.property == trans_prop)
                 .cloned()
                 .collect();
@@ -393,7 +415,10 @@ impl SaturationRule for PropertyChainRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(a, Axiom::SubObjectPropertyOf(_)))
+        ontology
+            .axioms()
+            .iter()
+            .any(|a| matches!(a, Axiom::SubObjectPropertyOf(_)))
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -401,15 +426,16 @@ impl SaturationRule for PropertyChainRule {
         let mut changed = false;
 
         // Extract property chain axioms
-        let property_chains: Vec<(Vec<IRI>, IRI)> = ontology.axioms().iter()
+        let property_chains: Vec<(Vec<IRI>, IRI)> = ontology
+            .axioms()
+            .iter()
             .filter_map(|a| {
                 if let Axiom::SubObjectPropertyOf(axiom) = a {
                     use crate::ontology::ObjectPropertyExpression;
                     // Check if sub_property is a chain
                     if let ObjectPropertyExpression::PropertyChain(chain) = &axiom.sub_property {
-                        let chain_iris: Vec<IRI> = chain.iter()
-                            .filter_map(extract_property_iri)
-                            .collect();
+                        let chain_iris: Vec<IRI> =
+                            chain.iter().filter_map(extract_property_iri).collect();
                         let super_iri = extract_property_iri(&axiom.super_property)?;
                         return Some((chain_iris, super_iri));
                     }
@@ -431,9 +457,12 @@ impl SaturationRule for PropertyChainRule {
                     // In a full implementation, we would propagate through the chain
                     // For now, we just note it by adding a universal restriction with top concept
                     use crate::ontology::ClassExpression;
-                    node.add_universal(super_prop.clone(), ClassExpression::Class(
-                        crate::ontology::Class { iri: IRI::new("http://www.w3.org/2002/07/owl#Thing") }
-                    ));
+                    node.add_universal(
+                        super_prop.clone(),
+                        ClassExpression::Class(crate::ontology::Class {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+                        }),
+                    );
                     changed = true;
                 }
             }
@@ -457,7 +486,10 @@ impl SaturationRule for InversePropertyRule {
     }
 
     fn is_applicable(&self, _node: &SaturationNode, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| matches!(a, Axiom::InverseObjectProperties(_)))
+        ontology
+            .axioms()
+            .iter()
+            .any(|a| matches!(a, Axiom::InverseObjectProperties(_)))
     }
 
     fn apply(&self, node: &mut SaturationNode, ontology: &Ontology) -> Result<bool> {
@@ -471,10 +503,11 @@ impl SaturationRule for InversePropertyRule {
                 && let (Some(iri1), Some(iri2)) = (
                     extract_property_iri(&inv_axiom.property1),
                     extract_property_iri(&inv_axiom.property2),
-                ) {
-                    inverse_map.insert(iri1.clone(), iri2.clone());
-                    inverse_map.insert(iri2, iri1);
-                }
+                )
+            {
+                inverse_map.insert(iri1.clone(), iri2.clone());
+                inverse_map.insert(iri2, iri1);
+            }
         }
 
         // For each existential restriction ∃R.C where R has inverse S,
@@ -487,9 +520,12 @@ impl SaturationRule for InversePropertyRule {
                 // by adding a universal restriction for the inverse property
                 // This is a simplified approach that marks the inverse as relevant
                 use crate::ontology::ClassExpression;
-                node.add_universal(inverse_prop.clone(), ClassExpression::Class(
-                    crate::ontology::Class { iri: IRI::new("http://www.w3.org/2002/07/owl#Thing") }
-                ));
+                node.add_universal(
+                    inverse_prop.clone(),
+                    ClassExpression::Class(crate::ontology::Class {
+                        iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+                    }),
+                );
                 changed = true;
             }
         }
@@ -499,9 +535,12 @@ impl SaturationRule for InversePropertyRule {
         for universal in &universals_clone {
             if let Some(inverse_prop) = inverse_map.get(&universal.property) {
                 // Track inverse relationship
-                node.add_existential(inverse_prop.clone(), ClassExpression::Class(
-                    crate::ontology::Class { iri: IRI::new("http://www.w3.org/2002/07/owl#Thing") }
-                ));
+                node.add_existential(
+                    inverse_prop.clone(),
+                    ClassExpression::Class(crate::ontology::Class {
+                        iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+                    }),
+                );
                 changed = true;
             }
         }
@@ -525,7 +564,9 @@ fn extract_property_iri(property_expr: &crate::ontology::ObjectPropertyExpressio
     }
 }
 
-fn extract_data_property_iri(property_expr: &crate::ontology::DataPropertyExpression) -> Option<IRI> {
+fn extract_data_property_iri(
+    property_expr: &crate::ontology::DataPropertyExpression,
+) -> Option<IRI> {
     use crate::ontology::DataPropertyExpression;
     match property_expr {
         DataPropertyExpression::DataProperty(prop) => Some(prop.iri.clone()),

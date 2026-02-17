@@ -224,7 +224,7 @@ impl Default for CacheConfig {
         let mut features = EnumSet::new();
         features.insert(CacheFeature::Satisfiability);
         features.insert(CacheFeature::CompletionGraph);
-        
+
         Self {
             features,
             max_cache_size_mb: 100,
@@ -355,8 +355,7 @@ impl PerformanceConfig {
 }
 
 /// Performance profile presets for different resource levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum PerformanceProfile {
     /// Low: Minimal resources (1-2 cores, basic caching, minimal memory)
     /// Good for: Embedded systems, resource-constrained environments
@@ -375,7 +374,7 @@ pub enum PerformanceProfile {
 
 impl PerformanceProfile {
     /// Get the recommended number of worker threads for this profile
-    #[must_use] 
+    #[must_use]
     pub fn worker_threads(&self) -> usize {
         match self {
             Self::Low => 2,
@@ -386,7 +385,7 @@ impl PerformanceProfile {
     }
 
     /// Get the recommended cache size in MB for this profile
-    #[must_use] 
+    #[must_use]
     pub fn cache_size_mb(&self) -> u64 {
         match self {
             Self::Low => 50,
@@ -397,7 +396,7 @@ impl PerformanceProfile {
     }
 
     /// Get the memory pool size in MB for this profile
-    #[must_use] 
+    #[must_use]
     pub fn memory_pool_size_mb(&self) -> u64 {
         match self {
             Self::Low => 128,
@@ -408,25 +407,25 @@ impl PerformanceProfile {
     }
 
     /// Whether SIMD should be enabled for this profile
-    #[must_use] 
+    #[must_use]
     pub fn enable_simd(&self) -> bool {
         matches!(self, Self::High | Self::Ultra)
     }
 
     /// Whether NUMA awareness should be enabled for this profile
-    #[must_use] 
+    #[must_use]
     pub fn enable_numa_awareness(&self) -> bool {
         matches!(self, Self::Ultra)
     }
 
     /// Whether lock-free data structures should be enabled
-    #[must_use] 
+    #[must_use]
     pub fn enable_lock_free(&self) -> bool {
         matches!(self, Self::High | Self::Ultra)
     }
 
     /// Whether persistent collections should be enabled
-    #[must_use] 
+    #[must_use]
     pub fn enable_persistent_collections(&self) -> bool {
         matches!(self, Self::High | Self::Ultra)
     }
@@ -436,7 +435,7 @@ impl PerformanceProfile {
     pub fn features(&self) -> EnumSet<PerformanceFeature> {
         let mut features = EnumSet::new();
         features.insert(PerformanceFeature::ParallelExpansion);
-        
+
         if self.enable_simd() {
             features.insert(PerformanceFeature::SIMD);
         }
@@ -449,12 +448,12 @@ impl PerformanceProfile {
         if self.enable_persistent_collections() {
             features.insert(PerformanceFeature::PersistentCollections);
         }
-        
+
         features
     }
 
     /// Maximum parallel classification tasks
-    #[must_use] 
+    #[must_use]
     pub fn max_parallel_classification_tasks(&self) -> usize {
         match self {
             Self::Low => 4,
@@ -464,7 +463,6 @@ impl PerformanceProfile {
         }
     }
 }
-
 
 impl Default for PerformanceConfig {
     fn default() -> Self {
@@ -482,7 +480,7 @@ impl Default for PerformanceConfig {
 
 impl PerformanceConfig {
     /// Create a configuration from a performance profile
-    #[must_use] 
+    #[must_use]
     pub fn from_profile(profile: PerformanceProfile) -> Self {
         Self {
             profile,
@@ -495,13 +493,14 @@ impl PerformanceConfig {
     }
 
     /// Get the effective number of worker threads
-    #[must_use] 
+    #[must_use]
     pub fn get_worker_threads(&self) -> usize {
-        self.worker_threads.unwrap_or_else(|| self.profile.worker_threads())
+        self.worker_threads
+            .unwrap_or_else(|| self.profile.worker_threads())
     }
 
     /// Set performance profile from environment variable
-    #[must_use] 
+    #[must_use]
     pub fn from_env() -> Self {
         let profile = std::env::var("OXIDOWL_PERFORMANCE_PROFILE")
             .ok()
@@ -542,7 +541,7 @@ impl Default for TableauConfig {
             timeout: Some(Duration::from_secs(300)),
             blocking_enabled: true,
             optimization_enabled: true,
-            rdf11_mode: false,              // RDF-star enabled by default
+            rdf11_mode: false,                // RDF-star enabled by default
             quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
         }
     }
@@ -553,7 +552,7 @@ impl Default for ReasoningConfig {
         let mut features = EnumSet::new();
         features.insert(ReasoningFeature::Optimizations);
         features.insert(ReasoningFeature::ClashDetection);
-        
+
         Self {
             tableau_algorithm: TableauAlgorithm::Traditional,
             blocking_strategy: BlockingStrategy::Anywhere,
@@ -576,15 +575,15 @@ impl Default for ReasonerConfig {
         let mut reasoning_features = EnumSet::new();
         reasoning_features.insert(ReasoningFeature::Optimizations);
         reasoning_features.insert(ReasoningFeature::ClashDetection);
-        
+
         let mut cache_features = EnumSet::new();
         cache_features.insert(CacheFeature::Satisfiability);
         cache_features.insert(CacheFeature::CompletionGraph);
-        
+
         let mut server_features = EnumSet::new();
         server_features.insert(ServerFeature::Cors);
         server_features.insert(ServerFeature::RestAPI);
-        
+
         Self {
             reasoning: ReasoningConfig {
                 tableau_algorithm: TableauAlgorithm::Traditional,
@@ -673,15 +672,17 @@ impl ReasonerConfig {
     pub fn validate(&self) -> Result<()> {
         // Validate timeouts
         if let Some(timeout) = self.reasoning.timeout
-            && timeout.as_secs() == 0 {
-                return Err(Error::config("Timeout cannot be zero".to_string()));
-            }
+            && timeout.as_secs() == 0
+        {
+            return Err(Error::config("Timeout cannot be zero".to_string()));
+        }
 
         // Validate memory limits
         if let Some(max_memory) = self.reasoning.max_memory_mb
-            && max_memory == 0 {
-                return Err(Error::config("Maximum memory cannot be zero".to_string()));
-            }
+            && max_memory == 0
+        {
+            return Err(Error::config("Maximum memory cannot be zero".to_string()));
+        }
 
         // Validate cache settings
         if self.cache.max_cache_size_mb == 0 {
@@ -714,7 +715,9 @@ impl ReasonerConfig {
     /// Check if parallel processing is enabled
     #[must_use]
     pub fn is_parallel_processing_enabled(&self) -> bool {
-        self.performance.is_enabled(PerformanceFeature::ParallelExpansion) && self.worker_thread_count() > 1
+        self.performance
+            .is_enabled(PerformanceFeature::ParallelExpansion)
+            && self.worker_thread_count() > 1
     }
 }
 
@@ -765,7 +768,9 @@ impl ReasonerConfig {
         config.reasoning.enable(ReasoningFeature::ClashDetection); // Enable clash detection
         config.cache.enable(CacheFeature::Satisfiability); // Enable satisfiability cache
         config.performance.worker_threads = Some(8); // Use multiple threads for production
-        config.performance.enable(PerformanceFeature::ParallelExpansion); // Enable parallel expansion
+        config
+            .performance
+            .enable(PerformanceFeature::ParallelExpansion); // Enable parallel expansion
         config
     }
 
@@ -778,7 +783,9 @@ impl ReasonerConfig {
         config.reasoning.disable(ReasoningFeature::ClashDetection); // Disable clash detection for tests
         config.cache.enable(CacheFeature::Satisfiability); // Enable satisfiability cache for tests
         config.performance.worker_threads = Some(2); // Use 2 threads for testing
-        config.performance.disable(PerformanceFeature::ParallelExpansion); // Disable parallel expansion for tests
+        config
+            .performance
+            .disable(PerformanceFeature::ParallelExpansion); // Disable parallel expansion for tests
         config
     }
 }

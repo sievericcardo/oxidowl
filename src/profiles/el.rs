@@ -30,7 +30,7 @@ pub struct ELValidator;
 
 impl ELValidator {
     /// Create a new EL profile validator
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

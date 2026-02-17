@@ -22,7 +22,7 @@ pub struct RuleValidator {
 
 impl RuleValidator {
     /// Create a new rule validator
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
@@ -205,7 +205,7 @@ pub struct GoalChecker {
 
 impl GoalChecker {
     /// Create a new goal checker
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
@@ -324,9 +324,10 @@ impl GoalChecker {
             // Check for direct class assertions
             for axiom in ontology_guard.axioms() {
                 if let Axiom::ClassAssertion(assertion) = axiom
-                    && self.matches_class_assertion_axiom(individual, class, assertion)? {
-                        return Ok(true);
-                    }
+                    && self.matches_class_assertion_axiom(individual, class, assertion)?
+                {
+                    return Ok(true);
+                }
             }
         }
 
@@ -351,9 +352,10 @@ impl GoalChecker {
                 if let Axiom::ObjectPropertyAssertion(assertion) = axiom
                     && self.matches_object_property_assertion_axiom(
                         subject, property, object, assertion,
-                    )? {
-                        return Ok(true);
-                    }
+                    )?
+                {
+                    return Ok(true);
+                }
             }
         }
 
@@ -378,9 +380,10 @@ impl GoalChecker {
                 if let Axiom::DataPropertyAssertion(assertion) = axiom
                     && self.matches_data_property_assertion_axiom(
                         subject, property, object, assertion,
-                    )? {
-                        return Ok(true);
-                    }
+                    )?
+                {
+                    return Ok(true);
+                }
             }
         }
 
@@ -458,14 +461,16 @@ impl GoalChecker {
     ) -> Result<bool> {
         let subject_match = match subject {
             SWRLIArgument::Individual(ind) => {
-                ind.iri().map(crate::ontology::IRI::as_str) == assertion.source.iri().map(crate::ontology::IRI::as_str)
+                ind.iri().map(crate::ontology::IRI::as_str)
+                    == assertion.source.iri().map(crate::ontology::IRI::as_str)
             }
             SWRLIArgument::Variable(_) => true, // Variables can match any individual
         };
 
         let object_match = match object {
             SWRLIArgument::Individual(ind) => {
-                ind.iri().map(crate::ontology::IRI::as_str) == assertion.target.iri().map(crate::ontology::IRI::as_str)
+                ind.iri().map(crate::ontology::IRI::as_str)
+                    == assertion.target.iri().map(crate::ontology::IRI::as_str)
             }
             SWRLIArgument::Variable(_) => true, // Variables can match any individual
         };

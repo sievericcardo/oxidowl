@@ -19,13 +19,13 @@ pub struct DatatypeValidator {
 
 impl DatatypeValidator {
     /// Create a new datatype validator
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self { strict: true }
     }
 
     /// Create a validator with custom strictness
-    #[must_use] 
+    #[must_use]
     pub fn with_strict(strict: bool) -> Self {
         Self { strict }
     }
@@ -117,7 +117,7 @@ impl DatatypeValidator {
     }
 
     /// Validate a datatype match between two IRIs
-    #[must_use] 
+    #[must_use]
     pub fn datatypes_compatible(datatype1: &IRI, datatype2: &IRI) -> bool {
         if datatype1 == datatype2 {
             return true;
@@ -504,7 +504,8 @@ mod tests {
         assert!(
             DatatypeValidator::validate_boolean("false")
                 .expect("Failed to validate boolean datatype value")
-        );        assert!(
+        );
+        assert!(
             DatatypeValidator::validate_boolean("1")
                 .expect("Failed to validate boolean datatype value")
         );
@@ -574,7 +575,13 @@ mod tests {
         let decimal_iri = IRI::new("http://www.w3.org/2001/XMLSchema#decimal");
 
         assert!(DatatypeValidator::datatypes_compatible(&int_iri, &long_iri));
-        assert!(DatatypeValidator::datatypes_compatible(&int_iri, &integer_iri));
-        assert!(DatatypeValidator::datatypes_compatible(&int_iri, &decimal_iri));
+        assert!(DatatypeValidator::datatypes_compatible(
+            &int_iri,
+            &integer_iri
+        ));
+        assert!(DatatypeValidator::datatypes_compatible(
+            &int_iri,
+            &decimal_iri
+        ));
     }
 }

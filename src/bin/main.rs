@@ -570,8 +570,7 @@ impl From<InputFormat> for OntologyFormat {
 }
 
 /// RDF version specification
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
 enum RdfVersion {
     /// RDF 1.1 (no RDF-star or RDF 1.2 features)
     #[value(name = "1.1")]
@@ -588,18 +587,15 @@ enum RdfVersion {
     Auto,
 }
 
-
 // Main entry point - spawns execution on a thread with large stack for deeply nested ontologies
 fn main() -> Result<()> {
     // Stack size of 32 MB to handle deeply nested class expressions in functional syntax
     // Default stack size is typically 2MB on macOS/Linux and 1MB on Windows
     const STACK_SIZE: usize = 32 * 1024 * 1024; // 32 MB
-    
+
     std::thread::Builder::new()
         .stack_size(STACK_SIZE)
-        .spawn(|| {
-            run_with_tokio()
-        })
+        .spawn(|| run_with_tokio())
         .expect("Failed to spawn main thread")
         .join()
         .expect("Main thread panicked")
@@ -651,7 +647,9 @@ async fn run_with_tokio() -> Result<()> {
         config.server.bind_address = bind.clone();
     }
     if cli.enable_owllink {
-        config.server.enable(oxidowl::config::ServerFeature::OWLlink);
+        config
+            .server
+            .enable(oxidowl::config::ServerFeature::OWLlink);
     }
     if let Some(port) = cli.owllink_port {
         config.server.owllink_port = port;
@@ -824,18 +822,18 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
 
         if !cli.quiet {
             println!("Ontology loading completed");
-            
+
             // Display axiom counts by type
             if let Some(ontology) = reasoner.get_ontology() {
                 let ontology_guard = ontology.read().map_err(|e| {
                     oxidowl::Error::reasoning(format!("Failed to read ontology: {e}"))
                 })?;
                 let axiom_counts = ontology_guard.count_axioms_by_type();
-                
+
                 // Sort by axiom type name for consistent output
                 let mut sorted_counts: Vec<_> = axiom_counts.iter().collect();
                 sorted_counts.sort_by_key(|(axiom_type, _)| format!("{axiom_type:?}"));
-                
+
                 for (axiom_type, count) in sorted_counts {
                     println!("{axiom_type:?}:{count}");
                 }
@@ -1028,10 +1026,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
                         .to_string_lossy()
                 ));
                 hierarchy.save_to_file(&prop_output)?;
-                println!(
-                    "Data property hierarchy saved to {}",
-                    prop_output.display()
-                );
+                println!("Data property hierarchy saved to {}", prop_output.display());
             }
         } else {
             // Print to stdout
@@ -2191,7 +2186,7 @@ async fn execute_entailment_check(
     // Load both premise and conclusion ontologies
     info!("Loading premise ontology from: {}", premise.display());
     reasoner.load_ontology_from_file(&premise, _ontology_format)?;
-    
+
     info!("Loading conclusion ontology from: {}", conclusion.display());
     let _conclusion_ontology = oxidowl::ontology::Ontology::from_file(
         &conclusion,

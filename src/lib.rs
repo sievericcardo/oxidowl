@@ -45,8 +45,8 @@ pub mod dl_clauses; // DL clause generation and dumping
 pub mod error;
 pub mod import;
 pub mod performance; // Performance monitoring and profiling
-pub mod profiling; // Flamegraph and heap profiling infrastructure
-pub mod prelude; // Common imports and type aliases for internal use // Import management and dependency resolution
+pub mod prelude;
+pub mod profiling; // Flamegraph and heap profiling infrastructure // Common imports and type aliases for internal use // Import management and dependency resolution
 // pub mod network;
 pub mod adapter; // Horned-OWL adapter for enhanced parsing
 pub mod distributed;
@@ -115,7 +115,7 @@ pub use crate::distributed::{
 };
 
 // Re-export error types
-pub use crate::config::{ReasonerConfig, TableauAlgorithm, PerformanceConfig, PerformanceProfile};
+pub use crate::config::{PerformanceConfig, PerformanceProfile, ReasonerConfig, TableauAlgorithm};
 pub use crate::core::reasoner::{ReasoningResult, ReasoningTask};
 pub use crate::error::{Error, Result};
 pub use crate::ontology::{

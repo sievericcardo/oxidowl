@@ -53,7 +53,7 @@ pub struct InternPoolStats {
 
 impl QuotedTripleInternPool {
     /// Create a new intern pool
-    #[must_use] 
+    #[must_use]
     pub fn new(enabled: bool) -> Self {
         Self {
             pool: Arc::new(RwLock::new(HashMap::new())),
@@ -63,14 +63,14 @@ impl QuotedTripleInternPool {
     }
 
     /// Create a disabled intern pool (zero overhead for RDF 1.1 mode)
-    #[must_use] 
+    #[must_use]
     pub fn disabled() -> Self {
         Self::new(false)
     }
 
     /// Intern a quoted triple
     /// Returns an Arc to the interned triple
-    #[must_use] 
+    #[must_use]
     pub fn intern(&self, triple: Triple) -> Arc<Triple> {
         if !self.enabled {
             // Zero overhead mode: just wrap in Arc
@@ -78,7 +78,7 @@ impl QuotedTripleInternPool {
         }
 
         let hash = TripleHash::from_triple(&triple);
-        
+
         // Check if already interned
         {
             let pool = self.pool.read().unwrap();
@@ -95,13 +95,13 @@ impl QuotedTripleInternPool {
         {
             let mut pool = self.pool.write().unwrap();
             pool.insert(hash, Arc::clone(&arc_triple));
-            
+
             // Update stats
             let mut stats = self.stats.write().unwrap();
             stats.misses += 1;
             stats.total_interns += 1;
             stats.pool_size = pool.len();
-            
+
             // Estimate memory saved (very rough: assume 200 bytes per triple)
             if stats.hits > 0 {
                 stats.memory_saved_bytes = stats.hits * 200;
@@ -112,7 +112,7 @@ impl QuotedTripleInternPool {
     }
 
     /// Get current statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> InternPoolStats {
         self.stats.read().unwrap().clone()
     }
@@ -125,13 +125,13 @@ impl QuotedTripleInternPool {
 
         let mut pool = self.pool.write().unwrap();
         pool.clear();
-        
+
         let mut stats = self.stats.write().unwrap();
         *stats = InternPoolStats::default();
     }
 
     /// Get the number of interned triples
-    #[must_use] 
+    #[must_use]
     pub fn size(&self) -> usize {
         if !self.enabled {
             return 0;
@@ -140,7 +140,7 @@ impl QuotedTripleInternPool {
     }
 
     /// Check if a triple is already interned
-    #[must_use] 
+    #[must_use]
     pub fn contains(&self, triple: &Triple) -> bool {
         if !self.enabled {
             return false;
@@ -178,7 +178,7 @@ pub struct CacheStats {
 
 impl QuotedTripleCache {
     /// Create a new quoted triple cache
-    #[must_use] 
+    #[must_use]
     pub fn new(enabled: bool) -> Self {
         Self {
             depth_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -190,13 +190,13 @@ impl QuotedTripleCache {
     }
 
     /// Create a disabled cache (zero overhead for RDF 1.1 mode)
-    #[must_use] 
+    #[must_use]
     pub fn disabled() -> Self {
         Self::new(false)
     }
 
     /// Get cached depth or None if not cached
-    #[must_use] 
+    #[must_use]
     pub fn get_depth(&self, triple: &Triple) -> Option<usize> {
         if !self.enabled {
             return None;
@@ -204,7 +204,7 @@ impl QuotedTripleCache {
 
         let hash = TripleHash::from_triple(triple);
         let cache = self.depth_cache.read().unwrap();
-        
+
         if let Some(&depth) = cache.get(&hash) {
             let mut stats = self.stats.write().unwrap();
             stats.depth_hits += 1;
@@ -228,7 +228,7 @@ impl QuotedTripleCache {
     }
 
     /// Get cached flattened triples or None if not cached
-    #[must_use] 
+    #[must_use]
     pub fn get_flattened(&self, triple: &Triple) -> Option<Vec<Triple>> {
         if !self.enabled {
             return None;
@@ -236,7 +236,7 @@ impl QuotedTripleCache {
 
         let hash = TripleHash::from_triple(triple);
         let cache = self.flatten_cache.read().unwrap();
-        
+
         if let Some(flattened) = cache.get(&hash) {
             let mut stats = self.stats.write().unwrap();
             stats.flatten_hits += 1;
@@ -260,7 +260,7 @@ impl QuotedTripleCache {
     }
 
     /// Get cached reification or None if not cached
-    #[must_use] 
+    #[must_use]
     pub fn get_reification(&self, triple: &Triple) -> Option<Vec<Triple>> {
         if !self.enabled {
             return None;
@@ -268,7 +268,7 @@ impl QuotedTripleCache {
 
         let hash = TripleHash::from_triple(triple);
         let cache = self.reification_cache.read().unwrap();
-        
+
         if let Some(reification) = cache.get(&hash) {
             let mut stats = self.stats.write().unwrap();
             stats.reification_hits += 1;
@@ -292,7 +292,7 @@ impl QuotedTripleCache {
     }
 
     /// Get current statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         self.stats.read().unwrap().clone()
     }
@@ -306,13 +306,13 @@ impl QuotedTripleCache {
         self.depth_cache.write().unwrap().clear();
         self.flatten_cache.write().unwrap().clear();
         self.reification_cache.write().unwrap().clear();
-        
+
         let mut stats = self.stats.write().unwrap();
         *stats = CacheStats::default();
     }
 
     /// Get total cache size (number of entries)
-    #[must_use] 
+    #[must_use]
     pub fn size(&self) -> usize {
         if !self.enabled {
             return 0;
@@ -351,7 +351,7 @@ impl Default for QuotedTripleOptimizerConfig {
 
 impl QuotedTripleOptimizerConfig {
     /// Create a configuration for RDF 1.1 mode (zero overhead)
-    #[must_use] 
+    #[must_use]
     pub fn rdf11_mode() -> Self {
         Self {
             enable_interning: false,
@@ -362,7 +362,7 @@ impl QuotedTripleOptimizerConfig {
     }
 
     /// Create a configuration for maximum performance
-    #[must_use] 
+    #[must_use]
     pub fn max_performance() -> Self {
         Self {
             enable_interning: true,
@@ -383,7 +383,7 @@ pub struct QuotedTripleOptimizer {
 
 impl QuotedTripleOptimizer {
     /// Create a new optimizer with given configuration
-    #[must_use] 
+    #[must_use]
     pub fn new(config: QuotedTripleOptimizerConfig) -> Self {
         Self {
             intern_pool: QuotedTripleInternPool::new(config.enable_interning),
@@ -393,19 +393,19 @@ impl QuotedTripleOptimizer {
     }
 
     /// Create a disabled optimizer (zero overhead for RDF 1.1 mode)
-    #[must_use] 
+    #[must_use]
     pub fn disabled() -> Self {
         Self::new(QuotedTripleOptimizerConfig::rdf11_mode())
     }
 
     /// Intern a quoted triple
-    #[must_use] 
+    #[must_use]
     pub fn intern(&self, triple: Triple) -> Arc<Triple> {
         self.intern_pool.intern(triple)
     }
 
     /// Get depth with caching
-    #[must_use] 
+    #[must_use]
     pub fn depth(&self, triple: &Triple) -> usize {
         if let Some(cached) = self.cache.get_depth(triple) {
             return cached;
@@ -418,7 +418,7 @@ impl QuotedTripleOptimizer {
     }
 
     /// Flatten with caching
-    #[must_use] 
+    #[must_use]
     pub fn flatten(&self, triple: &Triple) -> Vec<Triple> {
         if let Some(cached) = self.cache.get_flattened(triple) {
             return cached;
@@ -431,7 +431,11 @@ impl QuotedTripleOptimizer {
     }
 
     /// Convert to reification with caching
-    pub fn to_reification(&self, triple: &Triple, statement_id: &str) -> crate::Result<Vec<Triple>> {
+    pub fn to_reification(
+        &self,
+        triple: &Triple,
+        statement_id: &str,
+    ) -> crate::Result<Vec<Triple>> {
         if let Some(cached) = self.cache.get_reification(triple) {
             return Ok(cached);
         }
@@ -443,7 +447,7 @@ impl QuotedTripleOptimizer {
     }
 
     /// Get comprehensive statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> OptimizerStats {
         OptimizerStats {
             intern_pool: self.intern_pool.stats(),
@@ -458,7 +462,7 @@ impl QuotedTripleOptimizer {
     }
 
     /// Check if optimizations are enabled
-    #[must_use] 
+    #[must_use]
     pub fn is_enabled(&self) -> bool {
         self.config.enable_interning || self.config.enable_caching
     }
@@ -473,14 +477,15 @@ pub struct OptimizerStats {
 
 impl OptimizerStats {
     /// Total cache hit rate across all caches
-    #[must_use] 
+    #[must_use]
     pub fn hit_rate(&self) -> f64 {
-        let total_hits = self.cache.depth_hits + self.cache.flatten_hits + self.cache.reification_hits;
-        let total_operations = total_hits 
-            + self.cache.depth_misses 
-            + self.cache.flatten_misses 
+        let total_hits =
+            self.cache.depth_hits + self.cache.flatten_hits + self.cache.reification_hits;
+        let total_operations = total_hits
+            + self.cache.depth_misses
+            + self.cache.flatten_misses
             + self.cache.reification_misses;
-        
+
         if total_operations == 0 {
             0.0
         } else {
@@ -489,7 +494,7 @@ impl OptimizerStats {
     }
 
     /// Intern pool hit rate
-    #[must_use] 
+    #[must_use]
     pub fn intern_hit_rate(&self) -> f64 {
         let total = self.intern_pool.hits + self.intern_pool.misses;
         if total == 0 {
@@ -518,13 +523,13 @@ mod tests {
     fn test_intern_pool_basic() {
         let pool = QuotedTripleInternPool::new(true);
         let triple = create_test_triple();
-        
+
         let interned1 = pool.intern(triple.clone());
         let interned2 = pool.intern(triple.clone());
-        
+
         // Should be the same Arc
         assert!(Arc::ptr_eq(&interned1, &interned2));
-        
+
         let stats = pool.stats();
         assert_eq!(stats.hits, 1);
         assert_eq!(stats.misses, 1);
@@ -534,13 +539,13 @@ mod tests {
     fn test_intern_pool_disabled() {
         let pool = QuotedTripleInternPool::disabled();
         let triple = create_test_triple();
-        
+
         let interned1 = pool.intern(triple.clone());
         let interned2 = pool.intern(triple.clone());
-        
+
         // Different Arcs in disabled mode
         assert!(!Arc::ptr_eq(&interned1, &interned2));
-        
+
         let stats = pool.stats();
         assert_eq!(stats.hits, 0);
         assert_eq!(stats.misses, 0);
@@ -550,14 +555,14 @@ mod tests {
     fn test_cache_depth() {
         let cache = QuotedTripleCache::new(true);
         let triple = create_test_triple();
-        
+
         // First access - miss
         assert!(cache.get_depth(&triple).is_none());
         cache.cache_depth(&triple, 5);
-        
+
         // Second access - hit
         assert_eq!(cache.get_depth(&triple), Some(5));
-        
+
         let stats = cache.stats();
         assert_eq!(stats.depth_hits, 1);
         assert_eq!(stats.depth_misses, 1);
@@ -567,12 +572,12 @@ mod tests {
     fn test_cache_disabled() {
         let cache = QuotedTripleCache::disabled();
         let triple = create_test_triple();
-        
+
         // Always misses in disabled mode
         assert!(cache.get_depth(&triple).is_none());
         cache.cache_depth(&triple, 5);
         assert!(cache.get_depth(&triple).is_none());
-        
+
         let stats = cache.stats();
         assert_eq!(stats.depth_hits, 0);
         assert_eq!(stats.depth_misses, 0);
@@ -582,19 +587,19 @@ mod tests {
     fn test_optimizer_comprehensive() {
         let config = QuotedTripleOptimizerConfig::default();
         let optimizer = QuotedTripleOptimizer::new(config);
-        
+
         let triple = create_test_triple();
-        
+
         // Test interning
         let interned1 = optimizer.intern(triple.clone());
         let interned2 = optimizer.intern(triple.clone());
         assert!(Arc::ptr_eq(&interned1, &interned2));
-        
+
         // Test depth caching
         let depth1 = optimizer.depth(&triple);
         let depth2 = optimizer.depth(&triple);
         assert_eq!(depth1, depth2);
-        
+
         // Check stats
         let stats = optimizer.stats();
         assert!(stats.intern_hit_rate() > 0.0);
@@ -605,13 +610,13 @@ mod tests {
     fn test_optimizer_disabled() {
         let optimizer = QuotedTripleOptimizer::disabled();
         assert!(!optimizer.is_enabled());
-        
+
         let triple = create_test_triple();
-        
+
         // Should work but with no caching
         let depth = optimizer.depth(&triple);
         assert_eq!(depth, 0);
-        
+
         let stats = optimizer.stats();
         assert_eq!(stats.hit_rate(), 0.0);
     }

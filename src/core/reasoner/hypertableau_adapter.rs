@@ -245,13 +245,13 @@ impl HypertableauRunner {
     }
 
     /// Get the expansion statistics
-    #[must_use] 
+    #[must_use]
     pub fn statistics(&self) -> &ExpansionStatistics {
         &self.stats
     }
 
     /// Get the current expansion state
-    #[must_use] 
+    #[must_use]
     pub fn expansion_state(&self) -> &ExpansionState {
         &self.state
     }

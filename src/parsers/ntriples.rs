@@ -149,16 +149,16 @@ impl NTriplesParser {
             predicate: predicate.clone(),
             object,
         };
-        
+
         // Add to ontology RDF graph
         let graph = ontology.get_or_create_rdf_graph();
         graph.add_triple(triple);
-        
+
         // For OWL 2 predicates, also add to appropriate ontology structures
         // This allows the ontology to be used for OWL reasoning
         if let Some(pred_iri) = predicate.as_iri() {
             let pred_str = pred_iri.as_str();
-            
+
             // Handle common OWL 2 predicates
             // Note: Full conversion would require more sophisticated mapping
             if pred_str.contains("subClassOf") || pred_str.contains("type") {
@@ -182,7 +182,7 @@ impl NTriplesParser {
             predicate,
             object,
         };
-        
+
         // Store RDF-star triples in ontology graph
         let graph = ontology.get_or_create_rdf_graph();
         // Ensure the graph supports RDF-star
@@ -250,9 +250,8 @@ impl NTriplesParser {
         if s.starts_with('<') && s.ends_with('>') {
             // IRI
             let iri_str = &s[1..s.len() - 1];
-            let url = url::Url::parse(iri_str).map_err(|e| {
-                Error::ontology_parsing(format!("Invalid IRI: {e}"))
-            })?;
+            let url = url::Url::parse(iri_str)
+                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?;
             Ok(RdfTerm::Iri(url))
         } else if s.starts_with("_:") {
             // Blank node
@@ -267,9 +266,7 @@ impl NTriplesParser {
             // Literal
             self.parse_literal(s)
         } else {
-            Err(Error::ontology_parsing(format!(
-                "Cannot parse term: {s}"
-            )))
+            Err(Error::ontology_parsing(format!("Cannot parse term: {s}")))
         }
     }
 
@@ -295,9 +292,7 @@ impl NTriplesParser {
         }
 
         if i >= chars.len() {
-            return Err(Error::ontology_parsing(
-                "Unterminated literal".to_string(),
-            ));
+            return Err(Error::ontology_parsing("Unterminated literal".to_string()));
         }
 
         let value = chars[1..i].iter().collect::<String>();
@@ -305,7 +300,8 @@ impl NTriplesParser {
 
         // Check for language tag or datatype
         let language = if rest.starts_with('@') {
-            let end = rest.find(|c: char| c.is_whitespace() || c == '.' || c == '>')
+            let end = rest
+                .find(|c: char| c.is_whitespace() || c == '.' || c == '>')
                 .unwrap_or(rest.len());
             Some(rest[1..end].to_string())
         } else {
@@ -317,9 +313,8 @@ impl NTriplesParser {
                 let end = datatype_str.find('>').ok_or_else(|| {
                     Error::ontology_parsing("Unterminated datatype IRI".to_string())
                 })?;
-                let url = url::Url::parse(&datatype_str[1..end]).map_err(|e| {
-                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
-                })?;
+                let url = url::Url::parse(&datatype_str[1..end])
+                    .map_err(|e| Error::ontology_parsing(format!("Invalid datatype IRI: {e}")))?;
                 Some(url)
             } else {
                 None
@@ -343,9 +338,9 @@ impl NTriplesParser {
 
         if trimmed.starts_with('<') {
             // IRI
-            let end = trimmed.find('>').ok_or_else(|| {
-                Error::ontology_parsing("Unterminated IRI".to_string())
-            })?;
+            let end = trimmed
+                .find('>')
+                .ok_or_else(|| Error::ontology_parsing("Unterminated IRI".to_string()))?;
             Ok((&trimmed[..=end], &trimmed[end + 1..]))
         } else if trimmed.starts_with("_:") {
             // Blank node
@@ -512,7 +507,10 @@ mod tests {
         };
         let parser = NTriplesParser::with_config(config);
         let result = parser.parse_string(content);
-        assert!(result.is_err(), "Strict RDF 1.1 mode should reject RDF-star syntax");
+        assert!(
+            result.is_err(),
+            "Strict RDF 1.1 mode should reject RDF-star syntax"
+        );
     }
 
     #[test]
@@ -556,14 +554,17 @@ _:node-with-hyphens <http://example.org/pred> <http://example.org/obj> .
 _:node_with_underscores <http://example.org/pred> <http://example.org/obj> .
 _:node.with.dots <http://example.org/pred> <http://example.org/obj> .
 "#;
-        
+
         let parser = NTriplesParser::with_config(NTriplesConfig {
             validate_blank_nodes: false,
             ..Default::default()
         });
-        
+
         let result = parser.parse_string(content);
-        assert!(result.is_ok(), "Lenient mode should accept any blank node labels");
+        assert!(
+            result.is_ok(),
+            "Lenient mode should accept any blank node labels"
+        );
     }
 
     #[test]
@@ -575,14 +576,17 @@ _:a <http://example.org/pred> <http://example.org/obj2> .
 _:Z <http://example.org/pred> <http://example.org/obj3> .
 _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
 "#;
-        
+
         let parser = NTriplesParser::with_config(NTriplesConfig {
             validate_blank_nodes: true,
             ..Default::default()
         });
-        
+
         let result = parser.parse_string(content);
-        assert!(result.is_ok(), "Strict mode should accept well-formed blank nodes");
+        assert!(
+            result.is_ok(),
+            "Strict mode should accept well-formed blank nodes"
+        );
     }
 
     #[test]
@@ -594,18 +598,18 @@ _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
             "_:node.with.dots",
             "_:node:with:colons",
         ];
-        
+
         for invalid_label in invalid_cases {
             let content = format!(
                 "{} <http://example.org/pred> <http://example.org/obj> .",
                 invalid_label
             );
-            
+
             let parser = NTriplesParser::with_config(NTriplesConfig {
                 validate_blank_nodes: true,
                 ..Default::default()
             });
-            
+
             let result = parser.parse_string(&content);
             assert!(
                 result.is_err(),

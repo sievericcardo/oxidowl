@@ -20,7 +20,7 @@ pub struct Owl2RlEngine {
 
 impl Owl2RlEngine {
     /// Create a new OWL 2 RL engine with the given RDF graph
-    #[must_use] 
+    #[must_use]
     pub fn new(graph: RdfGraph) -> Self {
         let closure = graph.clone();
         Self {
@@ -58,13 +58,13 @@ impl Owl2RlEngine {
     }
 
     /// Get the closure (all derived triples)
-    #[must_use] 
+    #[must_use]
     pub fn closure(&self) -> &RdfGraph {
         &self.closure
     }
 
     /// Get the number of rule applications
-    #[must_use] 
+    #[must_use]
     pub fn rule_applications(&self) -> usize {
         self.rule_applications
     }

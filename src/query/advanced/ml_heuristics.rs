@@ -8,9 +8,7 @@
 
 use super::conjunctive::{ConjunctiveQuery, QueryAtom};
 use super::ml_models::{EnsembleModel, NeuralNetworkModel};
-use super::optimizer::{
-    PerformancePredictionModel, QueryPerformanceDataPoint,
-};
+use super::optimizer::{PerformancePredictionModel, QueryPerformanceDataPoint};
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -96,7 +94,7 @@ impl Default for MLHeuristicsConfig {
 }
 
 impl MLHeuristicsEngine {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: MLHeuristicsConfig) -> Self {
         Self {
             strategy_selector: StrategySelectionModel::new(&config),
@@ -235,7 +233,7 @@ impl MLHeuristicsEngine {
     }
 
     /// Generate comprehensive heuristics report
-    #[must_use] 
+    #[must_use]
     pub fn generate_heuristics_report(&self) -> HeuristicsPerformanceReport {
         HeuristicsPerformanceReport {
             strategy_selection_accuracy: self.strategy_selector.get_accuracy(),
@@ -433,7 +431,10 @@ impl StrategySelectionModel {
         }
 
         // Retrain if enough sessions have passed
-        if self.session_count.is_multiple_of(self.config.retraining_frequency) {
+        if self
+            .session_count
+            .is_multiple_of(self.config.retraining_frequency)
+        {
             self.retrain_model()?;
         }
 
@@ -619,7 +620,10 @@ impl ExpansionOrderPredictor {
         }
 
         // Retrain periodically
-        if self.session_count.is_multiple_of(self.config.retraining_frequency) {
+        if self
+            .session_count
+            .is_multiple_of(self.config.retraining_frequency)
+        {
             self.retrain_model()?;
         }
 

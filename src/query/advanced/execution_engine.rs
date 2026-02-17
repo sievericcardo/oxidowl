@@ -910,9 +910,10 @@ impl AdvancedExecutionEngine {
 
         // Step 1: Check cache if enabled
         if self.config.enable_caching
-            && let Some(cached_result) = self.check_cache(query).await? {
-                return Ok(cached_result);
-            }
+            && let Some(cached_result) = self.check_cache(query).await?
+        {
+            return Ok(cached_result);
+        }
 
         // Step 2: Generate optimized query plan
         let query_plan = {
@@ -977,9 +978,7 @@ impl AdvancedExecutionEngine {
         let features = ml_engine
             .extract_features(query, &self.ontology)
             .map_err(|e| {
-                AdvancedQueryError::InternalError(format!(
-                    "Failed to extract query features: {e}"
-                ))
+                AdvancedQueryError::InternalError(format!("Failed to extract query features: {e}"))
             })?;
 
         // Get strategy recommendation
@@ -1067,9 +1066,7 @@ impl AdvancedExecutionEngine {
         let features = ml_engine
             .extract_features(query, &self.ontology)
             .map_err(|e| {
-                AdvancedQueryError::InternalError(format!(
-                    "Failed to extract query features: {e}"
-                ))
+                AdvancedQueryError::InternalError(format!("Failed to extract query features: {e}"))
             })?;
 
         // Map strategy string to MLExecutionStrategy enum
@@ -1119,9 +1116,10 @@ impl AdvancedExecutionEngine {
         let query_hash = cache.compute_query_hash(query, &self.ontology);
 
         if let Some(entry) = cache.get_entry(&query_hash)
-            && !cache.is_entry_expired(entry) {
-                return Ok(Some(entry.result.clone()));
-            }
+            && !cache.is_entry_expired(entry)
+        {
+            return Ok(Some(entry.result.clone()));
+        }
 
         Ok(None)
     }
@@ -1180,7 +1178,7 @@ impl AdvancedExecutionEngine {
 
         // Decompose query into independent sub-queries based on variable dependencies
         let sub_queries = self.decompose_query_for_parallel(query)?;
-        
+
         if sub_queries.len() < 2 {
             // Cannot decompose effectively
             return self.execute_sequential(execution_id, query, strategy, constraints);
@@ -1189,17 +1187,17 @@ impl AdvancedExecutionEngine {
         // Execute sub-queries in parallel using thread pool
         let max_threads = self.config.max_parallel_threads.min(sub_queries.len());
         let mut handles = Vec::new();
-        
+
         for (i, sub_query) in sub_queries.into_iter().enumerate() {
             if i >= max_threads {
                 break; // Limit parallelism
             }
-            
+
             let execution_id_clone = execution_id.clone();
             let strategy_clone = strategy.to_string();
             let constraints_clone = constraints.clone();
             let self_clone = self;
-            
+
             // Execute sub-query in parallel
             // Note: In production, would use proper async task spawning
             let result = self_clone.execute_sequential(
@@ -1208,7 +1206,7 @@ impl AdvancedExecutionEngine {
                 &strategy_clone,
                 constraints_clone,
             )?;
-            
+
             handles.push(result);
         }
 
@@ -1224,9 +1222,7 @@ impl AdvancedExecutionEngine {
         }
 
         // Deduplicate and combine
-        combined_bindings.sort_by(|a, b| {
-            format!("{a:?}").cmp(&format!("{b:?}"))
-        });
+        combined_bindings.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         combined_bindings.dedup();
 
         Ok(ConjunctiveQueryResult {
@@ -1250,26 +1246,26 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
     ) -> Result<Vec<ConjunctiveQuery>, AdvancedQueryError> {
         let mut sub_queries = Vec::new();
-        
+
         // Analyze variable dependencies to find independent atom groups
         let mut atom_groups: Vec<Vec<QueryAtom>> = Vec::new();
         let mut used_atoms = HashSet::new();
-        
+
         for (i, atom) in query.body_atoms.iter().enumerate() {
             if used_atoms.contains(&i) {
                 continue;
             }
-            
+
             let mut group = vec![atom.clone()];
             let mut group_vars = self.get_atom_variables(atom);
             used_atoms.insert(i);
-            
+
             // Find atoms that share variables with this group
             for (j, other_atom) in query.body_atoms.iter().enumerate() {
                 if used_atoms.contains(&j) {
                     continue;
                 }
-                
+
                 let other_vars = self.get_atom_variables(other_atom);
                 if group_vars.iter().any(|v| other_vars.contains(v)) {
                     group.push(other_atom.clone());
@@ -1277,10 +1273,10 @@ impl AdvancedExecutionEngine {
                     used_atoms.insert(j);
                 }
             }
-            
+
             atom_groups.push(group);
         }
-        
+
         // Create sub-queries from atom groups
         for group in atom_groups {
             let sub_query = ConjunctiveQuery {
@@ -1291,19 +1287,21 @@ impl AdvancedExecutionEngine {
             };
             sub_queries.push(sub_query);
         }
-        
+
         Ok(sub_queries)
     }
 
     /// Get all variables referenced in an atom
     fn get_atom_variables(&self, atom: &QueryAtom) -> HashSet<QueryVariable> {
         let mut vars = HashSet::new();
-        
+
         match atom {
             QueryAtom::ClassAtom { variable, .. } => {
                 vars.insert(variable.clone());
             }
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vars.insert(subject.clone());
                 vars.insert(object.clone());
             }
@@ -1325,7 +1323,7 @@ impl AdvancedExecutionEngine {
                 vars.insert(variable.clone());
             }
         }
-        
+
         vars
     }
 
@@ -1343,7 +1341,7 @@ impl AdvancedExecutionEngine {
             ontology: test_ontology.clone(),
             reasoning_service: Arc::new(ReasoningService::new(
                 (*test_ontology).clone(),
-                Default::default()
+                Default::default(),
             )),
             available_indices: Vec::new(),
             constraints,
@@ -1359,20 +1357,24 @@ impl AdvancedExecutionEngine {
     }
 
     /// Create a test ontology for unit tests
-    /// 
+    ///
     /// This creates a simple ontology with basic classes, properties, and individuals
     /// suitable for testing query execution without requiring external ontology files.
     fn create_test_ontology() -> Ontology {
         use crate::ontology::*;
-        
+
         let mut onto = Ontology::new();
-        
+
         // Add basic classes
-        let person_class = Class { iri: IRI::new("http://test.org/Person") };
-        let animal_class = Class { iri: IRI::new("http://test.org/Animal") };
+        let person_class = Class {
+            iri: IRI::new("http://test.org/Person"),
+        };
+        let animal_class = Class {
+            iri: IRI::new("http://test.org/Animal"),
+        };
         onto.add_class(person_class.clone());
         onto.add_class(animal_class.clone());
-        
+
         // Add SubClassOf axiom: Person ⊑ Animal
         onto.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
             id: 0,
@@ -1380,11 +1382,13 @@ impl AdvancedExecutionEngine {
             superclass: ClassExpression::Class(animal_class),
             annotations: Vec::new(),
         }));
-        
+
         // Add basic property
-        let knows_prop = ObjectProperty { iri: IRI::new("http://test.org/knows") };
+        let knows_prop = ObjectProperty {
+            iri: IRI::new("http://test.org/knows"),
+        };
         onto.add_object_property(knows_prop);
-        
+
         onto
     }
 
@@ -1438,7 +1442,7 @@ impl AdvancedExecutionEngine {
         if let Ok(cache) = self.result_cache.read() {
             // Simplified - would check actual cache size in production
             let cache_entry_count = cache.cache_entries.len();
-            
+
             // Don't cache if cache has too many entries (> 90% of max)
             if cache_entry_count > (cache.config.max_entries * 9 / 10) {
                 return false;
@@ -1503,7 +1507,7 @@ impl Default for AdvancedExecutionConfig {
 }
 
 impl QueryResultCache {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
             cache_entries: HashMap::new(),
@@ -1514,7 +1518,7 @@ impl QueryResultCache {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn compute_query_hash(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> QueryHash {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -1618,12 +1622,12 @@ impl QueryResultCache {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_entry(&self, hash: &QueryHash) -> Option<&CacheEntry> {
         self.cache_entries.get(hash)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_entry_expired(&self, entry: &CacheEntry) -> bool {
         // Check if entry has expired based on TTL and invalidation triggers
         let now = Instant::now();
@@ -1720,7 +1724,7 @@ impl Default for CacheAccessStats {
 }
 
 impl LruTracker {
-    #[must_use] 
+    #[must_use]
     pub fn new(max_entries: usize) -> Self {
         Self {
             access_order: VecDeque::new(),
@@ -1753,7 +1757,7 @@ impl LruTracker {
     }
 
     /// Get the least recently used entry
-    #[must_use] 
+    #[must_use]
     pub fn get_lru(&self) -> Option<QueryHash> {
         self.access_order.back().cloned()
     }
@@ -1775,7 +1779,7 @@ impl LruTracker {
 }
 
 impl CacheSizeTracker {
-    #[must_use] 
+    #[must_use]
     pub fn new(max_size: usize) -> Self {
         Self {
             current_size: 0,
@@ -1793,7 +1797,7 @@ impl Default for ExecutionStrategySelector {
 }
 
 impl ExecutionStrategySelector {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             strategies: HashMap::new(),
@@ -2040,9 +2044,10 @@ impl ExecutionStrategySelector {
 
         for var in graph.keys() {
             if !visited.contains(var)
-                && self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack) {
-                    return true;
-                }
+                && self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack)
+            {
+                return true;
+            }
         }
 
         false
@@ -2097,7 +2102,7 @@ impl Default for StrategySelectionModel {
 }
 
 impl StrategySelectionModel {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             feature_extractors: Vec::new(),
@@ -2121,7 +2126,7 @@ impl Default for DefaultRankingModel {
 }
 
 impl DefaultRankingModel {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {}
     }
@@ -2136,7 +2141,7 @@ impl StrategyRankingModel for DefaultRankingModel {
         } else {
             features.iter().sum::<f64>() / features.len() as f64
         };
-        
+
         strategies
             .iter()
             .enumerate()
@@ -2198,7 +2203,7 @@ impl Default for ExecutionPerformanceMonitor {
 }
 
 impl ExecutionPerformanceMonitor {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             active_executions: HashMap::new(),
@@ -2310,10 +2315,11 @@ impl ExecutionPerformanceMonitor {
     /// Complete atom evaluation phase
     pub fn complete_atom_evaluation(&mut self, execution_id: &ExecutionId, atoms_count: usize) {
         if let Some(trace) = self.active_executions.get_mut(execution_id)
-            && let Some(start) = trace.atom_evaluation_start {
-                trace.atom_evaluation_duration = start.elapsed();
-                trace.atoms_evaluated = atoms_count;
-            }
+            && let Some(start) = trace.atom_evaluation_start
+        {
+            trace.atom_evaluation_duration = start.elapsed();
+            trace.atoms_evaluated = atoms_count;
+        }
     }
 
     /// Start join phase
@@ -2326,10 +2332,11 @@ impl ExecutionPerformanceMonitor {
     /// Complete join phase
     pub fn complete_join_phase(&mut self, execution_id: &ExecutionId, joins_count: usize) {
         if let Some(trace) = self.active_executions.get_mut(execution_id)
-            && let Some(start) = trace.join_start {
-                trace.join_duration = start.elapsed();
-                trace.joins_performed = joins_count;
-            }
+            && let Some(start) = trace.join_start
+        {
+            trace.join_duration = start.elapsed();
+            trace.joins_performed = joins_count;
+        }
     }
 
     /// Start materialization phase
@@ -2342,13 +2349,14 @@ impl ExecutionPerformanceMonitor {
     /// Complete materialization phase
     pub fn complete_materialization(&mut self, execution_id: &ExecutionId) {
         if let Some(trace) = self.active_executions.get_mut(execution_id)
-            && let Some(start) = trace.materialization_start {
-                trace.materialization_duration = start.elapsed();
-            }
+            && let Some(start) = trace.materialization_start
+        {
+            trace.materialization_duration = start.elapsed();
+        }
     }
 
     /// Get query profiler for accessing profiling statistics
-    #[must_use] 
+    #[must_use]
     pub fn query_profiler(&self) -> Arc<QueryProfiler> {
         self.query_profiler.clone()
     }
@@ -2361,7 +2369,7 @@ impl Default for PerformanceMetricsAggregator {
 }
 
 impl PerformanceMetricsAggregator {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             windowed_metrics: BTreeMap::new(),
@@ -2396,7 +2404,7 @@ impl Default for ExecutionAnomalyDetector {
 }
 
 impl ExecutionAnomalyDetector {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             baseline_models: HashMap::new(),
@@ -2425,7 +2433,7 @@ impl Default for ExecutionAlertSystem {
 }
 
 impl ExecutionAlertSystem {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             alert_rules: Vec::new(),
@@ -2437,7 +2445,7 @@ impl ExecutionAlertSystem {
 }
 
 impl ParallelExecutionCoordinator {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: ParallelExecutionConfig) -> Self {
         Self {
             thread_pool: Arc::new(Mutex::new(ThreadPool::new(config.max_worker_threads))),
@@ -2450,7 +2458,7 @@ impl ParallelExecutionCoordinator {
 }
 
 impl ThreadPool {
-    #[must_use] 
+    #[must_use]
     pub fn new(max_threads: usize) -> Self {
         Self {
             worker_threads: Vec::new(),
@@ -2468,7 +2476,7 @@ impl Default for ResourceManager {
 }
 
 impl ResourceManager {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         use crate::performance::MemoryTracker;
 
@@ -2515,7 +2523,7 @@ impl Default for ParallelExecutionConfig {
 
 // Additional error variants for AdvancedQueryError
 impl AdvancedQueryError {
-    #[must_use] 
+    #[must_use]
     pub fn strategy_not_found(strategy: String) -> Self {
         AdvancedQueryError::InternalError(format!("Execution strategy not found: {strategy}"))
     }

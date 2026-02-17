@@ -210,18 +210,17 @@ impl RdfXmlParser {
                 // This is a simplified extraction
                 if let Some(ns_start) = line.find("xmlns:")
                     && let Some(eq_pos) = line[ns_start..].find('=')
-                        && let Some(quote_start) = line[ns_start + eq_pos..].find('"')
-                            && let Some(quote_end) =
-                                line[ns_start + eq_pos + quote_start + 1..].find('"')
-                            {
-                                let prefix = &line[ns_start + 6..ns_start + eq_pos];
-                                let uri = &line[ns_start + eq_pos + quote_start + 1
-                                    ..ns_start + eq_pos + quote_start + 1 + quote_end];
+                    && let Some(quote_start) = line[ns_start + eq_pos..].find('"')
+                    && let Some(quote_end) = line[ns_start + eq_pos + quote_start + 1..].find('"')
+                {
+                    let prefix = &line[ns_start + 6..ns_start + eq_pos];
+                    let uri = &line[ns_start + eq_pos + quote_start + 1
+                        ..ns_start + eq_pos + quote_start + 1 + quote_end];
 
-                                // Add to ontology prefixes if the ontology supports it
-                                // For now, we'll store this information internally
-                                log::debug!("Found namespace: {prefix} -> {uri}");
-                            }
+                    // Add to ontology prefixes if the ontology supports it
+                    // For now, we'll store this information internally
+                    log::debug!("Found namespace: {prefix} -> {uri}");
+                }
             }
         }
         Ok(())
@@ -257,18 +256,20 @@ impl RdfXmlParser {
 
                     // Check for owl:Class elements
                     if (name == "owl:Class" || name.ends_with(":Class"))
-                        && let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
-                            self.add_class_declaration(class_iri, ontology)?;
-                        }
+                        && let Some(class_iri) = self.extract_resource_iri(&current_attributes)
+                    {
+                        self.add_class_declaration(class_iri, ontology)?;
+                    }
 
                     // Check for rdf:type relationships to owl:Class
                     if (name == "rdf:Description" || name.contains("Description"))
-                        && let Some(subject_iri) = self.extract_resource_iri(&current_attributes) {
-                            // Look for nested rdf:type owl:Class
-                            if self.has_class_type(&current_attributes) {
-                                self.add_class_declaration(subject_iri, ontology)?;
-                            }
+                        && let Some(subject_iri) = self.extract_resource_iri(&current_attributes)
+                    {
+                        // Look for nested rdf:type owl:Class
+                        if self.has_class_type(&current_attributes) {
+                            self.add_class_declaration(subject_iri, ontology)?;
                         }
+                    }
                 }
                 Ok(Event::Empty(ref e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
@@ -283,9 +284,10 @@ impl RdfXmlParser {
 
                     // Handle self-closing owl:Class elements
                     if (name == "owl:Class" || name.ends_with(":Class"))
-                        && let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
-                            self.add_class_declaration(class_iri, ontology)?;
-                        }
+                        && let Some(class_iri) = self.extract_resource_iri(&current_attributes)
+                    {
+                        self.add_class_declaration(class_iri, ontology)?;
+                    }
                 }
                 Ok(Event::Text(ref e)) => {
                     // Handle text content if needed for class declarations
@@ -484,7 +486,7 @@ impl RdfXmlParser {
 
         // Detect rdf:reifies (RDF 1.2)
         let has_rdf_reifies = content.contains("rdf:reifies");
-        
+
         // Detect standard reification patterns (RDF 1.1)
         let has_reification = content.contains("rdf:Statement")
             || (content.contains("rdf:subject")
@@ -508,17 +510,17 @@ impl RdfXmlParser {
         // Parse rdf:reifies if present and enabled
         if has_rdf_reifies && self.config.parse_rdf_reifies {
             let reified_triples = self.extract_rdf_reifies(content)?;
-            
+
             // Store reified triples in ontology RDF graph
             let graph = ontology.get_or_create_rdf_graph();
             for (reifier_id, triple) in reified_triples {
                 // Add the reified triple to the graph
                 graph.add_triple(triple.clone());
-                
+
                 // Add the reifier resource as metadata
                 // Create a quoted triple term for RDF-star representation
                 let quoted_triple_term = crate::semantics::RdfTerm::QuotedTriple(Box::new(triple));
-                
+
                 // You could add additional triples linking the reifier to the quoted triple
                 // This is implementation-specific based on your needs
                 let _ = (reifier_id, quoted_triple_term); // Placeholder for future implementation
@@ -528,31 +530,33 @@ impl RdfXmlParser {
         // Parse standard reification patterns if present
         if has_reification {
             let reifications = self.extract_rdf11_reifications(content)?;
-            
+
             match reification_mode {
                 ReificationMode::ConvertToQuotedTriples => {
                     // Convert RDF 1.1 reification to quoted triples
                     let graph = ontology.get_or_create_rdf_graph();
-                    
+
                     for (stmt_id, triple) in reifications {
                         // Create a quoted triple for RDF-star representation
-                        let quoted_triple = crate::semantics::RdfTerm::QuotedTriple(Box::new(triple.clone()));
-                        
+                        let quoted_triple =
+                            crate::semantics::RdfTerm::QuotedTriple(Box::new(triple.clone()));
+
                         // Store the original triple in the graph
                         graph.add_triple(triple);
-                        
+
                         // Store association between reification ID and quoted triple
                         // This can be used later for querying
                         // Create a meta-triple linking the statement ID to the quoted triple
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
-                            url::Url::parse(&format!("_:stmt_{stmt_id}"))
-                                .unwrap_or_else(|_| url::Url::parse("http://example.org/stmt").unwrap())
+                            url::Url::parse(&format!("_:stmt_{stmt_id}")).unwrap_or_else(|_| {
+                                url::Url::parse("http://example.org/stmt").unwrap()
+                            }),
                         );
                         let reifies_pred = crate::semantics::RdfTerm::Iri(
                             url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#reifies")
-                                .unwrap()
+                                .unwrap(),
                         );
-                        
+
                         let meta_triple = crate::semantics::Triple {
                             subject: stmt_iri,
                             predicate: reifies_pred,
@@ -564,50 +568,52 @@ impl RdfXmlParser {
                 ReificationMode::Preserve => {
                     // Keep RDF 1.1 reification as-is in the graph
                     let graph = ontology.get_or_create_rdf_graph();
-                    
+
                     for (stmt_id, triple) in reifications {
                         // Store the reification pattern as separate triples
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
                             url::Url::parse(&format!("http://example.org/stmt/{stmt_id}"))
-                                .unwrap_or_else(|_| url::Url::parse("http://example.org/stmt").unwrap())
+                                .unwrap_or_else(|_| {
+                                    url::Url::parse("http://example.org/stmt").unwrap()
+                                }),
                         );
-                        
+
                         let rdf_ns = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-                        
+
                         // rdf:type rdf:Statement
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}type")).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}type")).unwrap(),
                             ),
                             object: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}Statement")).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}Statement")).unwrap(),
                             ),
                         });
-                        
+
                         // rdf:subject
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}subject")).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}subject")).unwrap(),
                             ),
                             object: triple.subject.clone(),
                         });
-                        
+
                         // rdf:predicate
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}predicate")).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}predicate")).unwrap(),
                             ),
                             object: triple.predicate.clone(),
                         });
-                        
+
                         // rdf:object
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri,
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}object")).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}object")).unwrap(),
                             ),
                             object: triple.object.clone(),
                         });
@@ -616,7 +622,8 @@ impl RdfXmlParser {
                 ReificationMode::Auto => {
                     // This case should already be handled above in mode selection
                     return Err(crate::Error::ontology_parsing(
-                        "Auto reification mode should have been resolved before this point".to_string()
+                        "Auto reification mode should have been resolved before this point"
+                            .to_string(),
                     ));
                 }
             }
@@ -636,20 +643,20 @@ impl RdfXmlParser {
             for caps in regex.captures_iter(content) {
                 if let Some(reified_content) = caps.get(1) {
                     let content_str = reified_content.as_str().trim();
-                    
+
                     // Check if this looks like a quoted triple reference
                     // In RDF/XML, rdf:reifies would reference a triple resource
                     // Format: rdf:reifies rdf:resource="#triple1"
                     // We'll parse this as a placeholder for now
                     // TODO: Full RDF/XML rdf:reifies parsing
-                    
+
                     // For now, create placeholder triple
                     let placeholder_triple = RdfTriple {
                         subject: RdfTerm::BlankNode("_:s".to_string()),
                         predicate: RdfTerm::BlankNode("_:p".to_string()),
                         object: RdfTerm::BlankNode("_:o".to_string()),
                     };
-                    
+
                     results.push((content_str.to_string(), placeholder_triple));
                 }
             }

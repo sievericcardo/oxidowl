@@ -29,7 +29,7 @@ pub struct QLValidator {
 
 impl QLValidator {
     /// Create a new QL profile validator
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut prohibited_constructs = HashSet::new();
 
@@ -463,30 +463,29 @@ impl QLValidator {
         report: &mut ProfileValidationReport,
     ) {
         if let Axiom::ObjectPropertyAssertion(prop_axiom) = axiom
-            && !self.is_property_expression_allowed(&prop_axiom.property) {
-                report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedPropertyExpression(format!(
-                        "{:?}",
-                        prop_axiom.property
-                    )),
-                    "Property expression not allowed in OWL 2 QL profile".to_string(),
-                ));
-            } // Other axioms checked elsewhere
+            && !self.is_property_expression_allowed(&prop_axiom.property)
+        {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedPropertyExpression(format!(
+                    "{:?}",
+                    prop_axiom.property
+                )),
+                "Property expression not allowed in OWL 2 QL profile".to_string(),
+            ));
+        } // Other axioms checked elsewhere
     }
 
     /// Check data ranges within an axiom
     #[allow(dead_code)]
     fn check_data_ranges_in_axiom(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
         if let Axiom::DataPropertyRange(range_axiom) = axiom
-            && !self.is_data_range_allowed(&range_axiom.range) {
-                report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedDataRange(format!(
-                        "{:?}",
-                        range_axiom.range
-                    )),
-                    "Data range not allowed in OWL 2 QL profile".to_string(),
-                ));
-            } // Other axioms checked elsewhere
+            && !self.is_data_range_allowed(&range_axiom.range)
+        {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedDataRange(format!("{:?}", range_axiom.range)),
+                "Data range not allowed in OWL 2 QL profile".to_string(),
+            ));
+        } // Other axioms checked elsewhere
     }
 }
 

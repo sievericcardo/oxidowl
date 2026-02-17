@@ -102,7 +102,7 @@ pub struct Lexer {
 
 impl SWRLParser {
     /// Create a new parser
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             namespace_manager: NamespaceManager::new(),
@@ -556,7 +556,7 @@ impl SWRLParser {
 
 impl NamespaceManager {
     /// Create new namespace manager
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut manager = Self {
             prefixes: HashMap::new(),
@@ -614,7 +614,7 @@ impl NamespaceManager {
 
 impl Lexer {
     /// Create new lexer
-    #[must_use] 
+    #[must_use]
     pub fn new(input: &str) -> Self {
         let mut lexer = Self {
             input: input.to_string(),

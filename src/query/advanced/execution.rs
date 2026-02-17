@@ -149,8 +149,8 @@ impl QueryEngine {
         reasoning_service: Arc<ReasoningService>,
     ) -> Result<Self, AdvancedQueryError> {
         let optimizer = QueryOptimizer::new(ontology.clone(), reasoning_service.clone());
-        let rewriter = QueryRewriter::new(ontology.clone())
-            .map_err(AdvancedQueryError::RewritingError)?;
+        let rewriter =
+            QueryRewriter::new(ontology.clone()).map_err(AdvancedQueryError::RewritingError)?;
 
         Ok(Self {
             ontology: ontology.clone(),
@@ -500,31 +500,34 @@ impl QueryEngine {
                     .get_object_property_assertions_sync(property)
                 {
                     let mut results = Vec::new();
-                    
+
                     for (subj, obj) in assertions {
                         // Check if bindings are compatible
                         let mut compatible = true;
-                        
+
                         if let Some(bound_subj) = binding.get_binding(subject)
                             && let BoundValue::Individual(bound_individual) = bound_subj
-                                && bound_individual != &subj {
-                                    compatible = false;
-                                }
-                        
+                            && bound_individual != &subj
+                        {
+                            compatible = false;
+                        }
+
                         if let Some(bound_obj) = binding.get_binding(object)
                             && let BoundValue::Individual(bound_individual) = bound_obj
-                                && bound_individual != &obj {
-                                    compatible = false;
-                                }
-                        
+                            && bound_individual != &obj
+                        {
+                            compatible = false;
+                        }
+
                         if compatible {
                             let mut new_binding = QueryBinding::new();
-                            new_binding.bind_variable(subject.clone(), BoundValue::Individual(subj));
+                            new_binding
+                                .bind_variable(subject.clone(), BoundValue::Individual(subj));
                             new_binding.bind_variable(object.clone(), BoundValue::Individual(obj));
                             results.push(new_binding);
                         }
                     }
-                    
+
                     Ok(results)
                 } else {
                     Ok(vec![])
@@ -544,7 +547,7 @@ impl QueryEngine {
                 // Check if two variables refer to the same individual
                 let left_value = binding.get_binding(left);
                 let right_value = binding.get_binding(right);
-                
+
                 match (left_value, right_value) {
                     (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
                         // Both bound - check if same
@@ -554,7 +557,8 @@ impl QueryEngine {
                             Ok(vec![])
                         }
                     }
-                    (Some(BoundValue::Individual(ind)), None) | (None, Some(BoundValue::Individual(ind))) => {
+                    (Some(BoundValue::Individual(ind)), None)
+                    | (None, Some(BoundValue::Individual(ind))) => {
                         // One bound - bind the other to same value
                         let mut new_binding = QueryBinding::new();
                         let var = if left_value.is_some() { right } else { left };
@@ -572,7 +576,7 @@ impl QueryEngine {
                 // Check if two variables refer to different individuals
                 let left_value = binding.get_binding(left);
                 let right_value = binding.get_binding(right);
-                
+
                 match (left_value, right_value) {
                     (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
                         // Both bound - check if different
@@ -606,7 +610,10 @@ impl QueryEngine {
                     }
                 } else {
                     let mut new_binding = QueryBinding::new();
-                    new_binding.bind_variable(variable.clone(), BoundValue::Individual(individual.clone()));
+                    new_binding.bind_variable(
+                        variable.clone(),
+                        BoundValue::Individual(individual.clone()),
+                    );
                     Ok(vec![new_binding])
                 }
             }
@@ -625,7 +632,8 @@ impl QueryEngine {
                     }
                 } else {
                     let mut new_binding = QueryBinding::new();
-                    new_binding.bind_variable(variable.clone(), BoundValue::Literal(literal.clone()));
+                    new_binding
+                        .bind_variable(variable.clone(), BoundValue::Literal(literal.clone()));
                     Ok(vec![new_binding])
                 }
             }
@@ -677,13 +685,18 @@ impl QueryEngine {
             filtered_bindings.retain(|binding| {
                 if let Some(bound_value) = binding.get_binding(variable) {
                     match (bound_value, required_value) {
-                        (BoundValue::Literal(lit), super::conjunctive::ValueConstraint::ExactValue(required_lit)) => {
-                            lit == required_lit
-                        }
-                        (BoundValue::Literal(lit), super::conjunctive::ValueConstraint::ValueSet(allowed_values)) => {
-                            allowed_values.contains(lit)
-                        }
-                        (BoundValue::Literal(_lit), super::conjunctive::ValueConstraint::StringPattern(pattern)) => {
+                        (
+                            BoundValue::Literal(lit),
+                            super::conjunctive::ValueConstraint::ExactValue(required_lit),
+                        ) => lit == required_lit,
+                        (
+                            BoundValue::Literal(lit),
+                            super::conjunctive::ValueConstraint::ValueSet(allowed_values),
+                        ) => allowed_values.contains(lit),
+                        (
+                            BoundValue::Literal(_lit),
+                            super::conjunctive::ValueConstraint::StringPattern(pattern),
+                        ) => {
                             // Would use regex matching in production
                             let _ = pattern;
                             true // Simplified
@@ -738,7 +751,7 @@ impl QueryEngine {
     }
 
     /// Get cache statistics
-    #[must_use] 
+    #[must_use]
     pub fn cache_statistics(&self) -> &CacheStatistics {
         &self.cache.statistics
     }
@@ -746,7 +759,7 @@ impl QueryEngine {
 
 impl QueryBinding {
     /// Create a new empty binding
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             variable_bindings: HashMap::new(),
@@ -759,13 +772,13 @@ impl QueryBinding {
     }
 
     /// Get the binding for a variable
-    #[must_use] 
+    #[must_use]
     pub fn get_binding(&self, variable: &QueryVariable) -> Option<&BoundValue> {
         self.variable_bindings.get(variable)
     }
 
     /// Combine two bindings if compatible
-    #[must_use] 
+    #[must_use]
     pub fn combine(&self, other: &QueryBinding) -> Option<QueryBinding> {
         let mut combined = self.clone();
 
@@ -785,7 +798,7 @@ impl QueryBinding {
     }
 
     /// Project binding to only include specified variables
-    #[must_use] 
+    #[must_use]
     pub fn project(&self, variables: &[QueryVariable]) -> QueryBinding {
         let mut projected = QueryBinding::new();
 

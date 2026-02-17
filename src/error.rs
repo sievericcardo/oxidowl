@@ -178,7 +178,9 @@ pub enum Error {
     InvalidDirectionalLiteral { message: String },
 
     /// RDF version incompatibility
-    #[error("RDF version error: {feature} requires {required_version}, but graph is in {current_version} mode")]
+    #[error(
+        "RDF version error: {feature} requires {required_version}, but graph is in {current_version} mode"
+    )]
     RdfVersionIncompatibility {
         feature: String,
         required_version: String,

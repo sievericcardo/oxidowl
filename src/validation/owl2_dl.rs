@@ -31,7 +31,7 @@ pub struct ValidationError {
 }
 
 impl ValidationError {
-    #[must_use] 
+    #[must_use]
     pub fn new(error_type: ValidationErrorType, message: String) -> Self {
         Self {
             error_type,
@@ -232,7 +232,7 @@ pub struct OWL2DLValidator {
 }
 
 impl OWL2DLValidator {
-    #[must_use] 
+    #[must_use]
     pub fn new(ontology: Ontology) -> Self {
         let mut validator = Self {
             ontology,
@@ -319,11 +319,9 @@ impl OWL2DLValidator {
         for axiom in self.ontology.axioms() {
             if let Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom
                 && let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property
-                {
-                    errors.extend(
-                        self.validate_property_chain(chain, &sub_prop_axiom.super_property)?,
-                    );
-                }
+            {
+                errors.extend(self.validate_property_chain(chain, &sub_prop_axiom.super_property)?);
+            }
         }
 
         Ok(errors)
@@ -494,16 +492,17 @@ impl OWL2DLValidator {
             Axiom::DataPropertyAssertion(assertion_axiom) => {
                 // Validate the literal value against the property's range
                 if let Some(range) = self.get_data_property_range(&assertion_axiom.property)
-                    && !self.is_literal_compatible_with_range(&assertion_axiom.value, &range) {
-                        errors.push(ValidationError::new(
-                            ValidationErrorType::DatatypeMismatch,
-                            format!(
-                                "Literal {:?} is not compatible with data property range {}",
-                                assertion_axiom.value,
-                                self.format_data_range(&range)
-                            ),
-                        ));
-                    }
+                    && !self.is_literal_compatible_with_range(&assertion_axiom.value, &range)
+                {
+                    errors.push(ValidationError::new(
+                        ValidationErrorType::DatatypeMismatch,
+                        format!(
+                            "Literal {:?} is not compatible with data property range {}",
+                            assertion_axiom.value,
+                            self.format_data_range(&range)
+                        ),
+                    ));
+                }
             }
             Axiom::DatatypeDefinition(datatype_def) => {
                 // Validate the datatype definition itself
@@ -674,14 +673,14 @@ impl OWL2DLValidator {
     }
 
     /// Validate RDF-star and RDF 1.2 constraints (Phase 8)
-    /// 
+    ///
     /// This method validates:
     /// - Quoted triples are not used in predicate position
     /// - Nesting depth does not exceed configured limits
     /// - Quoted triple structures are well-formed
     /// - Directional literals (dirLangString) are properly formatted
     /// - Blank node labels conform to RDF 1.2 well-formedness rules
-    /// 
+    ///
     /// Note: RDF 1.1 ontologies without RDF-star features pass through unchanged
     fn validate_rdf_star_constraints(&self) -> Result<Vec<ValidationError>, OxidowlError> {
         let mut errors = Vec::new();
@@ -700,11 +699,13 @@ impl OWL2DLValidator {
                     crate::semantics::RdfTerm::QuotedTriple(_) => {
                         errors.push(ValidationError::new(
                             ValidationErrorType::QuotedTripleInPredicatePosition,
-                            "Quoted triples are not allowed in predicate position in RDF-star".to_string(),
+                            "Quoted triples are not allowed in predicate position in RDF-star"
+                                .to_string(),
                         ));
                     }
                     _ => {
-                        if let Err(e) = self.validate_rdf_term(&triple.predicate, "predicate", None) {
+                        if let Err(e) = self.validate_rdf_term(&triple.predicate, "predicate", None)
+                        {
                             errors.push(e);
                         }
                     }
@@ -765,25 +766,28 @@ impl OWL2DLValidator {
 
                     // Direction must be "ltr" or "rtl"
                     if let Some(dir) = direction
-                        && dir != "ltr" && dir != "rtl" {
-                            return Err(ValidationError::new(
-                                ValidationErrorType::InvalidDirectionalLiteral,
-                                format!(
-                                    "Invalid direction '{dir}' in {position} position (must be 'ltr' or 'rtl')"
-                                ),
-                            ));
-                        }
+                        && dir != "ltr"
+                        && dir != "rtl"
+                    {
+                        return Err(ValidationError::new(
+                            ValidationErrorType::InvalidDirectionalLiteral,
+                            format!(
+                                "Invalid direction '{dir}' in {position} position (must be 'ltr' or 'rtl')"
+                            ),
+                        ));
+                    }
 
                     // Datatype should be rdf:dirLangString if direction is present
                     if let Some(dt) = datatype
-                        && dt.as_str() != "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString" {
-                            return Err(ValidationError::new(
-                                ValidationErrorType::InvalidDirectionalLiteral,
-                                format!(
-                                    "Directional literal in {position} position must have datatype rdf:dirLangString"
-                                ),
-                            ));
-                        }
+                        && dt.as_str() != "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString"
+                    {
+                        return Err(ValidationError::new(
+                            ValidationErrorType::InvalidDirectionalLiteral,
+                            format!(
+                                "Directional literal in {position} position must have datatype rdf:dirLangString"
+                            ),
+                        ));
+                    }
                 }
                 Ok(())
             }
@@ -803,9 +807,7 @@ impl OWL2DLValidator {
                     // Legacy format without _: prefix
                     return Err(ValidationError::new(
                         ValidationErrorType::InvalidBlankNodeLabel,
-                        format!(
-                            "Invalid blank node label '{id}' in {position} position"
-                        ),
+                        format!("Invalid blank node label '{id}' in {position} position"),
                     ));
                 }
                 Ok(())
@@ -840,10 +842,10 @@ impl OWL2DLValidator {
     }
 
     /// Get the maximum allowed nesting depth from configuration or use default
-    /// 
+    ///
     /// Returns the configured max depth for quoted triple nesting.
     /// Default is 5 levels, which should be sufficient for most use cases.
-    /// 
+    ///
     /// Note: In future, this should be exposed in `ReasoningConfig` or `ValidationConfig`
     fn get_max_nesting_depth(&self) -> usize {
         // Use default value of 5 - appropriate for most RDF-star use cases
@@ -862,12 +864,12 @@ impl OWL2DLValidator {
                         &sub_prop_axiom.sub_property
                         && let ObjectPropertyExpression::ObjectProperty(super_prop) =
                             &sub_prop_axiom.super_property
-                        {
-                            self.property_hierarchy
-                                .entry(crate::ontology::IRI::from(sub_prop.iri.to_string()))
-                                .or_default()
-                                .push(crate::ontology::IRI::from(super_prop.iri.to_string()));
-                        }
+                    {
+                        self.property_hierarchy
+                            .entry(crate::ontology::IRI::from(sub_prop.iri.to_string()))
+                            .or_default()
+                            .push(crate::ontology::IRI::from(super_prop.iri.to_string()));
+                    }
                 }
                 Axiom::TransitiveObjectProperty(trans_axiom) => {
                     if let ObjectPropertyExpression::ObjectProperty(prop) = &trans_axiom.property {
@@ -1009,9 +1011,9 @@ impl OWL2DLValidator {
                 && self
                     .property_expression_matches(&range_axiom.property, property)
                     .unwrap_or(false)
-                {
-                    return Some(range_axiom.range.clone());
-                }
+            {
+                return Some(range_axiom.range.clone());
+            }
         }
         None
     }
@@ -1334,18 +1336,16 @@ impl OWL2DLValidator {
 
         // Check for circular datatype definitions - proper conversion and checking
         if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range)
-            && self.has_circular_datatype_reference(
-                datatype_def.datatype.as_ref(),
-                &internal_range,
-            ) {
-                errors.push(ValidationError::new(
-                    ValidationErrorType::CircularDatatypeDefinition,
-                    format!(
-                        "Circular reference in datatype definition: {}",
-                        datatype_def.datatype
-                    ),
-                ));
-            }
+            && self.has_circular_datatype_reference(datatype_def.datatype.as_ref(), &internal_range)
+        {
+            errors.push(ValidationError::new(
+                ValidationErrorType::CircularDatatypeDefinition,
+                format!(
+                    "Circular reference in datatype definition: {}",
+                    datatype_def.datatype
+                ),
+            ));
+        }
 
         Ok(())
     }
@@ -1895,24 +1895,25 @@ impl OWL2DLValidator {
         if let (Some(min_val), Some(max_val)) = (
             min_inclusive.or(min_exclusive),
             max_inclusive.or(max_exclusive),
-        )
-            && let (Ok(min_num), Ok(max_num)) = (min_val.parse::<f64>(), max_val.parse::<f64>())
-                && min_num > max_num {
-                    errors.push(ValidationError::new(
-                        ValidationErrorType::ConflictingFacetRestrictions,
-                        "Minimum value greater than maximum value".to_string(),
-                    ));
-                }
+        ) && let (Ok(min_num), Ok(max_num)) = (min_val.parse::<f64>(), max_val.parse::<f64>())
+            && min_num > max_num
+        {
+            errors.push(ValidationError::new(
+                ValidationErrorType::ConflictingFacetRestrictions,
+                "Minimum value greater than maximum value".to_string(),
+            ));
+        }
 
         // Check for impossible length ranges
         if let (Some(min_len), Some(max_len)) = (min_length, max_length)
             && let (Ok(min_num), Ok(max_num)) = (min_len.parse::<usize>(), max_len.parse::<usize>())
-                && min_num > max_num {
-                    errors.push(ValidationError::new(
-                        ValidationErrorType::ConflictingFacetRestrictions,
-                        "Minimum length greater than maximum length".to_string(),
-                    ));
-                }
+            && min_num > max_num
+        {
+            errors.push(ValidationError::new(
+                ValidationErrorType::ConflictingFacetRestrictions,
+                "Minimum length greater than maximum length".to_string(),
+            ));
+        }
 
         Ok(())
     }
@@ -2062,10 +2063,7 @@ impl OWL2DLValidator {
                 if regex::Regex::new(&restriction.value.to_string()).is_err() {
                     errors.push(ValidationError::new(
                         ValidationErrorType::InvalidDatatype,
-                        format!(
-                            "Invalid regular expression pattern: {}",
-                            restriction.value
-                        ),
+                        format!("Invalid regular expression pattern: {}", restriction.value),
                     ));
                 }
             }
@@ -2187,7 +2185,10 @@ impl OWL2DLValidator {
         for literal in literals {
             let literal_key = (
                 literal.value.clone(),
-                literal.datatype.as_ref().map(std::string::ToString::to_string),
+                literal
+                    .datatype
+                    .as_ref()
+                    .map(std::string::ToString::to_string),
             );
             if seen_literals.contains(&literal_key) {
                 errors.push(ValidationError {
@@ -2207,18 +2208,19 @@ impl OWL2DLValidator {
                 && !self.is_valid_literal_for_datatype(
                     &literal.value,
                     &crate::ontology::IRI::from_url(datatype.clone()),
-                )? {
-                    errors.push(ValidationError {
-                        error_type: ValidationErrorType::InvalidLiteralSyntax,
-                        message: format!(
-                            "Invalid literal '{}' for datatype {}",
-                            literal.value, datatype
-                        ),
-                        severity: ValidationSeverity::Error,
-                        axiom_id: None,
-                        location: None,
-                    });
-                }
+                )?
+            {
+                errors.push(ValidationError {
+                    error_type: ValidationErrorType::InvalidLiteralSyntax,
+                    message: format!(
+                        "Invalid literal '{}' for datatype {}",
+                        literal.value, datatype
+                    ),
+                    severity: ValidationSeverity::Error,
+                    axiom_id: None,
+                    location: None,
+                });
+            }
         }
 
         Ok(())
@@ -2372,11 +2374,11 @@ mod tests {
     #[test]
     fn test_quoted_triple_in_subject_position() {
         // Test that quoted triples in subject position are allowed
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         // Create: << :alice :knows :bob >> :certainty 0.95
         let alice = RdfTerm::iri("http://example.org/alice").unwrap();
         let knows = RdfTerm::iri("http://example.org/knows").unwrap();
@@ -2388,17 +2390,17 @@ mod tests {
             language: None,
             direction: None,
         };
-        
+
         let inner_triple = Triple::new(alice, knows, bob);
         let quoted_subject = RdfTerm::QuotedTriple(Box::new(inner_triple));
         let meta_triple = Triple::new(quoted_subject, certainty, value);
-        
+
         graph.add_triple(meta_triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be valid - quoted triples allowed in subject position
         assert!(report.is_valid, "Quoted triple in subject should be valid");
         assert_eq!(report.errors.len(), 0);
@@ -2407,30 +2409,33 @@ mod tests {
     #[test]
     fn test_quoted_triple_in_predicate_position_rejected() {
         // Test that quoted triples in predicate position are rejected
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         // Create invalid: :alice << :p1 :p2 :p3 >> :bob
         let alice = RdfTerm::iri("http://example.org/alice").unwrap();
         let p1 = RdfTerm::iri("http://example.org/p1").unwrap();
         let p2 = RdfTerm::iri("http://example.org/p2").unwrap();
         let p3 = RdfTerm::iri("http://example.org/p3").unwrap();
         let bob = RdfTerm::iri("http://example.org/bob").unwrap();
-        
+
         let inner_triple = Triple::new(p1, p2, p3);
         let quoted_predicate = RdfTerm::QuotedTriple(Box::new(inner_triple));
         let invalid_triple = Triple::new(alice, quoted_predicate, bob);
-        
+
         graph.add_triple(invalid_triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be invalid - quoted triples not allowed in predicate position
-        assert!(!report.is_valid, "Quoted triple in predicate should be invalid");
+        assert!(
+            !report.is_valid,
+            "Quoted triple in predicate should be invalid"
+        );
         assert!(report.errors.iter().any(|e| matches!(
             e.error_type,
             ValidationErrorType::QuotedTripleInPredicatePosition
@@ -2440,11 +2445,11 @@ mod tests {
     #[test]
     fn test_nested_quoted_triple_validation() {
         // Test that nested quoted triples within limits are valid
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         // Create: << << :a :b :c >> :d :e >> :f :g
         let a = RdfTerm::iri("http://example.org/a").unwrap();
         let b = RdfTerm::iri("http://example.org/b").unwrap();
@@ -2453,36 +2458,39 @@ mod tests {
         let e = RdfTerm::iri("http://example.org/e").unwrap();
         let f = RdfTerm::iri("http://example.org/f").unwrap();
         let g = RdfTerm::iri("http://example.org/g").unwrap();
-        
+
         let inner_triple = Triple::new(a, b, c);
         let inner_quoted = RdfTerm::QuotedTriple(Box::new(inner_triple));
         let middle_triple = Triple::new(inner_quoted, d, e);
         let middle_quoted = RdfTerm::QuotedTriple(Box::new(middle_triple));
         let outer_triple = Triple::new(middle_quoted, f, g);
-        
+
         graph.add_triple(outer_triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be valid - 2-level nesting is within default limit of 5
-        assert!(report.is_valid, "Nested quoted triples within limit should be valid");
+        assert!(
+            report.is_valid,
+            "Nested quoted triples within limit should be valid"
+        );
     }
 
     #[test]
     fn test_excessive_nesting_rejected() {
         // Test that extremely deep nesting exceeds limits
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         // Create deeply nested structure (depth = 6, exceeding limit of 5)
         let a = RdfTerm::iri("http://example.org/a").unwrap();
         let b = RdfTerm::iri("http://example.org/b").unwrap();
         let c = RdfTerm::iri("http://example.org/c").unwrap();
-        
+
         // Build 6 levels of nesting (starting from depth 0)
         // This creates a triple with depth = 6
         let mut current = Triple::new(a.clone(), b.clone(), c.clone());
@@ -2490,16 +2498,16 @@ mod tests {
             let quoted = RdfTerm::QuotedTriple(Box::new(current));
             current = Triple::new(quoted, b.clone(), c.clone());
         }
-        
+
         // Verify depth is 6
         assert_eq!(current.depth(), 6, "Triple should have depth 6");
-        
+
         graph.add_triple(current);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be invalid - exceeds default limit of 5
         assert!(!report.is_valid, "Excessive nesting should be invalid");
         assert!(report.errors.iter().any(|e| matches!(
@@ -2511,179 +2519,209 @@ mod tests {
     #[test]
     fn test_directional_literal_validation() {
         // Test that directional literals (RDF 1.2) are properly validated
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
         use url::Url;
-        
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/label").unwrap();
-        
+
         // Valid directional literal
         let valid_literal = RdfTerm::Literal {
             value: "مرحبا".to_string(),
-            datatype: Some(Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString").unwrap()),
+            datatype: Some(
+                Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString").unwrap(),
+            ),
             language: Some("ar".to_string()),
             direction: Some("rtl".to_string()),
         };
-        
+
         let triple = Triple::new(subject, predicate, valid_literal);
         graph.add_triple(triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be valid
-        assert!(report.is_valid, "Valid directional literal should pass validation");
+        assert!(
+            report.is_valid,
+            "Valid directional literal should pass validation"
+        );
     }
 
     #[test]
     fn test_invalid_directional_literal_without_language() {
         // Test that directional literal without language is rejected
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
         use url::Url;
-        
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/label").unwrap();
-        
+
         // Invalid: direction without language
         let invalid_literal = RdfTerm::Literal {
             value: "Hello".to_string(),
-            datatype: Some(Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString").unwrap()),
+            datatype: Some(
+                Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString").unwrap(),
+            ),
             language: None,
             direction: Some("ltr".to_string()),
         };
-        
+
         let triple = Triple::new(subject, predicate, invalid_literal);
         graph.add_triple(triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be invalid
-        assert!(!report.is_valid, "Directional literal without language should be invalid");
-        assert!(report.errors.iter().any(|e| matches!(
-            e.error_type,
-            ValidationErrorType::InvalidDirectionalLiteral
-        )));
+        assert!(
+            !report.is_valid,
+            "Directional literal without language should be invalid"
+        );
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| matches!(e.error_type, ValidationErrorType::InvalidDirectionalLiteral))
+        );
     }
 
     #[test]
     fn test_invalid_direction_value() {
         // Test that invalid direction value is rejected
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
         use url::Url;
-        
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         let subject = RdfTerm::iri("http://example.org/subject").unwrap();
         let predicate = RdfTerm::iri("http://example.org/label").unwrap();
-        
+
         // Invalid: direction must be "ltr" or "rtl"
         let invalid_literal = RdfTerm::Literal {
             value: "Hello".to_string(),
-            datatype: Some(Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString").unwrap()),
+            datatype: Some(
+                Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString").unwrap(),
+            ),
             language: Some("en".to_string()),
             direction: Some("invalid".to_string()),
         };
-        
+
         let triple = Triple::new(subject, predicate, invalid_literal);
         graph.add_triple(triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be invalid
-        assert!(!report.is_valid, "Invalid direction value should be rejected");
-        assert!(report.errors.iter().any(|e| matches!(
-            e.error_type,
-            ValidationErrorType::InvalidDirectionalLiteral
-        )));
+        assert!(
+            !report.is_valid,
+            "Invalid direction value should be rejected"
+        );
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| matches!(e.error_type, ValidationErrorType::InvalidDirectionalLiteral))
+        );
     }
 
     #[test]
     fn test_blank_node_label_validation() {
         // Test that blank node labels are validated
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         let subject = RdfTerm::BlankNode("_:validLabel123".to_string());
         let predicate = RdfTerm::iri("http://example.org/property").unwrap();
         let object = RdfTerm::iri("http://example.org/value").unwrap();
-        
+
         let triple = Triple::new(subject, predicate, object);
         graph.add_triple(triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be valid
-        assert!(report.is_valid, "Valid blank node label should pass validation");
+        assert!(
+            report.is_valid,
+            "Valid blank node label should pass validation"
+        );
     }
 
     #[test]
     fn test_invalid_blank_node_label() {
         // Test that invalid blank node labels are rejected
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         // Invalid: contains special characters
         let subject = RdfTerm::BlankNode("_:invalid-label!".to_string());
         let predicate = RdfTerm::iri("http://example.org/property").unwrap();
         let object = RdfTerm::iri("http://example.org/value").unwrap();
-        
+
         let triple = Triple::new(subject, predicate, object);
         graph.add_triple(triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate().unwrap();
-        
+
         // Should be invalid
-        assert!(!report.is_valid, "Invalid blank node label should be rejected");
-        assert!(report.errors.iter().any(|e| matches!(
-            e.error_type,
-            ValidationErrorType::InvalidBlankNodeLabel
-        )));
+        assert!(
+            !report.is_valid,
+            "Invalid blank node label should be rejected"
+        );
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| matches!(e.error_type, ValidationErrorType::InvalidBlankNodeLabel))
+        );
     }
 
     #[test]
     fn test_rdf11_ontology_validates_identically() {
         // Test that RDF 1.1 ontologies without RDF-star features pass validation
-        use crate::semantics::{RdfTerm, Triple, RdfGraph};
-        
+        use crate::semantics::{RdfGraph, RdfTerm, Triple};
+
         let mut ontology = Ontology::new();
         let mut graph = RdfGraph::new();
-        
+
         // Simple RDF 1.1 triple with no RDF-star features
         let subject = RdfTerm::iri("http://example.org/alice").unwrap();
         let predicate = RdfTerm::iri("http://example.org/knows").unwrap();
         let object = RdfTerm::iri("http://example.org/bob").unwrap();
-        
+
         let triple = Triple::new(subject, predicate, object);
         graph.add_triple(triple);
         ontology.set_rdf_graph(graph);
-        
+
         let mut validator = OWL2DLValidator::new(ontology);
         let report = validator.validate();
-        
+
         // Should be valid - no RDF-star features
         assert!(report.is_ok());
         let report = report.unwrap();
-        assert!(report.is_valid, "RDF 1.1 ontology should validate identically");
+        assert!(
+            report.is_valid,
+            "RDF 1.1 ontology should validate identically"
+        );
         assert_eq!(report.errors.len(), 0);
     }
 }

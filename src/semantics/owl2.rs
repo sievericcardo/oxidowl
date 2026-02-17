@@ -18,7 +18,6 @@ use crate::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 
-
 /// Configuration for OWL 2 DL interpretation with RDF-star support
 #[derive(Debug, Clone)]
 pub struct Owl2Config {
@@ -46,7 +45,7 @@ impl Default for Owl2Config {
 
 impl Owl2Config {
     /// Create configuration for RDF 1.1 compatibility
-    #[must_use] 
+    #[must_use]
     pub fn rdf11() -> Self {
         Self {
             rdf11_mode: true,
@@ -56,7 +55,7 @@ impl Owl2Config {
     }
 
     /// Create configuration for RDF-star with specified reasoning depth
-    #[must_use] 
+    #[must_use]
     pub fn rdfstar(depth: usize) -> Self {
         Self {
             rdf11_mode: false,
@@ -109,19 +108,19 @@ enum CardinalityType {
 
 impl Owl2Interpretation {
     /// Create a new OWL 2 DL interpretation with default configuration
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self::with_config(Owl2Config::default())
     }
 
     /// Create a new OWL 2 DL interpretation with RDF 1.1 compatibility
-    #[must_use] 
+    #[must_use]
     pub fn new_rdf11() -> Self {
         Self::with_config(Owl2Config::rdf11())
     }
 
     /// Create a new OWL 2 DL interpretation with specified configuration
-    #[must_use] 
+    #[must_use]
     pub fn with_config(config: Owl2Config) -> Self {
         let mut interpretation = Self {
             domain: HashSet::new(),
@@ -140,7 +139,7 @@ impl Owl2Interpretation {
     }
 
     /// Get the configuration
-    #[must_use] 
+    #[must_use]
     pub fn config(&self) -> &Owl2Config {
         &self.config
     }
@@ -214,8 +213,11 @@ impl Owl2Interpretation {
     }
 
     /// Get annotations for a quoted triple
-    #[must_use] 
-    pub fn get_quoted_triple_annotations(&self, quoted_triple_id: &str) -> Option<&Vec<(String, String)>> {
+    #[must_use]
+    pub fn get_quoted_triple_annotations(
+        &self,
+        quoted_triple_id: &str,
+    ) -> Option<&Vec<(String, String)>> {
         self.quoted_triple_annotations.get(quoted_triple_id)
     }
 
@@ -248,7 +250,7 @@ impl Owl2Interpretation {
             if self.config.quoted_triples_as_annotations {
                 // Map << s p o >> :q :r to: the axiom "s p o" has annotation :q :r
                 let quoted_id = self.quoted_triple_to_id(quoted);
-                
+
                 if let RdfTerm::Iri(pred_iri) = &triple.predicate {
                     let annotation_value = self.rdf_term_to_string(&triple.object);
                     self.add_quoted_triple_annotation(
@@ -286,7 +288,12 @@ impl Owl2Interpretation {
         match term {
             RdfTerm::Iri(iri) => iri.to_string(),
             RdfTerm::BlankNode(id) => format!("_:{id}"),
-            RdfTerm::Literal { value, datatype, language, .. } => {
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+                ..
+            } => {
                 if let Some(dt) = datatype {
                     format!("\"{value}\"^^<{dt}>")
                 } else if let Some(lang) = language {
@@ -337,9 +344,9 @@ impl Owl2Interpretation {
                     if let Individual::Named(named) = individual
                         && let Some(domain_element) =
                             self.individual_interpretation.get(&named.iri.to_string())
-                        {
-                            result.insert(domain_element.clone());
-                        }
+                    {
+                        result.insert(domain_element.clone());
+                    }
                 }
                 Ok(result)
             }
@@ -1207,9 +1214,10 @@ impl Owl2Interpretation {
                     // Class assertion: a rdf:type C
                     if let (RdfTerm::Iri(individual), RdfTerm::Iri(class)) =
                         (&triple.subject, &triple.object)
-                        && let Some(class_ext) = self.class_interpretation.get(&class.to_string()) {
-                            return class_ext.contains(&individual.to_string());
-                        }
+                        && let Some(class_ext) = self.class_interpretation.get(&class.to_string())
+                    {
+                        return class_ext.contains(&individual.to_string());
+                    }
                     false
                 }
                 predicate_iri => {
@@ -1217,17 +1225,17 @@ impl Owl2Interpretation {
                     if let Some(prop_ext) = self.object_property_interpretation.get(predicate_iri)
                         && let (RdfTerm::Iri(subj), RdfTerm::Iri(obj)) =
                             (&triple.subject, &triple.object)
-                        {
-                            return prop_ext.contains(&(subj.to_string(), obj.to_string()));
-                        }
+                    {
+                        return prop_ext.contains(&(subj.to_string(), obj.to_string()));
+                    }
 
                     // Data property assertion
                     if let Some(prop_ext) = self.data_property_interpretation.get(predicate_iri)
                         && let (RdfTerm::Iri(subj), RdfTerm::Literal { value, .. }) =
                             (&triple.subject, &triple.object)
-                        {
-                            return prop_ext.contains(&(subj.to_string(), value.clone()));
-                        }
+                    {
+                        return prop_ext.contains(&(subj.to_string(), value.clone()));
+                    }
 
                     false
                 }
@@ -1305,7 +1313,7 @@ pub struct Owl2ReasoningEngine {
 
 impl Owl2ReasoningEngine {
     /// Create a new OWL 2 DL reasoning engine
-    #[must_use] 
+    #[must_use]
     pub fn new(axioms: Vec<Axiom>) -> Self {
         Self {
             axioms,
@@ -1427,22 +1435,25 @@ impl Owl2ReasoningEngine {
         // Check for owl:Nothing
         for concept in concepts {
             if let ClassExpression::Class(class) = concept
-                && class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
-                    return Ok(true);
-                }
+                && class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+            {
+                return Ok(true);
+            }
         }
 
         // Check for complementary concepts (C and ¬C)
         for concept1 in concepts {
             for concept2 in concepts {
                 if let (ClassExpression::ObjectComplementOf(c1), c2) = (concept1, concept2)
-                    && c1.as_ref() == c2 {
-                        return Ok(true);
-                    }
+                    && c1.as_ref() == c2
+                {
+                    return Ok(true);
+                }
                 if let (c1, ClassExpression::ObjectComplementOf(c2)) = (concept1, concept2)
-                    && c1 == c2.as_ref() {
-                        return Ok(true);
-                    }
+                    && c1 == c2.as_ref()
+                {
+                    return Ok(true);
+                }
             }
         }
 
@@ -1474,10 +1485,11 @@ impl Owl2ReasoningEngine {
                     // Intersection rule: C ⊓ D means both C and D must hold
                     for sub_concept in concepts {
                         if !current_node.concepts.contains(sub_concept)
-                            && let Some(node) = nodes.get_mut(individual) {
-                                node.concepts.insert(sub_concept.clone());
-                                made_changes = true;
-                            }
+                            && let Some(node) = nodes.get_mut(individual)
+                        {
+                            node.concepts.insert(sub_concept.clone());
+                            made_changes = true;
+                        }
                     }
                 }
 
@@ -1487,10 +1499,11 @@ impl Owl2ReasoningEngine {
                     // A complete implementation would use backtracking
                     if let Some(first_concept) = concepts.first()
                         && !current_node.concepts.contains(first_concept)
-                            && let Some(node) = nodes.get_mut(individual) {
-                                node.concepts.insert(first_concept.clone());
-                                made_changes = true;
-                            }
+                        && let Some(node) = nodes.get_mut(individual)
+                    {
+                        node.concepts.insert(first_concept.clone());
+                        made_changes = true;
+                    }
                 }
 
                 ClassExpression::ObjectSomeValuesFrom { property, filler } => {

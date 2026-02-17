@@ -22,7 +22,7 @@ pub struct DisjointnessMap {
 
 impl DisjointnessMap {
     /// Create a new empty disjointness map
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             disjoint_pairs: HashMap::new(),
@@ -106,14 +106,11 @@ impl DisjointnessMap {
             .or_default()
             .insert(c2.clone());
 
-        self.disjoint_pairs
-            .entry(c2)
-            .or_default()
-            .insert(c1);
+        self.disjoint_pairs.entry(c2).or_default().insert(c1);
     }
 
     /// Check if two concepts are directly disjoint
-    #[must_use] 
+    #[must_use]
     pub fn are_disjoint(&self, c1: &ConceptId, c2: &ConceptId) -> bool {
         self.disjoint_pairs
             .get(c1)
@@ -122,7 +119,7 @@ impl DisjointnessMap {
     }
 
     /// Get all concepts that are disjoint with the given concept
-    #[must_use] 
+    #[must_use]
     pub fn get_disjoint_concepts(&self, concept: &ConceptId) -> HashSet<ConceptId> {
         self.disjoint_pairs
             .get(concept)

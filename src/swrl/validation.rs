@@ -82,8 +82,8 @@ impl SWRLValidator {
         issues.extend(builtin_issues);
 
         // Determine overall validity
-        let is_valid =
-            issues.is_empty() || (!self.strict_mode && issues.iter().all(ValidationIssue::is_warning_level));
+        let is_valid = issues.is_empty()
+            || (!self.strict_mode && issues.iter().all(ValidationIssue::is_warning_level));
 
         Ok(ValidationResult {
             is_valid,
@@ -220,9 +220,10 @@ impl SWRLValidator {
                 second_argument,
             } => {
                 if let ObjectPropertyExpression::PropertyChain(_) = predicate
-                    && self.strict_mode {
-                        issues.push(ValidationIssue::ComplexPropertyExpression);
-                    }
+                    && self.strict_mode
+                {
+                    issues.push(ValidationIssue::ComplexPropertyExpression);
+                }
 
                 if let SWRLIArgument::Variable(var) = first_argument {
                     self.validate_variable_naming(&var.iri.to_string(), &mut issues);
@@ -306,13 +307,14 @@ impl SWRLValidator {
 
                 // Check arity
                 if let Some(expected_arity) = self.get_expected_builtin_arity(predicate)
-                    && arguments.len() != expected_arity {
-                        issues.push(ValidationIssue::IncorrectBuiltInArity {
-                            builtin: predicate.to_string(),
-                            expected: expected_arity,
-                            actual: arguments.len(),
-                        });
-                    }
+                    && arguments.len() != expected_arity
+                {
+                    issues.push(ValidationIssue::IncorrectBuiltInArity {
+                        builtin: predicate.to_string(),
+                        expected: expected_arity,
+                        actual: arguments.len(),
+                    });
+                }
             }
         }
 
@@ -450,10 +452,16 @@ impl SWRLValidator {
 
         for atom in &rule.head {
             match atom {
-                SWRLAtom::ClassAtom { predicate: ClassExpression::Class(class), .. } => {
+                SWRLAtom::ClassAtom {
+                    predicate: ClassExpression::Class(class),
+                    ..
+                } => {
                     predicates.insert(class.iri.to_string());
                 }
-                SWRLAtom::ObjectPropertyAtom { predicate: ObjectPropertyExpression::ObjectProperty(prop), .. } => {
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: ObjectPropertyExpression::ObjectProperty(prop),
+                    ..
+                } => {
                     predicates.insert(prop.iri.to_string());
                 }
                 SWRLAtom::DataPropertyAtom { predicate, .. } => {
@@ -474,10 +482,16 @@ impl SWRLValidator {
 
         for atom in &rule.body {
             match atom {
-                SWRLAtom::ClassAtom { predicate: ClassExpression::Class(class), .. } => {
+                SWRLAtom::ClassAtom {
+                    predicate: ClassExpression::Class(class),
+                    ..
+                } => {
                     predicates.insert(class.iri.to_string());
                 }
-                SWRLAtom::ObjectPropertyAtom { predicate: ObjectPropertyExpression::ObjectProperty(prop), .. } => {
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate: ObjectPropertyExpression::ObjectProperty(prop),
+                    ..
+                } => {
                     predicates.insert(prop.iri.to_string());
                 }
                 SWRLAtom::DataPropertyAtom { predicate, .. } => {

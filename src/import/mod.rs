@@ -27,7 +27,7 @@ pub struct ImportDeclaration {
 
 impl ImportDeclaration {
     /// Create a new import declaration
-    #[must_use] 
+    #[must_use]
     pub fn new(imported_ontology_iri: IRI) -> Self {
         Self {
             imported_ontology_iri,
@@ -37,14 +37,14 @@ impl ImportDeclaration {
     }
 
     /// Set the version IRI
-    #[must_use] 
+    #[must_use]
     pub fn with_version_iri(mut self, version_iri: IRI) -> Self {
         self.version_iri = Some(version_iri);
         self
     }
 
     /// Add an annotation
-    #[must_use] 
+    #[must_use]
     pub fn with_annotation(mut self, annotation: Annotation) -> Self {
         self.annotations.push(annotation);
         self
@@ -120,7 +120,7 @@ pub struct ImportDependencyGraph {
 
 impl ImportDependencyGraph {
     /// Create a new dependency graph
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -147,13 +147,13 @@ impl ImportDependencyGraph {
     }
 
     /// Get direct dependencies of an ontology
-    #[must_use] 
+    #[must_use]
     pub fn get_dependencies(&self, ontology_iri: &IRI) -> Option<&HashSet<IRI>> {
         self.dependencies.get(ontology_iri)
     }
 
     /// Get all transitive dependencies
-    #[must_use] 
+    #[must_use]
     pub fn get_transitive_dependencies(&self, ontology_iri: &IRI) -> HashSet<IRI> {
         let mut visited = HashSet::new();
         let mut to_visit = VecDeque::new();
@@ -179,7 +179,7 @@ impl ImportDependencyGraph {
     }
 
     /// Detect circular dependencies
-    #[must_use] 
+    #[must_use]
     pub fn detect_cycles(&self) -> Vec<Vec<IRI>> {
         let mut cycles = Vec::new();
         let mut visited = HashSet::new();
@@ -343,10 +343,7 @@ impl std::fmt::Display for ImportError {
                 max_depth,
                 current_depth,
             } => {
-                write!(
-                    f,
-                    "Import depth exceeded: {current_depth} > {max_depth}"
-                )
+                write!(f, "Import depth exceeded: {current_depth} > {max_depth}")
             }
             ImportError::ParseError { import_iri, error } => {
                 write!(f, "Parse error in import {import_iri}: {error}")
@@ -385,7 +382,7 @@ pub struct ImportManager {
 
 impl ImportManager {
     /// Create a new import manager
-    #[must_use] 
+    #[must_use]
     pub fn new(config: ImportManagerConfig) -> Self {
         Self {
             config,
@@ -395,7 +392,7 @@ impl ImportManager {
     }
 
     /// Create import manager with default configuration
-    #[must_use] 
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(ImportManagerConfig::default())
     }
@@ -448,9 +445,10 @@ impl ImportManager {
                 && let Some(value_iri) = match &annotation.value {
                     AnnotationValue::IRI(iri) => Some(iri),
                     _ => None,
-                } {
-                    imports.push(ImportDeclaration::new(value_iri.clone()));
                 }
+            {
+                imports.push(ImportDeclaration::new(value_iri.clone()));
+            }
         }
 
         imports
@@ -479,15 +477,16 @@ impl ImportManager {
 
         // Check cache first
         if let Ok(cache) = self.ontology_cache.read()
-            && let Some(cached_ontology) = cache.get(&import_decl.imported_ontology_iri) {
-                return Ok(ImportResolutionResult {
-                    ontology: Some((**cached_ontology).clone()),
-                    import_iri: import_decl.imported_ontology_iri.clone(),
-                    resolved_source: Some("cache".to_string()),
-                    errors: Vec::new(),
-                    warnings: Vec::new(),
-                });
-            }
+            && let Some(cached_ontology) = cache.get(&import_decl.imported_ontology_iri)
+        {
+            return Ok(ImportResolutionResult {
+                ontology: Some((**cached_ontology).clone()),
+                import_iri: import_decl.imported_ontology_iri.clone(),
+                resolved_source: Some("cache".to_string()),
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            });
+        }
 
         // Add to dependency graph
         if let Ok(mut graph) = self.dependency_graph.write() {
@@ -534,12 +533,13 @@ impl ImportManager {
         // Validate imported ontology if configured
         if self.config.validate_imports
             && let Some(ref ontology) = result.ontology
-                && let Err(validation_error) = self.validate_imported_ontology(ontology) {
-                    result.errors.push(ImportError::ValidationError {
-                        import_iri: import_decl.imported_ontology_iri.clone(),
-                        error: validation_error.to_string(),
-                    });
-                }
+            && let Err(validation_error) = self.validate_imported_ontology(ontology)
+        {
+            result.errors.push(ImportError::ValidationError {
+                import_iri: import_decl.imported_ontology_iri.clone(),
+                error: validation_error.to_string(),
+            });
+        }
 
         Ok(result)
     }

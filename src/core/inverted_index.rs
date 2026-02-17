@@ -14,10 +14,10 @@ use std::sync::{Arc, RwLock};
 pub struct ConceptIndex {
     /// Map from IRI to all concepts that reference it
     iri_to_concepts: Arc<RwLock<HashMap<String, HashSet<u64>>>>,
-    
+
     /// Map from concept hash to the actual concept
     hash_to_concept: Arc<RwLock<HashMap<u64, ClassExpression>>>,
-    
+
     /// Statistics
     stats: Arc<RwLock<IndexStatistics>>,
 }
@@ -33,7 +33,7 @@ pub struct IndexStatistics {
 
 impl IndexStatistics {
     /// Get cache hit rate
-    #[must_use] 
+    #[must_use]
     pub fn hit_rate(&self) -> f64 {
         if self.total_lookups == 0 {
             0.0
@@ -45,7 +45,7 @@ impl IndexStatistics {
 
 impl ConceptIndex {
     /// Create a new concept index
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             iri_to_concepts: Arc::new(RwLock::new(HashMap::new())),
@@ -57,25 +57,29 @@ impl ConceptIndex {
     /// Index a concept and all IRIs it references
     pub fn index_concept(&self, concept: &ClassExpression) -> crate::Result<()> {
         let hash = crate::core::fast_hashing::hash_concept(concept);
-        
+
         // Store concept by hash
         {
-            let mut hash_map = self.hash_to_concept.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex hash map lock poisoned: {e}") 
+            let mut hash_map = self
+                .hash_to_concept
+                .write()
+                .map_err(|e| crate::Error::Cache {
+                    message: format!("ConceptIndex hash map lock poisoned: {e}"),
                 })?;
             hash_map.insert(hash, concept.clone());
         }
 
         // Extract and index all IRIs referenced by this concept
         let iris = self.extract_iris(concept);
-        
+
         {
-            let mut iri_map = self.iri_to_concepts.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex IRI map lock poisoned: {e}") 
+            let mut iri_map = self
+                .iri_to_concepts
+                .write()
+                .map_err(|e| crate::Error::Cache {
+                    message: format!("ConceptIndex IRI map lock poisoned: {e}"),
                 })?;
-            
+
             for iri in iris {
                 iri_map.entry(iri).or_insert_with(HashSet::new).insert(hash);
             }
@@ -83,10 +87,9 @@ impl ConceptIndex {
 
         // Update statistics
         {
-            let mut stats = self.stats.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {e}") 
-                })?;
+            let mut stats = self.stats.write().map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex stats lock poisoned: {e}"),
+            })?;
             stats.total_concepts += 1;
         }
 
@@ -97,18 +100,19 @@ impl ConceptIndex {
     pub fn find_concepts_by_iri(&self, iri: &str) -> crate::Result<Vec<ClassExpression>> {
         // Update lookup statistics
         {
-            let mut stats = self.stats.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {e}") 
-                })?;
+            let mut stats = self.stats.write().map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex stats lock poisoned: {e}"),
+            })?;
             stats.total_lookups += 1;
         }
 
-        let iri_map = self.iri_to_concepts.read()
-            .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex IRI map lock poisoned: {e}") 
+        let iri_map = self
+            .iri_to_concepts
+            .read()
+            .map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex IRI map lock poisoned: {e}"),
             })?;
-        
+
         let concept_hashes = match iri_map.get(iri) {
             Some(hashes) => hashes.clone(),
             None => return Ok(Vec::new()),
@@ -116,19 +120,20 @@ impl ConceptIndex {
 
         // Update cache hit statistics
         if !concept_hashes.is_empty() {
-            let mut stats = self.stats.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {e}") 
-                })?;
+            let mut stats = self.stats.write().map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex stats lock poisoned: {e}"),
+            })?;
             stats.cache_hits += 1;
         }
 
         // Retrieve concepts by hash
-        let hash_map = self.hash_to_concept.read()
-            .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex hash map lock poisoned: {e}") 
+        let hash_map = self
+            .hash_to_concept
+            .read()
+            .map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex hash map lock poisoned: {e}"),
             })?;
-        
+
         Ok(concept_hashes
             .iter()
             .filter_map(|hash| hash_map.get(hash).cloned())
@@ -148,17 +153,22 @@ impl ConceptIndex {
     const MAX_EXTRACTION_DEPTH: usize = 500;
 
     /// Recursively extract IRIs from a concept expression
-    fn extract_iris_recursive(&self, concept: &ClassExpression, iris: &mut Vec<String>, depth: usize) {
+    fn extract_iris_recursive(
+        &self,
+        concept: &ClassExpression,
+        iris: &mut Vec<String>,
+        depth: usize,
+    ) {
         // Prevent stack overflow on deeply nested expressions
         if depth > Self::MAX_EXTRACTION_DEPTH {
             return;
         }
-        
+
         match concept {
             ClassExpression::Class(class) => {
                 iris.push(class.iri.as_str().to_string());
             }
-            ClassExpression::ObjectIntersectionOf(exprs) 
+            ClassExpression::ObjectIntersectionOf(exprs)
             | ClassExpression::ObjectUnionOf(exprs) => {
                 for expr in exprs {
                     self.extract_iris_recursive(expr, iris, depth + 1);
@@ -185,9 +195,15 @@ impl ConceptIndex {
             ClassExpression::ObjectHasSelf { property } => {
                 self.extract_property_iris(property, iris, depth + 1);
             }
-            ClassExpression::ObjectMinCardinality { property, filler, .. }
-            | ClassExpression::ObjectMaxCardinality { property, filler, .. }
-            | ClassExpression::ObjectExactCardinality { property, filler, .. } => {
+            ClassExpression::ObjectMinCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectMaxCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectExactCardinality {
+                property, filler, ..
+            } => {
                 self.extract_property_iris(property, iris, depth + 1);
                 self.extract_iris_recursive(filler, iris, depth + 1);
             }
@@ -206,12 +222,17 @@ impl ConceptIndex {
         }
     }
 
-    fn extract_property_iris(&self, prop: &ObjectPropertyExpression, iris: &mut Vec<String>, depth: usize) {
+    fn extract_property_iris(
+        &self,
+        prop: &ObjectPropertyExpression,
+        iris: &mut Vec<String>,
+        depth: usize,
+    ) {
         // Prevent stack overflow on deeply nested property chains
         if depth > Self::MAX_EXTRACTION_DEPTH {
             return;
         }
-        
+
         match prop {
             ObjectPropertyExpression::ObjectProperty(p) => {
                 iris.push(p.iri.as_str().to_string());
@@ -229,27 +250,29 @@ impl ConceptIndex {
 
     /// Get index statistics
     pub fn get_statistics(&self) -> crate::Result<IndexStatistics> {
-        let stats = self.stats.read()
-            .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex stats lock poisoned: {e}") 
-            })?;
-        
+        let stats = self.stats.read().map_err(|e| crate::Error::Cache {
+            message: format!("ConceptIndex stats lock poisoned: {e}"),
+        })?;
+
         let mut result = stats.clone();
-        
+
         // Update total IRIs count
-        let iri_map = self.iri_to_concepts.read()
-            .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex IRI map lock poisoned: {e}") 
+        let iri_map = self
+            .iri_to_concepts
+            .read()
+            .map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex IRI map lock poisoned: {e}"),
             })?;
         result.total_iris = iri_map.len();
-        
+
         Ok(result)
     }
-    
+
     /// Get the number of indexed concepts
-    #[must_use] 
+    #[must_use]
     pub fn size(&self) -> usize {
-        self.hash_to_concept.read()
+        self.hash_to_concept
+            .read()
             .map(|map| map.len())
             .unwrap_or(0)
     }
@@ -257,26 +280,29 @@ impl ConceptIndex {
     /// Clear the index
     pub fn clear(&self) -> crate::Result<()> {
         {
-            let mut iri_map = self.iri_to_concepts.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex IRI map lock poisoned: {e}") 
+            let mut iri_map = self
+                .iri_to_concepts
+                .write()
+                .map_err(|e| crate::Error::Cache {
+                    message: format!("ConceptIndex IRI map lock poisoned: {e}"),
                 })?;
             iri_map.clear();
         }
 
         {
-            let mut hash_map = self.hash_to_concept.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex hash map lock poisoned: {e}") 
+            let mut hash_map = self
+                .hash_to_concept
+                .write()
+                .map_err(|e| crate::Error::Cache {
+                    message: format!("ConceptIndex hash map lock poisoned: {e}"),
                 })?;
             hash_map.clear();
         }
 
         {
-            let mut stats = self.stats.write()
-                .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {e}") 
-                })?;
+            let mut stats = self.stats.write().map_err(|e| crate::Error::Cache {
+                message: format!("ConceptIndex stats lock poisoned: {e}"),
+            })?;
             *stats = IndexStatistics::default();
         }
 
@@ -306,7 +332,9 @@ mod tests {
         index.index_concept(&concept).unwrap();
 
         // Should find concept by IRI
-        let results = index.find_concepts_by_iri("http://example.org/Person").unwrap();
+        let results = index
+            .find_concepts_by_iri("http://example.org/Person")
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], concept);
     }
@@ -322,18 +350,20 @@ mod tests {
             iri: IRI::new("http://example.org/Student"),
         });
 
-        let intersection = ClassExpression::ObjectIntersectionOf(vec![
-            person.clone(),
-            student.clone(),
-        ]);
+        let intersection =
+            ClassExpression::ObjectIntersectionOf(vec![person.clone(), student.clone()]);
 
         index.index_concept(&intersection).unwrap();
 
         // Should find intersection when looking up either IRI
-        let results1 = index.find_concepts_by_iri("http://example.org/Person").unwrap();
+        let results1 = index
+            .find_concepts_by_iri("http://example.org/Person")
+            .unwrap();
         assert_eq!(results1.len(), 1);
 
-        let results2 = index.find_concepts_by_iri("http://example.org/Student").unwrap();
+        let results2 = index
+            .find_concepts_by_iri("http://example.org/Student")
+            .unwrap();
         assert_eq!(results2.len(), 1);
     }
 
@@ -352,8 +382,12 @@ mod tests {
         assert_eq!(stats.total_iris, 1);
 
         // Perform lookups
-        index.find_concepts_by_iri("http://example.org/Person").unwrap();
-        index.find_concepts_by_iri("http://example.org/Unknown").unwrap();
+        index
+            .find_concepts_by_iri("http://example.org/Person")
+            .unwrap();
+        index
+            .find_concepts_by_iri("http://example.org/Unknown")
+            .unwrap();
 
         let stats = index.get_statistics().unwrap();
         assert_eq!(stats.total_lookups, 2);

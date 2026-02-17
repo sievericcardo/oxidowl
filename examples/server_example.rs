@@ -64,7 +64,9 @@ async fn main() -> Result<()> {
     config.server.bind_address = args.bind.clone();
 
     if args.owllink {
-        config.server.enable(oxidowl::config::ServerFeature::OWLlink);
+        config
+            .server
+            .enable(oxidowl::config::ServerFeature::OWLlink);
         config.server.owllink_port = args.owllink_port;
     }
 

@@ -6,8 +6,7 @@
 use crate::{Error, Result};
 
 /// IRI validation mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IriValidationMode {
     /// RFC 3986: ASCII-only URIs (RDF 1.1 compatible)
     RFC3986,
@@ -18,7 +17,6 @@ pub enum IriValidationMode {
     None,
 }
 
-
 /// IRI validator with configurable mode
 #[derive(Debug, Clone)]
 pub struct IriValidator {
@@ -27,13 +25,13 @@ pub struct IriValidator {
 
 impl IriValidator {
     /// Create a new IRI validator with the specified mode
-    #[must_use] 
+    #[must_use]
     pub fn new(mode: IriValidationMode) -> Self {
         Self { mode }
     }
 
     /// Create an RFC 3986 (URI) validator
-    #[must_use] 
+    #[must_use]
     pub fn rfc3986() -> Self {
         Self {
             mode: IriValidationMode::RFC3986,
@@ -41,7 +39,7 @@ impl IriValidator {
     }
 
     /// Create an RFC 3987 (IRI) validator
-    #[must_use] 
+    #[must_use]
     pub fn rfc3987() -> Self {
         Self {
             mode: IriValidationMode::RFC3987,
@@ -73,11 +71,11 @@ impl IriValidator {
 
         // RFC 3987 allows Unicode characters in IRIs
         // Basic structure validation: scheme:hier-part [ "?" query ] [ "#" fragment ]
-        
+
         // Check for scheme
         if let Some(colon_pos) = iri.find(':') {
             let scheme = &iri[..colon_pos];
-            
+
             // Validate scheme: starts with letter, contains only letters, digits, +, -, .
             if !Self::is_valid_scheme(scheme) {
                 return Err(Error::ontology_parsing(format!(
@@ -87,7 +85,7 @@ impl IriValidator {
 
             // Validate the rest of the IRI structure
             let after_scheme = &iri[colon_pos + 1..];
-            
+
             // Check for forbidden characters in IRI (control characters, space, etc.)
             if Self::has_forbidden_characters(after_scheme) {
                 return Err(Error::ontology_parsing(
@@ -111,7 +109,7 @@ impl IriValidator {
         }
 
         let mut chars = scheme.chars();
-        
+
         // First character must be alphabetic
         if let Some(first) = chars.next() {
             if !first.is_ascii_alphabetic() {
@@ -142,19 +140,19 @@ impl IriValidator {
             // DEL and C1 control characters
             ('\u{007F}'..='\u{009F}').contains(&ch) ||
             // Characters that must be percent-encoded
-            ch == '<' || ch == '>' || ch == '"' || ch == '{' || ch == '}' || 
+            ch == '<' || ch == '>' || ch == '"' || ch == '{' || ch == '}' ||
             ch == '|' || ch == '\\' || ch == '^' || ch == '`'
         })
     }
 
     /// Normalize an IRI according to RFC 3986 and RFC 3987
-    /// 
+    ///
     /// Performs IRI normalization including:
     /// - Scheme and host lowercasing
     /// - Percent-encoding normalization
     /// - Path segment normalization (removing . and ..)
     /// - Default port removal
-    #[must_use] 
+    #[must_use]
     pub fn normalize(&self, iri: &str) -> String {
         // Parse IRI using url crate
         if let Ok(url) = url::Url::parse(iri) {
@@ -163,7 +161,7 @@ impl IriValidator {
             // - Normalizes percent-encoding
             // - Removes default ports
             // - Normalizes path (. and .. segments)
-            
+
             // Return normalized URL as string
             url.to_string()
         } else {
@@ -174,7 +172,7 @@ impl IriValidator {
     }
 
     /// Check if an IRI is absolute (contains a scheme)
-    #[must_use] 
+    #[must_use]
     pub fn is_absolute(iri: &str) -> bool {
         iri.contains(':') && {
             if let Some(colon_pos) = iri.find(':') {
@@ -186,19 +184,19 @@ impl IriValidator {
     }
 
     /// Check if an IRI contains Unicode characters (is truly internationalized)
-    #[must_use] 
+    #[must_use]
     pub fn is_internationalized(iri: &str) -> bool {
         !iri.is_ascii()
     }
 
     /// Convert IRI to URI by percent-encoding non-ASCII characters
-    #[must_use] 
+    #[must_use]
     pub fn to_uri(&self, iri: &str) -> String {
         // Find scheme boundary
         if let Some(colon_pos) = iri.find(':') {
             let scheme = &iri[..=colon_pos];
             let rest = &iri[colon_pos + 1..];
-            
+
             // Percent-encode the non-scheme part
             let encoded_rest = Self::percent_encode_unicode(rest);
             format!("{scheme}{encoded_rest}")
@@ -230,13 +228,29 @@ impl IriValidator {
         // RFC 3986 reserved and unreserved characters don't need encoding
         // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
         // We'll be conservative and only keep safe characters unencoded
-        !ch.is_ascii_alphanumeric() && 
-        ch != '-' && ch != '.' && ch != '_' && ch != '~' &&
-        ch != ':' && ch != '/' && ch != '?' && ch != '#' &&
-        ch != '[' && ch != ']' && ch != '@' && ch != '!' &&
-        ch != '$' && ch != '&' && ch != '\'' && ch != '(' &&
-        ch != ')' && ch != '*' && ch != '+' && ch != ',' &&
-        ch != ';' && ch != '='
+        !ch.is_ascii_alphanumeric()
+            && ch != '-'
+            && ch != '.'
+            && ch != '_'
+            && ch != '~'
+            && ch != ':'
+            && ch != '/'
+            && ch != '?'
+            && ch != '#'
+            && ch != '['
+            && ch != ']'
+            && ch != '@'
+            && ch != '!'
+            && ch != '$'
+            && ch != '&'
+            && ch != '\''
+            && ch != '('
+            && ch != ')'
+            && ch != '*'
+            && ch != '+'
+            && ch != ','
+            && ch != ';'
+            && ch != '='
     }
 }
 
@@ -254,7 +268,11 @@ mod tests {
     fn test_rfc3986_ascii_uri() {
         let validator = IriValidator::rfc3986();
         assert!(validator.validate("http://example.org/test").is_ok());
-        assert!(validator.validate("https://www.w3.org/2002/07/owl#Thing").is_ok());
+        assert!(
+            validator
+                .validate("https://www.w3.org/2002/07/owl#Thing")
+                .is_ok()
+        );
         assert!(validator.validate("urn:isbn:0451450523").is_ok());
     }
 
@@ -283,7 +301,7 @@ mod tests {
         assert!(validator.validate("https://example.org").is_ok());
         assert!(validator.validate("ftp://example.org").is_ok());
         assert!(validator.validate("urn:example:test").is_ok());
-        
+
         // Invalid schemes
         assert!(validator.validate("123://example.org").is_err()); // Doesn't start with letter
         assert!(validator.validate("ht_tp://example.org").is_err()); // Contains underscore
@@ -296,7 +314,11 @@ mod tests {
         let validator = IriValidator::rfc3987();
         assert!(validator.validate("http://example.org/<test>").is_err()); // Angle brackets
         assert!(validator.validate("http://example.org/test space").is_err()); // Space
-        assert!(validator.validate("http://example.org/test\u{0000}").is_err()); // NULL
+        assert!(
+            validator
+                .validate("http://example.org/test\u{0000}")
+                .is_err()
+        ); // NULL
     }
 
     #[test]
@@ -310,15 +332,22 @@ mod tests {
     #[test]
     fn test_is_internationalized() {
         assert!(IriValidator::is_internationalized("http://例え.jp"));
-        assert!(IriValidator::is_internationalized("http://example.org/日本語"));
-        assert!(!IriValidator::is_internationalized("http://example.org/test"));
+        assert!(IriValidator::is_internationalized(
+            "http://example.org/日本語"
+        ));
+        assert!(!IriValidator::is_internationalized(
+            "http://example.org/test"
+        ));
     }
 
     #[test]
     fn test_to_uri_encoding() {
         let validator = IriValidator::rfc3987();
-        assert_eq!(validator.to_uri("http://example.org/test"), "http://example.org/test");
-        
+        assert_eq!(
+            validator.to_uri("http://example.org/test"),
+            "http://example.org/test"
+        );
+
         // Unicode should be percent-encoded
         let encoded = validator.to_uri("http://example.org/日本語");
         assert!(encoded.starts_with("http://example.org/"));
@@ -334,7 +363,7 @@ mod tests {
         assert!(IriValidator::is_valid_scheme("urn"));
         assert!(IriValidator::is_valid_scheme("file"));
         assert!(IriValidator::is_valid_scheme("data"));
-        
+
         // Invalid
         assert!(!IriValidator::is_valid_scheme("123"));
         assert!(!IriValidator::is_valid_scheme("ht_tp"));

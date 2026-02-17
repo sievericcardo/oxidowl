@@ -158,7 +158,7 @@ pub struct SavedState {
 
 impl Tableau {
     /// Create a new tableau with the given configuration and ontology
-    #[must_use] 
+    #[must_use]
     pub fn new(config: ReasoningConfig, ontology: Arc<Ontology>) -> Self {
         Self {
             nodes: Vec::new(),
@@ -171,7 +171,7 @@ impl Tableau {
                 timeout: config.timeout,
                 blocking_enabled: true,
                 optimization_enabled: true,
-                rdf11_mode: false,              // RDF-star enabled by default
+                rdf11_mode: false,                // RDF-star enabled by default
                 quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
             },
             pending_queue: VecDeque::new(),
@@ -410,29 +410,30 @@ impl Tableau {
                 // This is an optimization to avoid expensive lookups when not needed
                 if let Some(checker) = &mut self.clause_checker
                     && let ClassExpression::Class(ref class) = assertion.class
-                        && let Some(eq_closure) = checker.equivalence_closure() {
-                            let concept_id = equivalence::ConceptId(class.iri.to_string());
-                            let equiv_class = eq_closure.get_equivalence_class(&concept_id);
+                    && let Some(eq_closure) = checker.equivalence_closure()
+                {
+                    let concept_id = equivalence::ConceptId(class.iri.to_string());
+                    let equiv_class = eq_closure.get_equivalence_class(&concept_id);
 
-                            // Only add equivalent concepts if there are any (skip if just the original concept)
-                            if equiv_class.len() > 1 {
-                                for equiv_concept_id in equiv_class {
-                                    // Skip if it's the same as the original concept
-                                    if equiv_concept_id.0 == class.iri.to_string() {
-                                        continue;
-                                    }
+                    // Only add equivalent concepts if there are any (skip if just the original concept)
+                    if equiv_class.len() > 1 {
+                        for equiv_concept_id in equiv_class {
+                            // Skip if it's the same as the original concept
+                            if equiv_concept_id.0 == class.iri.to_string() {
+                                continue;
+                            }
 
-                                    // Add the equivalent concept to the node
-                                    let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
-                                    let equiv_class = crate::ontology::Class::new(equiv_iri);
-                                    let equiv_expr = ClassExpression::Class(equiv_class);
-                                    let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
-                                    if let Some(node) = self.nodes.get_mut(node_id) {
-                                        node.concepts.insert(equiv_concept);
-                                    }
-                                }
+                            // Add the equivalent concept to the node
+                            let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
+                            let equiv_class = crate::ontology::Class::new(equiv_iri);
+                            let equiv_expr = ClassExpression::Class(equiv_class);
+                            let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
+                            if let Some(node) = self.nodes.get_mut(node_id) {
+                                node.concepts.insert(equiv_concept);
                             }
                         }
+                    }
+                }
 
                 // Queue rule for expanding this concept
                 self.queue_rule_for_concept(node_id, &assertion.class)?;
@@ -523,49 +524,49 @@ impl Tableau {
     }
 
     /// Check if the tableau is satisfiable
-    #[must_use] 
+    #[must_use]
     pub fn is_satisfiable(&self) -> bool {
         matches!(self.state, TableauState::Satisfiable)
     }
 
     /// Check if the tableau is unsatisfiable
-    #[must_use] 
+    #[must_use]
     pub fn is_unsatisfiable(&self) -> bool {
         matches!(self.state, TableauState::Unsatisfiable)
     }
 
     /// Get the current state
-    #[must_use] 
+    #[must_use]
     pub fn state(&self) -> TableauState {
         self.state
     }
 
     /// Get the current state (alias for backward compatibility)
-    #[must_use] 
+    #[must_use]
     pub fn get_state(&self) -> TableauState {
         self.state
     }
 
     /// Get tableau statistics
-    #[must_use] 
+    #[must_use]
     pub fn statistics(&self) -> &TableauStatistics {
         &self.statistics
     }
 
     /// Get the nodes in the tableau
-    #[must_use] 
+    #[must_use]
     pub fn nodes(&self) -> &[TableauNode] {
         &self.nodes
     }
 
     /// Get the edges in the tableau
-    #[must_use] 
+    #[must_use]
     pub fn edges(&self) -> &[TableauEdge] {
         &self.edges
     }
 
     /// Get a node by ID
-    #[must_use] 
+    #[must_use]
     pub fn node(&self, id: NodeId) -> Option<&TableauNode> {
         self.nodes.get(id)
     }
@@ -601,13 +602,13 @@ impl Tableau {
     // Legacy methods for compatibility with existing code
 
     /// Check if tableau is complete
-    #[must_use] 
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         self.pending_queue.is_empty() && self.nodes.iter().all(|node| node.status.fully_expanded)
     }
 
     /// Get clash detector
-    #[must_use] 
+    #[must_use]
     pub fn clash_detector(&self) -> &ClashDetector {
         &self.clash_detector
     }
@@ -618,7 +619,7 @@ impl Tableau {
     }
 
     /// Get pending queue
-    #[must_use] 
+    #[must_use]
     pub fn pending_queue(&self) -> &VecDeque<RuleApplication> {
         &self.pending_queue
     }
@@ -629,7 +630,7 @@ impl Tableau {
     }
 
     /// Get config
-    #[must_use] 
+    #[must_use]
     pub fn config(&self) -> &TableauConfig {
         &self.config
     }
@@ -637,19 +638,19 @@ impl Tableau {
     // Additional methods for compatibility
 
     /// Get node count
-    #[must_use] 
+    #[must_use]
     pub fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
 
     /// Get backtrack count
-    #[must_use] 
+    #[must_use]
     pub fn get_backtrack_count(&self) -> usize {
         self.backtrack_stack.len()
     }
 
     /// Get max depth  
-    #[must_use] 
+    #[must_use]
     pub fn get_max_depth(&self) -> usize {
         self.config.max_depth as usize
     }

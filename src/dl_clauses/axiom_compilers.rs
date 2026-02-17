@@ -1106,8 +1106,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                 let ind1_name = self.individual_to_string(&axiom.individuals[i]);
                 let ind2_name = self.individual_to_string(&axiom.individuals[j]);
 
-                let equality_atom =
-                    DLAtom::new(format!("[{ind1_name} == {ind2_name}]"), vec![]);
+                let equality_atom = DLAtom::new(format!("[{ind1_name} == {ind2_name}]"), vec![]);
 
                 let clause = DLClause::new(
                     vec![equality_atom],
@@ -1135,8 +1134,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                 let ind1_name = self.individual_to_string(&axiom.individuals[i]);
                 let ind2_name = self.individual_to_string(&axiom.individuals[j]);
 
-                let equality_atom =
-                    DLAtom::new(format!("[{ind1_name} == {ind2_name}]"), vec![]);
+                let equality_atom = DLAtom::new(format!("[{ind1_name} == {ind2_name}]"), vec![]);
 
                 let clause = DLClause::new(
                     vec![], // Empty head (constraint)

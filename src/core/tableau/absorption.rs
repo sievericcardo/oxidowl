@@ -92,7 +92,7 @@ impl AbsorptionStats {
     }
 
     /// Pretty print statistics
-    #[must_use] 
+    #[must_use]
     pub fn format(&self) -> String {
         let mut output = String::new();
         output.push_str(&format!("Total clauses: {}\n", self.total_clauses));
@@ -148,7 +148,7 @@ impl ClauseAbsorber {
     /// # Returns
     ///
     /// A `ClauseAbsorber` containing absorbed patterns and remaining clauses
-    #[must_use] 
+    #[must_use]
     pub fn absorb(clause_set: &DLClauseSet) -> Self {
         let mut absorber = ClauseAbsorber {
             absorbed_clauses: Vec::new(),
@@ -233,21 +233,23 @@ impl ClauseAbsorber {
         let head_atom = &clause.head[0];
 
         // Both must be concept assertions (unary predicates with same argument)
-        if body_atom.arguments.len() == 1 && head_atom.arguments.len() == 1
-            && body_atom.arguments[0] == head_atom.arguments[0] {
-                let pattern = AbsorbablePattern::ConceptImplication {
-                    from_concept: body_atom.predicate.clone(),
-                    to_concept: head_atom.predicate.clone(),
-                };
+        if body_atom.arguments.len() == 1
+            && head_atom.arguments.len() == 1
+            && body_atom.arguments[0] == head_atom.arguments[0]
+        {
+            let pattern = AbsorbablePattern::ConceptImplication {
+                from_concept: body_atom.predicate.clone(),
+                to_concept: head_atom.predicate.clone(),
+            };
 
-                // Record in concept implications map
-                self.concept_implications
-                    .entry(body_atom.predicate.clone())
-                    .or_default()
-                    .insert(head_atom.predicate.clone());
+            // Record in concept implications map
+            self.concept_implications
+                .entry(body_atom.predicate.clone())
+                .or_default()
+                .insert(head_atom.predicate.clone());
 
-                return Some(pattern);
-            }
+            return Some(pattern);
+        }
 
         None
     }
@@ -411,61 +413,61 @@ impl ClauseAbsorber {
     }
 
     /// Get clauses that could not be absorbed (must be checked dynamically)
-    #[must_use] 
+    #[must_use]
     pub fn remaining_clauses(&self) -> &[DLClause] {
         &self.remaining_clauses
     }
 
     /// Get absorbed clauses (for reference/debugging)
-    #[must_use] 
+    #[must_use]
     pub fn absorbed_clauses(&self) -> &[DLClause] {
         &self.absorbed_clauses
     }
 
     /// Get absorbed patterns
-    #[must_use] 
+    #[must_use]
     pub fn absorbed_patterns(&self) -> &[AbsorbablePattern] {
         &self.absorbed_patterns
     }
 
     /// Get absorption statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> &AbsorptionStats {
         &self.stats
     }
 
     /// Get concept implication map (A → {B, C, ...})
-    #[must_use] 
+    #[must_use]
     pub fn concept_implications(&self) -> &HashMap<String, HashSet<String>> {
         &self.concept_implications
     }
 
     /// Get role domain map (R → {A, B, ...})
-    #[must_use] 
+    #[must_use]
     pub fn role_domains(&self) -> &HashMap<String, HashSet<String>> {
         &self.role_domains
     }
 
     /// Get role range map (R → {A, B, ...})
-    #[must_use] 
+    #[must_use]
     pub fn role_ranges(&self) -> &HashMap<String, HashSet<String>> {
         &self.role_ranges
     }
 
     /// Check if a concept implies other concepts
-    #[must_use] 
+    #[must_use]
     pub fn get_implied_concepts(&self, concept: &str) -> Option<&HashSet<String>> {
         self.concept_implications.get(concept)
     }
 
     /// Check if a role has domain constraints
-    #[must_use] 
+    #[must_use]
     pub fn get_role_domain_concepts(&self, role: &str) -> Option<&HashSet<String>> {
         self.role_domains.get(role)
     }
 
     /// Check if a role has range constraints
-    #[must_use] 
+    #[must_use]
     pub fn get_role_range_concepts(&self, role: &str) -> Option<&HashSet<String>> {
         self.role_ranges.get(role)
     }

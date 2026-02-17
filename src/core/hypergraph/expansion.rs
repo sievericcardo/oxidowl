@@ -141,7 +141,7 @@ pub struct ExpansionStatistics {
 
 impl HypertableauExpansion {
     /// Create a new hypertableau expansion engine
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         // Initialize standard contradictions
         let mut contradictions = HashSet::new();
@@ -368,9 +368,7 @@ impl HypertableauExpansion {
 
             if let Some(&existing_id) = existing_nodes.first() {
                 // Reuse existing node - add non-generating edge
-                trace!(
-                    "Reusing existing node {existing_id} for ∃{role_name}.{target_concept}"
-                );
+                trace!("Reusing existing node {existing_id} for ∃{role_name}.{target_concept}");
 
                 let edge = HyperEdge::non_generating(role_name.clone(), task.node_id, existing_id);
                 let edge_idx = self.graph.add_edge(edge);
@@ -527,9 +525,10 @@ impl HypertableauExpansion {
         for &node_id in &active_nodes {
             // Skip if already blocked
             if let Some(node) = self.graph.get_node(node_id)
-                && node.is_blocked {
-                    continue;
-                }
+                && node.is_blocked
+            {
+                continue;
+            }
 
             // Find potential blockers (subsumers)
             let subsumers = self.graph.find_subsumers(node_id);
@@ -597,7 +596,7 @@ impl HypertableauExpansion {
     }
 
     /// Get the hypergraph
-    #[must_use] 
+    #[must_use]
     pub fn graph(&self) -> &Hypergraph {
         &self.graph
     }
@@ -608,13 +607,13 @@ impl HypertableauExpansion {
     }
 
     /// Get expansion statistics
-    #[must_use] 
+    #[must_use]
     pub fn statistics(&self) -> &ExpansionStatistics {
         &self.stats
     }
 
     /// Get current expansion state
-    #[must_use] 
+    #[must_use]
     pub fn state(&self) -> &ExpansionState {
         &self.state
     }

@@ -186,10 +186,11 @@ impl ExplanationService {
                     if equiv_axiom.classes.contains(class) {
                         for equiv_class in &equiv_axiom.classes {
                             if let ClassExpression::Class(cls) = equiv_class
-                                && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
-                                    explanation.push(axiom.clone());
-                                    break;
-                                }
+                                && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+                            {
+                                explanation.push(axiom.clone());
+                                break;
+                            }
                         }
                     }
                 }
@@ -197,9 +198,10 @@ impl ExplanationService {
                 Axiom::SubClassOf(subclass_axiom) => {
                     if subclass_axiom.subclass == *class
                         && let ClassExpression::Class(super_cls) = &subclass_axiom.superclass
-                            && super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
-                                explanation.push(axiom.clone());
-                            }
+                        && super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+                    {
+                        explanation.push(axiom.clone());
+                    }
                 }
                 // Check for disjoint classes that cover all possibilities
                 Axiom::DisjointClasses(disjoint_axiom) => {
@@ -289,23 +291,24 @@ impl ExplanationService {
         // Look for direct subsumption relationships
         for axiom in ontology.axioms() {
             if let Axiom::SubClassOf(subclass_axiom) = axiom
-                && subclass_axiom.subclass == *current {
-                    // Found a step in the chain
-                    explanation.push(axiom.clone());
+                && subclass_axiom.subclass == *current
+            {
+                // Found a step in the chain
+                explanation.push(axiom.clone());
 
-                    if self.find_subsumption_path(
-                        &subclass_axiom.superclass,
-                        target,
-                        ontology,
-                        explanation,
-                        visited,
-                    )? {
-                        return Ok(true);
-                    }
-
-                    // Backtrack
-                    explanation.pop();
+                if self.find_subsumption_path(
+                    &subclass_axiom.superclass,
+                    target,
+                    ontology,
+                    explanation,
+                    visited,
+                )? {
+                    return Ok(true);
                 }
+
+                // Backtrack
+                explanation.pop();
+            }
         }
 
         visited.remove(current);
@@ -357,7 +360,7 @@ impl ExplanationService {
     }
 
     /// Generate a human-readable explanation
-    #[must_use] 
+    #[must_use]
     pub fn format_explanation(&self, explanation: &[Axiom]) -> String {
         let mut output = String::new();
         output.push_str("Explanation:\n");
@@ -501,7 +504,7 @@ impl ExplanationService {
     }
 
     /// Find minimal explanations (remove redundant axioms)
-    #[must_use] 
+    #[must_use]
     pub fn minimize_explanation(&self, explanation: Vec<Axiom>) -> Vec<Axiom> {
         // Simple minimization: remove duplicate axioms
         let mut minimal = Vec::new();

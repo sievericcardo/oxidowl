@@ -39,7 +39,7 @@ pub struct EntailmentChecker {
 
 impl EntailmentChecker {
     /// Create a new entailment checker for the specified regime
-    #[must_use] 
+    #[must_use]
     pub fn new(regime: EntailmentRegime) -> Self {
         Self {
             regime,

@@ -145,15 +145,16 @@ impl ClusterCoordinator {
 
         // Check if lock exists and is held
         if let Some(existing_lock) = locks.get(&lock_id)
-            && let Some(holder) = existing_lock.holder {
-                // Check if lock has expired
-                if existing_lock.acquired_at.elapsed() < existing_lock.timeout {
-                    // Lock is still held
-                    return Ok(false);
-                }
-                // Lock expired, can be acquired
-                debug!("Lock {lock_id} expired for holder {holder:?}");
+            && let Some(holder) = existing_lock.holder
+        {
+            // Check if lock has expired
+            if existing_lock.acquired_at.elapsed() < existing_lock.timeout {
+                // Lock is still held
+                return Ok(false);
             }
+            // Lock expired, can be acquired
+            debug!("Lock {lock_id} expired for holder {holder:?}");
+        }
 
         // Acquire the lock
         let lock = DistributedLock {
@@ -264,13 +265,13 @@ impl ClusterCoordinator {
 
 impl DistributedLock {
     /// Check if lock has expired
-    #[must_use] 
+    #[must_use]
     pub fn is_expired(&self) -> bool {
         self.acquired_at.elapsed() >= self.timeout
     }
 
     /// Get remaining time before lock expires
-    #[must_use] 
+    #[must_use]
     pub fn time_remaining(&self) -> Option<std::time::Duration> {
         let elapsed = self.acquired_at.elapsed();
         if elapsed < self.timeout {
@@ -283,7 +284,7 @@ impl DistributedLock {
 
 impl ConsensusProtocol {
     /// Create a new consensus protocol state
-    #[must_use] 
+    #[must_use]
     pub fn new(algorithm: ConsensusAlgorithm, min_cluster_size: usize) -> Self {
         let quorum_size = match algorithm {
             ConsensusAlgorithm::Raft => (min_cluster_size / 2) + 1,
@@ -300,7 +301,7 @@ impl ConsensusProtocol {
     }
 
     /// Check if a quorum can be reached with current participants
-    #[must_use] 
+    #[must_use]
     pub fn can_reach_quorum(&self) -> bool {
         self.participants.len() >= self.quorum_size
     }

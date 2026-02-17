@@ -12,13 +12,13 @@ pub struct SyntaxValidator {
 
 impl SyntaxValidator {
     /// Create a new validator with default settings (strict)
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self { strict_mode: true }
     }
 
     /// Create a lenient validator
-    #[must_use] 
+    #[must_use]
     pub fn lenient() -> Self {
         Self { strict_mode: false }
     }
@@ -67,29 +67,31 @@ impl SyntaxValidator {
 
             // Check for malformed IRIs (unclosed angle brackets)
             if let Some(open_pos) = trimmed.find('<')
-                && !trimmed[open_pos..].contains('>') {
-                    // Check if it continues on next line
-                    if line_num + 1 >= lines.len() || !lines[line_num + 1].contains('>') {
-                        return Err(Error::ontology_parsing(format!(
-                            "Line {}: Unclosed IRI angle bracket",
-                            line_num + 1
-                        )));
-                    }
+                && !trimmed[open_pos..].contains('>')
+            {
+                // Check if it continues on next line
+                if line_num + 1 >= lines.len() || !lines[line_num + 1].contains('>') {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Unclosed IRI angle bracket",
+                        line_num + 1
+                    )));
                 }
+            }
 
             // Check for invalid IRI characters in angle brackets
             if let Some(start) = trimmed.find('<')
-                && let Some(end_pos) = trimmed[start..].find('>') {
-                    let iri_content = &trimmed[start + 1..start + end_pos];
-                    // IRIs should not contain unencoded spaces
-                    if iri_content.contains(' ') {
-                        return Err(Error::ontology_parsing(format!(
-                            "Line {}: Invalid IRI - contains unencoded space: <{}>",
-                            line_num + 1,
-                            iri_content
-                        )));
-                    }
+                && let Some(end_pos) = trimmed[start..].find('>')
+            {
+                let iri_content = &trimmed[start + 1..start + end_pos];
+                // IRIs should not contain unencoded spaces
+                if iri_content.contains(' ') {
+                    return Err(Error::ontology_parsing(format!(
+                        "Line {}: Invalid IRI - contains unencoded space: <{}>",
+                        line_num + 1,
+                        iri_content
+                    )));
                 }
+            }
 
             // Validate literals in the line
             self.validate_turtle_literals(trimmed, line_num + 1)?;
@@ -333,49 +335,49 @@ impl SyntaxValidator {
             if content.contains(prop) {
                 for (line_num, line) in lines.iter().enumerate() {
                     if line.contains(prop)
-                        && let Some(pos) = line.find(prop) {
-                            let after_prop = &line[pos + prop.len()..].trim();
-                            let words: Vec<&str> = after_prop.split_whitespace().collect();
-                            if !words.is_empty() {
-                                let value = words[0].trim_end_matches(&['.', ';', ',', ']'][..]);
+                        && let Some(pos) = line.find(prop)
+                    {
+                        let after_prop = &line[pos + prop.len()..].trim();
+                        let words: Vec<&str> = after_prop.split_whitespace().collect();
+                        if !words.is_empty() {
+                            let value = words[0].trim_end_matches(&['.', ';', ',', ']'][..]);
 
-                                // Remove datatype suffix if present (e.g., ^^xsd:nonNegativeInteger)
-                                let base_value = if value.contains("^^") {
-                                    value.split("^^").next().unwrap_or(value)
-                                } else {
-                                    value
-                                };
+                            // Remove datatype suffix if present (e.g., ^^xsd:nonNegativeInteger)
+                            let base_value = if value.contains("^^") {
+                                value.split("^^").next().unwrap_or(value)
+                            } else {
+                                value
+                            };
 
-                                // Remove quotes if present
-                                let unquoted = base_value.trim_matches('"');
+                            // Remove quotes if present
+                            let unquoted = base_value.trim_matches('"');
 
-                                // Check for word-based numbers
-                                let number_words = [
-                                    "one", "two", "three", "four", "five", "six", "seven", "eight",
-                                    "nine", "ten", "zero",
-                                ];
-                                if number_words.contains(&unquoted.to_lowercase().as_str()) {
-                                    return Err(Error::ontology_parsing(format!(
-                                        "Line {}: {} value must be a numeric digit (e.g., '2'), not a word ('{}')",
-                                        line_num + 1,
-                                        prop,
-                                        unquoted
-                                    )));
-                                }
+                            // Check for word-based numbers
+                            let number_words = [
+                                "one", "two", "three", "four", "five", "six", "seven", "eight",
+                                "nine", "ten", "zero",
+                            ];
+                            if number_words.contains(&unquoted.to_lowercase().as_str()) {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: {} value must be a numeric digit (e.g., '2'), not a word ('{}')",
+                                    line_num + 1,
+                                    prop,
+                                    unquoted
+                                )));
+                            }
 
-                                // Check if it's a valid non-negative integer
-                                if !unquoted.chars().all(|c| c.is_ascii_digit())
-                                    && !unquoted.is_empty()
-                                {
-                                    return Err(Error::ontology_parsing(format!(
-                                        "Line {}: {} value must be a non-negative integer, not '{}'",
-                                        line_num + 1,
-                                        prop,
-                                        unquoted
-                                    )));
-                                }
+                            // Check if it's a valid non-negative integer
+                            if !unquoted.chars().all(|c| c.is_ascii_digit()) && !unquoted.is_empty()
+                            {
+                                return Err(Error::ontology_parsing(format!(
+                                    "Line {}: {} value must be a non-negative integer, not '{}'",
+                                    line_num + 1,
+                                    prop,
+                                    unquoted
+                                )));
                             }
                         }
+                    }
                 }
             }
         }
@@ -1055,11 +1057,12 @@ impl SyntaxValidator {
 
         // Check for owl:hasKey with no properties
         if content.contains("owl:hasKey")
-            && (content.contains("<owl:hasKey/>") || content.contains("<owl:hasKey />")) {
-                return Err(Error::ontology_parsing(
-                    "Empty owl:hasKey - must specify at least one property",
-                ));
-            }
+            && (content.contains("<owl:hasKey/>") || content.contains("<owl:hasKey />"))
+        {
+            return Err(Error::ontology_parsing(
+                "Empty owl:hasKey - must specify at least one property",
+            ));
+        }
 
         // Check for owl:propertyChainAxiom with less than 2 properties
         if content.contains("owl:propertyChainAxiom") {
@@ -1623,15 +1626,16 @@ impl SyntaxValidator {
                     }
 
                     if (trimmed.contains(" or)") || trimmed.contains("(or "))
-                        && let Some(or_pos) = trimmed.find(" or") {
-                            let after_or = trimmed[or_pos + 3..].trim();
-                            if after_or.is_empty() || after_or.starts_with(')') {
-                                return Err(Error::ontology_parsing(format!(
-                                    "Line {}: Incomplete 'or' expression - 'or' must have operands on both sides",
-                                    line_num + 1
-                                )));
-                            }
+                        && let Some(or_pos) = trimmed.find(" or")
+                    {
+                        let after_or = trimmed[or_pos + 3..].trim();
+                        if after_or.is_empty() || after_or.starts_with(')') {
+                            return Err(Error::ontology_parsing(format!(
+                                "Line {}: Incomplete 'or' expression - 'or' must have operands on both sides",
+                                line_num + 1
+                            )));
                         }
+                    }
 
                     // Validate datatype restrictions
                     if (trimmed.contains(">=")
@@ -2221,8 +2225,7 @@ impl SyntaxValidator {
                                     // Rule name should be followed by ':'
                                     if !potential_rule_name.ends_with(':') {
                                         // Check if it looks like a rule name (alphanumeric)
-                                        if potential_rule_name.chars().any(char::is_alphanumeric)
-                                        {
+                                        if potential_rule_name.chars().any(char::is_alphanumeric) {
                                             return Err(Error::ontology_parsing(format!(
                                                 "Line {}: SWRL rule name '{}' must be followed by ':' (e.g., '{}:')",
                                                 line_num + 1,

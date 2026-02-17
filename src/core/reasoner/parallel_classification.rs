@@ -4,20 +4,16 @@
 //! task scheduler for concurrent subsumption testing. This is inspired by Konclude's
 //! approach to achieve 20-50x speedup by testing all N² concept pairs concurrently.
 
-use crate::{
-    Error, Result,
-    ontology::ClassExpression,
-    config::PerformanceConfig,
-};
+use crate::{Error, Result, config::PerformanceConfig, ontology::ClassExpression};
+use log::{debug, info};
+use rayon::prelude::*;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
-use rayon::prelude::*;
-use log::{debug, info};
 
 /// A subsumption test task
 #[derive(Debug, Clone)]
@@ -44,7 +40,7 @@ pub struct ParallelClassificationScheduler {
 }
 
 impl ParallelClassificationScheduler {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: PerformanceConfig) -> Self {
         Self {
             config,
@@ -55,7 +51,7 @@ impl ParallelClassificationScheduler {
     }
 
     /// Schedule all classification tasks with dependency awareness
-    #[must_use] 
+    #[must_use]
     pub fn schedule_classification_tasks(
         &self,
         classes: &[ClassExpression],
@@ -75,9 +71,10 @@ impl ParallelClassificationScheduler {
 
                 // Skip if already determined by told subsumers
                 if let Some(subsumers) = told_subsumers.get(subclass)
-                    && subsumers.contains(superclass) {
-                        continue;
-                    }
+                    && subsumers.contains(superclass)
+                {
+                    continue;
+                }
 
                 // Assign priority based on position in hierarchy
                 let priority = priority_map.get(subclass).copied().unwrap_or(0)
@@ -164,10 +161,16 @@ impl ParallelClassificationScheduler {
     where
         F: Fn(&ClassExpression, &ClassExpression) -> Result<bool> + Send + Sync,
     {
-        let max_parallelism = self.config.max_parallel_classification_tasks
+        let max_parallelism = self
+            .config
+            .max_parallel_classification_tasks
             .unwrap_or(self.config.get_worker_threads() * 100);
 
-        info!("Executing {} tasks with max parallelism {}", tasks.len(), max_parallelism);
+        info!(
+            "Executing {} tasks with max parallelism {}",
+            tasks.len(),
+            max_parallelism
+        );
 
         // Use rayon's parallel iterator with controlled batch size
         let batch_size = (tasks.len() / (self.config.get_worker_threads() * 4)).max(1);
@@ -177,8 +180,8 @@ impl ParallelClassificationScheduler {
             .with_max_len(batch_size)
             .map(|task| {
                 if self.cancelled.load(Ordering::Relaxed) {
-                    return Err(Error::Timeout { 
-                        message: "Classification cancelled".to_string() 
+                    return Err(Error::Timeout {
+                        message: "Classification cancelled".to_string(),
                     });
                 }
 
@@ -188,8 +191,12 @@ impl ParallelClassificationScheduler {
                 let total = self.total_tests.load(Ordering::Relaxed);
 
                 if completed.is_multiple_of(100) {
-                    debug!("Classification progress: {}/{} ({:.1}%)", 
-                           completed, total, (completed as f64 / total as f64) * 100.0);
+                    debug!(
+                        "Classification progress: {}/{} ({:.1}%)",
+                        completed,
+                        total,
+                        (completed as f64 / total as f64) * 100.0
+                    );
                 }
 
                 Ok(SubsumptionResult {
@@ -209,7 +216,7 @@ impl ParallelClassificationScheduler {
     }
 
     /// Get progress information
-    #[must_use] 
+    #[must_use]
     pub fn get_progress(&self) -> (usize, usize) {
         (
             self.completed_tests.load(Ordering::Relaxed),
@@ -231,7 +238,7 @@ pub struct WorkStealingQueue<T> {
 }
 
 impl<T> WorkStealingQueue<T> {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             queue: VecDeque::new(),
@@ -250,12 +257,12 @@ impl<T> WorkStealingQueue<T> {
         self.queue.pop_back()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }

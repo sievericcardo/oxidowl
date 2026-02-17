@@ -77,13 +77,18 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology()
-                && let Some(result) = cache_manager.get_consistency_result(ontology) {
-                    return Ok(result);
-                }
+                && let Some(result) = cache_manager.get_consistency_result(ontology)
+            {
+                return Ok(result);
+            }
         }
 
         // Execute SWRL rules first to ensure all inferences are considered for consistency
@@ -94,7 +99,11 @@ impl ReasoningService {
         let result = reasoner.is_consistent()?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             if let Some(ontology) = reasoner.get_ontology() {
                 cache_manager.cache_consistency_result(ontology, result);
@@ -103,11 +112,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Consistency check timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Consistency check timed out".into(),
+            });
+        }
 
         // Log the time taken for the consistency check
         log::info!("Consistency check completed in {:?}", start.elapsed());
@@ -119,7 +129,11 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             if let Some(result) = cache_manager.get_satisfiability_result(expression) {
                 return Ok(result);
@@ -131,18 +145,23 @@ impl ReasoningService {
         let result = reasoner.is_class_satisfiable(expression)?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             cache_manager.cache_satisfiability_result(expression.clone(), result);
         }
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Satisfiability check timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Satisfiability check timed out".into(),
+            });
+        }
 
         // Log the time taken for the satisfiability check
         log::info!("Satisfiability check completed in {:?}", start.elapsed());
@@ -158,7 +177,11 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             if let Some(result) = cache_manager.get_subsumption_result(subclass, superclass) {
                 return Ok(result);
@@ -169,18 +192,23 @@ impl ReasoningService {
         let result = reasoner.is_subsumed_by(subclass, superclass)?;
 
         // Cache the result if caching is enabled
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Subsumption check timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Subsumption check timed out".into(),
+            });
+        }
 
         // Log the time taken for the subsumption check
         log::info!("Subsumption check completed in {:?}", start.elapsed());
@@ -223,11 +251,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Direct superclass retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Direct superclass retrieval timed out".into(),
+            });
+        }
 
         // Log the time taken for the retrieval
         log::info!(
@@ -250,11 +279,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Direct subclass retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Direct subclass retrieval timed out".into(),
+            });
+        }
 
         // Log the time taken for the retrieval
         log::info!(
@@ -276,11 +306,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Equivalent class retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Equivalent class retrieval timed out".into(),
+            });
+        }
 
         // Log the time taken for the retrieval
         log::info!(
@@ -303,11 +334,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Instance retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Instance retrieval timed out".into(),
+            });
+        }
 
         // Log the time taken for the retrieval
         log::info!("Instance retrieval completed in {:?}", start.elapsed());
@@ -327,11 +359,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Type retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Type retrieval timed out".into(),
+            });
+        }
 
         // Log the time taken for the retrieval
         log::info!("Type retrieval completed in {:?}", start.elapsed());
@@ -366,11 +399,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Object property value retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Object property value retrieval timed out".into(),
+            });
+        }
 
         // Log the time taken for the retrieval
         log::info!(
@@ -393,11 +427,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Data property value retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Data property value retrieval timed out".into(),
+            });
+        }
 
         // Convert Vec<String> to HashSet<Literal>
         let literals: HashSet<crate::ontology::Literal> = result
@@ -425,16 +460,21 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology()
-                && let Some(cached) = cache_manager.get_classification_result(ontology) {
-                    log::info!("Classification (cached) completed in {:?}", start.elapsed());
-                    return Ok(cached);
-                }
+                && let Some(cached) = cache_manager.get_classification_result(ontology)
+            {
+                log::info!("Classification (cached) completed in {:?}", start.elapsed());
+                return Ok(cached);
+            }
         }
 
         // Execute SWRL rules first to ensure all inferences are available for classification
@@ -446,14 +486,19 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Classification timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Classification timed out".into(),
+            });
+        }
 
         // Cache the result if caching is enabled
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
@@ -531,16 +576,21 @@ impl ReasoningService {
         let start = Instant::now();
 
         // Check cache
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology()
-                && let Some(cached) = cache_manager.get_realization_result(ontology) {
-                    log::info!("Realization (cached) completed in {:?}", start.elapsed());
-                    return Ok(cached);
-                }
+                && let Some(cached) = cache_manager.get_realization_result(ontology)
+            {
+                log::info!("Realization (cached) completed in {:?}", start.elapsed());
+                return Ok(cached);
+            }
         }
 
         // Execute SWRL rules first to ensure all inferences are available for realization
@@ -552,14 +602,19 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Realization timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Realization timed out".into(),
+            });
+        }
 
         // Cache the result if caching is enabled
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
             let _ontology_hash = self.calculate_ontology_hash();
             // Get ontology from reasoner
@@ -581,7 +636,11 @@ impl ReasoningService {
     ) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
-        if !self.config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
+        if !self
+            .config
+            .reasoning
+            .is_enabled(crate::config::ReasoningFeature::Explanations)
+        {
             return Err(Error::Reasoning {
                 message: "Explanation is disabled in the configuration".into(),
             });
@@ -592,11 +651,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Explanation retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Explanation retrieval timed out".into(),
+            });
+        }
 
         let explanation_sets: Vec<ExplanationSet> = explanations
             .into_iter()
@@ -616,7 +676,11 @@ impl ReasoningService {
     pub async fn explain_inconsistency(&self) -> Result<Vec<ExplanationSet>> {
         let start = Instant::now();
 
-        if !self.config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
+        if !self
+            .config
+            .reasoning
+            .is_enabled(crate::config::ReasoningFeature::Explanations)
+        {
             return Err(Error::Reasoning {
                 message: "Explanation is disabled in the configuration".into(),
             });
@@ -627,11 +691,12 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Inconsistency explanation retrieval timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Inconsistency explanation retrieval timed out".into(),
+            });
+        }
 
         let explanation_sets: Vec<ExplanationSet> = explanations
             .into_iter()
@@ -667,14 +732,19 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Axiom addition timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Axiom addition timed out".into(),
+            });
+        }
 
         // Clear relevant caches
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
         }
 
@@ -700,14 +770,19 @@ impl ReasoningService {
 
         // Check timeout
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Axiom removal timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Axiom removal timed out".into(),
+            });
+        }
 
         // Clear relevant caches
-        if self.config.cache.is_enabled(crate::config::CacheFeature::Satisfiability) {
+        if self
+            .config
+            .cache
+            .is_enabled(crate::config::CacheFeature::Satisfiability)
+        {
             write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
         }
 
@@ -828,7 +903,7 @@ impl ReasoningService {
     }
 
     /// Get access to the SWRL rule engine
-    #[must_use] 
+    #[must_use]
     pub fn get_swrl_engine(&self) -> Arc<RwLock<SWRLRuleEngine>> {
         Arc::clone(&self.swrl_engine)
     }
@@ -1058,7 +1133,7 @@ impl ReasoningService {
     }
 
     /// Get the cache manager for incremental reasoning integration
-    #[must_use] 
+    #[must_use]
     pub fn cache_manager(&self) -> Arc<RwLock<CacheManager>> {
         self.cache_manager.clone()
     }

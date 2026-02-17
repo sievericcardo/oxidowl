@@ -105,10 +105,10 @@ impl ReasoningTaskService {
                 "tasks: reading cache for satisfiability",
             )?
             .get_satisfiability_result(&class_expr)
-            {
-                debug!("Satisfiability result found in cache for: {class_iri}");
-                return Ok(cached_result);
-            }
+        {
+            debug!("Satisfiability result found in cache for: {class_iri}");
+            return Ok(cached_result);
+        }
 
         let ontology_guard =
             read_lock(ontology, "tasks: reading ontology for satisfiability check")?;
@@ -151,14 +151,13 @@ impl ReasoningTaskService {
         if let (Some(sub_expr), Some(sup_expr)) = (
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
-        )
-            && let Some(cached_result) =
-                read_lock(&self.cache_manager, "tasks: reading cache for subsumption")?
-                    .get_subsumption_result(&sub_expr, &sup_expr)
-            {
-                debug!("Subsumption result found in cache");
-                return Ok(cached_result);
-            }
+        ) && let Some(cached_result) =
+            read_lock(&self.cache_manager, "tasks: reading cache for subsumption")?
+                .get_subsumption_result(&sub_expr, &sup_expr)
+        {
+            debug!("Subsumption result found in cache");
+            return Ok(cached_result);
+        }
 
         let ontology_guard = read_lock(ontology, "tasks: reading ontology for subsumption check")?;
 

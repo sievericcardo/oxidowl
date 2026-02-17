@@ -19,7 +19,7 @@ pub struct UnificationEngine {
 
 impl UnificationEngine {
     /// Create a new unification engine
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             substitutions: HashMap::new(),
@@ -121,7 +121,8 @@ impl UnificationEngine {
     fn arguments_unify(&mut self, arg1: &SWRLIArgument, arg2: &SWRLIArgument) -> bool {
         match (arg1, arg2) {
             (SWRLIArgument::Individual(ind1), SWRLIArgument::Individual(ind2)) => {
-                ind1.iri().map(crate::ontology::IRI::as_str) == ind2.iri().map(crate::ontology::IRI::as_str)
+                ind1.iri().map(crate::ontology::IRI::as_str)
+                    == ind2.iri().map(crate::ontology::IRI::as_str)
             }
             (SWRLIArgument::Variable(var), SWRLIArgument::Individual(ind)) => self
                 .bind_individual_variable(
@@ -179,7 +180,8 @@ impl UnificationEngine {
             // Check consistency with existing binding
             match (existing, &value) {
                 (SWRLIArgument::Individual(ind1), SWRLIArgument::Individual(ind2)) => {
-                    ind1.iri().map(crate::ontology::IRI::as_str) == ind2.iri().map(crate::ontology::IRI::as_str)
+                    ind1.iri().map(crate::ontology::IRI::as_str)
+                        == ind2.iri().map(crate::ontology::IRI::as_str)
                 }
                 _ => false, // More complex consistency checking could be added
             }
@@ -223,26 +225,39 @@ impl UnificationEngine {
         rhs_range: &crate::ontology::DataRange,
     ) -> bool {
         use crate::ontology::DataRange;
-        
+
         match (lhs_range, rhs_range) {
             // Same datatype
-            (DataRange::Datatype(dt1), DataRange::Datatype(dt2)) => {
-                dt1.as_str() == dt2.as_str()
-            }
+            (DataRange::Datatype(dt1), DataRange::Datatype(dt2)) => dt1.as_str() == dt2.as_str(),
             // Datatype restrictions - check base datatype and facets
-            (DataRange::DatatypeRestriction { datatype: dt1, restrictions: r1 },
-             DataRange::DatatypeRestriction { datatype: dt2, restrictions: r2 }) => {
-                dt1.as_str() == dt2.as_str() && r1 == r2
-            }
+            (
+                DataRange::DatatypeRestriction {
+                    datatype: dt1,
+                    restrictions: r1,
+                },
+                DataRange::DatatypeRestriction {
+                    datatype: dt2,
+                    restrictions: r2,
+                },
+            ) => dt1.as_str() == dt2.as_str() && r1 == r2,
             // Data intersections - check if sets of ranges are equal
-            (DataRange::DataIntersectionOf(lhs_ranges), DataRange::DataIntersectionOf(rhs_ranges)) => {
-                lhs_ranges.len() == rhs_ranges.len() &&
-                lhs_ranges.iter().zip(rhs_ranges.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
+            (
+                DataRange::DataIntersectionOf(lhs_ranges),
+                DataRange::DataIntersectionOf(rhs_ranges),
+            ) => {
+                lhs_ranges.len() == rhs_ranges.len()
+                    && lhs_ranges
+                        .iter()
+                        .zip(rhs_ranges.iter())
+                        .all(|(r1, r2)| self.data_ranges_match(r1, r2))
             }
             // Data unions - check if sets of ranges are equal
             (DataRange::DataUnionOf(lhs_ranges), DataRange::DataUnionOf(rhs_ranges)) => {
-                lhs_ranges.len() == rhs_ranges.len() &&
-                lhs_ranges.iter().zip(rhs_ranges.iter()).all(|(r1, r2)| self.data_ranges_match(r1, r2))
+                lhs_ranges.len() == rhs_ranges.len()
+                    && lhs_ranges
+                        .iter()
+                        .zip(rhs_ranges.iter())
+                        .all(|(r1, r2)| self.data_ranges_match(r1, r2))
             }
             // Data complements - check if complemented ranges match
             (DataRange::DataComplementOf(r1), DataRange::DataComplementOf(r2)) => {
@@ -294,13 +309,13 @@ impl UnificationEngine {
     }
 
     /// Get current substitutions
-    #[must_use] 
+    #[must_use]
     pub fn get_substitutions(&self) -> &HashMap<String, SWRLIArgument> {
         &self.substitutions
     }
 
     /// Get current data substitutions
-    #[must_use] 
+    #[must_use]
     pub fn get_data_substitutions(&self) -> &HashMap<String, SWRLDArgument> {
         &self.data_substitutions
     }
@@ -320,7 +335,7 @@ pub struct PatternMatcher {
 
 impl PatternMatcher {
     /// Create a new pattern matcher
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             unification_engine: UnificationEngine::new(),
@@ -356,7 +371,7 @@ impl PatternMatcher {
     }
 
     /// Check if two atoms are structurally similar (ignoring variable names)
-    #[must_use] 
+    #[must_use]
     pub fn atoms_structurally_similar(&self, atom1: &SWRLAtom, atom2: &SWRLAtom) -> bool {
         std::mem::discriminant(atom1) == std::mem::discriminant(atom2)
     }
@@ -379,7 +394,7 @@ pub struct VariableBindings {
 
 impl VariableBindings {
     /// Create empty variable bindings
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             individual_bindings: HashMap::new(),
@@ -388,7 +403,7 @@ impl VariableBindings {
     }
 
     /// Check if bindings are empty
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.individual_bindings.is_empty() && self.data_bindings.is_empty()
     }

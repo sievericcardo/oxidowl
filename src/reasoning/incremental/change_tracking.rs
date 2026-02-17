@@ -53,7 +53,7 @@ pub enum TBoxChange {
 
 impl TBoxChange {
     /// Get the timestamp when this change occurred
-    #[must_use] 
+    #[must_use]
     pub fn timestamp(&self) -> Instant {
         match self {
             TBoxChange::AxiomAdded { timestamp, .. } => *timestamp,
@@ -68,7 +68,7 @@ impl TBoxChange {
     }
 
     /// Get a human-readable description of the change
-    #[must_use] 
+    #[must_use]
     pub fn description(&self) -> String {
         match self {
             TBoxChange::AxiomAdded { axiom, .. } => format!("Added axiom: {axiom:?}"),
@@ -91,7 +91,7 @@ impl TBoxChange {
     }
 
     /// Extract the classes that are directly affected by this change
-    #[must_use] 
+    #[must_use]
     pub fn affected_classes(&self) -> HashSet<Class> {
         let mut classes = HashSet::new();
 
@@ -166,7 +166,7 @@ pub enum ABoxChange {
 
 impl ABoxChange {
     /// Get the timestamp when this change occurred
-    #[must_use] 
+    #[must_use]
     pub fn timestamp(&self) -> Instant {
         match self {
             ABoxChange::IndividualAdded { timestamp, .. } => *timestamp,
@@ -181,7 +181,7 @@ impl ABoxChange {
     }
 
     /// Get a human-readable description of the change
-    #[must_use] 
+    #[must_use]
     pub fn description(&self) -> String {
         match self {
             ABoxChange::IndividualAdded { individual, .. } => {
@@ -230,9 +230,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Added property assertion: {subject_iri} {property:?} {object_iri}"
-                )
+                format!("Added property assertion: {subject_iri} {property:?} {object_iri}")
             }
             ABoxChange::ObjectPropertyAssertionRemoved {
                 subject,
@@ -248,9 +246,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Removed property assertion: {subject_iri} {property:?} {object_iri}"
-                )
+                format!("Removed property assertion: {subject_iri} {property:?} {object_iri}")
             }
             ABoxChange::DataPropertyAssertionAdded {
                 subject,
@@ -262,9 +258,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Added data assertion: {subject_iri} {property:?} {value}"
-                )
+                format!("Added data assertion: {subject_iri} {property:?} {value}")
             }
             ABoxChange::DataPropertyAssertionRemoved {
                 subject,
@@ -276,15 +270,13 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Removed data assertion: {subject_iri} {property:?} {value}"
-                )
+                format!("Removed data assertion: {subject_iri} {property:?} {value}")
             }
         }
     }
 
     /// Get the individuals directly affected by this change
-    #[must_use] 
+    #[must_use]
     pub fn affected_individuals(&self) -> HashSet<Individual> {
         let mut individuals = HashSet::new();
 
@@ -333,7 +325,7 @@ pub struct DependencyGraph {
 
 impl DependencyGraph {
     /// Create a new empty dependency graph
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             class_dependencies: HashMap::new(),
@@ -438,11 +430,16 @@ impl DependencyGraph {
     fn collect_class_dependents(&self, class: &Class, visited: &mut HashSet<Class>) {
         self.collect_class_dependents_with_depth(class, visited, 0);
     }
-    
+
     /// Maximum recursion depth to prevent stack overflow
     const MAX_DEPENDENT_DEPTH: usize = 500;
-    
-    fn collect_class_dependents_with_depth(&self, class: &Class, visited: &mut HashSet<Class>, depth: usize) {
+
+    fn collect_class_dependents_with_depth(
+        &self,
+        class: &Class,
+        visited: &mut HashSet<Class>,
+        depth: usize,
+    ) {
         if visited.contains(class) || depth > Self::MAX_DEPENDENT_DEPTH {
             return; // Avoid cycles and stack overflow
         }
@@ -513,7 +510,7 @@ pub enum InvalidationEvent {
 
 impl ChangeTracker {
     /// Create a new change tracker
-    #[must_use] 
+    #[must_use]
     pub fn new(config: super::IncrementalConfig) -> Self {
         Self {
             tbox_history: RwLock::new(VecDeque::new()),
@@ -637,9 +634,10 @@ impl ChangeTracker {
         let affected_individuals = change.affected_individuals();
 
         if !affected_individuals.is_empty()
-            && let Ok(mut queue) = self.invalidation_queue.write() {
-                queue.push_back(InvalidationEvent::InstanceRelations(affected_individuals));
-            }
+            && let Ok(mut queue) = self.invalidation_queue.write()
+        {
+            queue.push_back(InvalidationEvent::InstanceRelations(affected_individuals));
+        }
 
         Ok(())
     }
@@ -669,7 +667,7 @@ impl ChangeTracker {
 }
 
 /// Extract all atomic classes from a class expression
-#[must_use] 
+#[must_use]
 pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<Class> {
     let mut classes = HashSet::new();
     extract_classes_from_class_expression_with_depth(expr, &mut classes, 0);
@@ -679,7 +677,11 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
 /// Maximum recursion depth for extraction to prevent stack overflow
 const MAX_CLASS_EXTRACTION_DEPTH: usize = 500;
 
-fn extract_classes_from_class_expression_with_depth(expr: &ClassExpression, classes: &mut HashSet<Class>, depth: usize) {
+fn extract_classes_from_class_expression_with_depth(
+    expr: &ClassExpression,
+    classes: &mut HashSet<Class>,
+    depth: usize,
+) {
     // Prevent stack overflow on deeply nested expressions
     if depth > MAX_CLASS_EXTRACTION_DEPTH {
         return;

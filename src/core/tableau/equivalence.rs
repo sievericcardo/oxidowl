@@ -13,7 +13,7 @@ pub struct ConceptId(pub String);
 
 impl ConceptId {
     /// Create `ConceptId` from a class expression
-    #[must_use] 
+    #[must_use]
     pub fn from_class_expression(expr: &ClassExpression) -> Self {
         match expr {
             ClassExpression::Class(c) => ConceptId(c.iri.to_string()),
@@ -39,7 +39,7 @@ pub struct EquivalenceClosure {
 
 impl EquivalenceClosure {
     /// Create a new empty equivalence closure
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             parent: HashMap::new(),
@@ -146,10 +146,7 @@ impl EquivalenceClosure {
 
         for concept in all_concepts {
             let root = self.find(&concept);
-            self.classes
-                .entry(root)
-                .or_default()
-                .insert(concept);
+            self.classes.entry(root).or_default().insert(concept);
         }
     }
 

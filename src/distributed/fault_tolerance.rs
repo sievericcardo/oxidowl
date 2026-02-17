@@ -426,15 +426,11 @@ impl FaultTolerance {
             }
 
             FaultToleranceEvent::CircuitBreakerStateChanged(node_id, state) => {
-                info!(
-                    "Circuit breaker state changed for node {node_id}: {state:?}"
-                );
+                info!("Circuit breaker state changed for node {node_id}: {state:?}");
             }
 
             FaultToleranceEvent::RecoveryStarted(session_id, recovery_type) => {
-                info!(
-                    "Recovery session started: {session_id} - {recovery_type:?}"
-                );
+                info!("Recovery session started: {session_id} - {recovery_type:?}");
             }
 
             FaultToleranceEvent::RecoveryCompleted(session_id, result) => {
@@ -527,21 +523,21 @@ impl FaultTolerance {
                         && let Ok(new_node) = self
                             .find_alternative_node(&partition.assigned_node, cluster_manager)
                             .await
-                        {
-                            // Create new partition with different assignment
-                            let mut new_partition = partition.clone();
-                            new_partition.assigned_node = new_node;
+                    {
+                        // Create new partition with different assignment
+                        let mut new_partition = partition.clone();
+                        new_partition.assigned_node = new_node;
 
-                            match self
-                                .execute_partition(&new_partition, cluster_manager)
-                                .await
-                            {
-                                Ok(result) => return Ok(result),
-                                Err(e) => {
-                                    error!("Alternative node execution also failed: {e}");
-                                }
+                        match self
+                            .execute_partition(&new_partition, cluster_manager)
+                            .await
+                        {
+                            Ok(result) => return Ok(result),
+                            Err(e) => {
+                                error!("Alternative node execution also failed: {e}");
                             }
                         }
+                    }
                 }
             }
         }
@@ -934,7 +930,7 @@ pub enum CircuitBreakerState {
 
 impl CircuitBreaker {
     /// Create a new circuit breaker
-    #[must_use] 
+    #[must_use]
     pub fn new(failure_threshold: usize, timeout_duration: Duration) -> Self {
         Self {
             state: CircuitBreakerState::Closed,
@@ -946,7 +942,7 @@ impl CircuitBreaker {
     }
 
     /// Check if should attempt operation
-    #[must_use] 
+    #[must_use]
     pub fn should_attempt(&self) -> bool {
         match self.state {
             CircuitBreakerState::Closed => true,
@@ -996,7 +992,7 @@ impl CircuitBreaker {
     }
 
     /// Get current state
-    #[must_use] 
+    #[must_use]
     pub fn get_state(&self) -> CircuitBreakerState {
         self.state.clone()
     }

@@ -507,7 +507,9 @@ fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
 }
 
 /// Handle warp rejections
-async fn handle_rejection(err: warp::Rejection) -> std::result::Result<impl Reply, std::convert::Infallible> {
+async fn handle_rejection(
+    err: warp::Rejection,
+) -> std::result::Result<impl Reply, std::convert::Infallible> {
     let code;
     let message;
 

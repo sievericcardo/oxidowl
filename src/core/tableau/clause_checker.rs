@@ -87,13 +87,13 @@ pub struct ClauseViolation {
 
 impl ClauseChecker {
     /// Create a new clause checker
-    #[must_use] 
+    #[must_use]
     pub fn new(clauses: DLClauseSet) -> Self {
         Self::with_config(clauses, ClauseCheckerConfig::default())
     }
 
     /// Create clause checker with custom configuration
-    #[must_use] 
+    #[must_use]
     pub fn with_config(clauses: DLClauseSet, config: ClauseCheckerConfig) -> Self {
         // Apply clause absorption if enabled
         let (working_clauses, absorber) = if config.enable_absorption {
@@ -150,7 +150,7 @@ impl ClauseChecker {
     }
 
     /// Create clause checker with equivalence and disjointness information
-    #[must_use] 
+    #[must_use]
     pub fn with_reasoning_support(
         clauses: DLClauseSet,
         equivalence_closure: EquivalenceClosure,
@@ -213,7 +213,7 @@ impl ClauseChecker {
     }
 
     /// Create clause checker with full configuration options
-    #[must_use] 
+    #[must_use]
     pub fn with_full_config(
         clauses: DLClauseSet,
         equivalence_closure: Option<EquivalenceClosure>,
@@ -316,7 +316,7 @@ impl ClauseChecker {
     /// Check node immutably (without cache updates)
     ///
     /// Use this when you need immutable access or don't want to update cache.
-    #[must_use] 
+    #[must_use]
     pub fn check_node_immutable(&self, node: &TableauNode) -> Option<ClauseViolation> {
         log::trace!(
             "Checking node {} for clause violations (immutable)",
@@ -363,10 +363,12 @@ impl ClauseChecker {
 
                 // IMPORTANT: Also include clauses with empty bodies (they always apply!)
                 for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty() && !clause.head.is_empty()
-                        && !candidates.iter().any(|c| c.id == clause.id) {
-                            candidates.push(clause);
-                        }
+                    if clause.body.is_empty()
+                        && !clause.head.is_empty()
+                        && !candidates.iter().any(|c| c.id == clause.id)
+                    {
+                        candidates.push(clause);
+                    }
                 }
 
                 candidates
@@ -531,15 +533,18 @@ impl ClauseChecker {
             if !predicates.is_empty() {
                 let mut candidates = index
                     .get_candidate_clause_refs(&predicates)
-                    .into_iter().cloned()
+                    .into_iter()
+                    .cloned()
                     .collect::<Vec<_>>();
 
                 // Include clauses with empty bodies
                 for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty() && !clause.head.is_empty()
-                        && !candidates.iter().any(|c| c.id == clause.id) {
-                            candidates.push(clause.clone());
-                        }
+                    if clause.body.is_empty()
+                        && !clause.head.is_empty()
+                        && !candidates.iter().any(|c| c.id == clause.id)
+                    {
+                        candidates.push(clause.clone());
+                    }
                 }
 
                 candidates
@@ -547,7 +552,8 @@ impl ClauseChecker {
                 index
                     .deterministic_clauses()
                     .iter()
-                    .filter(|c| c.body.is_empty()).cloned()
+                    .filter(|c| c.body.is_empty())
+                    .cloned()
                     .collect()
             }
         } else {
@@ -686,15 +692,13 @@ impl ClauseChecker {
 
         // Get negative clauses (clone to avoid borrow issues)
         let negative_clauses: Vec<DLClause> = if let Some(index) = &self.clause_index {
-            index
-                .get_negative_clauses()
-                .into_iter().cloned()
-                .collect()
+            index.get_negative_clauses().into_iter().cloned().collect()
         } else {
             self.clauses
                 .deterministic_clauses
                 .iter()
-                .filter(|c| c.head.is_empty()).cloned()
+                .filter(|c| c.head.is_empty())
+                .cloned()
                 .collect()
         };
 
@@ -883,38 +887,38 @@ impl ClauseChecker {
     }
 
     /// Get statistics about the clause set
-    #[must_use] 
+    #[must_use]
     pub fn get_statistics(&self) -> &crate::dl_clauses::DLClauseStatistics {
         &self.clauses.statistics
     }
 
     /// Check if clause checker has any clauses
-    #[must_use] 
+    #[must_use]
     pub fn has_clauses(&self) -> bool {
         !self.clauses.deterministic_clauses.is_empty()
             || !self.clauses.disjunctive_clauses.is_empty()
     }
 
     /// Get the configuration
-    #[must_use] 
+    #[must_use]
     pub fn config(&self) -> &ClauseCheckerConfig {
         &self.config
     }
 
     /// Get the clause index (if enabled)
-    #[must_use] 
+    #[must_use]
     pub fn clause_index(&self) -> Option<&ClauseIndex> {
         self.clause_index.as_ref()
     }
 
     /// Check if indexing is enabled
-    #[must_use] 
+    #[must_use]
     pub fn is_indexing_enabled(&self) -> bool {
         self.clause_index.is_some()
     }
 
     /// Get the check result cache (if enabled)
-    #[must_use] 
+    #[must_use]
     pub fn check_cache(&self) -> Option<&CheckResultCache> {
         self.check_cache.as_ref()
     }
@@ -930,25 +934,25 @@ impl ClauseChecker {
     }
 
     /// Get the disjointness map (if available)
-    #[must_use] 
+    #[must_use]
     pub fn disjointness_map(&self) -> Option<&DisjointnessMap> {
         self.disjointness_map.as_ref()
     }
 
     /// Check if incremental checking is enabled
-    #[must_use] 
+    #[must_use]
     pub fn is_incremental_enabled(&self) -> bool {
         self.check_cache.is_some()
     }
 
     /// Get the clause absorber (if enabled)
-    #[must_use] 
+    #[must_use]
     pub fn absorber(&self) -> Option<&ClauseAbsorber> {
         self.absorber.as_ref()
     }
 
     /// Check if clause absorption is enabled
-    #[must_use] 
+    #[must_use]
     pub fn is_absorption_enabled(&self) -> bool {
         self.absorber.is_some()
     }

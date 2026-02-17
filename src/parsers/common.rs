@@ -84,14 +84,14 @@ pub mod format_utils {
     use url::Url;
 
     /// Format an IRI for serialization with proper escaping
-    #[must_use] 
+    #[must_use]
     pub fn format_iri(iri: &Url) -> String {
         // Common IRI formatting logic
         format!("<{iri}>")
     }
 
     /// Escape special characters in string literals
-    #[must_use] 
+    #[must_use]
     pub fn escape_string_literal(s: &str) -> String {
         s.replace('\\', "\\\\")
             .replace('"', "\\\"")
@@ -101,7 +101,7 @@ pub mod format_utils {
     }
 
     /// Generate indentation for pretty-printing
-    #[must_use] 
+    #[must_use]
     pub fn indent(level: usize) -> String {
         "  ".repeat(level)
     }

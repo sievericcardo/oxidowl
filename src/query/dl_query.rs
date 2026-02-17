@@ -41,12 +41,16 @@ fn extract_union_classes(expr: &ClassExpression, result: &mut HashSet<ClassExpre
 /// Maximum recursion depth to prevent stack overflow
 const MAX_UNION_EXTRACTION_DEPTH: usize = 500;
 
-fn extract_union_classes_with_depth(expr: &ClassExpression, result: &mut HashSet<ClassExpression>, depth: usize) {
+fn extract_union_classes_with_depth(
+    expr: &ClassExpression,
+    result: &mut HashSet<ClassExpression>,
+    depth: usize,
+) {
     // Prevent stack overflow on deeply nested unions
     if depth > MAX_UNION_EXTRACTION_DEPTH {
         return;
     }
-    
+
     match expr {
         ClassExpression::ObjectUnionOf(union_classes) => {
             // Recursively extract from nested unions
@@ -565,7 +569,8 @@ impl DLQueryParser {
         // Handle parentheses
         if tokens.get(start).map(std::string::String::as_str) == Some("(") {
             let (expr, end) = self.parse_expression_tokens(tokens, start + 1)?;
-            if end >= tokens.len() || tokens.get(end).map(std::string::String::as_str) != Some(")") {
+            if end >= tokens.len() || tokens.get(end).map(std::string::String::as_str) != Some(")")
+            {
                 return Err(Error::reasoning("Missing closing parenthesis"));
             }
             return Ok((expr, end + 1));

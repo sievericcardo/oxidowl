@@ -35,7 +35,9 @@ pub use self::{
     datatype_validation::DatatypeValidator,
     explanation::ExplanationService,
     hypertableau_adapter::HypertableauRunner,
-    parallel_classification::{ParallelClassificationScheduler, SubsumptionTask, SubsumptionResult},
+    parallel_classification::{
+        ParallelClassificationScheduler, SubsumptionResult, SubsumptionTask,
+    },
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},
     results::{
         ClassificationResult, PropertyClassificationResult, RealizationResult, ReasoningResult,

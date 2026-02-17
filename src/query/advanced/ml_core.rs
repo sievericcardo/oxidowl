@@ -337,7 +337,7 @@ pub struct QueryFeatures {
 
 impl QueryFeatures {
     /// Convert to feature vector (21 dimensions)
-    #[must_use] 
+    #[must_use]
     pub fn to_vector(&self) -> Vec<f32> {
         vec![
             self.atom_count,
@@ -362,7 +362,7 @@ impl QueryFeatures {
     }
 
     /// Get feature dimensionality
-    #[must_use] 
+    #[must_use]
     pub const fn dimension() -> usize {
         18 // 21 logical dimensions, but 3 are derived/metadata
     }
@@ -381,7 +381,7 @@ impl Default for QueryFeatureExtractor {
 }
 
 impl QueryFeatureExtractor {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             query_history: RwLock::new(Vec::new()),
@@ -520,12 +520,13 @@ impl QueryFeatureExtractor {
             for j in (i + 1)..n {
                 if let Some(shared_vars) =
                     self.get_shared_variables(&query.body_atoms[i], &query.body_atoms[j])
-                    && !shared_vars.is_empty() {
-                        join_graph[i].push(j);
-                        join_graph[j].push(i);
-                        join_variables[i].extend(shared_vars.clone());
-                        join_variables[j].extend(shared_vars);
-                    }
+                    && !shared_vars.is_empty()
+                {
+                    join_graph[i].push(j);
+                    join_graph[j].push(i);
+                    join_variables[i].extend(shared_vars.clone());
+                    join_variables[j].extend(shared_vars);
+                }
             }
         }
 
@@ -686,14 +687,16 @@ impl QueryFeatureExtractor {
                 if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom
                     && let crate::ontology::ClassExpression::Class(sub_class) =
                         &sub_class_axiom.subclass
-                        && sub_class.iri == current_iri {
-                            // Found a superclass
-                            if let crate::ontology::ClassExpression::Class(sup_class) =
-                                &sub_class_axiom.superclass
-                                && visited.insert(sup_class.iri.clone()) {
-                                    queue.push_back((sup_class.iri.clone(), depth + 1));
-                                }
-                        }
+                    && sub_class.iri == current_iri
+                {
+                    // Found a superclass
+                    if let crate::ontology::ClassExpression::Class(sup_class) =
+                        &sub_class_axiom.superclass
+                        && visited.insert(sup_class.iri.clone())
+                    {
+                        queue.push_back((sup_class.iri.clone(), depth + 1));
+                    }
+                }
             }
         }
 
@@ -741,7 +744,6 @@ impl QueryFeatureExtractor {
 
         // Similarity decreases with number of different bits
         let max_bits = 64.0;
-        
 
         1.0 - (different_bits as f32 / max_bits)
     }
@@ -900,10 +902,11 @@ impl QueryFeatureExtractor {
             use std::process::Command;
             if let Ok(output) = Command::new("sysctl").arg("-n").arg("hw.memsize").output()
                 && let Ok(size_str) = String::from_utf8(output.stdout)
-                    && let Ok(bytes) = size_str.trim().parse::<f64>() {
-                        // Get free memory percentage (rough estimate)
-                        return (bytes / 1024.0 / 1024.0 * 0.5) as f32; // Assume 50% available
-                    }
+                && let Ok(bytes) = size_str.trim().parse::<f64>()
+            {
+                // Get free memory percentage (rough estimate)
+                return (bytes / 1024.0 / 1024.0 * 0.5) as f32; // Assume 50% available
+            }
         }
 
         #[cfg(target_os = "windows")]
@@ -944,24 +947,26 @@ impl QueryFeatureExtractor {
             use std::process::Command;
             // Get load average on macOS
             if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output()
-                && let Ok(load_str) = String::from_utf8(output.stdout) {
-                    // Parse "{  1.5 2.0 2.5 }" format
-                    let parts: Vec<&str> = load_str
-                        .trim_matches(|c| c == '{' || c == '}')
-                        .split_whitespace()
-                        .collect();
-                    if !parts.is_empty()
-                        && let Ok(load) = parts[0].parse::<f32>() {
-                            // Normalize by CPU count
-                            if let Ok(cpu_output) =
-                                Command::new("sysctl").arg("-n").arg("hw.ncpu").output()
-                                && let Ok(cpu_str) = String::from_utf8(cpu_output.stdout)
-                                    && let Ok(cpu_count) = cpu_str.trim().parse::<f32>() {
-                                        return (load / cpu_count).min(1.0);
-                                    }
-                            return load.min(1.0);
-                        }
+                && let Ok(load_str) = String::from_utf8(output.stdout)
+            {
+                // Parse "{  1.5 2.0 2.5 }" format
+                let parts: Vec<&str> = load_str
+                    .trim_matches(|c| c == '{' || c == '}')
+                    .split_whitespace()
+                    .collect();
+                if !parts.is_empty()
+                    && let Ok(load) = parts[0].parse::<f32>()
+                {
+                    // Normalize by CPU count
+                    if let Ok(cpu_output) = Command::new("sysctl").arg("-n").arg("hw.ncpu").output()
+                        && let Ok(cpu_str) = String::from_utf8(cpu_output.stdout)
+                        && let Ok(cpu_count) = cpu_str.trim().parse::<f32>()
+                    {
+                        return (load / cpu_count).min(1.0);
+                    }
+                    return load.min(1.0);
                 }
+            }
         }
 
         // Fallback: moderate utilization
@@ -1116,7 +1121,7 @@ pub struct CostPrediction {
 
 impl CostPrediction {
     /// Baseline prediction without ML model
-    #[must_use] 
+    #[must_use]
     pub fn baseline(features: &QueryFeatures) -> Self {
         // Simple heuristic-based prediction
         let execution_time = (features.atom_count as f64 * features.ontology_size as f64)
@@ -1415,9 +1420,7 @@ impl CostPredictionModel {
 }
 
 /// Execution strategy types for query processing
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ExecutionStrategy {
     /// Use indexes for efficient lookups
     IndexedLookup,
@@ -1449,7 +1452,7 @@ pub enum ExecutionStrategy {
 
 impl ExecutionStrategy {
     /// Convert to string representation
-    #[must_use] 
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             ExecutionStrategy::IndexedLookup => "indexed_lookup",
@@ -1485,9 +1488,7 @@ pub enum QueryPattern {
 }
 
 /// Scalability characteristics
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScalabilityClass {
     Constant,     // O(1)
     Logarithmic,  // O(log n)
@@ -1592,7 +1593,7 @@ impl Default for StrategySelectionModel {
 
 impl StrategySelectionModel {
     /// Create a new strategy selection model
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut model = Self {
             strategy_registry: std::collections::HashMap::new(),
@@ -1915,7 +1916,7 @@ pub struct TrainingDataCollector {
 }
 
 impl TrainingDataCollector {
-    #[must_use] 
+    #[must_use]
     pub fn new(max_size: usize) -> Self {
         Self {
             samples: Vec::new(),
@@ -1939,12 +1940,12 @@ impl TrainingDataCollector {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn size(&self) -> usize {
         self.samples.len()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_samples(&self, count: usize) -> Vec<TrainingSample> {
         let start = self.samples.len().saturating_sub(count);
         self.samples[start..].to_vec()
@@ -2057,10 +2058,8 @@ impl ModelStorage {
 
     pub fn save_strategy_selector(&self, model: &StrategySelectionModel) -> Result<(), Error> {
         let path = self.storage_dir.join("strategy_selector.json");
-        let data = serde_json::to_vec_pretty(model).map_err(|e| {
-            Error::Internal {
-                message: format!("Failed to serialize model: {e}"),
-            }
+        let data = serde_json::to_vec_pretty(model).map_err(|e| Error::Internal {
+            message: format!("Failed to serialize model: {e}"),
         })?;
 
         std::fs::write(path, data).map_err(|e| Error::Internal {
@@ -2076,10 +2075,8 @@ impl ModelStorage {
             message: format!("Failed to read model: {e}"),
         })?;
 
-        let model = serde_json::from_slice(&data).map_err(|e| {
-            Error::Internal {
-                message: format!("Failed to deserialize model: {e}"),
-            }
+        let model = serde_json::from_slice(&data).map_err(|e| Error::Internal {
+            message: format!("Failed to deserialize model: {e}"),
         })?;
         Ok(model)
     }

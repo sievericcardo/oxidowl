@@ -22,7 +22,7 @@ pub struct DLClauseGenerator {
 
 impl DLClauseGenerator {
     /// Create a new DL clause generator
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut prefixes = HashMap::new();
 
@@ -137,11 +137,12 @@ impl DLClauseGenerator {
             let mut j = i + 1;
             while j < clauses.len() {
                 if self.can_absorb(&clauses[i], &clauses[j])
-                    && let Some(absorbed) = self.absorb_clauses(&clauses[i], &clauses[j]) {
-                        clauses[i] = absorbed;
-                        clauses.remove(j);
-                        continue;
-                    }
+                    && let Some(absorbed) = self.absorb_clauses(&clauses[i], &clauses[j])
+                {
+                    clauses[i] = absorbed;
+                    clauses.remove(j);
+                    continue;
+                }
                 j += 1;
             }
             i += 1;
@@ -393,7 +394,7 @@ impl DLClauseGenerator {
     }
 
     /// Get prefixes
-    #[must_use] 
+    #[must_use]
     pub fn get_prefixes(&self) -> &HashMap<String, String> {
         &self.prefixes
     }

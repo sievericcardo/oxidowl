@@ -117,7 +117,10 @@ impl ServerManager {
 
     /// Start all configured servers
     pub async fn start_all(&mut self) -> Result<()> {
-        if self.config.is_enabled(crate::config::ServerFeature::OWLlink) {
+        if self
+            .config
+            .is_enabled(crate::config::ServerFeature::OWLlink)
+        {
             let owllink_server = owllink::OWLlinkServer::new(
                 self.config.owllink_port,
                 self.config.bind_address.clone(),
@@ -138,7 +141,10 @@ impl ServerManager {
             self.servers.push(ServerHandle::Sparql(handle));
         }
 
-        if self.config.is_enabled(crate::config::ServerFeature::RestAPI) {
+        if self
+            .config
+            .is_enabled(crate::config::ServerFeature::RestAPI)
+        {
             // Create a mock explanation service for now
             let explanation_service = Arc::new(crate::explanation::ExplanationService::new());
 
@@ -168,9 +174,13 @@ impl ServerManager {
     pub fn get_status(&self) -> ServerStatus {
         ServerStatus {
             running_servers: self.servers.len(),
-            owllink_enabled: self.config.is_enabled(crate::config::ServerFeature::OWLlink),
+            owllink_enabled: self
+                .config
+                .is_enabled(crate::config::ServerFeature::OWLlink),
             sparql_enabled: self.config.is_enabled(crate::config::ServerFeature::SPARQL),
-            rest_api_enabled: self.config.is_enabled(crate::config::ServerFeature::RestAPI),
+            rest_api_enabled: self
+                .config
+                .is_enabled(crate::config::ServerFeature::RestAPI),
         }
     }
 }

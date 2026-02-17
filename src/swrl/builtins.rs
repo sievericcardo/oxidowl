@@ -216,13 +216,15 @@ impl SWRLBuiltInRegistry {
     }
 
     /// Get a built-in by IRI
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin(&self, iri: &IRI) -> Option<&dyn SWRLBuiltIn> {
-        self.builtins.get(&iri.to_string()).map(std::convert::AsRef::as_ref)
+        self.builtins
+            .get(&iri.to_string())
+            .map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin_iris(&self) -> Vec<IRI> {
         self.builtins.keys().map(|s| IRI::new(s)).collect()
     }

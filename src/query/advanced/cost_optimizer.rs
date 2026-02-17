@@ -705,7 +705,7 @@ impl std::error::Error for RewritingError {}
 
 impl CostBasedOptimizer {
     /// Create a new cost-based optimizer
-    #[must_use] 
+    #[must_use]
     pub fn new(
         _ontology: Arc<Ontology>,
         _reasoning_service: Arc<ReasoningService>,
@@ -771,9 +771,10 @@ impl CostBasedOptimizer {
         };
 
         // Step 6: Estimate performance for final plan
-        let stats = self.statistics.read().map_err(|e| {
-            OptimizationError::internal(format!("Failed to read statistics: {e}"))
-        })?;
+        let stats = self
+            .statistics
+            .read()
+            .map_err(|e| OptimizationError::internal(format!("Failed to read statistics: {e}")))?;
         let performance_prediction = self.estimate_performance(&rewritten_query, &pattern, &stats);
 
         // Step 7: Generate optimization suggestions
@@ -836,10 +837,7 @@ impl CostBasedOptimizer {
                             .entry(i)
                             .or_default()
                             .push((j, shared_vars.clone()));
-                        join_graph
-                            .entry(j)
-                            .or_default()
-                            .push((i, shared_vars));
+                        join_graph.entry(j).or_default().push((i, shared_vars));
                     }
                 }
             }
@@ -1400,7 +1398,9 @@ impl CostBasedOptimizer {
         for atom in atoms {
             match atom {
                 // Complex atoms go to tableau
-                QueryAtom::ClassAtom { class_expression, .. } => {
+                QueryAtom::ClassAtom {
+                    class_expression, ..
+                } => {
                     if self.is_complex_class_expression(class_expression) {
                         tableau_atoms.push(atom.clone());
                     } else {
@@ -1473,8 +1473,10 @@ impl CostBasedOptimizer {
         }
 
         // Get optimized atom order from join optimizer
-        let ordered_indices = self.join_optimizer.optimize_join_order_greedy(&query.body_atoms);
-        
+        let ordered_indices = self
+            .join_optimizer
+            .optimize_join_order_greedy(&query.body_atoms);
+
         // Reorder atoms according to optimized indices
         let mut ordered_atoms: Vec<QueryAtom> = ordered_indices
             .iter()
@@ -1484,9 +1486,10 @@ impl CostBasedOptimizer {
         // If we didn't get all atoms, add remaining ones
         if ordered_atoms.len() < query.body_atoms.len() {
             for atom in query.body_atoms.iter() {
-                if !ordered_atoms.iter().any(|a| {
-                    format!("{a:?}") == format!("{atom:?}")
-                }) {
+                if !ordered_atoms
+                    .iter()
+                    .any(|a| format!("{a:?}") == format!("{atom:?}"))
+                {
                     ordered_atoms.push(atom.clone());
                 }
             }
@@ -1617,19 +1620,24 @@ impl CostBasedOptimizer {
 
         // Suggest query rewriting for complex class expressions
         for atom in &query.body_atoms {
-            if let QueryAtom::ClassAtom { class_expression, .. } = atom
+            if let QueryAtom::ClassAtom {
+                class_expression, ..
+            } = atom
                 && matches!(
                     class_expression,
                     ClassExpression::ObjectUnionOf(_) | ClassExpression::ObjectIntersectionOf(_)
-                ) {
-                    suggestions.push(OptimizationSuggestion {
-                        suggestion_type: OptimizationSuggestionType::QueryRewriting,
-                        description: "Consider rewriting complex class expressions using subsumption reasoning".to_string(),
-                        expected_improvement: 0.25,
-                        implementation_difficulty: DifficultyLevel::Medium,
-                        priority: Priority::Medium,
-                    });
-                }
+                )
+            {
+                suggestions.push(OptimizationSuggestion {
+                    suggestion_type: OptimizationSuggestionType::QueryRewriting,
+                    description:
+                        "Consider rewriting complex class expressions using subsumption reasoning"
+                            .to_string(),
+                    expected_improvement: 0.25,
+                    implementation_difficulty: DifficultyLevel::Medium,
+                    priority: Priority::Medium,
+                });
+            }
         }
 
         // Suggest join reordering if not already optimized
@@ -1660,7 +1668,9 @@ impl CostBasedOptimizer {
         if query.body_atoms.len() > 5 {
             suggestions.push(OptimizationSuggestion {
                 suggestion_type: OptimizationSuggestionType::Partitioning,
-                description: "Consider partitioning query into smaller sub-queries for parallel execution".to_string(),
+                description:
+                    "Consider partitioning query into smaller sub-queries for parallel execution"
+                        .to_string(),
                 expected_improvement: 0.6,
                 implementation_difficulty: DifficultyLevel::Hard,
                 priority: Priority::Medium,
@@ -1796,7 +1806,7 @@ impl Default for QueryStatistics {
 }
 
 impl QueryStatistics {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             execution_times: HashMap::new(),
@@ -1841,7 +1851,7 @@ impl Default for JoinOrderOptimizer {
 }
 
 impl JoinOrderOptimizer {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             memo_cache: HashMap::new(),
@@ -1851,7 +1861,7 @@ impl JoinOrderOptimizer {
     }
 
     /// Greedy join ordering algorithm - orders atoms by selectivity
-    #[must_use] 
+    #[must_use]
     pub fn optimize_join_order_greedy(&self, atoms: &[QueryAtom]) -> Vec<usize> {
         if atoms.is_empty() {
             return Vec::new();
@@ -1869,7 +1879,7 @@ impl JoinOrderOptimizer {
         {
             let atom_idx = remaining.remove(idx);
             ordered.push(atom_idx);
-            
+
             // Track variables from first atom
             for var in self.extract_atom_variables(&atoms[atom_idx]) {
                 selected_vars.insert(var);
@@ -1883,7 +1893,7 @@ impl JoinOrderOptimizer {
                 .enumerate()
                 .max_by_key(|(_, atom_idx)| {
                     let vars = self.extract_atom_variables(&atoms[**atom_idx]);
-                    
+
                     vars.iter().filter(|v| selected_vars.contains(v)).count()
                 })
                 .unwrap();
@@ -1916,7 +1926,9 @@ impl JoinOrderOptimizer {
     fn extract_atom_variables(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
         match atom {
             QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vec![subject.clone(), object.clone()]
             }
             QueryAtom::DataPropertyAtom { subject, .. } => vec![subject.clone()],
@@ -1931,7 +1943,7 @@ impl JoinOrderOptimizer {
 }
 
 impl IndexAdvisor {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: IndexAdvisorConfig) -> Self {
         Self {
             query_patterns: HashMap::new(),
@@ -1953,7 +1965,9 @@ impl IndexAdvisor {
         let mut property_frequency = HashMap::new();
         for atom in &query.body_atoms {
             if let QueryAtom::ObjectPropertyAtom { property, .. } = atom {
-                *property_frequency.entry(format!("{property:?}")).or_insert(0) += 1;
+                *property_frequency
+                    .entry(format!("{property:?}"))
+                    .or_insert(0) += 1;
             }
         }
 
@@ -1966,11 +1980,8 @@ impl IndexAdvisor {
                     pattern,
                     stats,
                 );
-                let indexed_cost = self.estimate_property_access_cost_with_index(
-                    &property_name,
-                    pattern,
-                    stats,
-                );
+                let indexed_cost =
+                    self.estimate_property_access_cost_with_index(&property_name, pattern, stats);
 
                 let benefit = current_cost - indexed_cost;
                 let maintenance_cost = indexed_cost * self.config.maintenance_cost_factor;
@@ -2052,7 +2063,10 @@ impl IndexAdvisor {
         for atom in &query.body_atoms {
             let vars = self.extract_variables_from_atom(atom);
             for var in vars {
-                var_usage.entry(var).or_insert_with(Vec::new).push(atom.clone());
+                var_usage
+                    .entry(var)
+                    .or_insert_with(Vec::new)
+                    .push(atom.clone());
             }
         }
 
@@ -2069,12 +2083,16 @@ impl IndexAdvisor {
     fn extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
         match atom {
             QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vec![subject.clone(), object.clone()]
             }
             QueryAtom::DataPropertyAtom { subject, .. } => vec![subject.clone()],
             QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
-            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            }
             QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
             QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
         }
@@ -2099,7 +2117,7 @@ impl Default for AdvancedQueryRewriter {
 }
 
 impl AdvancedQueryRewriter {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             rewriting_rules: Vec::new(),
@@ -2243,7 +2261,9 @@ impl AdvancedQueryRewriter {
         // Apply various transformations based on rule ID
         if rule.id.contains("subsumption") {
             // Remove subsumed atoms
-            rewritten.body_atoms.retain(|atom| !self.is_subsumed(atom, &query.body_atoms));
+            rewritten
+                .body_atoms
+                .retain(|atom| !self.is_subsumed(atom, &query.body_atoms));
         } else if rule.id.contains("join") {
             // Eliminate redundant joins
             rewritten = self.eliminate_redundant_joins(&rewritten);
@@ -2297,7 +2317,7 @@ impl AdvancedQueryRewriter {
         // Estimate improvement using cost model analysis
         let original_cost = self.estimate_query_cost(original, context);
         let rewritten_cost = self.estimate_query_cost(rewritten, context);
-        
+
         if original_cost > 0.0 {
             // Calculate relative improvement
             let improvement = (original_cost - rewritten_cost) / original_cost;
@@ -2308,21 +2328,17 @@ impl AdvancedQueryRewriter {
             0.1
         }
     }
-    
-    fn estimate_query_cost(
-        &self,
-        query: &ConjunctiveQuery,
-        context: &RewritingContext,
-    ) -> f64 {
+
+    fn estimate_query_cost(&self, query: &ConjunctiveQuery, context: &RewritingContext) -> f64 {
         let mut cost = 0.0;
-        
+
         // Atom count contributes to cost
         cost += query.body_atoms.len() as f64 * 10.0;
-        
+
         // Join complexity
         let num_joins = query.body_atoms.len().saturating_sub(1);
         cost += (num_joins as f64).powi(2) * 5.0;
-        
+
         // Variable count increases cost
         let mut variables = std::collections::HashSet::new();
         for atom in &query.body_atoms {
@@ -2330,7 +2346,9 @@ impl AdvancedQueryRewriter {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.name.clone());
                 }
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.name.clone());
                     variables.insert(object.name.clone());
                 }
@@ -2338,16 +2356,17 @@ impl AdvancedQueryRewriter {
             }
         }
         cost += variables.len() as f64 * 3.0;
-        
+
         // Selectivity factor from context statistics
         // Note: statistics is Arc<RwLock<QueryStatistics>>, needs to be locked
         if let Ok(stats) = context.statistics.read()
-            && stats.total_queries > 0 {
-                // Use query count as proxy for concept selectivity
-                let selectivity = variables.len() as f64 / (stats.total_queries as f64 + 1.0);
-                cost *= 1.0 + selectivity.min(2.0); // Cap selectivity impact
-            }
-        
+            && stats.total_queries > 0
+        {
+            // Use query count as proxy for concept selectivity
+            let selectivity = variables.len() as f64 / (stats.total_queries as f64 + 1.0);
+            cost *= 1.0 + selectivity.min(2.0); // Cap selectivity impact
+        }
+
         cost
     }
 
@@ -2358,7 +2377,9 @@ impl AdvancedQueryRewriter {
     ) -> Result<ConjunctiveQuery, RewritingError> {
         // Remove atoms that are subsumed by others
         let mut rewritten = query.clone();
-        rewritten.body_atoms.retain(|atom| !self.is_subsumed(atom, &query.body_atoms));
+        rewritten
+            .body_atoms
+            .retain(|atom| !self.is_subsumed(atom, &query.body_atoms));
         Ok(rewritten)
     }
 
@@ -2397,12 +2418,16 @@ impl AdvancedQueryRewriter {
     fn rewriter_extract_variables_from_atom(&self, atom: &QueryAtom) -> Vec<QueryVariable> {
         match atom {
             QueryAtom::ClassAtom { variable, .. } => vec![variable.clone()],
-            QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vec![subject.clone(), object.clone()]
             }
             QueryAtom::DataPropertyAtom { subject, .. } => vec![subject.clone()],
             QueryAtom::SameIndividualAtom { left, right } => vec![left.clone(), right.clone()],
-            QueryAtom::DifferentIndividualsAtom { left, right } => vec![left.clone(), right.clone()],
+            QueryAtom::DifferentIndividualsAtom { left, right } => {
+                vec![left.clone(), right.clone()]
+            }
             QueryAtom::ConcreteIndividualAtom { variable, .. } => vec![variable.clone()],
             QueryAtom::ConcreteLiteralAtom { variable, .. } => vec![variable.clone()],
         }
@@ -2416,7 +2441,7 @@ impl Default for AdaptiveStrategySelector {
 }
 
 impl AdaptiveStrategySelector {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             strategy_history: HashMap::new(),
@@ -2444,7 +2469,7 @@ impl Default for RewritingFeedbackSystem {
 }
 
 impl RewritingFeedbackSystem {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             feedback_data: Vec::new(),
@@ -2461,7 +2486,7 @@ impl Default for AutoAdjustmentSystem {
 }
 
 impl AutoAdjustmentSystem {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             adjustment_history: Vec::new(),

@@ -2,15 +2,15 @@
 //!
 //! This module implements polynomial-time reasoning for the OWL 2 EL profile
 //! using completion rules and optimized data structures.
-//! 
+//!
 //! Features concurrent classification for improved performance on multi-core systems.
 
 use crate::{
     Error, Result,
     config::ReasonerConfig,
-    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, Ontology},
     core::reasoner::ClassificationResult,
-    explanation::{ExplanationService, Explanation},
+    explanation::{Explanation, ExplanationService},
+    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, Ontology},
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -42,10 +42,13 @@ pub struct ELReasoner {
 
 impl ELReasoner {
     /// Create a new EL reasoner
-    #[must_use] 
+    #[must_use]
     pub fn new(config: ReasonerConfig) -> Self {
         #[allow(clippy::arc_with_non_send_sync)]
-        let explanation_service = if config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
+        let explanation_service = if config
+            .reasoning
+            .is_enabled(crate::config::ReasoningFeature::Explanations)
+        {
             Some(Arc::new(ExplanationService::new()))
         } else {
             None
@@ -65,16 +68,17 @@ impl ELReasoner {
     /// Initialize with an ontology
     pub fn initialize(&mut self, ontology: &Ontology) -> Result<()> {
         let start = Instant::now();
-        
+
         // Step 1: Normalize ontology to EL normal form
         self.normalize_ontology(ontology)?;
-        
+
         // Step 2: Extract role hierarchy
         self.extract_role_hierarchy()?;
-        
+
         // Step 3: Initialize completion engine
-        self.completion_engine.initialize(&self.normalized_axioms, &self.role_hierarchy)?;
-        
+        self.completion_engine
+            .initialize(&self.normalized_axioms, &self.role_hierarchy)?;
+
         self.statistics.initialization_time = start.elapsed();
         Ok(())
     }
@@ -82,39 +86,43 @@ impl ELReasoner {
     /// Perform EL classification with optional concurrent processing
     pub fn classify(&mut self) -> Result<ClassificationResult> {
         let start = Instant::now();
-        
+
         // Apply completion rules until fixpoint
         self.completion_engine.run_to_completion()?;
-        
+
         // Build concept hierarchy from completion results
         // Use concurrent classification if enabled and rayon is available
         #[cfg(feature = "rayon")]
-        if self.config.performance.is_enabled(crate::config::PerformanceFeature::ParallelExpansion) {
+        if self
+            .config
+            .performance
+            .is_enabled(crate::config::PerformanceFeature::ParallelExpansion)
+        {
             self.build_concept_hierarchy_concurrent()?;
         } else {
             self.build_concept_hierarchy()?;
         }
-        
+
         #[cfg(not(feature = "rayon"))]
         self.build_concept_hierarchy()?;
-        
+
         let classification_time = start.elapsed();
         self.statistics.classification_time = classification_time;
-        
+
         // Convert hierarchy to ClassificationResult format
         let hierarchy_map = self.convert_to_class_expression_hierarchy();
-        
+
         Ok(ClassificationResult::new(hierarchy_map))
     }
-    
+
     /// Build concept hierarchy using concurrent processing
     #[cfg(feature = "rayon")]
     fn build_concept_hierarchy_concurrent(&mut self) -> Result<()> {
         let subsumptions = self.completion_engine.get_all_subsumptions();
-        
+
         // Group subsumptions by concept to enable parallel processing
         let subsumption_map = Arc::new(Mutex::new(HashMap::new()));
-        
+
         // Process subsumptions in parallel
         subsumptions.par_iter().for_each(|(sub, sup)| {
             let mut map = subsumption_map.lock().unwrap();
@@ -122,38 +130,44 @@ impl ELReasoner {
                 .or_insert_with(HashSet::new)
                 .insert(sup.clone());
         });
-        
+
         // Build hierarchy from the collected subsumptions
         let final_map = Arc::try_unwrap(subsumption_map)
             .map(|mutex| mutex.into_inner().unwrap())
             .unwrap_or_else(|arc| arc.lock().unwrap().clone());
         self.concept_hierarchy = ConceptHierarchy::from_subsumption_map(final_map);
-        
+
         Ok(())
     }
-    
+
     /// Convert EL concept hierarchy to `ClassExpression` hierarchy
-    fn convert_to_class_expression_hierarchy(&self) -> HashMap<ClassExpression, HashSet<ClassExpression>> {
+    fn convert_to_class_expression_hierarchy(
+        &self,
+    ) -> HashMap<ClassExpression, HashSet<ClassExpression>> {
         let mut result = HashMap::new();
-        
+
         for (sub, sups) in self.concept_hierarchy.get_all_subsumptions() {
             let sub_expr = sub.to_class_expression();
-            let sup_exprs: HashSet<_> = sups.iter()
-                .map(ELConcept::to_class_expression)
-                .collect();
+            let sup_exprs: HashSet<_> = sups.iter().map(ELConcept::to_class_expression).collect();
             result.insert(sub_expr, sup_exprs);
         }
-        
+
         result
     }
 
     /// Check if a subsumption holds
-    pub fn is_subsumed(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Result<bool> {
+    pub fn is_subsumed(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+    ) -> Result<bool> {
         // Convert to EL concepts and check in hierarchy
         let sub_concept = self.to_el_concept(subclass)?;
         let super_concept = self.to_el_concept(superclass)?;
-        
-        Ok(self.concept_hierarchy.is_subsumed(&sub_concept, &super_concept))
+
+        Ok(self
+            .concept_hierarchy
+            .is_subsumed(&sub_concept, &super_concept))
     }
 
     /// Get explanation for a subsumption
@@ -175,7 +189,7 @@ impl ELReasoner {
     }
 
     /// Check if the ontology is consistent (always true for EL)
-    #[must_use] 
+    #[must_use]
     pub fn is_consistent(&self) -> bool {
         // EL ontologies are always consistent
         true
@@ -190,13 +204,25 @@ impl ELReasoner {
     }
 
     /// Get reasoning statistics
-    #[must_use] 
+    #[must_use]
     pub fn get_reasoning_statistics(&self) -> HashMap<String, serde_json::Value> {
         let mut stats = HashMap::new();
-        stats.insert("initialization_time".to_string(), serde_json::json!(self.statistics.initialization_time.as_millis()));
-        stats.insert("classification_time".to_string(), serde_json::json!(self.statistics.classification_time.as_millis()));
-        stats.insert("completion_steps".to_string(), serde_json::json!(self.statistics.completion_steps));
-        stats.insert("memory_usage".to_string(), serde_json::json!(self.statistics.memory_usage));
+        stats.insert(
+            "initialization_time".to_string(),
+            serde_json::json!(self.statistics.initialization_time.as_millis()),
+        );
+        stats.insert(
+            "classification_time".to_string(),
+            serde_json::json!(self.statistics.classification_time.as_millis()),
+        );
+        stats.insert(
+            "completion_steps".to_string(),
+            serde_json::json!(self.statistics.completion_steps),
+        );
+        stats.insert(
+            "memory_usage".to_string(),
+            serde_json::json!(self.statistics.memory_usage),
+        );
         stats
     }
 
@@ -210,8 +236,13 @@ impl ELReasoner {
 
     fn extract_role_hierarchy(&mut self) -> Result<()> {
         for axiom in &self.normalized_axioms {
-            if let ELAxiom::RoleInclusion { sub_role, super_role } = axiom {
-                self.role_hierarchy.add_inclusion(sub_role.clone(), super_role.clone());
+            if let ELAxiom::RoleInclusion {
+                sub_role,
+                super_role,
+            } = axiom
+            {
+                self.role_hierarchy
+                    .add_inclusion(sub_role.clone(), super_role.clone());
             }
         }
         self.role_hierarchy.compute_transitive_closure();
@@ -228,9 +259,8 @@ impl ELReasoner {
         match class_expr {
             ClassExpression::Class(class) => Ok(ELConcept::Atomic(class.clone())),
             ClassExpression::ObjectIntersectionOf(classes) => {
-                let el_concepts: Result<Vec<_>> = classes.iter()
-                    .map(|c| self.to_el_concept(c))
-                    .collect();
+                let el_concepts: Result<Vec<_>> =
+                    classes.iter().map(|c| self.to_el_concept(c)).collect();
                 Ok(ELConcept::Conjunction(el_concepts?))
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
@@ -240,7 +270,9 @@ impl ELReasoner {
                     filler: Box::new(el_concept),
                 })
             }
-            _ => Err(Error::unsupported(format!("Class expression not supported in EL: {class_expr:?}"))),
+            _ => Err(Error::unsupported(format!(
+                "Class expression not supported in EL: {class_expr:?}"
+            ))),
         }
     }
 
@@ -257,10 +289,7 @@ impl ELReasoner {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ELAxiom {
     /// Concept inclusion: A ⊑ B
-    ConceptInclusion {
-        lhs: ELConcept,
-        rhs: ELConcept,
-    },
+    ConceptInclusion { lhs: ELConcept, rhs: ELConcept },
     /// Role inclusion: r ⊑ s
     RoleInclusion {
         sub_role: ObjectPropertyExpression,
@@ -281,43 +310,45 @@ pub enum ELAxiom {
 
 impl ELAxiom {
     /// Convert back to general axiom for explanations
-    #[must_use] 
+    #[must_use]
     pub fn to_general_axiom(&self) -> Axiom {
         use crate::ontology::axioms::*;
         match self {
-            ELAxiom::ConceptInclusion { lhs, rhs } => {
-                Axiom::SubClassOf(SubClassOfAxiom {
-                    id: 0,
-                    subclass: lhs.to_class_expression(),
-                    superclass: rhs.to_class_expression(),
-                    annotations: Vec::new(),
-                })
-            }
-            ELAxiom::RoleInclusion { sub_role, super_role } => {
-                Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
-                    id: 0,
-                    sub_property: sub_role.clone(),
-                    super_property: super_role.clone(),
-                    annotations: Vec::new(),
-                })
-            }
-            ELAxiom::ConceptAssertion { concept, individual } => {
-                Axiom::ClassAssertion(ClassAssertionAxiom {
-                    id: 0,
-                    individual: individual.clone(),
-                    class: concept.to_class_expression(),
-                    annotations: Vec::new(),
-                })
-            }
-            ELAxiom::RoleAssertion { role, source, target } => {
-                Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-                    id: 0,
-                    source: source.clone(),
-                    target: target.clone(),
-                    property: role.clone(),
-                    annotations: Vec::new(),
-                })
-            }
+            ELAxiom::ConceptInclusion { lhs, rhs } => Axiom::SubClassOf(SubClassOfAxiom {
+                id: 0,
+                subclass: lhs.to_class_expression(),
+                superclass: rhs.to_class_expression(),
+                annotations: Vec::new(),
+            }),
+            ELAxiom::RoleInclusion {
+                sub_role,
+                super_role,
+            } => Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
+                id: 0,
+                sub_property: sub_role.clone(),
+                super_property: super_role.clone(),
+                annotations: Vec::new(),
+            }),
+            ELAxiom::ConceptAssertion {
+                concept,
+                individual,
+            } => Axiom::ClassAssertion(ClassAssertionAxiom {
+                id: 0,
+                individual: individual.clone(),
+                class: concept.to_class_expression(),
+                annotations: Vec::new(),
+            }),
+            ELAxiom::RoleAssertion {
+                role,
+                source,
+                target,
+            } => Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
+                id: 0,
+                source: source.clone(),
+                target: target.clone(),
+                property: role.clone(),
+                annotations: Vec::new(),
+            }),
         }
     }
 }
@@ -340,34 +371,35 @@ pub enum ELConcept {
 
 impl ELConcept {
     /// Convert to general class expression
-    #[must_use] 
+    #[must_use]
     pub fn to_class_expression(&self) -> ClassExpression {
         match self {
             ELConcept::Atomic(class) => ClassExpression::Class(class.clone()),
-            ELConcept::Top => ClassExpression::Class(crate::ontology::Class::new(crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"))),
+            ELConcept::Top => ClassExpression::Class(crate::ontology::Class::new(
+                crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+            )),
             ELConcept::Conjunction(concepts) => {
-                let class_exprs: Vec<_> = concepts.iter()
+                let class_exprs: Vec<_> = concepts
+                    .iter()
                     .map(ELConcept::to_class_expression)
                     .collect();
                 ClassExpression::ObjectIntersectionOf(class_exprs)
             }
-            ELConcept::Existential { role, filler } => {
-                ClassExpression::ObjectSomeValuesFrom {
-                    property: role.clone(),
-                    filler: Box::new(filler.to_class_expression()),
-                }
-            }
+            ELConcept::Existential { role, filler } => ClassExpression::ObjectSomeValuesFrom {
+                property: role.clone(),
+                filler: Box::new(filler.to_class_expression()),
+            },
         }
     }
 
     /// Check if this concept is atomic
-    #[must_use] 
+    #[must_use]
     pub fn is_atomic(&self) -> bool {
         matches!(self, ELConcept::Atomic(_))
     }
 
     /// Get all atomic concepts in this concept
-    #[must_use] 
+    #[must_use]
     pub fn get_atomic_concepts(&self) -> HashSet<crate::ontology::Class> {
         let mut atoms = HashSet::new();
         self.collect_atomic_concepts(&mut atoms);
@@ -404,7 +436,7 @@ impl Default for ELNormalizer {
 
 impl ELNormalizer {
     /// Create a new normalizer
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -413,28 +445,46 @@ impl ELNormalizer {
     pub fn normalize_axioms(&self, axioms: &[Axiom]) -> Result<Vec<ELAxiom>> {
         use crate::ontology::axioms::*;
         let mut el_axioms = Vec::with_capacity(axioms.len());
-        
+
         for axiom in axioms {
             match axiom {
-                Axiom::SubClassOf(SubClassOfAxiom { subclass, superclass, .. }) => {
+                Axiom::SubClassOf(SubClassOfAxiom {
+                    subclass,
+                    superclass,
+                    ..
+                }) => {
                     let el_sub = self.normalize_class_expression(subclass)?;
                     let el_sup = self.normalize_class_expression(superclass)?;
-                    el_axioms.push(ELAxiom::ConceptInclusion { lhs: el_sub, rhs: el_sup });
-                }
-                Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom { sub_property, super_property, .. }) => {
-                    el_axioms.push(ELAxiom::RoleInclusion { 
-                        sub_role: sub_property.clone(), 
-                        super_role: super_property.clone() 
+                    el_axioms.push(ELAxiom::ConceptInclusion {
+                        lhs: el_sub,
+                        rhs: el_sup,
                     });
                 }
-                Axiom::ClassAssertion(ClassAssertionAxiom { individual, class, .. }) => {
+                Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
+                    sub_property,
+                    super_property,
+                    ..
+                }) => {
+                    el_axioms.push(ELAxiom::RoleInclusion {
+                        sub_role: sub_property.clone(),
+                        super_role: super_property.clone(),
+                    });
+                }
+                Axiom::ClassAssertion(ClassAssertionAxiom {
+                    individual, class, ..
+                }) => {
                     let el_concept = self.normalize_class_expression(class)?;
-                    el_axioms.push(ELAxiom::ConceptAssertion { 
-                        concept: el_concept, 
-                        individual: individual.clone() 
+                    el_axioms.push(ELAxiom::ConceptAssertion {
+                        concept: el_concept,
+                        individual: individual.clone(),
                     });
                 }
-                Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom { source, target, property, .. }) => {
+                Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
+                    source,
+                    target,
+                    property,
+                    ..
+                }) => {
                     el_axioms.push(ELAxiom::RoleAssertion {
                         role: property.clone(),
                         source: source.clone(),
@@ -447,7 +497,7 @@ impl ELNormalizer {
                 }
             }
         }
-        
+
         Ok(el_axioms)
     }
 
@@ -455,7 +505,8 @@ impl ELNormalizer {
         match class_expr {
             ClassExpression::Class(class) => Ok(ELConcept::Atomic(class.clone())),
             ClassExpression::ObjectIntersectionOf(classes) => {
-                let el_concepts: Result<Vec<_>> = classes.iter()
+                let el_concepts: Result<Vec<_>> = classes
+                    .iter()
                     .map(|c| self.normalize_class_expression(c))
                     .collect();
                 Ok(ELConcept::Conjunction(el_concepts?))
@@ -467,7 +518,9 @@ impl ELNormalizer {
                     filler: Box::new(el_filler),
                 })
             }
-            _ => Err(Error::unsupported(format!("Not supported in EL: {class_expr:?}"))),
+            _ => Err(Error::unsupported(format!(
+                "Not supported in EL: {class_expr:?}"
+            ))),
         }
     }
 }
@@ -489,7 +542,7 @@ impl Default for ConceptHierarchy {
 
 impl ConceptHierarchy {
     /// Create a new concept hierarchy
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             subsumptions: HashMap::new(),
@@ -498,26 +551,26 @@ impl ConceptHierarchy {
     }
 
     /// Build hierarchy from subsumption pairs
-    #[must_use] 
+    #[must_use]
     pub fn from_subsumptions(subsumptions: Vec<(ELConcept, ELConcept)>) -> Self {
         let mut hierarchy = Self::new();
-        
+
         for (sub, sup) in subsumptions {
             hierarchy.add_subsumption(sub, sup);
         }
-        
+
         hierarchy.compute_transitive_closure();
         hierarchy
     }
-    
+
     /// Build hierarchy from a pre-computed subsumption map (used by concurrent classification)
-    #[must_use] 
+    #[must_use]
     pub fn from_subsumption_map(subsumptions: HashMap<ELConcept, HashSet<ELConcept>>) -> Self {
         let mut hierarchy = Self {
             subsumptions,
             transitive_subsumptions: HashMap::new(),
         };
-        
+
         hierarchy.compute_transitive_closure();
         hierarchy
     }
@@ -528,7 +581,7 @@ impl ConceptHierarchy {
     }
 
     /// Check if one concept subsumes another
-    #[must_use] 
+    #[must_use]
     pub fn is_subsumed(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.transitive_subsumptions
             .get(sub)
@@ -540,12 +593,13 @@ impl ConceptHierarchy {
     pub fn compute_transitive_closure(&mut self) {
         // Floyd-Warshall algorithm for transitive closure
         let concepts: Vec<_> = self.subsumptions.keys().cloned().collect();
-        
+
         // Initialize with direct subsumptions
         for (sub, sups) in &self.subsumptions {
-            self.transitive_subsumptions.insert(sub.clone(), sups.clone());
+            self.transitive_subsumptions
+                .insert(sub.clone(), sups.clone());
         }
-        
+
         // Compute transitive closure
         for k in &concepts {
             for i in &concepts {
@@ -569,23 +623,21 @@ impl ConceptHierarchy {
     }
 
     /// Convert to classification hierarchy format
-    #[must_use] 
+    #[must_use]
     pub fn to_classification_hierarchy(&self) -> HashMap<String, Vec<String>> {
         let mut hierarchy = HashMap::with_capacity(self.transitive_subsumptions.len());
-        
+
         for (sub, sups) in &self.transitive_subsumptions {
             let sub_name = format!("{sub:?}");
-            let sup_names: Vec<_> = sups.iter()
-                .map(|sup| format!("{sup:?}"))
-                .collect();
+            let sup_names: Vec<_> = sups.iter().map(|sup| format!("{sup:?}")).collect();
             hierarchy.insert(sub_name, sup_names);
         }
-        
+
         hierarchy
     }
-    
+
     /// Get all subsumptions
-    #[must_use] 
+    #[must_use]
     pub fn get_all_subsumptions(&self) -> &HashMap<ELConcept, HashSet<ELConcept>> {
         &self.transitive_subsumptions
     }
@@ -608,7 +660,7 @@ impl Default for RoleHierarchy {
 
 impl RoleHierarchy {
     /// Create a new role hierarchy
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inclusions: HashMap::new(),
@@ -617,18 +669,25 @@ impl RoleHierarchy {
     }
 
     /// Add a role inclusion
-    pub fn add_inclusion(&mut self, sub_role: ObjectPropertyExpression, super_role: ObjectPropertyExpression) {
-        self.inclusions.entry(sub_role).or_default().insert(super_role);
+    pub fn add_inclusion(
+        &mut self,
+        sub_role: ObjectPropertyExpression,
+        super_role: ObjectPropertyExpression,
+    ) {
+        self.inclusions
+            .entry(sub_role)
+            .or_default()
+            .insert(super_role);
     }
 
     /// Compute transitive closure of role inclusions
     pub fn compute_transitive_closure(&mut self) {
         // Similar to concept hierarchy transitive closure
         let roles: Vec<_> = self.inclusions.keys().cloned().collect();
-        
+
         // Initialize with direct inclusions
         self.transitive_inclusions = self.inclusions.clone();
-        
+
         // Compute transitive closure
         for k in &roles {
             for i in &roles {
@@ -645,8 +704,12 @@ impl RoleHierarchy {
     }
 
     /// Check if one role subsumes another
-    #[must_use] 
-    pub fn is_role_subsumed(&self, sub_role: &ObjectPropertyExpression, super_role: &ObjectPropertyExpression) -> bool {
+    #[must_use]
+    pub fn is_role_subsumed(
+        &self,
+        sub_role: &ObjectPropertyExpression,
+        super_role: &ObjectPropertyExpression,
+    ) -> bool {
         self.transitive_inclusions
             .get(sub_role)
             .map(|sups| sups.contains(super_role))
@@ -654,8 +717,11 @@ impl RoleHierarchy {
     }
 
     /// Get all super-roles of a given role
-    #[must_use] 
-    pub fn get_super_roles(&self, role: &ObjectPropertyExpression) -> HashSet<ObjectPropertyExpression> {
+    #[must_use]
+    pub fn get_super_roles(
+        &self,
+        role: &ObjectPropertyExpression,
+    ) -> HashSet<ObjectPropertyExpression> {
         self.transitive_inclusions
             .get(role)
             .cloned()
@@ -684,7 +750,7 @@ impl Default for CompletionEngine {
 
 impl CompletionEngine {
     /// Create a new completion engine
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: CompletionState::new(),
@@ -702,7 +768,7 @@ impl CompletionEngine {
     /// Initialize with axioms and role hierarchy
     pub fn initialize(&mut self, axioms: &[ELAxiom], role_hierarchy: &RoleHierarchy) -> Result<()> {
         self.state.initialize(axioms, role_hierarchy)?;
-        
+
         // Add initial inferences to queue
         for axiom in axioms {
             if let ELAxiom::ConceptInclusion { lhs, rhs } = axiom {
@@ -712,7 +778,7 @@ impl CompletionEngine {
                 });
             }
         }
-        
+
         Ok(())
     }
 
@@ -720,7 +786,7 @@ impl CompletionEngine {
     pub fn run_to_completion(&mut self) -> Result<()> {
         while let Some(inference) = self.queue.pop_front() {
             self.completion_steps += 1;
-            
+
             // Apply all applicable rules
             for rule in &self.rules {
                 let new_inferences = rule.apply(&inference, &mut self.state)?;
@@ -730,16 +796,16 @@ impl CompletionEngine {
                     }
                 }
             }
-            
+
             // Add inference to state
             self.state.add_inference(inference);
         }
-        
+
         Ok(())
     }
 
     /// Get all computed subsumptions
-    #[must_use] 
+    #[must_use]
     pub fn get_all_subsumptions(&self) -> Vec<(ELConcept, ELConcept)> {
         self.state.get_all_subsumptions()
     }
@@ -765,7 +831,7 @@ impl Default for CompletionState {
 
 impl CompletionState {
     /// Create new completion state
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             subsumptions: HashSet::new(),
@@ -777,19 +843,19 @@ impl CompletionState {
     /// Initialize state with axioms
     pub fn initialize(&mut self, axioms: &[ELAxiom], role_hierarchy: &RoleHierarchy) -> Result<()> {
         self.role_hierarchy = Some(role_hierarchy.clone());
-        
+
         // Initialize with direct subsumptions from axioms
         for axiom in axioms {
             if let ELAxiom::ConceptInclusion { lhs, rhs } = axiom {
                 self.subsumptions.insert((lhs.clone(), rhs.clone()));
             }
         }
-        
+
         Ok(())
     }
 
     /// Check if an inference is already known
-    #[must_use] 
+    #[must_use]
     pub fn has_inference(&self, inference: &Inference) -> bool {
         match inference {
             Inference::Subsumption { sub, sup } => {
@@ -808,13 +874,13 @@ impl CompletionState {
     }
 
     /// Get all subsumptions
-    #[must_use] 
+    #[must_use]
     pub fn get_all_subsumptions(&self) -> Vec<(ELConcept, ELConcept)> {
         self.subsumptions.iter().cloned().collect()
     }
 
     /// Check if a subsumption holds
-    #[must_use] 
+    #[must_use]
     pub fn has_subsumption(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.subsumptions.contains(&(sub.clone(), sup.clone()))
     }
@@ -824,10 +890,7 @@ impl CompletionState {
 #[derive(Debug, Clone)]
 pub enum Inference {
     /// Subsumption inference
-    Subsumption {
-        sub: ELConcept,
-        sup: ELConcept,
-    },
+    Subsumption { sub: ELConcept, sup: ELConcept },
 }
 
 /// Trait for completion rules
@@ -843,7 +906,7 @@ pub struct SubsumptionRule;
 impl CompletionRule for SubsumptionRule {
     fn apply(&self, inference: &Inference, state: &mut CompletionState) -> Result<Vec<Inference>> {
         let mut new_inferences = Vec::new();
-        
+
         let Inference::Subsumption { sub, sup } = inference;
         // Find all concepts that sup subsumes
         for (existing_sub, existing_sup) in &state.subsumptions {
@@ -862,7 +925,7 @@ impl CompletionRule for SubsumptionRule {
                 });
             }
         }
-        
+
         Ok(new_inferences)
     }
 }
@@ -874,7 +937,7 @@ pub struct ConjunctionRule;
 impl CompletionRule for ConjunctionRule {
     fn apply(&self, inference: &Inference, _state: &mut CompletionState) -> Result<Vec<Inference>> {
         let mut new_inferences = Vec::new();
-        
+
         let Inference::Subsumption { sub, sup } = inference;
         if let ELConcept::Conjunction(concepts) = sup {
             for concept in concepts {
@@ -884,7 +947,7 @@ impl CompletionRule for ConjunctionRule {
                 });
             }
         }
-        
+
         Ok(new_inferences)
     }
 }
@@ -896,23 +959,27 @@ pub struct ExistentialRule;
 impl CompletionRule for ExistentialRule {
     fn apply(&self, inference: &Inference, state: &mut CompletionState) -> Result<Vec<Inference>> {
         let mut new_inferences = Vec::new();
-        
-        let Inference::Subsumption { sub: filler_sub, sup: filler_sup } = inference;
+
+        let Inference::Subsumption {
+            sub: filler_sub,
+            sup: filler_sup,
+        } = inference;
         // Look for existential restrictions with this filler
         for (existing_sub, existing_sup) in &state.subsumptions {
             if let ELConcept::Existential { role, filler } = existing_sup
-                && filler.as_ref() == filler_sub {
-                    // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
-                    new_inferences.push(Inference::Subsumption {
-                        sub: existing_sub.clone(),
-                        sup: ELConcept::Existential {
-                            role: role.clone(),
-                            filler: Box::new(filler_sup.clone()),
-                        },
-                    });
-                }
+                && filler.as_ref() == filler_sub
+            {
+                // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
+                new_inferences.push(Inference::Subsumption {
+                    sub: existing_sub.clone(),
+                    sup: ELConcept::Existential {
+                        role: role.clone(),
+                        filler: Box::new(filler_sup.clone()),
+                    },
+                });
+            }
         }
-        
+
         Ok(new_inferences)
     }
 }
@@ -922,7 +989,11 @@ impl CompletionRule for ExistentialRule {
 pub struct RoleChainRule;
 
 impl CompletionRule for RoleChainRule {
-    fn apply(&self, _inference: &Inference, _state: &mut CompletionState) -> Result<Vec<Inference>> {
+    fn apply(
+        &self,
+        _inference: &Inference,
+        _state: &mut CompletionState,
+    ) -> Result<Vec<Inference>> {
         // Simplified implementation - would need role chain support
         Ok(Vec::new())
     }

@@ -54,7 +54,7 @@ pub enum OWL2Datatype {
 
 impl OWL2Datatype {
     /// Get the IRI for this datatype
-    #[must_use] 
+    #[must_use]
     pub fn iri(&self) -> crate::ontology::IRI {
         let iri_string = match self {
             // XML Schema datatypes
@@ -110,7 +110,7 @@ impl OWL2Datatype {
     }
 
     /// Check if this datatype is numeric
-    #[must_use] 
+    #[must_use]
     pub fn is_numeric(&self) -> bool {
         matches!(
             self,
@@ -136,7 +136,7 @@ impl OWL2Datatype {
     }
 
     /// Check if this datatype is a date/time type
-    #[must_use] 
+    #[must_use]
     pub fn is_datetime(&self) -> bool {
         matches!(
             self,
@@ -154,13 +154,13 @@ impl OWL2Datatype {
     }
 
     /// Check if this datatype supports ordering
-    #[must_use] 
+    #[must_use]
     pub fn is_ordered(&self) -> bool {
         self.is_numeric() || self.is_datetime() || matches!(self, OWL2Datatype::String)
     }
 
     /// Get the parent datatype in the hierarchy
-    #[must_use] 
+    #[must_use]
     pub fn parent_datatype(&self) -> Option<OWL2Datatype> {
         match self {
             // Integer hierarchy
@@ -251,7 +251,7 @@ pub struct DatatypeDefinitionAxiom {
 }
 
 impl DatatypeDefinitionAxiom {
-    #[must_use] 
+    #[must_use]
     pub fn new(
         id: AxiomId,
         datatype: IRI<String>,
@@ -313,7 +313,7 @@ pub enum ConstrainingFacet {
 
 impl ConstrainingFacet {
     /// Get the IRI for this facet
-    #[must_use] 
+    #[must_use]
     pub fn iri(&self) -> crate::ontology::IRI {
         let iri_string = match self {
             ConstrainingFacet::Length => "http://www.w3.org/2001/XMLSchema#length",
@@ -334,7 +334,7 @@ impl ConstrainingFacet {
     }
 
     /// Check if this facet is applicable to the given datatype
-    #[must_use] 
+    #[must_use]
     pub fn is_applicable_to(&self, datatype: &OWL2Datatype) -> bool {
         match self {
             ConstrainingFacet::Length
@@ -372,7 +372,7 @@ pub struct DatatypeManager {
 }
 
 impl DatatypeManager {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut manager = Self {
             datatype_definitions: HashMap::new(),
@@ -447,7 +447,7 @@ impl DatatypeManager {
     }
 
     /// Check if a datatype is recognized (built-in or defined)
-    #[must_use] 
+    #[must_use]
     pub fn is_recognized_datatype(&self, datatype_iri: &crate::ontology::IRI) -> bool {
         // Check if it's a built-in OWL 2 datatype
         if OWL2Datatype::from_str(&datatype_iri.to_string()).is_ok() {
@@ -543,7 +543,7 @@ impl DatatypeManager {
     }
 
     /// Check if one datatype is a subtype of another
-    #[must_use] 
+    #[must_use]
     pub fn is_subtype_of(&self, subtype: &OWL2Datatype, supertype: &OWL2Datatype) -> bool {
         if subtype == supertype {
             return true;
@@ -557,7 +557,7 @@ impl DatatypeManager {
     }
 
     /// Get all subtypes of a datatype
-    #[must_use] 
+    #[must_use]
     pub fn get_subtypes(&self, datatype: &OWL2Datatype) -> HashSet<OWL2Datatype> {
         self.datatype_hierarchy
             .get(datatype)

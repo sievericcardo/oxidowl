@@ -108,7 +108,7 @@ impl Default for BenchmarkingConfig {
 }
 
 impl PerformanceBenchmarkingSystem {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: BenchmarkingConfig) -> Self {
         Self {
             benchmark_manager: BenchmarkSuiteManager::new(&config),
@@ -223,15 +223,12 @@ impl PerformanceBenchmarkingSystem {
         results.push(small_result);
 
         // Calculate total duration from all result execution times
-        let total_duration = results.iter()
-            .map(|r| r.total_benchmark_time)
-            .sum();
+        let total_duration = results.iter().map(|r| r.total_benchmark_time).sum();
 
         // Generate report
-        let report = self.report_generator.generate_industrial_report(
-            results,
-            total_duration,
-        )?;
+        let report = self
+            .report_generator
+            .generate_industrial_report(results, total_duration)?;
 
         Ok(report)
     }
@@ -278,7 +275,7 @@ impl PerformanceBenchmarkingSystem {
                     _ => None,
                 })
                 .collect();
-            
+
             Ok(subsumptions)
         };
         let classification_time = classification_start.elapsed();
@@ -831,23 +828,27 @@ impl PerformanceBenchmarkingSystem {
     fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
         // Count all unique variables across all atoms
         let mut variables = std::collections::HashSet::new();
-        
+
         // Add answer variables
         for var in &query.answer_variables {
             variables.insert(var.clone());
         }
-        
+
         // Add variables from atoms
         for atom in &query.body_atoms {
             match atom {
                 super::conjunctive::QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.clone());
                 }
-                super::conjunctive::QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                super::conjunctive::QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(object.clone());
                 }
-                super::conjunctive::QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                super::conjunctive::QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(subject.clone());
                     variables.insert(literal.clone());
                 }
@@ -867,7 +868,7 @@ impl PerformanceBenchmarkingSystem {
                 }
             }
         }
-        
+
         variables.len()
     }
 
@@ -914,11 +915,17 @@ impl PerformanceBenchmarkingSystem {
 
     fn get_atom_variables(&self, atom: &super::conjunctive::QueryAtom) -> Vec<String> {
         match atom {
-            super::conjunctive::QueryAtom::ClassAtom { variable, .. } => vec![variable.name.clone()],
-            super::conjunctive::QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+            super::conjunctive::QueryAtom::ClassAtom { variable, .. } => {
+                vec![variable.name.clone()]
+            }
+            super::conjunctive::QueryAtom::ObjectPropertyAtom {
+                subject, object, ..
+            } => {
                 vec![subject.name.clone(), object.name.clone()]
             }
-            super::conjunctive::QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+            super::conjunctive::QueryAtom::DataPropertyAtom {
+                subject, literal, ..
+            } => {
                 vec![subject.name.clone(), literal.name.clone()]
             }
             super::conjunctive::QueryAtom::SameIndividualAtom { left, right } => {
@@ -979,21 +986,22 @@ impl PerformanceBenchmarkingSystem {
         if execution_times.is_empty() {
             return 0.0;
         }
-        
+
         // Estimate based on variance of execution times
         // Higher variance suggests I/O wait or contention
         let mean = execution_times.iter().sum::<f64>() / execution_times.len() as f64;
         let variance = execution_times
             .iter()
             .map(|t| (t - mean).powi(2))
-            .sum::<f64>() / execution_times.len() as f64;
+            .sum::<f64>()
+            / execution_times.len() as f64;
         let std_dev = variance.sqrt();
-        
+
         // Lower coefficient of variation suggests higher CPU utilization
         let cv = if mean > 0.0 { std_dev / mean } else { 0.0 };
         let base_utilization = 75.0;
         let adjustment = (1.0 - cv.min(1.0)) * 20.0;
-        
+
         (base_utilization + adjustment).min(100.0)
     }
 
@@ -1002,7 +1010,7 @@ impl PerformanceBenchmarkingSystem {
         // Higher number of measurements typically means cache is warmed up
         let base_rate = 0.6;
         let warmup_bonus = (measurement_count.min(10) as f64) / 10.0 * 0.3;
-        
+
         (base_rate + warmup_bonus).min(0.95)
     }
 }
@@ -1267,9 +1275,7 @@ impl BenchmarkSuiteManager {
         &self,
         concept_count: usize,
     ) -> Result<Ontology, BenchmarkError> {
-        println!(
-            "Generating synthetic ontology with {concept_count} concepts..."
-        );
+        println!("Generating synthetic ontology with {concept_count} concepts...");
         self.create_mock_large_ontology(concept_count, "Synthetic")
     }
 
@@ -1280,27 +1286,42 @@ impl BenchmarkSuiteManager {
     ) -> Result<Ontology, BenchmarkError> {
         // Create a mock ontology with the specified number of concepts
         let mut ontology = Ontology::new();
-        ontology.iri = Some(IRI::new(&format!("http://example.org/{}", name.replace(' ', "_"))));
-        
+        ontology.iri = Some(IRI::new(&format!(
+            "http://example.org/{}",
+            name.replace(' ', "_")
+        )));
+
         // Create hierarchical structure with branching
         let branching_factor = 5;
         for i in 0..concept_count {
-            let parent_id = if i == 0 { 0 } else { (i - 1) / branching_factor };
-            
+            let parent_id = if i == 0 {
+                0
+            } else {
+                (i - 1) / branching_factor
+            };
+
             ontology.add_axiom(crate::ontology::Axiom::SubClassOf(
                 crate::ontology::SubClassOfAxiom {
                     id: 0,
                     subclass: ClassExpression::Class(Class {
-                        iri: IRI::from(format!("http://example.org/{}/Concept{}", name.replace(' ', "_"), i)),
+                        iri: IRI::from(format!(
+                            "http://example.org/{}/Concept{}",
+                            name.replace(' ', "_"),
+                            i
+                        )),
                     }),
                     superclass: ClassExpression::Class(Class {
-                        iri: IRI::from(format!("http://example.org/{}/Concept{}", name.replace(' ', "_"), parent_id)),
+                        iri: IRI::from(format!(
+                            "http://example.org/{}/Concept{}",
+                            name.replace(' ', "_"),
+                            parent_id
+                        )),
                     }),
                     annotations: Vec::new(),
-                }
+                },
             ));
         }
-        
+
         log::info!("Created mock {name} ontology with {concept_count} concepts");
         Ok(ontology)
     }
@@ -1348,9 +1369,7 @@ impl BenchmarkSuiteManager {
         name: &str,
         concept_count: usize,
     ) -> Result<Ontology, BenchmarkError> {
-        println!(
-            "Creating synthetic ontology '{name}' with {concept_count} concepts"
-        );
+        println!("Creating synthetic ontology '{name}' with {concept_count} concepts");
         self.create_mock_large_ontology(concept_count, name)
     }
 
@@ -1393,7 +1412,7 @@ impl PerformanceMetricsCollector {
 
     fn get_memory_usage(&self) -> f64 {
         // Try to get actual memory usage, fallback to estimation
-        
+
         #[cfg(target_os = "linux")]
         {
             // Read from /proc/self/statm on Linux
@@ -1407,13 +1426,13 @@ impl PerformanceMetricsCollector {
                 }
             }
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             // On macOS, we could use mach API or ps command
             // For now, use a reasonable estimation
         }
-        
+
         // Fallback: estimate based on allocator stats or default
         // In production, would use a proper memory profiling library
         1024.0 * 1024.0 * 512.0 // 512 MB default estimation
@@ -1590,12 +1609,12 @@ impl BenchmarkReportGenerator {
                 success_rate_trend: vec![],
             };
         }
-        
+
         let classification_times: Vec<f64> = results
             .iter()
             .map(|r| r.classification_metrics.classification_time.as_secs_f64())
             .collect();
-        
+
         let query_times: Vec<f64> = results
             .iter()
             .flat_map(|r| {
@@ -1604,12 +1623,12 @@ impl BenchmarkReportGenerator {
                     .map(|qr| qr.average_execution_time.as_secs_f64())
             })
             .collect();
-        
+
         let memory_usages: Vec<f64> = results
             .iter()
             .map(|r| r.system_metrics.memory_peak)
             .collect();
-        
+
         let success_rates: Vec<f64> = results
             .iter()
             .map(|r| {
@@ -1625,7 +1644,7 @@ impl BenchmarkReportGenerator {
                 }
             })
             .collect();
-        
+
         PerformanceTrends {
             classification_time_trend: classification_times,
             query_time_trend: query_times,
@@ -1670,35 +1689,41 @@ impl RegressionTestingFramework {
     ) -> Result<(), BenchmarkError> {
         // Validate performance metrics against acceptable thresholds
         println!("Validating against regression baselines...");
-        
+
         // Define baseline thresholds (in production, these would come from historical data)
         let max_classification_time_s = 300.0; // 5 minutes
         let max_query_time_s = 60.0; // 1 minute
         let max_memory_gb = 16.0; // 16 GB
         let min_success_rate = 0.8; // 80%
-        
+
         // Check each benchmark result
         for result in &report.ontology_results {
             // Check classification time
-            if result.classification_metrics.classification_time.as_secs_f64() > max_classification_time_s {
+            if result
+                .classification_metrics
+                .classification_time
+                .as_secs_f64()
+                > max_classification_time_s
+            {
                 println!(
                     "WARNING: Classification time {:.2}s exceeds baseline {:.2}s for ontology {}",
-                    result.classification_metrics.classification_time.as_secs_f64(),
+                    result
+                        .classification_metrics
+                        .classification_time
+                        .as_secs_f64(),
                     max_classification_time_s,
                     result.ontology_name
                 );
             }
-            
+
             // Check memory usage
             if result.system_metrics.memory_peak > max_memory_gb {
                 println!(
                     "WARNING: Memory usage {:.2}GB exceeds baseline {:.2}GB for ontology {}",
-                    result.system_metrics.memory_peak,
-                    max_memory_gb,
-                    result.ontology_name
+                    result.system_metrics.memory_peak, max_memory_gb, result.ontology_name
                 );
             }
-            
+
             // Check query performance
             for query_result in &result.query_results {
                 if query_result.average_execution_time.as_secs_f64() > max_query_time_s {
@@ -1709,18 +1734,16 @@ impl RegressionTestingFramework {
                         max_query_time_s
                     );
                 }
-                
+
                 if query_result.success_rate < min_success_rate {
                     println!(
                         "WARNING: Query {} success rate {:.2} below baseline {:.2}",
-                        query_result.query_id,
-                        query_result.success_rate,
-                        min_success_rate
+                        query_result.query_id, query_result.success_rate, min_success_rate
                     );
                 }
             }
         }
-        
+
         println!("Baseline validation complete.");
         Ok(())
     }

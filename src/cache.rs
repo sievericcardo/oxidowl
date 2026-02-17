@@ -281,9 +281,9 @@ pub struct GraphMetadata {
 /// Tier for cache eviction
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CacheTier {
-    Hot,   // Frequently accessed
-    Warm,  // Moderately accessed
-    Cold,  // Rarely accessed
+    Hot,  // Frequently accessed
+    Warm, // Moderately accessed
+    Cold, // Rarely accessed
 }
 
 /// Entry in the completion graph cache
@@ -347,7 +347,9 @@ impl CompletionGraphCache {
             return None;
         }
 
-        if let Ok(mut cache) = self.cache.write() && let Some(entry) = cache.get_mut(&signature) {
+        if let Ok(mut cache) = self.cache.write()
+            && let Some(entry) = cache.get_mut(&signature)
+        {
             entry.access_count += 1;
             entry.last_access = Instant::now();
 
@@ -380,7 +382,9 @@ impl CompletionGraphCache {
         let memory_size = graph.memory_size;
 
         // Check memory pressure and evict if necessary
-        if let Ok(current_usage) = self.memory_usage.read() && *current_usage + memory_size > self.memory_threshold {
+        if let Ok(current_usage) = self.memory_usage.read()
+            && *current_usage + memory_size > self.memory_threshold
+        {
             self.evict_to_fit(memory_size);
         }
 
@@ -413,23 +417,24 @@ impl CompletionGraphCache {
         // Cold tier: <3 accesses
 
         if let Ok(mut cache) = self.cache.write()
-            && let Some(entry) = cache.get_mut(&signature) {
-                let old_tier = entry.tier;
-                let new_tier = if access_count > 10 {
-                    CacheTier::Hot
-                } else if access_count > 3 {
-                    CacheTier::Warm
-                } else {
-                    CacheTier::Cold
-                };
+            && let Some(entry) = cache.get_mut(&signature)
+        {
+            let old_tier = entry.tier;
+            let new_tier = if access_count > 10 {
+                CacheTier::Hot
+            } else if access_count > 3 {
+                CacheTier::Warm
+            } else {
+                CacheTier::Cold
+            };
 
-                if old_tier != new_tier {
-                    entry.tier = new_tier;
+            if old_tier != new_tier {
+                entry.tier = new_tier;
 
-                    // Move between tier queues
-                    self.move_between_tiers(signature, old_tier, new_tier);
-                }
+                // Move between tier queues
+                self.move_between_tiers(signature, old_tier, new_tier);
             }
+        }
     }
 
     /// Move an entry between tier queues
@@ -520,21 +525,22 @@ impl CompletionGraphCache {
     /// Evict a single entry and return freed memory
     fn evict_entry(&self, signature: u64) -> usize {
         if let Ok(mut cache) = self.cache.write()
-            && let Some(entry) = cache.remove(&signature) {
-                let freed = entry.graph.memory_size;
+            && let Some(entry) = cache.remove(&signature)
+        {
+            let freed = entry.graph.memory_size;
 
-                // Update memory usage
-                if let Ok(mut usage) = self.memory_usage.write() {
-                    *usage = usage.saturating_sub(freed);
-                }
-
-                // Update metrics
-                if let Ok(mut metrics) = self.metrics.write() {
-                    metrics.evictions += 1;
-                }
-
-                return freed;
+            // Update memory usage
+            if let Ok(mut usage) = self.memory_usage.write() {
+                *usage = usage.saturating_sub(freed);
             }
+
+            // Update metrics
+            if let Ok(mut metrics) = self.metrics.write() {
+                metrics.evictions += 1;
+            }
+
+            return freed;
+        }
         0
     }
 
@@ -819,7 +825,7 @@ impl CacheManager {
     }
 
     /// Get a completion graph from cache
-    #[must_use] 
+    #[must_use]
     pub fn get_completion_graph(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
         self.completion_graph_cache.get(signature)
     }
@@ -830,7 +836,7 @@ impl CacheManager {
     }
 
     /// Get completion graph cache memory usage
-    #[must_use] 
+    #[must_use]
     pub fn completion_graph_memory_usage(&self) -> usize {
         self.completion_graph_cache.memory_usage()
     }

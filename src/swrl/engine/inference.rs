@@ -26,7 +26,7 @@ pub struct ForwardChaining {
 
 impl ForwardChaining {
     /// Create a new forward chaining engine
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             max_iterations: 1000,
@@ -206,7 +206,7 @@ pub struct BackwardChaining {
 
 impl BackwardChaining {
     /// Create a new backward chaining engine
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             max_goal_depth: 100,
@@ -224,38 +224,31 @@ impl BackwardChaining {
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
 
-        // For general execution without specific goals, 
+        // For general execution without specific goals,
         // collect all head atoms as potential goals and try to prove them
-        let mut potential_goals: Vec<SWRLAtom> = rules
-            .iter()
-            .flat_map(|rule| rule.head.clone())
-            .collect();
-        
+        let mut potential_goals: Vec<SWRLAtom> =
+            rules.iter().flat_map(|rule| rule.head.clone()).collect();
+
         // Deduplicate goals
         potential_goals.sort_by_key(|atom| format!("{atom:?}"));
         potential_goals.dedup();
-        
+
         let mut total_inferences = Vec::new();
         let mut total_applications = 0;
-        
+
         // Try to prove each potential goal
-        for goal in potential_goals.iter().take(10) { // Limit to prevent excessive work
-            let result = self.execute_with_goal(
-                rules,
-                known_facts,
-                ontology,
-                context,
-                goal,
-            )?;
-            
+        for goal in potential_goals.iter().take(10) {
+            // Limit to prevent excessive work
+            let result = self.execute_with_goal(rules, known_facts, ontology, context, goal)?;
+
             total_inferences.extend(result.inferences);
             total_applications += result.applications;
-            
+
             if result.fired {
                 info!("Backward chaining proved goal: {goal:?}");
             }
         }
-        
+
         Ok(SWRLExecutionResult {
             fired: !total_inferences.is_empty(),
             inferences: total_inferences,
@@ -359,7 +352,7 @@ pub struct HybridReasoning {
 
 impl HybridReasoning {
     /// Create a new hybrid reasoning engine
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             forward_engine: ForwardChaining::new(),

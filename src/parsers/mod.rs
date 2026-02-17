@@ -12,8 +12,7 @@ pub mod turtle;
 pub mod validation;
 
 /// RDF compatibility mode for parsing RDF-based formats
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RdfCompatibilityMode {
     /// RDF 1.1 mode - standard reification only
     RDF11,
@@ -26,10 +25,8 @@ pub enum RdfCompatibilityMode {
     Auto,
 }
 
-
 /// Error verbosity level for parser error messages
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorVerbosity {
     /// Minimal: just the error message
     Minimal,
@@ -39,7 +36,6 @@ pub enum ErrorVerbosity {
     /// Detailed: full context stack and token information
     Detailed,
 }
-
 
 /// Parser configuration
 #[derive(Debug, Clone)]
@@ -115,7 +111,7 @@ use std::path::Path;
 
 /// Extract the first section from a `CrossSyntax` multi-format file
 /// Returns the content of the first section (after the ### marker)
-#[must_use] 
+#[must_use]
 pub fn extract_first_crosssyntax_section(content: &str) -> String {
     let trimmed = content.trim();
 
@@ -312,21 +308,22 @@ fn detect_rdf_version_from_content(content: &str) -> RdfCompatibilityMode {
             }
         }
     }
-    
+
     // Check for RDF 1.2 rdf:reifies predicate
     if content.contains("rdf:reifies") || content.contains("<rdf:reifies") {
         return RdfCompatibilityMode::RDF12;
     }
-    
+
     // Check for RDF 1.1 standard reification vocabulary
     // These alone don't indicate RDF 1.2, so default to RDF 1.1
-    if content.contains("rdf:Statement") 
+    if content.contains("rdf:Statement")
         || content.contains("rdf:subject")
         || content.contains("rdf:predicate")
-        || content.contains("rdf:object") {
+        || content.contains("rdf:object")
+    {
         return RdfCompatibilityMode::RDF11;
     }
-    
+
     // Default to auto-detection (let the parser decide)
     RdfCompatibilityMode::Auto
 }
@@ -404,12 +401,14 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
                     strict_rdf11_mode: true,
                     ..Default::default()
                 },
-                RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => turtle::TurtleParserConfig {
-                    rdf_version: turtle::RdfVersionMode::RDFStar,
-                    parse_rdf_star: true,
-                    strict_rdf11_mode: false,
-                    ..Default::default()
-                },
+                RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => {
+                    turtle::TurtleParserConfig {
+                        rdf_version: turtle::RdfVersionMode::RDFStar,
+                        parse_rdf_star: true,
+                        strict_rdf11_mode: false,
+                        ..Default::default()
+                    }
+                }
                 RdfCompatibilityMode::Auto => turtle::TurtleParserConfig::default(),
             };
             let parser = turtle::TurtleParser::with_config(config);
@@ -425,13 +424,15 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
                     iri_validation_mode: crate::semantics::IriValidationMode::RFC3986,
                     validate_blank_nodes: false, // Lenient for compatibility
                 },
-                RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => ntriples::NTriplesConfig {
-                    rdf_version: ntriples::RdfVersionMode::RDFStar,
-                    parse_rdf_star: true,
-                    strict_rdf11_mode: false,
-                    iri_validation_mode: crate::semantics::IriValidationMode::RFC3987,
-                    validate_blank_nodes: false, // Lenient for compatibility
-                },
+                RdfCompatibilityMode::RDFStar | RdfCompatibilityMode::RDF12 => {
+                    ntriples::NTriplesConfig {
+                        rdf_version: ntriples::RdfVersionMode::RDFStar,
+                        parse_rdf_star: true,
+                        strict_rdf11_mode: false,
+                        iri_validation_mode: crate::semantics::IriValidationMode::RFC3987,
+                        validate_blank_nodes: false, // Lenient for compatibility
+                    }
+                }
                 RdfCompatibilityMode::Auto => ntriples::NTriplesConfig::default(),
             };
             let parser = ntriples::NTriplesParser::with_config(config);
@@ -573,7 +574,7 @@ impl ParserFactory {
     }
 
     /// Detect RDF version from content
-    #[must_use] 
+    #[must_use]
     pub fn detect_rdf_version(content: &str) -> RdfCompatibilityMode {
         detect_rdf_version_from_content(content)
     }

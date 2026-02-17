@@ -499,7 +499,7 @@ impl CompletionRuleSet {
             CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
             CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
             CompletionRule::Guess => false,         // Applied by strategy
-            CompletionRule::QuotedTriple => false,  // Applied based on RDF-star quoted triples, not OWL concepts
+            CompletionRule::QuotedTriple => false, // Applied based on RDF-star quoted triples, not OWL concepts
             CompletionRule::MetaAssertion => false, // Applied based on RDF-star meta-assertions, not OWL concepts
         }
     }
@@ -706,12 +706,14 @@ impl CompletionRuleSet {
                 let deps = Arc::clone(&application.dependencies);
                 let target = existing_successors[allowed - 1].clone();
 
-                for successor in existing_successors.iter().skip(allowed).take(existing - allowed) {
-                    result.merges.push((
-                        successor.clone(),
-                        target.clone(),
-                        Arc::clone(&deps),
-                    ));
+                for successor in existing_successors
+                    .iter()
+                    .skip(allowed)
+                    .take(existing - allowed)
+                {
+                    result
+                        .merges
+                        .push((successor.clone(), target.clone(), Arc::clone(&deps)));
                 }
             }
         }
@@ -751,15 +753,16 @@ impl CompletionRuleSet {
             concept,
             dependencies,
         } = &application.context
-            && let ClassExpression::ObjectHasSelf { property } = concept {
-                // Add a self-edge
-                result.edge_additions.push((
-                    application.node.clone(),
-                    application.node.clone(),
-                    property.clone(),
-                    Arc::clone(dependencies),
-                ));
-            }
+            && let ClassExpression::ObjectHasSelf { property } = concept
+        {
+            // Add a self-edge
+            result.edge_additions.push((
+                application.node.clone(),
+                application.node.clone(),
+                property.clone(),
+                Arc::clone(dependencies),
+            ));
+        }
 
         Ok(result)
     }
@@ -974,22 +977,26 @@ impl CompletionRuleSet {
         // Extract quoted triple from the concept or context
         // RDF-star quoted triples represent statements about statements
         // They need to be expanded into a reified representation in the tableau
-        
-        if let RuleContext::Concept { concept, dependencies } = &application.context {
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
             // Check if this is a quoted triple pattern
             // In a full implementation, we would:
             // 1. Extract the subject, predicate, object from the quoted triple
             // 2. Create a reification node for the statement
             // 3. Add rdf:subject, rdf:predicate, rdf:object edges
             // 4. Use the reification node for meta-assertions
-            
+
             // For now, log that we encountered a quoted triple
             log::debug!(
                 "Quoted triple rule application at node {}: concept = {:?}",
                 application.node,
                 concept
             );
-            
+
             // Extract RDF-star quoted triple and create reification
             // Check if the concept mentions a quoted triple that needs expansion
             // In a full RDF-star implementation, we would:
@@ -997,14 +1004,13 @@ impl CompletionRuleSet {
             // 2. Add rdf:type rdf:Statement
             // 3. Add rdf:subject, rdf:predicate, rdf:object triples
             // 4. Return the reification node for use in meta-assertions
-            
+
             // For now, we create minimal reification structure
             let reification_node = format!("_:reif_{}", application.node);
-            result.new_individuals.push((
-                reification_node.clone(),
-                Arc::clone(dependencies),
-            ));
-            
+            result
+                .new_individuals
+                .push((reification_node.clone(), Arc::clone(dependencies)));
+
             log::debug!("Created reification node: {reification_node}");
         }
 
@@ -1019,21 +1025,25 @@ impl CompletionRuleSet {
         // Handle meta-assertions (statements about statements)
         // For example: << :alice :knows :bob >> :certainty 0.9
         // This means the statement ":alice :knows :bob" has certainty 0.9
-        
-        if let RuleContext::Concept { concept, dependencies: _ } = &application.context {
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies: _,
+        } = &application.context
+        {
             // In a full implementation, we would:
             // 1. Identify the quoted triple this assertion is about
             // 2. Extract the meta-property (e.g., :certainty) and meta-value (e.g., 0.9)
             // 3. Add the meta-assertion as an annotation to the quoted triple
             // 4. Check for meta-level consistency (e.g., certainty in [0,1])
             // 5. Propagate meta-level inference rules if any
-            
+
             log::debug!(
                 "Meta-assertion rule application at node {}: concept = {:?}",
                 application.node,
                 concept
             );
-            
+
             // For clash detection: check for contradictory meta-assertions
             // Example: If we have both certainty > 0.8 and certainty < 0.2
             // This would be a meta-level clash

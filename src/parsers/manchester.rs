@@ -32,7 +32,7 @@ pub struct ManchesterParser {
 }
 
 impl ManchesterParser {
-    #[must_use] 
+    #[must_use]
     pub fn new(config: ManchesterParserConfig) -> Self {
         let mut prefixes = HashMap::new();
 
@@ -69,9 +69,9 @@ impl ManchesterParser {
     pub fn parse_string(&mut self, content: &str) -> Result<Ontology, OxidowlError> {
         // Use strict validation for Manchester syntax
         let validator = super::validation::SyntaxValidator::new();
-        validator.validate_manchester(content).map_err(|e| {
-            OxidowlError::ParseError(format!("Manchester validation failed: {e}"))
-        })?;
+        validator
+            .validate_manchester(content)
+            .map_err(|e| OxidowlError::ParseError(format!("Manchester validation failed: {e}")))?;
 
         self.input = content.to_string();
         self.current_position = 0;

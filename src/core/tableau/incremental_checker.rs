@@ -70,7 +70,7 @@ impl NodeFingerprint {
     ///
     /// - Time: O(n log n) where n = concepts + role edges
     /// - Space: O(1) (result is single u64)
-    #[must_use] 
+    #[must_use]
     pub fn from_node(node: &TableauNode) -> Self {
         let mut hasher = DefaultHasher::new();
 
@@ -117,7 +117,7 @@ impl NodeFingerprint {
     }
 
     /// Get the raw hash value
-    #[must_use] 
+    #[must_use]
     pub fn as_u64(&self) -> u64 {
         self.0
     }
@@ -204,7 +204,7 @@ impl CheckResultCache {
     /// - 10,000 entries ≈ 880 KB
     /// - 50,000 entries ≈ 4.4 MB
     /// - 100,000 entries ≈ 8.8 MB
-    #[must_use] 
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let cache = LruCache::new(NonZeroUsize::new(capacity).expect("capacity must be > 0"));
         Self {
@@ -272,7 +272,7 @@ impl CheckResultCache {
     }
 
     /// Get cache statistics
-    #[must_use] 
+    #[must_use]
     pub fn statistics(&self) -> CacheStatistics {
         CacheStatistics {
             capacity: self.cache.cap().get(),
@@ -289,19 +289,19 @@ impl CheckResultCache {
     }
 
     /// Get cache capacity
-    #[must_use] 
+    #[must_use]
     pub fn capacity(&self) -> usize {
         self.cache.cap().get()
     }
 
     /// Get current cache size
-    #[must_use] 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if cache is empty
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
@@ -342,13 +342,13 @@ impl CacheStatistics {
     /// A cache is considered "good" if:
     /// - Hit rate > 50%
     /// - Few evictions relative to size (< 10% of capacity)
-    #[must_use] 
+    #[must_use]
     pub fn is_performing_well(&self) -> bool {
         self.hit_rate > 0.5 && (self.evictions as f64) < (self.capacity as f64 * 0.1)
     }
 
     /// Get cache utilization (0.0 to 1.0)
-    #[must_use] 
+    #[must_use]
     pub fn utilization(&self) -> f64 {
         self.size as f64 / self.capacity as f64
     }
@@ -384,7 +384,7 @@ pub struct ChangeTracker {
 
 impl ChangeTracker {
     /// Create a new change tracker
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             changed_nodes: HashSet::new(),
@@ -438,13 +438,13 @@ impl ChangeTracker {
     }
 
     /// Get number of nodes being tracked
-    #[must_use] 
+    #[must_use]
     pub fn tracked_nodes(&self) -> usize {
         self.previous_fingerprints.len()
     }
 
     /// Get number of nodes marked as changed
-    #[must_use] 
+    #[must_use]
     pub fn changed_count(&self) -> usize {
         self.changed_nodes.len()
     }

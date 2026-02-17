@@ -33,7 +33,7 @@ pub struct RdfSimpleInterpretation {
 
 impl RdfSimpleInterpretation {
     /// Create a new RDF simple interpretation  
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             domain: HashSet::new(),
@@ -46,7 +46,7 @@ impl RdfSimpleInterpretation {
     }
 
     /// Create a new RDF simple interpretation with RDF 1.1 compatibility mode
-    #[must_use] 
+    #[must_use]
     pub fn new_rdf11() -> Self {
         Self {
             domain: HashSet::new(),
@@ -64,7 +64,7 @@ impl RdfSimpleInterpretation {
     }
 
     /// Check if RDF 1.1 compatibility mode is enabled
-    #[must_use] 
+    #[must_use]
     pub fn is_rdf11_mode(&self) -> bool {
         self.rdf11_mode
     }
@@ -78,7 +78,8 @@ impl RdfSimpleInterpretation {
     /// Maps a quoted triple to a resource in the interpretation domain
     pub fn set_quoted_triple_interpretation(&mut self, triple_id: String, resource: String) {
         if !self.rdf11_mode {
-            self.quoted_triple_interpretation.insert(triple_id, resource);
+            self.quoted_triple_interpretation
+                .insert(triple_id, resource);
         }
     }
 
@@ -147,13 +148,13 @@ impl RdfSimpleInterpretation {
     /// In RDF-star semantics, a quoted triple denotes a unique resource
     /// that represents the triple. This enables referential transparency:
     /// the same quoted triple always refers to the same resource.
-    #[must_use] 
+    #[must_use]
     pub fn interpret_quoted_triple(&self, triple: &Triple) -> Option<String> {
         if self.rdf11_mode {
             return None;
         }
 
-        // Create a canonical identifier for the quoted triple 
+        // Create a canonical identifier for the quoted triple
         // This ensures referential transparency: same triple = same resource
         let triple_id = format!(
             "<<{} {} {}>>",
@@ -207,7 +208,7 @@ impl RdfSimpleInterpretation {
     fn satisfies_triple(&self, triple: &Triple) -> bool {
         // Handle quoted triples in subject or object position (RDF-star)
         if !self.rdf11_mode {
-            // In RDF-star mode, check if this triple contains quoted triples 
+            // In RDF-star mode, check if this triple contains quoted triples
             // and handle them with proper referential transparency
             if matches!(triple.subject, RdfTerm::QuotedTriple(_))
                 || matches!(triple.object, RdfTerm::QuotedTriple(_))
@@ -309,7 +310,7 @@ pub struct RdfSimpleEntailment {
 
 impl RdfSimpleEntailment {
     /// Create a new RDF simple entailment engine
-    #[must_use] 
+    #[must_use]
     pub fn new(base_graph: RdfGraph) -> Self {
         Self {
             base_graph,
@@ -320,7 +321,7 @@ impl RdfSimpleEntailment {
     }
 
     /// Create a new RDF simple entailment engine with RDF 1.1 compatibility
-    #[must_use] 
+    #[must_use]
     pub fn new_rdf11(base_graph: RdfGraph) -> Self {
         Self {
             base_graph,
@@ -346,7 +347,7 @@ impl RdfSimpleEntailment {
         // Copy base graph to derived graph
         self.derived_graph = self.base_graph.clone();
 
-        // If RDF-star mode and quoted triple entailment is enabled, 
+        // If RDF-star mode and quoted triple entailment is enabled,
         // add derived triples from quoted triples
         if !self.rdf11_mode && self.enable_quoted_triple_entailment {
             self.derive_from_quoted_triples()?;
@@ -398,7 +399,7 @@ impl RdfSimpleEntailment {
     }
 
     /// Get the closure (base + derived facts)
-    #[must_use] 
+    #[must_use]
     pub fn closure(&self) -> RdfGraph {
         let mut closure = self.base_graph.clone();
         closure.merge(&self.derived_graph);
@@ -406,7 +407,7 @@ impl RdfSimpleEntailment {
     }
 
     /// Check if premises entail conclusion
-    #[must_use] 
+    #[must_use]
     pub fn entails(&self, premises: &RdfGraph, conclusion: &RdfGraph) -> bool {
         // In RDF-star mode with quoted triple entailment, check both regular
         // and quoted triple entailment
@@ -424,7 +425,7 @@ impl RdfSimpleEntailment {
     /// Returns true if the premises entail the conclusion considering:
     /// 1. Regular graph entailment
     /// 2. Quoted triple entailment: if << s p o >> is in premises, then s p o is entailed
-    #[must_use] 
+    #[must_use]
     pub fn entails_quoted(&self, premises: &RdfGraph, quoted_triple: &Triple) -> bool {
         if self.rdf11_mode {
             // In RDF 1.1 mode, no quoted triple entailment
@@ -452,9 +453,10 @@ impl RdfSimpleEntailment {
             // Check nested quoted triples
             if (self.contains_quoted_triple_term(&triple.subject, quoted_triple)
                 || self.contains_quoted_triple_term(&triple.object, quoted_triple))
-                && self.enable_quoted_triple_entailment {
-                    return true;
-                }
+                && self.enable_quoted_triple_entailment
+            {
+                return true;
+            }
         }
 
         false
@@ -463,7 +465,7 @@ impl RdfSimpleEntailment {
     /// Check if a term contains a specific quoted triple (handles nesting)
     fn contains_quoted_triple_term(&self, term: &RdfTerm, target: &Triple) -> bool {
         match term {
-            RdfTerm::QuotedTriple(quoted) =>  {
+            RdfTerm::QuotedTriple(quoted) => {
                 if **quoted == *target {
                     true
                 } else {
@@ -673,7 +675,7 @@ pub struct BlankNodeMapping {
 
 impl BlankNodeMapping {
     /// Create a new blank node mapping
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             mapping: HashMap::new(),
@@ -686,13 +688,13 @@ impl BlankNodeMapping {
     }
 
     /// Get mapping for a blank node
-    #[must_use] 
+    #[must_use]
     pub fn get_mapping(&self, blank_node: &str) -> Option<&String> {
         self.mapping.get(blank_node)
     }
 
     /// Apply mapping to an RDF term
-    #[must_use] 
+    #[must_use]
     pub fn apply_to_term(&self, term: &RdfTerm) -> RdfTerm {
         match term {
             RdfTerm::BlankNode(id) => {
@@ -707,7 +709,7 @@ impl BlankNodeMapping {
     }
 
     /// Apply mapping to a triple
-    #[must_use] 
+    #[must_use]
     pub fn apply_to_triple(&self, triple: &Triple) -> Triple {
         Triple {
             subject: self.apply_to_term(&triple.subject),
@@ -878,10 +880,7 @@ mod tests {
         assert!(interpretation.is_none());
 
         // Setting quoted triple interpretation should have no effect in RDF 1.1 mode
-        interp.set_quoted_triple_interpretation(
-            "<<test>>".to_string(),
-            "resource1".to_string(),
-        );
+        interp.set_quoted_triple_interpretation("<<test>>".to_string(), "resource1".to_string());
         assert!(interp.quoted_triple_interpretation.is_empty());
     }
 

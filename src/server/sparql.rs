@@ -114,6 +114,7 @@
 //! }
 //! ```
 
+use crate::semantics::{RdfGraph, RdfTerm, Triple as OxidowlTriple};
 use crate::{
     Error, Result,
     ontology::{Axiom, Ontology},
@@ -125,7 +126,6 @@ use oxigraph::{
     sparql::{Query, QueryResults, QuerySolution},
     store::Store,
 };
-use crate::semantics::{RdfGraph, RdfTerm, Triple as OxidowlTriple};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
@@ -234,9 +234,9 @@ impl SparqlServer {
                     triple.object,
                     GraphName::DefaultGraph,
                 );
-                store
-                    .insert(&quad)
-                    .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                store.insert(&quad).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
             }
         }
 
@@ -244,13 +244,18 @@ impl SparqlServer {
         let classification = self.reasoning_service.get_classification().await?;
         for (subclass, superclasses) in &classification.hierarchy {
             for superclass in superclasses {
-                let sub_iri =
-                    NamedNode::new(subclass).map_err(|e| Error::Sparql { message: e.to_string() })?;
-                let sup_iri =
-                    NamedNode::new(superclass).map_err(|e| Error::Sparql { message: e.to_string() })?;
-                let rdfs_subclass =
-                    NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                        .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                let sub_iri = NamedNode::new(subclass).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
+                let sup_iri = NamedNode::new(superclass).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
+                let rdfs_subclass = NamedNode::new(
+                    "http://www.w3.org/2000/01/rdf-schema#subClassOf",
+                )
+                .map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
 
                 let triple = Triple::new(sub_iri, rdfs_subclass, sup_iri);
                 let quad = Quad::new(
@@ -259,9 +264,9 @@ impl SparqlServer {
                     triple.object,
                     GraphName::DefaultGraph,
                 );
-                store
-                    .insert(&quad)
-                    .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                store.insert(&quad).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
             }
         }
 
@@ -269,12 +274,15 @@ impl SparqlServer {
         if let Some(rdf_graph) = ontology_guard.get_rdf_graph() {
             for rdf_triple in rdf_graph.triples() {
                 if let Ok(oxigraph_quad) = self.convert_rdfstar_triple_to_quad(rdf_triple) {
-                    store
-                        .insert(&oxigraph_quad)
-                        .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                    store.insert(&oxigraph_quad).map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
                 }
             }
-            tracing::info!("Added {} RDF-star triples to SPARQL store", rdf_graph.triples().len());
+            tracing::info!(
+                "Added {} RDF-star triples to SPARQL store",
+                rdf_graph.triples().len()
+            );
         }
 
         tracing::info!("Initialized SPARQL store with ontology data");
@@ -291,29 +299,40 @@ impl SparqlServer {
                 if let (Some(sub_iri), Some(sup_iri)) =
                     (self.class_expr_to_iri(sub), self.class_expr_to_iri(sup))
                 {
-                    let rdfs_subclass =
-                        NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                            .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                    let rdfs_subclass = NamedNode::new(
+                        "http://www.w3.org/2000/01/rdf-schema#subClassOf",
+                    )
+                    .map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
                     triples.push(Triple::new(sub_iri, rdfs_subclass, sup_iri));
                 }
             }
             Axiom::ClassAssertion(class, individual) => {
                 if let Some(class_iri) = self.class_expr_to_iri(class) {
-                    let individual_iri = NamedNode::new(&individual.iri)
-                        .map_err(|e| Error::Sparql { message: e.to_string() })?;
-                    let rdf_type =
-                        NamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-                            .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                    let individual_iri =
+                        NamedNode::new(&individual.iri).map_err(|e| Error::Sparql {
+                            message: e.to_string(),
+                        })?;
+                    let rdf_type = NamedNode::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                    )
+                    .map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
                     triples.push(Triple::new(individual_iri, rdf_type, class_iri));
                 }
             }
             Axiom::ObjectPropertyAssertion(prop, subj, obj) => {
-                let prop_iri = NamedNode::new(&prop.to_string())
-                    .map_err(|e| Error::Sparql { message: e.to_string() })?;
-                let subj_iri =
-                    NamedNode::new(&subj.iri).map_err(|e| Error::Sparql { message: e.to_string() })?;
-                let obj_iri =
-                    NamedNode::new(&obj.iri).map_err(|e| Error::Sparql { message: e.to_string() })?;
+                let prop_iri = NamedNode::new(&prop.to_string()).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
+                let subj_iri = NamedNode::new(&subj.iri).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
+                let obj_iri = NamedNode::new(&obj.iri).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
                 triples.push(Triple::new(subj_iri, prop_iri, obj_iri));
             }
             _ => {
@@ -337,10 +356,7 @@ impl SparqlServer {
 
     /// Convert an oxidowl RDF-star triple to an Oxigraph quad
     /// This handles quoted triples (RDF-star) by converting them to Oxigraph's Triple term
-    fn convert_rdfstar_triple_to_quad(
-        &self,
-        rdf_triple: &OxidowlTriple,
-    ) -> Result<Quad> {
+    fn convert_rdfstar_triple_to_quad(&self, rdf_triple: &OxidowlTriple) -> Result<Quad> {
         let subject = self.convert_rdf_term_to_oxigraph_subject(&rdf_triple.subject)?;
         let predicate = self.convert_rdf_term_to_oxigraph_predicate(&rdf_triple.predicate)?;
         let object = self.convert_rdf_term_to_oxigraph_term(&rdf_triple.object)?;
@@ -357,12 +373,15 @@ impl SparqlServer {
     fn convert_rdf_term_to_oxigraph_subject(&self, term: &RdfTerm) -> Result<Subject> {
         match term {
             RdfTerm::IRI(iri) => {
-                let node = NamedNode::new(iri).map_err(|e| Error::Sparql { message: e.to_string() })?;
+                let node = NamedNode::new(iri).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
                 Ok(Subject::NamedNode(node))
             }
             RdfTerm::BlankNode(id) => {
-                let node = oxigraph::model::BlankNode::new(id)
-                    .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                let node = oxigraph::model::BlankNode::new(id).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
                 Ok(Subject::BlankNode(node))
             }
             RdfTerm::QuotedTriple(boxed_triple) => {
@@ -372,17 +391,21 @@ impl SparqlServer {
                 let o = self.convert_rdf_term_to_oxigraph_term(&boxed_triple.object)?;
                 Ok(Subject::Triple(Box::new(Triple::new(s, p, o))))
             }
-            _ => Err(Error::Sparql { message: "Invalid RDF term for subject position".to_string() }),
+            _ => Err(Error::Sparql {
+                message: "Invalid RDF term for subject position".to_string(),
+            }),
         }
     }
 
     /// Convert oxidowl RdfTerm to Oxigraph NamedNode (predicate must be IRI)
     fn convert_rdf_term_to_oxigraph_predicate(&self, term: &RdfTerm) -> Result<NamedNode> {
         match term {
-            RdfTerm::IRI(iri) => {
-                NamedNode::new(iri).map_err(|e| Error::Sparql { message: e.to_string() })
-            }
-            _ => Err(Error::Sparql { message: "Predicate must be an IRI".to_string() }),
+            RdfTerm::IRI(iri) => NamedNode::new(iri).map_err(|e| Error::Sparql {
+                message: e.to_string(),
+            }),
+            _ => Err(Error::Sparql {
+                message: "Predicate must be an IRI".to_string(),
+            }),
         }
     }
 
@@ -390,21 +413,32 @@ impl SparqlServer {
     fn convert_rdf_term_to_oxigraph_term(&self, term: &RdfTerm) -> Result<Term> {
         match term {
             RdfTerm::IRI(iri) => {
-                let node = NamedNode::new(iri).map_err(|e| Error::Sparql { message: e.to_string() })?;
+                let node = NamedNode::new(iri).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
                 Ok(Term::NamedNode(node))
             }
             RdfTerm::BlankNode(id) => {
-                let node = oxigraph::model::BlankNode::new(id)
-                    .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                let node = oxigraph::model::BlankNode::new(id).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
+                })?;
                 Ok(Term::BlankNode(node))
             }
-            RdfTerm::Literal { value, datatype, language } => {
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+            } => {
                 let lit = if let Some(lang) = language {
-                    oxigraph::model::Literal::new_language_tagged_literal(value, lang)
-                        .map_err(|e| Error::Sparql { message: e.to_string() })?
+                    oxigraph::model::Literal::new_language_tagged_literal(value, lang).map_err(
+                        |e| Error::Sparql {
+                            message: e.to_string(),
+                        },
+                    )?
                 } else if let Some(dt) = datatype {
-                    let dt_node = NamedNode::new(dt)
-                        .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                    let dt_node = NamedNode::new(dt).map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
                     oxigraph::model::Literal::new_typed_literal(value, dt_node)
                 } else {
                     oxigraph::model::Literal::new_simple_literal(value)
@@ -631,7 +665,7 @@ fn term_to_sparql_value(term: &Term) -> SparqlValue {
                 predicate: term_to_sparql_value(&triple_box.predicate.into()),
                 object: term_to_sparql_value(&triple_box.object),
             };
-            
+
             SparqlValue {
                 value_type: "triple".to_string(),
                 value: format!(
@@ -662,7 +696,7 @@ fn triple_to_ntriples_string(triple: &Triple) -> String {
     };
     let predicate_str = format!("<{}>", triple.predicate.as_str());
     let object_str = term_to_ntriples_string(&triple.object);
-    
+
     format!("{} {} {}", subject_str, predicate_str, object_str)
 }
 
@@ -702,20 +736,20 @@ mod xsd {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::semantics::{RdfGraph, RdfTerm, Triple as OxidowlTriple};
     use crate::ontology::Ontology;
     use crate::reasoning::ReasoningService;
+    use crate::semantics::{RdfGraph, RdfTerm, Triple as OxidowlTriple};
 
     #[test]
     fn test_convert_simple_rdf_triple() {
         let server = create_test_server();
-        
+
         let triple = OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/alice".to_string()),
             predicate: RdfTerm::IRI("http://example.org/knows".to_string()),
             object: RdfTerm::IRI("http://example.org/bob".to_string()),
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&triple);
         assert!(quad.is_ok());
     }
@@ -723,14 +757,14 @@ mod tests {
     #[test]
     fn test_convert_quoted_triple_as_subject() {
         let server = create_test_server();
-        
+
         // Create inner quoted triple: << :alice :knows :bob >>
         let inner_triple = Box::new(OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/alice".to_string()),
             predicate: RdfTerm::IRI("http://example.org/knows".to_string()),
             object: RdfTerm::IRI("http://example.org/bob".to_string()),
         });
-        
+
         // Create outer triple: << :alice :knows :bob >> :certainty "0.95"
         let outer_triple = OxidowlTriple {
             subject: RdfTerm::QuotedTriple(inner_triple),
@@ -741,7 +775,7 @@ mod tests {
                 language: None,
             },
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&outer_triple);
         assert!(quad.is_ok());
     }
@@ -749,7 +783,7 @@ mod tests {
     #[test]
     fn test_convert_quoted_triple_as_object() {
         let server = create_test_server();
-        
+
         // Create quoted triple: << :doc1 :author "Smith" >>
         let inner_triple = Box::new(OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/doc1".to_string()),
@@ -760,14 +794,14 @@ mod tests {
                 language: None,
             },
         });
-        
+
         // Create triple: :archive23 :contains << :doc1 :author "Smith" >>
         let outer_triple = OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/archive23".to_string()),
             predicate: RdfTerm::IRI("http://example.org/contains".to_string()),
             object: RdfTerm::QuotedTriple(inner_triple),
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&outer_triple);
         assert!(quad.is_ok());
     }
@@ -775,28 +809,28 @@ mod tests {
     #[test]
     fn test_convert_nested_quoted_triple() {
         let server = create_test_server();
-        
+
         // Create innermost triple: << :a :b :c >>
         let innermost = Box::new(OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/a".to_string()),
             predicate: RdfTerm::IRI("http://example.org/b".to_string()),
             object: RdfTerm::IRI("http://example.org/c".to_string()),
         });
-        
+
         // Create middle triple: << << :a :b :c >> :d :e >>
         let middle = Box::new(OxidowlTriple {
             subject: RdfTerm::QuotedTriple(innermost),
             predicate: RdfTerm::IRI("http://example.org/d".to_string()),
             object: RdfTerm::IRI("http://example.org/e".to_string()),
         });
-        
+
         // Create outer triple: << << << :a :b :c >> :d :e >> :f :g >> :h :i
         let outer = OxidowlTriple {
             subject: RdfTerm::QuotedTriple(middle),
             predicate: RdfTerm::IRI("http://example.org/h".to_string()),
             object: RdfTerm::IRI("http://example.org/i".to_string()),
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&outer);
         assert!(quad.is_ok());
     }
@@ -804,7 +838,7 @@ mod tests {
     #[test]
     fn test_convert_literal_with_language() {
         let server = create_test_server();
-        
+
         let triple = OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/doc".to_string()),
             predicate: RdfTerm::IRI("http://example.org/title".to_string()),
@@ -814,7 +848,7 @@ mod tests {
                 language: Some("en".to_string()),
             },
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&triple);
         assert!(quad.is_ok());
     }
@@ -822,7 +856,7 @@ mod tests {
     #[test]
     fn test_convert_literal_with_datatype() {
         let server = create_test_server();
-        
+
         let triple = OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/measurement".to_string()),
             predicate: RdfTerm::IRI("http://example.org/value".to_string()),
@@ -832,7 +866,7 @@ mod tests {
                 language: None,
             },
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&triple);
         assert!(quad.is_ok());
     }
@@ -843,15 +877,15 @@ mod tests {
         let subject = oxigraph::model::NamedNode::new("http://example.org/alice").unwrap();
         let predicate = oxigraph::model::NamedNode::new("http://example.org/knows").unwrap();
         let object = oxigraph::model::NamedNode::new("http://example.org/bob").unwrap();
-        
+
         let triple = Triple::new(subject, predicate, object);
         let term = Term::Triple(Box::new(triple));
-        
+
         let sparql_value = term_to_sparql_value(&term);
-        
+
         assert_eq!(sparql_value.value_type, "triple");
         assert!(sparql_value.triple.is_some());
-        
+
         let nested = sparql_value.triple.unwrap();
         assert_eq!(nested.subject.value_type, "uri");
         assert_eq!(nested.subject.value, "http://example.org/alice");
@@ -866,10 +900,10 @@ mod tests {
         let subject = oxigraph::model::NamedNode::new("http://ex.org/s").unwrap();
         let predicate = oxigraph::model::NamedNode::new("http://ex.org/p").unwrap();
         let object = oxigraph::model::NamedNode::new("http://ex.org/o").unwrap();
-        
+
         let triple = Triple::new(subject, predicate, object);
         let ntriples_str = triple_to_ntriples_string(&triple);
-        
+
         assert!(ntriples_str.contains("<http://ex.org/s>"));
         assert!(ntriples_str.contains("<http://ex.org/p>"));
         assert!(ntriples_str.contains("<http://ex.org/o>"));
@@ -878,13 +912,13 @@ mod tests {
     #[test]
     fn test_blank_node_conversion() {
         let server = create_test_server();
-        
+
         let triple = OxidowlTriple {
             subject: RdfTerm::BlankNode("b0".to_string()),
             predicate: RdfTerm::IRI("http://example.org/property".to_string()),
             object: RdfTerm::BlankNode("b1".to_string()),
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&triple);
         assert!(quad.is_ok());
     }
@@ -892,7 +926,7 @@ mod tests {
     #[test]
     fn test_rdfstar_provenance_pattern() {
         let server = create_test_server();
-        
+
         // Pattern: << :doc1 :author "Smith" >> :source :archive23
         let inner = Box::new(OxidowlTriple {
             subject: RdfTerm::IRI("http://example.org/doc1".to_string()),
@@ -903,13 +937,13 @@ mod tests {
                 language: None,
             },
         });
-        
+
         let provenance = OxidowlTriple {
             subject: RdfTerm::QuotedTriple(inner),
             predicate: RdfTerm::IRI("http://example.org/source".to_string()),
             object: RdfTerm::IRI("http://example.org/archive23".to_string()),
         };
-        
+
         let quad = server.convert_rdfstar_triple_to_quad(&provenance);
         assert!(quad.is_ok());
     }
@@ -918,31 +952,31 @@ mod tests {
 
     #[test]
     fn test_sparql_star_query_quoted_triple_as_subject() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         // Create a store with RDF-star data
         let store = Store::new().unwrap();
-        
+
         // Add: << :alice :knows :bob >> :certainty "0.95"
         let inner_triple = Triple::new(
             NamedNode::new_unchecked("http://example.org/alice"),
             NamedNode::new_unchecked("http://example.org/knows"),
             NamedNode::new_unchecked("http://example.org/bob"),
         );
-        
+
         let quad = Quad::new(
             Subject::Triple(Box::new(inner_triple)),
             NamedNode::new_unchecked("http://example.org/certainty"),
             oxigraph::model::Literal::new_typed_literal(
                 "0.95",
-                NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#double")
+                NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#double"),
             ),
             GraphName::DefaultGraph,
         );
-        
+
         store.insert(&quad).unwrap();
-        
+
         // Query: SELECT ?certainty WHERE { << :alice :knows :bob >> :certainty ?certainty }
         let query_str = r#"
             PREFIX : <http://example.org/>
@@ -950,13 +984,13 @@ mod tests {
                 << :alice :knows :bob >> :certainty ?certainty .
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
             let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
-            
+
             let certainty = bindings[0].get("certainty").unwrap();
             if let Term::Literal(lit) = certainty {
                 assert_eq!(lit.value(), "0.95");
@@ -970,35 +1004,44 @@ mod tests {
 
     #[test]
     fn test_sparql_star_query_with_variables_in_quoted_triple() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         let store = Store::new().unwrap();
-        
+
         // Add: << :alice :knows :bob >> :confidence "high"
         // Add: << :alice :knows :charlie >> :confidence "medium"
         let data = vec![
             (":alice", ":knows", ":bob", "high"),
             (":alice", ":knows", ":charlie", "medium"),
         ];
-        
+
         for (s, p, o, conf) in data {
             let inner_triple = Triple::new(
-                NamedNode::new_unchecked(format!("http://example.org/{}", s.trim_start_matches(':'))),
-                NamedNode::new_unchecked(format!("http://example.org/{}", p.trim_start_matches(':'))),
-                NamedNode::new_unchecked(format!("http://example.org/{}", o.trim_start_matches(':'))),
+                NamedNode::new_unchecked(format!(
+                    "http://example.org/{}",
+                    s.trim_start_matches(':')
+                )),
+                NamedNode::new_unchecked(format!(
+                    "http://example.org/{}",
+                    p.trim_start_matches(':')
+                )),
+                NamedNode::new_unchecked(format!(
+                    "http://example.org/{}",
+                    o.trim_start_matches(':')
+                )),
             );
-            
+
             let quad = Quad::new(
                 Subject::Triple(Box::new(inner_triple)),
                 NamedNode::new_unchecked("http://example.org/confidence"),
                 oxigraph::model::Literal::new_simple_literal(conf),
                 GraphName::DefaultGraph,
             );
-            
+
             store.insert(&quad).unwrap();
         }
-        
+
         // Query: SELECT ?person ?confidence WHERE { << :alice :knows ?person >> :confidence ?confidence }
         let query_str = r#"
             PREFIX : <http://example.org/>
@@ -1006,19 +1049,26 @@ mod tests {
                 << :alice :knows ?person >> :confidence ?confidence .
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
             let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 2);
-            
+
             // Check both results are present
-            let persons: Vec<String> = bindings.iter()
+            let persons: Vec<String> = bindings
+                .iter()
                 .filter_map(|b| b.get("person"))
-                .filter_map(|t| if let Term::NamedNode(n) = t { Some(n.as_str().to_string()) } else { None })
+                .filter_map(|t| {
+                    if let Term::NamedNode(n) = t {
+                        Some(n.as_str().to_string())
+                    } else {
+                        None
+                    }
+                })
                 .collect();
-            
+
             assert!(persons.contains(&"http://example.org/bob".to_string()));
             assert!(persons.contains(&"http://example.org/charlie".to_string()));
         } else {
@@ -1028,33 +1078,33 @@ mod tests {
 
     #[test]
     fn test_sparql_star_query_nested_quoted_triples() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         let store = Store::new().unwrap();
-        
+
         // Add: << << :alice :knows :bob >> :certainty "0.95" >> :source :archive
         let innermost = Triple::new(
             NamedNode::new_unchecked("http://example.org/alice"),
             NamedNode::new_unchecked("http://example.org/knows"),
             NamedNode::new_unchecked("http://example.org/bob"),
         );
-        
+
         let middle = Triple::new(
             Subject::Triple(Box::new(innermost)),
             NamedNode::new_unchecked("http://example.org/certainty"),
             oxigraph::model::Literal::new_simple_literal("0.95"),
         );
-        
+
         let quad = Quad::new(
             Subject::Triple(Box::new(middle)),
             NamedNode::new_unchecked("http://example.org/source"),
             NamedNode::new_unchecked("http://example.org/archive"),
             GraphName::DefaultGraph,
         );
-        
+
         store.insert(&quad).unwrap();
-        
+
         // Query for nested structure
         let query_str = r#"
             PREFIX : <http://example.org/>
@@ -1062,13 +1112,13 @@ mod tests {
                 << << :alice :knows :bob >> :certainty "0.95" >> :source ?source .
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
             let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
-            
+
             let source = bindings[0].get("source").unwrap();
             if let Term::NamedNode(node) = source {
                 assert_eq!(node.as_str(), "http://example.org/archive");
@@ -1082,27 +1132,27 @@ mod tests {
 
     #[test]
     fn test_sparql_star_query_quoted_triple_as_object() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         let store = Store::new().unwrap();
-        
+
         // Add: :report1 :references << :paper1 :author "Smith" >>
         let quoted = Triple::new(
             NamedNode::new_unchecked("http://example.org/paper1"),
             NamedNode::new_unchecked("http://example.org/author"),
             oxigraph::model::Literal::new_simple_literal("Smith"),
         );
-        
+
         let quad = Quad::new(
             NamedNode::new_unchecked("http://example.org/report1"),
             NamedNode::new_unchecked("http://example.org/references"),
             Term::Triple(Box::new(quoted)),
             GraphName::DefaultGraph,
         );
-        
+
         store.insert(&quad).unwrap();
-        
+
         // Query: SELECT ?report WHERE { ?report :references << :paper1 :author "Smith" >> }
         let query_str = r#"
             PREFIX : <http://example.org/>
@@ -1110,13 +1160,13 @@ mod tests {
                 ?report :references << :paper1 :author "Smith" >> .
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
             let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
-            
+
             let report = bindings[0].get("report").unwrap();
             if let Term::NamedNode(node) = report {
                 assert_eq!(node.as_str(), "http://example.org/report1");
@@ -1130,19 +1180,21 @@ mod tests {
 
     #[test]
     fn test_sparql_star_construct_query() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         let store = Store::new().unwrap();
-        
+
         // Add base data: :alice :knows :bob
-        store.insert(&Quad::new(
-            NamedNode::new_unchecked("http://example.org/alice"),
-            NamedNode::new_unchecked("http://example.org/knows"),
-            NamedNode::new_unchecked("http://example.org/bob"),
-            GraphName::DefaultGraph,
-        )).unwrap();
-        
+        store
+            .insert(&Quad::new(
+                NamedNode::new_unchecked("http://example.org/alice"),
+                NamedNode::new_unchecked("http://example.org/knows"),
+                NamedNode::new_unchecked("http://example.org/bob"),
+                GraphName::DefaultGraph,
+            ))
+            .unwrap();
+
         // CONSTRUCT query that creates RDF-star triples
         let query_str = r#"
             PREFIX : <http://example.org/>
@@ -1153,13 +1205,13 @@ mod tests {
                 ?s :knows ?o .
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Graph(mut triples) = store.query(query).unwrap() {
             let constructed: Vec<_> = triples.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(constructed.len(), 1);
-            
+
             // Verify the constructed triple has a quoted triple as subject
             let triple = &constructed[0];
             if let Subject::Triple(_) = triple.subject {
@@ -1174,38 +1226,47 @@ mod tests {
 
     #[test]
     fn test_sparql_star_filter_on_quoted_triple_property() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         let store = Store::new().unwrap();
-        
+
         // Add multiple statements with different certainties
         let statements = vec![
             (":alice", ":likes", ":pizza", 0.9),
-            (":alice", ":likes", ":pasta", 0.7),  
+            (":alice", ":likes", ":pasta", 0.7),
             (":alice", ":likes", ":salad", 0.4),
         ];
-        
+
         for (s, p, o, certainty) in statements {
             let inner = Triple::new(
-                NamedNode::new_unchecked(format!("http://example.org/{}", s.trim_start_matches(':'))),
-                NamedNode::new_unchecked(format!("http://example.org/{}", p.trim_start_matches(':'))),
-                NamedNode::new_unchecked(format!("http://example.org/{}", o.trim_start_matches(':'))),
+                NamedNode::new_unchecked(format!(
+                    "http://example.org/{}",
+                    s.trim_start_matches(':')
+                )),
+                NamedNode::new_unchecked(format!(
+                    "http://example.org/{}",
+                    p.trim_start_matches(':')
+                )),
+                NamedNode::new_unchecked(format!(
+                    "http://example.org/{}",
+                    o.trim_start_matches(':')
+                )),
             );
-            
+
             let quad = Quad::new(
                 Subject::Triple(Box::new(inner)),
                 NamedNode::new_unchecked("http://example.org/certainty"),
                 oxigraph::model::Literal::new_typed_literal(
                     certainty.to_string(),
-                    NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#double")
+                    NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#double"),
                 ),
                 GraphName::DefaultGraph,
             );
-            
+
             store.insert(&quad).unwrap();
         }
-        
+
         // Query with FILTER: only return statements with certainty > 0.6
         let query_str = r#"
             PREFIX : <http://example.org/>
@@ -1215,18 +1276,25 @@ mod tests {
                 FILTER(?certainty > 0.6)
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
             let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 2); // pizza and pasta, not salad
-            
-            let foods: Vec<String> = bindings.iter()
+
+            let foods: Vec<String> = bindings
+                .iter()
                 .filter_map(|b| b.get("food"))
-                .filter_map(|t| if let Term::NamedNode(n) = t { Some(n.as_str().to_string()) } else { None })
+                .filter_map(|t| {
+                    if let Term::NamedNode(n) = t {
+                        Some(n.as_str().to_string())
+                    } else {
+                        None
+                    }
+                })
                 .collect();
-            
+
             assert!(foods.contains(&"http://example.org/pizza".to_string()));
             assert!(foods.contains(&"http://example.org/pasta".to_string()));
             assert!(!foods.contains(&"http://example.org/salad".to_string()));
@@ -1245,16 +1313,16 @@ mod tests {
             NamedNode::new_unchecked("http://example.org/knows"),
             NamedNode::new_unchecked("http://example.org/bob"),
         );
-        
+
         let term = Term::Triple(Box::new(inner_triple));
         let sparql_value = term_to_sparql_value(&term);
-        
+
         // Verify type
         assert_eq!(sparql_value.value_type, "triple");
-        
+
         // Verify nested structure exists
         assert!(sparql_value.triple.is_some());
-        
+
         let nested = sparql_value.triple.unwrap();
         assert_eq!(nested.subject.value_type, "uri");
         assert_eq!(nested.subject.value, "http://example.org/alice");
@@ -1262,7 +1330,7 @@ mod tests {
         assert_eq!(nested.predicate.value, "http://example.org/knows");
         assert_eq!(nested.object.value_type, "uri");
         assert_eq!(nested.object.value, "http://example.org/bob");
-        
+
         // Serialize to JSON
         let json = serde_json::to_string(&sparql_value).unwrap();
         assert!(json.contains("\"type\":\"triple\""));
@@ -1278,28 +1346,28 @@ mod tests {
             NamedNode::new_unchecked("http://ex.org/b"),
             NamedNode::new_unchecked("http://ex.org/c"),
         );
-        
+
         let outer = Triple::new(
             Subject::Triple(Box::new(innermost)),
             NamedNode::new_unchecked("http://ex.org/d"),
             NamedNode::new_unchecked("http://ex.org/e"),
         );
-        
+
         let term = Term::Triple(Box::new(outer));
         let sparql_value = term_to_sparql_value(&term);
-        
+
         // Serialize to JSON
         let json = serde_json::to_value(&sparql_value).unwrap();
-        
+
         // Verify structure
         assert_eq!(json["type"], "triple");
         assert!(json["triple"].is_object());
-        
+
         // Verify nested triple subject is also a triple
         let subject = &json["triple"]["subject"];
         assert_eq!(subject["type"], "triple");
         assert!(subject["triple"].is_object());
-        
+
         // Verify innermost triple
         let innermost_subject = &subject["triple"]["subject"];
         assert_eq!(innermost_subject["type"], "uri");
@@ -1308,27 +1376,27 @@ mod tests {
 
     #[test]
     fn test_sparql_results_with_quoted_triple_binding() {
-        use oxigraph::store::Store;
         use oxigraph::sparql::Query;
-        
+        use oxigraph::store::Store;
+
         let store = Store::new().unwrap();
-        
+
         // Add: << :doc1 :author "Smith" >> :confidence "0.95"
         let inner = Triple::new(
             NamedNode::new_unchecked("http://ex.org/doc1"),
             NamedNode::new_unchecked("http://ex.org/author"),
             oxigraph::model::Literal::new_simple_literal("Smith"),
         );
-        
+
         let quad = Quad::new(
             Subject::Triple(Box::new(inner)),
             NamedNode::new_unchecked("http://ex.org/confidence"),
             oxigraph::model::Literal::new_simple_literal("0.95"),
             GraphName::DefaultGraph,
         );
-        
+
         store.insert(&quad).unwrap();
-        
+
         // Query: SELECT ?stmt ?conf WHERE { ?stmt :confidence ?conf }
         let query_str = r#"
             PREFIX : <http://ex.org/>
@@ -1336,16 +1404,16 @@ mod tests {
                 ?stmt :confidence ?conf .
             }
         "#;
-        
+
         let query = Query::parse(query_str, None).unwrap();
-        
+
         if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
             let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
-            
+
             // Get the statement binding (should be a quoted triple)
             let stmt = bindings[0].get("stmt").unwrap();
-            
+
             if let Term::Triple(t) = stmt {
                 // Verify it's the expected triple
                 if let Subject::NamedNode(s) = &t.subject {
@@ -1356,14 +1424,24 @@ mod tests {
             } else {
                 panic!("Expected quoted triple in binding");
             }
-            
+
             // Convert to SparqlValue and verify JSON structure
             let sparql_value = term_to_sparql_value(stmt);
             let json = serde_json::to_value(&sparql_value).unwrap();
-            
+
             assert_eq!(json["type"], "triple");
-            assert!(json["triple"]["subject"]["value"].as_str().unwrap().contains("doc1"));
-            assert!(json["triple"]["predicate"]["value"].as_str().unwrap().contains("author"));
+            assert!(
+                json["triple"]["subject"]["value"]
+                    .as_str()
+                    .unwrap()
+                    .contains("doc1")
+            );
+            assert!(
+                json["triple"]["predicate"]["value"]
+                    .as_str()
+                    .unwrap()
+                    .contains("author")
+            );
             assert_eq!(json["triple"]["object"]["value"], "Smith");
         } else {
             panic!("Expected SELECT query results");
@@ -1378,9 +1456,9 @@ mod tests {
             NamedNode::new_unchecked("http://example.org/predicate"),
             oxigraph::model::Literal::new_simple_literal("object"),
         );
-        
+
         let ntriples = triple_to_ntriples_string(&triple);
-        
+
         // Should be: <http://example.org/subject> <http://example.org/predicate> "object"
         assert!(ntriples.contains("<http://example.org/subject>"));
         assert!(ntriples.contains("<http://example.org/predicate>"));
@@ -1392,15 +1470,15 @@ mod tests {
         // Create a simple URI value
         let term = Term::NamedNode(NamedNode::new_unchecked("http://example.org/resource"));
         let sparql_value = term_to_sparql_value(&term);
-        
+
         // Serialize to JSON
         let json = serde_json::to_string(&sparql_value).unwrap();
-        
+
         // Verify optional fields are omitted when None
         assert!(!json.contains("\"lang\""));
         assert!(!json.contains("\"datatype\""));
         assert!(!json.contains("\"triple\""));
-        
+
         // Only type and value should be present
         assert!(json.contains("\"type\":\"uri\""));
         assert!(json.contains("\"value\":\"http://example.org/resource\""));

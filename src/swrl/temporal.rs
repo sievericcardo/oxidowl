@@ -346,7 +346,7 @@ impl TemporalValue {
     }
 
     /// Convert `TemporalValue` to `SWRLValue`
-    #[must_use] 
+    #[must_use]
     pub fn to_swrl_value(&self) -> SWRLValue {
         match self {
             TemporalValue::Date(date) => SWRLValue::String(date.to_string()),
@@ -387,7 +387,7 @@ impl TemporalValue {
     }
 
     /// Get year component
-    #[must_use] 
+    #[must_use]
     pub fn year(&self) -> Option<i32> {
         match self {
             TemporalValue::Date(date) => Some(date.year()),
@@ -400,7 +400,7 @@ impl TemporalValue {
     }
 
     /// Get month component
-    #[must_use] 
+    #[must_use]
     pub fn month(&self) -> Option<u32> {
         match self {
             TemporalValue::Date(date) => Some(date.month()),
@@ -414,7 +414,7 @@ impl TemporalValue {
     }
 
     /// Get day component
-    #[must_use] 
+    #[must_use]
     pub fn day(&self) -> Option<u32> {
         match self {
             TemporalValue::Date(date) => Some(date.day()),
@@ -427,7 +427,7 @@ impl TemporalValue {
     }
 
     /// Get hour component
-    #[must_use] 
+    #[must_use]
     pub fn hour(&self) -> Option<u32> {
         match self {
             TemporalValue::Time(time) => Some(time.hour()),
@@ -438,7 +438,7 @@ impl TemporalValue {
     }
 
     /// Get minute component
-    #[must_use] 
+    #[must_use]
     pub fn minute(&self) -> Option<u32> {
         match self {
             TemporalValue::Time(time) => Some(time.minute()),
@@ -449,7 +449,7 @@ impl TemporalValue {
     }
 
     /// Get second component
-    #[must_use] 
+    #[must_use]
     pub fn second(&self) -> Option<u32> {
         match self {
             TemporalValue::Time(time) => Some(time.second()),

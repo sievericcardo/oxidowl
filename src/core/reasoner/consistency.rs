@@ -11,10 +11,10 @@
 //! but the ontology remains **consistent** (there exists a model where A and B are both empty).
 //! Therefore, we do not check for equivalence-disjointness violations in pre-consistency checks.
 
+use crate::Result;
 use crate::core::tableau::disjointness::DisjointnessMap;
 use crate::core::tableau::equivalence::EquivalenceClosure;
 use crate::ontology::Ontology;
-use crate::Result;
 
 /// Performs pre-consistency checks before running tableau
 ///
@@ -74,13 +74,13 @@ impl PreConsistencyChecker {
     }
 
     /// Get reference to equivalence closure (for future use)
-    #[must_use] 
+    #[must_use]
     pub fn equivalence_closure(&self) -> &EquivalenceClosure {
         &self.equivalence_closure
     }
 
     /// Get reference to disjointness map (for future use)
-    #[must_use] 
+    #[must_use]
     pub fn disjointness_map(&self) -> &DisjointnessMap {
         &self.disjointness_map
     }

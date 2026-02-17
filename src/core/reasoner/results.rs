@@ -187,10 +187,11 @@ impl ClassificationResult {
                         // If intermediate is a superclass of subclass AND superclass is a superclass of intermediate,
                         // then subclass -> superclass is transitive (not direct)
                         if let Some(intermediate_superclasses) = self.hierarchy.get(intermediate)
-                            && intermediate_superclasses.contains(superclass) {
-                                is_direct = false;
-                                break;
-                            }
+                            && intermediate_superclasses.contains(superclass)
+                        {
+                            is_direct = false;
+                            break;
+                        }
                     }
                 }
 
@@ -346,7 +347,8 @@ impl ClassificationResult {
 #[derive(Debug, Clone)]
 struct ClassNode {
     name: String,
-    #[allow(dead_code)]#[allow(dead_code)]
+    #[allow(dead_code)]
+    #[allow(dead_code)]
     iri: String,
     children: Vec<ClassNode>,
 }

@@ -33,7 +33,7 @@ pub enum ChangeEvent {
 
 impl ChangeEvent {
     /// Get the timestamp when this change occurred
-    #[must_use] 
+    #[must_use]
     pub fn timestamp(&self) -> Instant {
         match self {
             ChangeEvent::TBox(change) => change.timestamp(),
@@ -42,7 +42,7 @@ impl ChangeEvent {
     }
 
     /// Get a human-readable description of the change
-    #[must_use] 
+    #[must_use]
     pub fn description(&self) -> String {
         match self {
             ChangeEvent::TBox(change) => format!("TBox: {}", change.description()),
@@ -94,7 +94,7 @@ pub struct IncrementalStatistics {
 
 impl IncrementalStatistics {
     /// Calculate the cache hit ratio
-    #[must_use] 
+    #[must_use]
     pub fn cache_hit_ratio(&self) -> f64 {
         if self.cache_hits + self.cache_invalidations == 0 {
             0.0
@@ -104,7 +104,7 @@ impl IncrementalStatistics {
     }
 
     /// Get average time saved per incremental update
-    #[must_use] 
+    #[must_use]
     pub fn average_time_saved_ms(&self) -> f64 {
         if self.incremental_updates == 0 {
             0.0

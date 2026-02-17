@@ -591,7 +591,7 @@ pub struct MaintenanceThresholds {
 
 impl AdvancedQueryOptimizer {
     /// Create a new advanced query optimizer
-    #[must_use] 
+    #[must_use]
     pub fn new(
         ontology: Arc<Ontology>,
         reasoning_service: Arc<ReasoningService>,
@@ -658,37 +658,39 @@ impl AdvancedQueryOptimizer {
     ) -> Result<PerformancePrediction, OptimizationError> {
         // Enhanced implementation with better heuristics
         // In production, this would use trained ML models
-        
+
         let num_atoms = query.body_atoms.len();
         let num_variables = self.count_unique_variables(query);
-        
+
         // Estimate execution time based on query complexity
         let base_time_ms = 50;
         let atom_factor = num_atoms * 10;
         let variable_factor = num_variables * 5;
-        
+
         // Count complex atoms (unions, intersections, restrictions)
-        let complex_atoms = query.body_atoms.iter()
+        let complex_atoms = query
+            .body_atoms
+            .iter()
             .filter(|atom| self.is_complex_atom(atom))
             .count();
         let complexity_factor = complex_atoms * 20;
-        
+
         let estimated_time_ms = base_time_ms + atom_factor + variable_factor + complexity_factor;
-        
+
         // Estimate memory usage
         let base_memory = 1024 * 1024; // 1 MB base
         let atom_memory = num_atoms * 1024; // 1 KB per atom
         let variable_memory = num_variables * 512; // 512 bytes per variable
         let result_memory = (num_atoms * num_variables) * 128; // estimated result size
-        
+
         let estimated_memory = base_memory + atom_memory + variable_memory + result_memory;
-        
+
         // Estimate result size
         let estimated_results = (num_atoms * 10).min(1000);
-        
+
         // Confidence decreases with complexity
         let confidence = (0.95 - (complex_atoms as f64 * 0.05)).max(0.5);
-        
+
         Ok(PerformancePrediction {
             estimated_execution_time: Duration::from_millis(estimated_time_ms as u64),
             estimated_memory_usage: estimated_memory,
@@ -696,7 +698,7 @@ impl AdvancedQueryOptimizer {
             confidence_level: confidence,
         })
     }
-    
+
     fn count_unique_variables(&self, query: &ConjunctiveQuery) -> usize {
         let mut variables = std::collections::HashSet::new();
         for atom in &query.body_atoms {
@@ -704,11 +706,15 @@ impl AdvancedQueryOptimizer {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(&variable.name);
                 }
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(&subject.name);
                     variables.insert(&object.name);
                 }
-                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(&subject.name);
                     variables.insert(&literal.name);
                 }
@@ -717,12 +723,12 @@ impl AdvancedQueryOptimizer {
         }
         variables.len()
     }
-    
+
     fn is_complex_atom(&self, atom: &QueryAtom) -> bool {
         match atom {
-            QueryAtom::ClassAtom { class_expression, .. } => {
-                !matches!(class_expression, ClassExpression::Class(_))
-            }
+            QueryAtom::ClassAtom {
+                class_expression, ..
+            } => !matches!(class_expression, ClassExpression::Class(_)),
             _ => false,
         }
     }
@@ -813,9 +819,10 @@ impl AdvancedQueryOptimizer {
         memory_used: usize,
     ) {
         if self.config.enable_performance_monitoring
-            && let Ok(mut monitor) = self.performance_monitor.lock() {
-                monitor.record_execution(query_hash, execution_time, memory_used);
-            }
+            && let Ok(mut monitor) = self.performance_monitor.lock()
+        {
+            monitor.record_execution(query_hash, execution_time, memory_used);
+        }
     }
 }
 
@@ -909,7 +916,7 @@ impl PerformanceMonitor {
         } else {
             0
         };
-        
+
         let record = QueryExecutionRecord {
             query_hash,
             execution_time,
@@ -933,38 +940,39 @@ impl PerformanceMonitor {
     ) -> Result<Vec<(String, String)>, OptimizationError> {
         // Enhanced classification with hierarchy analysis
         let mut results = Vec::new();
-        
+
         // Build subsumption hierarchy
         for (class_iri, _class) in ontology.classes() {
             let class_str = class_iri.to_string();
-            
+
             // Find direct superclasses from SubClassOf axioms
             let mut superclasses = Vec::new();
-            
+
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
                     // Check if our class is the subclass
                     if let ClassExpression::Class(c) = &sub_axiom.subclass
-                        && c.iri == class_iri {
-                            // Extract superclass
-                            if let ClassExpression::Class(super_c) = &sub_axiom.superclass {
-                                superclasses.push(super_c.iri.to_string());
-                            }
+                        && c.iri == class_iri
+                    {
+                        // Extract superclass
+                        if let ClassExpression::Class(super_c) = &sub_axiom.superclass {
+                            superclasses.push(super_c.iri.to_string());
                         }
+                    }
                 }
             }
-            
+
             // If no explicit superclasses, default to owl:Thing
             if superclasses.is_empty() {
                 superclasses.push("http://www.w3.org/2002/07/owl#Thing".to_string());
             }
-            
+
             // Add all subsumption relationships
             for superclass in superclasses {
                 results.push((class_str.clone(), superclass));
             }
         }
-        
+
         Ok(results)
     }
 }

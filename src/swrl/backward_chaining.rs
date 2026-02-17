@@ -119,7 +119,7 @@ pub struct ProofTree {
 
 impl BackwardChainingEngine {
     /// Create a new backward chaining engine
-    #[must_use] 
+    #[must_use]
     pub fn new(rules: Vec<SWRLRule>, max_depth: usize) -> Self {
         Self {
             rules,
@@ -221,25 +221,20 @@ impl BackwardChainingEngine {
         // Then, try to resolve using rules
         for rule in &self.rules.clone() {
             if let Some(head_atom) = rule.head.first()
-                && let Some(unifier) = self.unify_atoms(&instantiated_goal, head_atom, bindings) {
-                    // Try to prove the rule body
-                    if self.prove_rule_body(
-                        &rule.body,
-                        &unifier,
-                        solutions,
-                        proof_trees,
-                        depth + 1,
-                    )? {
-                        // Create proof tree
-                        let proof = ProofTree {
-                            goal: goal.clone(),
-                            rule: Some(rule.clone()),
-                            sub_proofs: Vec::new(), // Would need to collect from body proof
-                            from_facts: false,
-                        };
-                        proof_trees.push(proof);
-                    }
+                && let Some(unifier) = self.unify_atoms(&instantiated_goal, head_atom, bindings)
+            {
+                // Try to prove the rule body
+                if self.prove_rule_body(&rule.body, &unifier, solutions, proof_trees, depth + 1)? {
+                    // Create proof tree
+                    let proof = ProofTree {
+                        goal: goal.clone(),
+                        rule: Some(rule.clone()),
+                        sub_proofs: Vec::new(), // Would need to collect from body proof
+                        from_facts: false,
+                    };
+                    proof_trees.push(proof);
                 }
+            }
         }
 
         self.query_stack.pop();
@@ -260,16 +255,17 @@ impl BackwardChainingEngine {
                 argument,
             } => {
                 if let SWRLTerm::Individual(individual) = self.swrl_argument_to_term(argument)
-                    && self.fact_base.has_class_assertion(predicate, &individual) {
-                        solutions.push(bindings.clone());
-                        proof_trees.push(ProofTree {
-                            goal: goal.clone(),
-                            rule: None,
-                            sub_proofs: Vec::new(),
-                            from_facts: true,
-                        });
-                        return true;
-                    }
+                    && self.fact_base.has_class_assertion(predicate, &individual)
+                {
+                    solutions.push(bindings.clone());
+                    proof_trees.push(ProofTree {
+                        goal: goal.clone(),
+                        rule: None,
+                        sub_proofs: Vec::new(),
+                        from_facts: true,
+                    });
+                    return true;
+                }
             }
             SWRLAtom::ObjectPropertyAtom {
                 predicate,
@@ -279,20 +275,19 @@ impl BackwardChainingEngine {
                 if let (SWRLTerm::Individual(subj), SWRLTerm::Individual(obj)) = (
                     self.swrl_argument_to_term(first_argument),
                     self.swrl_argument_to_term(second_argument),
-                )
-                    && self
-                        .fact_base
-                        .has_object_property_assertion(predicate, &subj, &obj)
-                    {
-                        solutions.push(bindings.clone());
-                        proof_trees.push(ProofTree {
-                            goal: goal.clone(),
-                            rule: None,
-                            sub_proofs: Vec::new(),
-                            from_facts: true,
-                        });
-                        return true;
-                    }
+                ) && self
+                    .fact_base
+                    .has_object_property_assertion(predicate, &subj, &obj)
+                {
+                    solutions.push(bindings.clone());
+                    proof_trees.push(ProofTree {
+                        goal: goal.clone(),
+                        rule: None,
+                        sub_proofs: Vec::new(),
+                        from_facts: true,
+                    });
+                    return true;
+                }
             }
             SWRLAtom::DataPropertyAtom {
                 predicate,
@@ -306,48 +301,6 @@ impl BackwardChainingEngine {
                         && self
                             .fact_base
                             .has_data_property_assertion(predicate, &subj, &value)
-                        {
-                            solutions.push(bindings.clone());
-                            proof_trees.push(ProofTree {
-                                goal: goal.clone(),
-                                rule: None,
-                                sub_proofs: Vec::new(),
-                                from_facts: true,
-                            });
-                            return true;
-                        }
-                }
-            }
-            SWRLAtom::SameIndividualAtom {
-                first_argument,
-                second_argument,
-            } => {
-                if let (SWRLTerm::Individual(ind1), SWRLTerm::Individual(ind2)) = (
-                    self.swrl_argument_to_term(first_argument),
-                    self.swrl_argument_to_term(second_argument),
-                )
-                    && self.fact_base.has_same_individual_assertion(&ind1, &ind2) {
-                        solutions.push(bindings.clone());
-                        proof_trees.push(ProofTree {
-                            goal: goal.clone(),
-                            rule: None,
-                            sub_proofs: Vec::new(),
-                            from_facts: true,
-                        });
-                        return true;
-                    }
-            }
-            SWRLAtom::DifferentIndividualsAtom {
-                first_argument,
-                second_argument,
-            } => {
-                if let (SWRLTerm::Individual(ind1), SWRLTerm::Individual(ind2)) = (
-                    self.swrl_argument_to_term(first_argument),
-                    self.swrl_argument_to_term(second_argument),
-                )
-                    && self
-                        .fact_base
-                        .has_different_individual_assertion(&ind1, &ind2)
                     {
                         solutions.push(bindings.clone());
                         proof_trees.push(ProofTree {
@@ -358,6 +311,47 @@ impl BackwardChainingEngine {
                         });
                         return true;
                     }
+                }
+            }
+            SWRLAtom::SameIndividualAtom {
+                first_argument,
+                second_argument,
+            } => {
+                if let (SWRLTerm::Individual(ind1), SWRLTerm::Individual(ind2)) = (
+                    self.swrl_argument_to_term(first_argument),
+                    self.swrl_argument_to_term(second_argument),
+                ) && self.fact_base.has_same_individual_assertion(&ind1, &ind2)
+                {
+                    solutions.push(bindings.clone());
+                    proof_trees.push(ProofTree {
+                        goal: goal.clone(),
+                        rule: None,
+                        sub_proofs: Vec::new(),
+                        from_facts: true,
+                    });
+                    return true;
+                }
+            }
+            SWRLAtom::DifferentIndividualsAtom {
+                first_argument,
+                second_argument,
+            } => {
+                if let (SWRLTerm::Individual(ind1), SWRLTerm::Individual(ind2)) = (
+                    self.swrl_argument_to_term(first_argument),
+                    self.swrl_argument_to_term(second_argument),
+                ) && self
+                    .fact_base
+                    .has_different_individual_assertion(&ind1, &ind2)
+                {
+                    solutions.push(bindings.clone());
+                    proof_trees.push(ProofTree {
+                        goal: goal.clone(),
+                        rule: None,
+                        sub_proofs: Vec::new(),
+                        from_facts: true,
+                    });
+                    return true;
+                }
             }
             SWRLAtom::BuiltInAtom {
                 predicate: _,
@@ -597,7 +591,9 @@ impl BackwardChainingEngine {
 
                 if let Some(existing_val) = bindings.bindings.get(var) {
                     if let SWRLTerm::Individual(existing_ind) = existing_val {
-                        if existing_ind.iri().map(super::super::ontology::IRI::as_str) == Some(&ind_name) {
+                        if existing_ind.iri().map(super::super::ontology::IRI::as_str)
+                            == Some(&ind_name)
+                        {
                             Some(new_bindings)
                         } else {
                             None
@@ -883,7 +879,7 @@ impl BackwardChainingEngine {
     }
 
     /// Get statistics about the engine
-    #[must_use] 
+    #[must_use]
     pub fn get_statistics(&self) -> BackwardChainingStatistics {
         BackwardChainingStatistics {
             rules_count: self.rules.len(),
@@ -900,7 +896,7 @@ impl BackwardChainingEngine {
 
 impl VariableBindings {
     /// Create new empty bindings
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bindings: HashMap::new(),
@@ -919,7 +915,7 @@ impl VariableBindings {
     }
 
     /// Lookup binding for a variable
-    #[must_use] 
+    #[must_use]
     pub fn lookup(&self, var: &SWRLVariable) -> Option<&SWRLTerm> {
         self.bindings.get(var)
     }
@@ -953,7 +949,7 @@ impl VariableBindings {
 
 impl QueryStack {
     /// Create new query stack
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
@@ -983,7 +979,7 @@ impl QueryStack {
     }
 
     /// Check if goal is on the stack
-    #[must_use] 
+    #[must_use]
     pub fn contains_goal(&self, goal: &SWRLAtom) -> bool {
         self.visited.contains(goal)
     }
@@ -998,7 +994,7 @@ impl QueryStack {
 
 impl FactBase {
     /// Create new empty fact base
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             class_assertions: HashSet::new(),
@@ -1015,7 +1011,7 @@ impl FactBase {
     }
 
     /// Check if class assertion exists
-    #[must_use] 
+    #[must_use]
     pub fn has_class_assertion(&self, class: &ClassExpression, individual: &Individual) -> bool {
         self.class_assertions
             .contains(&(class.clone(), individual.clone()))
@@ -1033,7 +1029,7 @@ impl FactBase {
     }
 
     /// Check if object property assertion exists
-    #[must_use] 
+    #[must_use]
     pub fn has_object_property_assertion(
         &self,
         property: &ObjectPropertyExpression,
@@ -1059,7 +1055,7 @@ impl FactBase {
     }
 
     /// Check if data property assertion exists
-    #[must_use] 
+    #[must_use]
     pub fn has_data_property_assertion(
         &self,
         property: &DataPropertyExpression,
@@ -1078,7 +1074,7 @@ impl FactBase {
     }
 
     /// Check if same individual assertion exists
-    #[must_use] 
+    #[must_use]
     pub fn has_same_individual_assertion(&self, ind1: &Individual, ind2: &Individual) -> bool {
         self.same_individual_assertions
             .contains(&(ind1.clone(), ind2.clone()))
@@ -1092,7 +1088,7 @@ impl FactBase {
     }
 
     /// Check if different individual assertion exists
-    #[must_use] 
+    #[must_use]
     pub fn has_different_individual_assertion(&self, ind1: &Individual, ind2: &Individual) -> bool {
         self.different_individual_assertions
             .contains(&(ind1.clone(), ind2.clone()))
@@ -1112,7 +1108,7 @@ impl FactBase {
     }
 
     /// Get total number of facts
-    #[must_use] 
+    #[must_use]
     pub fn total_facts(&self) -> usize {
         self.class_assertions.len()
             + self.object_property_assertions.len()

@@ -735,8 +735,10 @@ impl QualityAssessor {
         }
 
         // Count how many unique values exist for each variable
-        let mut variable_values: std::collections::HashMap<String, std::collections::HashSet<String>> = 
-            std::collections::HashMap::new();
+        let mut variable_values: std::collections::HashMap<
+            String,
+            std::collections::HashSet<String>,
+        > = std::collections::HashMap::new();
 
         for binding in bindings {
             for (var, val) in &binding.variable_bindings {

@@ -1,19 +1,17 @@
 //! Core saturation engine implementation
 
-use crate::{
-    Error, Result,
-    ontology::{ClassExpression, Ontology},
-};
 use super::{
     config::SaturationConfig,
     node::{SaturationNode, SaturationStatus},
     rules::SaturationRuleSet,
 };
 use crate::core::{
-    persistent_collections::ConceptSet,
-    completion_cache::CompletionGraphCache,
-    incremental::IncrementalClassifier,
-    inverted_index::ConceptIndex,
+    completion_cache::CompletionGraphCache, incremental::IncrementalClassifier,
+    inverted_index::ConceptIndex, persistent_collections::ConceptSet,
+};
+use crate::{
+    Error, Result,
+    ontology::{ClassExpression, Ontology},
 };
 use log::{debug, info, warn};
 use std::{
@@ -65,7 +63,7 @@ pub struct SaturationStatistics {
 
 impl SaturationResult {
     /// Create a new saturation result
-    #[must_use] 
+    #[must_use]
     pub fn new(nodes: HashMap<ClassExpression, SaturationNode>) -> Self {
         let mut statistics = SaturationStatistics::default();
         let mut subsumptions = HashMap::new();
@@ -97,13 +95,13 @@ impl SaturationResult {
     }
 
     /// Get the saturation node for a concept
-    #[must_use] 
+    #[must_use]
     pub fn get_node(&self, concept: &ClassExpression) -> Option<&SaturationNode> {
         self.nodes.get(concept)
     }
 
     /// Get direct subsumers for a concept
-    #[must_use] 
+    #[must_use]
     pub fn get_direct_subsumers(&self, concept: &ClassExpression) -> ConceptSet {
         self.nodes
             .get(concept)
@@ -112,7 +110,7 @@ impl SaturationResult {
     }
 
     /// Check if one concept subsumes another based on saturation
-    #[must_use] 
+    #[must_use]
     pub fn subsumes(&self, subsumer: &ClassExpression, subsumed: &ClassExpression) -> bool {
         if let Some(node) = self.nodes.get(subsumed) {
             node.all_subsumers.contains(subsumer) || node.saturated_concepts.contains(subsumer)
@@ -133,20 +131,20 @@ pub struct SaturationEngine {
 
     /// Cache of saturation results
     cache: Arc<RwLock<HashMap<ClassExpression, SaturationNode>>>,
-    
+
     /// Completion graph cache for incremental reasoning
     completion_cache: Arc<CompletionGraphCache>,
-    
+
     /// Incremental classifier for ontology updates
     incremental: Arc<IncrementalClassifier>,
-    
+
     /// Concept index for fast IRI lookups
     concept_index: Arc<RwLock<ConceptIndex>>,
 }
 
 impl SaturationEngine {
     /// Create a new saturation engine
-    #[must_use] 
+    #[must_use]
     pub fn new(config: SaturationConfig) -> Self {
         Self {
             config,
@@ -157,21 +155,21 @@ impl SaturationEngine {
             concept_index: Arc::new(RwLock::new(ConceptIndex::new())),
         }
     }
-    
+
     /// Get completion graph cache
-    #[must_use] 
+    #[must_use]
     pub fn completion_cache(&self) -> &CompletionGraphCache {
         &self.completion_cache
     }
-    
+
     /// Get incremental classifier
-    #[must_use] 
+    #[must_use]
     pub fn incremental_classifier(&self) -> &IncrementalClassifier {
         &self.incremental
     }
-    
+
     /// Get concept index
-    #[must_use] 
+    #[must_use]
     pub fn concept_index(&self) -> Arc<RwLock<ConceptIndex>> {
         Arc::clone(&self.concept_index)
     }
@@ -226,10 +224,11 @@ impl SaturationEngine {
         // Check cache first
         if self.config.enable_caching
             && let Ok(cache) = self.cache.read()
-                && let Some(cached_node) = cache.get(concept) {
-                    debug!("Found cached saturation for {concept:?}");
-                    return Ok(cached_node.clone());
-                }
+            && let Some(cached_node) = cache.get(concept)
+        {
+            debug!("Found cached saturation for {concept:?}");
+            return Ok(cached_node.clone());
+        }
 
         let mut node = SaturationNode::new(concept.clone());
         let mut iteration = 0;
@@ -280,9 +279,10 @@ impl SaturationEngine {
 
         // Cache the result
         if self.config.enable_caching
-            && let Ok(mut cache) = self.cache.write() {
-                cache.insert(concept.clone(), node.clone());
-            }
+            && let Ok(mut cache) = self.cache.write()
+        {
+            cache.insert(concept.clone(), node.clone());
+        }
 
         Ok(node)
     }
@@ -340,9 +340,10 @@ impl SaturationEngine {
 
         // Check for errors
         if let Ok(errors_lock) = errors.lock()
-            && !errors_lock.is_empty() {
-                return Err(errors_lock[0].clone());
-            }
+            && !errors_lock.is_empty()
+        {
+            return Err(errors_lock[0].clone());
+        }
 
         // Extract results
         let nodes = Arc::try_unwrap(nodes)
@@ -361,8 +362,7 @@ impl SaturationEngine {
         debug!("Computing transitive closure of subsumers");
 
         // Build adjacency list
-        let mut subsumption_graph: HashMap<ClassExpression, ConceptSet> =
-            HashMap::new();
+        let mut subsumption_graph: HashMap<ClassExpression, ConceptSet> = HashMap::new();
 
         for (concept, node) in &nodes {
             subsumption_graph.insert(concept.clone(), node.direct_subsumers.clone());
@@ -412,16 +412,17 @@ impl SaturationEngine {
         // Check for complementary concepts
         for concept in &node.saturated_concepts {
             if let ClassExpression::ObjectComplementOf(complement) = concept
-                && node.saturated_concepts.contains(complement.as_ref()) {
-                    return true;
-                }
+                && node.saturated_concepts.contains(complement.as_ref())
+            {
+                return true;
+            }
         }
 
         false
     }
 
     /// Get direct subsumers for a concept
-    #[must_use] 
+    #[must_use]
     pub fn get_direct_subsumers(
         &self,
         concept: &ClassExpression,
@@ -476,10 +477,11 @@ impl SaturationEngine {
             for (other_concept, node) in nodes {
                 if (node.saturated_concepts.contains(&concept)
                     || node.direct_subsumers.contains(&concept))
-                    && !affected.contains(other_concept) {
-                        affected = affected.update(other_concept.clone());
-                        to_process.push(other_concept.clone());
-                    }
+                    && !affected.contains(other_concept)
+                {
+                    affected = affected.update(other_concept.clone());
+                    to_process.push(other_concept.clone());
+                }
             }
         }
 
@@ -495,7 +497,7 @@ impl SaturationEngine {
     }
 
     /// Get cache size
-    #[must_use] 
+    #[must_use]
     pub fn cache_size(&self) -> usize {
         self.cache.read().map(|c| c.len()).unwrap_or(0)
     }

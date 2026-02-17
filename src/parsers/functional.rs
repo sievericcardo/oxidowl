@@ -132,7 +132,7 @@ impl FunctionalParser {
     /// Create a new functional syntax parser with custom configuration
     #[must_use]
     pub fn with_config(config: ParserConfig) -> Self {
-        Self { 
+        Self {
             config,
             token_positions: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
         }
@@ -208,7 +208,7 @@ impl FunctionalParser {
             // Empty content is valid - return empty ontology
             return Ok(ontology);
         }
-        
+
         // Check for various placeholder formats and minimal ontologies
         if trimmed == "(placeholder)" || trimmed == "Ontology()" || trimmed == "Ontology( )" {
             // These are valid minimal ontologies
@@ -248,9 +248,13 @@ impl FunctionalParser {
         let mut ctx = ParseContext::new();
         let mut token_start_line = 1u32;
         let mut token_start_column = 1u32;
-        
+
         // Helper closure to push token with position tracking
-        let push_token = |tok: String, line: u32, col: u32, tokens: &mut Vec<String>, positions: &mut Vec<TokenWithPosition>| {
+        let push_token = |tok: String,
+                          line: u32,
+                          col: u32,
+                          tokens: &mut Vec<String>,
+                          positions: &mut Vec<TokenWithPosition>| {
             if !tok.trim().is_empty() {
                 let trimmed = tok.trim().to_string();
                 positions.push(TokenWithPosition {
@@ -269,10 +273,16 @@ impl FunctionalParser {
                     if in_string {
                         // End of string
                         current_token.push(ch);
-                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                        push_token(
+                            current_token.clone(),
+                            token_start_line,
+                            token_start_column,
+                            &mut tokens,
+                            &mut token_positions_vec,
+                        );
                         current_token.clear();
                         in_string = false;
-                        
+
                         // Check for ^^ after the string
                         if chars.peek() == Some(&'^') {
                             token_start_line = ctx.line;
@@ -282,7 +292,13 @@ impl FunctionalParser {
                             if chars.peek() == Some(&'^') {
                                 chars.next(); // consume second ^
                                 ctx.update('^');
-                                push_token("^^".to_string(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                                push_token(
+                                    "^^".to_string(),
+                                    token_start_line,
+                                    token_start_column,
+                                    &mut tokens,
+                                    &mut token_positions_vec,
+                                );
                             } else {
                                 current_token.push('^');
                             }
@@ -290,7 +306,13 @@ impl FunctionalParser {
                     } else {
                         // Start of string
                         if !current_token.is_empty() {
-                            push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                            push_token(
+                                current_token.clone(),
+                                token_start_line,
+                                token_start_column,
+                                &mut tokens,
+                                &mut token_positions_vec,
+                            );
                             current_token.clear();
                         }
                         token_start_line = ctx.line;
@@ -301,7 +323,13 @@ impl FunctionalParser {
                 }
                 '<' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
-                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                        push_token(
+                            current_token.clone(),
+                            token_start_line,
+                            token_start_column,
+                            &mut tokens,
+                            &mut token_positions_vec,
+                        );
                         current_token.clear();
                     }
                     token_start_line = ctx.line;
@@ -311,18 +339,36 @@ impl FunctionalParser {
                 }
                 '>' if in_iri && !in_string => {
                     current_token.push(ch);
-                    push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                    push_token(
+                        current_token.clone(),
+                        token_start_line,
+                        token_start_column,
+                        &mut tokens,
+                        &mut token_positions_vec,
+                    );
                     current_token.clear();
                     in_iri = false;
                 }
                 '(' | ')' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
-                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                        push_token(
+                            current_token.clone(),
+                            token_start_line,
+                            token_start_column,
+                            &mut tokens,
+                            &mut token_positions_vec,
+                        );
                         current_token.clear();
                     }
                     token_start_line = ctx.line;
                     token_start_column = ctx.column;
-                    push_token(ch.to_string(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                    push_token(
+                        ch.to_string(),
+                        token_start_line,
+                        token_start_column,
+                        &mut tokens,
+                        &mut token_positions_vec,
+                    );
                     if ch == '(' {
                         _paren_depth += 1;
                     } else {
@@ -331,7 +377,13 @@ impl FunctionalParser {
                 }
                 ' ' | '\t' | '\n' | '\r' if !in_iri && !in_string => {
                     if !current_token.is_empty() {
-                        push_token(current_token.clone(), token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+                        push_token(
+                            current_token.clone(),
+                            token_start_line,
+                            token_start_column,
+                            &mut tokens,
+                            &mut token_positions_vec,
+                        );
                         current_token.clear();
                     }
                     // Reset token start position for next token
@@ -350,9 +402,15 @@ impl FunctionalParser {
         }
 
         if !current_token.is_empty() {
-            push_token(current_token, token_start_line, token_start_column, &mut tokens, &mut token_positions_vec);
+            push_token(
+                current_token,
+                token_start_line,
+                token_start_column,
+                &mut tokens,
+                &mut token_positions_vec,
+            );
         }
-        
+
         // Store positions for error reporting
         if let Ok(mut positions) = self.token_positions.try_borrow_mut() {
             *positions = token_positions_vec;
@@ -719,9 +777,7 @@ impl FunctionalParser {
 
                 let property = crate::ontology::ObjectProperty {
                     iri: url::Url::parse(&property_iri)
-                        .map_err(|e| {
-                            Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                        })?
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
 
@@ -741,9 +797,7 @@ impl FunctionalParser {
 
             let property = crate::ontology::ObjectProperty {
                 iri: url::Url::parse(&property_iri)
-                    .map_err(|e| {
-                        Error::ontology_parsing(format!("Invalid property IRI: {e}"))
-                    })?
+                    .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                     .into(),
             };
 
@@ -788,7 +842,10 @@ impl FunctionalParser {
                         position += 1; // Skip ")"
                     }
 
-                    Ok((crate::ontology::DataRange::DataIntersectionOf(ranges), position))
+                    Ok((
+                        crate::ontology::DataRange::DataIntersectionOf(ranges),
+                        position,
+                    ))
                 } else {
                     Err(Error::ontology_parsing(
                         "Expected '(' after DataIntersectionOf".to_string(),
@@ -830,7 +887,10 @@ impl FunctionalParser {
                         position += 1; // Skip ")"
                     }
 
-                    Ok((crate::ontology::DataRange::DataComplementOf(Box::new(range)), position))
+                    Ok((
+                        crate::ontology::DataRange::DataComplementOf(Box::new(range)),
+                        position,
+                    ))
                 } else {
                     Err(Error::ontology_parsing(
                         "Expected '(' after DataComplementOf".to_string(),
@@ -912,7 +972,8 @@ impl FunctionalParser {
                         // Parse literal value
                         if position >= tokens.len() {
                             return Err(Error::ontology_parsing(
-                                "Expected literal value after facet in DatatypeRestriction".to_string(),
+                                "Expected literal value after facet in DatatypeRestriction"
+                                    .to_string(),
                             ));
                         }
                         let literal_token = &tokens[position];
@@ -1304,7 +1365,8 @@ impl FunctionalParser {
                         ));
                     }
 
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Parse filler class expression
@@ -1347,7 +1409,8 @@ impl FunctionalParser {
                         ));
                     }
 
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Parse filler class expression
@@ -1400,7 +1463,8 @@ impl FunctionalParser {
                             "Expected object property in ObjectMinCardinality".to_string(),
                         ));
                     }
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Parse optional filler class expression
@@ -1460,7 +1524,8 @@ impl FunctionalParser {
                             "Expected object property in ObjectMaxCardinality".to_string(),
                         ));
                     }
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Parse optional filler class expression
@@ -1520,7 +1585,8 @@ impl FunctionalParser {
                             "Expected object property in ObjectExactCardinality".to_string(),
                         ));
                     }
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Parse optional filler class expression
@@ -1569,7 +1635,8 @@ impl FunctionalParser {
                             "Expected object property after ObjectHasValue(".to_string(),
                         ));
                     }
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Parse individual
@@ -1619,7 +1686,8 @@ impl FunctionalParser {
                             "Expected object property after ObjectHasSelf(".to_string(),
                         ));
                     }
-                    let (property, new_pos) = self.parse_object_property_expression(tokens, position, prefixes)?;
+                    let (property, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
                     position = new_pos;
 
                     // Skip closing ")"
@@ -1851,9 +1919,7 @@ impl FunctionalParser {
                 let class = crate::ontology::Class {
                     iri: url::Url::parse(&class_iri)
                         .map_err(|e| {
-                            Error::ontology_parsing(format!(
-                                "Invalid class IRI '{class_iri}': {e}"
-                            ))
+                            Error::ontology_parsing(format!("Invalid class IRI '{class_iri}': {e}"))
                         })?
                         .into(),
                 };
@@ -2546,7 +2612,9 @@ fn serialize_class_expression(ce: &crate::ontology::ClassExpression) -> String {
 fn serialize_individual(ind: &crate::ontology::Individual) -> String {
     format!(
         "<{}>",
-        ind.iri().map(super::super::ontology::IRI::as_str).unwrap_or("_:anonymous")
+        ind.iri()
+            .map(super::super::ontology::IRI::as_str)
+            .unwrap_or("_:anonymous")
     )
 }
 

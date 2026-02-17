@@ -497,7 +497,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
 
 impl super::generator::DLClauseGenerator {
     /// Convert IRI to string with prefix handling
-    #[must_use] 
+    #[must_use]
     pub fn iri_to_string(&self, iri: &crate::ontology::IRI) -> String {
         let iri_str = iri.as_str();
 
@@ -525,7 +525,7 @@ impl super::generator::DLClauseGenerator {
     }
 
     /// Convert URL to string with prefix handling
-    #[must_use] 
+    #[must_use]
     pub fn url_to_string(&self, url: &url::Url) -> String {
         let url_str = url.as_str();
 
@@ -553,7 +553,7 @@ impl super::generator::DLClauseGenerator {
     }
 
     /// Convert class expression to a simple string representation
-    #[must_use] 
+    #[must_use]
     pub fn class_expression_to_simple_string(&self, expr: &ClassExpression) -> String {
         match expr {
             ClassExpression::Class(class) => self.iri_to_string(&class.iri),

@@ -11,11 +11,11 @@ use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpressio
 
 pub mod dl;
 pub mod el;
+pub mod el_reasoner;
 pub mod ql;
 pub mod rl;
-pub mod validator;
-pub mod el_reasoner;
 pub mod rl_reasoner;
+pub mod validator;
 
 // Re-export reasoners for easier access
 pub use el_reasoner::ELReasoner;
@@ -43,7 +43,7 @@ pub enum OWL2Profile {
 
 impl OWL2Profile {
     /// Get the profile name as a string
-    #[must_use] 
+    #[must_use]
     pub fn name(&self) -> &'static str {
         match self {
             OWL2Profile::EL => "OWL 2 EL",
@@ -55,7 +55,7 @@ impl OWL2Profile {
     }
 
     /// Get the profile description
-    #[must_use] 
+    #[must_use]
     pub fn description(&self) -> &'static str {
         match self {
             OWL2Profile::EL => "Existential Language - optimized for classification",
@@ -144,7 +144,7 @@ impl ProfileViolation {
     }
 
     /// Set the axiom ID that caused the violation
-    #[must_use] 
+    #[must_use]
     pub fn with_axiom_id(mut self, axiom_id: crate::ontology::AxiomId) -> Self {
         self.axiom_id = Some(axiom_id);
         self
@@ -185,7 +185,7 @@ pub struct ProfileValidationReport {
 
 impl ProfileValidationReport {
     /// Create a new profile validation report
-    #[must_use] 
+    #[must_use]
     pub fn new(profile: OWL2Profile) -> Self {
         Self {
             profile,
@@ -202,13 +202,13 @@ impl ProfileValidationReport {
     }
 
     /// Check if the ontology conforms to the profile
-    #[must_use] 
+    #[must_use]
     pub fn is_valid(&self) -> bool {
         self.conforms
     }
 
     /// Get the number of violations
-    #[must_use] 
+    #[must_use]
     pub fn violation_count(&self) -> usize {
         self.violations.len()
     }
@@ -242,7 +242,7 @@ pub struct ProfileDetectionResult {
 
 impl ProfileDetectionResult {
     /// Create a new profile detection result
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             conforming_profiles: Vec::new(),
@@ -264,7 +264,7 @@ impl ProfileDetectionResult {
     }
 
     /// Get the recommended profile for the ontology
-    #[must_use] 
+    #[must_use]
     pub fn recommended_profile(&self) -> OWL2Profile {
         self.most_restrictive.unwrap_or(self.least_restrictive)
     }

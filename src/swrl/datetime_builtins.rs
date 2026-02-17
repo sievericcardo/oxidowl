@@ -19,23 +19,26 @@ fn parse_day_time_duration(duration_str: &str) -> Result<chrono::Duration> {
 
     // Parse hours
     if let Some(h_pos) = remaining.find('H')
-        && let Ok(h) = remaining[..h_pos].parse::<i64>() {
-            hours = h;
-            remaining = &remaining[h_pos + 1..];
-        }
+        && let Ok(h) = remaining[..h_pos].parse::<i64>()
+    {
+        hours = h;
+        remaining = &remaining[h_pos + 1..];
+    }
 
     // Parse minutes
     if let Some(m_pos) = remaining.find('M')
-        && let Ok(m) = remaining[..m_pos].parse::<i64>() {
-            minutes = m;
-            remaining = &remaining[m_pos + 1..];
-        }
+        && let Ok(m) = remaining[..m_pos].parse::<i64>()
+    {
+        minutes = m;
+        remaining = &remaining[m_pos + 1..];
+    }
 
     // Parse seconds
     if let Some(s_pos) = remaining.find('S')
-        && let Ok(s) = remaining[..s_pos].parse::<i64>() {
-            seconds = s;
-        }
+        && let Ok(s) = remaining[..s_pos].parse::<i64>()
+    {
+        seconds = s;
+    }
 
     Ok(chrono::Duration::hours(hours)
         + chrono::Duration::minutes(minutes)
@@ -65,7 +68,7 @@ pub struct DateTimeBuiltInRegistry {
 
 impl DateTimeBuiltInRegistry {
     /// Create a new registry with core date/time built-ins
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
             builtins: HashMap::new(),
@@ -188,13 +191,13 @@ impl DateTimeBuiltInRegistry {
     }
 
     /// Get a built-in by IRI
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin(&self, iri: &str) -> Option<&dyn SWRLBuiltIn> {
         self.builtins.get(iri).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
     }
@@ -252,7 +255,7 @@ impl DateTimeBuiltInRegistry {
     }
 
     /// Format `chrono::Duration` as dayTimeDuration string
-    #[must_use] 
+    #[must_use]
     pub fn format_day_time_duration(&self, duration: chrono::Duration) -> String {
         let total_seconds = duration.num_seconds();
         let days = total_seconds / 86400;

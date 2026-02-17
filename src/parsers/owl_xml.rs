@@ -1180,7 +1180,7 @@ pub struct OwlXmlSerializer;
 
 impl OwlXmlSerializer {
     /// Create a new OWL XML serializer
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -1430,7 +1430,9 @@ fn serialize_class_expression_xml(ce: &crate::ontology::ClassExpression) -> Stri
 fn serialize_individual_xml(ind: &crate::ontology::Individual) -> String {
     format!(
         "<NamedIndividual IRI=\"{}\"/>",
-        ind.iri().map(super::super::ontology::IRI::as_str).unwrap_or("_:anonymous")
+        ind.iri()
+            .map(super::super::ontology::IRI::as_str)
+            .unwrap_or("_:anonymous")
     )
 }
 

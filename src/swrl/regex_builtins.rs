@@ -20,7 +20,7 @@ pub struct RegexBuiltInRegistry {
 
 impl RegexBuiltInRegistry {
     /// Create a new registry with all regex built-ins
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
             builtins: HashMap::new(),
@@ -78,19 +78,19 @@ impl RegexBuiltInRegistry {
     }
 
     /// Get a built-in predicate by IRI
-    #[must_use] 
+    #[must_use]
     pub fn get(&self, iri: &str) -> Option<&dyn SWRLBuiltIn> {
         self.builtins.get(iri).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
-    #[must_use] 
+    #[must_use]
     pub fn get_all_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
     }
 
     /// Get count of registered built-ins
-    #[must_use] 
+    #[must_use]
     pub fn count(&self) -> usize {
         self.builtins.len()
     }
@@ -127,9 +127,10 @@ fn get_or_compile_regex(
 
     // Try to get from cache first
     if let Ok(cache_guard) = cache.lock()
-        && let Some(regex) = cache_guard.get(&cache_key) {
-            return Ok(regex.clone());
-        }
+        && let Some(regex) = cache_guard.get(&cache_key)
+    {
+        return Ok(regex.clone());
+    }
 
     // Compile new regex
     let regex = if case_insensitive {

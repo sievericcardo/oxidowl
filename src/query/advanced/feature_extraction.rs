@@ -52,7 +52,7 @@ impl Default for FeatureExtractionConfig {
 
 impl DLQueryFeatureExtractor {
     /// Create a new DL query feature extractor
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             feature_cache: HashMap::new(),
@@ -61,7 +61,7 @@ impl DLQueryFeatureExtractor {
     }
 
     /// Create with custom configuration
-    #[must_use] 
+    #[must_use]
     pub fn with_config(config: FeatureExtractionConfig) -> Self {
         Self {
             feature_cache: HashMap::new(),

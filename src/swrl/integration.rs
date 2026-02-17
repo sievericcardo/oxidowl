@@ -28,7 +28,7 @@ pub struct SWRLFeatureRegistry {
 
 impl SWRLFeatureRegistry {
     /// Create a new comprehensive SWRL feature registry
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut main_registry = SWRLBuiltInRegistry::new();
         let datetime_registry = DateTimeBuiltInRegistry::new();
@@ -74,7 +74,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Check if a built-in is supported
-    #[must_use] 
+    #[must_use]
     pub fn is_builtin_supported(&self, iri: &str) -> bool {
         self.datetime_registry.get_builtin(iri).is_some()
             || self.regex_registry.get(iri).is_some()
@@ -82,7 +82,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get all supported built-in IRIs
-    #[must_use] 
+    #[must_use]
     pub fn get_all_builtin_iris(&self) -> Vec<String> {
         let mut iris = Vec::new();
 
@@ -106,7 +106,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get built-ins by category
-    #[must_use] 
+    #[must_use]
     pub fn get_builtins_by_category(&self) -> HashMap<String, Vec<String>> {
         let mut categories = HashMap::new();
 
@@ -194,13 +194,13 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get feature implementation status
-    #[must_use] 
+    #[must_use]
     pub fn get_feature_status(&self) -> &HashMap<String, bool> {
         &self.feature_status
     }
 
     /// Get statistics about implemented built-ins
-    #[must_use] 
+    #[must_use]
     pub fn get_statistics(&self) -> SWRLFeatureStatistics {
         let datetime_count = self.datetime_registry.get_builtin_iris().len();
         let regex_count = self.regex_registry.count();
@@ -282,7 +282,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get expected arity for a built-in
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin_arity(&self, iri: &str) -> Option<usize> {
         if let Some(builtin) = self.datetime_registry.get_builtin(iri) {
             return builtin.arity();

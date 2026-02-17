@@ -202,19 +202,19 @@ impl QueryVariable {
     }
 
     /// Check if this variable can be bound to individuals
-    #[must_use] 
+    #[must_use]
     pub fn is_individual(&self) -> bool {
         matches!(self.var_type, VariableType::Individual)
     }
 
     /// Check if this variable can be bound to classes
-    #[must_use] 
+    #[must_use]
     pub fn is_class(&self) -> bool {
         matches!(self.var_type, VariableType::Class)
     }
 
     /// Check if this variable can be bound to literals
-    #[must_use] 
+    #[must_use]
     pub fn is_literal(&self) -> bool {
         matches!(self.var_type, VariableType::Literal)
     }
@@ -222,7 +222,7 @@ impl QueryVariable {
 
 impl ConjunctiveQuery {
     /// Create a new empty conjunctive query
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             answer_variables: Vec::new(),
@@ -245,7 +245,7 @@ impl ConjunctiveQuery {
     }
 
     /// Get all variables appearing in the query
-    #[must_use] 
+    #[must_use]
     pub fn get_all_variables(&self) -> HashSet<QueryVariable> {
         let mut variables = HashSet::new();
 
@@ -286,7 +286,7 @@ impl ConjunctiveQuery {
     }
 
     /// Check if the query is well-formed
-    #[must_use] 
+    #[must_use]
     pub fn is_well_formed(&self) -> bool {
         // Check that all answer variables appear in the body
         let body_variables = self.get_body_variables();
@@ -296,7 +296,7 @@ impl ConjunctiveQuery {
     }
 
     /// Get variables that appear only in the query body
-    #[must_use] 
+    #[must_use]
     pub fn get_body_variables(&self) -> HashSet<QueryVariable> {
         let mut variables = HashSet::new();
 
@@ -333,7 +333,7 @@ impl ConjunctiveQuery {
     }
 
     /// Get the complexity score of this query (higher = more complex)
-    #[must_use] 
+    #[must_use]
     pub fn complexity_score(&self) -> u32 {
         let mut score = 0;
 

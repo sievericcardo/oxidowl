@@ -28,7 +28,7 @@ pub struct ImportResolver {
 
 impl ImportResolver {
     /// Create a new import resolver
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             iri_mappings: Arc::new(RwLock::new(HashMap::new())),
@@ -40,7 +40,7 @@ impl ImportResolver {
     }
 
     /// Configure the resolver
-    #[must_use] 
+    #[must_use]
     pub fn with_config(mut self, config: ImportResolverConfig) -> Self {
         self.base_directories = config.base_directories;
         self.allow_remote = config.allow_remote;
@@ -56,7 +56,7 @@ impl ImportResolver {
     }
 
     /// Resolve import IRI to actual location
-    #[must_use] 
+    #[must_use]
     pub fn resolve_import<'a>(
         &'a self,
         import_iri: &'a str,
@@ -106,9 +106,10 @@ impl ImportResolver {
             // Try relative resolution
             if let Some(base) = base_iri
                 && let Ok(base_url) = Url::parse(base)
-                    && let Ok(resolved_url) = base_url.join(import_iri) {
-                        return self.resolve_import(resolved_url.as_ref(), None).await;
-                    }
+                && let Ok(resolved_url) = base_url.join(import_iri)
+            {
+                return self.resolve_import(resolved_url.as_ref(), None).await;
+            }
 
             // Try file system resolution
             for base_dir in &self.base_directories {
@@ -267,10 +268,11 @@ impl ImportResolver {
             if line.contains("owl:imports") {
                 // Very basic extraction - would need proper parsing
                 if let Some(start) = line.find('"')
-                    && let Some(end) = line[start + 1..].find('"') {
-                        let import_iri = &line[start + 1..start + 1 + end];
-                        imports.push(import_iri.to_string());
-                    }
+                    && let Some(end) = line[start + 1..].find('"')
+                {
+                    let import_iri = &line[start + 1..start + 1 + end];
+                    imports.push(import_iri.to_string());
+                }
             }
         }
 

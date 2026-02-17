@@ -10,10 +10,7 @@ use super::{
 use crate::{
     Result,
     config::ReasoningConfig,
-    core::{
-        dependency::DependencySet,
-        expansion::DefaultExpansionStrategy,
-    },
+    core::{dependency::DependencySet, expansion::DefaultExpansionStrategy},
     ontology::{ClassExpression, Ontology},
 };
 use std::collections::{HashMap, HashSet};
@@ -43,7 +40,7 @@ pub struct TableauBuilder {
 
 impl TableauBuilder {
     /// Create a new tableau builder
-    #[must_use] 
+    #[must_use]
     pub fn new(config: ReasoningConfig) -> Self {
         Self {
             config,
@@ -56,28 +53,28 @@ impl TableauBuilder {
     }
 
     /// Add an initial concept to the root node
-    #[must_use] 
+    #[must_use]
     pub fn add_initial_concept(mut self, concept: ConceptLabel) -> Self {
         self.initial_concepts.push(concept);
         self
     }
 
     /// Add multiple initial concepts
-    #[must_use] 
+    #[must_use]
     pub fn add_initial_concepts(mut self, concepts: Vec<ConceptLabel>) -> Self {
         self.initial_concepts.extend(concepts);
         self
     }
 
     /// Add a property inclusion constraint
-    #[must_use] 
+    #[must_use]
     pub fn add_property_inclusion(mut self, inclusion: PropertyInclusion) -> Self {
         self.property_inclusions.push(inclusion);
         self
     }
 
     /// Add an inverse property relationship
-    #[must_use] 
+    #[must_use]
     pub fn add_inverse_property(mut self, property: String, inverse: String) -> Self {
         self.inverse_properties
             .insert(property.clone(), inverse.clone());
@@ -86,14 +83,14 @@ impl TableauBuilder {
     }
 
     /// Add a functional property
-    #[must_use] 
+    #[must_use]
     pub fn add_functional_property(mut self, property: String) -> Self {
         self.functional_properties.insert(property);
         self
     }
 
     /// Add a transitive property  
-    #[must_use] 
+    #[must_use]
     pub fn add_transitive_property(mut self, property: String) -> Self {
         self.transitive_properties.insert(property);
         self
@@ -102,7 +99,7 @@ impl TableauBuilder {
     /// Configure builder from ontology axioms
     pub fn from_ontology(mut self, ontology: &Ontology) -> Result<Self> {
         use crate::ontology::Axiom;
-        
+
         // Extract property axioms from ontology
         // This analyzes the ontology and extracts:
         // - Functional properties
@@ -127,7 +124,8 @@ impl TableauBuilder {
                 Axiom::InverseObjectProperties(axiom) => {
                     let prop1_name = format!("{:?}", axiom.property1);
                     let prop2_name = format!("{:?}", axiom.property2);
-                    self.inverse_properties.insert(prop1_name.clone(), prop2_name.clone());
+                    self.inverse_properties
+                        .insert(prop1_name.clone(), prop2_name.clone());
                     self.inverse_properties.insert(prop2_name, prop1_name);
                 }
                 Axiom::SubObjectPropertyOf(axiom) => {
@@ -206,7 +204,9 @@ impl TableauBuilder {
         // Generate initial rule applications for the root node concepts
         // This ensures that all initial concepts are properly expanded
         {
-            use crate::core::completion::{CompletionRule, RuleApplication, RuleContext, RulePriority};
+            use crate::core::completion::{
+                CompletionRule, RuleApplication, RuleContext, RulePriority,
+            };
             use std::sync::Arc;
 
             // Queue appropriate rules for each initial concept
@@ -216,14 +216,26 @@ impl TableauBuilder {
                         let rule = match class_expr.as_ref() {
                             ClassExpression::ObjectIntersectionOf(_) => Some(CompletionRule::And),
                             ClassExpression::ObjectUnionOf(_) => Some(CompletionRule::Or),
-                            ClassExpression::ObjectSomeValuesFrom { .. } => Some(CompletionRule::Some),
-                            ClassExpression::ObjectAllValuesFrom { .. } => Some(CompletionRule::All),
-                            ClassExpression::ObjectMinCardinality { .. } => Some(CompletionRule::AtLeast),
-                            ClassExpression::ObjectMaxCardinality { .. } => Some(CompletionRule::AtMost),
+                            ClassExpression::ObjectSomeValuesFrom { .. } => {
+                                Some(CompletionRule::Some)
+                            }
+                            ClassExpression::ObjectAllValuesFrom { .. } => {
+                                Some(CompletionRule::All)
+                            }
+                            ClassExpression::ObjectMinCardinality { .. } => {
+                                Some(CompletionRule::AtLeast)
+                            }
+                            ClassExpression::ObjectMaxCardinality { .. } => {
+                                Some(CompletionRule::AtMost)
+                            }
                             ClassExpression::ObjectOneOf(_) => Some(CompletionRule::Nominal),
                             ClassExpression::ObjectHasSelf { .. } => Some(CompletionRule::Self_),
-                            ClassExpression::DataSomeValuesFrom { .. } => Some(CompletionRule::Datatype),
-                            ClassExpression::DataAllValuesFrom { .. } => Some(CompletionRule::Datatype),
+                            ClassExpression::DataSomeValuesFrom { .. } => {
+                                Some(CompletionRule::Datatype)
+                            }
+                            ClassExpression::DataAllValuesFrom { .. } => {
+                                Some(CompletionRule::Datatype)
+                            }
                             ClassExpression::DataHasValue { .. } => Some(CompletionRule::Datatype),
                             _ => None,
                         };
@@ -276,7 +288,8 @@ impl TableauBuilder {
         let negated_super = format!("not({super_str})");
         let conjunction = format!("and({sub_str}, {negated_super})");
         let concept_label = ConceptLabel::parse(&conjunction);
-        let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
+        let mut tableau =
+            super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
         // Add the conjunction A ⊓ ¬B to check subsumption
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
@@ -293,7 +306,8 @@ impl TableauBuilder {
     ) -> Result<super::Tableau> {
         // Parse the class expression and build tableau
         let concept_label = ConceptLabel::parse(class_str);
-        let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
+        let mut tableau =
+            super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
         // Add the class expression as an initial concept to check satisfiability
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
@@ -313,7 +327,8 @@ impl TableauBuilder {
         // If unsatisfiable, then individual ∈ C
         let negated_class = format!("not({class_str})");
         let concept_label = ConceptLabel::parse(&negated_class);
-        let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
+        let mut tableau =
+            super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
         // Add the negated class assertion to check instance membership
         let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;

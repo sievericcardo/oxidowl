@@ -118,9 +118,10 @@ impl MemoryTracker {
             .arg(std::process::id().to_string())
             .output()
             && let Ok(output_str) = String::from_utf8(output.stdout)
-                && let Ok(kb) = output_str.trim().parse::<usize>() {
-                    return kb * 1024; // Convert KB to bytes
-                }
+            && let Ok(kb) = output_str.trim().parse::<usize>()
+        {
+            return kb * 1024; // Convert KB to bytes
+        }
         0
     }
 
@@ -180,26 +181,29 @@ impl MemoryTracker {
 
         // Use vm_stat to get memory statistics
         if let Ok(output) = Command::new("vm_stat").output()
-            && let Ok(output_str) = String::from_utf8(output.stdout) {
-                let mut free_pages = 0usize;
-                let mut inactive_pages = 0usize;
+            && let Ok(output_str) = String::from_utf8(output.stdout)
+        {
+            let mut free_pages = 0usize;
+            let mut inactive_pages = 0usize;
 
-                for line in output_str.lines() {
-                    if line.contains("Pages free:") {
-                        if let Some(value) = line.split(':').nth(1)
-                            && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
-                                free_pages = pages;
-                            }
-                    } else if line.contains("Pages inactive:")
-                        && let Some(value) = line.split(':').nth(1)
-                            && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
-                                inactive_pages = pages;
-                            }
+            for line in output_str.lines() {
+                if line.contains("Pages free:") {
+                    if let Some(value) = line.split(':').nth(1)
+                        && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>()
+                    {
+                        free_pages = pages;
+                    }
+                } else if line.contains("Pages inactive:")
+                    && let Some(value) = line.split(':').nth(1)
+                    && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>()
+                {
+                    inactive_pages = pages;
                 }
-
-                // Page size is typically 4096 bytes on macOS
-                return (free_pages + inactive_pages) * 4096;
             }
+
+            // Page size is typically 4096 bytes on macOS
+            return (free_pages + inactive_pages) * 4096;
+        }
         0
     }
 
@@ -242,7 +246,10 @@ impl MemoryTracker {
         let cache_sizes: Vec<usize> = snapshots.iter().map(|s| s.cache_size).collect();
 
         Ok(MemoryStats {
-            current_total_mb: snapshots.last().map(MemorySnapshot::total_used_mb).unwrap_or(0.0),
+            current_total_mb: snapshots
+                .last()
+                .map(MemorySnapshot::total_used_mb)
+                .unwrap_or(0.0),
             peak_total_mb: total_used.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
             avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64)
                 / (1024.0 * 1024.0),

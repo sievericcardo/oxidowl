@@ -11,7 +11,9 @@ fn test_memory_tracking_integration() {
     for i in 1..=10 {
         let cache_size = 1024 * 1024 * i; // Growing cache
         let reasoning_state = 512 * 1024 * i; // Growing reasoning state
-        let _ = tracker.snapshot(cache_size, reasoning_state).expect("Failed to record snapshot");
+        let _ = tracker
+            .snapshot(cache_size, reasoning_state)
+            .expect("Failed to record snapshot");
     }
 
     let stats = tracker.get_stats().expect("Failed to get memory stats");
@@ -78,7 +80,9 @@ fn test_performance_monitor_integration() {
 
     // Simulate query execution with memory snapshots
     for i in 1..=5 {
-        let _ = monitor.snapshot_memory(1024 * 1024 * i, 512 * 1024 * i).expect("Failed to record memory snapshot");
+        let _ = monitor
+            .snapshot_memory(1024 * 1024 * i, 512 * 1024 * i)
+            .expect("Failed to record memory snapshot");
 
         let timing = QueryTiming::new(
             Duration::from_millis((100 * i) as u64),
@@ -89,7 +93,9 @@ fn test_performance_monitor_integration() {
             5 * i as usize,
             100 * i as usize,
         );
-        let _ = monitor.record_query_timing(timing).expect("Failed to record query timing");
+        let _ = monitor
+            .record_query_timing(timing)
+            .expect("Failed to record query timing");
     }
 
     // Get comprehensive report
@@ -134,7 +140,9 @@ fn test_performance_monitor_disabled() {
         5,
         100,
     );
-    let _ = monitor.record_query_timing(timing).expect("Failed to record timing");
+    let _ = monitor
+        .record_query_timing(timing)
+        .expect("Failed to record timing");
 
     // Stats should show zero queries
     let report = monitor.get_report().expect("Failed to get report");
@@ -146,7 +154,9 @@ fn test_memory_snapshot_calculations() {
     let tracker = MemoryTracker::new(10);
 
     // 10 MB heap + 2 MB cache + 3 MB reasoning state = 15 MB total
-    let _ = tracker.snapshot(2 * 1024 * 1024, 3 * 1024 * 1024).expect("Failed to record snapshot");
+    let _ = tracker
+        .snapshot(2 * 1024 * 1024, 3 * 1024 * 1024)
+        .expect("Failed to record snapshot");
 
     let snapshots = tracker.get_snapshots().expect("Failed to get snapshots");
     assert_eq!(snapshots.len(), 1);
@@ -217,7 +227,9 @@ fn test_tracker_max_snapshots_limit() {
 
     // Take 5 snapshots
     for i in 1..=5 {
-        let _ = tracker.snapshot(1024 * i, 512 * i).expect("Failed to record snapshot");
+        let _ = tracker
+            .snapshot(1024 * i, 512 * i)
+            .expect("Failed to record snapshot");
     }
 
     // Should only have the last 3

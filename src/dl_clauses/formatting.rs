@@ -78,7 +78,7 @@ impl DLClauseSet {
     }
 
     /// Convert to HermiT-style string representation
-    #[must_use] 
+    #[must_use]
     pub fn to_hermit_format(&self) -> String {
         let mut output = String::new();
 
@@ -142,7 +142,7 @@ impl DLClauseSet {
     }
 
     /// Get a summary of the clause set
-    #[must_use] 
+    #[must_use]
     pub fn summary(&self) -> String {
         format!(
             "DL Clause Set Summary:\n\
@@ -158,7 +158,7 @@ impl DLClauseSet {
     }
 
     /// Get clauses in a compact format for debugging
-    #[must_use] 
+    #[must_use]
     pub fn to_compact_format(&self) -> String {
         let mut output = String::new();
 

@@ -17,7 +17,7 @@ pub struct DateTimeConstructorRegistry {
 
 impl DateTimeConstructorRegistry {
     /// Create a new registry with all constructor built-ins
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
             builtins: HashMap::new(),
@@ -70,13 +70,13 @@ impl DateTimeConstructorRegistry {
     }
 
     /// Get a built-in predicate by IRI
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin(&self, iri: &str) -> Option<&dyn SWRLBuiltIn> {
         self.builtins.get(iri).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
-    #[must_use] 
+    #[must_use]
     pub fn get_builtin_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
     }

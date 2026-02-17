@@ -350,10 +350,7 @@ impl QueryDistributor {
 
         for atom in &query.body_atoms {
             if let Some(concept) = self.extract_concept_from_atom(atom) {
-                concept_groups
-                    .entry(concept)
-                    .or_default()
-                    .push(atom);
+                concept_groups.entry(concept).or_default().push(atom);
             }
         }
 
@@ -425,8 +422,7 @@ impl QueryDistributor {
         });
 
         // Distribute atoms to balance complexity across nodes
-        let chunk_size =
-            query.body_atoms.len().div_ceil(available_nodes.len());
+        let chunk_size = query.body_atoms.len().div_ceil(available_nodes.len());
 
         for (i, chunk) in atoms_with_complexity.chunks(chunk_size).enumerate() {
             if chunk.is_empty() {

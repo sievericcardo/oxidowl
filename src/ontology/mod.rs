@@ -444,7 +444,7 @@ impl Ontology {
     }
 
     /// Check if ontology contains RDF-star features (quoted triples)
-    #[must_use] 
+    #[must_use]
     pub fn has_rdf_star_features(&self) -> bool {
         if let Some(graph) = &self.rdf_graph {
             graph.quoted_triple_count() > 0
@@ -478,7 +478,7 @@ impl Ontology {
     }
 
     /// Count axioms by type
-    #[must_use] 
+    #[must_use]
     pub fn count_axioms_by_type(&self) -> std::collections::HashMap<axioms::AxiomType, usize> {
         let mut counts = std::collections::HashMap::new();
         for axiom in &self.axioms {
@@ -695,12 +695,13 @@ impl Ontology {
             if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
                 // Extract IRI between < and >
                 if let Some(start) = trimmed.find('<')
-                    && let Some(end) = trimmed[start..].find('>') {
-                        let iri_str = &trimmed[start + 1..start + end];
-                        if iri_str.starts_with("http") {
-                            return Some(IRI::new(iri_str));
-                        }
+                    && let Some(end) = trimmed[start..].find('>')
+                {
+                    let iri_str = &trimmed[start + 1..start + end];
+                    if iri_str.starts_with("http") {
+                        return Some(IRI::new(iri_str));
                     }
+                }
             }
         }
         None
@@ -813,10 +814,11 @@ impl Ontology {
 
         for axiom in &self.axioms {
             if let axioms::Axiom::Declaration(decl) = axiom
-                && let axioms::Entity::Class(iri) = &decl.entity {
-                    let class = concepts::Class { iri: iri.clone() };
-                    classes.push((iri.clone(), class));
-                }
+                && let axioms::Entity::Class(iri) = &decl.entity
+            {
+                let class = concepts::Class { iri: iri.clone() };
+                classes.push((iri.clone(), class));
+            }
         }
 
         classes
@@ -858,18 +860,18 @@ impl Ontology {
                         && !individuals
                             .iter()
                             .any(|(existing_iri, _)| existing_iri == &named.iri)
-                        {
-                            individuals.push((named.iri.clone(), assertion.source.clone()));
-                        }
+                    {
+                        individuals.push((named.iri.clone(), assertion.source.clone()));
+                    }
 
                     // Extract target
                     if let individuals::Individual::Named(named) = &assertion.target
                         && !individuals
                             .iter()
                             .any(|(existing_iri, _)| existing_iri == &named.iri)
-                        {
-                            individuals.push((named.iri.clone(), assertion.target.clone()));
-                        }
+                    {
+                        individuals.push((named.iri.clone(), assertion.target.clone()));
+                    }
                 }
                 axioms::Axiom::DataPropertyAssertion(data_assertion) => {
                     // Extract individual from data property assertion
@@ -925,10 +927,11 @@ impl Ontology {
 
         for axiom in &self.axioms {
             if let axioms::Axiom::Declaration(decl) = axiom
-                && let axioms::Entity::ObjectProperty(iri) = &decl.entity {
-                    let property = ObjectProperty { iri: iri.clone() };
-                    properties.push(property);
-                }
+                && let axioms::Entity::ObjectProperty(iri) = &decl.entity
+            {
+                let property = ObjectProperty { iri: iri.clone() };
+                properties.push(property);
+            }
         }
 
         properties
@@ -942,15 +945,12 @@ impl Ontology {
     ///
     /// Example: If we have R ∘ S ⊑ T and we query with (R, S), returns Some(T)
     #[must_use]
-    pub fn get_property_chain_super(
-        &self,
-        first_role: &str,
-        second_role: &str,
-    ) -> Option<String> {
+    pub fn get_property_chain_super(&self, first_role: &str, second_role: &str) -> Option<String> {
         for axiom in &self.axioms {
             if let axioms::Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom {
                 // Check if the sub_property is a property chain
-                if let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property {
+                if let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property
+                {
                     // Check if this chain matches our (first_role, second_role) pattern
                     if chain.len() == 2 {
                         let first_matches = match &chain[0] {
@@ -996,9 +996,10 @@ impl Ontology {
         for axiom in &self.axioms {
             if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
                 // Check if this equivalence contains our target class
-                let contains_target = equiv_axiom.classes.iter().any(|ce| {
-                    matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri)
-                });
+                let contains_target = equiv_axiom
+                    .classes
+                    .iter()
+                    .any(|ce| matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri));
 
                 if contains_target {
                     // Return the first non-trivial equivalent definition
@@ -1027,9 +1028,10 @@ impl Ontology {
         for axiom in &self.axioms {
             if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
                 // Check if this equivalence contains our target class
-                let contains_target = equiv_axiom.classes.iter().any(|ce| {
-                    matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri)
-                });
+                let contains_target = equiv_axiom
+                    .classes
+                    .iter()
+                    .any(|ce| matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri));
 
                 if contains_target {
                     // Collect all non-self equivalent expressions

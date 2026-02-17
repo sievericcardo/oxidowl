@@ -3,9 +3,9 @@
 //! This module provides flamegraph generation, heap profiling, and performance
 //! counter tracking to identify bottlenecks and optimize the reasoner.
 
-use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[cfg(feature = "profiling")]
 use pprof::ProfilerGuard;
@@ -20,7 +20,7 @@ pub struct PerformanceCounter {
 }
 
 impl PerformanceCounter {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -40,7 +40,7 @@ impl PerformanceCounter {
         });
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn average_duration(&self) -> Duration {
         if self.count == 0 {
             Duration::ZERO
@@ -59,7 +59,7 @@ pub struct PerformanceProfiler {
 }
 
 impl PerformanceProfiler {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             counters: Arc::new(Mutex::new(HashMap::new())),
@@ -92,13 +92,16 @@ impl PerformanceProfiler {
     #[cfg(feature = "profiling")]
     pub fn stop_profiling_and_report(&mut self, output_path: &str) -> Result<(), String> {
         if let Some(guard) = self.profiler_guard.take() {
-            let report = guard.report().build()
+            let report = guard
+                .report()
+                .build()
                 .map_err(|e| format!("Failed to build profiling report: {}", e))?;
 
             let file = std::fs::File::create(output_path)
                 .map_err(|e| format!("Failed to create flamegraph file: {}", e))?;
 
-            report.flamegraph(file)
+            report
+                .flamegraph(file)
                 .map_err(|e| format!("Failed to generate flamegraph: {}", e))?;
 
             Ok(())
@@ -115,13 +118,15 @@ impl PerformanceProfiler {
     /// Record a timed operation
     pub fn record_operation(&self, operation: &str, duration: Duration) {
         if let Ok(mut counters) = self.counters.lock() {
-            let counter = counters.entry(operation.to_string()).or_insert_with(PerformanceCounter::new);
+            let counter = counters
+                .entry(operation.to_string())
+                .or_insert_with(PerformanceCounter::new);
             counter.record(duration);
         }
     }
 
     /// Start timing an operation
-    #[must_use] 
+    #[must_use]
     pub fn start_timer(&self, operation: &str) -> OperationTimer {
         OperationTimer {
             operation: operation.to_string(),
@@ -131,11 +136,9 @@ impl PerformanceProfiler {
     }
 
     /// Get all recorded counters
-    #[must_use] 
+    #[must_use]
     pub fn get_counters(&self) -> HashMap<String, PerformanceCounter> {
-        self.counters.lock()
-            .map(|c| c.clone())
-            .unwrap_or_default()
+        self.counters.lock().map(|c| c.clone()).unwrap_or_default()
     }
 
     /// Print performance summary
@@ -182,7 +185,9 @@ impl Drop for OperationTimer {
     fn drop(&mut self) {
         let duration = self.start.elapsed();
         if let Ok(mut counters) = self.profiler.lock() {
-            let counter = counters.entry(self.operation.clone()).or_insert_with(PerformanceCounter::new);
+            let counter = counters
+                .entry(self.operation.clone())
+                .or_insert_with(PerformanceCounter::new);
             counter.record(duration);
         }
     }
@@ -220,7 +225,7 @@ pub mod heap {
     pub struct HeapProfiler;
 
     impl HeapProfiler {
-        #[must_use] 
+        #[must_use]
         pub fn new() -> Self {
             Self
         }
@@ -241,7 +246,7 @@ mod tests {
     #[test]
     fn test_performance_counter() {
         let mut counter = PerformanceCounter::new();
-        
+
         counter.record(Duration::from_millis(100));
         counter.record(Duration::from_millis(200));
         counter.record(Duration::from_millis(150));
@@ -255,7 +260,7 @@ mod tests {
     #[test]
     fn test_operation_timer() {
         let profiler = PerformanceProfiler::new();
-        
+
         {
             let _timer = profiler.start_timer("test_operation");
             thread::sleep(Duration::from_millis(10));
@@ -268,7 +273,7 @@ mod tests {
     #[test]
     fn test_profiler_record_operation() {
         let profiler = PerformanceProfiler::new();
-        
+
         profiler.record_operation("op1", Duration::from_millis(100));
         profiler.record_operation("op1", Duration::from_millis(200));
         profiler.record_operation("op2", Duration::from_millis(50));

@@ -63,15 +63,12 @@ impl SWRLBuiltIn for MemberBuiltIn {
                     SWRLValue::String(s) => s.as_str(),
                     SWRLValue::Integer(i) => {
                         return Ok(SWRLValue::Boolean(
-                            members
-                                .iter()
-                                .any(|m| m.parse::<i64>() == Ok(*i)),
+                            members.iter().any(|m| m.parse::<i64>() == Ok(*i)),
                         ));
                     }
                     SWRLValue::Float(f) => {
                         return Ok(SWRLValue::Boolean(members.iter().any(|m| {
-                            m.parse::<f64>()
-                                .is_ok_and(|n| (n - f).abs() < f64::EPSILON)
+                            m.parse::<f64>().is_ok_and(|n| (n - f).abs() < f64::EPSILON)
                         })));
                     }
                     _ => {

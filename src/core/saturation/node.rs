@@ -1,7 +1,7 @@
 //! Saturation node data structures
 
-use crate::ontology::{ClassExpression, IRI};
 use crate::core::persistent_collections::ConceptSet;
+use crate::ontology::{ClassExpression, IRI};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
@@ -83,7 +83,7 @@ pub struct UniversalRestriction {
 
 impl SaturationNode {
     /// Create a new saturation node for a concept
-    #[must_use] 
+    #[must_use]
     pub fn new(concept: ClassExpression) -> Self {
         let mut saturated_concepts = ConceptSet::new();
         saturated_concepts.insert(concept.clone());
@@ -158,7 +158,7 @@ impl SaturationNode {
     }
 
     /// Check if this node should be marked as `RequiresFullTableau`
-    #[must_use] 
+    #[must_use]
     pub fn should_require_tableau(&self, max_branches: usize) -> bool {
         self.branch_count > max_branches
     }
@@ -181,13 +181,13 @@ impl SaturationNode {
     }
 
     /// Check if a concept is subsumed by this node's saturated concepts
-    #[must_use] 
+    #[must_use]
     pub fn subsumes(&self, concept: &ClassExpression) -> bool {
         self.saturated_concepts.contains(concept)
     }
 
     /// Get a cached subsumption result
-    #[must_use] 
+    #[must_use]
     pub fn get_cached_subsumption(&self, concept: &ClassExpression) -> Option<bool> {
         self.subsumption_cache.get(concept).copied()
     }
@@ -203,19 +203,19 @@ impl SaturationNode {
     }
 
     /// Get the signature hash
-    #[must_use] 
+    #[must_use]
     pub fn get_signature(&self) -> u64 {
         self.signature
     }
 
     /// Check if this node is complete
-    #[must_use] 
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         self.status == SaturationStatus::Complete
     }
 
     /// Check if this node requires full tableau expansion
-    #[must_use] 
+    #[must_use]
     pub fn requires_full_tableau(&self) -> bool {
         self.status == SaturationStatus::RequiresFullTableau
     }

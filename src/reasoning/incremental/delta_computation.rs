@@ -47,7 +47,7 @@ pub struct ReasoningDelta {
 
 impl ReasoningDelta {
     /// Create an empty reasoning delta
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             concepts_to_recheck: HashSet::new(),
@@ -62,7 +62,7 @@ impl ReasoningDelta {
     }
 
     /// Check if this delta represents no changes
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.concepts_to_recheck.is_empty()
             && self.hierarchy_updates.is_empty()
@@ -84,7 +84,7 @@ impl ReasoningDelta {
     }
 
     /// Estimate the complexity of applying this delta
-    #[must_use] 
+    #[must_use]
     pub fn complexity_score(&self) -> usize {
         self.concepts_to_recheck.len() * 10
             + self.hierarchy_updates.len() * 5
@@ -121,7 +121,7 @@ pub struct QueryDelta {
 
 impl QueryDelta {
     /// Create an empty query delta
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             atoms_to_reevaluate: HashSet::new(),
@@ -135,7 +135,7 @@ impl QueryDelta {
     }
 
     /// Check if this delta represents no changes
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.atoms_to_reevaluate.is_empty()
             && self.affected_variables.is_empty()
@@ -502,9 +502,9 @@ impl DeltaComputer {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                delta.cache_invalidations.insert(format!(
-                    "individual_class_{iri}_{class:?}"
-                ));
+                delta
+                    .cache_invalidations
+                    .insert(format!("individual_class_{iri}_{class:?}"));
             }
             ABoxChange::ClassAssertionRemoved {
                 individual, class, ..
@@ -515,9 +515,9 @@ impl DeltaComputer {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                delta.cache_invalidations.insert(format!(
-                    "individual_class_{iri}_{class:?}"
-                ));
+                delta
+                    .cache_invalidations
+                    .insert(format!("individual_class_{iri}_{class:?}"));
             }
             ABoxChange::ObjectPropertyAssertionAdded {
                 subject,
@@ -535,9 +535,9 @@ impl DeltaComputer {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                delta.cache_invalidations.insert(format!(
-                    "prop_{subject_iri}_{property:?}_{object_iri}"
-                ));
+                delta
+                    .cache_invalidations
+                    .insert(format!("prop_{subject_iri}_{property:?}_{object_iri}"));
             }
             ABoxChange::ObjectPropertyAssertionRemoved {
                 subject,
@@ -555,9 +555,9 @@ impl DeltaComputer {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                delta.cache_invalidations.insert(format!(
-                    "prop_{subject_iri}_{property:?}_{object_iri}"
-                ));
+                delta
+                    .cache_invalidations
+                    .insert(format!("prop_{subject_iri}_{property:?}_{object_iri}"));
             }
             ABoxChange::DataPropertyAssertionAdded {
                 subject,
@@ -570,9 +570,9 @@ impl DeltaComputer {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                delta.cache_invalidations.insert(format!(
-                    "data_prop_{subject_iri}_{property:?}_{value}"
-                ));
+                delta
+                    .cache_invalidations
+                    .insert(format!("data_prop_{subject_iri}_{property:?}_{value}"));
             }
             ABoxChange::DataPropertyAssertionRemoved {
                 subject,
@@ -585,9 +585,9 @@ impl DeltaComputer {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                delta.cache_invalidations.insert(format!(
-                    "data_prop_{subject_iri}_{property:?}_{value}"
-                ));
+                delta
+                    .cache_invalidations
+                    .insert(format!("data_prop_{subject_iri}_{property:?}_{value}"));
             }
         }
 
@@ -848,9 +848,9 @@ impl DeltaComputer {
         if let Ok(mut stats) = self.statistics.write()
             && (original_concept_count > delta.concepts_to_recheck.len()
                 || original_hierarchy_count > delta.hierarchy_updates.len())
-            {
-                stats.optimizations_applied += 1;
-            }
+        {
+            stats.optimizations_applied += 1;
+        }
 
         Ok(())
     }
@@ -1024,9 +1024,10 @@ impl DeltaComputer {
                 if (node.saturated_concepts.contains(&concept)
                     || node.direct_subsumers.contains(&concept)
                     || node.all_subsumers.contains(&concept))
-                    && affected.insert(other_concept.clone()) {
-                        to_process.push(other_concept.clone());
-                    }
+                    && affected.insert(other_concept.clone())
+                {
+                    to_process.push(other_concept.clone());
+                }
             }
         }
 
@@ -1073,8 +1074,7 @@ impl DeltaComputer {
             100 // Default estimate
         };
 
-        let affected_ratio =
-            delta.saturation_updates.len() as f64 / total_concepts.max(1) as f64;
+        let affected_ratio = delta.saturation_updates.len() as f64 / total_concepts.max(1) as f64;
         delta.use_incremental_saturation =
             affected_ratio <= self.config.saturation_incremental_threshold;
 
