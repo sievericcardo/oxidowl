@@ -1220,15 +1220,17 @@ impl ClassificationService {
                 // Second check: verify datatype compatibility if literal has a datatype
                 if let Some(lit_dt_url) = literal_datatype_url {
                     let lit_dt_iri = IRI::from(lit_dt_url.clone());
-                    Ok(self
-                        .datatype_validator
-                        .datatypes_compatible(&lit_dt_iri, datatype_iri))
+                    Ok(DatatypeValidator::datatypes_compatible(
+                        &lit_dt_iri,
+                        datatype_iri,
+                    ))
                 } else {
                     // No datatype means xsd:string, check if compatible with string
                     let xsd_string = IRI::new("http://www.w3.org/2001/XMLSchema#string");
-                    Ok(self
-                        .datatype_validator
-                        .datatypes_compatible(&xsd_string, datatype_iri))
+                    Ok(DatatypeValidator::datatypes_compatible(
+                        &xsd_string,
+                        datatype_iri,
+                    ))
                 }
             }
             crate::ontology::DataRange::DatatypeRestriction {

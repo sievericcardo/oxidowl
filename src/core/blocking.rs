@@ -422,7 +422,7 @@ impl CoreBlocking {
     }
 
     /// Extract core concepts from a node (only atomic concepts and negations)
-    fn get_core_concepts(&self, node: &TableauNode) -> Vec<ConceptLabel> {
+    fn get_core_concepts(node: &TableauNode) -> Vec<ConceptLabel> {
         node.concepts
             .iter()
             .filter(|concept| match concept {
@@ -437,12 +437,12 @@ impl CoreBlocking {
 
 impl BlockingChecker for CoreBlocking {
     fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
-        let node_core = self.get_core_concepts(node);
+        let node_core = Self::get_core_concepts(node);
 
         // Core blocking: check only core concepts
         for other_node in nodes {
             if other_node.id != node.id && other_node.id < node.id {
-                let other_core = self.get_core_concepts(other_node);
+                let other_core = Self::get_core_concepts(other_node);
                 if signatures_subsume(&other_core, &node_core) {
                     return Some(other_node.id);
                 }
@@ -467,7 +467,7 @@ impl BlockingChecker for CoreBlocking {
     }
 
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
-        self.get_core_concepts(node)
+        Self::get_core_concepts(node)
     }
 }
 
