@@ -114,16 +114,15 @@
 //! }
 //! ```
 
-use crate::semantics::{RdfGraph, RdfTerm, Triple as OxidowlTriple};
+use crate::semantics::{RdfTerm, Triple as OxidowlTriple};
 use crate::{
     Error, Result,
-    ontology::{Axiom, Ontology},
+    ontology::Axiom,
     reasoning::ReasoningService,
 };
 use oxigraph::{
-    io::{RdfFormat, RdfParser},
-    model::{Dataset, GraphName, NamedNode, NamedOrBlankNode, Quad, Subject, Term, Triple},
-    sparql::{Query, QueryResults, QuerySolution},
+    model::{GraphName, NamedNode, NamedOrBlankNode, Quad, Subject, Term, Triple},
+    sparql::{Query, QueryResults},
     store::Store,
 };
 use serde::{Deserialize, Serialize};
@@ -614,7 +613,7 @@ async fn handle_sparql_update(
     tracing::debug!("Executing SPARQL update: {}", update_string);
 
     // Parse and execute update
-    let mut store_guard = store.write().await;
+    let store_guard = store.write().await;
     store_guard
         .update(update_string)
         .map_err(|e| warp::reject::custom(SparqlError(format!("Update execution error: {}", e))))?;
@@ -738,7 +737,7 @@ mod tests {
     use super::*;
     use crate::ontology::Ontology;
     use crate::reasoning::ReasoningService;
-    use crate::semantics::{RdfGraph, RdfTerm, Triple as OxidowlTriple};
+    use crate::semantics::{RdfTerm, Triple as OxidowlTriple};
 
     #[test]
     fn test_convert_simple_rdf_triple() {

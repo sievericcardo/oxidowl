@@ -14,9 +14,8 @@ pub use rest::RestApiServer;
 #[cfg(feature = "sparql")]
 pub use sparql::SparqlServer;
 
-use crate::{Error, Result, config::ServerConfig, reasoning::ReasoningService};
+use crate::{Result, config::ServerConfig, reasoning::ReasoningService};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Main server manager
 #[derive(Debug)]

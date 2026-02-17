@@ -5,7 +5,7 @@
 use crate::{
     Error, Result,
     explanation::ExplanationService,
-    ontology::{ClassExpression, Individual},
+    ontology::ClassExpression,
     reasoning::ReasoningService,
 };
 use serde::{Deserialize, Serialize};
@@ -275,7 +275,7 @@ pub struct ClassificationResponse {
 // REST API endpoint handlers
 
 async fn get_reasoner_status(
-    reasoning_service: Arc<ReasoningService>,
+    _reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     let status = ReasonerStatus {
         name: "Oxidowl".to_string(),
@@ -469,7 +469,7 @@ async fn get_instances(
 
 async fn explain_inference(
     request: ExplanationRequest,
-    explanation_service: Arc<ExplanationService>,
+    _explanation_service: Arc<ExplanationService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     // For now, return a mock explanation - would integrate with actual explanation service
     Ok(warp::reply::json(&ApiResponse::success(

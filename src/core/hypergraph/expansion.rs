@@ -708,7 +708,7 @@ mod tests {
             },
         );
         let some_expr = ClassExpression::ObjectSomeValuesFrom {
-            property: property,
+            property,
             filler: Box::new(person),
         };
 

@@ -5,7 +5,7 @@
 
 use crate::{
     Error, Result,
-    ontology::{ClassExpression, Individual, ObjectPropertyExpression},
+    ontology::ClassExpression,
     reasoning::ReasoningService,
 };
 use quick_xml::{de::from_str, se::to_string};
