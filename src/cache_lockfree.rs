@@ -139,7 +139,7 @@ impl Default for LockFreeCacheConfig {
     }
 }
 
-/// Lock-free concept satisfiability cache using DashMap
+/// Lock-free concept satisfiability cache using `DashMap`
 #[derive(Debug)]
 pub struct LockFreeConceptCache {
     cache: DashMap<ClassExpression, LockFreeCacheEntry<bool>>,
@@ -215,14 +215,17 @@ impl LockFreeConceptCache {
         self.size.store(0, Ordering::Relaxed);
     }
 
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
 
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use] 
     pub fn hit_rate(&self) -> f64 {
         self.metrics.get_hit_rate()
     }
@@ -303,14 +306,17 @@ impl LockFreeSubsumptionCache {
         self.size.store(0, Ordering::Relaxed);
     }
 
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
 
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use] 
     pub fn hit_rate(&self) -> f64 {
         self.metrics.get_hit_rate()
     }
@@ -375,14 +381,17 @@ impl LockFreeClassificationCache {
         self.size.store(0, Ordering::Relaxed);
     }
 
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
 
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use] 
     pub fn hit_rate(&self) -> f64 {
         self.metrics.get_hit_rate()
     }
@@ -412,6 +421,7 @@ impl LockFreeCacheManager {
         self.classification_cache.clear();
     }
 
+    #[must_use] 
     pub fn total_size(&self) -> usize {
         self.concept_cache.len() + self.subsumption_cache.len() + self.classification_cache.len()
     }

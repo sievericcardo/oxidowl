@@ -47,6 +47,7 @@ pub struct ReasoningDelta {
 
 impl ReasoningDelta {
     /// Create an empty reasoning delta
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             concepts_to_recheck: HashSet::new(),
@@ -61,6 +62,7 @@ impl ReasoningDelta {
     }
 
     /// Check if this delta represents no changes
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.concepts_to_recheck.is_empty()
             && self.hierarchy_updates.is_empty()
@@ -82,6 +84,7 @@ impl ReasoningDelta {
     }
 
     /// Estimate the complexity of applying this delta
+    #[must_use] 
     pub fn complexity_score(&self) -> usize {
         self.concepts_to_recheck.len() * 10
             + self.hierarchy_updates.len() * 5
@@ -118,6 +121,7 @@ pub struct QueryDelta {
 
 impl QueryDelta {
     /// Create an empty query delta
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             atoms_to_reevaluate: HashSet::new(),
@@ -131,6 +135,7 @@ impl QueryDelta {
     }
 
     /// Check if this delta represents no changes
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.atoms_to_reevaluate.is_empty()
             && self.affected_variables.is_empty()
@@ -354,33 +359,33 @@ impl DeltaComputer {
                 // Add affected variables
                 match atom {
                     QueryAtom::ClassAtom { variable, .. } => {
-                        delta.affected_variables.insert(variable.name.to_string());
+                        delta.affected_variables.insert(variable.name.clone());
                     }
                     QueryAtom::ObjectPropertyAtom {
                         subject, object, ..
                     } => {
-                        delta.affected_variables.insert(subject.name.to_string());
-                        delta.affected_variables.insert(object.name.to_string());
+                        delta.affected_variables.insert(subject.name.clone());
+                        delta.affected_variables.insert(object.name.clone());
                     }
                     QueryAtom::DataPropertyAtom {
                         subject, literal, ..
                     } => {
-                        delta.affected_variables.insert(subject.name.to_string());
-                        delta.affected_variables.insert(literal.name.to_string());
+                        delta.affected_variables.insert(subject.name.clone());
+                        delta.affected_variables.insert(literal.name.clone());
                     }
                     QueryAtom::SameIndividualAtom { left, right } => {
-                        delta.affected_variables.insert(left.name.to_string());
-                        delta.affected_variables.insert(right.name.to_string());
+                        delta.affected_variables.insert(left.name.clone());
+                        delta.affected_variables.insert(right.name.clone());
                     }
                     QueryAtom::DifferentIndividualsAtom { left, right } => {
-                        delta.affected_variables.insert(left.name.to_string());
-                        delta.affected_variables.insert(right.name.to_string());
+                        delta.affected_variables.insert(left.name.clone());
+                        delta.affected_variables.insert(right.name.clone());
                     }
                     QueryAtom::ConcreteIndividualAtom { variable, .. } => {
-                        delta.affected_variables.insert(variable.name.to_string());
+                        delta.affected_variables.insert(variable.name.clone());
                     }
                     QueryAtom::ConcreteLiteralAtom { variable, .. } => {
-                        delta.affected_variables.insert(variable.name.to_string());
+                        delta.affected_variables.insert(variable.name.clone());
                     }
                 }
             }
@@ -403,7 +408,7 @@ impl DeltaComputer {
         }
     }
 
-    /// Compute delta for a single TBox change
+    /// Compute delta for a single `TBox` change
     async fn compute_tbox_change_delta(&self, change: &TBoxChange) -> Result<ReasoningDelta> {
         let mut delta = ReasoningDelta::new();
 
@@ -462,7 +467,7 @@ impl DeltaComputer {
         Ok(delta)
     }
 
-    /// Compute delta for a single ABox change
+    /// Compute delta for a single `ABox` change
     async fn compute_abox_change_delta(&self, change: &ABoxChange) -> Result<ReasoningDelta> {
         let mut delta = ReasoningDelta::new();
 
@@ -475,7 +480,7 @@ impl DeltaComputer {
                 };
                 delta
                     .cache_invalidations
-                    .insert(format!("individual_{}", iri));
+                    .insert(format!("individual_{iri}"));
             }
             ABoxChange::IndividualRemoved { individual, .. } => {
                 delta.individual_updates.insert(individual.clone());
@@ -485,7 +490,7 @@ impl DeltaComputer {
                 };
                 delta
                     .cache_invalidations
-                    .insert(format!("individual_{}", iri));
+                    .insert(format!("individual_{iri}"));
             }
             ABoxChange::ClassAssertionAdded {
                 individual, class, ..
@@ -498,9 +503,7 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "individual_class_{}_{:?}",
-                    iri,
-                    class
+                    "individual_class_{iri}_{class:?}"
                 ));
             }
             ABoxChange::ClassAssertionRemoved {
@@ -513,9 +516,7 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "individual_class_{}_{:?}",
-                    iri,
-                    class
+                    "individual_class_{iri}_{class:?}"
                 ));
             }
             ABoxChange::ObjectPropertyAssertionAdded {
@@ -535,10 +536,7 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "prop_{}_{:?}_{}",
-                    subject_iri,
-                    property,
-                    object_iri
+                    "prop_{subject_iri}_{property:?}_{object_iri}"
                 ));
             }
             ABoxChange::ObjectPropertyAssertionRemoved {
@@ -558,10 +556,7 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "prop_{}_{:?}_{}",
-                    subject_iri,
-                    property,
-                    object_iri
+                    "prop_{subject_iri}_{property:?}_{object_iri}"
                 ));
             }
             ABoxChange::DataPropertyAssertionAdded {
@@ -576,10 +571,7 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "data_prop_{}_{:?}_{}",
-                    subject_iri,
-                    property,
-                    value
+                    "data_prop_{subject_iri}_{property:?}_{value}"
                 ));
             }
             ABoxChange::DataPropertyAssertionRemoved {
@@ -594,10 +586,7 @@ impl DeltaComputer {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 delta.cache_invalidations.insert(format!(
-                    "data_prop_{}_{:?}_{}",
-                    subject_iri,
-                    property,
-                    value
+                    "data_prop_{subject_iri}_{property:?}_{value}"
                 ));
             }
         }
@@ -754,7 +743,7 @@ impl DeltaComputer {
                         TBoxChange::ObjectPropertyAdded { property: prop, .. }
                         | TBoxChange::ObjectPropertyRemoved { property: prop, .. } => {
                             // Simplified check - would need more sophisticated property matching
-                            if format!("{:?}", property).contains(&prop.iri.to_string()) {
+                            if format!("{property:?}").contains(&prop.iri.to_string()) {
                                 return Ok(true);
                             }
                         }
@@ -964,7 +953,7 @@ impl DeltaComputer {
         Ok(())
     }
 
-    /// Compute affected saturation nodes from TBox changes
+    /// Compute affected saturation nodes from `TBox` changes
     pub fn compute_affected_saturation_nodes(
         &self,
         tbox_changes: &[TBoxChange],
@@ -1000,7 +989,7 @@ impl DeltaComputer {
         Ok(affected)
     }
 
-    /// Compute affected saturation nodes from ABox changes
+    /// Compute affected saturation nodes from `ABox` changes
     pub fn compute_affected_saturation_from_abox(
         &self,
         abox_changes: &[ABoxChange],

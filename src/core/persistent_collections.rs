@@ -6,7 +6,7 @@
 //! - **Structural Sharing**: Modifications create new versions sharing unchanged data
 //! - **O(log n) Operations**: Efficient insert/remove/lookup via hash array mapped tries
 //! - **Memory Efficiency**: Reduced copying, better cache locality
-//! - **Deduplication**: ConceptSetPool ensures identical sets share storage
+//! - **Deduplication**: `ConceptSetPool` ensures identical sets share storage
 
 use crate::{ontology::ClassExpression, Result};
 use im::HashSet as ImHashSet;
@@ -18,7 +18,7 @@ use std::{
 /// Persistent immutable set of class expressions with structural sharing
 pub type ConceptSet = ImHashSet<ClassExpression>;
 
-/// Pool for deduplicating ConceptSets to maximize structural sharing
+/// Pool for deduplicating `ConceptSets` to maximize structural sharing
 ///
 /// Multiple saturation nodes may produce identical or overlapping concept sets.
 /// The pool ensures these sets share storage, reducing memory usage by 50-80%
@@ -34,6 +34,7 @@ pub struct ConceptSetPool {
 
 impl ConceptSetPool {
     /// Create a new empty pool
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             pool: Arc::new(RwLock::new(StdHashMap::new())),
@@ -52,7 +53,7 @@ impl ConceptSetPool {
         // Fast path: check if already pooled
         {
             let pool_guard = self.pool.read().map_err(|e| {
-                crate::Error::Cache { message: format!("ConceptSetPool read lock poisoned: {}", e) }
+                crate::Error::Cache { message: format!("ConceptSetPool read lock poisoned: {e}") }
             })?;
             
             if let Some(canonical) = pool_guard.get(&hash) {
@@ -67,7 +68,7 @@ impl ConceptSetPool {
         
         // Slow path: insert new canonical version
         let mut pool_guard = self.pool.write().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool write lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool write lock poisoned: {e}") }
         })?;
         
         // Double-check after acquiring write lock (another thread may have inserted)
@@ -92,15 +93,15 @@ impl ConceptSetPool {
     /// Get statistics about pool effectiveness
     pub fn stats(&self) -> Result<ConceptSetPoolStats> {
         let hits = *self.hits.read().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool hits lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool hits lock poisoned: {e}") }
         })?;
         
         let misses = *self.misses.read().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool misses lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool misses lock poisoned: {e}") }
         })?;
         
         let pool_size = self.pool.read().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool read lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool read lock poisoned: {e}") }
         })?.len();
         
         Ok(ConceptSetPoolStats {
@@ -118,15 +119,15 @@ impl ConceptSetPool {
     /// Clear the pool (for testing or when starting new reasoning session)
     pub fn clear(&self) -> Result<()> {
         self.pool.write().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool write lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool write lock poisoned: {e}") }
         })?.clear();
         
         *self.hits.write().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool hits lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool hits lock poisoned: {e}") }
         })? = 0;
         
         *self.misses.write().map_err(|e| {
-            crate::Error::Cache { message: format!("ConceptSetPool misses lock poisoned: {}", e) }
+            crate::Error::Cache { message: format!("ConceptSetPool misses lock poisoned: {e}") }
         })? = 0;
         
         Ok(())
@@ -143,7 +144,7 @@ impl ConceptSetPool {
         
         // Sort concepts to ensure consistent hashing
         let mut sorted: Vec<_> = set.iter().collect();
-        sorted.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        sorted.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         
         for concept in sorted {
             concept.hash(&mut hasher);
@@ -159,7 +160,7 @@ impl Default for ConceptSetPool {
     }
 }
 
-/// Statistics about ConceptSetPool effectiveness
+/// Statistics about `ConceptSetPool` effectiveness
 #[derive(Debug, Clone)]
 pub struct ConceptSetPoolStats {
     /// Number of times a set was found in the pool
@@ -177,6 +178,7 @@ pub struct ConceptSetPoolStats {
 
 impl ConceptSetPoolStats {
     /// Check if the pool is effective (>50% hit rate indicates good deduplication)
+    #[must_use] 
     pub fn is_effective(&self) -> bool {
         self.hit_rate > 0.5
     }
@@ -184,7 +186,8 @@ impl ConceptSetPoolStats {
     /// Estimate memory saved by pooling (rough approximation)
     ///
     /// Assumes each unique set would be duplicated (hits) times without pooling.
-    /// Each ClassExpression is ~100 bytes on average.
+    /// Each `ClassExpression` is ~100 bytes on average.
+    #[must_use] 
     pub fn estimated_memory_saved_bytes(&self, avg_set_size: usize) -> usize {
         self.hits * avg_set_size * 100 // 100 bytes per ClassExpression estimate
     }

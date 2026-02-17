@@ -22,7 +22,7 @@ pub struct QueryRewriter {
     max_rewriting_depth: usize,
 }
 
-/// Index of TBox axioms for efficient query rewriting
+/// Index of `TBox` axioms for efficient query rewriting
 #[derive(Debug, Clone)]
 struct TBoxIndex {
     /// Class inclusions: C ⊑ D
@@ -160,7 +160,7 @@ impl QueryRewriter {
         Ok(self.remove_redundant_queries(rewritten_queries))
     }
 
-    /// Expand a single query atom using TBox axioms
+    /// Expand a single query atom using `TBox` axioms
     fn expand_atom(
         &self,
         atom: &QueryAtom,
@@ -242,7 +242,7 @@ impl QueryRewriter {
         Ok(expansions)
     }
 
-    /// Generate new atoms that can be added to the query based on TBox axioms
+    /// Generate new atoms that can be added to the query based on `TBox` axioms
     fn generate_new_atoms(
         &self,
         query: &ConjunctiveQuery,
@@ -322,7 +322,7 @@ impl QueryRewriter {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
         let count = COUNTER.fetch_add(1, Ordering::SeqCst);
-        QueryVariable::individual(format!("{}_{}", prefix, count))
+        QueryVariable::individual(format!("{prefix}_{count}"))
     }
 
     /// Compute a hash for a query to check for duplicates
@@ -366,8 +366,7 @@ impl QueryRewriter {
                 } => {
                     if !self.is_ql_class_expression(class_expression) {
                         return Err(RewritingError::NotQLProfile(format!(
-                            "Complex class expression not allowed in QL: {}",
-                            class_expression
+                            "Complex class expression not allowed in QL: {class_expression}"
                         )));
                     }
                 }
@@ -395,7 +394,7 @@ impl QueryRewriter {
         }
     }
 
-    /// Build TBox index for efficient query rewriting
+    /// Build `TBox` index for efficient query rewriting
     fn build_tbox_index(ontology: &Ontology) -> Result<TBoxIndex, RewritingError> {
         let mut index = TBoxIndex {
             class_inclusions: HashMap::new(),

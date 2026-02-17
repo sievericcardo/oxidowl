@@ -1,7 +1,7 @@
 //! DL Clause generation and representation
 //!
 //! This module provides functionality for converting OWL axioms into Description Logic (DL) clauses,
-//! following the style of tableau-based reasoners like HermiT, Konclude, and Pellet.
+//! following the style of tableau-based reasoners like `HermiT`, Konclude, and Pellet.
 
 mod axiom_compilers;
 mod formatting;

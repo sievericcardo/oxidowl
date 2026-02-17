@@ -12,11 +12,12 @@ use std::collections::{HashMap, HashSet};
 pub struct ConceptId(pub String);
 
 impl ConceptId {
-    /// Create ConceptId from a class expression
+    /// Create `ConceptId` from a class expression
+    #[must_use] 
     pub fn from_class_expression(expr: &ClassExpression) -> Self {
         match expr {
             ClassExpression::Class(c) => ConceptId(c.iri.to_string()),
-            _ => ConceptId(format!("{:?}", expr)),
+            _ => ConceptId(format!("{expr:?}")),
         }
     }
 }
@@ -38,6 +39,7 @@ pub struct EquivalenceClosure {
 
 impl EquivalenceClosure {
     /// Create a new empty equivalence closure
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             parent: HashMap::new(),
@@ -48,7 +50,7 @@ impl EquivalenceClosure {
 
     /// Build equivalence closure from ontology
     ///
-    /// Processes all EquivalentClasses axioms and computes the
+    /// Processes all `EquivalentClasses` axioms and computes the
     /// transitive closure of equivalence relationships.
     pub fn from_ontology(ontology: &Ontology) -> Result<Self> {
         let mut closure = Self::new();
@@ -64,7 +66,7 @@ impl EquivalenceClosure {
                         let c1 = ConceptId::from_class_expression(&equiv.classes[i]);
                         let c2 = ConceptId::from_class_expression(&equiv.classes[j]);
 
-                        log::trace!("Adding equivalence: {:?} ≡ {:?}", c1, c2);
+                        log::trace!("Adding equivalence: {c1:?} ≡ {c2:?}");
                         closure.add_equivalence(c1, c2);
                     }
                 }

@@ -31,6 +31,7 @@ pub struct ValidationError {
 }
 
 impl ValidationError {
+    #[must_use] 
     pub fn new(error_type: ValidationErrorType, message: String) -> Self {
         Self {
             error_type,
@@ -231,6 +232,7 @@ pub struct OWL2DLValidator {
 }
 
 impl OWL2DLValidator {
+    #[must_use] 
     pub fn new(ontology: Ontology) -> Self {
         let mut validator = Self {
             ontology,
@@ -304,8 +306,7 @@ impl OWL2DLValidator {
                 errors.push(ValidationError {
                     error_type: ValidationErrorType::CyclicPropertyHierarchy,
                     message: format!(
-                        "Cyclic property hierarchy detected involving property: {}",
-                        property
+                        "Cyclic property hierarchy detected involving property: {property}"
                     ),
                     severity: ValidationSeverity::Error,
                     axiom_id: None,
@@ -390,8 +391,7 @@ impl OWL2DLValidator {
                             error_type:
                                 ValidationErrorType::NonSimplePropertyInCardinalityRestriction,
                             message: format!(
-                                "Non-simple property {} used in cardinality restriction",
-                                prop_iri
+                                "Non-simple property {prop_iri} used in cardinality restriction"
                             ),
                             severity: ValidationSeverity::Error,
                             axiom_id: None,
@@ -528,7 +528,7 @@ impl OWL2DLValidator {
                 if !self.is_recognized_datatype(iri) {
                     errors.push(ValidationError::new(
                         ValidationErrorType::UnrecognizedDatatype,
-                        format!("Unrecognized datatype: {}", iri),
+                        format!("Unrecognized datatype: {iri}"),
                     ));
                 }
             }
@@ -540,7 +540,7 @@ impl OWL2DLValidator {
                 if !self.is_recognized_datatype(datatype) {
                     errors.push(ValidationError::new(
                         ValidationErrorType::UnrecognizedDatatype,
-                        format!("Unrecognized base datatype in restriction: {}", datatype),
+                        format!("Unrecognized base datatype in restriction: {datatype}"),
                     ));
                 }
 
@@ -651,7 +651,7 @@ impl OWL2DLValidator {
                 if !declared_entities.contains(&entity) {
                     errors.push(ValidationError {
                         error_type: ValidationErrorType::UndeclaredEntity,
-                        message: format!("Undeclared entity used: {:?}", entity),
+                        message: format!("Undeclared entity used: {entity:?}"),
                         severity: ValidationSeverity::Error,
                         axiom_id: Some(axiom.axiom_id().to_string()),
                         location: None,
@@ -722,8 +722,7 @@ impl OWL2DLValidator {
                     errors.push(ValidationError::new(
                         ValidationErrorType::ExcessiveQuotedTripleNesting,
                         format!(
-                            "Quoted triple nesting depth {} exceeds configured maximum {}",
-                            depth, max_depth
+                            "Quoted triple nesting depth {depth} exceeds configured maximum {max_depth}"
                         ),
                     ));
                 }
@@ -759,8 +758,7 @@ impl OWL2DLValidator {
                         return Err(ValidationError::new(
                             ValidationErrorType::InvalidDirectionalLiteral,
                             format!(
-                                "Directional literal in {} position must have a language tag",
-                                position
+                                "Directional literal in {position} position must have a language tag"
                             ),
                         ));
                     }
@@ -771,8 +769,7 @@ impl OWL2DLValidator {
                             return Err(ValidationError::new(
                                 ValidationErrorType::InvalidDirectionalLiteral,
                                 format!(
-                                    "Invalid direction '{}' in {} position (must be 'ltr' or 'rtl')",
-                                    dir, position
+                                    "Invalid direction '{dir}' in {position} position (must be 'ltr' or 'rtl')"
                                 ),
                             ));
                         }
@@ -783,8 +780,7 @@ impl OWL2DLValidator {
                             return Err(ValidationError::new(
                                 ValidationErrorType::InvalidDirectionalLiteral,
                                 format!(
-                                    "Directional literal in {} position must have datatype rdf:dirLangString",
-                                    position
+                                    "Directional literal in {position} position must have datatype rdf:dirLangString"
                                 ),
                             ));
                         }
@@ -799,8 +795,7 @@ impl OWL2DLValidator {
                         return Err(ValidationError::new(
                             ValidationErrorType::InvalidBlankNodeLabel,
                             format!(
-                                "Invalid blank node label '{}' in {} position (must contain only alphanumeric characters)",
-                                id, position
+                                "Invalid blank node label '{id}' in {position} position (must contain only alphanumeric characters)"
                             ),
                         ));
                     }
@@ -809,8 +804,7 @@ impl OWL2DLValidator {
                     return Err(ValidationError::new(
                         ValidationErrorType::InvalidBlankNodeLabel,
                         format!(
-                            "Invalid blank node label '{}' in {} position",
-                            id, position
+                            "Invalid blank node label '{id}' in {position} position"
                         ),
                     ));
                 }
@@ -850,7 +844,7 @@ impl OWL2DLValidator {
     /// Returns the configured max depth for quoted triple nesting.
     /// Default is 5 levels, which should be sufficient for most use cases.
     /// 
-    /// Note: In future, this should be exposed in ReasoningConfig or ValidationConfig
+    /// Note: In future, this should be exposed in `ReasoningConfig` or `ValidationConfig`
     fn get_max_nesting_depth(&self) -> usize {
         // Use default value of 5 - appropriate for most RDF-star use cases
         // This balances expressiveness with computational complexity
@@ -1288,7 +1282,7 @@ impl OWL2DLValidator {
         match range {
             crate::ontology::DataRange::Datatype(iri) => iri.to_string(),
             crate::ontology::DataRange::DatatypeRestriction { datatype, .. } => {
-                format!("restriction on {}", datatype)
+                format!("restriction on {datatype}")
             }
             crate::ontology::DataRange::DataIntersectionOf(_) => {
                 "intersection of data ranges".to_string()
@@ -1369,7 +1363,7 @@ impl OWL2DLValidator {
                 if !self.is_supported_datatype(&dt_iri) {
                     errors.push(ValidationError::new(
                         ValidationErrorType::UnsupportedDatatype,
-                        format!("Unsupported datatype: {}", dt_iri),
+                        format!("Unsupported datatype: {dt_iri}"),
                     ));
                 }
             }
@@ -1437,7 +1431,7 @@ impl OWL2DLValidator {
                 if !self.is_supported_datatype(&dt_iri) {
                     errors.push(ValidationError::new(
                         ValidationErrorType::UnsupportedDatatype,
-                        format!("Unsupported base datatype: {}", dt_iri),
+                        format!("Unsupported base datatype: {dt_iri}"),
                     ));
                 }
 
@@ -1660,7 +1654,7 @@ impl OWL2DLValidator {
         }
     }
 
-    /// Convert horned_owl data range to internal data range
+    /// Convert `horned_owl` data range to internal data range
     fn convert_horned_owl_data_range(
         &self,
         range: &horned_owl::model::DataRange<String>,
@@ -1715,7 +1709,7 @@ impl OWL2DLValidator {
         }
     }
 
-    /// Convert horned_owl literal to internal literal
+    /// Convert `horned_owl` literal to internal literal
     fn convert_horned_owl_literal(
         &self,
         literal: &horned_owl::model::Literal<String>,
@@ -1724,7 +1718,7 @@ impl OWL2DLValidator {
         literal.clone()
     }
 
-    /// Convert horned_owl facet restriction to internal facet restriction
+    /// Convert `horned_owl` facet restriction to internal facet restriction
     fn convert_horned_owl_facet_restriction(
         &self,
         fr: &horned_owl::model::FacetRestriction<String>,
@@ -1744,8 +1738,7 @@ impl OWL2DLValidator {
             "FractionDigits" => crate::ontology::datatypes::ConstrainingFacet::FractionDigits,
             _ => {
                 return Err(Error::invalid_input(format!(
-                    "Unknown facet type: {}",
-                    facet_str
+                    "Unknown facet type: {facet_str}"
                 )));
             }
         };
@@ -2044,8 +2037,7 @@ impl OWL2DLValidator {
                     errors.push(ValidationError::new(
                         ValidationErrorType::InvalidFacetRestriction,
                         format!(
-                            "Length facet {} not applicable to datatype {}",
-                            facet_name, datatype_iri
+                            "Length facet {facet_name} not applicable to datatype {datatype_iri}"
                         ),
                     ));
                 }
@@ -2059,8 +2051,7 @@ impl OWL2DLValidator {
                     errors.push(ValidationError::new(
                         ValidationErrorType::InvalidFacetRestriction,
                         format!(
-                            "Range facet {} not applicable to datatype {}",
-                            facet_name, datatype_iri
+                            "Range facet {facet_name} not applicable to datatype {datatype_iri}"
                         ),
                     ));
                 }
@@ -2081,7 +2072,7 @@ impl OWL2DLValidator {
             _ => {
                 errors.push(ValidationError::new(
                     ValidationErrorType::InvalidFacetRestriction,
-                    format!("Unknown facet: {}", facet_name),
+                    format!("Unknown facet: {facet_name}"),
                 ));
             }
         }
@@ -2133,8 +2124,7 @@ impl OWL2DLValidator {
                     errors.push(ValidationError {
                         error_type: ValidationErrorType::IncompatibleDataRanges,
                         message: format!(
-                            "Incompatible data ranges in intersection: {:?} and {:?}",
-                            range1, range2
+                            "Incompatible data ranges in intersection: {range1:?} and {range2:?}"
                         ),
                         severity: ValidationSeverity::Error,
                         axiom_id: None,
@@ -2197,7 +2187,7 @@ impl OWL2DLValidator {
         for literal in literals {
             let literal_key = (
                 literal.value.clone(),
-                literal.datatype.as_ref().map(|dt| dt.to_string()),
+                literal.datatype.as_ref().map(std::string::ToString::to_string),
             );
             if seen_literals.contains(&literal_key) {
                 errors.push(ValidationError {

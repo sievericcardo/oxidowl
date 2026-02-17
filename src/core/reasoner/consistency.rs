@@ -74,11 +74,13 @@ impl PreConsistencyChecker {
     }
 
     /// Get reference to equivalence closure (for future use)
+    #[must_use] 
     pub fn equivalence_closure(&self) -> &EquivalenceClosure {
         &self.equivalence_closure
     }
 
     /// Get reference to disjointness map (for future use)
+    #[must_use] 
     pub fn disjointness_map(&self) -> &DisjointnessMap {
         &self.disjointness_map
     }

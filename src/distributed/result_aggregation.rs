@@ -391,8 +391,7 @@ impl ResultAggregator {
         }
 
         info!(
-            "Started aggregation session for query {} expecting {} partitions",
-            query_id, expected_partitions
+            "Started aggregation session for query {query_id} expecting {expected_partitions} partitions"
         );
 
         Ok(result_receiver)
@@ -440,7 +439,7 @@ impl ResultAggregator {
         };
 
         let session = session.ok_or_else(|| {
-            DistributedError::Aggregation(format!("No active session for query {}", query_id))
+            DistributedError::Aggregation(format!("No active session for query {query_id}"))
         })?;
 
         info!(
@@ -455,7 +454,7 @@ impl ResultAggregator {
 
         // Send result
         if let Err(e) = session.result_sender.send(aggregated_result) {
-            error!("Failed to send aggregated result: {}", e);
+            error!("Failed to send aggregated result: {e}");
         }
 
         Ok(())
@@ -546,7 +545,7 @@ impl ResultAggregator {
         let mut active_sessions = self.active_sessions.write().await;
 
         if active_sessions.remove(&query_id).is_some() {
-            info!("Cancelled aggregation session for query {}", query_id);
+            info!("Cancelled aggregation session for query {query_id}");
         }
 
         Ok(())
@@ -624,8 +623,8 @@ impl DuplicateDetector {
     /// Convert bound value to canonical string
     fn value_to_string(&self, value: &BoundValue) -> String {
         match value {
-            BoundValue::Individual(ind) => format!("{:?}", ind),
-            BoundValue::Literal(lit) => format!("{:?}", lit),
+            BoundValue::Individual(ind) => format!("{ind:?}"),
+            BoundValue::Literal(lit) => format!("{lit:?}"),
             BoundValue::Class(cls) => cls.clone(),
             BoundValue::Property(prop) => prop.clone(),
         }

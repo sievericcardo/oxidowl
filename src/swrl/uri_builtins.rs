@@ -34,42 +34,42 @@ impl SWRLBuiltIn for ResolveUriBuiltIn {
                     } else {
                         "http:"
                     };
-                    format!("{}{}", scheme, relative)
+                    format!("{scheme}{relative}")
                 } else if relative.starts_with('/') {
                     // Absolute path
                     if let Some(scheme_end) = base.find("://") {
                         if let Some(path_start) = base[scheme_end + 3..].find('/') {
                             format!("{}{}", &base[..scheme_end + 3 + path_start], relative)
                         } else {
-                            format!("{}{}", base, relative)
+                            format!("{base}{relative}")
                         }
                     } else {
-                        format!("{}{}", base, relative)
+                        format!("{base}{relative}")
                     }
-                } else if relative.starts_with("?") {
+                } else if relative.starts_with('?') {
                     // Query component
                     if let Some(query_pos) = base.find('?') {
                         format!("{}{}", &base[..query_pos], relative)
                     } else {
-                        format!("{}{}", base, relative)
+                        format!("{base}{relative}")
                     }
-                } else if relative.starts_with("#") {
+                } else if relative.starts_with('#') {
                     // Fragment component
                     if let Some(fragment_pos) = base.find('#') {
                         format!("{}{}", &base[..fragment_pos], relative)
                     } else {
-                        format!("{}{}", base, relative)
+                        format!("{base}{relative}")
                     }
                 } else {
                     // Relative path
                     if base.ends_with('/') {
-                        format!("{}{}", base, relative)
+                        format!("{base}{relative}")
                     } else {
                         // Remove last path segment and append relative
                         if let Some(last_slash) = base.rfind('/') {
                             format!("{}/{}", &base[..last_slash], relative)
                         } else {
-                            format!("{}/{}", base, relative)
+                            format!("{base}/{relative}")
                         }
                     }
                 };
@@ -108,7 +108,7 @@ impl SWRLBuiltIn for AnyUriBuiltIn {
                 {
                     input.clone()
                 } else {
-                    format!("urn:{}", input)
+                    format!("urn:{input}")
                 };
                 Ok(SWRLValue::Boolean(*result == uri))
             }

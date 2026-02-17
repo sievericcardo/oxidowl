@@ -278,7 +278,7 @@ pub struct RuleResult {
     /// Branching points created
     pub branches: Vec<BranchInfo>,
 
-    /// Branching points for choice rules (simplified from HyperTableau)
+    /// Branching points for choice rules (simplified from `HyperTableau`)
     pub branching_points: Vec<(String, Vec<String>)>,
 
     /// Data property assertions
@@ -733,7 +733,7 @@ impl CompletionRuleSet {
                 current_node.clone(),
                 nominal
                     .iri()
-                    .map(|iri| iri.as_str())
+                    .map(super::super::ontology::IRI::as_str)
                     .unwrap_or("unknown")
                     .to_string(),
                 Arc::clone(&application.dependencies),
@@ -1005,7 +1005,7 @@ impl CompletionRuleSet {
                 Arc::clone(dependencies),
             ));
             
-            log::debug!("Created reification node: {}", reification_node);
+            log::debug!("Created reification node: {reification_node}");
         }
 
         Ok(result)

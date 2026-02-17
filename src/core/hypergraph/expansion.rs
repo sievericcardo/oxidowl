@@ -141,6 +141,7 @@ pub struct ExpansionStatistics {
 
 impl HypertableauExpansion {
     /// Create a new hypertableau expansion engine
+    #[must_use] 
     pub fn new() -> Self {
         // Initialize standard contradictions
         let mut contradictions = HashSet::new();
@@ -368,8 +369,7 @@ impl HypertableauExpansion {
             if let Some(&existing_id) = existing_nodes.first() {
                 // Reuse existing node - add non-generating edge
                 trace!(
-                    "Reusing existing node {} for ∃{}.{}",
-                    existing_id, role_name, target_concept
+                    "Reusing existing node {existing_id} for ∃{role_name}.{target_concept}"
                 );
 
                 let edge = HyperEdge::non_generating(role_name.clone(), task.node_id, existing_id);
@@ -378,7 +378,7 @@ impl HypertableauExpansion {
                 self.stats.nodes_reused += 1;
             } else {
                 // Create new node - add generating edge
-                trace!("Creating new node for ∃{}.{}", role_name, target_concept);
+                trace!("Creating new node for ∃{role_name}.{target_concept}");
 
                 let new_node = HyperNode::new();
                 let new_node_id = self.graph.add_node(new_node);
@@ -508,7 +508,7 @@ impl HypertableauExpansion {
             for label in &node.labels {
                 for (c1, c2) in &self.contradictions {
                     if label == c1 && node.labels.contains(c2) {
-                        trace!("Clash detected: {} and {} in node {}", c1, c2, node_id);
+                        trace!("Clash detected: {c1} and {c2} in node {node_id}");
                         return true;
                     }
                 }
@@ -538,7 +538,7 @@ impl HypertableauExpansion {
                 if blocker_id != node_id {
                     // Check if blocker is an ancestor (subset blocking)
                     if self.is_ancestor(blocker_id, node_id) {
-                        trace!("Blocking node {} by ancestor {}", node_id, blocker_id);
+                        trace!("Blocking node {node_id} by ancestor {blocker_id}");
                         if let Some(node) = self.graph.get_node_mut(node_id) {
                             node.block(blocker_id);
                             self.stats.blocks_performed += 1;
@@ -597,6 +597,7 @@ impl HypertableauExpansion {
     }
 
     /// Get the hypergraph
+    #[must_use] 
     pub fn graph(&self) -> &Hypergraph {
         &self.graph
     }
@@ -607,11 +608,13 @@ impl HypertableauExpansion {
     }
 
     /// Get expansion statistics
+    #[must_use] 
     pub fn statistics(&self) -> &ExpansionStatistics {
         &self.stats
     }
 
     /// Get current expansion state
+    #[must_use] 
     pub fn state(&self) -> &ExpansionState {
         &self.state
     }

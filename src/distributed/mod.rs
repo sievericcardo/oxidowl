@@ -1,7 +1,7 @@
 //! Distributed Query Processing Module
 //!
 //! Phase 2.2 implementation providing distributed reasoning capabilities across multiple nodes.
-//! This module enables horizontal scaling of OxidOWL for large-scale ontology processing.
+//! This module enables horizontal scaling of `OxidOWL` for large-scale ontology processing.
 //!
 //! # Architecture Overview
 //!
@@ -189,7 +189,7 @@ pub enum CommunicationProtocol {
     /// gRPC communication
     Grpc,
 
-    /// HTTP-based RESTful API
+    /// HTTP-based `RESTful` API
     Http,
 
     /// WebSocket communication
@@ -591,7 +591,7 @@ impl DistributedQueryProcessor {
         let cluster_manager = self.cluster_manager.clone();
         tokio::spawn(async move {
             if let Err(e) = cluster_manager.write().await.start().await {
-                error!("Cluster manager failed: {}", e);
+                error!("Cluster manager failed: {e}");
             }
         });
 
@@ -599,7 +599,7 @@ impl DistributedQueryProcessor {
         let coordinator = self.coordinator.clone();
         tokio::spawn(async move {
             if let Err(e) = coordinator.write().await.start().await {
-                error!("Cluster coordinator failed: {}", e);
+                error!("Cluster coordinator failed: {e}");
             }
         });
 
@@ -607,7 +607,7 @@ impl DistributedQueryProcessor {
         let fault_tolerance = self.fault_tolerance.clone();
         tokio::spawn(async move {
             if let Err(e) = fault_tolerance.write().await.start_monitoring().await {
-                error!("Fault tolerance monitoring failed: {}", e);
+                error!("Fault tolerance monitoring failed: {e}");
             }
         });
 
@@ -615,7 +615,7 @@ impl DistributedQueryProcessor {
         let load_balancer = self.load_balancer.clone();
         tokio::spawn(async move {
             if let Err(e) = load_balancer.write().await.start().await {
-                error!("Load balancer failed: {}", e);
+                error!("Load balancer failed: {e}");
             }
         });
 
@@ -683,7 +683,7 @@ impl DistributedQueryProcessor {
                 Ok(Err(e)) => return Err(e),
                 Err(e) => {
                     return Err(Error::Internal {
-                        message: format!("Task execution failed: {}", e),
+                        message: format!("Task execution failed: {e}"),
                     });
                 }
             }

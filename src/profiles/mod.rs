@@ -43,6 +43,7 @@ pub enum OWL2Profile {
 
 impl OWL2Profile {
     /// Get the profile name as a string
+    #[must_use] 
     pub fn name(&self) -> &'static str {
         match self {
             OWL2Profile::EL => "OWL 2 EL",
@@ -54,6 +55,7 @@ impl OWL2Profile {
     }
 
     /// Get the profile description
+    #[must_use] 
     pub fn description(&self) -> &'static str {
         match self {
             OWL2Profile::EL => "Existential Language - optimized for classification",
@@ -90,28 +92,28 @@ impl std::fmt::Display for ProfileViolationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ProfileViolationType::DisallowedClassExpression(msg) => {
-                write!(f, "Disallowed class expression: {}", msg)
+                write!(f, "Disallowed class expression: {msg}")
             }
             ProfileViolationType::DisallowedPropertyExpression(msg) => {
-                write!(f, "Disallowed property expression: {}", msg)
+                write!(f, "Disallowed property expression: {msg}")
             }
             ProfileViolationType::DisallowedAxiom(msg) => {
-                write!(f, "Disallowed axiom: {}", msg)
+                write!(f, "Disallowed axiom: {msg}")
             }
             ProfileViolationType::DisallowedDataRange(msg) => {
-                write!(f, "Disallowed data range: {}", msg)
+                write!(f, "Disallowed data range: {msg}")
             }
             ProfileViolationType::UnsupportedFeature(msg) => {
-                write!(f, "Unsupported feature: {}", msg)
+                write!(f, "Unsupported feature: {msg}")
             }
             ProfileViolationType::ComplexityViolation(msg) => {
-                write!(f, "Complexity violation: {}", msg)
+                write!(f, "Complexity violation: {msg}")
             }
             ProfileViolationType::QuotedTripleNotSupported(msg) => {
-                write!(f, "Quoted triple not supported in profile: {}", msg)
+                write!(f, "Quoted triple not supported in profile: {msg}")
             }
             ProfileViolationType::ExcessiveNestingForProfile(msg) => {
-                write!(f, "Excessive nesting for profile: {}", msg)
+                write!(f, "Excessive nesting for profile: {msg}")
             }
         }
     }
@@ -142,6 +144,7 @@ impl ProfileViolation {
     }
 
     /// Set the axiom ID that caused the violation
+    #[must_use] 
     pub fn with_axiom_id(mut self, axiom_id: crate::ontology::AxiomId) -> Self {
         self.axiom_id = Some(axiom_id);
         self
@@ -158,10 +161,10 @@ impl std::fmt::Display for ProfileViolation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.violation_type, self.context)?;
         if let Some(axiom_id) = self.axiom_id {
-            write!(f, " (axiom: {})", axiom_id)?;
+            write!(f, " (axiom: {axiom_id})")?;
         }
         if let Some(location) = &self.location {
-            write!(f, " at {}", location)?;
+            write!(f, " at {location}")?;
         }
         Ok(())
     }
@@ -182,6 +185,7 @@ pub struct ProfileValidationReport {
 
 impl ProfileValidationReport {
     /// Create a new profile validation report
+    #[must_use] 
     pub fn new(profile: OWL2Profile) -> Self {
         Self {
             profile,
@@ -198,11 +202,13 @@ impl ProfileValidationReport {
     }
 
     /// Check if the ontology conforms to the profile
+    #[must_use] 
     pub fn is_valid(&self) -> bool {
         self.conforms
     }
 
     /// Get the number of violations
+    #[must_use] 
     pub fn violation_count(&self) -> usize {
         self.violations.len()
     }
@@ -236,6 +242,7 @@ pub struct ProfileDetectionResult {
 
 impl ProfileDetectionResult {
     /// Create a new profile detection result
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             conforming_profiles: Vec::new(),
@@ -257,6 +264,7 @@ impl ProfileDetectionResult {
     }
 
     /// Get the recommended profile for the ontology
+    #[must_use] 
     pub fn recommended_profile(&self) -> OWL2Profile {
         self.most_restrictive.unwrap_or(self.least_restrictive)
     }

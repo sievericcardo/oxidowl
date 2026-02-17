@@ -237,12 +237,12 @@ impl MemoryTracker {
             return Ok(MemoryStats::default());
         }
 
-        let total_used: Vec<usize> = snapshots.iter().map(|s| s.total_used()).collect();
+        let total_used: Vec<usize> = snapshots.iter().map(MemorySnapshot::total_used).collect();
         let heap_allocated: Vec<usize> = snapshots.iter().map(|s| s.heap_allocated).collect();
         let cache_sizes: Vec<usize> = snapshots.iter().map(|s| s.cache_size).collect();
 
         Ok(MemoryStats {
-            current_total_mb: snapshots.last().map(|s| s.total_used_mb()).unwrap_or(0.0),
+            current_total_mb: snapshots.last().map(MemorySnapshot::total_used_mb).unwrap_or(0.0),
             peak_total_mb: total_used.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
             avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64)
                 / (1024.0 * 1024.0),
@@ -260,7 +260,7 @@ impl MemoryTracker {
                 / (1024.0 * 1024.0),
             system_available_mb: snapshots
                 .last()
-                .map(|s| s.system_available_mb())
+                .map(MemorySnapshot::system_available_mb)
                 .unwrap_or(0.0),
         })
     }
@@ -431,7 +431,7 @@ impl QueryProfiler {
         if durations.is_empty() {
             return 0.0;
         }
-        let total_ms: u128 = durations.iter().map(|d| d.as_millis()).sum();
+        let total_ms: u128 = durations.iter().map(std::time::Duration::as_millis).sum();
         total_ms as f64 / durations.len() as f64
     }
 

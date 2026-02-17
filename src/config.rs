@@ -39,7 +39,7 @@ pub enum ServerFeature {
     Server,
     /// Enable CORS headers
     Cors,
-    /// Enable OWLlink server
+    /// Enable `OWLlink` server
     OWLlink,
     /// Enable SPARQL endpoint
     SPARQL,
@@ -263,7 +263,7 @@ pub struct ServerConfig {
     pub request_timeout: Duration,
     /// Maximum request size in bytes
     pub max_request_size: usize,
-    /// OWLlink server port
+    /// `OWLlink` server port
     pub owllink_port: u16,
     /// SPARQL endpoint port
     pub sparql_port: u16,
@@ -375,6 +375,7 @@ pub enum PerformanceProfile {
 
 impl PerformanceProfile {
     /// Get the recommended number of worker threads for this profile
+    #[must_use] 
     pub fn worker_threads(&self) -> usize {
         match self {
             Self::Low => 2,
@@ -385,6 +386,7 @@ impl PerformanceProfile {
     }
 
     /// Get the recommended cache size in MB for this profile
+    #[must_use] 
     pub fn cache_size_mb(&self) -> u64 {
         match self {
             Self::Low => 50,
@@ -395,6 +397,7 @@ impl PerformanceProfile {
     }
 
     /// Get the memory pool size in MB for this profile
+    #[must_use] 
     pub fn memory_pool_size_mb(&self) -> u64 {
         match self {
             Self::Low => 128,
@@ -405,21 +408,25 @@ impl PerformanceProfile {
     }
 
     /// Whether SIMD should be enabled for this profile
+    #[must_use] 
     pub fn enable_simd(&self) -> bool {
         matches!(self, Self::High | Self::Ultra)
     }
 
     /// Whether NUMA awareness should be enabled for this profile
+    #[must_use] 
     pub fn enable_numa_awareness(&self) -> bool {
         matches!(self, Self::Ultra)
     }
 
     /// Whether lock-free data structures should be enabled
+    #[must_use] 
     pub fn enable_lock_free(&self) -> bool {
         matches!(self, Self::High | Self::Ultra)
     }
 
     /// Whether persistent collections should be enabled
+    #[must_use] 
     pub fn enable_persistent_collections(&self) -> bool {
         matches!(self, Self::High | Self::Ultra)
     }
@@ -447,6 +454,7 @@ impl PerformanceProfile {
     }
 
     /// Maximum parallel classification tasks
+    #[must_use] 
     pub fn max_parallel_classification_tasks(&self) -> usize {
         match self {
             Self::Low => 4,
@@ -474,6 +482,7 @@ impl Default for PerformanceConfig {
 
 impl PerformanceConfig {
     /// Create a configuration from a performance profile
+    #[must_use] 
     pub fn from_profile(profile: PerformanceProfile) -> Self {
         Self {
             profile,
@@ -486,11 +495,13 @@ impl PerformanceConfig {
     }
 
     /// Get the effective number of worker threads
+    #[must_use] 
     pub fn get_worker_threads(&self) -> usize {
         self.worker_threads.unwrap_or_else(|| self.profile.worker_threads())
     }
 
     /// Set performance profile from environment variable
+    #[must_use] 
     pub fn from_env() -> Self {
         let profile = std::env::var("OXIDOWL_PERFORMANCE_PROFILE")
             .ok()

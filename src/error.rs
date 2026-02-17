@@ -337,22 +337,22 @@ fn format_ontology_parsing_error(
     context: &Option<String>,
     token: &Option<String>,
 ) -> String {
-    let mut result = format!("Ontology parsing error: {}", message);
+    let mut result = format!("Ontology parsing error: {message}");
 
     if let Some(l) = line {
         if let Some(c) = column {
-            result.push_str(&format!(" at line {}, column {}", l, c));
+            result.push_str(&format!(" at line {l}, column {c}"));
         } else {
-            result.push_str(&format!(" at line {}", l));
+            result.push_str(&format!(" at line {l}"));
         }
     }
 
     if let Some(t) = token {
-        result.push_str(&format!(" (token: '{}')", t));
+        result.push_str(&format!(" (token: '{t}')"));
     }
 
     if let Some(ctx) = context {
-        result.push_str(&format!("\nContext: {}", ctx));
+        result.push_str(&format!("\nContext: {ctx}"));
     }
 
     result
@@ -365,18 +365,18 @@ fn format_rdf_star_syntax_error(
     column: &Option<usize>,
     context: &Option<String>,
 ) -> String {
-    let mut result = format!("RDF-star syntax error: {}", message);
+    let mut result = format!("RDF-star syntax error: {message}");
 
     if let Some(l) = line {
         if let Some(c) = column {
-            result.push_str(&format!(" at line {}, column {}", l, c));
+            result.push_str(&format!(" at line {l}, column {c}"));
         } else {
-            result.push_str(&format!(" at line {}", l));
+            result.push_str(&format!(" at line {l}"));
         }
     }
 
     if let Some(ctx) = context {
-        result.push_str(&format!("\nContext: {}", ctx));
+        result.push_str(&format!("\nContext: {ctx}"));
     }
 
     // Add helpful hint for common RDF-star errors

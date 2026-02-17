@@ -16,6 +16,7 @@ pub struct TableauAlgorithmInstance {
 
 impl TableauAlgorithmInstance {
     /// Create a new instance with a tableau
+    #[must_use] 
     pub fn new(tableau: Tableau) -> Self {
         Self { tableau }
     }
@@ -221,6 +222,7 @@ impl TableauFactory {
     }
 
     /// Get access to the underlying tableau builder
+    #[must_use] 
     pub fn tableau_builder(&self) -> &TableauBuilder {
         &self.tableau_builder
     }

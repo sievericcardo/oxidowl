@@ -113,8 +113,9 @@ use crate::{
 };
 use std::path::Path;
 
-/// Extract the first section from a CrossSyntax multi-format file
+/// Extract the first section from a `CrossSyntax` multi-format file
 /// Returns the content of the first section (after the ### marker)
+#[must_use] 
 pub fn extract_first_crosssyntax_section(content: &str) -> String {
     let trimmed = content.trim();
 
@@ -161,7 +162,7 @@ pub fn extract_first_crosssyntax_section(content: &str) -> String {
 /// Detect format from file content for ambiguous cases
 fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat> {
     let content = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| Error::io(format!("Failed to read file for format detection: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to read file for format detection: {e}")))?;
 
     let trimmed = content.trim();
 
@@ -351,7 +352,7 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 
     // Read the file content
     let content = std::fs::read_to_string(path)
-        .map_err(|e| Error::io(format!("Failed to read file: {}", e)))?;
+        .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
 
     // Check if this is a CrossSyntax file and extract first section
     let parsed_content = if content.trim().starts_with("###") {
@@ -572,6 +573,7 @@ impl ParserFactory {
     }
 
     /// Detect RDF version from content
+    #[must_use] 
     pub fn detect_rdf_version(content: &str) -> RdfCompatibilityMode {
         detect_rdf_version_from_content(content)
     }
@@ -651,12 +653,12 @@ impl Parser for ManchesterParser {
         let mut parser = self.clone();
         parser
             .parse_string(input)
-            .map_err(|e| Error::ontology_parsing(format!("Manchester parsing error: {:?}", e)))
+            .map_err(|e| Error::ontology_parsing(format!("Manchester parsing error: {e:?}")))
     }
 
     fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
         let content = std::fs::read_to_string(path)
-            .map_err(|e| Error::ontology_parsing(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| Error::ontology_parsing(format!("Failed to read file: {e}")))?;
         self.parse(&content)
     }
 }

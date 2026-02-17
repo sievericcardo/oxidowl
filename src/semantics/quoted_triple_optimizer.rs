@@ -53,6 +53,7 @@ pub struct InternPoolStats {
 
 impl QuotedTripleInternPool {
     /// Create a new intern pool
+    #[must_use] 
     pub fn new(enabled: bool) -> Self {
         Self {
             pool: Arc::new(RwLock::new(HashMap::new())),
@@ -62,12 +63,14 @@ impl QuotedTripleInternPool {
     }
 
     /// Create a disabled intern pool (zero overhead for RDF 1.1 mode)
+    #[must_use] 
     pub fn disabled() -> Self {
         Self::new(false)
     }
 
     /// Intern a quoted triple
     /// Returns an Arc to the interned triple
+    #[must_use] 
     pub fn intern(&self, triple: Triple) -> Arc<Triple> {
         if !self.enabled {
             // Zero overhead mode: just wrap in Arc
@@ -109,6 +112,7 @@ impl QuotedTripleInternPool {
     }
 
     /// Get current statistics
+    #[must_use] 
     pub fn stats(&self) -> InternPoolStats {
         self.stats.read().unwrap().clone()
     }
@@ -127,6 +131,7 @@ impl QuotedTripleInternPool {
     }
 
     /// Get the number of interned triples
+    #[must_use] 
     pub fn size(&self) -> usize {
         if !self.enabled {
             return 0;
@@ -135,6 +140,7 @@ impl QuotedTripleInternPool {
     }
 
     /// Check if a triple is already interned
+    #[must_use] 
     pub fn contains(&self, triple: &Triple) -> bool {
         if !self.enabled {
             return false;
@@ -172,6 +178,7 @@ pub struct CacheStats {
 
 impl QuotedTripleCache {
     /// Create a new quoted triple cache
+    #[must_use] 
     pub fn new(enabled: bool) -> Self {
         Self {
             depth_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -183,11 +190,13 @@ impl QuotedTripleCache {
     }
 
     /// Create a disabled cache (zero overhead for RDF 1.1 mode)
+    #[must_use] 
     pub fn disabled() -> Self {
         Self::new(false)
     }
 
     /// Get cached depth or None if not cached
+    #[must_use] 
     pub fn get_depth(&self, triple: &Triple) -> Option<usize> {
         if !self.enabled {
             return None;
@@ -219,6 +228,7 @@ impl QuotedTripleCache {
     }
 
     /// Get cached flattened triples or None if not cached
+    #[must_use] 
     pub fn get_flattened(&self, triple: &Triple) -> Option<Vec<Triple>> {
         if !self.enabled {
             return None;
@@ -250,6 +260,7 @@ impl QuotedTripleCache {
     }
 
     /// Get cached reification or None if not cached
+    #[must_use] 
     pub fn get_reification(&self, triple: &Triple) -> Option<Vec<Triple>> {
         if !self.enabled {
             return None;
@@ -281,6 +292,7 @@ impl QuotedTripleCache {
     }
 
     /// Get current statistics
+    #[must_use] 
     pub fn stats(&self) -> CacheStats {
         self.stats.read().unwrap().clone()
     }
@@ -300,6 +312,7 @@ impl QuotedTripleCache {
     }
 
     /// Get total cache size (number of entries)
+    #[must_use] 
     pub fn size(&self) -> usize {
         if !self.enabled {
             return 0;
@@ -338,6 +351,7 @@ impl Default for QuotedTripleOptimizerConfig {
 
 impl QuotedTripleOptimizerConfig {
     /// Create a configuration for RDF 1.1 mode (zero overhead)
+    #[must_use] 
     pub fn rdf11_mode() -> Self {
         Self {
             enable_interning: false,
@@ -348,6 +362,7 @@ impl QuotedTripleOptimizerConfig {
     }
 
     /// Create a configuration for maximum performance
+    #[must_use] 
     pub fn max_performance() -> Self {
         Self {
             enable_interning: true,
@@ -368,6 +383,7 @@ pub struct QuotedTripleOptimizer {
 
 impl QuotedTripleOptimizer {
     /// Create a new optimizer with given configuration
+    #[must_use] 
     pub fn new(config: QuotedTripleOptimizerConfig) -> Self {
         Self {
             intern_pool: QuotedTripleInternPool::new(config.enable_interning),
@@ -377,16 +393,19 @@ impl QuotedTripleOptimizer {
     }
 
     /// Create a disabled optimizer (zero overhead for RDF 1.1 mode)
+    #[must_use] 
     pub fn disabled() -> Self {
         Self::new(QuotedTripleOptimizerConfig::rdf11_mode())
     }
 
     /// Intern a quoted triple
+    #[must_use] 
     pub fn intern(&self, triple: Triple) -> Arc<Triple> {
         self.intern_pool.intern(triple)
     }
 
     /// Get depth with caching
+    #[must_use] 
     pub fn depth(&self, triple: &Triple) -> usize {
         if let Some(cached) = self.cache.get_depth(triple) {
             return cached;
@@ -399,6 +418,7 @@ impl QuotedTripleOptimizer {
     }
 
     /// Flatten with caching
+    #[must_use] 
     pub fn flatten(&self, triple: &Triple) -> Vec<Triple> {
         if let Some(cached) = self.cache.get_flattened(triple) {
             return cached;
@@ -423,6 +443,7 @@ impl QuotedTripleOptimizer {
     }
 
     /// Get comprehensive statistics
+    #[must_use] 
     pub fn stats(&self) -> OptimizerStats {
         OptimizerStats {
             intern_pool: self.intern_pool.stats(),
@@ -437,6 +458,7 @@ impl QuotedTripleOptimizer {
     }
 
     /// Check if optimizations are enabled
+    #[must_use] 
     pub fn is_enabled(&self) -> bool {
         self.config.enable_interning || self.config.enable_caching
     }
@@ -451,6 +473,7 @@ pub struct OptimizerStats {
 
 impl OptimizerStats {
     /// Total cache hit rate across all caches
+    #[must_use] 
     pub fn hit_rate(&self) -> f64 {
         let total_hits = self.cache.depth_hits + self.cache.flatten_hits + self.cache.reification_hits;
         let total_operations = total_hits 
@@ -466,6 +489,7 @@ impl OptimizerStats {
     }
 
     /// Intern pool hit rate
+    #[must_use] 
     pub fn intern_hit_rate(&self) -> f64 {
         let total = self.intern_pool.hits + self.intern_pool.misses;
         if total == 0 {

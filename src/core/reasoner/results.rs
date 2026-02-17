@@ -238,7 +238,7 @@ impl ClassificationResult {
         Ok(children)
     }
 
-    /// Write class hierarchy in HermiT format
+    /// Write class hierarchy in `HermiT` format
     fn write_class_hierarchy<W: Write>(
         &self,
         writer: &mut W,
@@ -275,7 +275,7 @@ impl ClassificationResult {
         Ok(())
     }
 
-    /// Write object properties in HermiT format
+    /// Write object properties in `HermiT` format
     fn write_object_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
         // This would be populated from actual object property classification
         // For now, we'll write a basic structure
@@ -296,7 +296,7 @@ impl ClassificationResult {
         Ok(())
     }
 
-    /// Write data properties in HermiT format  
+    /// Write data properties in `HermiT` format  
     fn write_data_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
         // This would be populated from actual data property classification
         writeln!(writer)?;
@@ -342,7 +342,7 @@ impl ClassificationResult {
     }
 }
 
-/// Helper structure for building class trees in HermiT format
+/// Helper structure for building class trees in `HermiT` format
 #[derive(Debug, Clone)]
 struct ClassNode {
     name: String,

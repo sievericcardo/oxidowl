@@ -152,7 +152,7 @@ impl ClusterCoordinator {
                     return Ok(false);
                 }
                 // Lock expired, can be acquired
-                debug!("Lock {} expired for holder {:?}", lock_id, holder);
+                debug!("Lock {lock_id} expired for holder {holder:?}");
             }
 
         // Acquire the lock
@@ -164,7 +164,7 @@ impl ClusterCoordinator {
         };
 
         locks.insert(lock_id.clone(), lock);
-        info!("Lock {} acquired by node {:?}", lock_id, node_id);
+        info!("Lock {lock_id} acquired by node {node_id:?}");
         Ok(true)
     }
 
@@ -175,7 +175,7 @@ impl ClusterCoordinator {
         if let Some(lock) = locks.get(&lock_id) {
             if lock.holder == Some(node_id) {
                 locks.remove(&lock_id);
-                info!("Lock {} released by node {:?}", lock_id, node_id);
+                info!("Lock {lock_id} released by node {node_id:?}");
                 return Ok(true);
             } else {
                 warn!(
@@ -202,7 +202,7 @@ impl ClusterCoordinator {
         *leader = leader_id;
 
         if let Some(id) = leader_id {
-            info!("Leader set to node {:?}", id);
+            info!("Leader set to node {id:?}");
         } else {
             info!("Leader cleared (no leader)");
         }
@@ -234,7 +234,7 @@ impl ClusterCoordinator {
         let mut consensus = self.consensus.write().await;
         if !consensus.participants.contains(&node_id) {
             consensus.participants.push(node_id);
-            info!("Added node {:?} to consensus participants", node_id);
+            info!("Added node {node_id:?} to consensus participants");
         }
         Ok(())
     }
@@ -243,7 +243,7 @@ impl ClusterCoordinator {
     pub async fn remove_participant(&self, node_id: NodeId) -> Result<()> {
         let mut consensus = self.consensus.write().await;
         consensus.participants.retain(|&id| id != node_id);
-        info!("Removed node {:?} from consensus participants", node_id);
+        info!("Removed node {node_id:?} from consensus participants");
         Ok(())
     }
 
@@ -264,11 +264,13 @@ impl ClusterCoordinator {
 
 impl DistributedLock {
     /// Check if lock has expired
+    #[must_use] 
     pub fn is_expired(&self) -> bool {
         self.acquired_at.elapsed() >= self.timeout
     }
 
     /// Get remaining time before lock expires
+    #[must_use] 
     pub fn time_remaining(&self) -> Option<std::time::Duration> {
         let elapsed = self.acquired_at.elapsed();
         if elapsed < self.timeout {
@@ -281,6 +283,7 @@ impl DistributedLock {
 
 impl ConsensusProtocol {
     /// Create a new consensus protocol state
+    #[must_use] 
     pub fn new(algorithm: ConsensusAlgorithm, min_cluster_size: usize) -> Self {
         let quorum_size = match algorithm {
             ConsensusAlgorithm::Raft => (min_cluster_size / 2) + 1,
@@ -297,6 +300,7 @@ impl ConsensusProtocol {
     }
 
     /// Check if a quorum can be reached with current participants
+    #[must_use] 
     pub fn can_reach_quorum(&self) -> bool {
         self.participants.len() >= self.quorum_size
     }

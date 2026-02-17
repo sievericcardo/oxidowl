@@ -1,7 +1,7 @@
 //! RDFS Entailment Implementation
 //!
 //! This module implements RDFS entailment as defined in:
-//! https://www.w3.org/TR/rdf-schema/#ch_entailmentrules
+//! <https://www.w3.org/TR/rdf-schema/#ch_entailmentrules>
 //!
 //! RDFS entailment rules (rdfs1-rdfs13) are implemented according to the specification.
 
@@ -26,6 +26,7 @@ pub struct RdfsInterpretation {
 
 impl RdfsInterpretation {
     /// Create a new RDFS interpretation
+    #[must_use] 
     pub fn new() -> Self {
         let mut interpretation = Self {
             base: super::rdf::RdfSimpleInterpretation::new(),
@@ -64,11 +65,13 @@ impl RdfsInterpretation {
     }
 
     /// Get class interpretation
+    #[must_use] 
     pub fn get_class_interpretation(&self, class: &str) -> Option<&HashSet<String>> {
         self.class_interpretation.get(class)
     }
 
     /// Check if resource is instance of class
+    #[must_use] 
     pub fn is_instance_of(&self, resource: &str, class: &str) -> bool {
         if let Some(instances) = self.class_interpretation.get(class) {
             instances.contains(resource)
@@ -298,6 +301,7 @@ impl RdfsEntailmentEngine {
 
 impl RdfsEntailmentEngine {
     /// Create a new RDFS entailment engine
+    #[must_use] 
     pub fn new(input_graph: RdfGraph) -> Self {
         Self {
             input_graph,
@@ -503,7 +507,7 @@ impl RdfsEntailmentEngine {
     fn apply_rdfs5(&mut self, graph: &RdfGraph) -> Result<()> {
         let subprop_iri = RdfTerm::Iri(RDFS_SUBPROPERTY_OF.clone());
 
-        let subprop_triples: Vec<_> = graph.find_triples(None, Some(&subprop_iri), None).to_vec();
+        let subprop_triples: Vec<_> = graph.find_triples(None, Some(&subprop_iri), None).clone();
         
         for triple1 in &subprop_triples {
             for triple2 in &subprop_triples {
@@ -654,7 +658,7 @@ impl RdfsEntailmentEngine {
     fn apply_rdfs11(&mut self, graph: &RdfGraph) -> Result<()> {
         let subclass_iri = RdfTerm::Iri(RDFS_SUBCLASS_OF.clone());
 
-        let subclass_triples: Vec<_> = graph.find_triples(None, Some(&subclass_iri), None).to_vec();
+        let subclass_triples: Vec<_> = graph.find_triples(None, Some(&subclass_iri), None).clone();
         
         for triple1 in &subclass_triples {
             for triple2 in &subclass_triples {
@@ -707,6 +711,7 @@ impl RdfsEntailmentEngine {
     }
 
     /// Get the closure (input + derived facts)
+    #[must_use] 
     pub fn closure(&self) -> RdfGraph {
         let mut closure = self.input_graph.clone();
         closure.merge(&self.derived_graph);
@@ -714,6 +719,7 @@ impl RdfsEntailmentEngine {
     }
 
     /// Get derived facts only
+    #[must_use] 
     pub fn derived_facts(&self) -> &RdfGraph {
         &self.derived_graph
     }

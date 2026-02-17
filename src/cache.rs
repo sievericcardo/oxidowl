@@ -819,6 +819,7 @@ impl CacheManager {
     }
 
     /// Get a completion graph from cache
+    #[must_use] 
     pub fn get_completion_graph(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
         self.completion_graph_cache.get(signature)
     }
@@ -829,6 +830,7 @@ impl CacheManager {
     }
 
     /// Get completion graph cache memory usage
+    #[must_use] 
     pub fn completion_graph_memory_usage(&self) -> usize {
         self.completion_graph_cache.memory_usage()
     }

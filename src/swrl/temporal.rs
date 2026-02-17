@@ -15,9 +15,9 @@ pub enum TemporalValue {
     Date(NaiveDate),
     /// Time without date (e.g., 14:30:00)
     Time(NaiveTime),
-    /// DateTime without timezone (e.g., 2023-12-25T14:30:00)
+    /// `DateTime` without timezone (e.g., 2023-12-25T14:30:00)
     DateTime(NaiveDateTime),
-    /// DateTime with timezone (e.g., 2023-12-25T14:30:00Z)
+    /// `DateTime` with timezone (e.g., 2023-12-25T14:30:00Z)
     DateTimeWithTz(DateTime<FixedOffset>),
     /// Year-month duration (e.g., P1Y2M)
     YearMonthDuration(IsoDuration),
@@ -54,7 +54,7 @@ pub enum TemporalError {
 
 impl From<TemporalError> for Error {
     fn from(err: TemporalError) -> Self {
-        Error::reasoning(format!("Temporal error: {}", err))
+        Error::reasoning(format!("Temporal error: {err}"))
     }
 }
 
@@ -155,8 +155,7 @@ impl TemporalValue {
             "http://www.w3.org/2001/XMLSchema#gMonth" => Self::parse_gmonth(value),
             "http://www.w3.org/2001/XMLSchema#gDay" => Self::parse_gday(value),
             _ => Err(TemporalError::UnsupportedOperation(format!(
-                "Unsupported temporal datatype: {}",
-                datatype
+                "Unsupported temporal datatype: {datatype}"
             ))),
         }
     }
@@ -165,14 +164,14 @@ impl TemporalValue {
     fn parse_date(value: &str) -> Result<Self, TemporalError> {
         NaiveDate::from_str(value)
             .map(TemporalValue::Date)
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))
     }
 
     /// Parse time from string
     fn parse_time(value: &str) -> Result<Self, TemporalError> {
         NaiveTime::from_str(value)
             .map(TemporalValue::Time)
-            .map_err(|e| TemporalError::InvalidTimeFormat(format!("{}: {}", value, e)))
+            .map_err(|e| TemporalError::InvalidTimeFormat(format!("{value}: {e}")))
     }
 
     /// Parse datetime from string
@@ -181,7 +180,7 @@ impl TemporalValue {
         if Self::has_timezone(value) {
             // Parse with timezone
             let dt = DateTime::parse_from_rfc3339(value)
-                .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+                .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
 
             // Convert to UTC (offset 0) - this operation is infallible for valid DateTime
             let utc_dt =
@@ -191,7 +190,7 @@ impl TemporalValue {
             // Parse without timezone
             NaiveDateTime::from_str(value)
                 .map(TemporalValue::DateTime)
-                .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))
+                .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))
         }
     }
 
@@ -241,7 +240,7 @@ impl TemporalValue {
     /// Parse day-time duration from string
     fn parse_day_time_duration(value: &str) -> Result<Self, TemporalError> {
         let iso_duration = IsoDuration::from_str(value)
-            .map_err(|e| TemporalError::InvalidDurationFormat(format!("{}: {:?}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDurationFormat(format!("{value}: {e:?}")))?;
 
         // Convert to chrono Duration
         let mut total_seconds = 0i64;
@@ -268,7 +267,7 @@ impl TemporalValue {
     fn parse_year_month_duration(value: &str) -> Result<Self, TemporalError> {
         IsoDuration::from_str(value)
             .map(TemporalValue::YearMonthDuration)
-            .map_err(|e| TemporalError::InvalidDurationFormat(format!("{}: {:?}", value, e)))
+            .map_err(|e| TemporalError::InvalidDurationFormat(format!("{value}: {e:?}")))
     }
 
     /// Parse gYear from string
@@ -276,7 +275,7 @@ impl TemporalValue {
         value
             .parse::<i32>()
             .map(TemporalValue::GYear)
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))
     }
 
     /// Parse gYearMonth from string  
@@ -288,10 +287,10 @@ impl TemporalValue {
 
         let year = parts[0]
             .parse::<i32>()
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
         let month = parts[1]
             .parse::<u32>()
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
 
         Ok(TemporalValue::GYearMonth(year, month))
     }
@@ -310,10 +309,10 @@ impl TemporalValue {
 
         let month = parts[0]
             .parse::<u32>()
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
         let day = parts[1]
             .parse::<u32>()
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
 
         Ok(TemporalValue::GMonthDay(month, day))
     }
@@ -327,7 +326,7 @@ impl TemporalValue {
         let month_str = &value[2..];
         let month = month_str
             .parse::<u32>()
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
 
         Ok(TemporalValue::GMonth(month))
     }
@@ -341,12 +340,13 @@ impl TemporalValue {
         let day_str = &value[3..];
         let day = day_str
             .parse::<u32>()
-            .map_err(|e| TemporalError::InvalidDateFormat(format!("{}: {}", value, e)))?;
+            .map_err(|e| TemporalError::InvalidDateFormat(format!("{value}: {e}")))?;
 
         Ok(TemporalValue::GDay(day))
     }
 
-    /// Convert TemporalValue to SWRLValue
+    /// Convert `TemporalValue` to `SWRLValue`
+    #[must_use] 
     pub fn to_swrl_value(&self) -> SWRLValue {
         match self {
             TemporalValue::Date(date) => SWRLValue::String(date.to_string()),
@@ -359,17 +359,17 @@ impl TemporalValue {
             TemporalValue::YearMonthDuration(duration) => SWRLValue::String(duration.to_string()),
             TemporalValue::GYear(year) => SWRLValue::String(year.to_string()),
             TemporalValue::GYearMonth(year, month) => {
-                SWRLValue::String(format!("{:04}-{:02}", year, month))
+                SWRLValue::String(format!("{year:04}-{month:02}"))
             }
             TemporalValue::GMonthDay(month, day) => {
-                SWRLValue::String(format!("--{:02}-{:02}", month, day))
+                SWRLValue::String(format!("--{month:02}-{day:02}"))
             }
-            TemporalValue::GMonth(month) => SWRLValue::String(format!("--{:02}", month)),
-            TemporalValue::GDay(day) => SWRLValue::String(format!("---{:02}", day)),
+            TemporalValue::GMonth(month) => SWRLValue::String(format!("--{month:02}")),
+            TemporalValue::GDay(day) => SWRLValue::String(format!("---{day:02}")),
         }
     }
 
-    /// Convert from SWRLValue
+    /// Convert from `SWRLValue`
     pub fn from_swrl_value(value: &SWRLValue) -> Result<Self, TemporalError> {
         match value {
             SWRLValue::String(s) => {
@@ -387,6 +387,7 @@ impl TemporalValue {
     }
 
     /// Get year component
+    #[must_use] 
     pub fn year(&self) -> Option<i32> {
         match self {
             TemporalValue::Date(date) => Some(date.year()),
@@ -399,6 +400,7 @@ impl TemporalValue {
     }
 
     /// Get month component
+    #[must_use] 
     pub fn month(&self) -> Option<u32> {
         match self {
             TemporalValue::Date(date) => Some(date.month()),
@@ -412,6 +414,7 @@ impl TemporalValue {
     }
 
     /// Get day component
+    #[must_use] 
     pub fn day(&self) -> Option<u32> {
         match self {
             TemporalValue::Date(date) => Some(date.day()),
@@ -424,6 +427,7 @@ impl TemporalValue {
     }
 
     /// Get hour component
+    #[must_use] 
     pub fn hour(&self) -> Option<u32> {
         match self {
             TemporalValue::Time(time) => Some(time.hour()),
@@ -434,6 +438,7 @@ impl TemporalValue {
     }
 
     /// Get minute component
+    #[must_use] 
     pub fn minute(&self) -> Option<u32> {
         match self {
             TemporalValue::Time(time) => Some(time.minute()),
@@ -444,6 +449,7 @@ impl TemporalValue {
     }
 
     /// Get second component
+    #[must_use] 
     pub fn second(&self) -> Option<u32> {
         match self {
             TemporalValue::Time(time) => Some(time.second()),

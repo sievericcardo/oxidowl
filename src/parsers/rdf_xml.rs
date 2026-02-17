@@ -162,9 +162,8 @@ impl RdfXmlParser {
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:ex="http://example.org/">
-{}
-</rdf:RDF>"#,
-                content
+{content}
+</rdf:RDF>"#
             );
             self.parse_rdf_xml_content(&wrapped, &mut ontology)?;
         } else {
@@ -221,7 +220,7 @@ impl RdfXmlParser {
 
                                 // Add to ontology prefixes if the ontology supports it
                                 // For now, we'll store this information internally
-                                log::debug!("Found namespace: {} -> {}", prefix, uri);
+                                log::debug!("Found namespace: {prefix} -> {uri}");
                             }
             }
         }
@@ -295,7 +294,7 @@ impl RdfXmlParser {
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     // Return XML parsing error as fatal error
-                    return Err(Error::ParseError(format!("XML parsing error: {}", e)));
+                    return Err(Error::ParseError(format!("XML parsing error: {e}")));
                 }
                 _ => {}
             }
@@ -322,7 +321,7 @@ impl RdfXmlParser {
 
         // Check for rdf:nodeID for blank nodes
         if let Some(node_id) = attributes.get("rdf:nodeID") {
-            return Some(format!("_:{}", node_id));
+            return Some(format!("_:{node_id}"));
         }
 
         None
@@ -357,7 +356,7 @@ impl RdfXmlParser {
         if uri.starts_with("http://") || uri.starts_with("https://") {
             uri.to_string()
         } else if let Some(base) = &self.config.base_uri {
-            format!("{}{}", base, uri)
+            format!("{base}{uri}")
         } else {
             uri.to_string()
         }
@@ -366,9 +365,9 @@ impl RdfXmlParser {
     /// Resolve fragment ID against base URI
     fn resolve_fragment_id(&self, id: &str) -> String {
         if let Some(base) = &self.config.base_uri {
-            format!("{}#{}", base, id)
+            format!("{base}#{id}")
         } else {
-            format!("#{}", id)
+            format!("#{id}")
         }
     }
 
@@ -546,7 +545,7 @@ impl RdfXmlParser {
                         // This can be used later for querying
                         // Create a meta-triple linking the statement ID to the quoted triple
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
-                            url::Url::parse(&format!("_:stmt_{}", stmt_id))
+                            url::Url::parse(&format!("_:stmt_{stmt_id}"))
                                 .unwrap_or_else(|_| url::Url::parse("http://example.org/stmt").unwrap())
                         );
                         let reifies_pred = crate::semantics::RdfTerm::Iri(
@@ -569,7 +568,7 @@ impl RdfXmlParser {
                     for (stmt_id, triple) in reifications {
                         // Store the reification pattern as separate triples
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
-                            url::Url::parse(&format!("http://example.org/stmt/{}", stmt_id))
+                            url::Url::parse(&format!("http://example.org/stmt/{stmt_id}"))
                                 .unwrap_or_else(|_| url::Url::parse("http://example.org/stmt").unwrap())
                         );
                         
@@ -579,10 +578,10 @@ impl RdfXmlParser {
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{}type", rdf_ns)).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}type")).unwrap()
                             ),
                             object: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{}Statement", rdf_ns)).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}Statement")).unwrap()
                             ),
                         });
                         
@@ -590,7 +589,7 @@ impl RdfXmlParser {
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{}subject", rdf_ns)).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}subject")).unwrap()
                             ),
                             object: triple.subject.clone(),
                         });
@@ -599,7 +598,7 @@ impl RdfXmlParser {
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{}predicate", rdf_ns)).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}predicate")).unwrap()
                             ),
                             object: triple.predicate.clone(),
                         });
@@ -608,7 +607,7 @@ impl RdfXmlParser {
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri,
                             predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{}object", rdf_ns)).unwrap()
+                                url::Url::parse(&format!("{rdf_ns}object")).unwrap()
                             ),
                             object: triple.object.clone(),
                         });
@@ -627,7 +626,7 @@ impl RdfXmlParser {
     }
 
     /// Extract rdf:reifies patterns (RDF 1.2)
-    /// Returns a list of (reifying_resource, reified_triple) pairs
+    /// Returns a list of (`reifying_resource`, `reified_triple`) pairs
     fn extract_rdf_reifies(&self, content: &str) -> Result<Vec<(String, RdfTriple)>> {
         let mut results = Vec::new();
 
@@ -885,7 +884,7 @@ impl OntologySerializer for RdfXmlSerializer {
             .iri
             .as_ref()
             .map_or("http://example.org/ontology", crate::ontology::IRI::as_str);
-        result.push_str(&format!("  <owl:Ontology rdf:about=\"{}\" />\n\n", iri_str));
+        result.push_str(&format!("  <owl:Ontology rdf:about=\"{iri_str}\" />\n\n"));
 
         // Serialize classes
         if !ontology.classes().is_empty() {

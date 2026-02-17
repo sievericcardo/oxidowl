@@ -44,6 +44,7 @@ pub struct ParallelClassificationScheduler {
 }
 
 impl ParallelClassificationScheduler {
+    #[must_use] 
     pub fn new(config: PerformanceConfig) -> Self {
         Self {
             config,
@@ -54,6 +55,7 @@ impl ParallelClassificationScheduler {
     }
 
     /// Schedule all classification tasks with dependency awareness
+    #[must_use] 
     pub fn schedule_classification_tasks(
         &self,
         classes: &[ClassExpression],
@@ -207,6 +209,7 @@ impl ParallelClassificationScheduler {
     }
 
     /// Get progress information
+    #[must_use] 
     pub fn get_progress(&self) -> (usize, usize) {
         (
             self.completed_tests.load(Ordering::Relaxed),
@@ -228,6 +231,7 @@ pub struct WorkStealingQueue<T> {
 }
 
 impl<T> WorkStealingQueue<T> {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             queue: VecDeque::new(),
@@ -246,10 +250,12 @@ impl<T> WorkStealingQueue<T> {
         self.queue.pop_back()
     }
 
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }

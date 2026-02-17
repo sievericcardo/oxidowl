@@ -33,6 +33,7 @@ pub struct IndexStatistics {
 
 impl IndexStatistics {
     /// Get cache hit rate
+    #[must_use] 
     pub fn hit_rate(&self) -> f64 {
         if self.total_lookups == 0 {
             0.0
@@ -44,6 +45,7 @@ impl IndexStatistics {
 
 impl ConceptIndex {
     /// Create a new concept index
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             iri_to_concepts: Arc::new(RwLock::new(HashMap::new())),
@@ -60,7 +62,7 @@ impl ConceptIndex {
         {
             let mut hash_map = self.hash_to_concept.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex hash map lock poisoned: {}", e) 
+                    message: format!("ConceptIndex hash map lock poisoned: {e}") 
                 })?;
             hash_map.insert(hash, concept.clone());
         }
@@ -71,7 +73,7 @@ impl ConceptIndex {
         {
             let mut iri_map = self.iri_to_concepts.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex IRI map lock poisoned: {}", e) 
+                    message: format!("ConceptIndex IRI map lock poisoned: {e}") 
                 })?;
             
             for iri in iris {
@@ -83,7 +85,7 @@ impl ConceptIndex {
         {
             let mut stats = self.stats.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {}", e) 
+                    message: format!("ConceptIndex stats lock poisoned: {e}") 
                 })?;
             stats.total_concepts += 1;
         }
@@ -97,14 +99,14 @@ impl ConceptIndex {
         {
             let mut stats = self.stats.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {}", e) 
+                    message: format!("ConceptIndex stats lock poisoned: {e}") 
                 })?;
             stats.total_lookups += 1;
         }
 
         let iri_map = self.iri_to_concepts.read()
             .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex IRI map lock poisoned: {}", e) 
+                message: format!("ConceptIndex IRI map lock poisoned: {e}") 
             })?;
         
         let concept_hashes = match iri_map.get(iri) {
@@ -116,7 +118,7 @@ impl ConceptIndex {
         if !concept_hashes.is_empty() {
             let mut stats = self.stats.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {}", e) 
+                    message: format!("ConceptIndex stats lock poisoned: {e}") 
                 })?;
             stats.cache_hits += 1;
         }
@@ -124,7 +126,7 @@ impl ConceptIndex {
         // Retrieve concepts by hash
         let hash_map = self.hash_to_concept.read()
             .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex hash map lock poisoned: {}", e) 
+                message: format!("ConceptIndex hash map lock poisoned: {e}") 
             })?;
         
         Ok(concept_hashes
@@ -229,7 +231,7 @@ impl ConceptIndex {
     pub fn get_statistics(&self) -> crate::Result<IndexStatistics> {
         let stats = self.stats.read()
             .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex stats lock poisoned: {}", e) 
+                message: format!("ConceptIndex stats lock poisoned: {e}") 
             })?;
         
         let mut result = stats.clone();
@@ -237,7 +239,7 @@ impl ConceptIndex {
         // Update total IRIs count
         let iri_map = self.iri_to_concepts.read()
             .map_err(|e| crate::Error::Cache { 
-                message: format!("ConceptIndex IRI map lock poisoned: {}", e) 
+                message: format!("ConceptIndex IRI map lock poisoned: {e}") 
             })?;
         result.total_iris = iri_map.len();
         
@@ -245,6 +247,7 @@ impl ConceptIndex {
     }
     
     /// Get the number of indexed concepts
+    #[must_use] 
     pub fn size(&self) -> usize {
         self.hash_to_concept.read()
             .map(|map| map.len())
@@ -256,7 +259,7 @@ impl ConceptIndex {
         {
             let mut iri_map = self.iri_to_concepts.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex IRI map lock poisoned: {}", e) 
+                    message: format!("ConceptIndex IRI map lock poisoned: {e}") 
                 })?;
             iri_map.clear();
         }
@@ -264,7 +267,7 @@ impl ConceptIndex {
         {
             let mut hash_map = self.hash_to_concept.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex hash map lock poisoned: {}", e) 
+                    message: format!("ConceptIndex hash map lock poisoned: {e}") 
                 })?;
             hash_map.clear();
         }
@@ -272,7 +275,7 @@ impl ConceptIndex {
         {
             let mut stats = self.stats.write()
                 .map_err(|e| crate::Error::Cache { 
-                    message: format!("ConceptIndex stats lock poisoned: {}", e) 
+                    message: format!("ConceptIndex stats lock poisoned: {e}") 
                 })?;
             *stats = IndexStatistics::default();
         }

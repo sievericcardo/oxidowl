@@ -16,6 +16,7 @@ pub struct DLValidator;
 
 impl DLValidator {
     /// Create a new DL profile validator
+    #[must_use] 
     pub fn new() -> Self {
         Self
     }

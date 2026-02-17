@@ -1,6 +1,6 @@
 //! Entailment checker implementation
 //!
-//! This module contains the main EntailmentChecker struct and EntailmentRegime enum
+//! This module contains the main `EntailmentChecker` struct and `EntailmentRegime` enum
 //! for checking various types of entailment relationships.
 
 #![allow(dead_code)]
@@ -39,6 +39,7 @@ pub struct EntailmentChecker {
 
 impl EntailmentChecker {
     /// Create a new entailment checker for the specified regime
+    #[must_use] 
     pub fn new(regime: EntailmentRegime) -> Self {
         Self {
             regime,

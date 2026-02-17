@@ -79,6 +79,7 @@ impl Default for LargeOntologyConfig {
 }
 
 impl IndustrialOptimizer {
+    #[must_use] 
     pub fn new(config: LargeOntologyConfig) -> Self {
         Self {
             memory_manager: LargeScaleMemoryManager::new(config.memory_limit_gb),
@@ -111,8 +112,7 @@ impl IndustrialOptimizer {
         }
 
         println!(
-            "Activating large ontology optimizations for {} concepts",
-            concept_count
+            "Activating large ontology optimizations for {concept_count} concepts"
         );
 
         // Memory management checkpoint
@@ -231,7 +231,7 @@ impl IndustrialOptimizer {
                 // Memory management
                 if chunk_index % 10 == 0 {
                     self.memory_manager
-                        .checkpoint(&format!("level-{}-chunk-{}", level_index, chunk_index))?;
+                        .checkpoint(&format!("level-{level_index}-chunk-{chunk_index}"))?;
                 }
             }
         }
@@ -280,7 +280,7 @@ impl IndustrialOptimizer {
 
             // Memory checkpoint after each module
             self.memory_manager
-                .checkpoint(&format!("module-{}", module_index))?;
+                .checkpoint(&format!("module-{module_index}"))?;
         }
 
         // Resolve inter-module dependencies
@@ -471,8 +471,8 @@ impl IndustrialOptimizer {
                     .collect();
 
                 modules.push(SemanticModule {
-                    module_id: format!("chunk_{}", i),
-                    namespace: format!("generated_module_{}", i),
+                    module_id: format!("chunk_{i}"),
+                    namespace: format!("generated_module_{i}"),
                     concepts,
                     concept_count: chunk.len(),
                     estimated_complexity: 1.0,
@@ -1189,7 +1189,7 @@ impl DistributedProcessingCoordinator {
             .chunks(partition_size)
             .enumerate()
             .map(|(i, chunk)| OntologyPartition {
-                partition_id: format!("partition_{}", i),
+                partition_id: format!("partition_{i}"),
                 concepts: chunk
                     .iter()
                     .map(|(class_iri, _class)| ClassExpression::class(class_iri.clone()))
@@ -1307,7 +1307,7 @@ impl From<ChunkOntology> for ConjunctiveQuery {
         for (idx, concept) in chunk.concepts.iter().enumerate() {
             if let ClassExpression::Class(_c) = concept {
                 // Create variable for this concept
-                let concept_var = QueryVariable::new(format!("?x{}", idx));
+                let concept_var = QueryVariable::new(format!("?x{idx}"));
                 
                 // Add atom: ?x rdf:type ConceptC
                 body_atoms.push(QueryAtom::ClassAtom {

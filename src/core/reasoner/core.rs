@@ -31,10 +31,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-/// OWLlink request structure
+/// `OWLlink` request structure
 #[derive(Debug, Clone)]
 struct OWLlinkRequest {
-    /// Command name (Tell, IsClassSatisfiable, etc.)
+    /// Command name (Tell, `IsClassSatisfiable`, etc.)
     command: String,
     /// Axioms to add (for Tell command)
     #[allow(dead_code)]
@@ -102,7 +102,7 @@ pub struct Reasoner {
     /// Classification service for complex operations
     classification_service: ClassificationService,
 
-    /// Query processor for SPARQL and OWLlink
+    /// Query processor for SPARQL and `OWLlink`
     #[allow(dead_code)]
     query_processor: QueryProcessor,
 
@@ -224,6 +224,7 @@ impl Reasoner {
     }
 
     /// Get the ontology being reasoned over
+    #[must_use] 
     pub fn get_ontology(&self) -> Option<&OntologyRef> {
         self.ontology.as_ref()
     }
@@ -543,8 +544,8 @@ impl Reasoner {
             }
 
             // Remove duplicates
-            types.sort_by_key(|c| format!("{:?}", c));
-            types.dedup_by_key(|c| format!("{:?}", c));
+            types.sort_by_key(|c| format!("{c:?}"));
+            types.dedup_by_key(|c| format!("{c:?}"));
 
             Ok(types)
         } else {
@@ -577,8 +578,8 @@ impl Reasoner {
             }
 
             // Remove duplicates
-            values.sort_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
-            values.dedup_by_key(|i| i.iri().map(|iri| iri.to_string()).unwrap_or_default());
+            values.sort_by_key(|i| i.iri().map(std::string::ToString::to_string).unwrap_or_default());
+            values.dedup_by_key(|i| i.iri().map(std::string::ToString::to_string).unwrap_or_default());
 
             Ok(values)
         } else {
@@ -611,8 +612,8 @@ impl Reasoner {
             }
 
             // Remove duplicates
-            values.sort_by_key(|l| format!("{:?}", l));
-            values.dedup_by_key(|l| format!("{:?}", l));
+            values.sort_by_key(|l| format!("{l:?}"));
+            values.dedup_by_key(|l| format!("{l:?}"));
 
             Ok(values)
         } else {
@@ -832,11 +833,13 @@ impl Reasoner {
     }
 
     /// Get reasoning statistics
+    #[must_use] 
     pub fn get_statistics(&self) -> ReasoningStatistics {
         self.statistics.clone()
     }
 
     /// Get the size of the current ontology
+    #[must_use] 
     pub fn get_ontology_size(&self) -> usize {
         if let Some(ref ontology) = self.ontology {
             read_lock(ontology, "core: reading ontology for size")
@@ -863,7 +866,7 @@ impl Reasoner {
 
         let file_path = path.as_ref();
         let content = std::fs::read_to_string(file_path).map_err(|e| crate::Error::Io {
-            message: format!("Failed to read file: {}", e),
+            message: format!("Failed to read file: {e}"),
         })?;
 
         // Extract first section if CrossSyntax multi-format file
@@ -1190,7 +1193,7 @@ impl Reasoner {
         }
     }
 
-    /// Process OWLlink request
+    /// Process `OWLlink` request
     pub fn process_owllink_request(&self, request: &str) -> Result<String> {
         // Parse OWLlink XML request
         let parsed_request = self.parse_owllink_xml(request)?;
@@ -1208,8 +1211,7 @@ impl Reasoner {
                     let class_expr = crate::ontology::concepts::ClassExpression::Class(class);
                     let result = self.is_class_satisfiable(&class_expr)?;
                     Ok(format!(
-                        "<Response><BooleanResponse result=\"{}\"/></Response>",
-                        result
+                        "<Response><BooleanResponse result=\"{result}\"/></Response>"
                     ))
                 } else {
                     Err(Error::reasoning(
@@ -1220,8 +1222,7 @@ impl Reasoner {
             "IsKBConsistent" => {
                 let result = self.is_consistent()?;
                 Ok(format!(
-                    "<Response><BooleanResponse result=\"{}\"/></Response>",
-                    result
+                    "<Response><BooleanResponse result=\"{result}\"/></Response>"
                 ))
             }
             "GetSubClasses" => {
@@ -1294,7 +1295,7 @@ impl Reasoner {
                             format!(
                                 "<NamedIndividual IRI=\"{}\"/>",
                                 ind.iri()
-                                    .map(|iri| iri.to_string())
+                                    .map(std::string::ToString::to_string)
                                     .unwrap_or_else(|| "unknown".to_string())
                             )
                         })
@@ -1316,7 +1317,7 @@ impl Reasoner {
         }
     }
 
-    /// Parse OWLlink XML request into structured data
+    /// Parse `OWLlink` XML request into structured data
     fn parse_owllink_xml(&self, xml: &str) -> Result<OWLlinkRequest> {
         // Simple XML parsing - would use proper XML parser in production
         let mut request = OWLlinkRequest {
@@ -1344,11 +1345,11 @@ impl Reasoner {
 
         // Extract class IRI if present
         if let Some(start) = xml.find("IRI=\"")
-            && let Some(end) = xml[start + 5..].find("\"") {
+            && let Some(end) = xml[start + 5..].find('"') {
                 let iri_str = &xml[start + 5..start + 5 + end];
                 request.class_iri = Some(
                     url::Url::parse(iri_str)
-                        .map_err(|e| Error::reasoning(format!("Invalid IRI: {}", e)))?,
+                        .map_err(|e| Error::reasoning(format!("Invalid IRI: {e}")))?,
                 );
             }
 
@@ -1579,7 +1580,7 @@ impl Reasoner {
         // ASK queries return true/false
         let select_result = self.execute_sparql_select(query)?;
         let parsed: serde_json::Value = serde_json::from_str(&select_result)
-            .map_err(|e| Error::reasoning(format!("Failed to parse SELECT result: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Failed to parse SELECT result: {e}")))?;
 
         let has_results = if let Some(bindings) = parsed["results"]["bindings"].as_array() {
             !bindings.is_empty()
@@ -1689,7 +1690,7 @@ impl Reasoner {
         let query_upper = query.to_uppercase();
 
         // Look for "INSERT DATA" or "DELETE DATA" followed by braces
-        let keyword = format!("{} DATA", operation);
+        let keyword = format!("{operation} DATA");
         if let Some(start) = query_upper.find(&keyword) {
             // Find the opening brace after the keyword
             let search_from = start + keyword.len();
@@ -1745,8 +1746,7 @@ impl Reasoner {
 
         if patterns.is_empty() {
             return Err(Error::reasoning(format!(
-                "No patterns found in {} query. Data content might be malformed.",
-                operation
+                "No patterns found in {operation} query. Data content might be malformed."
             )));
         }
 
@@ -1944,10 +1944,10 @@ impl Reasoner {
         let mut processed = std::collections::HashSet::new();
 
         while let Some(current) = to_process.pop() {
-            if processed.contains(&format!("{:?}", current)) {
+            if processed.contains(&format!("{current:?}")) {
                 continue;
             }
-            processed.insert(format!("{:?}", current));
+            processed.insert(format!("{current:?}"));
 
             // Get superclasses of current class (careful to avoid infinite recursion)
             if let Some(ontology_ref) = &self.ontology {
@@ -1985,10 +1985,10 @@ impl Reasoner {
         let mut processed = std::collections::HashSet::new();
 
         while let Some(current) = to_process.pop() {
-            if processed.contains(&format!("{:?}", current)) {
+            if processed.contains(&format!("{current:?}")) {
                 continue;
             }
-            processed.insert(format!("{:?}", current));
+            processed.insert(format!("{current:?}"));
 
             // Get subclasses of current class (careful to avoid infinite recursion)
             if let Some(ontology_ref) = &self.ontology {
@@ -2054,8 +2054,8 @@ impl Reasoner {
         }
 
         // Remove duplicates
-        classes.sort_by_key(|c| format!("{:?}", c));
-        classes.dedup_by_key(|c| format!("{:?}", c));
+        classes.sort_by_key(|c| format!("{c:?}"));
+        classes.dedup_by_key(|c| format!("{c:?}"));
 
         Ok(classes)
     }
@@ -2189,7 +2189,7 @@ impl Reasoner {
         let clause_set = self.dump_dl_clauses()?;
         let content = clause_set.to_string();
         std::fs::write(path, content).map_err(|e| Error::Io {
-            message: format!("Failed to write DL clauses: {}", e),
+            message: format!("Failed to write DL clauses: {e}"),
         })
     }
 

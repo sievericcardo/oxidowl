@@ -61,6 +61,7 @@ pub struct NodeSignature {
 
 impl NodeSignature {
     /// Create a new node signature
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             concepts: Vec::new(),
@@ -84,6 +85,7 @@ impl NodeSignature {
     }
 
     /// Check if this signature subsumes another
+    #[must_use] 
     pub fn subsumes(&self, other: &NodeSignature) -> bool {
         // Check if all concepts in other are in self
         other.concepts.iter().all(|c| self.concepts.contains(c))
@@ -166,6 +168,7 @@ impl HyperNode {
     }
 
     /// Create a new hypernode with a specific ID (for testing)
+    #[must_use] 
     pub fn with_id(id: NodeId) -> Self {
         Self {
             id,
@@ -194,6 +197,7 @@ impl HyperNode {
     }
 
     /// Check if node has a specific label
+    #[must_use] 
     pub fn has_label(&self, label: &str) -> bool {
         self.labels.contains(label)
     }
@@ -216,6 +220,7 @@ impl HyperNode {
     }
 
     /// Check if this node is active (not merged)
+    #[must_use] 
     pub fn is_active(&self) -> bool {
         self.merged_into.is_none()
     }
@@ -248,6 +253,7 @@ pub struct HyperEdge {
 
 impl HyperEdge {
     /// Create a new hyperedge
+    #[must_use] 
     pub fn new(role: String, from: NodeId, to: NodeId, edge_type: EdgeType) -> Self {
         Self {
             role,
@@ -259,11 +265,13 @@ impl HyperEdge {
     }
 
     /// Create a generating edge
+    #[must_use] 
     pub fn generating(role: String, from: NodeId, to: NodeId) -> Self {
         Self::new(role, from, to, EdgeType::Generating)
     }
 
     /// Create a non-generating edge
+    #[must_use] 
     pub fn non_generating(role: String, from: NodeId, to: NodeId) -> Self {
         Self::new(role, from, to, EdgeType::NonGenerating)
     }
@@ -298,6 +306,7 @@ pub struct Hypergraph {
 
 impl Hypergraph {
     /// Create a new empty hypergraph
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             nodes: HashMap::new(),
@@ -332,6 +341,7 @@ impl Hypergraph {
     }
 
     /// Get a node by ID
+    #[must_use] 
     pub fn get_node(&self, id: NodeId) -> Option<&HyperNode> {
         self.nodes.get(&id)
     }
@@ -366,11 +376,13 @@ impl Hypergraph {
     }
 
     /// Get an edge by index
+    #[must_use] 
     pub fn get_edge(&self, edge_id: usize) -> Option<&HyperEdge> {
         self.edges.get(edge_id)
     }
 
     /// Get outgoing edges from a node
+    #[must_use] 
     pub fn get_outgoing_edges(&self, node_id: NodeId) -> Vec<&HyperEdge> {
         self.outgoing
             .get(&node_id)
@@ -385,6 +397,7 @@ impl Hypergraph {
     }
 
     /// Get incoming edges to a node
+    #[must_use] 
     pub fn get_incoming_edges(&self, node_id: NodeId) -> Vec<&HyperEdge> {
         self.incoming
             .get(&node_id)
@@ -399,6 +412,7 @@ impl Hypergraph {
     }
 
     /// Find nodes with a given signature
+    #[must_use] 
     pub fn find_by_signature(&self, signature: &NodeSignature) -> Vec<NodeId> {
         self.signature_index
             .get(signature)
@@ -412,6 +426,7 @@ impl Hypergraph {
     }
 
     /// Find nodes that subsume the given node by ID
+    #[must_use] 
     pub fn find_subsumers(&self, node_id: NodeId) -> Vec<NodeId> {
         if let Some(node) = self.nodes.get(&node_id) {
             let signature = &node.signature;
@@ -426,6 +441,7 @@ impl Hypergraph {
     }
 
     /// Get the root node
+    #[must_use] 
     pub fn root(&self) -> Option<&HyperNode> {
         self.root.and_then(|id| self.nodes.get(&id))
     }
@@ -439,26 +455,31 @@ impl Hypergraph {
     }
 
     /// Get all active edges
+    #[must_use] 
     pub fn active_edges(&self) -> Vec<&HyperEdge> {
         self.edges.iter().filter(|e| e.is_active).collect()
     }
 
     /// Get the number of nodes
+    #[must_use] 
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
     /// Get the number of active nodes
+    #[must_use] 
     pub fn active_node_count(&self) -> usize {
         self.nodes.values().filter(|n| n.is_active()).count()
     }
 
     /// Get the number of edges
+    #[must_use] 
     pub fn edge_count(&self) -> usize {
         self.edges.len()
     }
 
     /// Get the number of active edges
+    #[must_use] 
     pub fn active_edge_count(&self) -> usize {
         self.edges.iter().filter(|e| e.is_active).count()
     }

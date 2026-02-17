@@ -1210,7 +1210,7 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
     }
 
     fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
-        self.inner.order_expansions(existentials)
+        self.inner.order_expansions(existentials);
     }
 
     fn should_delay_expansion(
@@ -1226,10 +1226,10 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
     }
 
     fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
-        self.inner.expansion_completed(candidate, result)
+        self.inner.expansion_completed(candidate, result);
     }
 
     fn clear(&mut self) {
-        self.inner.clear()
+        self.inner.clear();
     }
 }

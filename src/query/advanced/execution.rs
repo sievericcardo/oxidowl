@@ -649,7 +649,7 @@ impl QueryEngine {
                     .iter()
                     .map(|var| format!("{:?}", binding.get_binding(var)))
                     .collect();
-                let sig = format!("{:?}", distinct_sig);
+                let sig = format!("{distinct_sig:?}");
                 seen.insert(sig)
             });
         }
@@ -738,6 +738,7 @@ impl QueryEngine {
     }
 
     /// Get cache statistics
+    #[must_use] 
     pub fn cache_statistics(&self) -> &CacheStatistics {
         &self.cache.statistics
     }
@@ -745,6 +746,7 @@ impl QueryEngine {
 
 impl QueryBinding {
     /// Create a new empty binding
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             variable_bindings: HashMap::new(),
@@ -757,11 +759,13 @@ impl QueryBinding {
     }
 
     /// Get the binding for a variable
+    #[must_use] 
     pub fn get_binding(&self, variable: &QueryVariable) -> Option<&BoundValue> {
         self.variable_bindings.get(variable)
     }
 
     /// Combine two bindings if compatible
+    #[must_use] 
     pub fn combine(&self, other: &QueryBinding) -> Option<QueryBinding> {
         let mut combined = self.clone();
 
@@ -781,6 +785,7 @@ impl QueryBinding {
     }
 
     /// Project binding to only include specified variables
+    #[must_use] 
     pub fn project(&self, variables: &[QueryVariable]) -> QueryBinding {
         let mut projected = QueryBinding::new();
 
@@ -844,10 +849,10 @@ impl Default for QueryBinding {
 impl std::fmt::Display for BoundValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BoundValue::Individual(individual) => write!(f, "{}", individual),
-            BoundValue::Literal(literal) => write!(f, "{}", literal),
-            BoundValue::Class(class) => write!(f, "{}", class),
-            BoundValue::Property(property) => write!(f, "{}", property),
+            BoundValue::Individual(individual) => write!(f, "{individual}"),
+            BoundValue::Literal(literal) => write!(f, "{literal}"),
+            BoundValue::Class(class) => write!(f, "{class}"),
+            BoundValue::Property(property) => write!(f, "{property}"),
         }
     }
 }

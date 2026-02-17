@@ -26,6 +26,7 @@ pub struct ForwardChaining {
 
 impl ForwardChaining {
     /// Create a new forward chaining engine
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             max_iterations: 1000,
@@ -53,7 +54,7 @@ impl ForwardChaining {
             let mut iteration_inferences = Vec::new();
             let mut iteration_fired = false;
 
-            debug!("Forward chaining iteration {}", iteration);
+            debug!("Forward chaining iteration {iteration}");
 
             for rule in rules {
                 // Try to apply the rule with current facts
@@ -179,7 +180,7 @@ impl ForwardChaining {
 
             // Check if this is a new fact (not already known)
             if !known_facts.contains(&bound_atom) {
-                debug!("Generated new fact from rule: {:?}", bound_atom);
+                debug!("Generated new fact from rule: {bound_atom:?}");
                 new_facts.push(bound_atom);
             }
         }
@@ -205,6 +206,7 @@ pub struct BackwardChaining {
 
 impl BackwardChaining {
     /// Create a new backward chaining engine
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             max_goal_depth: 100,
@@ -230,7 +232,7 @@ impl BackwardChaining {
             .collect();
         
         // Deduplicate goals
-        potential_goals.sort_by_key(|atom| format!("{:?}", atom));
+        potential_goals.sort_by_key(|atom| format!("{atom:?}"));
         potential_goals.dedup();
         
         let mut total_inferences = Vec::new();
@@ -250,7 +252,7 @@ impl BackwardChaining {
             total_applications += result.applications;
             
             if result.fired {
-                info!("Backward chaining proved goal: {:?}", goal);
+                info!("Backward chaining proved goal: {goal:?}");
             }
         }
         
@@ -280,7 +282,7 @@ impl BackwardChaining {
 
         while let Some(current_goal) = goal_stack.pop() {
             // Prevent infinite recursion
-            let goal_key = format!("{:?}", current_goal);
+            let goal_key = format!("{current_goal:?}");
             if visited_goals.contains(&goal_key) {
                 continue;
             }
@@ -357,6 +359,7 @@ pub struct HybridReasoning {
 
 impl HybridReasoning {
     /// Create a new hybrid reasoning engine
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             forward_engine: ForwardChaining::new(),

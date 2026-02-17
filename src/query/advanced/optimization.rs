@@ -113,6 +113,7 @@ pub struct PlanMetadata {
 
 impl QueryOptimizer {
     /// Create a new query optimizer
+    #[must_use] 
     pub fn new(ontology: Arc<Ontology>, reasoning_service: Arc<ReasoningService>) -> Self {
         Self {
             ontology,
@@ -123,6 +124,7 @@ impl QueryOptimizer {
     }
 
     /// Create optimizer with custom configuration
+    #[must_use] 
     pub fn with_config(
         ontology: Arc<Ontology>,
         reasoning_service: Arc<ReasoningService>,

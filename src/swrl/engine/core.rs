@@ -1,6 +1,6 @@
 //! SWRL Rule Engine Core Implementation
 //!
-//! This module contains the main SWRLRuleEngine struct and its public API.
+//! This module contains the main `SWRLRuleEngine` struct and its public API.
 //! The core coordinates rule execution by delegating to specialized modules.
 
 #![allow(dead_code)]
@@ -118,7 +118,7 @@ impl SWRLRuleEngine {
                 match read_lock(ontology, "SWRL core: reading ontology for loading rules") {
                     Ok(guard) => guard,
                     Err(e) => {
-                        warn!("Failed to acquire read lock on ontology: {}", e);
+                        warn!("Failed to acquire read lock on ontology: {e}");
                         return;
                     }
                 };
@@ -148,7 +148,7 @@ impl SWRLRuleEngine {
                 }
             }
 
-            info!("Loaded {} SWRL rules from ontology", rule_count);
+            info!("Loaded {rule_count} SWRL rules from ontology");
         }
     }
 
@@ -243,7 +243,7 @@ impl SWRLRuleEngine {
 
     /// Execute rules with a specific query goal (for backward chaining)
     pub fn execute_with_goal(&mut self, goal: &SWRLAtom) -> Result<SWRLExecutionResult> {
-        info!("Starting goal-driven execution for goal: {:?}", goal);
+        info!("Starting goal-driven execution for goal: {goal:?}");
         let mut backward_chaining = std::mem::take(&mut self.backward_chaining);
         let mut known_facts = Vec::new(); // Initialize with facts from ontology
         if let Some(ontology_arc) = &self.ontology {
@@ -323,7 +323,7 @@ impl SWRLRuleEngine {
             rule_state.active = active;
             Ok(())
         } else {
-            Err(Error::reasoning(format!("Rule {} not found", rule_id)))
+            Err(Error::reasoning(format!("Rule {rule_id} not found")))
         }
     }
 

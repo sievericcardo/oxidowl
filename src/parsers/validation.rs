@@ -12,11 +12,13 @@ pub struct SyntaxValidator {
 
 impl SyntaxValidator {
     /// Create a new validator with default settings (strict)
+    #[must_use] 
     pub fn new() -> Self {
         Self { strict_mode: true }
     }
 
     /// Create a lenient validator
+    #[must_use] 
     pub fn lenient() -> Self {
         Self { strict_mode: false }
     }
@@ -217,7 +219,7 @@ impl SyntaxValidator {
                     || trimmed.contains(':')
                     || trimmed.contains('[')
                     || trimmed.contains('(')
-                    || trimmed.starts_with("\"");
+                    || trimmed.starts_with('"');
 
                 // If it has multiple words but no Turtle-specific characters, it's likely invalid
                 if word_count >= 3 && !has_turtle_chars {
@@ -422,16 +424,14 @@ impl SyntaxValidator {
                                             if let Some(&hex_ch) = chars.peek() {
                                                 if !hex_ch.is_ascii_hexdigit() {
                                                     return Err(Error::ontology_parsing(format!(
-                                                        "Line {}: Invalid \\u escape sequence - expected 4 hex digits",
-                                                        line_num
+                                                        "Line {line_num}: Invalid \\u escape sequence - expected 4 hex digits"
                                                     )));
                                                 }
                                                 literal_value.push(hex_ch);
                                                 chars.next();
                                             } else {
                                                 return Err(Error::ontology_parsing(format!(
-                                                    "Line {}: Incomplete \\u escape sequence",
-                                                    line_num
+                                                    "Line {line_num}: Incomplete \\u escape sequence"
                                                 )));
                                             }
                                         }
@@ -444,16 +444,14 @@ impl SyntaxValidator {
                                             if let Some(&hex_ch) = chars.peek() {
                                                 if !hex_ch.is_ascii_hexdigit() {
                                                     return Err(Error::ontology_parsing(format!(
-                                                        "Line {}: Invalid \\U escape sequence - expected 8 hex digits",
-                                                        line_num
+                                                        "Line {line_num}: Invalid \\U escape sequence - expected 8 hex digits"
                                                     )));
                                                 }
                                                 literal_value.push(hex_ch);
                                                 chars.next();
                                             } else {
                                                 return Err(Error::ontology_parsing(format!(
-                                                    "Line {}: Incomplete \\U escape sequence",
-                                                    line_num
+                                                    "Line {line_num}: Incomplete \\U escape sequence"
                                                 )));
                                             }
                                         }
@@ -461,15 +459,13 @@ impl SyntaxValidator {
                                     'x' => {
                                         // Hex escape: \xXX (2 hex digits) - NOT standard Turtle!
                                         return Err(Error::ontology_parsing(format!(
-                                            "Line {}: Invalid escape sequence \\x (not valid in Turtle)",
-                                            line_num
+                                            "Line {line_num}: Invalid escape sequence \\x (not valid in Turtle)"
                                         )));
                                     }
                                     _ => {
                                         // Invalid escape character
                                         return Err(Error::ontology_parsing(format!(
-                                            "Line {}: Invalid escape sequence \\{} (valid escapes: \\t \\n \\r \\\\ \\\" \\' \\uXXXX \\UXXXXXXXX)",
-                                            line_num, escaped
+                                            "Line {line_num}: Invalid escape sequence \\{escaped} (valid escapes: \\t \\n \\r \\\\ \\\" \\' \\uXXXX \\UXXXXXXXX)"
                                         )));
                                     }
                                 }
@@ -510,8 +506,7 @@ impl SyntaxValidator {
                                 let clean_value = literal_value.trim();
                                 if clean_value.is_empty() {
                                     return Err(Error::ontology_parsing(format!(
-                                        "Line {}: Empty integer literal",
-                                        line_num
+                                        "Line {line_num}: Empty integer literal"
                                     )));
                                 }
                                 // Check for invalid characters in integer
@@ -524,8 +519,7 @@ impl SyntaxValidator {
                                 };
                                 if !clean_value[start_idx..].chars().all(|c| c.is_ascii_digit()) {
                                     return Err(Error::ontology_parsing(format!(
-                                        "Line {}: Invalid integer literal: \"{}\"^^{}",
-                                        line_num, clean_value, datatype
+                                        "Line {line_num}: Invalid integer literal: \"{clean_value}\"^^{datatype}"
                                     )));
                                 }
                             } else if datatype.ends_with("decimal") {
@@ -533,8 +527,7 @@ impl SyntaxValidator {
                                 let clean_value = literal_value.trim();
                                 if clean_value.is_empty() {
                                     return Err(Error::ontology_parsing(format!(
-                                        "Line {}: Empty numeric literal",
-                                        line_num
+                                        "Line {line_num}: Empty numeric literal"
                                     )));
                                 }
 
@@ -551,8 +544,7 @@ impl SyntaxValidator {
                                         && first != '.'
                                     {
                                         return Err(Error::ontology_parsing(format!(
-                                            "Line {}: Invalid decimal literal: \"{}\"^^{}",
-                                            line_num, clean_value, datatype
+                                            "Line {line_num}: Invalid decimal literal: \"{clean_value}\"^^{datatype}"
                                         )));
                                     }
                                     if first == '.' {
@@ -567,14 +559,12 @@ impl SyntaxValidator {
                                         'e' | 'E' => {
                                             // Exponential notation NOT allowed in decimal
                                             return Err(Error::ontology_parsing(format!(
-                                                "Line {}: Invalid decimal literal: \"{}\"^^{} (exponential notation not allowed)",
-                                                line_num, clean_value, datatype
+                                                "Line {line_num}: Invalid decimal literal: \"{clean_value}\"^^{datatype} (exponential notation not allowed)"
                                             )));
                                         }
                                         _ => {
                                             return Err(Error::ontology_parsing(format!(
-                                                "Line {}: Invalid decimal literal: \"{}\"^^{} (invalid character '{}')",
-                                                line_num, clean_value, datatype, ch
+                                                "Line {line_num}: Invalid decimal literal: \"{clean_value}\"^^{datatype} (invalid character '{ch}')"
                                             )));
                                         }
                                     }
@@ -584,8 +574,7 @@ impl SyntaxValidator {
                                 let clean_value = literal_value.trim();
                                 if clean_value.is_empty() {
                                     return Err(Error::ontology_parsing(format!(
-                                        "Line {}: Empty numeric literal",
-                                        line_num
+                                        "Line {line_num}: Empty numeric literal"
                                     )));
                                 }
 
@@ -610,8 +599,7 @@ impl SyntaxValidator {
                                             && first != '.'
                                         {
                                             return Err(Error::ontology_parsing(format!(
-                                                "Line {}: Invalid numeric literal: \"{}\"^^{}",
-                                                line_num, clean_value, datatype
+                                                "Line {line_num}: Invalid numeric literal: \"{clean_value}\"^^{datatype}"
                                             )));
                                         }
                                         if first == '.' {
@@ -630,8 +618,7 @@ impl SyntaxValidator {
                                             '+' | '-' if has_exp => {} // Sign after exponent
                                             _ => {
                                                 return Err(Error::ontology_parsing(format!(
-                                                    "Line {}: Invalid numeric literal: \"{}\"^^{} (invalid character '{}')",
-                                                    line_num, clean_value, datatype, ch
+                                                    "Line {line_num}: Invalid numeric literal: \"{clean_value}\"^^{datatype} (invalid character '{ch}')"
                                                 )));
                                             }
                                         }
@@ -642,8 +629,7 @@ impl SyntaxValidator {
                                 let clean_value = literal_value.trim();
                                 if clean_value != "true" && clean_value != "false" {
                                     return Err(Error::ontology_parsing(format!(
-                                        "Line {}: Invalid boolean literal: \"{}\"^^{} (must be 'true' or 'false')",
-                                        line_num, clean_value, datatype
+                                        "Line {line_num}: Invalid boolean literal: \"{clean_value}\"^^{datatype} (must be 'true' or 'false')"
                                     )));
                                 }
                             }
@@ -670,22 +656,19 @@ impl SyntaxValidator {
                         // Validate language tag format (basic check: should be letters and hyphens)
                         if lang_tag.is_empty() {
                             return Err(Error::ontology_parsing(format!(
-                                "Line {}: Empty language tag",
-                                line_num
+                                "Line {line_num}: Empty language tag"
                             )));
                         }
                         // Language tag must start with a letter (not a dash)
                         if lang_tag.starts_with('-') {
                             return Err(Error::ontology_parsing(format!(
-                                "Line {}: Invalid language tag: @{} (cannot start with '-')",
-                                line_num, lang_tag
+                                "Line {line_num}: Invalid language tag: @{lang_tag} (cannot start with '-')"
                             )));
                         }
                         // Language tag must contain only letters and hyphens
                         if !lang_tag.chars().all(|c| c.is_alphabetic() || c == '-') {
                             return Err(Error::ontology_parsing(format!(
-                                "Line {}: Invalid language tag: @{} (must contain only letters and hyphens)",
-                                line_num, lang_tag
+                                "Line {line_num}: Invalid language tag: @{lang_tag} (must contain only letters and hyphens)"
                             )));
                         }
                     }
@@ -693,8 +676,7 @@ impl SyntaxValidator {
                     // Check for literals with both language tag and datatype (invalid)
                     if has_language && has_datatype {
                         return Err(Error::ontology_parsing(format!(
-                            "Line {}: Literal cannot have both language tag and datatype",
-                            line_num
+                            "Line {line_num}: Literal cannot have both language tag and datatype"
                         )));
                     }
                 }
@@ -745,8 +727,7 @@ impl SyntaxValidator {
 
         if paren_depth != 0 {
             return Err(Error::ontology_parsing(format!(
-                "Unmatched parentheses: {} unclosed",
-                paren_depth
+                "Unmatched parentheses: {paren_depth} unclosed"
             )));
         }
 
@@ -949,8 +930,7 @@ impl SyntaxValidator {
                         // If there's non-whitespace text directly in rdf:RDF, it's invalid
                         if !trimmed_text.is_empty() {
                             return Err(Error::ontology_parsing(format!(
-                                "Invalid RDF/XML: text content '{}' not allowed directly inside rdf:RDF element",
-                                trimmed_text
+                                "Invalid RDF/XML: text content '{trimmed_text}' not allowed directly inside rdf:RDF element"
                             )));
                         }
                     }
@@ -958,8 +938,7 @@ impl SyntaxValidator {
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     return Err(Error::ontology_parsing(format!(
-                        "RDF/XML parsing error: {}",
-                        e
+                        "RDF/XML parsing error: {e}"
                     )));
                 }
                 _ => {}
@@ -1012,8 +991,7 @@ impl SyntaxValidator {
                     Ok(Event::Eof) => break,
                     Err(e) => {
                         return Err(Error::ontology_parsing(format!(
-                            "RDF/XML parsing error: {}",
-                            e
+                            "RDF/XML parsing error: {e}"
                         )));
                     }
                     _ => {}
@@ -1067,8 +1045,7 @@ impl SyntaxValidator {
                     Ok(Event::Eof) => break,
                     Err(e) => {
                         return Err(Error::ontology_parsing(format!(
-                            "RDF/XML parsing error: {}",
-                            e
+                            "RDF/XML parsing error: {e}"
                         )));
                     }
                     _ => {}
@@ -1120,8 +1097,7 @@ impl SyntaxValidator {
                     Ok(Event::Eof) => break,
                     Err(e) => {
                         return Err(Error::ontology_parsing(format!(
-                            "RDF/XML parsing error: {}",
-                            e
+                            "RDF/XML parsing error: {e}"
                         )));
                     }
                     _ => {}
@@ -1181,8 +1157,7 @@ impl SyntaxValidator {
                     Ok(Event::Eof) => break,
                     Err(e) => {
                         return Err(Error::ontology_parsing(format!(
-                            "RDF/XML parsing error: {}",
-                            e
+                            "RDF/XML parsing error: {e}"
                         )));
                     }
                     _ => {}
@@ -1342,8 +1317,8 @@ impl SyntaxValidator {
 
             // Check for keywords without colons (e.g., "Class Person" instead of "Class: Person")
             for keyword in &keywords_requiring_colons {
-                let pattern = format!("{} ", keyword);
-                if trimmed.starts_with(&pattern) && !trimmed.starts_with(&format!("{}:", keyword)) {
+                let pattern = format!("{keyword} ");
+                if trimmed.starts_with(&pattern) && !trimmed.starts_with(&format!("{keyword}:")) {
                     return Err(Error::ontology_parsing(format!(
                         "Line {}: Missing colon after keyword '{}' - should be '{}:'",
                         line_num + 1,
@@ -1579,7 +1554,7 @@ impl SyntaxValidator {
                         for (char1, char2) in &contradictions {
                             // Split by comma and whitespace to get individual characteristics
                             let chars: Vec<&str> =
-                                characteristics_part.split(',').map(|s| s.trim()).collect();
+                                characteristics_part.split(',').map(str::trim).collect();
                             let has_char1 = chars.iter().any(|c| c == char1);
                             let has_char2 = chars.iter().any(|c| c == char2);
 
@@ -1661,8 +1636,8 @@ impl SyntaxValidator {
                     // Validate datatype restrictions
                     if (trimmed.contains(">=")
                         || trimmed.contains("<=")
-                        || trimmed.contains(">")
-                        || trimmed.contains("<"))
+                        || trimmed.contains('>')
+                        || trimmed.contains('<'))
                         && trimmed.contains('[')
                     {
                         let restriction_part = if let Some(start) = trimmed.find('[') {
@@ -1678,7 +1653,7 @@ impl SyntaxValidator {
                         if !restriction_part.is_empty() {
                             let parts: Vec<&str> = restriction_part.split_whitespace().collect();
                             for part in parts {
-                                if part.chars().all(|c| c.is_alphabetic()) {
+                                if part.chars().all(char::is_alphabetic) {
                                     return Err(Error::ontology_parsing(format!(
                                         "Line {}: Invalid datatype restriction value '{}' - expected numeric literal or quoted string",
                                         line_num + 1,
@@ -1851,7 +1826,7 @@ impl SyntaxValidator {
                         let looks_like_keyword = first_word
                             .chars()
                             .next()
-                            .map(|c| c.is_uppercase())
+                            .map(char::is_uppercase)
                             .unwrap_or(false);
 
                         // Check if first word is a known keyword
@@ -2068,8 +2043,8 @@ impl SyntaxValidator {
             // Validate datatype restrictions use valid values (not undefined names)
             if (trimmed.contains(">=")
                 || trimmed.contains("<=")
-                || trimmed.contains(">")
-                || trimmed.contains("<"))
+                || trimmed.contains('>')
+                || trimmed.contains('<'))
                 && trimmed.contains('[')
             {
                 // This looks like a datatype restriction
@@ -2087,7 +2062,7 @@ impl SyntaxValidator {
                     let parts: Vec<&str> = restriction_part.split_whitespace().collect();
                     for part in parts {
                         // Check if it looks like a name (starts with letter) but isn't a number
-                        if part.chars().all(|c| c.is_alphabetic()) {
+                        if part.chars().all(char::is_alphabetic) {
                             return Err(Error::ontology_parsing(format!(
                                 "Line {}: Invalid datatype restriction value '{}' - expected numeric literal or quoted string",
                                 line_num + 1,
@@ -2246,7 +2221,7 @@ impl SyntaxValidator {
                                     // Rule name should be followed by ':'
                                     if !potential_rule_name.ends_with(':') {
                                         // Check if it looks like a rule name (alphanumeric)
-                                        if potential_rule_name.chars().any(|c| c.is_alphanumeric())
+                                        if potential_rule_name.chars().any(char::is_alphanumeric)
                                         {
                                             return Err(Error::ontology_parsing(format!(
                                                 "Line {}: SWRL rule name '{}' must be followed by ':' (e.g., '{}:')",

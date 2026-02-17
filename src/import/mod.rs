@@ -27,6 +27,7 @@ pub struct ImportDeclaration {
 
 impl ImportDeclaration {
     /// Create a new import declaration
+    #[must_use] 
     pub fn new(imported_ontology_iri: IRI) -> Self {
         Self {
             imported_ontology_iri,
@@ -36,12 +37,14 @@ impl ImportDeclaration {
     }
 
     /// Set the version IRI
+    #[must_use] 
     pub fn with_version_iri(mut self, version_iri: IRI) -> Self {
         self.version_iri = Some(version_iri);
         self
     }
 
     /// Add an annotation
+    #[must_use] 
     pub fn with_annotation(mut self, annotation: Annotation) -> Self {
         self.annotations.push(annotation);
         self
@@ -117,6 +120,7 @@ pub struct ImportDependencyGraph {
 
 impl ImportDependencyGraph {
     /// Create a new dependency graph
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -143,11 +147,13 @@ impl ImportDependencyGraph {
     }
 
     /// Get direct dependencies of an ontology
+    #[must_use] 
     pub fn get_dependencies(&self, ontology_iri: &IRI) -> Option<&HashSet<IRI>> {
         self.dependencies.get(ontology_iri)
     }
 
     /// Get all transitive dependencies
+    #[must_use] 
     pub fn get_transitive_dependencies(&self, ontology_iri: &IRI) -> HashSet<IRI> {
         let mut visited = HashSet::new();
         let mut to_visit = VecDeque::new();
@@ -173,6 +179,7 @@ impl ImportDependencyGraph {
     }
 
     /// Detect circular dependencies
+    #[must_use] 
     pub fn detect_cycles(&self) -> Vec<Vec<IRI>> {
         let mut cycles = Vec::new();
         let mut visited = HashSet::new();
@@ -318,7 +325,7 @@ impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ImportError::ResolutionFailed { import_iri, reason } => {
-                write!(f, "Failed to resolve import {}: {}", import_iri, reason)
+                write!(f, "Failed to resolve import {import_iri}: {reason}")
             }
             ImportError::CircularDependency { cycle, context } => {
                 write!(
@@ -326,7 +333,7 @@ impl std::fmt::Display for ImportError {
                     "Circular dependency detected: {} ({})",
                     cycle
                         .iter()
-                        .map(|iri| iri.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" -> "),
                     context
@@ -338,15 +345,14 @@ impl std::fmt::Display for ImportError {
             } => {
                 write!(
                     f,
-                    "Import depth exceeded: {} > {}",
-                    current_depth, max_depth
+                    "Import depth exceeded: {current_depth} > {max_depth}"
                 )
             }
             ImportError::ParseError { import_iri, error } => {
-                write!(f, "Parse error in import {}: {}", import_iri, error)
+                write!(f, "Parse error in import {import_iri}: {error}")
             }
             ImportError::ValidationError { import_iri, error } => {
-                write!(f, "Validation error in import {}: {}", import_iri, error)
+                write!(f, "Validation error in import {import_iri}: {error}")
             }
             ImportError::VersionMismatch {
                 import_iri,
@@ -355,12 +361,11 @@ impl std::fmt::Display for ImportError {
             } => {
                 write!(
                     f,
-                    "Version mismatch for {}: expected {:?}, got {:?}",
-                    import_iri, expected_version, actual_version
+                    "Version mismatch for {import_iri}: expected {expected_version:?}, got {actual_version:?}"
                 )
             }
             ImportError::IoError { import_iri, error } => {
-                write!(f, "I/O error loading {}: {}", import_iri, error)
+                write!(f, "I/O error loading {import_iri}: {error}")
             }
         }
     }
@@ -380,6 +385,7 @@ pub struct ImportManager {
 
 impl ImportManager {
     /// Create a new import manager
+    #[must_use] 
     pub fn new(config: ImportManagerConfig) -> Self {
         Self {
             config,
@@ -389,6 +395,7 @@ impl ImportManager {
     }
 
     /// Create import manager with default configuration
+    #[must_use] 
     pub fn with_defaults() -> Self {
         Self::new(ImportManagerConfig::default())
     }
@@ -509,18 +516,18 @@ impl ImportManager {
         // Try to resolve as file path
         if let Some(ontology) = self.try_resolve_as_file(mapped_iri)? {
             result.ontology = Some(ontology);
-            result.resolved_source = Some(format!("file: {}", mapped_iri));
+            result.resolved_source = Some(format!("file: {mapped_iri}"));
         }
         // Try to resolve as URL
         else if let Some(ontology) = self.try_resolve_as_url(mapped_iri)? {
             result.ontology = Some(ontology);
-            result.resolved_source = Some(format!("url: {}", mapped_iri));
+            result.resolved_source = Some(format!("url: {mapped_iri}"));
         }
         // Resolution failed
         else {
             result.errors.push(ImportError::ResolutionFailed {
                 import_iri: import_decl.imported_ontology_iri.clone(),
-                reason: format!("Could not resolve {} as file or URL", mapped_iri),
+                reason: format!("Could not resolve {mapped_iri} as file or URL"),
             });
         }
 
@@ -586,7 +593,7 @@ impl ImportManager {
             }
             _ => {
                 // For unknown URLs, log a warning and return None
-                warn!("Cannot load remote ontology from URL: {}", url_str);
+                warn!("Cannot load remote ontology from URL: {url_str}");
                 Ok(None)
             }
         }
@@ -597,48 +604,48 @@ impl ImportManager {
         let extension = path
             .extension()
             .and_then(|ext| ext.to_str())
-            .map(|s| s.to_lowercase());
+            .map(str::to_lowercase);
 
         match extension.as_deref() {
             Some("owl" | "owx") => {
                 // Try OWL/XML parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::owl_xml::parse(&content)
             }
             Some("ttl") => {
                 // Try Turtle parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::turtle::parse(&content)
             }
             Some("rdf" | "xml") => {
                 // Try RDF/XML parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::rdf_xml::parse(&content)
             }
             Some("ofn") => {
                 // Try Functional Syntax parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::functional::parse(&content)
             }
             Some("nt") => {
                 // Try N-Triples parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::ntriples::parse(&content)
             }
             _ => {
                 // Unknown extension, try to detect format by content
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 // Simple heuristics to detect format
                 if content.trim_start().starts_with("<?xml") {
@@ -707,7 +714,7 @@ impl ImportManager {
 
         // Log the discovered namespaces for future prefix mapping
         if !used_namespaces.is_empty() {
-            log::debug!("Discovered namespaces during import: {:?}", used_namespaces);
+            log::debug!("Discovered namespaces during import: {used_namespaces:?}");
         }
 
         // If source has an ontology IRI and target doesn't, inherit it

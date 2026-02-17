@@ -42,6 +42,7 @@ pub struct ELReasoner {
 
 impl ELReasoner {
     /// Create a new EL reasoner
+    #[must_use] 
     pub fn new(config: ReasonerConfig) -> Self {
         #[allow(clippy::arc_with_non_send_sync)]
         let explanation_service = if config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
@@ -131,14 +132,14 @@ impl ELReasoner {
         Ok(())
     }
     
-    /// Convert EL concept hierarchy to ClassExpression hierarchy
+    /// Convert EL concept hierarchy to `ClassExpression` hierarchy
     fn convert_to_class_expression_hierarchy(&self) -> HashMap<ClassExpression, HashSet<ClassExpression>> {
         let mut result = HashMap::new();
         
         for (sub, sups) in self.concept_hierarchy.get_all_subsumptions() {
             let sub_expr = sub.to_class_expression();
             let sup_exprs: HashSet<_> = sups.iter()
-                .map(|sup| sup.to_class_expression())
+                .map(ELConcept::to_class_expression)
                 .collect();
             result.insert(sub_expr, sup_exprs);
         }
@@ -174,6 +175,7 @@ impl ELReasoner {
     }
 
     /// Check if the ontology is consistent (always true for EL)
+    #[must_use] 
     pub fn is_consistent(&self) -> bool {
         // EL ontologies are always consistent
         true
@@ -188,6 +190,7 @@ impl ELReasoner {
     }
 
     /// Get reasoning statistics
+    #[must_use] 
     pub fn get_reasoning_statistics(&self) -> HashMap<String, serde_json::Value> {
         let mut stats = HashMap::new();
         stats.insert("initialization_time".to_string(), serde_json::json!(self.statistics.initialization_time.as_millis()));
@@ -237,7 +240,7 @@ impl ELReasoner {
                     filler: Box::new(el_concept),
                 })
             }
-            _ => Err(Error::unsupported(format!("Class expression not supported in EL: {:?}", class_expr))),
+            _ => Err(Error::unsupported(format!("Class expression not supported in EL: {class_expr:?}"))),
         }
     }
 
@@ -245,7 +248,7 @@ impl ELReasoner {
         // Convert EL axioms back to general axioms for explanation
         self.normalized_axioms
             .iter()
-            .map(|el_axiom| el_axiom.to_general_axiom())
+            .map(ELAxiom::to_general_axiom)
             .collect()
     }
 }
@@ -278,6 +281,7 @@ pub enum ELAxiom {
 
 impl ELAxiom {
     /// Convert back to general axiom for explanations
+    #[must_use] 
     pub fn to_general_axiom(&self) -> Axiom {
         use crate::ontology::axioms::*;
         match self {
@@ -336,13 +340,14 @@ pub enum ELConcept {
 
 impl ELConcept {
     /// Convert to general class expression
+    #[must_use] 
     pub fn to_class_expression(&self) -> ClassExpression {
         match self {
             ELConcept::Atomic(class) => ClassExpression::Class(class.clone()),
             ELConcept::Top => ClassExpression::Class(crate::ontology::Class::new(crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"))),
             ELConcept::Conjunction(concepts) => {
                 let class_exprs: Vec<_> = concepts.iter()
-                    .map(|c| c.to_class_expression())
+                    .map(ELConcept::to_class_expression)
                     .collect();
                 ClassExpression::ObjectIntersectionOf(class_exprs)
             }
@@ -356,11 +361,13 @@ impl ELConcept {
     }
 
     /// Check if this concept is atomic
+    #[must_use] 
     pub fn is_atomic(&self) -> bool {
         matches!(self, ELConcept::Atomic(_))
     }
 
     /// Get all atomic concepts in this concept
+    #[must_use] 
     pub fn get_atomic_concepts(&self) -> HashSet<crate::ontology::Class> {
         let mut atoms = HashSet::new();
         self.collect_atomic_concepts(&mut atoms);
@@ -397,6 +404,7 @@ impl Default for ELNormalizer {
 
 impl ELNormalizer {
     /// Create a new normalizer
+    #[must_use] 
     pub fn new() -> Self {
         Self
     }
@@ -459,7 +467,7 @@ impl ELNormalizer {
                     filler: Box::new(el_filler),
                 })
             }
-            _ => Err(Error::unsupported(format!("Not supported in EL: {:?}", class_expr))),
+            _ => Err(Error::unsupported(format!("Not supported in EL: {class_expr:?}"))),
         }
     }
 }
@@ -481,6 +489,7 @@ impl Default for ConceptHierarchy {
 
 impl ConceptHierarchy {
     /// Create a new concept hierarchy
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             subsumptions: HashMap::new(),
@@ -489,6 +498,7 @@ impl ConceptHierarchy {
     }
 
     /// Build hierarchy from subsumption pairs
+    #[must_use] 
     pub fn from_subsumptions(subsumptions: Vec<(ELConcept, ELConcept)>) -> Self {
         let mut hierarchy = Self::new();
         
@@ -501,6 +511,7 @@ impl ConceptHierarchy {
     }
     
     /// Build hierarchy from a pre-computed subsumption map (used by concurrent classification)
+    #[must_use] 
     pub fn from_subsumption_map(subsumptions: HashMap<ELConcept, HashSet<ELConcept>>) -> Self {
         let mut hierarchy = Self {
             subsumptions,
@@ -517,6 +528,7 @@ impl ConceptHierarchy {
     }
 
     /// Check if one concept subsumes another
+    #[must_use] 
     pub fn is_subsumed(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.transitive_subsumptions
             .get(sub)
@@ -557,13 +569,14 @@ impl ConceptHierarchy {
     }
 
     /// Convert to classification hierarchy format
+    #[must_use] 
     pub fn to_classification_hierarchy(&self) -> HashMap<String, Vec<String>> {
         let mut hierarchy = HashMap::with_capacity(self.transitive_subsumptions.len());
         
         for (sub, sups) in &self.transitive_subsumptions {
-            let sub_name = format!("{:?}", sub);
+            let sub_name = format!("{sub:?}");
             let sup_names: Vec<_> = sups.iter()
-                .map(|sup| format!("{:?}", sup))
+                .map(|sup| format!("{sup:?}"))
                 .collect();
             hierarchy.insert(sub_name, sup_names);
         }
@@ -572,6 +585,7 @@ impl ConceptHierarchy {
     }
     
     /// Get all subsumptions
+    #[must_use] 
     pub fn get_all_subsumptions(&self) -> &HashMap<ELConcept, HashSet<ELConcept>> {
         &self.transitive_subsumptions
     }
@@ -594,6 +608,7 @@ impl Default for RoleHierarchy {
 
 impl RoleHierarchy {
     /// Create a new role hierarchy
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             inclusions: HashMap::new(),
@@ -630,6 +645,7 @@ impl RoleHierarchy {
     }
 
     /// Check if one role subsumes another
+    #[must_use] 
     pub fn is_role_subsumed(&self, sub_role: &ObjectPropertyExpression, super_role: &ObjectPropertyExpression) -> bool {
         self.transitive_inclusions
             .get(sub_role)
@@ -638,6 +654,7 @@ impl RoleHierarchy {
     }
 
     /// Get all super-roles of a given role
+    #[must_use] 
     pub fn get_super_roles(&self, role: &ObjectPropertyExpression) -> HashSet<ObjectPropertyExpression> {
         self.transitive_inclusions
             .get(role)
@@ -667,6 +684,7 @@ impl Default for CompletionEngine {
 
 impl CompletionEngine {
     /// Create a new completion engine
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             state: CompletionState::new(),
@@ -721,6 +739,7 @@ impl CompletionEngine {
     }
 
     /// Get all computed subsumptions
+    #[must_use] 
     pub fn get_all_subsumptions(&self) -> Vec<(ELConcept, ELConcept)> {
         self.state.get_all_subsumptions()
     }
@@ -746,6 +765,7 @@ impl Default for CompletionState {
 
 impl CompletionState {
     /// Create new completion state
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             subsumptions: HashSet::new(),
@@ -769,6 +789,7 @@ impl CompletionState {
     }
 
     /// Check if an inference is already known
+    #[must_use] 
     pub fn has_inference(&self, inference: &Inference) -> bool {
         match inference {
             Inference::Subsumption { sub, sup } => {
@@ -787,11 +808,13 @@ impl CompletionState {
     }
 
     /// Get all subsumptions
+    #[must_use] 
     pub fn get_all_subsumptions(&self) -> Vec<(ELConcept, ELConcept)> {
         self.subsumptions.iter().cloned().collect()
     }
 
     /// Check if a subsumption holds
+    #[must_use] 
     pub fn has_subsumption(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.subsumptions.contains(&(sub.clone(), sup.clone()))
     }

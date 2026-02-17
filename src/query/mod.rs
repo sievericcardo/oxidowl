@@ -58,11 +58,13 @@ impl QueryService {
     }
 
     /// Get the DL query engine for direct access
+    #[must_use] 
     pub fn dl_engine(&self) -> &DLQueryEngine {
         &self.dl_engine
     }
 
     /// Get the advanced query engine for direct access
+    #[must_use] 
     pub fn advanced_engine(&self) -> &QueryEngine {
         &self.advanced_engine
     }

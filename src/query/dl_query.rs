@@ -162,7 +162,7 @@ impl DLQueryEngine {
                 let namespace = if iri_string.ends_with('#') || iri_string.ends_with('/') {
                     iri_string.to_string()
                 } else {
-                    format!("{}#", iri_string)
+                    format!("{iri_string}#")
                 };
                 return Ok(namespace);
             }
@@ -188,7 +188,7 @@ impl DLQueryEngine {
             let namespace = if xml_base.ends_with('#') || xml_base.ends_with('/') {
                 xml_base
             } else {
-                format!("{}#", xml_base)
+                format!("{xml_base}#")
             };
             return Ok(namespace);
         }
@@ -563,9 +563,9 @@ impl DLQueryParser {
         }
 
         // Handle parentheses
-        if tokens.get(start).map(|s| s.as_str()) == Some("(") {
+        if tokens.get(start).map(std::string::String::as_str) == Some("(") {
             let (expr, end) = self.parse_expression_tokens(tokens, start + 1)?;
-            if end >= tokens.len() || tokens.get(end).map(|s| s.as_str()) != Some(")") {
+            if end >= tokens.len() || tokens.get(end).map(std::string::String::as_str) != Some(")") {
                 return Err(Error::reasoning("Missing closing parenthesis"));
             }
             return Ok((expr, end + 1));
@@ -587,7 +587,7 @@ impl DLQueryParser {
             return self.parse_binary_operators(class_expr, tokens, start + 1);
         }
 
-        Err(Error::reasoning(format!("Unexpected token: {}", token)))
+        Err(Error::reasoning(format!("Unexpected token: {token}")))
     }
 
     /// Parse binary operators (and, or, some, etc.)

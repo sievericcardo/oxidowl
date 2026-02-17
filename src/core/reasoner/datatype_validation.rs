@@ -19,11 +19,13 @@ pub struct DatatypeValidator {
 
 impl DatatypeValidator {
     /// Create a new datatype validator
+    #[must_use] 
     pub fn new() -> Self {
         Self { strict: true }
     }
 
     /// Create a validator with custom strictness
+    #[must_use] 
     pub fn with_strict(strict: bool) -> Self {
         Self { strict }
     }
@@ -105,8 +107,7 @@ impl DatatypeValidator {
                 // Unknown datatype
                 if self.strict {
                     Err(Error::invalid_input(format!(
-                        "Unknown XSD datatype: {}",
-                        datatype_local
+                        "Unknown XSD datatype: {datatype_local}"
                     )))
                 } else {
                     Ok(true)
@@ -116,6 +117,7 @@ impl DatatypeValidator {
     }
 
     /// Validate a datatype match between two IRIs
+    #[must_use] 
     pub fn datatypes_compatible(&self, datatype1: &IRI, datatype2: &IRI) -> bool {
         if datatype1 == datatype2 {
             return true;

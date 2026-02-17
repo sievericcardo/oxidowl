@@ -31,6 +31,7 @@ pub struct Interpretation {
 
 impl Interpretation {
     /// Create a new empty interpretation
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             domain: HashSet::new(),
@@ -49,6 +50,7 @@ impl Interpretation {
     }
 
     /// Get the domain of interpretation
+    #[must_use] 
     pub fn domain(&self) -> &HashSet<String> {
         &self.domain
     }
@@ -64,6 +66,7 @@ impl Interpretation {
     }
 
     /// Get interpretation for an IRI
+    #[must_use] 
     pub fn get_iri_interpretation(&self, iri: &str) -> Option<&String> {
         self.iri_interpretation.get(iri)
     }
@@ -75,6 +78,7 @@ impl Interpretation {
     }
 
     /// Get interpretation for a blank node
+    #[must_use] 
     pub fn get_blank_node_interpretation(&self, blank_node: &str) -> Option<&String> {
         self.blank_node_interpretation.get(blank_node)
     }
@@ -89,6 +93,7 @@ impl Interpretation {
     }
 
     /// Get property interpretation
+    #[must_use] 
     pub fn get_property_interpretation(
         &self,
         property: &str,
@@ -110,6 +115,7 @@ impl Interpretation {
     }
 
     /// Get class interpretation
+    #[must_use] 
     pub fn get_class_interpretation(&self, class: &str) -> Option<&HashSet<String>> {
         self.class_interpretation.get(class)
     }
@@ -128,6 +134,7 @@ impl Interpretation {
     }
 
     /// Get literal interpretation
+    #[must_use] 
     pub fn get_literal_interpretation(&self, literal: &str) -> Option<&String> {
         self.literal_interpretation.get(literal)
     }
@@ -138,11 +145,13 @@ impl Interpretation {
     }
 
     /// Get datatype interpretation
+    #[must_use] 
     pub fn get_datatype_interpretation(&self, datatype: &str) -> Option<&HashSet<String>> {
         self.datatype_interpretation.get(datatype)
     }
 
     /// Interpret an RDF term in this interpretation
+    #[must_use] 
     pub fn interpret_rdf_term(&self, term: &RdfTerm) -> Option<String> {
         match term {
             RdfTerm::Iri(iri) => {
@@ -159,9 +168,9 @@ impl Interpretation {
                 ..
             } => {
                 let literal_key = if let Some(dt) = datatype {
-                    format!("{}^^{}", value, dt)
+                    format!("{value}^^{dt}")
                 } else if let Some(lang) = language {
-                    format!("{}@{}", value, lang)
+                    format!("{value}@{lang}")
                 } else {
                     value.clone()
                 };
@@ -173,13 +182,14 @@ impl Interpretation {
             }
             RdfTerm::QuotedTriple(triple) => {
                 // RDF-star: quoted triples interpreted as resources
-                let triple_id = format!("<<{}>>", triple);
+                let triple_id = format!("<<{triple}>>");
                 Some(triple_id)
             }
         }
     }
 
     /// Check if a triple is satisfied by this interpretation
+    #[must_use] 
     pub fn satisfies_triple(&self, triple: &Triple) -> bool {
         let subject_interp = self.interpret_rdf_term(&triple.subject);
         let predicate_interp = self.interpret_rdf_term(&triple.predicate);
@@ -253,7 +263,7 @@ impl Interpretation {
 
         for term in &all_terms {
             if !term.is_literal() {
-                let domain_element = format!("d{}", term_counter);
+                let domain_element = format!("d{term_counter}");
                 domain.insert(domain_element.clone());
 
                 match term {
@@ -296,8 +306,7 @@ impl Interpretation {
             if let Some(existing) = self.iri_interpretation.get(iri) {
                 if existing != interpretation {
                     return Err(Error::reasoning(format!(
-                        "Conflicting IRI interpretation for {}",
-                        iri
+                        "Conflicting IRI interpretation for {iri}"
                     )));
                 }
             } else {
@@ -384,6 +393,7 @@ pub struct InterpretationBuilder {
 
 impl InterpretationBuilder {
     /// Create a new interpretation builder
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             interpretation: Interpretation::new(),
@@ -391,12 +401,14 @@ impl InterpretationBuilder {
     }
 
     /// Set the domain
+    #[must_use] 
     pub fn with_domain(mut self, domain: HashSet<String>) -> Self {
         self.interpretation.set_domain(domain);
         self
     }
 
     /// Add an IRI interpretation
+    #[must_use] 
     pub fn with_iri(mut self, iri: String, domain_element: String) -> Self {
         self.interpretation
             .set_iri_interpretation(iri, domain_element);
@@ -404,6 +416,7 @@ impl InterpretationBuilder {
     }
 
     /// Add a property interpretation
+    #[must_use] 
     pub fn with_property(mut self, property: String, relations: HashSet<(String, String)>) -> Self {
         self.interpretation
             .set_property_interpretation(property, relations);
@@ -411,6 +424,7 @@ impl InterpretationBuilder {
     }
 
     /// Add a class interpretation
+    #[must_use] 
     pub fn with_class(mut self, class: String, instances: HashSet<String>) -> Self {
         self.interpretation
             .set_class_interpretation(class, instances);
@@ -441,6 +455,7 @@ pub struct InterpretationFactory;
 
 impl InterpretationFactory {
     /// Create a minimal interpretation for RDF
+    #[must_use] 
     pub fn create_minimal_rdf_interpretation() -> Interpretation {
         let mut interpretation = Interpretation::new();
 
@@ -453,6 +468,7 @@ impl InterpretationFactory {
     }
 
     /// Create a standard RDFS interpretation
+    #[must_use] 
     pub fn create_rdfs_interpretation() -> Interpretation {
         let mut interpretation = Self::create_minimal_rdf_interpretation();
 
@@ -470,6 +486,7 @@ impl InterpretationFactory {
     }
 
     /// Create a standard OWL interpretation
+    #[must_use] 
     pub fn create_owl_interpretation() -> Interpretation {
         let mut interpretation = Self::create_rdfs_interpretation();
 

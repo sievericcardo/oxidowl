@@ -646,6 +646,7 @@ pub struct BlockerCandidateIndex {
 
 impl BlockerCandidateIndex {
     /// Create a new blocker candidate index
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             signature_index: HashMap::new(),
@@ -663,10 +664,10 @@ impl BlockerCandidateIndex {
         
         // Sort signature for deterministic hashing
         let mut sorted_sig: Vec<_> = signature.iter().collect();
-        sorted_sig.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        sorted_sig.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         
         for concept in sorted_sig {
-            format!("{:?}", concept).hash(&mut hasher);
+            format!("{concept:?}").hash(&mut hasher);
         }
         
         hasher.finish()
@@ -690,6 +691,7 @@ impl BlockerCandidateIndex {
     }
 
     /// Find potential blocker candidates for a node signature
+    #[must_use] 
     pub fn find_blocker_candidates(&self, signature: &[ConceptLabel]) -> Vec<NodeId> {
         let hash = Self::compute_signature_hash(signature);
         
@@ -715,6 +717,7 @@ impl BlockerCandidateIndex {
     }
 
     /// Get the cached signature for a node
+    #[must_use] 
     pub fn get_signature(&self, node_id: NodeId) -> Option<&Vec<ConceptLabel>> {
         self.signature_cache.get(&node_id)
     }
@@ -739,11 +742,13 @@ impl BlockerCandidateIndex {
     }
 
     /// Get the number of indexed nodes
+    #[must_use] 
     pub fn size(&self) -> usize {
         self.node_signatures.len()
     }
 
     /// Check if a node is indexed
+    #[must_use] 
     pub fn contains(&self, node_id: NodeId) -> bool {
         self.node_signatures.contains_key(&node_id)
     }
@@ -763,6 +768,7 @@ pub struct IndexedAnywhereBlocking {
 }
 
 impl IndexedAnywhereBlocking {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             index: BlockerCandidateIndex::new(),

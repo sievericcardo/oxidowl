@@ -194,21 +194,25 @@ pub struct NodeStatus {
 
 impl ConceptLabel {
     /// Check if this concept label is atomic
+    #[must_use] 
     pub fn is_atomic(&self) -> bool {
         matches!(self, ConceptLabel::Atomic(_))
     }
 
     /// Check if this concept label is negated
+    #[must_use] 
     pub fn is_negated(&self) -> bool {
         matches!(self, ConceptLabel::NegatedAtomic(_))
     }
 
     /// Check if this concept label is complex
+    #[must_use] 
     pub fn is_complex(&self) -> bool {
         matches!(self, ConceptLabel::Complex(_))
     }
 
     /// Get the atomic name if this is an atomic concept
+    #[must_use] 
     pub fn atomic_name(&self) -> Option<&str> {
         match self {
             ConceptLabel::Atomic(name) => Some(name),
@@ -217,6 +221,7 @@ impl ConceptLabel {
     }
 
     /// Get the negated atomic name if this is a negated atomic concept
+    #[must_use] 
     pub fn negated_atomic_name(&self) -> Option<&str> {
         match self {
             ConceptLabel::NegatedAtomic(name) => Some(name),
@@ -225,6 +230,7 @@ impl ConceptLabel {
     }
 
     /// Check if two concept labels are complementary (one is the negation of the other)
+    #[must_use] 
     pub fn is_complementary(&self, other: &ConceptLabel) -> bool {
         match (self, other) {
             (ConceptLabel::Atomic(name1), ConceptLabel::NegatedAtomic(name2)) => name1 == name2,
@@ -240,6 +246,7 @@ impl ConceptLabel {
     }
 
     /// Create a negated version of this concept label
+    #[must_use] 
     pub fn negate(&self) -> ConceptLabel {
         match self {
             ConceptLabel::Atomic(name) => ConceptLabel::NegatedAtomic(name.clone()),
@@ -250,6 +257,7 @@ impl ConceptLabel {
     }
 
     /// Parse a concept from string representation
+    #[must_use] 
     pub fn parse(concept_str: &str) -> Self {
         // Simple parsing - in practice this would be more sophisticated
         if let Some(stripped) = concept_str.strip_prefix('!') {
@@ -263,15 +271,15 @@ impl ConceptLabel {
 impl std::fmt::Display for ConceptLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConceptLabel::Atomic(name) => write!(f, "{}", name),
-            ConceptLabel::NegatedAtomic(name) => write!(f, "!{}", name),
+            ConceptLabel::Atomic(name) => write!(f, "{name}"),
+            ConceptLabel::NegatedAtomic(name) => write!(f, "!{name}"),
             ConceptLabel::Intersection(concepts) => {
                 write!(f, "(")?;
                 for (i, c) in concepts.iter().enumerate() {
                     if i > 0 {
                         write!(f, " ⊓ ")?;
                     }
-                    write!(f, "{}", c)?;
+                    write!(f, "{c}")?;
                 }
                 write!(f, ")")
             }
@@ -281,15 +289,15 @@ impl std::fmt::Display for ConceptLabel {
                     if i > 0 {
                         write!(f, " ⊔ ")?;
                     }
-                    write!(f, "{}", c)?;
+                    write!(f, "{c}")?;
                 }
                 write!(f, ")")
             }
             ConceptLabel::Existential { role, filler } => {
-                write!(f, "∃{}.{}", role, filler)
+                write!(f, "∃{role}.{filler}")
             }
             ConceptLabel::Universal { role, filler } => {
-                write!(f, "∀{}.{}", role, filler)
+                write!(f, "∀{role}.{filler}")
             }
             ConceptLabel::AtLeast {
                 cardinality,
@@ -297,9 +305,9 @@ impl std::fmt::Display for ConceptLabel {
                 filler,
             } => {
                 if let Some(fil) = filler {
-                    write!(f, "≥{}{}.{}", cardinality, role, fil)
+                    write!(f, "≥{cardinality}{role}.{fil}")
                 } else {
-                    write!(f, "≥{}{}", cardinality, role)
+                    write!(f, "≥{cardinality}{role}")
                 }
             }
             ConceptLabel::AtMost {
@@ -308,20 +316,20 @@ impl std::fmt::Display for ConceptLabel {
                 filler,
             } => {
                 if let Some(fil) = filler {
-                    write!(f, "≤{}{}.{}", cardinality, role, fil)
+                    write!(f, "≤{cardinality}{role}.{fil}")
                 } else {
-                    write!(f, "≤{}{}", cardinality, role)
+                    write!(f, "≤{cardinality}{role}")
                 }
             }
             ConceptLabel::Complex(expr) => {
-                write!(f, "Complex({:?})", expr)
+                write!(f, "Complex({expr:?})")
             }
             ConceptLabel::Nominal(individual) => {
-                write!(f, "{{{}}}", individual) // Nominals are shown in curly braces
+                write!(f, "{{{individual}}}") // Nominals are shown in curly braces
             }
             ConceptLabel::QuotedTriple(id) => {
                 // RDF-star quoted triple shown with angle brackets
-                write!(f, "{}", id)
+                write!(f, "{id}")
             }
             ConceptLabel::MetaAssertion {
                 quoted_triple_id,
@@ -329,7 +337,7 @@ impl std::fmt::Display for ConceptLabel {
                 value,
             } => {
                 // Meta-assertion shown as property-value pair about quoted triple
-                write!(f, "{} {}={}", quoted_triple_id, property, value)
+                write!(f, "{quoted_triple_id} {property}={value}")
             }
         }
     }
@@ -337,6 +345,7 @@ impl std::fmt::Display for ConceptLabel {
 
 impl RoleLabel {
     /// Parse a role from string representation
+    #[must_use] 
     pub fn parse(role_str: &str) -> Self {
         if role_str.starts_with("inv(") && role_str.ends_with(')') {
             let inner = &role_str[4..role_str.len() - 1];
@@ -350,23 +359,24 @@ impl RoleLabel {
 impl std::fmt::Display for RoleLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RoleLabel::Atomic(name) => write!(f, "{}", name),
-            RoleLabel::Inverse(name) => write!(f, "inv({})", name),
+            RoleLabel::Atomic(name) => write!(f, "{name}"),
+            RoleLabel::Inverse(name) => write!(f, "inv({name})"),
             RoleLabel::Chain(roles) => {
                 let chain_str = roles
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(" ∘ ");
-                write!(f, "{}", chain_str)
+                write!(f, "{chain_str}")
             }
-            RoleLabel::Complex(expr) => write!(f, "{}", expr),
+            RoleLabel::Complex(expr) => write!(f, "{expr}"),
         }
     }
 }
 
 impl TableauNode {
     /// Create a new tableau node
+    #[must_use] 
     pub fn new(id: NodeId, node_type: NodeType) -> Self {
         Self {
             id,
@@ -395,11 +405,13 @@ impl TableauNode {
     }
 
     /// Check if the node has a specific concept
+    #[must_use] 
     pub fn has_concept(&self, concept: &ConceptLabel) -> bool {
         self.concepts.contains(concept)
     }
 
     /// Check if the node has complementary concepts (clash)
+    #[must_use] 
     pub fn has_concept_clash(&self) -> bool {
         for concept1 in &self.concepts {
             for concept2 in &self.concepts {
@@ -420,6 +432,7 @@ impl TableauNode {
     }
 
     /// Get all successors for a specific role
+    #[must_use] 
     pub fn get_role_successors(&self, role: &str) -> Option<&HashSet<NodeId>> {
         self.role_successors.get(role)
     }
@@ -430,6 +443,7 @@ impl TableauNode {
     }
 
     /// Check if the node is blocked
+    #[must_use] 
     pub fn is_blocked(&self) -> bool {
         self.blocking_info.is_blocked
     }
@@ -441,6 +455,7 @@ impl TableauNode {
     }
 
     /// Get the dependency set for a concept
+    #[must_use] 
     pub fn get_concept_dependency(&self, concept: &ConceptLabel) -> Option<&Arc<DependencySet>> {
         self.concept_dependencies.get(concept)
     }

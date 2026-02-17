@@ -1,8 +1,8 @@
 //! OWL 2 DL Semantics Implementation
 //!
 //! This module implements OWL 2 DL semantics according to:
-//! https://www.w3.org/TR/owl2-direct-semantics/
-//! https://www.w3.org/TR/owl2-primer/
+//! <https://www.w3.org/TR/owl2-direct-semantics>/
+//! <https://www.w3.org/TR/owl2-primer>/
 //!
 //! Extended to support RDF-star semantics with configurable quoted triple reasoning.
 
@@ -46,6 +46,7 @@ impl Default for Owl2Config {
 
 impl Owl2Config {
     /// Create configuration for RDF 1.1 compatibility
+    #[must_use] 
     pub fn rdf11() -> Self {
         Self {
             rdf11_mode: true,
@@ -55,6 +56,7 @@ impl Owl2Config {
     }
 
     /// Create configuration for RDF-star with specified reasoning depth
+    #[must_use] 
     pub fn rdfstar(depth: usize) -> Self {
         Self {
             rdf11_mode: false,
@@ -107,16 +109,19 @@ enum CardinalityType {
 
 impl Owl2Interpretation {
     /// Create a new OWL 2 DL interpretation with default configuration
+    #[must_use] 
     pub fn new() -> Self {
         Self::with_config(Owl2Config::default())
     }
 
     /// Create a new OWL 2 DL interpretation with RDF 1.1 compatibility
+    #[must_use] 
     pub fn new_rdf11() -> Self {
         Self::with_config(Owl2Config::rdf11())
     }
 
     /// Create a new OWL 2 DL interpretation with specified configuration
+    #[must_use] 
     pub fn with_config(config: Owl2Config) -> Self {
         let mut interpretation = Self {
             domain: HashSet::new(),
@@ -135,6 +140,7 @@ impl Owl2Interpretation {
     }
 
     /// Get the configuration
+    #[must_use] 
     pub fn config(&self) -> &Owl2Config {
         &self.config
     }
@@ -194,7 +200,7 @@ impl Owl2Interpretation {
     }
 
     /// Add annotation for a quoted triple
-    /// Maps << s p o >> to its annotations (annotation_property, annotation_value)
+    /// Maps << s p o >> to its annotations (`annotation_property`, `annotation_value`)
     pub fn add_quoted_triple_annotation(
         &mut self,
         quoted_triple_id: String,
@@ -208,6 +214,7 @@ impl Owl2Interpretation {
     }
 
     /// Get annotations for a quoted triple
+    #[must_use] 
     pub fn get_quoted_triple_annotations(&self, quoted_triple_id: &str) -> Option<&Vec<(String, String)>> {
         self.quoted_triple_annotations.get(quoted_triple_id)
     }
@@ -278,14 +285,14 @@ impl Owl2Interpretation {
     fn rdf_term_to_string(&self, term: &RdfTerm) -> String {
         match term {
             RdfTerm::Iri(iri) => iri.to_string(),
-            RdfTerm::BlankNode(id) => format!("_:{}", id),
+            RdfTerm::BlankNode(id) => format!("_:{id}"),
             RdfTerm::Literal { value, datatype, language, .. } => {
                 if let Some(dt) = datatype {
-                    format!("\"{}\"^^<{}>", value, dt)
+                    format!("\"{value}\"^^<{dt}>")
                 } else if let Some(lang) = language {
-                    format!("\"{}\"@{}", value, lang)
+                    format!("\"{value}\"@{lang}")
                 } else {
-                    format!("\"{}\"", value)
+                    format!("\"{value}\"")
                 }
             }
             RdfTerm::QuotedTriple(quoted) => self.quoted_triple_to_id(quoted),
@@ -908,11 +915,11 @@ impl Owl2Interpretation {
                         // For now, just use Simple literal as placeholder
                         // Proper datatype handling would require horned_owl Datatype construction
                         horned_owl::model::Literal::Simple {
-                            literal: restriction.value.value.to_string(),
+                            literal: restriction.value.value.clone(),
                         }
                     } else {
                         horned_owl::model::Literal::Simple {
-                            literal: restriction.value.value.to_string(),
+                            literal: restriction.value.value.clone(),
                         }
                     };
 
@@ -940,17 +947,17 @@ impl Owl2Interpretation {
         }
     }
 
-    /// Convert a horned_owl literal to string representation
+    /// Convert a `horned_owl` literal to string representation
     fn horned_owl_literal_to_string(&self, literal: &horned_owl::model::Literal<String>) -> String {
         match literal {
             horned_owl::model::Literal::Simple { literal } => literal.clone(),
             horned_owl::model::Literal::Language { literal, lang } => {
-                format!("{}@{}", literal, lang)
+                format!("{literal}@{lang}")
             }
             horned_owl::model::Literal::Datatype {
                 literal,
                 datatype_iri,
-            } => format!("{}^^{}", literal, datatype_iri),
+            } => format!("{literal}^^{datatype_iri}"),
         }
     }
 
@@ -1151,7 +1158,7 @@ impl Owl2Interpretation {
                                 .abs()
                                 .to_string()
                                 .chars()
-                                .filter(|c| c.is_ascii_digit())
+                                .filter(char::is_ascii_digit)
                                 .count();
                             if let Ok(target_digits) = restricting_str.parse::<usize>() {
                                 digit_count <= target_digits
@@ -1263,7 +1270,7 @@ impl SemanticInterpretation for Owl2Interpretation {
             RdfTerm::Literal { value, .. } => Some(value.clone()),
             RdfTerm::QuotedTriple(triple) => {
                 // RDF-star: quoted triples as individuals
-                let triple_id = format!("<<{}>>", triple);
+                let triple_id = format!("<<{triple}>>");
                 Some(triple_id)
             }
         }
@@ -1298,6 +1305,7 @@ pub struct Owl2ReasoningEngine {
 
 impl Owl2ReasoningEngine {
     /// Create a new OWL 2 DL reasoning engine
+    #[must_use] 
     pub fn new(axioms: Vec<Axiom>) -> Self {
         Self {
             axioms,
@@ -1307,7 +1315,7 @@ impl Owl2ReasoningEngine {
 
     /// Check satisfiability of a class expression
     pub fn is_satisfiable(&mut self, class_expr: &ClassExpression) -> Result<bool> {
-        let key = format!("{:?}", class_expr);
+        let key = format!("{class_expr:?}");
 
         if let Some(&result) = self.cache.get(&key) {
             return Ok(result);
@@ -1361,7 +1369,7 @@ impl Owl2ReasoningEngine {
         const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
 
         // Create initial node with the class expression to check
-        let initial_individual = format!("_:x{}", next_individual_id);
+        let initial_individual = format!("_:x{next_individual_id}");
         next_individual_id += 1;
 
         let mut initial_concepts = HashSet::new();
@@ -1388,8 +1396,7 @@ impl Owl2ReasoningEngine {
                 .get(&current_individual)
                 .ok_or_else(|| {
                     Error::reasoning(format!(
-                        "Individual {} not found in tableau nodes",
-                        current_individual
+                        "Individual {current_individual} not found in tableau nodes"
                     ))
                 })?
                 .clone();
@@ -1456,8 +1463,7 @@ impl Owl2ReasoningEngine {
             .get(individual)
             .ok_or_else(|| {
                 Error::reasoning(format!(
-                    "Individual {} not found in tableau nodes",
-                    individual
+                    "Individual {individual} not found in tableau nodes"
                 ))
             })?
             .clone();
@@ -1508,7 +1514,7 @@ impl Owl2ReasoningEngine {
 
                     if !has_successor {
                         // Create new successor
-                        let new_individual = format!("_:x{}", next_individual_id);
+                        let new_individual = format!("_:x{next_individual_id}");
                         *next_individual_id += 1;
 
                         let mut new_concepts = HashSet::new();

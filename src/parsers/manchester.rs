@@ -32,6 +32,7 @@ pub struct ManchesterParser {
 }
 
 impl ManchesterParser {
+    #[must_use] 
     pub fn new(config: ManchesterParserConfig) -> Self {
         let mut prefixes = HashMap::new();
 
@@ -69,7 +70,7 @@ impl ManchesterParser {
         // Use strict validation for Manchester syntax
         let validator = super::validation::SyntaxValidator::new();
         validator.validate_manchester(content).map_err(|e| {
-            OxidowlError::ParseError(format!("Manchester validation failed: {}", e))
+            OxidowlError::ParseError(format!("Manchester validation failed: {e}"))
         })?;
 
         self.input = content.to_string();
@@ -107,7 +108,7 @@ impl ManchesterParser {
         self.resolve_iri(name.trim())
     }
 
-    /// Parse a Manchester syntax class expression into ClassExpression
+    /// Parse a Manchester syntax class expression into `ClassExpression`
     pub fn parse_class_expression(
         &self,
         expr: &str,
@@ -286,17 +287,17 @@ impl ManchesterParser {
         if let Some(stripped) = expr.strip_prefix("exactly ") {
             let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
-                return Ok(format!("exactly_{}", num));
+                return Ok(format!("exactly_{num}"));
             }
         } else if let Some(stripped) = expr.strip_prefix("min ") {
             let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
-                return Ok(format!("min_{}", num));
+                return Ok(format!("min_{num}"));
             }
         } else if let Some(stripped) = expr.strip_prefix("max ") {
             let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
-                return Ok(format!("max_{}", num));
+                return Ok(format!("max_{num}"));
             }
         } else if expr == "some" {
             return Ok("some_values_from".to_string());
@@ -324,8 +325,7 @@ impl ManchesterParser {
 
                 if let Some(namespace) = self.prefixes.get(prefix) {
                     return Ok(crate::ontology::IRI::new(&format!(
-                        "{}{}",
-                        namespace, local_name
+                        "{namespace}{local_name}"
                     )));
                 }
             }

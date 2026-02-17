@@ -165,7 +165,7 @@ impl MLHeuristicsEngine {
         features: &QueryFeatures,
     ) -> Result<StrategyRecommendation, Error> {
         let selector = self.strategy_selector.read().map_err(|e| Error::Internal {
-            message: format!("Failed to acquire selector lock: {}", e),
+            message: format!("Failed to acquire selector lock: {e}"),
         })?;
         if let Some(model) = selector.as_ref() {
             model.select(features)
@@ -188,7 +188,7 @@ impl MLHeuristicsEngine {
     /// Add training data from query execution
     pub fn add_training_data(&self, execution: QueryExecution) -> Result<(), Error> {
         let mut data = self.training_data.write().map_err(|e| Error::Internal {
-            message: format!("Failed to acquire training data lock: {}", e),
+            message: format!("Failed to acquire training data lock: {e}"),
         })?;
 
         data.add(execution);
@@ -267,7 +267,7 @@ impl MLHeuristicsEngine {
                 .strategy_selector
                 .write()
                 .map_err(|e| Error::Internal {
-                    message: format!("Failed to acquire selector lock: {}", e),
+                    message: format!("Failed to acquire selector lock: {e}"),
                 })?;
             *selector = Some(model);
         }
@@ -289,7 +289,7 @@ impl MLHeuristicsEngine {
         }
 
         let selector = self.strategy_selector.read().map_err(|e| Error::Internal {
-            message: format!("Failed to acquire selector lock: {}", e),
+            message: format!("Failed to acquire selector lock: {e}"),
         })?;
 
         if let Some(model) = selector.as_ref() {
@@ -337,6 +337,7 @@ pub struct QueryFeatures {
 
 impl QueryFeatures {
     /// Convert to feature vector (21 dimensions)
+    #[must_use] 
     pub fn to_vector(&self) -> Vec<f32> {
         vec![
             self.atom_count,
@@ -361,6 +362,7 @@ impl QueryFeatures {
     }
 
     /// Get feature dimensionality
+    #[must_use] 
     pub const fn dimension() -> usize {
         18 // 21 logical dimensions, but 3 are derived/metadata
     }
@@ -379,6 +381,7 @@ impl Default for QueryFeatureExtractor {
 }
 
 impl QueryFeatureExtractor {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             query_history: RwLock::new(Vec::new()),
@@ -633,7 +636,7 @@ impl QueryFeatureExtractor {
             match atom {
                 QueryAtom::ClassAtom { .. } => class_atoms += 1,
                 QueryAtom::ObjectPropertyAtom { .. } | QueryAtom::DataPropertyAtom { .. } => {
-                    property_atoms += 1
+                    property_atoms += 1;
                 }
                 _ => {}
             }
@@ -699,7 +702,7 @@ impl QueryFeatureExtractor {
 
     fn get_similar_query_time(&self, query_hash: u64) -> Result<f32, Error> {
         let history = self.query_history.read().map_err(|e| Error::Internal {
-            message: format!("Failed to read query history: {}", e),
+            message: format!("Failed to read query history: {e}"),
         })?;
 
         // Find structurally similar queries using fingerprinting
@@ -1089,7 +1092,7 @@ impl QueryFeatureExtractor {
 
     pub fn record_execution(&self, query_hash: u64, execution_time: f32) -> Result<(), Error> {
         let mut history = self.query_history.write().map_err(|e| Error::Internal {
-            message: format!("Failed to write query history: {}", e),
+            message: format!("Failed to write query history: {e}"),
         })?;
 
         history.push((query_hash, execution_time));
@@ -1113,6 +1116,7 @@ pub struct CostPrediction {
 
 impl CostPrediction {
     /// Baseline prediction without ML model
+    #[must_use] 
     pub fn baseline(features: &QueryFeatures) -> Self {
         // Simple heuristic-based prediction
         let execution_time = (features.atom_count as f64 * features.ontology_size as f64)
@@ -1445,6 +1449,7 @@ pub enum ExecutionStrategy {
 
 impl ExecutionStrategy {
     /// Convert to string representation
+    #[must_use] 
     pub fn as_str(&self) -> &'static str {
         match self {
             ExecutionStrategy::IndexedLookup => "indexed_lookup",
@@ -1587,6 +1592,7 @@ impl Default for StrategySelectionModel {
 
 impl StrategySelectionModel {
     /// Create a new strategy selection model
+    #[must_use] 
     pub fn new() -> Self {
         let mut model = Self {
             strategy_registry: std::collections::HashMap::new(),
@@ -1909,6 +1915,7 @@ pub struct TrainingDataCollector {
 }
 
 impl TrainingDataCollector {
+    #[must_use] 
     pub fn new(max_size: usize) -> Self {
         Self {
             samples: Vec::new(),
@@ -1932,10 +1939,12 @@ impl TrainingDataCollector {
         }
     }
 
+    #[must_use] 
     pub fn size(&self) -> usize {
         self.samples.len()
     }
 
+    #[must_use] 
     pub fn get_samples(&self, count: usize) -> Vec<TrainingSample> {
         let start = self.samples.len().saturating_sub(count);
         self.samples[start..].to_vec()
@@ -1978,7 +1987,7 @@ pub struct ModelStorage {
 impl ModelStorage {
     pub fn new(storage_dir: PathBuf) -> Result<Self, Error> {
         std::fs::create_dir_all(&storage_dir).map_err(|e| Error::Internal {
-            message: format!("Failed to create storage directory: {}", e),
+            message: format!("Failed to create storage directory: {e}"),
         })?;
 
         Ok(Self { storage_dir })
@@ -2050,12 +2059,12 @@ impl ModelStorage {
         let path = self.storage_dir.join("strategy_selector.json");
         let data = serde_json::to_vec_pretty(model).map_err(|e| {
             Error::Internal {
-                message: format!("Failed to serialize model: {}", e),
+                message: format!("Failed to serialize model: {e}"),
             }
         })?;
 
         std::fs::write(path, data).map_err(|e| Error::Internal {
-            message: format!("Failed to write model: {}", e),
+            message: format!("Failed to write model: {e}"),
         })?;
 
         Ok(())
@@ -2064,12 +2073,12 @@ impl ModelStorage {
     pub fn load_strategy_selector(&self) -> Result<StrategySelectionModel, Error> {
         let path = self.storage_dir.join("strategy_selector.json");
         let data = std::fs::read(path).map_err(|e| Error::Internal {
-            message: format!("Failed to read model: {}", e),
+            message: format!("Failed to read model: {e}"),
         })?;
 
         let model = serde_json::from_slice(&data).map_err(|e| {
             Error::Internal {
-                message: format!("Failed to deserialize model: {}", e),
+                message: format!("Failed to deserialize model: {e}"),
             }
         })?;
         Ok(model)

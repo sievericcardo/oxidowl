@@ -357,6 +357,7 @@ impl ExplanationService {
     }
 
     /// Generate a human-readable explanation
+    #[must_use] 
     pub fn format_explanation(&self, explanation: &[Axiom]) -> String {
         let mut output = String::new();
         output.push_str("Explanation:\n");
@@ -385,7 +386,7 @@ impl ExplanationService {
                 let classes: Vec<String> = equiv_axiom
                     .classes
                     .iter()
-                    .map(|c| format!("{:?}", c))
+                    .map(|c| format!("{c:?}"))
                     .collect();
                 format!("EquivalentClasses({})", classes.join(", "))
             }
@@ -405,14 +406,14 @@ impl ExplanationService {
                 let classes: Vec<String> = disjoint_axiom
                     .classes
                     .iter()
-                    .map(|c| format!("{:?}", c))
+                    .map(|c| format!("{c:?}"))
                     .collect();
                 format!("DisjointClasses({})", classes.join(", "))
             }
             Axiom::FunctionalObjectProperty(func_axiom) => {
                 format!("FunctionalObjectProperty({:?})", func_axiom.property)
             }
-            _ => format!("{:?}", axiom),
+            _ => format!("{axiom:?}"),
         }
     }
 
@@ -432,8 +433,8 @@ impl ExplanationService {
         let mut parent_map: std::collections::HashMap<String, (String, Axiom)> =
             std::collections::HashMap::new();
 
-        let start_key = format!("{:?}", subclass);
-        let target_key = format!("{:?}", superclass);
+        let start_key = format!("{subclass:?}");
+        let target_key = format!("{superclass:?}");
 
         queue.push_back(start_key.clone());
         visited.insert(start_key.clone());
@@ -477,8 +478,8 @@ impl ExplanationService {
                     for (i, class1) in equiv_axiom.classes.iter().enumerate() {
                         for (j, class2) in equiv_axiom.classes.iter().enumerate() {
                             if i != j {
-                                let class1_key = format!("{:?}", class1);
-                                let class2_key = format!("{:?}", class2);
+                                let class1_key = format!("{class1:?}");
+                                let class2_key = format!("{class2:?}");
 
                                 if class1_key == current && !visited.contains(&class2_key) {
                                     visited.insert(class2_key.clone());
@@ -500,6 +501,7 @@ impl ExplanationService {
     }
 
     /// Find minimal explanations (remove redundant axioms)
+    #[must_use] 
     pub fn minimize_explanation(&self, explanation: Vec<Axiom>) -> Vec<Axiom> {
         // Simple minimization: remove duplicate axioms
         let mut minimal = Vec::new();

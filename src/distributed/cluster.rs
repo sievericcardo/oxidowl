@@ -340,7 +340,7 @@ impl ClusterManager {
         tokio::spawn(async move {
             let mut discovery = discovery_service.lock().await;
             if let Err(e) = discovery.start(event_sender).await {
-                error!("Discovery service failed: {}", e);
+                error!("Discovery service failed: {e}");
             }
         });
 
@@ -351,7 +351,7 @@ impl ClusterManager {
         tokio::spawn(async move {
             let mut monitor = health_monitor.lock().await;
             if let Err(e) = monitor.start(event_sender, state).await {
-                error!("Health monitoring failed: {}", e);
+                error!("Health monitoring failed: {e}");
             }
         });
 
@@ -362,7 +362,7 @@ impl ClusterManager {
             let mut receiver = event_receiver.lock().await;
             while let Some(event) = receiver.recv().await {
                 if let Err(e) = Self::process_cluster_event(&state, event).await {
-                    error!("Error processing cluster event: {}", e);
+                    error!("Error processing cluster event: {e}");
                 }
             }
         });
@@ -392,7 +392,7 @@ impl ClusterManager {
             }
 
             ClusterEvent::NodeLeft(node_id) => {
-                info!("Node left cluster: {}", node_id);
+                info!("Node left cluster: {node_id}");
                 cluster_state.nodes.remove(&node_id);
                 cluster_state.statistics.node_events += 1;
 
@@ -411,17 +411,17 @@ impl ClusterManager {
                         HealthStatus::Unhealthy => node.status = NodeStatus::Failed,
                         HealthStatus::Unknown => node.status = NodeStatus::Unavailable,
                     }
-                    debug!("Node {} health changed to {:?}", node_id, health_status);
+                    debug!("Node {node_id} health changed to {health_status:?}");
                 }
             }
 
             ClusterEvent::LeaderElected(node_id) => {
-                info!("New leader elected: {}", node_id);
+                info!("New leader elected: {node_id}");
                 cluster_state.topology.leader = Some(node_id);
             }
 
             ClusterEvent::NetworkPartition(partition) => {
-                warn!("Network partition detected: {:?}", partition);
+                warn!("Network partition detected: {partition:?}");
                 cluster_state.topology.partitions.push(partition);
             }
 
@@ -498,7 +498,7 @@ impl ClusterManager {
     pub async fn add_node(&mut self, node_info: NodeInfo) -> Result<()> {
         let event = ClusterEvent::NodeJoined(node_info);
         self.event_sender.send(event).map_err(|e| {
-            DistributedError::Cluster(format!("Failed to send node join event: {}", e))
+            DistributedError::Cluster(format!("Failed to send node join event: {e}"))
         })?;
         Ok(())
     }
@@ -507,7 +507,7 @@ impl ClusterManager {
     pub async fn remove_node(&mut self, node_id: NodeId) -> Result<()> {
         let event = ClusterEvent::NodeLeft(node_id);
         self.event_sender.send(event).map_err(|e| {
-            DistributedError::Cluster(format!("Failed to send node leave event: {}", e))
+            DistributedError::Cluster(format!("Failed to send node leave event: {e}"))
         })?;
         Ok(())
     }
@@ -603,7 +603,7 @@ impl HealthMonitor {
                 tokio::select! {
                     _ = interval.tick() => {
                         if let Err(e) = Self::perform_health_checks(&state, &event_sender).await {
-                            error!("Health check failed: {}", e);
+                            error!("Health check failed: {e}");
                         }
                     }
                     _ = shutdown_rx.recv() => {
@@ -680,7 +680,7 @@ impl HealthMonitor {
         match tokio::net::TcpStream::connect(address).await {
             Ok(_) => Ok(()),
             Err(e) => Err(Error::Network {
-                message: format!("Node ping failed: {}", e),
+                message: format!("Node ping failed: {e}"),
             }),
         }
     }
@@ -733,7 +733,7 @@ impl DiscoveryService {
                 tokio::select! {
                     _ = interval.tick() => {
                         if let Err(e) = Self::discover_nodes(&config, &event_sender).await {
-                            error!("Node discovery failed: {}", e);
+                            error!("Node discovery failed: {e}");
                         }
                     }
                     _ = shutdown_rx.recv() => {
@@ -803,7 +803,7 @@ impl DiscoveryService {
                     let _ = event_sender.send(event);
                 }
                 Err(e) => {
-                    debug!("Failed to connect to static node {}: {}", address, e);
+                    debug!("Failed to connect to static node {address}: {e}");
                 }
             }
         }

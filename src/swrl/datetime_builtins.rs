@@ -50,11 +50,11 @@ fn format_day_time_duration(duration: chrono::Duration) -> String {
     let seconds = total_seconds % 60;
 
     if hours > 0 {
-        format!("PT{}H{}M{}S", hours, minutes, seconds)
+        format!("PT{hours}H{minutes}M{seconds}S")
     } else if minutes > 0 {
-        format!("PT{}M{}S", minutes, seconds)
+        format!("PT{minutes}M{seconds}S")
     } else {
-        format!("PT{}S", seconds)
+        format!("PT{seconds}S")
     }
 }
 
@@ -65,6 +65,7 @@ pub struct DateTimeBuiltInRegistry {
 
 impl DateTimeBuiltInRegistry {
     /// Create a new registry with core date/time built-ins
+    #[must_use] 
     pub fn new() -> Self {
         let mut registry = Self {
             builtins: HashMap::new(),
@@ -187,16 +188,18 @@ impl DateTimeBuiltInRegistry {
     }
 
     /// Get a built-in by IRI
+    #[must_use] 
     pub fn get_builtin(&self, iri: &str) -> Option<&dyn SWRLBuiltIn> {
-        self.builtins.get(iri).map(|b| b.as_ref())
+        self.builtins.get(iri).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
+    #[must_use] 
     pub fn get_builtin_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
     }
 
-    /// Parse dayTimeDuration string into chrono::Duration
+    /// Parse dayTimeDuration string into `chrono::Duration`
     pub fn parse_day_time_duration(&self, duration_str: &str) -> crate::Result<chrono::Duration> {
         // Parse ISO 8601 duration format like PT1H30M45S
         if !duration_str.starts_with('P') {
@@ -248,7 +251,8 @@ impl DateTimeBuiltInRegistry {
         Ok(duration)
     }
 
-    /// Format chrono::Duration as dayTimeDuration string
+    /// Format `chrono::Duration` as dayTimeDuration string
+    #[must_use] 
     pub fn format_day_time_duration(&self, duration: chrono::Duration) -> String {
         let total_seconds = duration.num_seconds();
         let days = total_seconds / 86400;
@@ -259,9 +263,9 @@ impl DateTimeBuiltInRegistry {
         let seconds = remaining % 60;
 
         if days > 0 {
-            format!("P{}DT{}H{}M{}S", days, hours, minutes, seconds)
+            format!("P{days}DT{hours}H{minutes}M{seconds}S")
         } else {
-            format!("PT{}H{}M{}S", hours, minutes, seconds)
+            format!("PT{hours}H{minutes}M{seconds}S")
         }
     }
 }
@@ -292,9 +296,9 @@ impl SWRLBuiltIn for DateTimeEqualBuiltIn {
         }
 
         let dt1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {e}")))?;
         let dt2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {e}")))?;
 
         Ok(SWRLValue::Boolean(dt1 == dt2))
     }
@@ -321,7 +325,7 @@ impl SWRLBuiltIn for YearFromDateTimeBuiltIn {
         }
 
         let temporal_value = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
 
         if let Some(year) = temporal_value.year() {
             // Check if result matches expected value or return the year
@@ -365,18 +369,18 @@ impl SWRLBuiltIn for AddDayTimeDurationToDateTimeBuiltIn {
         }
 
         let datetime = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
         let duration = extract_temporal_value(&args[2])
-            .map_err(|e| Error::reasoning(format!("Invalid duration value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid duration value: {e}")))?;
 
         let result = utils::add_day_time_duration(&datetime, &duration)
-            .map_err(|e| Error::reasoning(format!("Duration addition failed: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Duration addition failed: {e}")))?;
 
         // Check if result matches expected value
         match &args[0] {
             SWRLValue::Literal(_) => {
                 let expected = extract_temporal_value(&args[0])
-                    .map_err(|e| Error::reasoning(format!("Invalid expected result: {}", e)))?;
+                    .map_err(|e| Error::reasoning(format!("Invalid expected result: {e}")))?;
                 Ok(SWRLValue::Boolean(result == expected))
             }
             _ => {
@@ -410,9 +414,9 @@ impl SWRLBuiltIn for DateTimeLessThanBuiltIn {
         }
 
         let dt1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {e}")))?;
         let dt2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {e}")))?;
 
         Ok(SWRLValue::Boolean(dt1 < dt2))
     }
@@ -439,9 +443,9 @@ impl SWRLBuiltIn for DateTimeLessThanOrEqualBuiltIn {
         }
 
         let dt1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {e}")))?;
         let dt2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {e}")))?;
 
         Ok(SWRLValue::Boolean(dt1 <= dt2))
     }
@@ -468,9 +472,9 @@ impl SWRLBuiltIn for DateTimeGreaterThanBuiltIn {
         }
 
         let dt1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {e}")))?;
         let dt2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {e}")))?;
 
         Ok(SWRLValue::Boolean(dt1 > dt2))
     }
@@ -497,9 +501,9 @@ impl SWRLBuiltIn for DateTimeGreaterThanOrEqualBuiltIn {
         }
 
         let dt1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first datetime: {e}")))?;
         let dt2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second datetime: {e}")))?;
 
         Ok(SWRLValue::Boolean(dt1 >= dt2))
     }
@@ -528,7 +532,7 @@ impl SWRLBuiltIn for MonthFromDateTimeBuiltIn {
         }
 
         let temporal_value = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
 
         if let Some(month) = temporal_value.month() {
             match &args[0] {
@@ -568,7 +572,7 @@ impl SWRLBuiltIn for DayFromDateTimeBuiltIn {
         }
 
         let temporal_value = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
 
         if let Some(day) = temporal_value.day() {
             match &args[0] {
@@ -608,7 +612,7 @@ impl SWRLBuiltIn for HourFromDateTimeBuiltIn {
         }
 
         let temporal_value = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
 
         if let Some(hour) = temporal_value.hour() {
             match &args[0] {
@@ -648,7 +652,7 @@ impl SWRLBuiltIn for MinuteFromDateTimeBuiltIn {
         }
 
         let temporal_value = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
 
         if let Some(minute) = temporal_value.minute() {
             match &args[0] {
@@ -690,7 +694,7 @@ impl SWRLBuiltIn for SecondFromDateTimeBuiltIn {
         }
 
         let temporal_value = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid datetime value: {e}")))?;
 
         if let Some(second) = temporal_value.second() {
             match &args[0] {
@@ -732,9 +736,9 @@ impl SWRLBuiltIn for DateEqualBuiltIn {
         }
 
         let date1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first date: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first date: {e}")))?;
         let date2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second date: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second date: {e}")))?;
 
         // Compare only date components
         let dates_equal = date1.year() == date2.year()
@@ -764,9 +768,9 @@ impl SWRLBuiltIn for DateLessThanBuiltIn {
         }
 
         let date1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first date: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first date: {e}")))?;
         let date2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second date: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second date: {e}")))?;
 
         // Create date values for comparison (ignoring time components)
         let d1_year = date1.year().unwrap_or(1970);
@@ -804,9 +808,9 @@ impl SWRLBuiltIn for TimeEqualBuiltIn {
         }
 
         let time1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first time: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first time: {e}")))?;
         let time2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second time: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second time: {e}")))?;
 
         // Compare only time components
         let times_equal = time1.hour() == time2.hour()
@@ -836,9 +840,9 @@ impl SWRLBuiltIn for TimeLessThanBuiltIn {
         }
 
         let time1 = extract_temporal_value(&args[0])
-            .map_err(|e| Error::reasoning(format!("Invalid first time: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid first time: {e}")))?;
         let time2 = extract_temporal_value(&args[1])
-            .map_err(|e| Error::reasoning(format!("Invalid second time: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("Invalid second time: {e}")))?;
 
         // Create time values for comparison (ignoring date components)
         let t1_hour = time1.hour().unwrap_or(0);
@@ -897,8 +901,7 @@ impl SWRLBuiltIn for SubtractDatesYieldingDayTimeDurationBuiltIn {
         };
 
         Ok(SWRLValue::Literal(Literal::new(format!(
-            "P{}D",
-            duration_days
+            "P{duration_days}D"
         ))))
     }
 
@@ -939,8 +942,7 @@ impl SWRLBuiltIn for SubtractTimesYieldingDayTimeDurationBuiltIn {
         };
 
         Ok(SWRLValue::Literal(Literal::new(format!(
-            "PT{}S",
-            duration_seconds
+            "PT{duration_seconds}S"
         ))))
     }
 
@@ -1112,21 +1114,21 @@ impl SWRLBuiltIn for TimezoneBuiltIn {
                         {
                             tz_candidate.to_string()
                         } else {
-                            "".to_string()
+                            String::new()
                         }
                     } else {
-                        "".to_string()
+                        String::new()
                     }
                 } else {
                     // No 'T' found, probably not a valid datetime
-                    "".to_string()
+                    String::new()
                 };
 
                 Ok(SWRLValue::Literal(Literal {
                     value: timezone,
                     datatype: Some(
                         url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
-                            .map_err(|e| Error::reasoning(format!("Invalid URL: {}", e)))?,
+                            .map_err(|e| Error::reasoning(format!("Invalid URL: {e}")))?,
                     ),
                     language: None,
                 }))
@@ -1164,7 +1166,7 @@ impl SWRLBuiltIn for AddYearMonthDurationBuiltIn {
 
                 // Parse date (YYYY-MM-DD format)
                 let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-                    .map_err(|e| Error::reasoning(format!("Invalid date format: {}", e)))?;
+                    .map_err(|e| Error::reasoning(format!("Invalid date format: {e}")))?;
 
                 // Parse yearMonth duration (P1Y2M format)
                 let (years, months) = parse_year_month_duration(duration_str)?;
@@ -1178,7 +1180,7 @@ impl SWRLBuiltIn for AddYearMonthDurationBuiltIn {
                     value: new_date.format("%Y-%m-%d").to_string(),
                     datatype: Some(
                         url::Url::parse("http://www.w3.org/2001/XMLSchema#date")
-                            .map_err(|e| Error::reasoning(format!("Invalid URL: {}", e)))?,
+                            .map_err(|e| Error::reasoning(format!("Invalid URL: {e}")))?,
                     ),
                     language: None,
                 }))
@@ -1227,11 +1229,11 @@ impl SWRLBuiltIn for AddYearMonthDurationsBuiltIn {
 
                 // Format result as P{years}Y{months}M
                 let result = if result_years > 0 && result_months > 0 {
-                    format!("P{}Y{}M", result_years, result_months)
+                    format!("P{result_years}Y{result_months}M")
                 } else if result_years > 0 {
-                    format!("P{}Y", result_years)
+                    format!("P{result_years}Y")
                 } else if result_months > 0 {
-                    format!("P{}M", result_months)
+                    format!("P{result_months}M")
                 } else {
                     "P0M".to_string()
                 };
@@ -1240,7 +1242,7 @@ impl SWRLBuiltIn for AddYearMonthDurationsBuiltIn {
                     value: result,
                     datatype: Some(
                         url::Url::parse("http://www.w3.org/2001/XMLSchema#yearMonthDuration")
-                            .map_err(|e| Error::reasoning(format!("Invalid URL: {}", e)))?,
+                            .map_err(|e| Error::reasoning(format!("Invalid URL: {e}")))?,
                     ),
                     language: None,
                 }))

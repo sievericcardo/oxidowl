@@ -25,6 +25,7 @@ pub struct DependencyTracker {
 
 impl DependencyTracker {
     /// Create a new dependency tracker
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             dependencies: HashMap::new(),
@@ -48,6 +49,7 @@ impl DependencyTracker {
     }
     
     /// Get all concepts that depend on the given concept
+    #[must_use] 
     pub fn get_dependents(&self, concept_hash: u64) -> HashSet<u64> {
         self.dependencies
             .get(&concept_hash)
@@ -56,6 +58,7 @@ impl DependencyTracker {
     }
     
     /// Get all concepts that the given concept depends on
+    #[must_use] 
     pub fn get_dependencies(&self, concept_hash: u64) -> HashSet<u64> {
         self.reverse_dependencies
             .get(&concept_hash)
@@ -65,6 +68,7 @@ impl DependencyTracker {
     
     /// Compute transitive closure of dependents
     /// Returns all concepts that transitively depend on the given concept
+    #[must_use] 
     pub fn transitive_dependents(&self, concept_hash: u64) -> HashSet<u64> {
         let mut result = HashSet::new();
         let mut queue = vec![concept_hash];
@@ -108,7 +112,7 @@ pub struct IncrementalClassifier {
     /// Concept index for IRI-based lookups
     concept_index: Arc<RwLock<ConceptIndex>>,
     
-    /// Current classification results (concept_hash -> super_classes)
+    /// Current classification results (`concept_hash` -> `super_classes`)
     classification: Arc<RwLock<HashMap<u64, HashSet<u64>>>>,
     
     /// Statistics
@@ -126,6 +130,7 @@ pub struct IncrementalStatistics {
 
 impl IncrementalStatistics {
     /// Get percentage of concepts that were reclassified vs skipped
+    #[must_use] 
     pub fn reclassification_rate(&self) -> f64 {
         let total = self.concepts_reclassified + self.concepts_skipped;
         if total == 0 {
@@ -138,6 +143,7 @@ impl IncrementalStatistics {
 
 impl IncrementalClassifier {
     /// Create a new incremental classifier
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             dependencies: Arc::new(RwLock::new(DependencyTracker::new())),
@@ -152,7 +158,7 @@ impl IncrementalClassifier {
         // Extract all concepts and build index
         let index = self.concept_index.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier index lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier index lock poisoned: {e}") 
             })?;
         
         // Index all axioms - extract concepts and index them
@@ -211,7 +217,7 @@ impl IncrementalClassifier {
         // Update stats
         let mut stats = self.stats.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier stats lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier stats lock poisoned: {e}") 
             })?;
         stats.total_concepts = index.size();
         
@@ -229,7 +235,7 @@ impl IncrementalClassifier {
         
         let mut deps = self.dependencies.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier dependencies lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier dependencies lock poisoned: {e}") 
             })?;
         
         deps.add_dependency(dep_hash, dep_on_hash);
@@ -240,7 +246,7 @@ impl IncrementalClassifier {
     pub fn get_affected_concepts(&self, changed_iris: &[String]) -> Result<HashSet<u64>> {
         let index = self.concept_index.read()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier index lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier index lock poisoned: {e}") 
             })?;
         
         let mut affected = HashSet::new();
@@ -258,7 +264,7 @@ impl IncrementalClassifier {
         // Get transitive dependents
         let deps = self.dependencies.read()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier dependencies lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier dependencies lock poisoned: {e}") 
             })?;
         
         let mut transitive_affected = HashSet::new();
@@ -278,7 +284,7 @@ impl IncrementalClassifier {
     ) -> Result<()> {
         let mut classification = self.classification.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier classification lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier classification lock poisoned: {e}") 
             })?;
         
         classification.insert(concept_hash, super_classes);
@@ -286,7 +292,7 @@ impl IncrementalClassifier {
         // Update stats
         let mut stats = self.stats.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier stats lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier stats lock poisoned: {e}") 
             })?;
         stats.concepts_reclassified += 1;
         
@@ -297,7 +303,7 @@ impl IncrementalClassifier {
     pub fn get_classification(&self, concept_hash: u64) -> Result<Option<HashSet<u64>>> {
         let classification = self.classification.read()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier classification lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier classification lock poisoned: {e}") 
             })?;
         
         Ok(classification.get(&concept_hash).cloned())
@@ -311,7 +317,7 @@ impl IncrementalClassifier {
         // Update stats
         let mut stats = self.stats.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier stats lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier stats lock poisoned: {e}") 
             })?;
         stats.total_updates += 1;
         
@@ -323,7 +329,7 @@ impl IncrementalClassifier {
     pub fn mark_skipped(&self) -> Result<()> {
         let mut stats = self.stats.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier stats lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier stats lock poisoned: {e}") 
             })?;
         stats.concepts_skipped += 1;
         Ok(())
@@ -333,7 +339,7 @@ impl IncrementalClassifier {
     pub fn statistics(&self) -> Result<IncrementalStatistics> {
         let stats = self.stats.read()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier stats lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier stats lock poisoned: {e}") 
             })?;
         Ok(stats.clone())
     }
@@ -342,13 +348,13 @@ impl IncrementalClassifier {
     pub fn clear(&self) -> Result<()> {
         let mut deps = self.dependencies.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier dependencies lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier dependencies lock poisoned: {e}") 
             })?;
         deps.clear();
         
         let mut classification = self.classification.write()
             .map_err(|e| Error::Internal { 
-                message: format!("IncrementalClassifier classification lock poisoned: {}", e) 
+                message: format!("IncrementalClassifier classification lock poisoned: {e}") 
             })?;
         classification.clear();
         

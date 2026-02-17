@@ -64,7 +64,7 @@ pub enum Token {
     Identifier(String),
     /// URI: <http://example.org/Person>
     URI(String),
-    /// QName: prefix:local
+    /// `QName`: prefix:local
     QName(String, String),
     /// String literal: "text"
     StringLiteral(String),
@@ -102,6 +102,7 @@ pub struct Lexer {
 
 impl SWRLParser {
     /// Create a new parser
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             namespace_manager: NamespaceManager::new(),
@@ -305,7 +306,7 @@ impl SWRLParser {
 
         match &tokens[0] {
             Token::Variable(name) => {
-                let var_iri = format!("urn:swrl:var#{}", name);
+                let var_iri = format!("urn:swrl:var#{name}");
                 Ok(SWRLArgument::Individual(SWRLIArgument::Variable(
                     SWRLVariable::new(IRI::new(&var_iri)),
                 )))
@@ -545,7 +546,7 @@ impl SWRLParser {
 
     /// Create parse error
     fn error(&self, message: &str) -> Error {
-        Error::reasoning(format!("Parse error: {}", message))
+        Error::reasoning(format!("Parse error: {message}"))
     }
 }
 
@@ -555,6 +556,7 @@ impl SWRLParser {
 
 impl NamespaceManager {
     /// Create new namespace manager
+    #[must_use] 
     pub fn new() -> Self {
         let mut manager = Self {
             prefixes: HashMap::new(),
@@ -583,14 +585,13 @@ impl NamespaceManager {
         self.default_namespace = Some(namespace.to_string());
     }
 
-    /// Resolve QName to full IRI
+    /// Resolve `QName` to full IRI
     pub fn resolve_qname(&self, prefix: &str, local: &str) -> Result<String> {
         if let Some(namespace) = self.prefixes.get(prefix) {
-            Ok(format!("{}{}", namespace, local))
+            Ok(format!("{namespace}{local}"))
         } else {
             Err(Error::reasoning(format!(
-                "Unknown namespace prefix: {}",
-                prefix
+                "Unknown namespace prefix: {prefix}"
             )))
         }
     }
@@ -600,9 +601,9 @@ impl NamespaceManager {
         if identifier.starts_with("http://") || identifier.starts_with("https://") {
             Ok(identifier.to_string())
         } else if let Some(default_ns) = &self.default_namespace {
-            Ok(format!("{}{}", default_ns, identifier))
+            Ok(format!("{default_ns}{identifier}"))
         } else {
-            Ok(format!("http://example.org/{}", identifier))
+            Ok(format!("http://example.org/{identifier}"))
         }
     }
 }
@@ -613,6 +614,7 @@ impl NamespaceManager {
 
 impl Lexer {
     /// Create new lexer
+    #[must_use] 
     pub fn new(input: &str) -> Self {
         let mut lexer = Self {
             input: input.to_string(),
@@ -723,7 +725,7 @@ impl Lexer {
                 let number = self.read_number()?;
                 Ok(Some(Token::NumericLiteral(number)))
             }
-            _ => Err(Error::reasoning(format!("Unexpected character: {}", ch))),
+            _ => Err(Error::reasoning(format!("Unexpected character: {ch}"))),
         }
     }
 

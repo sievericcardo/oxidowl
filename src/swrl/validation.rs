@@ -38,7 +38,7 @@ impl SWRLValidator {
 
     /// Validate a SWRL rule
     pub fn validate_rule(&self, rule: &SWRLRule) -> Result<ValidationResult> {
-        debug!("Validating SWRL rule: {:?}", rule);
+        debug!("Validating SWRL rule: {rule:?}");
 
         let mut issues = Vec::new();
         let mut warnings = Vec::new();
@@ -83,7 +83,7 @@ impl SWRLValidator {
 
         // Determine overall validity
         let is_valid =
-            issues.is_empty() || (!self.strict_mode && issues.iter().all(|i| i.is_warning_level()));
+            issues.is_empty() || (!self.strict_mode && issues.iter().all(ValidationIssue::is_warning_level));
 
         Ok(ValidationResult {
             is_valid,

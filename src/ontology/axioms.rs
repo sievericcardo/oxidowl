@@ -461,7 +461,7 @@ pub struct SWRLRuleAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-/// OWL 2 HasKey Axiom
+/// OWL 2 `HasKey` Axiom
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HasKeyAxiom {
     pub id: AxiomId,

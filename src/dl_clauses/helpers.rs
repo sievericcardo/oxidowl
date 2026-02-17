@@ -132,7 +132,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
-        let predicate = format!("atLeast({},{},{})", cardinality, property, range);
+        let predicate = format!("atLeast({cardinality},{property},{range})");
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
@@ -144,7 +144,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
-        let predicate = format!("atMost({},{},{})", cardinality, property, range);
+        let predicate = format!("atMost({cardinality},{property},{range})");
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
@@ -155,7 +155,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
-        let predicate = format!("{{{}}}", value);
+        let predicate = format!("{{{value}}}");
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
@@ -174,13 +174,13 @@ impl HelperMethods for super::generator::DLClauseGenerator {
                 // For complex expressions, use a simplified representation
                 let property_name = self.object_property_expression_to_string(property);
                 let filler_name = self.class_expression_to_simple_string(filler);
-                let predicate = format!("∃{}.{}", property_name, filler_name);
+                let predicate = format!("∃{property_name}.{filler_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 let property_name = self.object_property_expression_to_string(property);
                 let filler_name = self.class_expression_to_simple_string(filler);
-                let predicate = format!("∀{}.{}", property_name, filler_name);
+                let predicate = format!("∀{property_name}.{filler_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectMinCardinality {
@@ -190,7 +190,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
             } => {
                 let property_name = self.object_property_expression_to_string(property);
                 let filler_name = self.class_expression_to_simple_string(filler);
-                let predicate = format!("≥{}{}.{}", cardinality, property_name, filler_name);
+                let predicate = format!("≥{cardinality}{property_name}.{filler_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectMaxCardinality {
@@ -200,7 +200,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
             } => {
                 let property_name = self.object_property_expression_to_string(property);
                 let filler_name = self.class_expression_to_simple_string(filler);
-                let predicate = format!("≤{}{}.{}", cardinality, property_name, filler_name);
+                let predicate = format!("≤{cardinality}{property_name}.{filler_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectExactCardinality {
@@ -210,36 +210,36 @@ impl HelperMethods for super::generator::DLClauseGenerator {
             } => {
                 let property_name = self.object_property_expression_to_string(property);
                 let filler_name = self.class_expression_to_simple_string(filler);
-                let predicate = format!("={}{}.{}", cardinality, property_name, filler_name);
+                let predicate = format!("={cardinality}{property_name}.{filler_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectHasSelf { property } => {
                 let property_name = self.object_property_expression_to_string(property);
-                let predicate = format!("∃{}.Self", property_name);
+                let predicate = format!("∃{property_name}.Self");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectHasValue { property, value } => {
                 let property_name = self.object_property_expression_to_string(property);
                 let individual_name = self.individual_to_string(value);
-                let predicate = format!("∃{}.{{{}}}", property_name, individual_name);
+                let predicate = format!("∃{property_name}.{{{individual_name}}}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::DataHasValue { property, value } => {
                 let property_name = self.data_property_expression_to_string(property);
                 let literal_value = &value.value;
-                let predicate = format!("∃{}.{{{}}}", property_name, literal_value);
+                let predicate = format!("∃{property_name}.{{{literal_value}}}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 let property_name = self.data_property_expression_to_string(property);
                 let datatype_name = self.data_range_to_string(filler);
-                let predicate = format!("∃{}.{}", property_name, datatype_name);
+                let predicate = format!("∃{property_name}.{datatype_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::DataAllValuesFrom { property, filler } => {
                 let property_name = self.data_property_expression_to_string(property);
                 let datatype_name = self.data_range_to_string(filler);
-                let predicate = format!("∀{}.{}", property_name, datatype_name);
+                let predicate = format!("∀{property_name}.{datatype_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectIntersectionOf(operands) => {
@@ -260,7 +260,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
             }
             ClassExpression::ObjectComplementOf(operand) => {
                 let operand_name = self.class_expression_to_simple_string(operand);
-                let predicate = format!("¬{}", operand_name);
+                let predicate = format!("¬{operand_name}");
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             ClassExpression::ObjectOneOf(individuals) => {
@@ -337,7 +337,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
                     base_type
                 } else {
                     // Simplified representation of facet restrictions
-                    format!("{}[restrictions]", base_type)
+                    format!("{base_type}[restrictions]")
                 }
             }
         }
@@ -361,16 +361,16 @@ impl HelperMethods for super::generator::DLClauseGenerator {
     ) -> Result<DLAtom> {
         match range {
             DataRange::Datatype(dt) => {
-                let datatype_str = format!("{}", dt);
+                let datatype_str = format!("{dt}");
                 Ok(DLAtom::new(
-                    format!("{}({})", datatype_str, variable),
+                    format!("{datatype_str}({variable})"),
                     vec![variable.to_string()],
                 ))
             }
             _ => {
                 let range_string = self.data_range_to_string(range);
                 Ok(DLAtom::new(
-                    format!("{}({})", range_string, variable),
+                    format!("{range_string}({variable})"),
                     vec![variable.to_string()],
                 ))
             }
@@ -497,6 +497,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
 
 impl super::generator::DLClauseGenerator {
     /// Convert IRI to string with prefix handling
+    #[must_use] 
     pub fn iri_to_string(&self, iri: &crate::ontology::IRI) -> String {
         let iri_str = iri.as_str();
 
@@ -507,7 +508,7 @@ impl super::generator::DLClauseGenerator {
                 if prefix.is_empty() {
                     return local_name.to_string();
                 } else {
-                    return format!("{}:{}", prefix, local_name);
+                    return format!("{prefix}:{local_name}");
                 }
             }
         }
@@ -524,6 +525,7 @@ impl super::generator::DLClauseGenerator {
     }
 
     /// Convert URL to string with prefix handling
+    #[must_use] 
     pub fn url_to_string(&self, url: &url::Url) -> String {
         let url_str = url.as_str();
 
@@ -534,7 +536,7 @@ impl super::generator::DLClauseGenerator {
                 if prefix.is_empty() {
                     return local_name.to_string();
                 } else {
-                    return format!("{}:{}", prefix, local_name);
+                    return format!("{prefix}:{local_name}");
                 }
             }
         }
@@ -551,6 +553,7 @@ impl super::generator::DLClauseGenerator {
     }
 
     /// Convert class expression to a simple string representation
+    #[must_use] 
     pub fn class_expression_to_simple_string(&self, expr: &ClassExpression) -> String {
         match expr {
             ClassExpression::Class(class) => self.iri_to_string(&class.iri),
@@ -637,7 +640,7 @@ impl super::generator::DLClauseGenerator {
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
-        let predicate = format!("atLeast({},{},{})", cardinality, property, range);
+        let predicate = format!("atLeast({cardinality},{property},{range})");
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
@@ -650,7 +653,7 @@ impl super::generator::DLClauseGenerator {
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
-        let predicate = format!("atMost({},{},{})", cardinality, property, range);
+        let predicate = format!("atMost({cardinality},{property},{range})");
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 
@@ -662,7 +665,7 @@ impl super::generator::DLClauseGenerator {
         variable: &str,
         is_negative: bool,
     ) -> Result<DLAtom> {
-        let predicate = format!("{{{}}}", value);
+        let predicate = format!("{{{value}}}");
         Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(is_negative))
     }
 }

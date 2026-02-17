@@ -90,7 +90,7 @@ pub struct IntelligentIndexingSystem {
     /// Role indices for object properties
     role_indices: HashMap<ObjectPropertyExpression, RoleIndex>,
 
-    /// Individual indices for ABox queries
+    /// Individual indices for `ABox` queries
     individual_indices: HashMap<Individual, IndividualIndex>,
 
     /// Composite indices for complex queries
@@ -255,7 +255,7 @@ pub enum RoleIndexType {
     Composition,
 }
 
-/// Specialized index for individual (ABox) queries
+/// Specialized index for individual (`ABox`) queries
 #[derive(Debug, Clone)]
 pub struct IndividualIndex {
     /// Index type and structure
@@ -591,6 +591,7 @@ pub struct MaintenanceThresholds {
 
 impl AdvancedQueryOptimizer {
     /// Create a new advanced query optimizer
+    #[must_use] 
     pub fn new(
         ontology: Arc<Ontology>,
         reasoning_service: Arc<ReasoningService>,

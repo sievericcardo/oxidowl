@@ -291,7 +291,7 @@ impl IncrementalReasoningService {
             let results = {
                 let mut query_engine_guard = query_engine
                     .lock()
-                    .map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
+                    .map_err(|e| Error::internal(format!("Failed to lock query engine: {e}")))?;
                 query_engine_guard.execute_query(query)?
             };
             QueryResult {
@@ -480,7 +480,7 @@ impl IncrementalReasoningService {
         let result = {
             let mut query_engine_guard = query_engine
                 .lock()
-                .map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
+                .map_err(|e| Error::internal(format!("Failed to lock query engine: {e}")))?;
             query_engine_guard.execute_query(query)?
         };
 
@@ -564,6 +564,7 @@ pub struct PerformanceReport {
 
 impl PerformanceReport {
     /// Calculate overall efficiency score (0.0 to 1.0)
+    #[must_use] 
     pub fn efficiency_score(&self) -> f64 {
         let cache_hit_ratio = self.cache_statistics.post_invalidation_hit_rate;
         let incremental_ratio = if self.incremental_statistics.incremental_updates > 0 {
@@ -577,11 +578,13 @@ impl PerformanceReport {
     }
 
     /// Get total time saved by incremental reasoning (milliseconds)
+    #[must_use] 
     pub fn total_time_saved_ms(&self) -> u64 {
         self.incremental_statistics.time_saved_ms + self.cache_statistics.time_saved_ms
     }
 
     /// Get total memory saved by incremental approaches (bytes)
+    #[must_use] 
     pub fn total_memory_saved_bytes(&self) -> usize {
         self.cache_statistics.memory_saved_bytes + self.incremental_statistics.memory_usage_bytes
     }

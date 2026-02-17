@@ -1,6 +1,6 @@
-//! Query processing for SPARQL and OWLlink
+//! Query processing for SPARQL and `OWLlink`
 //!
-//! This module handles parsing and execution of SPARQL queries and OWLlink requests.
+//! This module handles parsing and execution of SPARQL queries and `OWLlink` requests.
 
 use crate::{
     Error, Result,
@@ -25,7 +25,7 @@ pub struct TriplePattern {
     pub object: String,
 }
 
-/// OWLlink request representation
+/// `OWLlink` request representation
 #[derive(Debug, Clone)]
 pub struct OwllinkRequest {
     pub request_type: String,
@@ -37,7 +37,7 @@ pub struct OwllinkRequest {
     pub direct: Option<bool>,
 }
 
-/// Processor for SPARQL and OWLlink queries
+/// Processor for SPARQL and `OWLlink` queries
 #[derive(Debug)]
 pub struct QueryProcessor;
 
@@ -119,7 +119,7 @@ impl QueryProcessor {
     fn execute_ask_query(&self, query: &SparqlQuery, ontology: &Ontology) -> Result<String> {
         let bindings = self.find_pattern_bindings(&query.patterns, ontology)?;
         let result = !bindings.is_empty();
-        Ok(format!("{{\"boolean\": {}}}", result))
+        Ok(format!("{{\"boolean\": {result}}}"))
     }
 
     /// Execute CONSTRUCT query
@@ -174,7 +174,7 @@ impl QueryProcessor {
         }
     }
 
-    /// Parse OWLlink XML request
+    /// Parse `OWLlink` XML request
     fn parse_owllink_request(&self, request: &str) -> Result<OwllinkRequest> {
         // Basic XML parsing for OWLlink - in production would use proper XML parser
         let request_type = if request.contains("IsKBSatisfiable") {
@@ -425,14 +425,14 @@ impl QueryProcessor {
             for (i, value) in row.iter().enumerate() {
                 if i < variables.len() {
                     let var_name = variables[i].trim_start_matches('?');
-                    output.push_str(&format!("      <binding name=\"{}\">\n", var_name));
+                    output.push_str(&format!("      <binding name=\"{var_name}\">\n"));
                     if value.starts_with('<') && value.ends_with('>') {
                         output.push_str(&format!(
                             "        <uri>{}</uri>\n",
                             &value[1..value.len() - 1]
                         ));
                     } else {
-                        output.push_str(&format!("        <literal>{}</literal>\n", value));
+                        output.push_str(&format!("        <literal>{value}</literal>\n"));
                     }
                     output.push_str("      </binding>\n");
                 }
@@ -453,7 +453,7 @@ impl QueryProcessor {
             // Find WHERE to delimit construct template
             if let Some(where_pos) = construct_part.to_uppercase().find("WHERE") {
                 let template = &construct_part[..where_pos];
-                return self.extract_triple_patterns(&format!("WHERE {{{}}}", template));
+                return self.extract_triple_patterns(&format!("WHERE {{{template}}}"));
             }
         }
 
@@ -494,7 +494,7 @@ impl QueryProcessor {
         output.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n\n");
 
         for (subject, predicate, object) in triples {
-            output.push_str(&format!("{} {} {} .\n", subject, predicate, object));
+            output.push_str(&format!("{subject} {predicate} {object} .\n"));
         }
 
         output
@@ -600,7 +600,7 @@ impl QueryProcessor {
                                     },
                                 };
                                 triples.push((
-                                    target_iri.to_string(),
+                                    target_iri.clone(),
                                     property_iri.to_string(),
                                     object.iri.as_str().to_string(),
                                 ));
@@ -621,7 +621,7 @@ impl QueryProcessor {
                                 triples.push((
                                     subject.iri.as_str().to_string(),
                                     property_iri.to_string(),
-                                    target_iri.to_string(),
+                                    target_iri.clone(),
                                 ));
                             }
                 }
@@ -641,7 +641,7 @@ impl QueryProcessor {
                                 assertion.value.value.clone()
                             };
                             triples.push((
-                                target_iri.to_string(),
+                                target_iri.clone(),
                                 property_iri.to_string(),
                                 literal_value,
                             ));
@@ -682,13 +682,12 @@ impl QueryProcessor {
                     // Try to resolve from ontology-specific prefixes
                     // For now, return error for unknown prefixes
                     return Err(crate::Error::reasoning(format!(
-                        "Unknown prefix: {}",
-                        prefix
+                        "Unknown prefix: {prefix}"
                     )));
                 }
             };
 
-            Ok(format!("{}{}", namespace, local_name))
+            Ok(format!("{namespace}{local_name}"))
         } else {
             // No prefix found, return as-is
             Ok(prefixed_name.to_string())
@@ -703,7 +702,7 @@ impl QueryProcessor {
         ontology: &Ontology,
     ) -> Result<Vec<(String, String, String)>> {
         let mut triples = Vec::new();
-        let resource = format!("<{}>", target_iri);
+        let resource = format!("<{target_iri}>");
 
         // Iterate through axioms to find relevant information
         for axiom in ontology.axioms() {
@@ -712,7 +711,7 @@ impl QueryProcessor {
                     if let crate::ontology::Individual::Named(individual) = &assertion.individual
                         && individual.iri.as_str() == target_iri {
                             triples.push((
-                                resource.to_string(),
+                                resource.clone(),
                                 "rdf:type".to_string(),
                                 self.format_class_expression(&assertion.class),
                             ));
@@ -723,7 +722,7 @@ impl QueryProcessor {
                         && subject.iri.as_str() == target_iri
                             && let crate::ontology::Individual::Named(object) = &assertion.target {
                                 triples.push((
-                                    resource.to_string(),
+                                    resource.clone(),
                                     self.format_object_property(&assertion.property),
                                     format!("<{}>", object.iri),
                                 ));
@@ -797,8 +796,7 @@ impl QueryProcessor {
             };
             Ok(format!(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
-<BooleanResponse result="{}" />"#,
-                is_satisfiable
+<BooleanResponse result="{is_satisfiable}" />"#
             ))
         } else {
             Err(Error::reasoning(
@@ -835,8 +833,7 @@ impl QueryProcessor {
 
         Ok(format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
-<BooleanResponse result="{}" />"#,
-            result
+<BooleanResponse result="{result}" />"#
         ))
     }
 
@@ -867,8 +864,7 @@ impl QueryProcessor {
 
         Ok(format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
-<SetOfClassesResponse>{}</SetOfClassesResponse>"#,
-            class_elements
+<SetOfClassesResponse>{class_elements}</SetOfClassesResponse>"#
         ))
     }
 
@@ -899,8 +895,7 @@ impl QueryProcessor {
 
         Ok(format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
-<SetOfClassesResponse>{}</SetOfClassesResponse>"#,
-            class_elements
+<SetOfClassesResponse>{class_elements}</SetOfClassesResponse>"#
         ))
     }
 
@@ -930,8 +925,7 @@ impl QueryProcessor {
 
         Ok(format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
-<SetOfClassesResponse>{}</SetOfClassesResponse>"#,
-            class_elements
+<SetOfClassesResponse>{class_elements}</SetOfClassesResponse>"#
         ))
     }
 
@@ -972,8 +966,7 @@ impl QueryProcessor {
 
         Ok(format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
-<SetOfIndividualsResponse>{}</SetOfIndividualsResponse>"#,
-            individual_elements
+<SetOfIndividualsResponse>{individual_elements}</SetOfIndividualsResponse>"#
         ))
     }
 
@@ -1000,12 +993,11 @@ impl QueryProcessor {
 
         Ok(format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
-<SetOfClassesResponse>{}</SetOfClassesResponse>"#,
-            class_elements
+<SetOfClassesResponse>{class_elements}</SetOfClassesResponse>"#
         ))
     }
 
-    /// Extract class expression from OWLlink XML
+    /// Extract class expression from `OWLlink` XML
     fn extract_class_from_owllink(&self, xml: &str) -> Result<ClassExpression> {
         // Basic XML parsing to extract class
         if let Some(start) = xml.find("IRI=\"")
@@ -1021,7 +1013,7 @@ impl QueryProcessor {
         ))
     }
 
-    /// Extract KB name from OWLlink XML
+    /// Extract KB name from `OWLlink` XML
     fn extract_kb_name_from_owllink(&self, xml: &str) -> Result<String> {
         // Basic XML parsing to extract KB name
         if let Some(start) = xml.find("kb=\"")
@@ -1033,7 +1025,7 @@ impl QueryProcessor {
         Ok("default".to_string())
     }
 
-    /// Extract individual from OWLlink XML
+    /// Extract individual from `OWLlink` XML
     fn extract_individual_from_owllink(&self, xml: &str) -> Result<crate::ontology::Individual> {
         // Parse named individual
         if let Some(start) = xml.find("owl:NamedIndividual")
@@ -1064,7 +1056,7 @@ impl QueryProcessor {
         ))
     }
 
-    /// Parse axiom from OWLlink XML
+    /// Parse axiom from `OWLlink` XML
     fn parse_axiom_from_owllink(&self, xml: &str) -> Result<crate::ontology::Axiom> {
         // Enhanced axiom parsing for entailment checks
 
@@ -1125,7 +1117,7 @@ impl QueryProcessor {
         ))
     }
 
-    /// Extract superclass from OWLlink XML (for SubClassOf axioms)
+    /// Extract superclass from `OWLlink` XML (for `SubClassOf` axioms)
     fn extract_superclass_from_owllink(&self, xml: &str) -> Result<ClassExpression> {
         // Look for the second class expression in SubClassOf
         let mut class_count = 0;
@@ -1150,7 +1142,7 @@ impl QueryProcessor {
         ))
     }
 
-    /// Extract object property from OWLlink XML
+    /// Extract object property from `OWLlink` XML
     fn extract_object_property_from_owllink(
         &self,
         xml: &str,
@@ -1209,7 +1201,7 @@ impl QueryProcessor {
         ))
     }
 
-    /// Extract axiom from OWLlink XML request
+    /// Extract axiom from `OWLlink` XML request
     fn extract_axiom_from_owllink(&self, xml: &str) -> Result<crate::ontology::Axiom> {
         // Look for axiom elements in the XML
         if xml.contains("SubClassOf") {
@@ -1247,7 +1239,7 @@ impl QueryProcessor {
         ))
     }
 
-    /// Extract direct flag from OWLlink XML request
+    /// Extract direct flag from `OWLlink` XML request
     fn extract_direct_flag_from_owllink(&self, xml: &str) -> Result<bool> {
         // Look for direct attribute in various query elements
         if let Some(start) = xml.find("direct=")
@@ -1262,7 +1254,7 @@ impl QueryProcessor {
         Ok(false)
     }
 
-    /// Extract super class from OWLlink XML (for SubClassOf axioms)
+    /// Extract super class from `OWLlink` XML (for `SubClassOf` axioms)
     fn extract_super_class_from_owllink(
         &self,
         xml: &str,

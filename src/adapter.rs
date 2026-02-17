@@ -168,6 +168,7 @@ impl HornedOwlAdapter {
     }
 
     /// Check if adapter is in RDF 1.1 compatibility mode
+    #[must_use] 
     pub fn is_rdf11_mode(&self) -> bool {
         self.rdf11_mode
     }
@@ -207,19 +208,19 @@ impl HornedOwlAdapter {
         Ok(Class::new(iri))
     }
 
-    /// Convert oxidowl RdfTerm to a set of RDF 1.1-compatible triples
+    /// Convert oxidowl `RdfTerm` to a set of RDF 1.1-compatible triples
     /// 
     /// This method handles RDF-star quoted triples by reifying them according to
     /// the RDF reification vocabulary. Each quoted triple becomes a blank node
     /// with rdf:type rdf:Statement and rdf:subject, rdf:predicate, rdf:object properties.
     /// 
     /// # Arguments
-    /// * `term` - The RdfTerm to convert (may contain nested quoted triples)
+    /// * `term` - The `RdfTerm` to convert (may contain nested quoted triples)
     /// 
     /// # Returns
-    /// A tuple of (converted_term, additional_triples) where:
-    /// - converted_term is the RDF 1.1-compatible term (quoted triples become blank nodes)
-    /// - additional_triples are the reification triples to add to the graph
+    /// A tuple of (`converted_term`, `additional_triples`) where:
+    /// - `converted_term` is the RDF 1.1-compatible term (quoted triples become blank nodes)
+    /// - `additional_triples` are the reification triples to add to the graph
     pub fn reify_rdf_term(&mut self, term: &RdfTerm) -> Result<(RdfTerm, Vec<Triple>)> {
         match term {
             RdfTerm::QuotedTriple(triple) => {
@@ -298,7 +299,7 @@ impl HornedOwlAdapter {
 
     /// Detect reified triples in RDF 1.1 data and convert to quoted triples
     /// 
-    /// This is the inverse of reify_rdf_term. It scans for patterns like:
+    /// This is the inverse of `reify_rdf_term`. It scans for patterns like:
     /// ```
     /// _:bn rdf:type rdf:Statement .
     /// _:bn rdf:subject <s> .
@@ -444,7 +445,7 @@ impl HornedOwlAdapter {
         }
 
         // Log the conversion attempt
-        log::debug!("Converting horned-owl ontology: {:?}", horned_ontology);
+        log::debug!("Converting horned-owl ontology: {horned_ontology:?}");
 
         // For now, return the basic ontology structure
         // In a full implementation, this would parse the horned-owl structure
@@ -466,8 +467,7 @@ impl HornedOwlAdapter {
         // Add basic SWRL rule support structure
         // For now, we'll ensure the ontology can handle SWRL rules
         log::debug!(
-            "Converting ontology with SWRL support: {:?}",
-            horned_ontology
+            "Converting ontology with SWRL support: {horned_ontology:?}"
         );
 
         // In a full implementation, this would:

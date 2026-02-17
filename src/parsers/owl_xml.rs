@@ -303,7 +303,7 @@ fn parse_axiom_element(
                     println!("DEBUG: Added TransitiveObjectProperty axiom to ontology");
                 }
                 Err(e) => {
-                    println!("DEBUG: Failed to parse TransitiveObjectProperty: {:?}", e);
+                    println!("DEBUG: Failed to parse TransitiveObjectProperty: {e:?}");
                 }
             }
         }
@@ -1180,6 +1180,7 @@ pub struct OwlXmlSerializer;
 
 impl OwlXmlSerializer {
     /// Create a new OWL XML serializer
+    #[must_use] 
     pub fn new() -> Self {
         Self
     }
@@ -1207,9 +1208,9 @@ impl OntologySerializer for OwlXmlSerializer {
 
         // Add ontology IRI and version IRI if present
         if let Some(onto_iri) = ontology.get_iri() {
-            output.push_str(&format!("         ontologyIRI=\"{}\"", onto_iri));
+            output.push_str(&format!("         ontologyIRI=\"{onto_iri}\""));
             if let Some(version_iri) = &ontology.version_iri {
-                output.push_str(&format!("\n         versionIRI=\"{}\"", version_iri));
+                output.push_str(&format!("\n         versionIRI=\"{version_iri}\""));
             }
             output.push_str(">\n");
         } else {
@@ -1218,7 +1219,7 @@ impl OntologySerializer for OwlXmlSerializer {
 
         // Write imports
         for import in &ontology.imports {
-            output.push_str(&format!("  <Import>{}</Import>\n", import));
+            output.push_str(&format!("  <Import>{import}</Import>\n"));
         }
 
         // Write ontology annotations
@@ -1375,7 +1376,7 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 }
             )
         }
-        _ => format!("<!-- Unsupported axiom type: {:?} -->", axiom),
+        _ => format!("<!-- Unsupported axiom type: {axiom:?} -->"),
     }
 }
 
@@ -1422,14 +1423,14 @@ fn serialize_class_expression_xml(ce: &crate::ontology::ClassExpression) -> Stri
                 serialize_class_expression_xml(class)
             )
         }
-        _ => format!("<!-- Unsupported class expression: {:?} -->", ce),
+        _ => format!("<!-- Unsupported class expression: {ce:?} -->"),
     }
 }
 
 fn serialize_individual_xml(ind: &crate::ontology::Individual) -> String {
     format!(
         "<NamedIndividual IRI=\"{}\"/>",
-        ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous")
+        ind.iri().map(super::super::ontology::IRI::as_str).unwrap_or("_:anonymous")
     )
 }
 
@@ -1482,7 +1483,7 @@ fn serialize_annotation_xml(annotation: &crate::ontology::Annotation, indent: us
     }
 }
 
-/// Parse FunctionalDataProperty axiom
+/// Parse `FunctionalDataProperty` axiom
 fn parse_functional_data_property(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1504,7 +1505,7 @@ fn parse_functional_data_property(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse ObjectPropertyDomain axiom
+/// Parse `ObjectPropertyDomain` axiom
 fn parse_object_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1529,7 +1530,7 @@ fn parse_object_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse ObjectPropertyRange axiom
+/// Parse `ObjectPropertyRange` axiom
 fn parse_object_property_range(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1554,7 +1555,7 @@ fn parse_object_property_range(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse DataPropertyDomain axiom
+/// Parse `DataPropertyDomain` axiom
 fn parse_data_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1579,7 +1580,7 @@ fn parse_data_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse DataPropertyRange axiom
+/// Parse `DataPropertyRange` axiom
 fn parse_data_property_range(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()

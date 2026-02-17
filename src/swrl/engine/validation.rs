@@ -22,6 +22,7 @@ pub struct RuleValidator {
 
 impl RuleValidator {
     /// Create a new rule validator
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
@@ -46,8 +47,7 @@ impl RuleValidator {
         for var in &head_variables {
             if !body_variables.contains(var) {
                 return Err(Error::reasoning(format!(
-                    "Variable {} in rule head does not appear in rule body (safety violation)",
-                    var
+                    "Variable {var} in rule head does not appear in rule body (safety violation)"
                 )));
             }
         }
@@ -56,7 +56,7 @@ impl RuleValidator {
         self.validate_atom_consistency(&rule.body)?;
         self.validate_atom_consistency(&rule.head)?;
 
-        debug!("Rule validation successful: {:?}", rule);
+        debug!("Rule validation successful: {rule:?}");
         Ok(())
     }
 
@@ -165,8 +165,7 @@ impl RuleValidator {
         for pair in &same_pairs {
             if different_pairs.contains(pair) {
                 return Err(Error::reasoning(format!(
-                    "Rule contains contradiction: individuals are both same and different: {:?}",
-                    pair
+                    "Rule contains contradiction: individuals are both same and different: {pair:?}"
                 )));
             }
         }
@@ -180,8 +179,8 @@ impl RuleValidator {
         arg1: &SWRLIArgument,
         arg2: &SWRLIArgument,
     ) -> (String, String) {
-        let str1 = format!("{:?}", arg1);
-        let str2 = format!("{:?}", arg2);
+        let str1 = format!("{arg1:?}");
+        let str2 = format!("{arg2:?}");
 
         if str1 <= str2 {
             (str1, str2)
@@ -206,6 +205,7 @@ pub struct GoalChecker {
 
 impl GoalChecker {
     /// Create a new goal checker
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
@@ -439,8 +439,8 @@ impl GoalChecker {
     ) -> Result<bool> {
         // Implement matching logic
         match individual {
-            SWRLIArgument::Individual(ind) => Ok(ind.iri().map(|i| i.as_str())
-                == assertion.individual.iri().map(|i| i.as_str())
+            SWRLIArgument::Individual(ind) => Ok(ind.iri().map(crate::ontology::IRI::as_str)
+                == assertion.individual.iri().map(crate::ontology::IRI::as_str)
                 && class == &assertion.class),
             SWRLIArgument::Variable(_) => {
                 // Variables can match any individual
@@ -458,14 +458,14 @@ impl GoalChecker {
     ) -> Result<bool> {
         let subject_match = match subject {
             SWRLIArgument::Individual(ind) => {
-                ind.iri().map(|i| i.as_str()) == assertion.source.iri().map(|i| i.as_str())
+                ind.iri().map(crate::ontology::IRI::as_str) == assertion.source.iri().map(crate::ontology::IRI::as_str)
             }
             SWRLIArgument::Variable(_) => true, // Variables can match any individual
         };
 
         let object_match = match object {
             SWRLIArgument::Individual(ind) => {
-                ind.iri().map(|i| i.as_str()) == assertion.target.iri().map(|i| i.as_str())
+                ind.iri().map(crate::ontology::IRI::as_str) == assertion.target.iri().map(crate::ontology::IRI::as_str)
             }
             SWRLIArgument::Variable(_) => true, // Variables can match any individual
         };

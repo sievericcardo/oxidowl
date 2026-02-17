@@ -161,7 +161,7 @@ impl ClassificationService {
         let use_parallel = perf_config.is_enabled(crate::config::PerformanceFeature::LockFree) && total_tableau_pairs > 100;
         
         if use_parallel {
-            info!("Using parallel classification for {} subsumption checks", total_tableau_pairs);
+            info!("Using parallel classification for {total_tableau_pairs} subsumption checks");
             
             // Create parallel scheduler
             let scheduler = ParallelClassificationScheduler::new(perf_config);
@@ -197,7 +197,7 @@ impl ClassificationService {
             
             tableau_checks = total_tableau_pairs;
         } else {
-            info!("Using sequential classification for {} subsumption checks", total_tableau_pairs);
+            info!("Using sequential classification for {total_tableau_pairs} subsumption checks");
             
             // Perform tableau expansion for remaining pairs (sequential fallback)
             for (subclass, superclass) in tableau_pairs {
@@ -208,7 +208,7 @@ impl ClassificationService {
                 tableau_checks += 1;
 
                 if tableau_checks % 100 == 0 {
-                    debug!("Tableau checks progress: {}/{}", tableau_checks, total_tableau_pairs);
+                    debug!("Tableau checks progress: {tableau_checks}/{total_tableau_pairs}");
                 }
             }
         }
@@ -217,7 +217,7 @@ impl ClassificationService {
               phase3_start.elapsed(), tableau_checks);
 
         // Extract ontology IRI before dropping the read lock
-        let ontology_iri = ontology_guard.iri.as_ref().map(|iri| iri.to_string());
+        let ontology_iri = ontology_guard.iri.as_ref().map(std::string::ToString::to_string);
 
         // Drop the read lock before creating result
         drop(ontology_guard);
@@ -1165,7 +1165,7 @@ impl ClassificationService {
         // Get all data property values for this individual and property
         let individual_iri = individual
             .iri()
-            .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
         let mut has_matching_value = false;
 
@@ -1339,7 +1339,7 @@ impl ClassificationService {
                 // Get all asserted types of the individual
                 let individual_iri = individual
                     .iri()
-                    .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
                 let mut asserted_classes = Vec::new();
 
                 for axiom in ontology.axioms() {
@@ -1470,7 +1470,7 @@ impl ClassificationService {
                 // Check if individual has this specific data property value
                 let individual_iri = individual
                     .iri()
-                    .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
@@ -1500,7 +1500,7 @@ impl ClassificationService {
     ) -> Result<bool> {
         let individual_iri = individual
             .iri()
-            .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom

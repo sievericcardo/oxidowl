@@ -550,9 +550,9 @@ impl QueryDistributor {
         match atom {
             QueryAtom::ClassAtom {
                 class_expression, ..
-            } => Some(format!("{:?}", class_expression)),
-            QueryAtom::ObjectPropertyAtom { property, .. } => Some(format!("{:?}", property)),
-            QueryAtom::DataPropertyAtom { property, .. } => Some(format!("{:?}", property)),
+            } => Some(format!("{class_expression:?}")),
+            QueryAtom::ObjectPropertyAtom { property, .. } => Some(format!("{property:?}")),
+            QueryAtom::DataPropertyAtom { property, .. } => Some(format!("{property:?}")),
             _ => Some("unknown".to_string()),
         }
     }
@@ -666,7 +666,7 @@ impl QueryDistributor {
                 partition.status = PartitionStatus::Cancelled;
             }
 
-            info!("Query {} cancelled", query_id);
+            info!("Query {query_id} cancelled");
         }
 
         Ok(())
@@ -742,16 +742,16 @@ impl QueryAnalyzer {
                 QueryAtom::ClassAtom {
                     class_expression, ..
                 } => {
-                    concepts.insert(format!("{:?}", class_expression));
+                    concepts.insert(format!("{class_expression:?}"));
                 }
                 QueryAtom::ObjectPropertyAtom { property, .. } => {
-                    properties.insert(format!("{:?}", property));
+                    properties.insert(format!("{property:?}"));
                 }
                 QueryAtom::DataPropertyAtom { property, .. } => {
-                    properties.insert(format!("{:?}", property));
+                    properties.insert(format!("{property:?}"));
                 }
                 QueryAtom::ConcreteIndividualAtom { individual, .. } => {
-                    individuals.insert(format!("{:?}", individual));
+                    individuals.insert(format!("{individual:?}"));
                 }
                 _ => {}
             }

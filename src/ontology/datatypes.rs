@@ -54,6 +54,7 @@ pub enum OWL2Datatype {
 
 impl OWL2Datatype {
     /// Get the IRI for this datatype
+    #[must_use] 
     pub fn iri(&self) -> crate::ontology::IRI {
         let iri_string = match self {
             // XML Schema datatypes
@@ -109,6 +110,7 @@ impl OWL2Datatype {
     }
 
     /// Check if this datatype is numeric
+    #[must_use] 
     pub fn is_numeric(&self) -> bool {
         matches!(
             self,
@@ -134,6 +136,7 @@ impl OWL2Datatype {
     }
 
     /// Check if this datatype is a date/time type
+    #[must_use] 
     pub fn is_datetime(&self) -> bool {
         matches!(
             self,
@@ -151,11 +154,13 @@ impl OWL2Datatype {
     }
 
     /// Check if this datatype supports ordering
+    #[must_use] 
     pub fn is_ordered(&self) -> bool {
         self.is_numeric() || self.is_datetime() || matches!(self, OWL2Datatype::String)
     }
 
     /// Get the parent datatype in the hierarchy
+    #[must_use] 
     pub fn parent_datatype(&self) -> Option<OWL2Datatype> {
         match self {
             // Integer hierarchy
@@ -230,8 +235,7 @@ impl FromStr for OWL2Datatype {
             "http://www.w3.org/2002/07/owl#real" => Ok(OWL2Datatype::Real),
             "http://www.w3.org/2002/07/owl#rational" => Ok(OWL2Datatype::Rational),
             _ => Err(OxidowlError::InvalidDatatype(format!(
-                "Unknown datatype IRI: {}",
-                iri
+                "Unknown datatype IRI: {iri}"
             ))),
         }
     }
@@ -247,6 +251,7 @@ pub struct DatatypeDefinitionAxiom {
 }
 
 impl DatatypeDefinitionAxiom {
+    #[must_use] 
     pub fn new(
         id: AxiomId,
         datatype: IRI<String>,
@@ -262,7 +267,7 @@ impl DatatypeDefinitionAxiom {
     }
 }
 
-/// Enhanced DataRange enum to support all OWL 2 data range constructs
+/// Enhanced `DataRange` enum to support all OWL 2 data range constructs
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DataRange {
     /// Named datatype
@@ -308,6 +313,7 @@ pub enum ConstrainingFacet {
 
 impl ConstrainingFacet {
     /// Get the IRI for this facet
+    #[must_use] 
     pub fn iri(&self) -> crate::ontology::IRI {
         let iri_string = match self {
             ConstrainingFacet::Length => "http://www.w3.org/2001/XMLSchema#length",
@@ -328,6 +334,7 @@ impl ConstrainingFacet {
     }
 
     /// Check if this facet is applicable to the given datatype
+    #[must_use] 
     pub fn is_applicable_to(&self, datatype: &OWL2Datatype) -> bool {
         match self {
             ConstrainingFacet::Length
@@ -365,6 +372,7 @@ pub struct DatatypeManager {
 }
 
 impl DatatypeManager {
+    #[must_use] 
     pub fn new() -> Self {
         let mut manager = Self {
             datatype_definitions: HashMap::new(),
@@ -439,6 +447,7 @@ impl DatatypeManager {
     }
 
     /// Check if a datatype is recognized (built-in or defined)
+    #[must_use] 
     pub fn is_recognized_datatype(&self, datatype_iri: &crate::ontology::IRI) -> bool {
         // Check if it's a built-in OWL 2 datatype
         if OWL2Datatype::from_str(&datatype_iri.to_string()).is_ok() {
@@ -465,8 +474,7 @@ impl DatatypeManager {
             }
 
             return Err(OxidowlError::InvalidDatatype(format!(
-                "Unrecognized datatype: {}",
-                datatype_url
+                "Unrecognized datatype: {datatype_url}"
             )));
         }
 
@@ -484,32 +492,28 @@ impl DatatypeManager {
             OWL2Datatype::Boolean => {
                 if !matches!(value, "true" | "false" | "1" | "0") {
                     return Err(OxidowlError::InvalidLiteral(format!(
-                        "Invalid boolean value: {}",
-                        value
+                        "Invalid boolean value: {value}"
                     )));
                 }
             }
             OWL2Datatype::Integer => {
                 if value.parse::<i64>().is_err() {
                     return Err(OxidowlError::InvalidLiteral(format!(
-                        "Invalid integer value: {}",
-                        value
+                        "Invalid integer value: {value}"
                     )));
                 }
             }
             OWL2Datatype::Decimal => {
                 if value.parse::<f64>().is_err() {
                     return Err(OxidowlError::InvalidLiteral(format!(
-                        "Invalid decimal value: {}",
-                        value
+                        "Invalid decimal value: {value}"
                     )));
                 }
             }
             OWL2Datatype::Float | OWL2Datatype::Double => {
                 if value.parse::<f64>().is_err() && !matches!(value, "INF" | "-INF" | "NaN") {
                     return Err(OxidowlError::InvalidLiteral(format!(
-                        "Invalid float/double value: {}",
-                        value
+                        "Invalid float/double value: {value}"
                     )));
                 }
             }
@@ -518,8 +522,7 @@ impl DatatypeManager {
                 // Basic validation - just check that it's not empty for most types
                 if value.is_empty() && !matches!(datatype, OWL2Datatype::String) {
                     return Err(OxidowlError::InvalidLiteral(format!(
-                        "Empty value for datatype: {:?}",
-                        datatype
+                        "Empty value for datatype: {datatype:?}"
                     )));
                 }
             }
@@ -540,6 +543,7 @@ impl DatatypeManager {
     }
 
     /// Check if one datatype is a subtype of another
+    #[must_use] 
     pub fn is_subtype_of(&self, subtype: &OWL2Datatype, supertype: &OWL2Datatype) -> bool {
         if subtype == supertype {
             return true;
@@ -553,6 +557,7 @@ impl DatatypeManager {
     }
 
     /// Get all subtypes of a datatype
+    #[must_use] 
     pub fn get_subtypes(&self, datatype: &OWL2Datatype) -> HashSet<OWL2Datatype> {
         self.datatype_hierarchy
             .get(datatype)

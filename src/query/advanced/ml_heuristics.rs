@@ -96,6 +96,7 @@ impl Default for MLHeuristicsConfig {
 }
 
 impl MLHeuristicsEngine {
+    #[must_use] 
     pub fn new(config: MLHeuristicsConfig) -> Self {
         Self {
             strategy_selector: StrategySelectionModel::new(&config),
@@ -234,6 +235,7 @@ impl MLHeuristicsEngine {
     }
 
     /// Generate comprehensive heuristics report
+    #[must_use] 
     pub fn generate_heuristics_report(&self) -> HeuristicsPerformanceReport {
         HeuristicsPerformanceReport {
             strategy_selection_accuracy: self.strategy_selector.get_accuracy(),
@@ -1038,11 +1040,11 @@ impl std::fmt::Display for MLError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MLError::FeatureExtractionFailed(msg) => {
-                write!(f, "Feature extraction failed: {}", msg)
+                write!(f, "Feature extraction failed: {msg}")
             }
-            MLError::ModelPredictionFailed(msg) => write!(f, "Model prediction failed: {}", msg),
+            MLError::ModelPredictionFailed(msg) => write!(f, "Model prediction failed: {msg}"),
             MLError::TrainingDataInsufficient => write!(f, "Insufficient training data"),
-            MLError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
+            MLError::ConfigurationError(msg) => write!(f, "Configuration error: {msg}"),
         }
     }
 }

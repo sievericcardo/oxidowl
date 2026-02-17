@@ -52,6 +52,7 @@ impl Default for FeatureExtractionConfig {
 
 impl DLQueryFeatureExtractor {
     /// Create a new DL query feature extractor
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             feature_cache: HashMap::new(),
@@ -60,6 +61,7 @@ impl DLQueryFeatureExtractor {
     }
 
     /// Create with custom configuration
+    #[must_use] 
     pub fn with_config(config: FeatureExtractionConfig) -> Self {
         Self {
             feature_cache: HashMap::new(),
@@ -310,7 +312,7 @@ impl DLQueryFeatureExtractor {
             match atom {
                 QueryAtom::ClassAtom { .. } => class_atoms += 1,
                 QueryAtom::ObjectPropertyAtom { .. } | QueryAtom::DataPropertyAtom { .. } => {
-                    prop_atoms += 1
+                    prop_atoms += 1;
                 }
                 _ => other_atoms += 1,
             }
@@ -596,7 +598,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
                     "max_expression_depth",
                 ]
                 .iter()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             );
         }
 
@@ -613,7 +615,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
                     "cardinality_restrictions",
                 ]
                 .iter()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             );
         }
 
@@ -625,7 +627,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
                     "estimated_join_cost",
                 ]
                 .iter()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             );
         }
 

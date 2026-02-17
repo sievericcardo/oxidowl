@@ -18,7 +18,7 @@ use std::{
     time::Instant,
 };
 
-/// Represents a change to the TBox (terminological knowledge)
+/// Represents a change to the `TBox` (terminological knowledge)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TBoxChange {
     /// A new axiom was added to the ontology
@@ -53,6 +53,7 @@ pub enum TBoxChange {
 
 impl TBoxChange {
     /// Get the timestamp when this change occurred
+    #[must_use] 
     pub fn timestamp(&self) -> Instant {
         match self {
             TBoxChange::AxiomAdded { timestamp, .. } => *timestamp,
@@ -67,10 +68,11 @@ impl TBoxChange {
     }
 
     /// Get a human-readable description of the change
+    #[must_use] 
     pub fn description(&self) -> String {
         match self {
-            TBoxChange::AxiomAdded { axiom, .. } => format!("Added axiom: {:?}", axiom),
-            TBoxChange::AxiomRemoved { axiom, .. } => format!("Removed axiom: {:?}", axiom),
+            TBoxChange::AxiomAdded { axiom, .. } => format!("Added axiom: {axiom:?}"),
+            TBoxChange::AxiomRemoved { axiom, .. } => format!("Removed axiom: {axiom:?}"),
             TBoxChange::ClassAdded { class, .. } => format!("Added class: {}", class.iri),
             TBoxChange::ClassRemoved { class, .. } => format!("Removed class: {}", class.iri),
             TBoxChange::ObjectPropertyAdded { property, .. } => {
@@ -89,6 +91,7 @@ impl TBoxChange {
     }
 
     /// Extract the classes that are directly affected by this change
+    #[must_use] 
     pub fn affected_classes(&self) -> HashSet<Class> {
         let mut classes = HashSet::new();
 
@@ -106,7 +109,7 @@ impl TBoxChange {
     }
 }
 
-/// Represents a change to the ABox (assertional knowledge)
+/// Represents a change to the `ABox` (assertional knowledge)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ABoxChange {
     /// A new individual was introduced
@@ -163,6 +166,7 @@ pub enum ABoxChange {
 
 impl ABoxChange {
     /// Get the timestamp when this change occurred
+    #[must_use] 
     pub fn timestamp(&self) -> Instant {
         match self {
             ABoxChange::IndividualAdded { timestamp, .. } => *timestamp,
@@ -177,6 +181,7 @@ impl ABoxChange {
     }
 
     /// Get a human-readable description of the change
+    #[must_use] 
     pub fn description(&self) -> String {
         match self {
             ABoxChange::IndividualAdded { individual, .. } => {
@@ -184,14 +189,14 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Added individual: {}", iri)
+                format!("Added individual: {iri}")
             }
             ABoxChange::IndividualRemoved { individual, .. } => {
                 let iri = match individual {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Removed individual: {}", iri)
+                format!("Removed individual: {iri}")
             }
             ABoxChange::ClassAssertionAdded {
                 individual, class, ..
@@ -200,7 +205,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Added assertion: {} is instance of {:?}", iri, class)
+                format!("Added assertion: {iri} is instance of {class:?}")
             }
             ABoxChange::ClassAssertionRemoved {
                 individual, class, ..
@@ -209,7 +214,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Removed assertion: {} is instance of {:?}", iri, class)
+                format!("Removed assertion: {iri} is instance of {class:?}")
             }
             ABoxChange::ObjectPropertyAssertionAdded {
                 subject,
@@ -226,8 +231,7 @@ impl ABoxChange {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 format!(
-                    "Added property assertion: {} {:?} {}",
-                    subject_iri, property, object_iri
+                    "Added property assertion: {subject_iri} {property:?} {object_iri}"
                 )
             }
             ABoxChange::ObjectPropertyAssertionRemoved {
@@ -245,8 +249,7 @@ impl ABoxChange {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 format!(
-                    "Removed property assertion: {} {:?} {}",
-                    subject_iri, property, object_iri
+                    "Removed property assertion: {subject_iri} {property:?} {object_iri}"
                 )
             }
             ABoxChange::DataPropertyAssertionAdded {
@@ -260,8 +263,7 @@ impl ABoxChange {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 format!(
-                    "Added data assertion: {} {:?} {}",
-                    subject_iri, property, value
+                    "Added data assertion: {subject_iri} {property:?} {value}"
                 )
             }
             ABoxChange::DataPropertyAssertionRemoved {
@@ -275,14 +277,14 @@ impl ABoxChange {
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
                 format!(
-                    "Removed data assertion: {} {:?} {}",
-                    subject_iri, property, value
+                    "Removed data assertion: {subject_iri} {property:?} {value}"
                 )
             }
         }
     }
 
     /// Get the individuals directly affected by this change
+    #[must_use] 
     pub fn affected_individuals(&self) -> HashSet<Individual> {
         let mut individuals = HashSet::new();
 
@@ -331,6 +333,7 @@ pub struct DependencyGraph {
 
 impl DependencyGraph {
     /// Create a new empty dependency graph
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             class_dependencies: HashMap::new(),
@@ -352,7 +355,7 @@ impl DependencyGraph {
         Ok(graph)
     }
 
-    /// Add a class dependency (e.g., SubClass relationship)
+    /// Add a class dependency (e.g., `SubClass` relationship)
     pub fn add_class_dependency(&mut self, dependent: Class, depends_on: Class) {
         self.class_dependencies
             .entry(dependent)
@@ -481,9 +484,9 @@ impl Clone for DependencyGraph {
 /// Change tracking system that monitors ontology modifications
 #[derive(Debug)]
 pub struct ChangeTracker {
-    /// History of TBox changes
+    /// History of `TBox` changes
     tbox_history: RwLock<VecDeque<TBoxChange>>,
-    /// History of ABox changes
+    /// History of `ABox` changes
     abox_history: RwLock<VecDeque<ABoxChange>>,
     /// Dependency graph for impact analysis
     dependency_graph: RwLock<DependencyGraph>,
@@ -510,6 +513,7 @@ pub enum InvalidationEvent {
 
 impl ChangeTracker {
     /// Create a new change tracker
+    #[must_use] 
     pub fn new(config: super::IncrementalConfig) -> Self {
         Self {
             tbox_history: RwLock::new(VecDeque::new()),
@@ -529,7 +533,7 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Track a TBox change
+    /// Track a `TBox` change
     pub fn track_tbox_change(&self, change: TBoxChange) -> Result<()> {
         // Add to history
         if let Ok(mut history) = self.tbox_history.write() {
@@ -550,7 +554,7 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Track an ABox change
+    /// Track an `ABox` change
     pub fn track_abox_change(&self, change: ABoxChange) -> Result<()> {
         // Add to history
         if let Ok(mut history) = self.abox_history.write() {
@@ -577,7 +581,7 @@ impl ChangeTracker {
         }
     }
 
-    /// Get recent TBox changes since a given timestamp
+    /// Get recent `TBox` changes since a given timestamp
     pub fn get_tbox_changes_since(&self, since: Instant) -> Vec<TBoxChange> {
         if let Ok(history) = self.tbox_history.read() {
             history
@@ -590,7 +594,7 @@ impl ChangeTracker {
         }
     }
 
-    /// Get recent ABox changes since a given timestamp
+    /// Get recent `ABox` changes since a given timestamp
     pub fn get_abox_changes_since(&self, since: Instant) -> Vec<ABoxChange> {
         if let Ok(history) = self.abox_history.read() {
             history
@@ -603,7 +607,7 @@ impl ChangeTracker {
         }
     }
 
-    /// Generate invalidation events for a TBox change
+    /// Generate invalidation events for a `TBox` change
     fn generate_invalidation_events_for_tbox_change(&self, change: &TBoxChange) -> Result<()> {
         let affected_classes = change.affected_classes();
 
@@ -628,7 +632,7 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Generate invalidation events for an ABox change
+    /// Generate invalidation events for an `ABox` change
     fn generate_invalidation_events_for_abox_change(&self, change: &ABoxChange) -> Result<()> {
         let affected_individuals = change.affected_individuals();
 
@@ -640,7 +644,7 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Update dependency graph based on TBox change
+    /// Update dependency graph based on `TBox` change
     fn update_dependency_graph_for_tbox_change(&self, change: &TBoxChange) -> Result<()> {
         if let Ok(mut graph) = self.dependency_graph.write() {
             match change {
@@ -665,6 +669,7 @@ impl ChangeTracker {
 }
 
 /// Extract all atomic classes from a class expression
+#[must_use] 
 pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<Class> {
     let mut classes = HashSet::new();
     extract_classes_from_class_expression_with_depth(expr, &mut classes, 0);

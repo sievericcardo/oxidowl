@@ -22,7 +22,7 @@ use std::{sync::Arc, time::Instant};
 pub struct TableauExecutor;
 
 impl TableauExecutor {
-    /// Convert ConceptLabel to ClassExpression for rule contexts
+    /// Convert `ConceptLabel` to `ClassExpression` for rule contexts
     fn concept_label_to_class_expression(concept: &ConceptLabel) -> Result<ClassExpression> {
         match concept {
             ConceptLabel::Atomic(name) => {
@@ -42,7 +42,7 @@ impl TableauExecutor {
         }
     }
 
-    /// Helper to create RuleApplication with proper fields
+    /// Helper to create `RuleApplication` with proper fields
     #[allow(dead_code)]
     fn create_rule_application(
         rule: CompletionRule,
@@ -229,7 +229,7 @@ impl TableauExecutor {
                         for disjunct in disjuncts {
                             let label = ConceptLabel::Complex(Box::new(disjunct.clone()));
                             if node.concepts.contains(&label) {
-                                debug!("OR rule: disjunct already present at node {}", node_id);
+                                debug!("OR rule: disjunct already present at node {node_id}");
                                 return Ok(());
                             }
                         }
@@ -240,7 +240,7 @@ impl TableauExecutor {
                     if let Some(first_disjunct) = disjuncts.first() {
                         let concept_label = ConceptLabel::Complex(Box::new(first_disjunct.clone()));
                         tableau.add_concept_to_node(node_id, concept_label)?;
-                        debug!("Applied OR rule at node {}: chose first disjunct", node_id);
+                        debug!("Applied OR rule at node {node_id}: chose first disjunct");
                     }
                 }
                 _ => {
@@ -262,7 +262,7 @@ impl TableauExecutor {
             match concept {
                 ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                     // Check if suitable successor already exists
-                    let role_name = format!("{:?}", property); // Simplified for now
+                    let role_name = format!("{property:?}"); // Simplified for now
                     let has_successor = tableau.nodes.get(node_id)
                         .and_then(|n| n.role_successors.get(&role_name))
                         .map(|succs| !succs.is_empty())
@@ -280,7 +280,7 @@ impl TableauExecutor {
                         let filler_label = ConceptLabel::Complex(filler.clone());
                         tableau.add_concept_to_node(new_node_id, filler_label)?;
                         
-                        debug!("Applied SOME rule at node {}: created successor node {}", node_id, new_node_id);
+                        debug!("Applied SOME rule at node {node_id}: created successor node {new_node_id}");
                     }
                 }
                 _ => {
@@ -301,7 +301,7 @@ impl TableauExecutor {
         if let RuleContext::Concept { concept, .. } = &rule_app.context {
             match concept {
                 ClassExpression::ObjectAllValuesFrom { property, filler } => {
-                    let role_name = format!("{:?}", property);
+                    let role_name = format!("{property:?}");
                     
                     // Find all R-successors
                     let successors: Vec<NodeId> = tableau.nodes.get(node_id)
@@ -318,7 +318,7 @@ impl TableauExecutor {
                     }
                     
                     if successor_count > 0 {
-                        debug!("Applied ALL rule at node {}: propagated to {} successors", node_id, successor_count);
+                        debug!("Applied ALL rule at node {node_id}: propagated to {successor_count} successors");
                     }
                 }
                 _ => {
@@ -339,12 +339,12 @@ impl TableauExecutor {
         if let RuleContext::Concept { concept, .. } = &rule_app.context {
             match concept {
                 ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
-                    let role_name = format!("{:?}", property);
+                    let role_name = format!("{property:?}");
                     
                     // Count existing R-successors
                     let existing_count = tableau.nodes.get(node_id)
                         .and_then(|n| n.role_successors.get(&role_name))
-                        .map(|succs| succs.len())
+                        .map(std::collections::HashSet::len)
                         .unwrap_or(0);
                     
                     // Create additional successors if needed
@@ -361,7 +361,7 @@ impl TableauExecutor {
                     }
                     
                     if needed > 0 {
-                        debug!("Applied AT_LEAST rule at node {}: created {} successors", node_id, needed);
+                        debug!("Applied AT_LEAST rule at node {node_id}: created {needed} successors");
                     }
                 }
                 _ => {
@@ -382,7 +382,7 @@ impl TableauExecutor {
         if let RuleContext::Concept { concept, .. } = &rule_app.context {
             match concept {
                 ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
-                    let role_name = format!("{:?}", property);
+                    let role_name = format!("{property:?}");
                     
                     // Get existing R-successors that satisfy the filler concept C
                     let successors: Vec<NodeId> = tableau.nodes.get(node_id)
@@ -430,7 +430,7 @@ impl TableauExecutor {
                                 // Merge node_b into node_a
                                 Self::merge_nodes(tableau, node_a, node_b)?;
                                 
-                                debug!("Merged nodes {} and {} to satisfy AT_MOST constraint", node_a, node_b);
+                                debug!("Merged nodes {node_a} and {node_b} to satisfy AT_MOST constraint");
                             }
                         }
                     }
@@ -523,7 +523,7 @@ impl TableauExecutor {
                 ClassExpression::ObjectOneOf(individuals) => {
                     // Add nominal labels for each individual
                     for individual in individuals {
-                        let name = format!("{:?}", individual);
+                        let name = format!("{individual:?}");
                         let nominal_label = ConceptLabel::Nominal(name);
                         tableau.add_concept_to_node(node_id, nominal_label)?;
                     }
@@ -548,10 +548,10 @@ impl TableauExecutor {
             match concept {
                 ClassExpression::ObjectHasSelf { property } => {
                     // Create self-loop: add R-edge from node to itself
-                    let role_name = format!("{:?}", property);
+                    let role_name = format!("{property:?}");
                     let role_label = RoleLabel::Atomic(role_name);
                     tableau.add_edge(node_id, node_id, role_label)?;
-                    debug!("Applied SELF rule at node {}: created self-loop", node_id);
+                    debug!("Applied SELF rule at node {node_id}: created self-loop");
                 }
                 _ => {
                     debug!("SELF rule called on non-self concept");
@@ -621,7 +621,7 @@ impl TableauExecutor {
             match concept {
                 ClassExpression::DataSomeValuesFrom { property, filler } => {
                     // Create a data value node satisfying the data range
-                    let data_prop_name = format!("{:?}", property);
+                    let data_prop_name = format!("{property:?}");
                     
                     // Check if we already have a data property edge
                     let has_data_edge = tableau.nodes.get(node_id)
@@ -647,12 +647,12 @@ impl TableauExecutor {
                         ));
                         tableau.add_concept_to_node(data_node_id, data_range_label)?;
                         
-                        debug!("Applied DATATYPE rule (some) at node {}: created data value node {}", node_id, data_node_id);
+                        debug!("Applied DATATYPE rule (some) at node {node_id}: created data value node {data_node_id}");
                     }
                 }
                 ClassExpression::DataAllValuesFrom { property, filler } => {
                     // Ensure all data values satisfy the data range
-                    let data_prop_name = format!("{:?}", property);
+                    let data_prop_name = format!("{property:?}");
                     
                     // Get all data property successors
                     let data_successors: Vec<NodeId> = tableau.nodes.get(node_id)
@@ -674,11 +674,11 @@ impl TableauExecutor {
                         tableau.add_concept_to_node(data_node_id, data_range_label.clone())?;
                     }
                     
-                    debug!("Applied DATATYPE rule (all) at node {}: propagated to {} data nodes", node_id, successor_count);
+                    debug!("Applied DATATYPE rule (all) at node {node_id}: propagated to {successor_count} data nodes");
                 }
                 ClassExpression::DataHasValue { property, value } => {
                     // Assert specific data value
-                    let data_prop_name = format!("{:?}", property);
+                    let data_prop_name = format!("{property:?}");
                     
                     // Create a data value node with the specific value
                     let data_node_id = tableau.add_node(NodeType::Generated)?;
@@ -688,10 +688,10 @@ impl TableauExecutor {
                     tableau.add_edge(node_id, data_node_id, data_role)?;
                     
                     // Add the specific value as a nominal
-                    let value_label = ConceptLabel::Nominal(format!("{:?}", value));
+                    let value_label = ConceptLabel::Nominal(format!("{value:?}"));
                     tableau.add_concept_to_node(data_node_id, value_label)?;
                     
-                    debug!("Applied DATATYPE rule (has value) at node {}: created data value node {}", node_id, data_node_id);
+                    debug!("Applied DATATYPE rule (has value) at node {node_id}: created data value node {data_node_id}");
                 }
                 _ => {
                     debug!("DATATYPE rule called on non-datatype concept");
@@ -769,7 +769,7 @@ impl TableauExecutor {
         // Get property chain information from rule context
         if let RuleContext::Role { role, .. } = &rule_app.context {
             // Role context contains property chain information
-            debug!("PROPERTY_CHAIN rule at node {}: processing role {:?}", node_id, role);
+            debug!("PROPERTY_CHAIN rule at node {node_id}: processing role {role:?}");
             
             // Note: Property chain axioms are encoded in SubObjectPropertyOf axioms
             // where the sub-property is a PropertyChain. These are converted to
@@ -802,8 +802,7 @@ impl TableauExecutor {
                 // If we have first_role ∘ second_role ⊑ super_role, create implied edge
                 
                 debug!(
-                    "Found potential chain: node {} --{}--> {} --{}--> {}",
-                    node_id, first_role, intermediate_node, second_role, target_node
+                    "Found potential chain: node {node_id} --{first_role}--> {intermediate_node} --{second_role}--> {target_node}"
                 );
                 
                 // Query ontology for property chain axioms matching (first_role, second_role)
@@ -821,15 +820,14 @@ impl TableauExecutor {
                     chains_created += 1;
                     
                     debug!(
-                        "Applied property chain: {} ∘ {} ⊑ {} (created edge {} -> {})",
-                        first_role, second_role, super_role_name, node_id, target_node
+                        "Applied property chain: {first_role} ∘ {second_role} ⊑ {super_role_name} (created edge {node_id} -> {target_node})"
                     );
                 }
             }
         }
         
         if chains_created > 0 {
-            debug!("PROPERTY_CHAIN rule at node {}: created {} implied edges", node_id, chains_created);
+            debug!("PROPERTY_CHAIN rule at node {node_id}: created {chains_created} implied edges");
         }
         
         Ok(())
@@ -917,12 +915,12 @@ impl TableauExecutor {
             )?;
             
             // Add the meta-property edge from quoted triple to value
-            let meta_role = RoleLabel::Atomic(format!("meta:{:?}", role));
+            let meta_role = RoleLabel::Atomic(format!("meta:{role:?}"));
             tableau.add_edge(node_id, value_node, meta_role)?;
             
             // Add the concept constraint to the value node
             let concept_label = Self::concept_label_to_class_expression(&ConceptLabel::Atomic(
-                format!("{:?}", concept)
+                format!("{concept:?}")
             ))?;
             tableau.add_concept_to_node(value_node, ConceptLabel::Complex(Box::new(concept_label)))?;
             
@@ -1060,11 +1058,11 @@ impl TableauExecutor {
                             },
                             nodes: vec![i],
                             dependencies: Arc::new(DependencySet::new()),
-                            explanation: format!("Node {} has a concept and its complement", i),
+                            explanation: format!("Node {i} has a concept and its complement"),
                         };
                         tableau.clash_detector.add_clash(clash);
                         tableau.statistics.increment_clashes();
-                        log::warn!("Complement clash detected at node {}: C and ¬C", i);
+                        log::warn!("Complement clash detected at node {i}: C and ¬C");
                     }
                 }
             }
@@ -1125,25 +1123,19 @@ impl TableauExecutor {
                         if are_equivalent {
                             let clash = Clash {
                                 clash_type: ClashType::Concept {
-                                    concept: format!("{:?} ≡ {:?} but {:?} ⊥ {:?}", c1, c2, c1, c2),
+                                    concept: format!("{c1:?} ≡ {c2:?} but {c1:?} ⊥ {c2:?}"),
                                     node: i,
                                 },
                                 nodes: vec![i],
                                 dependencies: Arc::new(DependencySet::new()),
                                 explanation: format!(
-                                    "Node {} has concepts {:?} and {:?} which are both equivalent and disjoint",
-                                    i, c1, c2
+                                    "Node {i} has concepts {c1:?} and {c2:?} which are both equivalent and disjoint"
                                 ),
                             };
                             tableau.clash_detector.add_clash(clash);
                             tableau.statistics.increment_clashes();
                             log::warn!(
-                                "Equivalence-disjointness clash detected at node {}: {:?} ≡ {:?} but {:?} ⊥ {:?}",
-                                i,
-                                c1,
-                                c2,
-                                c1,
-                                c2
+                                "Equivalence-disjointness clash detected at node {i}: {c1:?} ≡ {c2:?} but {c1:?} ⊥ {c2:?}"
                             );
                             return Ok(()); // Found a clash, no need to continue
                         }

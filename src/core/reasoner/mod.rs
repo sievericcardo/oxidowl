@@ -8,7 +8,7 @@
 //! - `classification`: Complex operations (classification, realization)
 //! - `tableau`: Tableau algorithm integration and factories
 //! - `consistency`: Pre-consistency checking for fast inconsistency detection
-//! - `queries`: SPARQL and OWLlink query processing
+//! - `queries`: SPARQL and `OWLlink` query processing
 //! - `explanation`: Explanation services for reasoning results
 //! - `statistics`: Performance metrics and statistics
 //! - `results`: Result types for various reasoning operations

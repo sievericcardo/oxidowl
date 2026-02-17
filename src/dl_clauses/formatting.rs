@@ -9,7 +9,7 @@ use std::{fs::File, io::Write, path::Path};
 use crate::dl_clauses::types::DLClauseSet;
 
 impl DLClauseSet {
-    /// Save DL clauses to a file in HermiT format
+    /// Save DL clauses to a file in `HermiT` format
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let mut file = File::create(path)?;
 
@@ -78,6 +78,7 @@ impl DLClauseSet {
     }
 
     /// Convert to HermiT-style string representation
+    #[must_use] 
     pub fn to_hermit_format(&self) -> String {
         let mut output = String::new();
 
@@ -141,6 +142,7 @@ impl DLClauseSet {
     }
 
     /// Get a summary of the clause set
+    #[must_use] 
     pub fn summary(&self) -> String {
         format!(
             "DL Clause Set Summary:\n\
@@ -156,6 +158,7 @@ impl DLClauseSet {
     }
 
     /// Get clauses in a compact format for debugging
+    #[must_use] 
     pub fn to_compact_format(&self) -> String {
         let mut output = String::new();
 

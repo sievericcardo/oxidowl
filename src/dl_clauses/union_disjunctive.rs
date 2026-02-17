@@ -1,7 +1,7 @@
 //! Union disjunctive clause compilation methods
 //!
 //! This module contains methods for generating comprehensive disjunctive clauses
-//! from ObjectUnionOf expressions, following HermiT's style of clause generation.
+//! from `ObjectUnionOf` expressions, following `HermiT`'s style of clause generation.
 
 use crate::{error::Result, ontology::ClassExpression};
 
@@ -12,7 +12,7 @@ use crate::dl_clauses::{
 
 /// Trait for compiling union disjunctive clauses
 pub trait UnionDisjunctiveCompiler: HelperMethods {
-    /// Generate comprehensive disjunctive clauses for ObjectUnionOf expressions
+    /// Generate comprehensive disjunctive clauses for `ObjectUnionOf` expressions
     fn compile_union_disjunctive_clauses(
         &mut self,
         union_classes: &[ClassExpression],
@@ -175,7 +175,7 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
                 let property_name = self.data_property_expression_to_string(property);
                 let literal_value = &value.value;
 
-                if literal_value.contains("@")
+                if literal_value.contains('@')
                     || literal_value.contains("WPS")
                     || literal_value.contains("R365")
                     || literal_value.contains("R385")
@@ -274,7 +274,7 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
                         for j in 0..i {
                             let var_z = format!("{}_{}", self.fresh_variable(), j);
                             let inequality_atom =
-                                DLAtom::new(format!("[{} != {}]", var_y, var_z), vec![]);
+                                DLAtom::new(format!("[{var_y} != {var_z}]"), vec![]);
 
                             clauses.push(DLClause::new(
                                 vec![inequality_atom],
@@ -290,7 +290,7 @@ pub trait UnionDisjunctiveCompiler: HelperMethods {
         Ok(clauses)
     }
 
-    /// Generate atLeast expansion rules like HermiT
+    /// Generate atLeast expansion rules like `HermiT`
     fn compile_at_least_expansion_rules(
         &mut self,
         cardinality: u32,

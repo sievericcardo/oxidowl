@@ -24,7 +24,7 @@ use std::sync::{Arc, RwLock};
 /// Type alias for a thread-safe, shared ontology reference
 ///
 /// This type represents an ontology that can be safely shared across threads
-/// and allows for both read and write access through the RwLock.
+/// and allows for both read and write access through the `RwLock`.
 pub type OntologyRef = Arc<RwLock<Ontology>>;
 
 /// IRI (Internationalized Resource Identifier) wrapper
@@ -444,6 +444,7 @@ impl Ontology {
     }
 
     /// Check if ontology contains RDF-star features (quoted triples)
+    #[must_use] 
     pub fn has_rdf_star_features(&self) -> bool {
         if let Some(graph) = &self.rdf_graph {
             graph.quoted_triple_count() > 0
@@ -477,6 +478,7 @@ impl Ontology {
     }
 
     /// Count axioms by type
+    #[must_use] 
     pub fn count_axioms_by_type(&self) -> std::collections::HashMap<axioms::AxiomType, usize> {
         let mut counts = std::collections::HashMap::new();
         for axiom in &self.axioms {
@@ -934,7 +936,7 @@ impl Ontology {
 
     /// Query for property chain axioms and return super property if chain matches
     ///
-    /// This method searches for SubObjectPropertyOf axioms with property chains
+    /// This method searches for `SubObjectPropertyOf` axioms with property chains
     /// that match the given first and second roles. If found, it returns the
     /// super property that can be inferred from the chain.
     ///
@@ -983,9 +985,9 @@ impl Ontology {
         None
     }
 
-    /// Get concept definition from EquivalentClasses axioms
+    /// Get concept definition from `EquivalentClasses` axioms
     ///
-    /// This method searches for EquivalentClasses axioms containing the given
+    /// This method searches for `EquivalentClasses` axioms containing the given
     /// named class and returns an equivalent definition if found.
     ///
     /// Example: If Person ≡ Human ⊓ ∃hasParent.Person, returns Some(Human ⊓ ∃hasParent.Person)

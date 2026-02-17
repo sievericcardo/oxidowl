@@ -20,6 +20,7 @@ pub struct PerformanceCounter {
 }
 
 impl PerformanceCounter {
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -39,6 +40,7 @@ impl PerformanceCounter {
         });
     }
 
+    #[must_use] 
     pub fn average_duration(&self) -> Duration {
         if self.count == 0 {
             Duration::ZERO
@@ -57,6 +59,7 @@ pub struct PerformanceProfiler {
 }
 
 impl PerformanceProfiler {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             counters: Arc::new(Mutex::new(HashMap::new())),
@@ -118,6 +121,7 @@ impl PerformanceProfiler {
     }
 
     /// Start timing an operation
+    #[must_use] 
     pub fn start_timer(&self, operation: &str) -> OperationTimer {
         OperationTimer {
             operation: operation.to_string(),
@@ -127,6 +131,7 @@ impl PerformanceProfiler {
     }
 
     /// Get all recorded counters
+    #[must_use] 
     pub fn get_counters(&self) -> HashMap<String, PerformanceCounter> {
         self.counters.lock()
             .map(|c| c.clone())
@@ -215,6 +220,7 @@ pub mod heap {
     pub struct HeapProfiler;
 
     impl HeapProfiler {
+        #[must_use] 
         pub fn new() -> Self {
             Self
         }

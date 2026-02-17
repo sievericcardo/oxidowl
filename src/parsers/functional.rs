@@ -456,10 +456,10 @@ impl FunctionalParser {
 
             if position + 1 < tokens.len() {
                 // Check for two-token format: ":=" "<IRI>" or "prefix:=" "<IRI>"
-                if tokens[position].ends_with(":=") && tokens[position + 1].starts_with("<") {
+                if tokens[position].ends_with(":=") && tokens[position + 1].starts_with('<') {
                     let prefix_part = &tokens[position];
                     let prefix_name = if prefix_part == ":=" {
-                        "".to_string() // Default prefix
+                        String::new() // Default prefix
                     } else {
                         prefix_part[..prefix_part.len() - 2].to_string() // Remove ":="
                     };
@@ -578,7 +578,7 @@ impl FunctionalParser {
                     let default_base = if iri_str.ends_with('#') || iri_str.ends_with('/') {
                         iri_str.to_string()
                     } else {
-                        format!("{}#", iri_str)
+                        format!("{iri_str}#")
                     };
                     prefixes.insert(String::new(), default_base);
                 }
@@ -1842,8 +1842,7 @@ impl FunctionalParser {
                 // Check if this is a structural token (parentheses) or OWL keyword
                 if is_structural_token(token) {
                     return Err(Error::ontology_parsing(format!(
-                        "OWL keyword '{}' cannot be used as a class name. Expected a class IRI or class expression.",
-                        token
+                        "OWL keyword '{token}' cannot be used as a class name. Expected a class IRI or class expression."
                     )));
                 }
 
@@ -1853,8 +1852,7 @@ impl FunctionalParser {
                     iri: url::Url::parse(&class_iri)
                         .map_err(|e| {
                             Error::ontology_parsing(format!(
-                                "Invalid class IRI '{}': {}",
-                                class_iri, e
+                                "Invalid class IRI '{class_iri}': {e}"
                             ))
                         })?
                         .into(),
@@ -2118,14 +2116,13 @@ impl FunctionalParser {
             // Blank nodes are represented as-is in functional syntax
             // They are local identifiers within the ontology
             // Convert to a unique IRI in the blank node namespace
-            return Ok(format!("http://www.w3.org/2002/07/owl#blank{}", stripped));
+            return Ok(format!("http://www.w3.org/2002/07/owl#blank{stripped}"));
         }
 
         // Validate that non-bracketed tokens are not structural tokens or OWL keywords
         if is_structural_token(iri) {
             return Err(Error::ontology_parsing(format!(
-                "OWL keyword '{}' cannot be used as an IRI. This may indicate a malformed construct or empty element.",
-                iri
+                "OWL keyword '{iri}' cannot be used as an IRI. This may indicate a malformed construct or empty element."
             )));
         }
 
@@ -2133,13 +2130,12 @@ impl FunctionalParser {
             // Relative IRI with default prefix (e.g., ":Employee")
             if let Some(base) = prefixes.get("") {
                 // Empty string key is the default prefix from ontology IRI
-                Ok(format!("{}{}", base, local))
+                Ok(format!("{base}{local}"))
             } else {
                 // No base IRI defined, return as-is but this will likely fail validation
                 Err(Error::ontology_parsing(format!(
-                    "Relative IRI '{}' found but no base ontology IRI is defined. \
-                     Relative IRIs require an ontology header like: Ontology(<http://example.org/> ...)",
-                    iri
+                    "Relative IRI '{iri}' found but no base ontology IRI is defined. \
+                     Relative IRIs require an ontology header like: Ontology(<http://example.org/> ...)"
                 )))
             }
         } else if let Some(colon_pos) = iri.find(':') {
@@ -2148,12 +2144,11 @@ impl FunctionalParser {
             let local = &iri[colon_pos + 1..];
 
             if let Some(base) = prefixes.get(prefix) {
-                let expanded = format!("{}{}", base, local);
+                let expanded = format!("{base}{local}");
                 // Validate the expanded IRI can be parsed as a URL
                 if url::Url::parse(&expanded).is_err() {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid IRI: relative URL without a base. Original: '{}', Expanded: '{}', Available prefixes: {:?}",
-                        iri, expanded, prefixes
+                        "Invalid IRI: relative URL without a base. Original: '{iri}', Expanded: '{expanded}', Available prefixes: {prefixes:?}"
                     )));
                 }
                 Ok(expanded)
@@ -2188,7 +2183,7 @@ impl FunctionalParser {
         }
     }
 
-    /// Parse `HasKey` axiom: `HasKey`(<class> (<object_properties>) (<data_properties>))
+    /// Parse `HasKey` axiom: `HasKey`(<class> (<`object_properties`>) (<`data_properties`>))
     fn parse_has_key(
         &self,
         tokens: &[String],
@@ -2273,7 +2268,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse TransitiveObjectProperty axiom
+    /// Parse `TransitiveObjectProperty` axiom
     fn parse_transitive_object_property(
         &self,
         tokens: &[String],
@@ -2316,7 +2311,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse SymmetricObjectProperty axiom
+    /// Parse `SymmetricObjectProperty` axiom
     fn parse_symmetric_object_property(
         &self,
         tokens: &[String],
@@ -2359,7 +2354,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse ReflexiveObjectProperty axiom
+    /// Parse `ReflexiveObjectProperty` axiom
     fn parse_reflexive_object_property(
         &self,
         tokens: &[String],
@@ -2402,7 +2397,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse FunctionalObjectProperty axiom
+    /// Parse `FunctionalObjectProperty` axiom
     fn parse_functional_object_property(
         &self,
         tokens: &[String],
@@ -2445,7 +2440,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse InverseFunctionalObjectProperty axiom
+    /// Parse `InverseFunctionalObjectProperty` axiom
     fn parse_inverse_functional_object_property(
         &self,
         tokens: &[String],
@@ -2529,7 +2524,7 @@ fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
         crate::ontology::Axiom::Declaration(decl) => {
             format!("Declaration({})", serialize_entity(&decl.entity))
         }
-        _ => format!("# Unsupported axiom type: {:?}", axiom),
+        _ => format!("# Unsupported axiom type: {axiom:?}"),
     }
 }
 
@@ -2544,14 +2539,14 @@ fn serialize_class_expression(ce: &crate::ontology::ClassExpression) -> String {
             let class_strs: Vec<String> = classes.iter().map(serialize_class_expression).collect();
             format!("ObjectUnionOf({})", class_strs.join(" "))
         }
-        _ => format!("# Unsupported class expression: {:?}", ce),
+        _ => format!("# Unsupported class expression: {ce:?}"),
     }
 }
 
 fn serialize_individual(ind: &crate::ontology::Individual) -> String {
     format!(
         "<{}>",
-        ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous")
+        ind.iri().map(super::super::ontology::IRI::as_str).unwrap_or("_:anonymous")
     )
 }
 
@@ -2578,7 +2573,7 @@ fn serialize_annotation_property(prop: &crate::ontology::AnnotationProperty) -> 
 
 fn serialize_annotation_value(value: &crate::ontology::AnnotationValue) -> String {
     match value {
-        crate::ontology::AnnotationValue::IRI(iri) => format!("<{}>", iri),
+        crate::ontology::AnnotationValue::IRI(iri) => format!("<{iri}>"),
         crate::ontology::AnnotationValue::Literal(lit) => {
             if let Some(datatype) = &lit.datatype {
                 format!("\"{}\"^^<{}>", lit.value, datatype.as_str())
@@ -2613,9 +2608,9 @@ impl OntologySerializer for FunctionalSyntaxSerializer {
         // Write ontology header
         if let Some(onto_iri) = ontology.get_iri() {
             if let Some(version_iri) = &ontology.version_iri {
-                content.push_str(&format!("Ontology(<{}> <{}>\n", onto_iri, version_iri));
+                content.push_str(&format!("Ontology(<{onto_iri}> <{version_iri}>\n"));
             } else {
-                content.push_str(&format!("Ontology(<{}>\n", onto_iri));
+                content.push_str(&format!("Ontology(<{onto_iri}>\n"));
             }
         } else {
             content.push_str("Ontology(\n");
@@ -2623,7 +2618,7 @@ impl OntologySerializer for FunctionalSyntaxSerializer {
 
         // Write imports
         for import in &ontology.imports {
-            content.push_str(&format!("  Import(<{}>)\n", import));
+            content.push_str(&format!("  Import(<{import}>)\n"));
         }
 
         // Write annotations

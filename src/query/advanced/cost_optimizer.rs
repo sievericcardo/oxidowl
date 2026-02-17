@@ -680,9 +680,9 @@ pub enum RewritingError {
 impl std::fmt::Display for RewritingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RewritingError::InvalidQuery(msg) => write!(f, "Invalid query: {}", msg),
+            RewritingError::InvalidQuery(msg) => write!(f, "Invalid query: {msg}"),
             RewritingError::RuleApplicationFailed { rule_id, error } => {
-                write!(f, "Rule '{}' failed: {}", rule_id, error)
+                write!(f, "Rule '{rule_id}' failed: {error}")
             }
             RewritingError::NoApplicableRules => write!(f, "No applicable rewriting rules found"),
             RewritingError::PerformanceRegression {
@@ -691,11 +691,10 @@ impl std::fmt::Display for RewritingError {
             } => {
                 write!(
                     f,
-                    "Rewriting resulted in performance regression: {} -> {}",
-                    original_cost, new_cost
+                    "Rewriting resulted in performance regression: {original_cost} -> {new_cost}"
                 )
             }
-            RewritingError::SystemError(msg) => write!(f, "System error: {}", msg),
+            RewritingError::SystemError(msg) => write!(f, "System error: {msg}"),
         }
     }
 }
@@ -706,6 +705,7 @@ impl std::error::Error for RewritingError {}
 
 impl CostBasedOptimizer {
     /// Create a new cost-based optimizer
+    #[must_use] 
     pub fn new(
         _ontology: Arc<Ontology>,
         _reasoning_service: Arc<ReasoningService>,
@@ -735,7 +735,7 @@ impl CostBasedOptimizer {
         // Step 2: Generate base query plan
         let base_plan = {
             let stats = self.statistics.read().map_err(|e| {
-                OptimizationError::internal(format!("Failed to read statistics: {}", e))
+                OptimizationError::internal(format!("Failed to read statistics: {e}"))
             })?;
             self.generate_base_plan(query, &pattern, &stats)?
         };
@@ -743,7 +743,7 @@ impl CostBasedOptimizer {
         // Step 3: Optimize join order if applicable
         let optimized_joins = if self.config.enable_join_optimization && pattern.join_count > 1 {
             let stats = self.statistics.read().map_err(|e| {
-                OptimizationError::internal(format!("Failed to read statistics: {}", e))
+                OptimizationError::internal(format!("Failed to read statistics: {e}"))
             })?;
             self.optimize_join_order(query, &pattern, &stats)?
         } else {
@@ -753,7 +753,7 @@ impl CostBasedOptimizer {
         // Step 4: Generate index recommendations
         let _index_recommendations = if self.config.enable_index_recommendations {
             let stats = self.statistics.read().map_err(|e| {
-                OptimizationError::internal(format!("Failed to read statistics: {}", e))
+                OptimizationError::internal(format!("Failed to read statistics: {e}"))
             })?;
             self.index_advisor
                 .recommend_indices(query, &pattern, &stats)?
@@ -772,7 +772,7 @@ impl CostBasedOptimizer {
 
         // Step 6: Estimate performance for final plan
         let stats = self.statistics.read().map_err(|e| {
-            OptimizationError::internal(format!("Failed to read statistics: {}", e))
+            OptimizationError::internal(format!("Failed to read statistics: {e}"))
         })?;
         let performance_prediction = self.estimate_performance(&rewritten_query, &pattern, &stats);
 
@@ -1485,7 +1485,7 @@ impl CostBasedOptimizer {
         if ordered_atoms.len() < query.body_atoms.len() {
             for atom in query.body_atoms.iter() {
                 if !ordered_atoms.iter().any(|a| {
-                    format!("{:?}", a) == format!("{:?}", atom)
+                    format!("{a:?}") == format!("{atom:?}")
                 }) {
                     ordered_atoms.push(atom.clone());
                 }
@@ -1605,8 +1605,7 @@ impl CostBasedOptimizer {
                     suggestions.push(OptimizationSuggestion {
                         suggestion_type: OptimizationSuggestionType::IndexCreation,
                         description: format!(
-                            "Create index on property: {:?} to improve join performance",
-                            property
+                            "Create index on property: {property:?} to improve join performance"
                         ),
                         expected_improvement: 0.4, // 40% improvement
                         implementation_difficulty: DifficultyLevel::Easy,
@@ -1797,6 +1796,7 @@ impl Default for QueryStatistics {
 }
 
 impl QueryStatistics {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             execution_times: HashMap::new(),
@@ -1841,6 +1841,7 @@ impl Default for JoinOrderOptimizer {
 }
 
 impl JoinOrderOptimizer {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             memo_cache: HashMap::new(),
@@ -1850,6 +1851,7 @@ impl JoinOrderOptimizer {
     }
 
     /// Greedy join ordering algorithm - orders atoms by selectivity
+    #[must_use] 
     pub fn optimize_join_order_greedy(&self, atoms: &[QueryAtom]) -> Vec<usize> {
         if atoms.is_empty() {
             return Vec::new();
@@ -1929,6 +1931,7 @@ impl JoinOrderOptimizer {
 }
 
 impl IndexAdvisor {
+    #[must_use] 
     pub fn new(config: IndexAdvisorConfig) -> Self {
         Self {
             query_patterns: HashMap::new(),
@@ -1950,7 +1953,7 @@ impl IndexAdvisor {
         let mut property_frequency = HashMap::new();
         for atom in &query.body_atoms {
             if let QueryAtom::ObjectPropertyAtom { property, .. } = atom {
-                *property_frequency.entry(format!("{:?}", property)).or_insert(0) += 1;
+                *property_frequency.entry(format!("{property:?}")).or_insert(0) += 1;
             }
         }
 
@@ -1982,8 +1985,7 @@ impl IndexAdvisor {
                         maintenance_cost,
                         confidence: if cost_benefit_ratio > 5.0 { 0.9 } else { 0.7 },
                         justification: format!(
-                            "Property {} used frequently ({}x) with cost/benefit ratio: {:.2}",
-                            property_name, frequency, cost_benefit_ratio
+                            "Property {property_name} used frequently ({frequency}x) with cost/benefit ratio: {cost_benefit_ratio:.2}"
                         ),
                     });
                 }
@@ -2097,6 +2099,7 @@ impl Default for AdvancedQueryRewriter {
 }
 
 impl AdvancedQueryRewriter {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             rewriting_rules: Vec::new(),
@@ -2263,7 +2266,7 @@ impl AdvancedQueryRewriter {
                 continue;
             }
             // Would check actual subsumption relationship
-            if format!("{:?}", atom) == format!("{:?}", other) {
+            if format!("{atom:?}") == format!("{other:?}") {
                 return true;
             }
         }
@@ -2367,7 +2370,7 @@ impl AdvancedQueryRewriter {
         let mut rewritten = query.clone();
         let mut seen = HashSet::new();
         rewritten.body_atoms.retain(|atom| {
-            let signature = format!("{:?}", atom);
+            let signature = format!("{atom:?}");
             seen.insert(signature)
         });
         Ok(rewritten)
@@ -2413,6 +2416,7 @@ impl Default for AdaptiveStrategySelector {
 }
 
 impl AdaptiveStrategySelector {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             strategy_history: HashMap::new(),
@@ -2440,6 +2444,7 @@ impl Default for RewritingFeedbackSystem {
 }
 
 impl RewritingFeedbackSystem {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             feedback_data: Vec::new(),
@@ -2456,6 +2461,7 @@ impl Default for AutoAdjustmentSystem {
 }
 
 impl AutoAdjustmentSystem {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             adjustment_history: Vec::new(),

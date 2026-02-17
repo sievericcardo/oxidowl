@@ -65,6 +65,7 @@ pub struct SaturationStatistics {
 
 impl SaturationResult {
     /// Create a new saturation result
+    #[must_use] 
     pub fn new(nodes: HashMap<ClassExpression, SaturationNode>) -> Self {
         let mut statistics = SaturationStatistics::default();
         let mut subsumptions = HashMap::new();
@@ -96,11 +97,13 @@ impl SaturationResult {
     }
 
     /// Get the saturation node for a concept
+    #[must_use] 
     pub fn get_node(&self, concept: &ClassExpression) -> Option<&SaturationNode> {
         self.nodes.get(concept)
     }
 
     /// Get direct subsumers for a concept
+    #[must_use] 
     pub fn get_direct_subsumers(&self, concept: &ClassExpression) -> ConceptSet {
         self.nodes
             .get(concept)
@@ -109,6 +112,7 @@ impl SaturationResult {
     }
 
     /// Check if one concept subsumes another based on saturation
+    #[must_use] 
     pub fn subsumes(&self, subsumer: &ClassExpression, subsumed: &ClassExpression) -> bool {
         if let Some(node) = self.nodes.get(subsumed) {
             node.all_subsumers.contains(subsumer) || node.saturated_concepts.contains(subsumer)
@@ -142,6 +146,7 @@ pub struct SaturationEngine {
 
 impl SaturationEngine {
     /// Create a new saturation engine
+    #[must_use] 
     pub fn new(config: SaturationConfig) -> Self {
         Self {
             config,
@@ -154,16 +159,19 @@ impl SaturationEngine {
     }
     
     /// Get completion graph cache
+    #[must_use] 
     pub fn completion_cache(&self) -> &CompletionGraphCache {
         &self.completion_cache
     }
     
     /// Get incremental classifier
+    #[must_use] 
     pub fn incremental_classifier(&self) -> &IncrementalClassifier {
         &self.incremental
     }
     
     /// Get concept index
+    #[must_use] 
     pub fn concept_index(&self) -> Arc<RwLock<ConceptIndex>> {
         Arc::clone(&self.concept_index)
     }
@@ -201,7 +209,7 @@ impl SaturationEngine {
         let nodes = self.compute_transitive_subsumers(nodes);
 
         let saturation_time = start_time.elapsed();
-        info!("Saturation completed in {:?}", saturation_time);
+        info!("Saturation completed in {saturation_time:?}");
 
         let mut result = SaturationResult::new(nodes);
         result.statistics.saturation_time = saturation_time;
@@ -219,14 +227,14 @@ impl SaturationEngine {
         if self.config.enable_caching
             && let Ok(cache) = self.cache.read()
                 && let Some(cached_node) = cache.get(concept) {
-                    debug!("Found cached saturation for {:?}", concept);
+                    debug!("Found cached saturation for {concept:?}");
                     return Ok(cached_node.clone());
                 }
 
         let mut node = SaturationNode::new(concept.clone());
         let mut iteration = 0;
 
-        debug!("Saturating concept: {:?}", concept);
+        debug!("Saturating concept: {concept:?}");
 
         loop {
             iteration += 1;
@@ -247,7 +255,7 @@ impl SaturationEngine {
             // Check for inconsistency
             if self.check_inconsistency(&node) {
                 node.mark_inconsistent();
-                debug!("Concept {:?} is inconsistent", concept);
+                debug!("Concept {concept:?} is inconsistent");
                 break;
             }
 
@@ -413,6 +421,7 @@ impl SaturationEngine {
     }
 
     /// Get direct subsumers for a concept
+    #[must_use] 
     pub fn get_direct_subsumers(
         &self,
         concept: &ClassExpression,
@@ -486,6 +495,7 @@ impl SaturationEngine {
     }
 
     /// Get cache size
+    #[must_use] 
     pub fn cache_size(&self) -> usize {
         self.cache.read().map(|c| c.len()).unwrap_or(0)
     }

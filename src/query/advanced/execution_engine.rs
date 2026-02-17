@@ -884,7 +884,7 @@ impl AdvancedExecutionEngine {
         // Initialize ML-enhanced strategy selection engine
         let ml_config = MLConfig::default();
         let ml_engine = Arc::new(RwLock::new(MLEngine::new(ml_config).map_err(|e| {
-            AdvancedQueryError::InternalError(format!("Failed to initialize ML engine: {}", e))
+            AdvancedQueryError::InternalError(format!("Failed to initialize ML engine: {e}"))
         })?));
 
         Ok(Self {
@@ -917,7 +917,7 @@ impl AdvancedExecutionEngine {
         // Step 2: Generate optimized query plan
         let query_plan = {
             let mut optimizer = self.optimizer.lock().map_err(|e| {
-                AdvancedQueryError::internal(format!("Failed to lock optimizer: {}", e))
+                AdvancedQueryError::internal(format!("Failed to lock optimizer: {e}"))
             })?;
             optimizer.optimize_query(query)?
         };
@@ -929,7 +929,7 @@ impl AdvancedExecutionEngine {
             // Fallback to legacy strategy selector
             let strategy = {
                 let mut selector = self.strategy_selector.lock().map_err(|e| {
-                    AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e))
+                    AdvancedQueryError::internal(format!("Failed to lock strategy selector: {e}"))
                 })?;
                 selector.select_strategy(query, &query_plan)?
             };
@@ -971,21 +971,20 @@ impl AdvancedExecutionEngine {
     ) -> Result<(String, Option<StrategyRecommendation>), AdvancedQueryError> {
         // Extract features from query
         let ml_engine = self.ml_engine.read().map_err(|e| {
-            AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {}", e))
+            AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {e}"))
         })?;
 
         let features = ml_engine
             .extract_features(query, &self.ontology)
             .map_err(|e| {
                 AdvancedQueryError::InternalError(format!(
-                    "Failed to extract query features: {}",
-                    e
+                    "Failed to extract query features: {e}"
                 ))
             })?;
 
         // Get strategy recommendation
         let recommendation = ml_engine.select_strategy(&features).map_err(|e| {
-            AdvancedQueryError::InternalError(format!("Failed to select strategy: {}", e))
+            AdvancedQueryError::InternalError(format!("Failed to select strategy: {e}"))
         })?;
 
         let strategy_name = recommendation.strategy.as_str().to_string();
@@ -1061,7 +1060,7 @@ impl AdvancedExecutionEngine {
         _ml_recommendation: &Option<StrategyRecommendation>,
     ) -> Result<(), AdvancedQueryError> {
         let ml_engine = self.ml_engine.read().map_err(|e| {
-            AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {}", e))
+            AdvancedQueryError::InternalError(format!("Failed to acquire ML engine lock: {e}"))
         })?;
 
         // Extract features again (we could cache these from earlier)
@@ -1069,8 +1068,7 @@ impl AdvancedExecutionEngine {
             .extract_features(query, &self.ontology)
             .map_err(|e| {
                 AdvancedQueryError::InternalError(format!(
-                    "Failed to extract query features: {}",
-                    e
+                    "Failed to extract query features: {e}"
                 ))
             })?;
 
@@ -1099,13 +1097,12 @@ impl AdvancedExecutionEngine {
         drop(ml_engine); // Release read lock
         let ml_engine = self.ml_engine.write().map_err(|e| {
             AdvancedQueryError::InternalError(format!(
-                "Failed to acquire ML engine write lock: {}",
-                e
+                "Failed to acquire ML engine write lock: {e}"
             ))
         })?;
 
         ml_engine.add_training_data(execution).map_err(|e| {
-            AdvancedQueryError::InternalError(format!("Failed to add training data: {}", e))
+            AdvancedQueryError::InternalError(format!("Failed to add training data: {e}"))
         })?;
 
         Ok(())
@@ -1117,7 +1114,7 @@ impl AdvancedExecutionEngine {
         query: &ConjunctiveQuery,
     ) -> Result<Option<ConjunctiveQueryResult>, AdvancedQueryError> {
         let cache = self.result_cache.read().map_err(|e| {
-            AdvancedQueryError::internal(format!("Failed to read result cache: {}", e))
+            AdvancedQueryError::internal(format!("Failed to read result cache: {e}"))
         })?;
         let query_hash = cache.compute_query_hash(query, &self.ontology);
 
@@ -1140,7 +1137,7 @@ impl AdvancedExecutionEngine {
         // Start monitoring
         {
             let mut monitor = self.performance_monitor.lock().map_err(|e| {
-                AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e))
+                AdvancedQueryError::internal(format!("Failed to lock performance monitor: {e}"))
             })?;
             monitor.start_execution(&execution_id, query, strategy);
         }
@@ -1159,7 +1156,7 @@ impl AdvancedExecutionEngine {
         // Complete monitoring
         {
             let mut monitor = self.performance_monitor.lock().map_err(|e| {
-                AdvancedQueryError::internal(format!("Failed to lock performance monitor: {}", e))
+                AdvancedQueryError::internal(format!("Failed to lock performance monitor: {e}"))
             })?;
             monitor.complete_execution(&execution_id, &result);
         }
@@ -1228,7 +1225,7 @@ impl AdvancedExecutionEngine {
 
         // Deduplicate and combine
         combined_bindings.sort_by(|a, b| {
-            format!("{:?}", a).cmp(&format!("{:?}", b))
+            format!("{a:?}").cmp(&format!("{b:?}"))
         });
         combined_bindings.dedup();
 
@@ -1237,7 +1234,7 @@ impl AdvancedExecutionEngine {
             metadata: super::execution::ExecutionMetadata {
                 execution_time: max_execution_time,
                 optimization_time: Duration::from_millis(0),
-                strategy_used: format!("Parallel-{}", strategy),
+                strategy_used: format!("Parallel-{strategy}"),
                 intermediate_results: total_reasoning_calls,
                 cache_hit: false,
                 reasoning_calls: total_reasoning_calls,
@@ -1355,7 +1352,7 @@ impl AdvancedExecutionEngine {
 
         // Get strategy implementation and execute
         let selector = self.strategy_selector.lock().map_err(|e| {
-            AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e))
+            AdvancedQueryError::internal(format!("Failed to lock strategy selector: {e}"))
         })?;
         let strategy_impl = selector.get_strategy(strategy)?;
         strategy_impl.execute(query, &context)
@@ -1459,7 +1456,7 @@ impl AdvancedExecutionEngine {
         result: &ConjunctiveQueryResult,
     ) -> Result<(), AdvancedQueryError> {
         let mut cache = self.result_cache.write().map_err(|e| {
-            AdvancedQueryError::internal(format!("Failed to write result cache: {}", e))
+            AdvancedQueryError::internal(format!("Failed to write result cache: {e}"))
         })?;
         cache.insert(query, result.clone(), &self.ontology)?;
         Ok(())
@@ -1477,7 +1474,7 @@ impl AdvancedExecutionEngine {
             .strategy_selector
             .lock()
             .map_err(|e| {
-                AdvancedQueryError::internal(format!("Failed to lock strategy selector: {}", e))
+                AdvancedQueryError::internal(format!("Failed to lock strategy selector: {e}"))
             })
             .ok();
         if let Some(ref mut s) = selector {
@@ -1506,6 +1503,7 @@ impl Default for AdvancedExecutionConfig {
 }
 
 impl QueryResultCache {
+    #[must_use] 
     pub fn new(config: CacheConfig) -> Self {
         Self {
             cache_entries: HashMap::new(),
@@ -1516,6 +1514,7 @@ impl QueryResultCache {
         }
     }
 
+    #[must_use] 
     pub fn compute_query_hash(&self, query: &ConjunctiveQuery, ontology: &Ontology) -> QueryHash {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -1564,7 +1563,7 @@ impl QueryResultCache {
                 } => {
                     variable.hash(&mut parameter_hasher);
                     // Hash the class expression string representation
-                    format!("{:?}", class_expression).hash(&mut parameter_hasher);
+                    format!("{class_expression:?}").hash(&mut parameter_hasher);
                 }
                 QueryAtom::ObjectPropertyAtom {
                     subject,
@@ -1572,7 +1571,7 @@ impl QueryResultCache {
                     object,
                 } => {
                     subject.hash(&mut parameter_hasher);
-                    format!("{:?}", property).hash(&mut parameter_hasher);
+                    format!("{property:?}").hash(&mut parameter_hasher);
                     object.hash(&mut parameter_hasher);
                 }
                 QueryAtom::DataPropertyAtom {
@@ -1581,8 +1580,8 @@ impl QueryResultCache {
                     literal,
                 } => {
                     subject.hash(&mut parameter_hasher);
-                    format!("{:?}", property).hash(&mut parameter_hasher);
-                    format!("{:?}", literal).hash(&mut parameter_hasher);
+                    format!("{property:?}").hash(&mut parameter_hasher);
+                    format!("{literal:?}").hash(&mut parameter_hasher);
                 }
                 QueryAtom::SameIndividualAtom { left, right } => {
                     left.hash(&mut parameter_hasher);
@@ -1597,11 +1596,11 @@ impl QueryResultCache {
                     individual,
                 } => {
                     variable.hash(&mut parameter_hasher);
-                    format!("{:?}", individual).hash(&mut parameter_hasher);
+                    format!("{individual:?}").hash(&mut parameter_hasher);
                 }
                 QueryAtom::ConcreteLiteralAtom { variable, literal } => {
                     variable.hash(&mut parameter_hasher);
-                    format!("{:?}", literal).hash(&mut parameter_hasher);
+                    format!("{literal:?}").hash(&mut parameter_hasher);
                 }
             }
         }
@@ -1619,10 +1618,12 @@ impl QueryResultCache {
         }
     }
 
+    #[must_use] 
     pub fn get_entry(&self, hash: &QueryHash) -> Option<&CacheEntry> {
         self.cache_entries.get(hash)
     }
 
+    #[must_use] 
     pub fn is_entry_expired(&self, entry: &CacheEntry) -> bool {
         // Check if entry has expired based on TTL and invalidation triggers
         let now = Instant::now();
@@ -1719,6 +1720,7 @@ impl Default for CacheAccessStats {
 }
 
 impl LruTracker {
+    #[must_use] 
     pub fn new(max_entries: usize) -> Self {
         Self {
             access_order: VecDeque::new(),
@@ -1751,6 +1753,7 @@ impl LruTracker {
     }
 
     /// Get the least recently used entry
+    #[must_use] 
     pub fn get_lru(&self) -> Option<QueryHash> {
         self.access_order.back().cloned()
     }
@@ -1772,6 +1775,7 @@ impl LruTracker {
 }
 
 impl CacheSizeTracker {
+    #[must_use] 
     pub fn new(max_size: usize) -> Self {
         Self {
             current_size: 0,
@@ -1789,6 +1793,7 @@ impl Default for ExecutionStrategySelector {
 }
 
 impl ExecutionStrategySelector {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             strategies: HashMap::new(),
@@ -2092,6 +2097,7 @@ impl Default for StrategySelectionModel {
 }
 
 impl StrategySelectionModel {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             feature_extractors: Vec::new(),
@@ -2115,6 +2121,7 @@ impl Default for DefaultRankingModel {
 }
 
 impl DefaultRankingModel {
+    #[must_use] 
     pub fn new() -> Self {
         Self {}
     }
@@ -2191,6 +2198,7 @@ impl Default for ExecutionPerformanceMonitor {
 }
 
 impl ExecutionPerformanceMonitor {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             active_executions: HashMap::new(),
@@ -2266,7 +2274,7 @@ impl ExecutionPerformanceMonitor {
                     .unwrap_or(0),
                 result_size,
                 success: result.is_ok(),
-                error: result.as_ref().err().map(|e| e.to_string()),
+                error: result.as_ref().err().map(std::string::ToString::to_string),
                 performance_score: {
                     // Calculate performance score based on execution metrics
                     // Score = 1.0 / (normalized_time * normalized_memory)
@@ -2340,6 +2348,7 @@ impl ExecutionPerformanceMonitor {
     }
 
     /// Get query profiler for accessing profiling statistics
+    #[must_use] 
     pub fn query_profiler(&self) -> Arc<QueryProfiler> {
         self.query_profiler.clone()
     }
@@ -2352,6 +2361,7 @@ impl Default for PerformanceMetricsAggregator {
 }
 
 impl PerformanceMetricsAggregator {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             windowed_metrics: BTreeMap::new(),
@@ -2386,6 +2396,7 @@ impl Default for ExecutionAnomalyDetector {
 }
 
 impl ExecutionAnomalyDetector {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             baseline_models: HashMap::new(),
@@ -2414,6 +2425,7 @@ impl Default for ExecutionAlertSystem {
 }
 
 impl ExecutionAlertSystem {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             alert_rules: Vec::new(),
@@ -2425,6 +2437,7 @@ impl ExecutionAlertSystem {
 }
 
 impl ParallelExecutionCoordinator {
+    #[must_use] 
     pub fn new(config: ParallelExecutionConfig) -> Self {
         Self {
             thread_pool: Arc::new(Mutex::new(ThreadPool::new(config.max_worker_threads))),
@@ -2437,6 +2450,7 @@ impl ParallelExecutionCoordinator {
 }
 
 impl ThreadPool {
+    #[must_use] 
     pub fn new(max_threads: usize) -> Self {
         Self {
             worker_threads: Vec::new(),
@@ -2454,6 +2468,7 @@ impl Default for ResourceManager {
 }
 
 impl ResourceManager {
+    #[must_use] 
     pub fn new() -> Self {
         use crate::performance::MemoryTracker;
 
@@ -2500,7 +2515,8 @@ impl Default for ParallelExecutionConfig {
 
 // Additional error variants for AdvancedQueryError
 impl AdvancedQueryError {
+    #[must_use] 
     pub fn strategy_not_found(strategy: String) -> Self {
-        AdvancedQueryError::InternalError(format!("Execution strategy not found: {}", strategy))
+        AdvancedQueryError::InternalError(format!("Execution strategy not found: {strategy}"))
     }
 }

@@ -58,7 +58,7 @@ impl SWRLBuiltIn for MemberBuiltIn {
         match (&args[0], &args[1]) {
             (element, SWRLValue::String(list_str)) => {
                 // Simple list representation as comma-separated values
-                let members: Vec<&str> = list_str.split(',').map(|s| s.trim()).collect();
+                let members: Vec<&str> = list_str.split(',').map(str::trim).collect();
                 let element_str = match element {
                     SWRLValue::String(s) => s.as_str(),
                     SWRLValue::Integer(i) => {
@@ -146,12 +146,12 @@ impl SWRLBuiltIn for ListIntersectionBuiltIn {
                 let items1: Vec<&str> = if list1.is_empty() {
                     Vec::new()
                 } else {
-                    list1.split(',').map(|s| s.trim()).collect()
+                    list1.split(',').map(str::trim).collect()
                 };
                 let items2: Vec<&str> = if list2.is_empty() {
                     Vec::new()
                 } else {
-                    list2.split(',').map(|s| s.trim()).collect()
+                    list2.split(',').map(str::trim).collect()
                 };
 
                 let intersection: Vec<&str> = items1
@@ -193,12 +193,12 @@ impl SWRLBuiltIn for ListSubtractionBuiltIn {
                 let items1: Vec<&str> = if list1.is_empty() {
                     Vec::new()
                 } else {
-                    list1.split(',').map(|s| s.trim()).collect()
+                    list1.split(',').map(str::trim).collect()
                 };
                 let items2: Vec<&str> = if list2.is_empty() {
                     Vec::new()
                 } else {
-                    list2.split(',').map(|s| s.trim()).collect()
+                    list2.split(',').map(str::trim).collect()
                 };
 
                 let difference: Vec<&str> = items1
@@ -297,7 +297,7 @@ impl SWRLBuiltIn for RestBuiltIn {
                     return Ok(SWRLValue::Boolean(result.is_empty()));
                 }
 
-                let items: Vec<&str> = list.split(',').map(|s| s.trim()).collect();
+                let items: Vec<&str> = list.split(',').map(str::trim).collect();
                 let rest_items = if items.len() > 1 {
                     items[1..].join(",")
                 } else {
@@ -341,7 +341,7 @@ impl SWRLBuiltIn for SublistBuiltIn {
                     return Ok(SWRLValue::Boolean(result.is_empty()));
                 }
 
-                let items: Vec<&str> = list.split(',').map(|s| s.trim()).collect();
+                let items: Vec<&str> = list.split(',').map(str::trim).collect();
                 let start_idx = (*start as usize).saturating_sub(1); // 1-based indexing
                 let end_idx = start_idx + (*length as usize);
 

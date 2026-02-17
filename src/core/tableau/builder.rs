@@ -43,6 +43,7 @@ pub struct TableauBuilder {
 
 impl TableauBuilder {
     /// Create a new tableau builder
+    #[must_use] 
     pub fn new(config: ReasoningConfig) -> Self {
         Self {
             config,
@@ -55,24 +56,28 @@ impl TableauBuilder {
     }
 
     /// Add an initial concept to the root node
+    #[must_use] 
     pub fn add_initial_concept(mut self, concept: ConceptLabel) -> Self {
         self.initial_concepts.push(concept);
         self
     }
 
     /// Add multiple initial concepts
+    #[must_use] 
     pub fn add_initial_concepts(mut self, concepts: Vec<ConceptLabel>) -> Self {
         self.initial_concepts.extend(concepts);
         self
     }
 
     /// Add a property inclusion constraint
+    #[must_use] 
     pub fn add_property_inclusion(mut self, inclusion: PropertyInclusion) -> Self {
         self.property_inclusions.push(inclusion);
         self
     }
 
     /// Add an inverse property relationship
+    #[must_use] 
     pub fn add_inverse_property(mut self, property: String, inverse: String) -> Self {
         self.inverse_properties
             .insert(property.clone(), inverse.clone());
@@ -81,12 +86,14 @@ impl TableauBuilder {
     }
 
     /// Add a functional property
+    #[must_use] 
     pub fn add_functional_property(mut self, property: String) -> Self {
         self.functional_properties.insert(property);
         self
     }
 
     /// Add a transitive property  
+    #[must_use] 
     pub fn add_transitive_property(mut self, property: String) -> Self {
         self.transitive_properties.insert(property);
         self
@@ -181,19 +188,19 @@ impl TableauBuilder {
         // Store functional properties for use in merging
         // Functional properties: if x R y1 and x R y2, then y1 = y2
         for func_prop in &self.functional_properties {
-            log::trace!("Functional property: {}", func_prop);
+            log::trace!("Functional property: {func_prop}");
         }
 
         // Store transitive properties for closure computation
         // Transitive properties: if x R y and y R z, then x R z
         for trans_prop in &self.transitive_properties {
-            log::trace!("Transitive property: {}", trans_prop);
+            log::trace!("Transitive property: {trans_prop}");
         }
 
         // Store inverse properties for role reasoning
         // Inverse properties: if x R y, then y R⁻ x
         for (prop, inverse) in &self.inverse_properties {
-            log::trace!("Inverse properties: {} ≡ {}⁻", prop, inverse);
+            log::trace!("Inverse properties: {prop} ≡ {inverse}⁻");
         }
 
         // Generate initial rule applications for the root node concepts
@@ -266,8 +273,8 @@ impl TableauBuilder {
         super_str: &str,
     ) -> Result<super::Tableau> {
         // For subsumption checking A ⊑ B, we create a tableau with A ⊓ ¬B and check for unsatisfiability
-        let negated_super = format!("not({})", super_str);
-        let conjunction = format!("and({}, {})", sub_str, negated_super);
+        let negated_super = format!("not({super_str})");
+        let conjunction = format!("and({sub_str}, {negated_super})");
         let concept_label = ConceptLabel::parse(&conjunction);
         let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
@@ -304,7 +311,7 @@ impl TableauBuilder {
     ) -> Result<super::Tableau> {
         // For instance checking, we create a tableau with individual ∈ ¬C and check for satisfiability
         // If unsatisfiable, then individual ∈ C
-        let negated_class = format!("not({})", class_str);
+        let negated_class = format!("not({class_str})");
         let concept_label = ConceptLabel::parse(&negated_class);
         let mut tableau = super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 

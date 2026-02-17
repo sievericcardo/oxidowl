@@ -158,6 +158,7 @@ pub struct SavedState {
 
 impl Tableau {
     /// Create a new tableau with the given configuration and ontology
+    #[must_use] 
     pub fn new(config: ReasoningConfig, ontology: Arc<Ontology>) -> Self {
         Self {
             nodes: Vec::new(),
@@ -522,41 +523,49 @@ impl Tableau {
     }
 
     /// Check if the tableau is satisfiable
+    #[must_use] 
     pub fn is_satisfiable(&self) -> bool {
         matches!(self.state, TableauState::Satisfiable)
     }
 
     /// Check if the tableau is unsatisfiable
+    #[must_use] 
     pub fn is_unsatisfiable(&self) -> bool {
         matches!(self.state, TableauState::Unsatisfiable)
     }
 
     /// Get the current state
+    #[must_use] 
     pub fn state(&self) -> TableauState {
         self.state
     }
 
     /// Get the current state (alias for backward compatibility)
+    #[must_use] 
     pub fn get_state(&self) -> TableauState {
         self.state
     }
 
     /// Get tableau statistics
+    #[must_use] 
     pub fn statistics(&self) -> &TableauStatistics {
         &self.statistics
     }
 
     /// Get the nodes in the tableau
+    #[must_use] 
     pub fn nodes(&self) -> &[TableauNode] {
         &self.nodes
     }
 
     /// Get the edges in the tableau
+    #[must_use] 
     pub fn edges(&self) -> &[TableauEdge] {
         &self.edges
     }
 
     /// Get a node by ID
+    #[must_use] 
     pub fn node(&self, id: NodeId) -> Option<&TableauNode> {
         self.nodes.get(id)
     }
@@ -592,11 +601,13 @@ impl Tableau {
     // Legacy methods for compatibility with existing code
 
     /// Check if tableau is complete
+    #[must_use] 
     pub fn is_complete(&self) -> bool {
         self.pending_queue.is_empty() && self.nodes.iter().all(|node| node.status.fully_expanded)
     }
 
     /// Get clash detector
+    #[must_use] 
     pub fn clash_detector(&self) -> &ClashDetector {
         &self.clash_detector
     }
@@ -607,6 +618,7 @@ impl Tableau {
     }
 
     /// Get pending queue
+    #[must_use] 
     pub fn pending_queue(&self) -> &VecDeque<RuleApplication> {
         &self.pending_queue
     }
@@ -617,6 +629,7 @@ impl Tableau {
     }
 
     /// Get config
+    #[must_use] 
     pub fn config(&self) -> &TableauConfig {
         &self.config
     }
@@ -624,16 +637,19 @@ impl Tableau {
     // Additional methods for compatibility
 
     /// Get node count
+    #[must_use] 
     pub fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
 
     /// Get backtrack count
+    #[must_use] 
     pub fn get_backtrack_count(&self) -> usize {
         self.backtrack_stack.len()
     }
 
     /// Get max depth  
+    #[must_use] 
     pub fn get_max_depth(&self) -> usize {
         self.config.max_depth as usize
     }
@@ -683,7 +699,7 @@ impl Tableau {
     /// Add a concept to a node
     pub fn add_concept_to_node(&mut self, node_id: NodeId, concept: ConceptLabel) -> Result<()> {
         if node_id >= self.nodes.len() {
-            return Err(Error::reasoning(format!("Invalid node id: {}", node_id)));
+            return Err(Error::reasoning(format!("Invalid node id: {node_id}")));
         }
 
         if let Some(node) = self.nodes.get_mut(node_id) {

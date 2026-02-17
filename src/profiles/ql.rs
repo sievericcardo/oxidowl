@@ -29,6 +29,7 @@ pub struct QLValidator {
 
 impl QLValidator {
     /// Create a new QL profile validator
+    #[must_use] 
     pub fn new() -> Self {
         let mut prohibited_constructs = HashSet::new();
 
@@ -95,10 +96,9 @@ impl QLValidator {
                         if !self.is_ql_basic_class_expression(class_expr) {
                             report.add_violation(ProfileViolation::new(
                                 ProfileViolationType::DisallowedClassExpression(format!(
-                                    "{:?}",
-                                    class_expr
+                                    "{class_expr:?}"
                                 )),
-                                format!("Non-basic class in equivalence: {:?}", class_expr),
+                                format!("Non-basic class in equivalence: {class_expr:?}"),
                             ));
                         }
                     }
@@ -109,10 +109,9 @@ impl QLValidator {
                         if !self.is_ql_basic_class_expression(class_expr) {
                             report.add_violation(ProfileViolation::new(
                                 ProfileViolationType::DisallowedClassExpression(format!(
-                                    "{:?}",
-                                    class_expr
+                                    "{class_expr:?}"
                                 )),
-                                format!("Non-basic class in disjointness: {:?}", class_expr),
+                                format!("Non-basic class in disjointness: {class_expr:?}"),
                             ));
                         }
                     }
@@ -261,7 +260,7 @@ impl QLValidator {
                 Axiom::SubObjectPropertyOf(sub_prop) => {
                     if let ObjectPropertyExpression::PropertyChain(_) = &sub_prop.sub_property {
                         report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{:?}", sub_prop)),
+                            ProfileViolationType::DisallowedAxiom(format!("{sub_prop:?}")),
                             "Property chains are not allowed in OWL 2 QL".to_string(),
                         ));
                     }
@@ -270,7 +269,7 @@ impl QLValidator {
                 // Asymmetric property axioms are not allowed
                 Axiom::AsymmetricObjectProperty(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "Asymmetric property axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -278,7 +277,7 @@ impl QLValidator {
                 // Irreflexive property axioms are not allowed
                 Axiom::IrreflexiveObjectProperty(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "Irreflexive property axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -286,7 +285,7 @@ impl QLValidator {
                 // Transitive property axioms are not allowed
                 Axiom::TransitiveObjectProperty(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "Transitive property axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -294,7 +293,7 @@ impl QLValidator {
                 // Has key axioms are not allowed
                 Axiom::HasKey(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "HasKey axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -505,8 +504,8 @@ impl ProfileValidator for QLValidator {
         for axiom in ontology.axioms() {
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                    format!("Axiom type not supported in OWL 2 QL profile: {:?}", axiom),
+                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                    format!("Axiom type not supported in OWL 2 QL profile: {axiom:?}"),
                 ));
             }
         }

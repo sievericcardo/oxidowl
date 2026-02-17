@@ -31,9 +31,9 @@ use rayon::prelude::*;
 pub struct RLReasoner {
     /// RL-compatible axioms
     rl_axioms: Vec<RLAxiom>,
-    /// Materialized facts (ABox)
+    /// Materialized facts (`ABox`)
     materialized_facts: MaterializedKnowledgeBase,
-    /// TBox hierarchy
+    /// `TBox` hierarchy
     tbox: TBoxHierarchy,
     /// Forward-chaining rule engine
     rule_engine: ForwardChainingEngine,
@@ -48,6 +48,7 @@ pub struct RLReasoner {
 
 impl RLReasoner {
     /// Create a new RL reasoner
+    #[must_use] 
     pub fn new(config: ReasonerConfig) -> Self {
         #[allow(clippy::arc_with_non_send_sync)]
         let explanation_service = if config.reasoning.is_enabled(crate::config::ReasoningFeature::Explanations) {
@@ -152,7 +153,7 @@ impl RLReasoner {
         Ok(())
     }
 
-    /// Build TBox hierarchy from RL axioms
+    /// Build `TBox` hierarchy from RL axioms
     fn build_tbox(&mut self) -> Result<()> {
         for axiom in &self.rl_axioms {
             match axiom {
@@ -186,7 +187,7 @@ impl RLReasoner {
         Ok(())
     }
 
-    /// Initialize ABox with assertions from ontology
+    /// Initialize `ABox` with assertions from ontology
     fn initialize_abox(&mut self) -> Result<()> {
         for axiom in &self.rl_axioms {
             match axiom {
@@ -259,7 +260,7 @@ impl RLReasoner {
         for (subclass, superclasses) in self.tbox.get_all_subsumptions() {
             let sub_expr = subclass.to_class_expression();
             let sup_exprs: HashSet<_> = superclasses.iter()
-                .map(|sup| sup.to_class_expression())
+                .map(RLClassExpression::to_class_expression)
                 .collect();
             hierarchy.insert(sub_expr, sup_exprs);
         }
@@ -288,7 +289,7 @@ impl RLReasoner {
 
     fn original_axioms_as_general_axioms(&self) -> Vec<Axiom> {
         self.rl_axioms.iter()
-            .map(|rl_axiom| rl_axiom.to_general_axiom())
+            .map(RLAxiom::to_general_axiom)
             .collect()
     }
 }
@@ -296,17 +297,17 @@ impl RLReasoner {
 /// RL-specific axiom representation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RLAxiom {
-    /// SubClassOf axiom
+    /// `SubClassOf` axiom
     SubClassOf {
         subclass: RLClassExpression,
         superclass: RLClassExpression,
     },
-    /// SubPropertyOf axiom
+    /// `SubPropertyOf` axiom
     SubPropertyOf {
         subproperty: ObjectPropertyExpression,
         superproperty: ObjectPropertyExpression,
     },
-    /// EquivalentClasses axiom
+    /// `EquivalentClasses` axiom
     EquivalentClasses {
         classes: Vec<RLClassExpression>,
     },
@@ -337,11 +338,11 @@ pub enum RLAxiom {
         subject: Individual,
         value: String, // Simplified literal representation
     },
-    /// TransitiveProperty
+    /// `TransitiveProperty`
     TransitiveProperty {
         property: ObjectPropertyExpression,
     },
-    /// SymmetricProperty
+    /// `SymmetricProperty`
     SymmetricProperty {
         property: ObjectPropertyExpression,
     },
@@ -349,6 +350,7 @@ pub enum RLAxiom {
 
 impl RLAxiom {
     /// Try to convert a general axiom to RL axiom
+    #[must_use] 
     pub fn from_general_axiom(axiom: &Axiom) -> Option<Self> {
         use crate::ontology::axioms::*;
         match axiom {
@@ -385,6 +387,7 @@ impl RLAxiom {
     }
 
     /// Convert to general axiom
+    #[must_use] 
     pub fn to_general_axiom(&self) -> Axiom {
         use crate::ontology::axioms::*;
         match self {
@@ -480,12 +483,13 @@ impl RLClassExpression {
     }
 
     /// Convert to general class expression
+    #[must_use] 
     pub fn to_class_expression(&self) -> ClassExpression {
         match self {
             RLClassExpression::Class(class) => ClassExpression::Class(class.clone()),
             RLClassExpression::Intersection(exprs) => {
                 let class_exprs: Vec<_> = exprs.iter()
-                    .map(|e| e.to_class_expression())
+                    .map(RLClassExpression::to_class_expression)
                     .collect();
                 ClassExpression::ObjectIntersectionOf(class_exprs)
             }
@@ -505,7 +509,7 @@ impl RLClassExpression {
     }
 }
 
-/// Materialized knowledge base (ABox)
+/// Materialized knowledge base (`ABox`)
 #[derive(Debug)]
 pub struct MaterializedKnowledgeBase {
     /// Class assertions: individual -> classes
@@ -524,6 +528,7 @@ impl Default for MaterializedKnowledgeBase {
 
 impl MaterializedKnowledgeBase {
     /// Create a new knowledge base
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             class_assertions: HashMap::new(),
@@ -567,6 +572,7 @@ impl MaterializedKnowledgeBase {
     }
 
     /// Check if a class assertion exists
+    #[must_use] 
     pub fn has_class_assertion(&self, individual: &Individual, class: &ClassExpression) -> bool {
         if let Some(rl_class) = RLClassExpression::from_class_expression(class) {
             self.class_assertions
@@ -579,6 +585,7 @@ impl MaterializedKnowledgeBase {
     }
 
     /// Get all instances of a class
+    #[must_use] 
     pub fn get_instances(&self, class: &ClassExpression) -> HashSet<Individual> {
         if let Some(rl_class) = RLClassExpression::from_class_expression(class) {
             self.class_assertions
@@ -612,14 +619,16 @@ impl MaterializedKnowledgeBase {
     }
 
     /// Count total facts
+    #[must_use] 
     pub fn fact_count(&self) -> usize {
-        let class_count: usize = self.class_assertions.values().map(|s| s.len()).sum();
-        let obj_prop_count: usize = self.object_property_assertions.values().map(|s| s.len()).sum();
-        let data_prop_count: usize = self.data_property_assertions.values().map(|s| s.len()).sum();
+        let class_count: usize = self.class_assertions.values().map(std::collections::HashSet::len).sum();
+        let obj_prop_count: usize = self.object_property_assertions.values().map(std::collections::HashSet::len).sum();
+        let data_prop_count: usize = self.data_property_assertions.values().map(std::collections::HashSet::len).sum();
         class_count + obj_prop_count + data_prop_count
     }
 
     /// Get all individuals
+    #[must_use] 
     pub fn get_all_individuals(&self) -> HashSet<Individual> {
         let mut individuals = HashSet::new();
         individuals.extend(self.class_assertions.keys().cloned());
@@ -631,7 +640,7 @@ impl MaterializedKnowledgeBase {
     }
 }
 
-/// TBox hierarchy
+/// `TBox` hierarchy
 #[derive(Debug)]
 pub struct TBoxHierarchy {
     /// Class inclusions
@@ -651,7 +660,8 @@ impl Default for TBoxHierarchy {
 }
 
 impl TBoxHierarchy {
-    /// Create a new TBox hierarchy
+    /// Create a new `TBox` hierarchy
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             class_inclusions: HashMap::new(),
@@ -730,6 +740,7 @@ impl TBoxHierarchy {
     }
 
     /// Get all subsumptions
+    #[must_use] 
     pub fn get_all_subsumptions(&self) -> &HashMap<RLClassExpression, HashSet<RLClassExpression>> {
         &self.class_inclusions
     }
@@ -776,6 +787,7 @@ impl Default for ForwardChainingEngine {
 
 impl ForwardChainingEngine {
     /// Create a new forward-chaining engine
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             max_iterations: 10000,

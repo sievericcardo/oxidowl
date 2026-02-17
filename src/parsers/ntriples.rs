@@ -245,13 +245,13 @@ impl NTriplesParser {
         Ok((RdfTerm::QuotedTriple(Box::new(triple)), rest))
     }
 
-    /// Convert a string term to RdfTerm
+    /// Convert a string term to `RdfTerm`
     fn string_to_rdf_term(&self, s: &str) -> Result<RdfTerm> {
         if s.starts_with('<') && s.ends_with('>') {
             // IRI
             let iri_str = &s[1..s.len() - 1];
             let url = url::Url::parse(iri_str).map_err(|e| {
-                Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                Error::ontology_parsing(format!("Invalid IRI: {e}"))
             })?;
             Ok(RdfTerm::Iri(url))
         } else if s.starts_with("_:") {
@@ -268,8 +268,7 @@ impl NTriplesParser {
             self.parse_literal(s)
         } else {
             Err(Error::ontology_parsing(format!(
-                "Cannot parse term: {}",
-                s
+                "Cannot parse term: {s}"
             )))
         }
     }
@@ -319,7 +318,7 @@ impl NTriplesParser {
                     Error::ontology_parsing("Unterminated datatype IRI".to_string())
                 })?;
                 let url = url::Url::parse(&datatype_str[1..end]).map_err(|e| {
-                    Error::ontology_parsing(format!("Invalid datatype IRI: {}", e))
+                    Error::ontology_parsing(format!("Invalid datatype IRI: {e}"))
                 })?;
                 Some(url)
             } else {
@@ -399,8 +398,7 @@ impl NTriplesParser {
             Ok((&trimmed[..term_len], &trimmed[term_len..]))
         } else {
             Err(Error::ontology_parsing(format!(
-                "Cannot parse term from: {}",
-                trimmed
+                "Cannot parse term from: {trimmed}"
             )))
         }
     }
@@ -430,7 +428,7 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 pub struct NTriplesSerializer;
 
 impl NTriplesSerializer {
-    /// Create a new NTriplesSerializer instance
+    /// Create a new `NTriplesSerializer` instance
     #[must_use]
     pub fn new() -> Self {
         Self

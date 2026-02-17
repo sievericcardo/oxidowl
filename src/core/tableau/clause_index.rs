@@ -4,9 +4,9 @@
 //! to clause IDs, enabling O(k) clause lookup instead of O(n) where k << n.
 //!
 //! The index maintains:
-//! - body_index: Maps predicates in clause bodies to clause IDs
-//! - head_index: Maps predicates in clause heads to clause IDs
-//! - negative_clauses: Separate tracking of clauses with empty heads (⊥)
+//! - `body_index`: Maps predicates in clause bodies to clause IDs
+//! - `head_index`: Maps predicates in clause heads to clause IDs
+//! - `negative_clauses`: Separate tracking of clauses with empty heads (⊥)
 //!
 //! This reduces the clause checking complexity from O(n×m) to O(k×m) where:
 //! - n = total number of clauses
@@ -56,7 +56,7 @@ pub struct ClauseIndex {
     /// All disjunctive clauses (indexed by position)
     disjunctive_clauses: Vec<DLClause>,
 
-    /// IDs of negative clauses (body → ⊥) in deterministic_clauses
+    /// IDs of negative clauses (body → ⊥) in `deterministic_clauses`
     negative_clause_ids: Vec<usize>,
 
     /// Index statistics
@@ -69,13 +69,14 @@ impl ClauseIndex {
     /// Algorithm:
     /// 1. For each clause c in clauses:
     ///    a. Extract predicates from body atoms
-    ///    b. Add c.id to body_index[predicate]
+    ///    b. Add c.id to `body_index`[predicate]
     ///    c. Extract predicates from head atoms
-    ///    d. Add c.id to head_index[predicate]
-    ///    e. If head empty: add to negative_clauses
+    ///    d. Add c.id to `head_index`[predicate]
+    ///    e. If head empty: add to `negative_clauses`
     ///
     /// Time: O(n × k) where k = atoms per clause
     /// Space: O(n × p) where p = unique predicates
+    #[must_use] 
     pub fn from_clause_set(clause_set: &DLClauseSet) -> Self {
         let total_clauses =
             clause_set.deterministic_clauses.len() + clause_set.disjunctive_clauses.len();
@@ -144,7 +145,7 @@ impl ClauseIndex {
         let total_clause_entries: usize = body_index
             .values()
             .chain(head_index.values())
-            .map(|set| set.len())
+            .map(std::collections::HashSet::len)
             .sum();
 
         let avg_clauses_per_predicate = if indexed_predicates > 0 {
@@ -156,7 +157,7 @@ impl ClauseIndex {
         let max_clauses_per_predicate = body_index
             .values()
             .chain(head_index.values())
-            .map(|set| set.len())
+            .map(std::collections::HashSet::len)
             .max()
             .unwrap_or(0);
 
@@ -202,11 +203,12 @@ impl ClauseIndex {
     ///
     /// Algorithm:
     /// 1. For each predicate in input:
-    ///    a. Look up body_index[predicate]
+    ///    a. Look up `body_index`[predicate]
     ///    b. Union all clause IDs
     /// 2. Return unique clause IDs
     ///
     /// Time: O(p × k) where p = input predicates, k = avg clauses per predicate
+    #[must_use] 
     pub fn get_candidate_clauses(&self, predicates: &[String]) -> Vec<usize> {
         if predicates.is_empty() {
             return Vec::new();
@@ -227,6 +229,7 @@ impl ClauseIndex {
     ///
     /// This is a convenience method that returns actual clause references
     /// instead of just IDs.
+    #[must_use] 
     pub fn get_candidate_clause_refs(&self, predicates: &[String]) -> Vec<&DLClause> {
         let ids = self.get_candidate_clauses(predicates);
 
@@ -246,11 +249,13 @@ impl ClauseIndex {
     ///
     /// These clauses represent inconsistency conditions and should
     /// always be checked regardless of predicate filtering.
+    #[must_use] 
     pub fn get_negative_clause_ids(&self) -> &[usize] {
         &self.negative_clause_ids
     }
 
     /// Get references to all negative clauses
+    #[must_use] 
     pub fn get_negative_clauses(&self) -> Vec<&DLClause> {
         self.negative_clause_ids
             .iter()
@@ -259,16 +264,19 @@ impl ClauseIndex {
     }
 
     /// Get all deterministic clauses
+    #[must_use] 
     pub fn deterministic_clauses(&self) -> &[DLClause] {
         &self.deterministic_clauses
     }
 
     /// Get all disjunctive clauses
+    #[must_use] 
     pub fn disjunctive_clauses(&self) -> &[DLClause] {
         &self.disjunctive_clauses
     }
 
     /// Get a specific clause by ID
+    #[must_use] 
     pub fn get_clause(&self, id: usize) -> Option<&DLClause> {
         if id < self.deterministic_clauses.len() {
             self.deterministic_clauses.get(id)
@@ -279,16 +287,19 @@ impl ClauseIndex {
     }
 
     /// Get index statistics
+    #[must_use] 
     pub fn statistics(&self) -> &IndexStatistics {
         &self.stats
     }
 
     /// Check if index is empty
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.deterministic_clauses.is_empty() && self.disjunctive_clauses.is_empty()
     }
 
     /// Get total number of clauses
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.stats.total_clauses
     }
@@ -296,6 +307,7 @@ impl ClauseIndex {
     /// Get clauses matching head predicates
     ///
     /// Useful for finding clauses that could derive a given concept
+    #[must_use] 
     pub fn get_clauses_deriving(&self, predicates: &[String]) -> Vec<&DLClause> {
         let mut candidates = HashSet::new();
 

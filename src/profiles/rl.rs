@@ -24,6 +24,7 @@ pub struct RLValidator;
 
 impl RLValidator {
     /// Create a new RL profile validator
+    #[must_use] 
     pub fn new() -> Self {
         Self
     }
@@ -132,14 +133,13 @@ impl RLValidator {
         let prohibited_constructs = self.get_prohibited_constructs();
 
         // Check axiom type against prohibited list
-        let axiom_debug_str = format!("{:?}", axiom);
+        let axiom_debug_str = format!("{axiom:?}");
         let axiom_type = axiom_debug_str.split('(').next().unwrap_or("Unknown");
         if prohibited_constructs.contains(axiom_type) {
             report.add_violation(ProfileViolation::new(
-                ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                 format!(
-                    "Axiom type '{}' is prohibited in OWL 2 RL profile",
-                    axiom_type
+                    "Axiom type '{axiom_type}' is prohibited in OWL 2 RL profile"
                 ),
             ));
         }
@@ -268,8 +268,8 @@ impl ProfileValidator for RLValidator {
 
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                    format!("Axiom type not supported in OWL 2 RL profile: {:?}", axiom),
+                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                    format!("Axiom type not supported in OWL 2 RL profile: {axiom:?}"),
                 ));
             }
         }
@@ -503,7 +503,7 @@ impl RLValidator {
                 ClassExpression::Class(_) | ClassExpression::ObjectIntersectionOf(_)
             ) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedClassExpression(format!("Union subclass with complex superclass: {:?} ⊑ {:?}", subclass, superclass)),
+                    ProfileViolationType::DisallowedClassExpression(format!("Union subclass with complex superclass: {subclass:?} ⊑ {superclass:?}")),
                     "Complex combinations of union subclass with non-atomic superclass may not be expressible in Horn clauses",
                 ));
             }
@@ -523,7 +523,7 @@ impl RLValidator {
                     if disjoint_axiom.classes.len() > 2 {
                         // Pairwise disjointness is preferred for Horn clause translation
                         report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                            ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                             "Multi-way disjoint classes may not translate efficiently to Horn clauses",
                         ));
                     }
@@ -532,7 +532,7 @@ impl RLValidator {
                     if equiv_axiom.classes.len() > 2 {
                         // Pairwise equivalences are preferred
                         report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                            ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                             "Multi-way equivalent classes should be expressed as pairwise equivalences for Horn clause translation",
                         ));
                     }

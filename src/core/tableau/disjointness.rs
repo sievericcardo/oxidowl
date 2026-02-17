@@ -1,7 +1,7 @@
 //! Disjointness tracking for clash detection
 //!
 //! This module tracks disjointness relationships between concepts,
-//! including those from DisjointClasses and DisjointUnion axioms.
+//! including those from `DisjointClasses` and `DisjointUnion` axioms.
 
 use crate::Result;
 use crate::core::tableau::equivalence::{ConceptId, EquivalenceClosure};
@@ -22,6 +22,7 @@ pub struct DisjointnessMap {
 
 impl DisjointnessMap {
     /// Create a new empty disjointness map
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             disjoint_pairs: HashMap::new(),
@@ -31,7 +32,7 @@ impl DisjointnessMap {
 
     /// Build disjointness map from ontology
     ///
-    /// Processes DisjointClasses and DisjointUnion axioms to build
+    /// Processes `DisjointClasses` and `DisjointUnion` axioms to build
     /// the complete disjointness map.
     pub fn from_ontology(ontology: &Ontology, _eq_closure: &EquivalenceClosure) -> Result<Self> {
         let mut map = Self::new();
@@ -53,7 +54,7 @@ impl DisjointnessMap {
                             let c1 = ConceptId::from_class_expression(&disj.classes[i]);
                             let c2 = ConceptId::from_class_expression(&disj.classes[j]);
 
-                            log::trace!("Adding disjoint pair: {:?} ⊥ {:?}", c1, c2);
+                            log::trace!("Adding disjoint pair: {c1:?} ⊥ {c2:?}");
                             map.add_disjoint_pair(c1, c2);
                         }
                     }
@@ -68,7 +69,7 @@ impl DisjointnessMap {
                         .map(ConceptId::from_class_expression)
                         .collect();
 
-                    log::trace!("Processing DisjointUnion: {:?} = ⊔ {:?}", parent, children);
+                    log::trace!("Processing DisjointUnion: {parent:?} = ⊔ {children:?}");
 
                     // Add pairwise disjointness for all children
                     for i in 0..children.len() {
@@ -112,6 +113,7 @@ impl DisjointnessMap {
     }
 
     /// Check if two concepts are directly disjoint
+    #[must_use] 
     pub fn are_disjoint(&self, c1: &ConceptId, c2: &ConceptId) -> bool {
         self.disjoint_pairs
             .get(c1)
@@ -120,6 +122,7 @@ impl DisjointnessMap {
     }
 
     /// Get all concepts that are disjoint with the given concept
+    #[must_use] 
     pub fn get_disjoint_concepts(&self, concept: &ConceptId) -> HashSet<ConceptId> {
         self.disjoint_pairs
             .get(concept)

@@ -108,6 +108,7 @@ impl Default for BenchmarkingConfig {
 }
 
 impl PerformanceBenchmarkingSystem {
+    #[must_use] 
     pub fn new(config: BenchmarkingConfig) -> Self {
         Self {
             benchmark_manager: BenchmarkSuiteManager::new(&config),
@@ -251,7 +252,7 @@ impl PerformanceBenchmarkingSystem {
         queries: &[(String, ConjunctiveQuery)],
         optimizer: &mut AdvancedQueryOptimizer,
     ) -> Result<OntologyBenchmarkResult, BenchmarkError> {
-        println!("Benchmarking synthetic ontology: {}", name);
+        println!("Benchmarking synthetic ontology: {name}");
 
         let benchmark_start = Instant::now();
 
@@ -287,7 +288,7 @@ impl PerformanceBenchmarkingSystem {
         for (query_id, query) in queries {
             let query_start = Instant::now();
             let query_result = optimizer.optimize_advanced(query).map_err(|e| {
-                BenchmarkError::SystemError(format!("Query optimization failed: {:?}", e))
+                BenchmarkError::SystemError(format!("Query optimization failed: {e:?}"))
             })?;
             let query_time = query_start.elapsed();
 
@@ -636,7 +637,7 @@ impl PerformanceBenchmarkingSystem {
                 execution_time,
                 peak_memory_mb,
                 success: false,
-                error_message: Some(format!("Classification error: {:?}", e)),
+                error_message: Some(format!("Classification error: {e:?}")),
             }),
             Err(_) => Ok(SingleClassificationMeasurement {
                 execution_time: Duration::from_secs(self.config.benchmark_timeout_minutes * 60),
@@ -743,7 +744,7 @@ impl PerformanceBenchmarkingSystem {
                 result_size: 0,
                 optimization_effectiveness: 0.0,
                 strategy_used: strategy,
-                error_message: Some(format!("Query error: {:?}", e)),
+                error_message: Some(format!("Query error: {e:?}")),
             }),
             Err(_) => Ok(SingleQueryMeasurement {
                 execution_time: Duration::from_secs(60),
@@ -1217,12 +1218,12 @@ pub enum BenchmarkError {
 impl std::fmt::Display for BenchmarkError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BenchmarkError::IOError(msg) => write!(f, "IO error: {}", msg),
-            BenchmarkError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
-            BenchmarkError::OntologyLoadError(msg) => write!(f, "Ontology load error: {}", msg),
-            BenchmarkError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
-            BenchmarkError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
-            BenchmarkError::SystemError(msg) => write!(f, "System error: {}", msg),
+            BenchmarkError::IOError(msg) => write!(f, "IO error: {msg}"),
+            BenchmarkError::SerializationError(msg) => write!(f, "Serialization error: {msg}"),
+            BenchmarkError::OntologyLoadError(msg) => write!(f, "Ontology load error: {msg}"),
+            BenchmarkError::TimeoutError(msg) => write!(f, "Timeout error: {msg}"),
+            BenchmarkError::ConfigurationError(msg) => write!(f, "Configuration error: {msg}"),
+            BenchmarkError::SystemError(msg) => write!(f, "System error: {msg}"),
         }
     }
 }
@@ -1267,8 +1268,7 @@ impl BenchmarkSuiteManager {
         concept_count: usize,
     ) -> Result<Ontology, BenchmarkError> {
         println!(
-            "Generating synthetic ontology with {} concepts...",
-            concept_count
+            "Generating synthetic ontology with {concept_count} concepts..."
         );
         self.create_mock_large_ontology(concept_count, "Synthetic")
     }
@@ -1301,7 +1301,7 @@ impl BenchmarkSuiteManager {
             ));
         }
         
-        log::info!("Created mock {} ontology with {} concepts", name, concept_count);
+        log::info!("Created mock {name} ontology with {concept_count} concepts");
         Ok(ontology)
     }
 
@@ -1324,14 +1324,13 @@ impl BenchmarkSuiteManager {
         let mut queries = Vec::new();
 
         for i in 0..count {
-            let query_id = format!("query_{}", i);
+            let query_id = format!("query_{i}");
             let query = ConjunctiveQuery {
                 answer_variables: vec![QueryVariable::individual("x")],
                 body_atoms: vec![QueryAtom::ClassAtom {
                     variable: QueryVariable::individual("x"),
                     class_expression: ClassExpression::class(IRI::new(&format!(
-                        "http://example.org/Class{}",
-                        i
+                        "http://example.org/Class{i}"
                     ))),
                 }],
                 constraints: QueryConstraints::default(),
@@ -1350,8 +1349,7 @@ impl BenchmarkSuiteManager {
         concept_count: usize,
     ) -> Result<Ontology, BenchmarkError> {
         println!(
-            "Creating synthetic ontology '{}' with {} concepts",
-            name, concept_count
+            "Creating synthetic ontology '{name}' with {concept_count} concepts"
         );
         self.create_mock_large_ontology(concept_count, name)
     }
@@ -1362,17 +1360,17 @@ impl BenchmarkSuiteManager {
         _ontology: &Ontology,
         query_count: usize,
     ) -> Result<Vec<(String, ConjunctiveQuery)>, BenchmarkError> {
-        println!("Generating {} synthetic queries", query_count);
+        println!("Generating {query_count} synthetic queries");
         let mut queries = Vec::new();
 
         for i in 0..query_count {
             let query = ConjunctiveQuery {
-                answer_variables: vec![QueryVariable::new(format!("x{}", i))],
+                answer_variables: vec![QueryVariable::new(format!("x{i}"))],
                 body_atoms: vec![],
                 constraints: QueryConstraints::default(),
                 metadata: QueryMetadata::default(),
             };
-            queries.push((format!("synthetic_query_{}", i), query));
+            queries.push((format!("synthetic_query_{i}"), query));
         }
 
         Ok(queries)

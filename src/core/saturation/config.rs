@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for the saturation engine
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaturationConfig {
-    /// Maximum number of non-deterministic branches before marking as RequiresFullTableau
+    /// Maximum number of non-deterministic branches before marking as `RequiresFullTableau`
     pub max_branches: usize,
 
     /// Enable aggressive saturation (may increase memory usage)
@@ -59,35 +59,41 @@ pub enum SaturationStrategy {
 
 impl SaturationConfig {
     /// Create a new saturation configuration
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the maximum number of branches
+    #[must_use] 
     pub fn with_max_branches(mut self, max_branches: usize) -> Self {
         self.max_branches = max_branches;
         self
     }
 
     /// Enable or disable aggressive saturation
+    #[must_use] 
     pub fn with_aggressive_saturation(mut self, enable: bool) -> Self {
         self.aggressive_saturation = enable;
         self
     }
 
     /// Set the saturation strategy
+    #[must_use] 
     pub fn with_strategy(mut self, strategy: SaturationStrategy) -> Self {
         self.strategy = strategy;
         self
     }
 
     /// Enable or disable parallel saturation
+    #[must_use] 
     pub fn with_parallel(mut self, enable: bool) -> Self {
         self.enable_parallel = enable;
         self
     }
 
     /// Get a conservative configuration
+    #[must_use] 
     pub fn conservative() -> Self {
         Self {
             max_branches: 3,
@@ -98,6 +104,7 @@ impl SaturationConfig {
     }
 
     /// Get an aggressive configuration
+    #[must_use] 
     pub fn aggressive() -> Self {
         Self {
             max_branches: 10,

@@ -38,7 +38,7 @@ impl SWRLInterpreter {
         context: &mut SWRLExecutionContext,
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<SWRLExecutionResult> {
-        trace!("Interpreting SWRL rule: {:?}", rule);
+        trace!("Interpreting SWRL rule: {rule:?}");
 
         // Find all possible variable bindings that satisfy the rule body
         let bindings = self.find_satisfying_bindings(rule, context, ontology)?;
@@ -106,7 +106,7 @@ impl SWRLInterpreter {
         current_binding: &HashMap<SWRLVariable, SWRLValue>,
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
-        trace!("Finding bindings for atom: {:?}", atom);
+        trace!("Finding bindings for atom: {atom:?}");
 
         match atom {
             SWRLAtom::ClassAtom {

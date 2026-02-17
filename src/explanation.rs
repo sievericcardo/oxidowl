@@ -27,6 +27,7 @@ pub struct ExplanationService {
 
 impl ExplanationService {
     /// Create a new explanation service
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             proof_tracker: Arc::new(Mutex::new(ProofTracker::new())),
@@ -298,6 +299,7 @@ pub struct JustificationComputer {
 
 impl JustificationComputer {
     /// Create a new justification computer
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             cache: std::cell::RefCell::new(HashMap::new()),
@@ -623,6 +625,7 @@ pub struct ProofTracker {
 
 impl ProofTracker {
     /// Create a new proof tracker
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             steps: Vec::new(),
@@ -642,6 +645,7 @@ impl ProofTracker {
     }
 
     /// Get all steps for a node
+    #[must_use] 
     pub fn get_steps_for_node(&self, node_id: NodeId) -> Vec<&ReasoningStep> {
         self.node_map
             .get(&node_id)
@@ -700,11 +704,13 @@ pub struct ExplanationFormatter;
 
 impl ExplanationFormatter {
     /// Create a new explanation formatter
+    #[must_use] 
     pub fn new() -> Self {
         Self
     }
 
     /// Format explanation in the specified format
+    #[must_use] 
     pub fn format(&self, explanation: &Explanation, format: ExplanationFormat) -> String {
         match format {
             ExplanationFormat::PlainText => self.format_plain_text(explanation),
@@ -723,8 +729,7 @@ impl ExplanationFormatter {
                 superclass,
             } => {
                 result.push_str(&format!(
-                    "Explanation for: {:?} ⊑ {:?}\n\n",
-                    subclass, superclass
+                    "Explanation for: {subclass:?} ⊑ {superclass:?}\n\n"
                 ));
             }
             ExplanationConclusion::Inconsistency => {
@@ -732,14 +737,12 @@ impl ExplanationFormatter {
             }
             ExplanationConclusion::Unsatisfiability { class } => {
                 result.push_str(&format!(
-                    "Explanation for unsatisfiability of: {:?}\n\n",
-                    class
+                    "Explanation for unsatisfiability of: {class:?}\n\n"
                 ));
             }
             ExplanationConclusion::InstanceOf { individual, class } => {
                 result.push_str(&format!(
-                    "Explanation for: {:?} : {:?}\n\n",
-                    individual, class
+                    "Explanation for: {individual:?} : {class:?}\n\n"
                 ));
             }
         }
@@ -767,7 +770,7 @@ impl ExplanationFormatter {
         let justification_str = explanation
             .justification
             .iter()
-            .map(|axiom| format!("{:?}", axiom))
+            .map(|axiom| format!("{axiom:?}"))
             .collect::<Vec<_>>()
             .join(", ");
 

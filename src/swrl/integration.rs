@@ -28,6 +28,7 @@ pub struct SWRLFeatureRegistry {
 
 impl SWRLFeatureRegistry {
     /// Create a new comprehensive SWRL feature registry
+    #[must_use] 
     pub fn new() -> Self {
         let mut main_registry = SWRLBuiltInRegistry::new();
         let datetime_registry = DateTimeBuiltInRegistry::new();
@@ -68,12 +69,12 @@ impl SWRLFeatureRegistry {
         }
 
         Err(Error::reasoning(format!(
-            "Unknown built-in predicate: {}",
-            iri
+            "Unknown built-in predicate: {iri}"
         )))
     }
 
     /// Check if a built-in is supported
+    #[must_use] 
     pub fn is_builtin_supported(&self, iri: &str) -> bool {
         self.datetime_registry.get_builtin(iri).is_some()
             || self.regex_registry.get(iri).is_some()
@@ -81,6 +82,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get all supported built-in IRIs
+    #[must_use] 
     pub fn get_all_builtin_iris(&self) -> Vec<String> {
         let mut iris = Vec::new();
 
@@ -104,6 +106,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get built-ins by category
+    #[must_use] 
     pub fn get_builtins_by_category(&self) -> HashMap<String, Vec<String>> {
         let mut categories = HashMap::new();
 
@@ -191,11 +194,13 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get feature implementation status
+    #[must_use] 
     pub fn get_feature_status(&self) -> &HashMap<String, bool> {
         &self.feature_status
     }
 
     /// Get statistics about implemented built-ins
+    #[must_use] 
     pub fn get_statistics(&self) -> SWRLFeatureStatistics {
         let datetime_count = self.datetime_registry.get_builtin_iris().len();
         let regex_count = self.regex_registry.count();
@@ -207,13 +212,13 @@ impl SWRLFeatureRegistry {
             total_builtins: datetime_count + regex_count + main_count,
             datetime_builtins: datetime_count,
             regex_builtins: regex_count,
-            core_builtins: categories.get("core").map_or(0, |v| v.len()),
-            math_builtins: categories.get("math").map_or(0, |v| v.len()),
-            string_builtins: categories.get("string").map_or(0, |v| v.len()),
-            comparison_builtins: categories.get("comparison").map_or(0, |v| v.len()),
-            list_builtins: categories.get("list").map_or(0, |v| v.len()),
-            uri_builtins: categories.get("uri").map_or(0, |v| v.len()),
-            boolean_builtins: categories.get("boolean").map_or(0, |v| v.len()),
+            core_builtins: categories.get("core").map_or(0, std::vec::Vec::len),
+            math_builtins: categories.get("math").map_or(0, std::vec::Vec::len),
+            string_builtins: categories.get("string").map_or(0, std::vec::Vec::len),
+            comparison_builtins: categories.get("comparison").map_or(0, std::vec::Vec::len),
+            list_builtins: categories.get("list").map_or(0, std::vec::Vec::len),
+            uri_builtins: categories.get("uri").map_or(0, std::vec::Vec::len),
+            boolean_builtins: categories.get("boolean").map_or(0, std::vec::Vec::len),
             feature_coverage: self.calculate_feature_coverage(),
         }
     }
@@ -266,7 +271,7 @@ impl SWRLFeatureRegistry {
                 });
             }
         } else {
-            warnings.push(format!("Variable arity built-in: {}", iri));
+            warnings.push(format!("Variable arity built-in: {iri}"));
         }
 
         Ok(ValidationResult {
@@ -277,6 +282,7 @@ impl SWRLFeatureRegistry {
     }
 
     /// Get expected arity for a built-in
+    #[must_use] 
     pub fn get_builtin_arity(&self, iri: &str) -> Option<usize> {
         if let Some(builtin) = self.datetime_registry.get_builtin(iri) {
             return builtin.arity();

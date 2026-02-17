@@ -1,6 +1,6 @@
-//! Lock helper utilities for safe RwLock access
+//! Lock helper utilities for safe `RwLock` access
 //!
-//! This module provides helper functions that convert `PoisonError` from RwLock
+//! This module provides helper functions that convert `PoisonError` from `RwLock`
 //! operations into proper `Error` types with context and backtraces (in debug builds).
 //!
 //! # Usage
@@ -24,15 +24,15 @@
 use crate::error::{Error, Result};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-/// Acquire a read lock on an RwLock with proper error handling
+/// Acquire a read lock on an `RwLock` with proper error handling
 ///
-/// This function attempts to acquire a read lock on the provided RwLock.
+/// This function attempts to acquire a read lock on the provided `RwLock`.
 /// If the lock is poisoned, it returns a `LockPoisoned` error with context
 /// and a backtrace (in debug builds).
 ///
 /// # Arguments
 ///
-/// * `lock` - The RwLock to acquire a read lock on
+/// * `lock` - The `RwLock` to acquire a read lock on
 /// * `context` - Contextual information about what is being locked (used in error messages)
 ///
 /// # Returns
@@ -52,18 +52,18 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// ```
 pub fn read_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockReadGuard<'a, T>> {
     lock.read()
-        .map_err(|e| Error::lock_poisoned(format!("Read lock poisoned: {} - {}", context, e)))
+        .map_err(|e| Error::lock_poisoned(format!("Read lock poisoned: {context} - {e}")))
 }
 
-/// Acquire a write lock on an RwLock with proper error handling
+/// Acquire a write lock on an `RwLock` with proper error handling
 ///
-/// This function attempts to acquire a write lock on the provided RwLock.
+/// This function attempts to acquire a write lock on the provided `RwLock`.
 /// If the lock is poisoned, it returns a `LockPoisoned` error with context
 /// and a backtrace (in debug builds).
 ///
 /// # Arguments
 ///
-/// * `lock` - The RwLock to acquire a write lock on
+/// * `lock` - The `RwLock` to acquire a write lock on
 /// * `context` - Contextual information about what is being locked (used in error messages)
 ///
 /// # Returns
@@ -83,7 +83,7 @@ pub fn read_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockRead
 /// ```
 pub fn write_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockWriteGuard<'a, T>> {
     lock.write()
-        .map_err(|e| Error::lock_poisoned(format!("Write lock poisoned: {} - {}", context, e)))
+        .map_err(|e| Error::lock_poisoned(format!("Write lock poisoned: {context} - {e}")))
 }
 
 #[cfg(test)]

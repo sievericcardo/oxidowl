@@ -22,6 +22,7 @@ pub struct DLClauseGenerator {
 
 impl DLClauseGenerator {
     /// Create a new DL clause generator
+    #[must_use] 
     pub fn new() -> Self {
         let mut prefixes = HashMap::new();
 
@@ -248,9 +249,9 @@ impl DLClauseGenerator {
         if let Some(iri) = ontology.get_iri() {
             let iri_str = iri.as_str();
             if let Some(base) = iri_str.strip_suffix('#') {
-                self.prefixes.insert("".to_string(), format!("{base}#"));
+                self.prefixes.insert(String::new(), format!("{base}#"));
             } else if let Some(base) = iri_str.strip_suffix('/') {
-                self.prefixes.insert("".to_string(), format!("{base}/"));
+                self.prefixes.insert(String::new(), format!("{base}/"));
             }
         }
 
@@ -392,6 +393,7 @@ impl DLClauseGenerator {
     }
 
     /// Get prefixes
+    #[must_use] 
     pub fn get_prefixes(&self) -> &HashMap<String, String> {
         &self.prefixes
     }

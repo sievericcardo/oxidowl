@@ -477,7 +477,7 @@ impl ReasoningService {
         let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
         let result = swrl_engine
             .execute_rules()
-            .map_err(|e| Error::reasoning(format!("SWRL rule execution failed: {}", e)))?;
+            .map_err(|e| Error::reasoning(format!("SWRL rule execution failed: {e}")))?;
 
         // Apply the inferences to the ontology
         if !result.inferences.is_empty() {
@@ -828,6 +828,7 @@ impl ReasoningService {
     }
 
     /// Get access to the SWRL rule engine
+    #[must_use] 
     pub fn get_swrl_engine(&self) -> Arc<RwLock<SWRLRuleEngine>> {
         Arc::clone(&self.swrl_engine)
     }
@@ -856,8 +857,7 @@ impl ReasoningService {
         let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
         swrl_engine.set_rule_active(rule_id, active).map_err(|e| {
             Error::reasoning(format!(
-                "Failed to set SWRL rule {} active state: {}",
-                rule_id, e
+                "Failed to set SWRL rule {rule_id} active state: {e}"
             ))
         })
     }
@@ -1031,13 +1031,13 @@ impl ReasoningService {
     }
 
     // Synchronous wrapper methods for advanced query processing
-    /// Synchronous version of get_instances for use in advanced query processing
+    /// Synchronous version of `get_instances` for use in advanced query processing
     pub fn get_instances_sync(&self, class: &ClassExpression) -> Result<Vec<Individual>> {
         let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
         reasoner.get_instances(class, false)
     }
 
-    /// Synchronous version of is_instance_of for use in advanced query processing  
+    /// Synchronous version of `is_instance_of` for use in advanced query processing  
     pub fn is_instance_of_sync(
         &self,
         individual: &Individual,
@@ -1058,6 +1058,7 @@ impl ReasoningService {
     }
 
     /// Get the cache manager for incremental reasoning integration
+    #[must_use] 
     pub fn cache_manager(&self) -> Arc<RwLock<CacheManager>> {
         self.cache_manager.clone()
     }

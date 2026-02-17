@@ -92,6 +92,7 @@ impl AbsorptionStats {
     }
 
     /// Pretty print statistics
+    #[must_use] 
     pub fn format(&self) -> String {
         let mut output = String::new();
         output.push_str(&format!("Total clauses: {}\n", self.total_clauses));
@@ -105,7 +106,7 @@ impl AbsorptionStats {
         if !self.pattern_counts.is_empty() {
             output.push_str("\nPattern breakdown:\n");
             for (pattern, count) in &self.pattern_counts {
-                output.push_str(&format!("  {}: {}\n", pattern, count));
+                output.push_str(&format!("  {pattern}: {count}\n"));
             }
         }
 
@@ -147,6 +148,7 @@ impl ClauseAbsorber {
     /// # Returns
     ///
     /// A `ClauseAbsorber` containing absorbed patterns and remaining clauses
+    #[must_use] 
     pub fn absorb(clause_set: &DLClauseSet) -> Self {
         let mut absorber = ClauseAbsorber {
             absorbed_clauses: Vec::new(),
@@ -409,51 +411,61 @@ impl ClauseAbsorber {
     }
 
     /// Get clauses that could not be absorbed (must be checked dynamically)
+    #[must_use] 
     pub fn remaining_clauses(&self) -> &[DLClause] {
         &self.remaining_clauses
     }
 
     /// Get absorbed clauses (for reference/debugging)
+    #[must_use] 
     pub fn absorbed_clauses(&self) -> &[DLClause] {
         &self.absorbed_clauses
     }
 
     /// Get absorbed patterns
+    #[must_use] 
     pub fn absorbed_patterns(&self) -> &[AbsorbablePattern] {
         &self.absorbed_patterns
     }
 
     /// Get absorption statistics
+    #[must_use] 
     pub fn stats(&self) -> &AbsorptionStats {
         &self.stats
     }
 
     /// Get concept implication map (A → {B, C, ...})
+    #[must_use] 
     pub fn concept_implications(&self) -> &HashMap<String, HashSet<String>> {
         &self.concept_implications
     }
 
     /// Get role domain map (R → {A, B, ...})
+    #[must_use] 
     pub fn role_domains(&self) -> &HashMap<String, HashSet<String>> {
         &self.role_domains
     }
 
     /// Get role range map (R → {A, B, ...})
+    #[must_use] 
     pub fn role_ranges(&self) -> &HashMap<String, HashSet<String>> {
         &self.role_ranges
     }
 
     /// Check if a concept implies other concepts
+    #[must_use] 
     pub fn get_implied_concepts(&self, concept: &str) -> Option<&HashSet<String>> {
         self.concept_implications.get(concept)
     }
 
     /// Check if a role has domain constraints
+    #[must_use] 
     pub fn get_role_domain_concepts(&self, role: &str) -> Option<&HashSet<String>> {
         self.role_domains.get(role)
     }
 
     /// Check if a role has range constraints
+    #[must_use] 
     pub fn get_role_range_concepts(&self, role: &str) -> Option<&HashSet<String>> {
         self.role_ranges.get(role)
     }

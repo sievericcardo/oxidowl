@@ -54,21 +54,20 @@ fn parse_iri_to_url_with_base(uri_str: &str, base: Option<&str>) -> Result<url::
         && let Ok(base_url) = url::Url::parse(base_uri) {
             // Resolve relative URI against base
             return base_url.join(uri_str)
-                .map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{}' against base '{}': {}", uri_str, base_uri, e)));
+                .map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{uri_str}' against base '{base_uri}': {e}")));
         }
     
     // No base URI provided - check if it looks like it has a scheme
     if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
         // Has a scheme but failed to parse - this is an error
         return url::Url::parse(uri_str)
-            .map_err(|e| Error::ontology_parsing(format!("Invalid absolute IRI: {}", e)));
+            .map_err(|e| Error::ontology_parsing(format!("Invalid absolute IRI: {e}")));
     }
     
     // Relative URI without base - require explicit base for proper resolution
     // This is more correct than using a dummy base
     Err(Error::ontology_parsing(format!(
-        "Relative IRI '{}' requires a base URI. Use @base directive or provide an absolute IRI.",
-        uri_str
+        "Relative IRI '{uri_str}' requires a base URI. Use @base directive or provide an absolute IRI."
     )))
 }
 
@@ -565,7 +564,7 @@ impl TurtleParser {
         } else {
             // Regular subject
             self.resolve_token(&tokens[0], state).map_err(|e| {
-                Error::ontology_parsing(format!("Failed to resolve subject token: {}", e))
+                Error::ontology_parsing(format!("Failed to resolve subject token: {e}"))
             })?
         };
 
@@ -631,8 +630,7 @@ impl TurtleParser {
                     .resolve_token(&tokens[start_index], state)
                     .map_err(|e| {
                         Error::ontology_parsing(format!(
-                            "Failed to resolve predicate token at index {}: {}",
-                            start_index, e
+                            "Failed to resolve predicate token at index {start_index}: {e}"
                         ))
                     })?;
                 start_index += 1; // Move past the predicate
@@ -739,7 +737,7 @@ impl TurtleParser {
                                                 let prefix = &dt_str[..colon_pos];
                                                 let local = &dt_str[colon_pos + 1..];
                                                 if let Some(base) = state.prefixes.get(prefix) {
-                                                    format!("{}{}", base, local)
+                                                    format!("{base}{local}")
                                                 } else {
                                                     dt_str
                                                 }
@@ -793,8 +791,7 @@ impl TurtleParser {
                 Ok(obj) => obj,
                 Err(e) => {
                     eprintln!(
-                        "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
-                        start_index, e
+                        "Warning: Failed to resolve object token at index {start_index}: {e}. Skipping this predicate-object pair."
                     );
                     // Skip to next statement
                     while start_index < tokens.len()
@@ -1175,10 +1172,10 @@ impl TurtleParser {
                 if parts.len() == 2 {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
-                    Token::PrefixedName("".to_string(), subject_iri.to_string())
+                    Token::PrefixedName(String::new(), subject_iri.to_string())
                 }
             } else {
-                Token::PrefixedName("".to_string(), subject_iri.to_string())
+                Token::PrefixedName(String::new(), subject_iri.to_string())
             };
 
             let subject_uri = self.resolve_token(&subject_token, state)?;
@@ -1269,13 +1266,13 @@ impl TurtleParser {
                                                         )
                                                     } else {
                                                         Token::PrefixedName(
-                                                            "".to_string(),
+                                                            String::new(),
                                                             class_token_str.to_string(),
                                                         )
                                                     }
                                                 } else {
                                                     Token::PrefixedName(
-                                                        "".to_string(),
+                                                        String::new(),
                                                         class_token_str.to_string(),
                                                     )
                                                 };
@@ -1287,14 +1284,12 @@ impl TurtleParser {
                                                         intersection_classes
                                                             .push(ClassExpression::Class(class));
                                                         eprintln!(
-                                                            "Added intersection class: {}",
-                                                            class_uri
+                                                            "Added intersection class: {class_uri}"
                                                         );
                                                     }
                                                     Err(e) => {
                                                         eprintln!(
-                                                            "Warning: Could not resolve intersection class {}: {}",
-                                                            class_token_str, e
+                                                            "Warning: Could not resolve intersection class {class_token_str}: {e}"
                                                         );
                                                     }
                                                 }
@@ -1332,13 +1327,13 @@ impl TurtleParser {
                                             )
                                         } else {
                                             Token::PrefixedName(
-                                                "".to_string(),
+                                                String::new(),
                                                 class_token_str.to_string(),
                                             )
                                         }
                                     } else {
                                         Token::PrefixedName(
-                                            "".to_string(),
+                                            String::new(),
                                             class_token_str.to_string(),
                                         )
                                     };
@@ -1348,12 +1343,11 @@ impl TurtleParser {
                                             let class = Class::new(IRI::new(&class_uri));
                                             intersection_classes
                                                 .push(ClassExpression::Class(class));
-                                            eprintln!("Added intersection class: {}", class_uri);
+                                            eprintln!("Added intersection class: {class_uri}");
                                         }
                                         Err(e) => {
                                             eprintln!(
-                                                "Warning: Could not resolve intersection class {}: {}",
-                                                class_token_str, e
+                                                "Warning: Could not resolve intersection class {class_token_str}: {e}"
                                             );
                                         }
                                     }
@@ -1436,14 +1430,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1469,14 +1461,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1541,14 +1531,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1592,7 +1580,7 @@ impl TurtleParser {
             };
 
             let cardinality: u32 = cardinality_str.parse().map_err(|_| {
-                Error::ontology_parsing(format!("Invalid cardinality value: {}", cardinality_str))
+                Error::ontology_parsing(format!("Invalid cardinality value: {cardinality_str}"))
             })?;
 
             // Extract the onClass (filler)
@@ -1620,8 +1608,7 @@ impl TurtleParser {
                 Token::Iri(class_name[1..class_name.len() - 1].to_string())
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid class name: {}",
-                    class_name
+                    "Invalid class name: {class_name}"
                 )));
             };
 
@@ -1675,8 +1662,7 @@ impl TurtleParser {
                 // Validate it's "true" or "false"
                 if value_str != "true" && value_str != "false" {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid owl:hasSelf value: '{}'. Must be 'true' or 'false'",
-                        value_str
+                        "Invalid owl:hasSelf value: '{value_str}'. Must be 'true' or 'false'"
                     )));
                 }
 
@@ -1697,8 +1683,7 @@ impl TurtleParser {
                                 && !datatype_part.contains("XMLSchema#boolean")
                             {
                                 return Err(Error::ontology_parsing(format!(
-                                    "Invalid datatype for owl:hasSelf: '{}'. Must be xsd:boolean",
-                                    datatype_part
+                                    "Invalid datatype for owl:hasSelf: '{datatype_part}'. Must be xsd:boolean"
                                 )));
                             }
                         }
@@ -1713,14 +1698,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1778,7 +1761,7 @@ impl TurtleParser {
                 && let Some(paren_end) = restriction_str[restr_start + paren_start..].find(')') {
                     let facets_str = &restriction_str
                         [restr_start + paren_start + 1..restr_start + paren_start + paren_end];
-                    eprintln!("Parsing facets: {}", facets_str);
+                    eprintln!("Parsing facets: {facets_str}");
 
                     // Parse facets like "[ xsd:maxExclusive \"80.0\"^^xsd:double ]"
                     let mut in_bracket = false;
@@ -1941,8 +1924,7 @@ impl TurtleParser {
                 };
 
                 println!(
-                    "Creating enhanced SubClassOf axiom: {} rdfs:subClassOf {}",
-                    subject_uri, object_uri
+                    "Creating enhanced SubClassOf axiom: {subject_uri} rdfs:subClassOf {object_uri}"
                 );
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
             }
@@ -2135,7 +2117,7 @@ impl TurtleParser {
         Ok(tokens)
     }
 
-    /// Process tokens to convert << ... >> into QuotedTriple tokens
+    /// Process tokens to convert << ... >> into `QuotedTriple` tokens
     /// Supports recursive quoted triples
     fn process_quoted_triples(&self, tokens: Vec<Token>, state: &ParseState) -> Result<Vec<Token>> {
         if !self.config.parse_rdf_star {
@@ -2234,7 +2216,7 @@ impl TurtleParser {
         })
     }
 
-    /// Convert a token to an RdfTerm, handling recursive quoted triples
+    /// Convert a token to an `RdfTerm`, handling recursive quoted triples
     fn token_to_rdf_term(&self, token: &Token, state: &ParseState) -> Result<RdfTerm> {
         match token {
             Token::QuotedTriple(triple) => {
@@ -2244,14 +2226,14 @@ impl TurtleParser {
             Token::Iri(iri) => {
                 let decoded = self.decode_escape_sequences(iri);
                 let url = url::Url::parse(&decoded).map_err(|e| {
-                    Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                    Error::ontology_parsing(format!("Invalid IRI: {e}"))
                 })?;
                 Ok(RdfTerm::Iri(url))
             }
             Token::PrefixedName(prefix, local) => {
                 let expanded = self.expand_prefixed_name(&format!("{prefix}:{local}"), state)?;
                 let url = url::Url::parse(&expanded).map_err(|e| {
-                    Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                    Error::ontology_parsing(format!("Invalid IRI: {e}"))
                 })?;
                 Ok(RdfTerm::Iri(url))
             }
@@ -2278,20 +2260,19 @@ impl TurtleParser {
                 if keyword.contains(':') {
                     let expanded = self.expand_prefixed_name(keyword, state)?;
                     let url = url::Url::parse(&expanded).map_err(|e| {
-                        Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                        Error::ontology_parsing(format!("Invalid IRI: {e}"))
                     })?;
                     Ok(RdfTerm::Iri(url))
                 } else {
                     // Treat as IRI for simplicity
                     let url = url::Url::parse(keyword).map_err(|e| {
-                        Error::ontology_parsing(format!("Invalid IRI: {}", e))
+                        Error::ontology_parsing(format!("Invalid IRI: {e}"))
                     })?;
                     Ok(RdfTerm::Iri(url))
                 }
             }
             _ => Err(Error::ontology_parsing(format!(
-                "Cannot convert token {:?} to RdfTerm",
-                token
+                "Cannot convert token {token:?} to RdfTerm"
             ))),
         }
     }
@@ -2327,10 +2308,9 @@ impl TurtleParser {
                 Ok(self.decode_escape_sequences(lit))
             }
             _ => {
-                let token_desc = format!("{:?}", token);
+                let token_desc = format!("{token:?}");
                 Err(Error::ontology_parsing(format!(
-                    "Cannot resolve token to URI: {:?}",
-                    token_desc
+                    "Cannot resolve token to URI: {token_desc:?}"
                 )))
             }
         }
@@ -2430,8 +2410,7 @@ impl TurtleParser {
             } else {
                 // Handle unknown prefixes - this should be an error for proper Turtle parsing
                 Err(Error::ontology_parsing(format!(
-                    "Undefined prefix: {}",
-                    prefix
+                    "Undefined prefix: {prefix}"
                 )))
             }
         } else if let Some(base) = &state.base_uri {
@@ -2440,8 +2419,7 @@ impl TurtleParser {
         } else {
             // Relative URI without base - this should be an error
             Err(Error::ontology_parsing(format!(
-                "Relative URI without base: {}",
-                name
+                "Relative URI without base: {name}"
             )))
         }
     }
@@ -2640,7 +2618,7 @@ pub fn parse_file_with_config<P: AsRef<Path>>(
 pub struct TurtleSerializer;
 
 impl TurtleSerializer {
-    /// Create a new TurtleSerializer instance
+    /// Create a new `TurtleSerializer` instance
     #[must_use]
     pub fn new() -> Self {
         Self

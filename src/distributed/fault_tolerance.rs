@@ -358,7 +358,7 @@ impl FaultTolerance {
         tokio::spawn(async move {
             let mut detector = failure_detector.write().await;
             if let Err(e) = detector.start(event_sender).await {
-                error!("Failure detector failed: {}", e);
+                error!("Failure detector failed: {e}");
             }
         });
 
@@ -368,7 +368,7 @@ impl FaultTolerance {
         tokio::spawn(async move {
             let mut manager = recovery_manager.write().await;
             if let Err(e) = manager.start(event_sender).await {
-                error!("Recovery manager failed: {}", e);
+                error!("Recovery manager failed: {e}");
             }
         });
 
@@ -386,7 +386,7 @@ impl FaultTolerance {
                 )
                 .await
                 {
-                    error!("Error processing fault tolerance event: {}", e);
+                    error!("Error processing fault tolerance event: {e}");
                 }
             }
         });
@@ -402,7 +402,7 @@ impl FaultTolerance {
     ) -> Result<()> {
         match event {
             FaultToleranceEvent::NodeFailure(node_id, failure_type) => {
-                warn!("Node failure detected: {} - {:?}", node_id, failure_type);
+                warn!("Node failure detected: {node_id} - {failure_type:?}");
 
                 // Update circuit breaker
                 {
@@ -414,7 +414,7 @@ impl FaultTolerance {
             }
 
             FaultToleranceEvent::NodeRecovery(node_id) => {
-                info!("Node recovery detected: {}", node_id);
+                info!("Node recovery detected: {node_id}");
 
                 // Reset circuit breaker
                 {
@@ -427,15 +427,13 @@ impl FaultTolerance {
 
             FaultToleranceEvent::CircuitBreakerStateChanged(node_id, state) => {
                 info!(
-                    "Circuit breaker state changed for node {}: {:?}",
-                    node_id, state
+                    "Circuit breaker state changed for node {node_id}: {state:?}"
                 );
             }
 
             FaultToleranceEvent::RecoveryStarted(session_id, recovery_type) => {
                 info!(
-                    "Recovery session started: {} - {:?}",
-                    session_id, recovery_type
+                    "Recovery session started: {session_id} - {recovery_type:?}"
                 );
             }
 
@@ -451,11 +449,11 @@ impl FaultTolerance {
             }
 
             FaultToleranceEvent::CheckpointCreated(checkpoint_id, description) => {
-                info!("Checkpoint created: {} - {}", checkpoint_id, description);
+                info!("Checkpoint created: {checkpoint_id} - {description}");
             }
 
             FaultToleranceEvent::GracefulDegradation(level) => {
-                warn!("Graceful degradation activated: {:?}", level);
+                warn!("Graceful degradation activated: {level:?}");
             }
         }
 
@@ -506,7 +504,7 @@ impl FaultTolerance {
                     return Ok(result);
                 }
                 Err(e) => {
-                    error!("Partition execution failed (attempt {}): {}", attempts, e);
+                    error!("Partition execution failed (attempt {attempts}): {e}");
 
                     // Record failure in circuit breaker
                     {
@@ -540,7 +538,7 @@ impl FaultTolerance {
                             {
                                 Ok(result) => return Ok(result),
                                 Err(e) => {
-                                    error!("Alternative node execution also failed: {}", e);
+                                    error!("Alternative node execution also failed: {e}");
                                 }
                             }
                         }
@@ -685,7 +683,7 @@ impl FaultTolerance {
         let event = FaultToleranceEvent::RecoveryStarted(session_id, recovery_type);
         let _ = self.event_sender.send(event);
 
-        info!("Started recovery session: {}", session_id);
+        info!("Started recovery session: {session_id}");
         Ok(session_id)
     }
 
@@ -936,6 +934,7 @@ pub enum CircuitBreakerState {
 
 impl CircuitBreaker {
     /// Create a new circuit breaker
+    #[must_use] 
     pub fn new(failure_threshold: usize, timeout_duration: Duration) -> Self {
         Self {
             state: CircuitBreakerState::Closed,
@@ -947,6 +946,7 @@ impl CircuitBreaker {
     }
 
     /// Check if should attempt operation
+    #[must_use] 
     pub fn should_attempt(&self) -> bool {
         match self.state {
             CircuitBreakerState::Closed => true,
@@ -996,6 +996,7 @@ impl CircuitBreaker {
     }
 
     /// Get current state
+    #[must_use] 
     pub fn get_state(&self) -> CircuitBreakerState {
         self.state.clone()
     }
@@ -1036,7 +1037,7 @@ impl CheckpointManager {
         };
 
         self.checkpoints.insert(id, checkpoint);
-        info!("Created checkpoint: {}", id);
+        info!("Created checkpoint: {id}");
 
         Ok(())
     }

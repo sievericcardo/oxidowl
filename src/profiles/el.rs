@@ -3,16 +3,16 @@
 //! OWL 2 EL is the existential language profile, optimized for polynomial-time
 //! classification and instance checking. It allows:
 //!
-//! - Existential quantification (ObjectSomeValuesFrom, DataSomeValuesFrom)
-//! - Intersection (ObjectIntersectionOf)  
-//! - Nominals (ObjectOneOf) with some restrictions
-//! - Self restrictions (ObjectHasSelf)
+//! - Existential quantification (`ObjectSomeValuesFrom`, `DataSomeValuesFrom`)
+//! - Intersection (`ObjectIntersectionOf`)  
+//! - Nominals (`ObjectOneOf`) with some restrictions
+//! - Self restrictions (`ObjectHasSelf`)
 //! - Basic property axioms
 //!
 //! Disallowed constructs:
-//! - Universal quantification (ObjectAllValuesFrom, DataAllValuesFrom)
-//! - Complement (ObjectComplementOf)
-//! - Union (ObjectUnionOf)
+//! - Universal quantification (`ObjectAllValuesFrom`, `DataAllValuesFrom`)
+//! - Complement (`ObjectComplementOf`)
+//! - Union (`ObjectUnionOf`)
 //! - Cardinality restrictions
 //! - Disjoint classes/properties
 
@@ -30,6 +30,7 @@ pub struct ELValidator;
 
 impl ELValidator {
     /// Create a new EL profile validator
+    #[must_use] 
     pub fn new() -> Self {
         Self
     }

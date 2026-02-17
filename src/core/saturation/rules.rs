@@ -39,6 +39,7 @@ impl std::fmt::Debug for SaturationRuleSet {
 
 impl SaturationRuleSet {
     /// Create a new rule set with standard OWL 2 DL saturation rules
+    #[must_use] 
     pub fn new_owl2_dl() -> Self {
         let rules: Vec<Box<dyn SaturationRule>> = vec![
             Box::new(ConjunctionRule),
@@ -70,6 +71,7 @@ impl SaturationRuleSet {
     }
 
     /// Get all rules
+    #[must_use] 
     pub fn rules(&self) -> &[Box<dyn SaturationRule>] {
         &self.rules
     }
@@ -114,7 +116,7 @@ impl SaturationRule for ConjunctionRule {
     }
 }
 
-/// Rule for SubClassOf axioms: C ⊑ D, individual:C ⊢ individual:D
+/// Rule for `SubClassOf` axioms: C ⊑ D, individual:C ⊢ individual:D
 #[derive(Debug)]
 pub struct SubClassOfRule;
 
@@ -154,7 +156,7 @@ impl SaturationRule for SubClassOfRule {
     }
 }
 
-/// Rule for EquivalentClasses axioms: C ≡ D ⊢ C ⊑ D, D ⊑ C
+/// Rule for `EquivalentClasses` axioms: C ≡ D ⊢ C ⊑ D, D ⊑ C
 #[derive(Debug)]
 pub struct EquivalentClassRule;
 

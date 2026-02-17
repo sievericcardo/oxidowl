@@ -23,11 +23,13 @@ pub enum UnificationResult {
 
 impl UnificationResult {
     /// Check if unification was successful
+    #[must_use] 
     pub fn is_success(&self) -> bool {
         matches!(self, UnificationResult::Success(_))
     }
 
     /// Get bindings if successful
+    #[must_use] 
     pub fn bindings(&self) -> Option<&Bindings> {
         match self {
             UnificationResult::Success(bindings) => Some(bindings),
@@ -45,11 +47,13 @@ pub struct UnificationEngine {
 
 impl UnificationEngine {
     /// Create a new unification engine
+    #[must_use] 
     pub fn new() -> Self {
         Self { debug: false }
     }
 
     /// Enable debug mode
+    #[must_use] 
     pub fn with_debug(mut self, debug: bool) -> Self {
         self.debug = debug;
         self
@@ -59,11 +63,12 @@ impl UnificationEngine {
     ///
     /// Returns a set of variable bindings that make atom1 and atom2 identical,
     /// or None if no such bindings exist.
+    #[must_use] 
     pub fn unify_atoms(&self, atom1: &SWRLAtom, atom2: &SWRLAtom) -> UnificationResult {
         let mut bindings = Bindings::new();
 
         if self.debug {
-            debug!("Attempting to unify atoms: {:?} with {:?}", atom1, atom2);
+            debug!("Attempting to unify atoms: {atom1:?} with {atom2:?}");
         }
 
         // Try to unify based on atom type
@@ -193,7 +198,7 @@ impl UnificationEngine {
 
         if success {
             if self.debug {
-                debug!("Unification succeeded with bindings: {:?}", bindings);
+                debug!("Unification succeeded with bindings: {bindings:?}");
             }
             UnificationResult::Success(bindings)
         } else {
@@ -293,6 +298,7 @@ impl UnificationEngine {
     }
 
     /// Apply bindings to an atom
+    #[must_use] 
     pub fn apply_bindings(&self, atom: &SWRLAtom, bindings: &Bindings) -> SWRLAtom {
         match atom {
             SWRLAtom::ClassAtom {
@@ -388,6 +394,7 @@ impl UnificationEngine {
     }
 
     /// Find all variable bindings that make atom match any fact
+    #[must_use] 
     pub fn match_atom_with_facts(&self, atom: &SWRLAtom, facts: &[SWRLAtom]) -> Vec<Bindings> {
         let mut all_bindings = Vec::new();
 
@@ -409,6 +416,7 @@ impl UnificationEngine {
     }
 
     /// Compose two binding sets (merge them if compatible)
+    #[must_use] 
     pub fn compose_bindings(&self, bindings1: &Bindings, bindings2: &Bindings) -> Option<Bindings> {
         let mut result = bindings1.clone();
 

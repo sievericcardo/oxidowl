@@ -16,6 +16,7 @@ pub struct FastConceptHasher {
 impl FastConceptHasher {
     /// Create a new fast hasher
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             hasher: DefaultHasher::new(),
@@ -157,6 +158,7 @@ impl FastConceptHasher {
 
     /// Finalize and return the hash value
     #[inline]
+    #[must_use] 
     pub fn finish(self) -> u64 {
         self.hasher.finish()
     }
@@ -187,7 +189,7 @@ fn compare_concepts_with_depth(a: &ClassExpression, b: &ClassExpression, depth: 
         // Fall back to discriminant-only comparison for very deep structures
         let a_disc = std::mem::discriminant(a);
         let b_disc = std::mem::discriminant(b);
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     // CRITICAL: Check discriminants first to ensure total order
@@ -197,7 +199,7 @@ fn compare_concepts_with_depth(a: &ClassExpression, b: &ClassExpression, depth: 
     
     if a_disc != b_disc {
         // Different variants - use discriminant ordering for total order
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     // Same variant - compare by content
@@ -358,14 +360,14 @@ fn compare_object_properties_with_depth(
     if depth > MAX_COMPARISON_DEPTH {
         let a_disc = std::mem::discriminant(a);
         let b_disc = std::mem::discriminant(b);
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     let a_disc = std::mem::discriminant(a);
     let b_disc = std::mem::discriminant(b);
     
     if a_disc != b_disc {
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     match (a, b) {
@@ -420,14 +422,14 @@ fn compare_data_ranges_with_depth(a: &DataRange, b: &DataRange, depth: usize) ->
     if depth > MAX_COMPARISON_DEPTH {
         let a_disc = std::mem::discriminant(a);
         let b_disc = std::mem::discriminant(b);
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     let a_disc = std::mem::discriminant(a);
     let b_disc = std::mem::discriminant(b);
     
     if a_disc != b_disc {
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     match (a, b) {
@@ -492,7 +494,7 @@ fn compare_individuals(a: &Individual, b: &Individual) -> std::cmp::Ordering {
     let b_disc = std::mem::discriminant(b);
     
     if a_disc != b_disc {
-        return format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc));
+        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
     }
     
     match (a, b) {
@@ -519,6 +521,7 @@ fn compare_literals(a: &Literal, b: &Literal) -> std::cmp::Ordering {
 /// - Directly hashes structural components (IRIs, discriminants)
 /// - Avoids Debug formatting overhead
 /// - Uses efficient inline hashing
+#[must_use] 
 pub fn compute_fast_signature(concepts: &ConceptSet) -> u64 {
     let mut hasher = FastConceptHasher::new();
     
@@ -533,7 +536,7 @@ pub fn compute_fast_signature(concepts: &ConceptSet) -> u64 {
         
         if a_disc != b_disc {
             // Different variants - use discriminant ordering
-            format!("{:?}", a_disc).cmp(&format!("{:?}", b_disc))
+            format!("{a_disc:?}").cmp(&format!("{b_disc:?}"))
         } else {
             // Same variant - compare by content using structural comparison
             compare_concepts(a, b)
@@ -550,6 +553,7 @@ pub fn compute_fast_signature(concepts: &ConceptSet) -> u64 {
 
 /// Compute hash for a single concept (useful for indexing)
 #[inline]
+#[must_use] 
 pub fn hash_concept(concept: &ClassExpression) -> u64 {
     let mut hasher = FastConceptHasher::new();
     hasher.hash_concept(concept);

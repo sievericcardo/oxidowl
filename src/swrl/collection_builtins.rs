@@ -27,7 +27,7 @@ impl SWRLBuiltIn for CountBuiltIn {
                 let items: Vec<&str> = if collection_str.is_empty() {
                     Vec::new()
                 } else {
-                    collection_str.split(',').map(|s| s.trim()).collect()
+                    collection_str.split(',').map(str::trim).collect()
                 };
 
                 let actual_count = items.len() as i64;
@@ -90,13 +90,13 @@ impl SWRLBuiltIn for UnionBuiltIn {
                 let items1: HashSet<&str> = if coll1.is_empty() {
                     HashSet::new()
                 } else {
-                    coll1.split(',').map(|s| s.trim()).collect()
+                    coll1.split(',').map(str::trim).collect()
                 };
 
                 let items2: HashSet<&str> = if coll2.is_empty() {
                     HashSet::new()
                 } else {
-                    coll2.split(',').map(|s| s.trim()).collect()
+                    coll2.split(',').map(str::trim).collect()
                 };
 
                 let union: HashSet<&str> = items1.union(&items2).cloned().collect();
@@ -135,13 +135,13 @@ impl SWRLBuiltIn for SubsetBuiltIn {
                 let subset_items: HashSet<&str> = if subset_str.is_empty() {
                     HashSet::new()
                 } else {
-                    subset_str.split(',').map(|s| s.trim()).collect()
+                    subset_str.split(',').map(str::trim).collect()
                 };
 
                 let superset_items: HashSet<&str> = if superset_str.is_empty() {
                     HashSet::new()
                 } else {
-                    superset_str.split(',').map(|s| s.trim()).collect()
+                    superset_str.split(',').map(str::trim).collect()
                 };
 
                 let is_subset = subset_items.is_subset(&superset_items);

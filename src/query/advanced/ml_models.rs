@@ -98,6 +98,7 @@ struct LayerGradients {
 
 impl LinearRegressionModel {
     /// Create a new linear regression model
+    #[must_use] 
     pub fn new(feature_count: usize) -> Self {
         Self {
             execution_time_coefficients: vec![0.1; feature_count], // Initialize with small random values
@@ -285,6 +286,7 @@ impl PerformancePredictionModel for LinearRegressionModel {
 
 impl NeuralNetworkModel {
     /// Create a new neural network model
+    #[must_use] 
     pub fn new(feature_count: usize, hidden_sizes: Vec<usize>) -> Self {
         let mut layers = Vec::new();
         let mut input_size = feature_count;
@@ -587,6 +589,7 @@ impl ActivationFunction {
 
 impl EnsembleModel {
     /// Create a new ensemble model
+    #[must_use] 
     pub fn new(models: Vec<Box<dyn PerformancePredictionModel>>) -> Self {
         let model_count = models.len();
         let equal_weights = vec![1.0 / model_count as f64; model_count];

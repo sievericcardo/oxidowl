@@ -27,11 +27,13 @@ pub struct IriValidator {
 
 impl IriValidator {
     /// Create a new IRI validator with the specified mode
+    #[must_use] 
     pub fn new(mode: IriValidationMode) -> Self {
         Self { mode }
     }
 
     /// Create an RFC 3986 (URI) validator
+    #[must_use] 
     pub fn rfc3986() -> Self {
         Self {
             mode: IriValidationMode::RFC3986,
@@ -39,6 +41,7 @@ impl IriValidator {
     }
 
     /// Create an RFC 3987 (IRI) validator
+    #[must_use] 
     pub fn rfc3987() -> Self {
         Self {
             mode: IriValidationMode::RFC3987,
@@ -59,7 +62,7 @@ impl IriValidator {
         // Use url crate for RFC 3986 validation
         url::Url::parse(uri)
             .map(|_| ())
-            .map_err(|e| Error::ontology_parsing(format!("Invalid URI (RFC 3986): {}", e)))
+            .map_err(|e| Error::ontology_parsing(format!("Invalid URI (RFC 3986): {e}")))
     }
 
     /// Validate according to RFC 3987 (Internationalized IRIs)
@@ -78,8 +81,7 @@ impl IriValidator {
             // Validate scheme: starts with letter, contains only letters, digits, +, -, .
             if !Self::is_valid_scheme(scheme) {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid IRI scheme: '{}'",
-                    scheme
+                    "Invalid IRI scheme: '{scheme}'"
                 )));
             }
 
@@ -152,6 +154,7 @@ impl IriValidator {
     /// - Percent-encoding normalization
     /// - Path segment normalization (removing . and ..)
     /// - Default port removal
+    #[must_use] 
     pub fn normalize(&self, iri: &str) -> String {
         // Parse IRI using url crate
         if let Ok(url) = url::Url::parse(iri) {
@@ -165,12 +168,13 @@ impl IriValidator {
             url.to_string()
         } else {
             // If parsing fails, return original (may be relative IRI or invalid)
-            log::warn!("Failed to parse IRI for normalization: {}", iri);
+            log::warn!("Failed to parse IRI for normalization: {iri}");
             iri.to_string()
         }
     }
 
     /// Check if an IRI is absolute (contains a scheme)
+    #[must_use] 
     pub fn is_absolute(iri: &str) -> bool {
         iri.contains(':') && {
             if let Some(colon_pos) = iri.find(':') {
@@ -182,11 +186,13 @@ impl IriValidator {
     }
 
     /// Check if an IRI contains Unicode characters (is truly internationalized)
+    #[must_use] 
     pub fn is_internationalized(iri: &str) -> bool {
         !iri.is_ascii()
     }
 
     /// Convert IRI to URI by percent-encoding non-ASCII characters
+    #[must_use] 
     pub fn to_uri(&self, iri: &str) -> String {
         // Find scheme boundary
         if let Some(colon_pos) = iri.find(':') {
@@ -195,7 +201,7 @@ impl IriValidator {
             
             // Percent-encode the non-scheme part
             let encoded_rest = Self::percent_encode_unicode(rest);
-            format!("{}{}", scheme, encoded_rest)
+            format!("{scheme}{encoded_rest}")
         } else {
             Self::percent_encode_unicode(iri)
         }
@@ -212,7 +218,7 @@ impl IriValidator {
                 let mut buf = [0; 4];
                 let encoded = ch.encode_utf8(&mut buf);
                 for byte in encoded.bytes() {
-                    result.push_str(&format!("%{:02X}", byte));
+                    result.push_str(&format!("%{byte:02X}"));
                 }
             }
         }

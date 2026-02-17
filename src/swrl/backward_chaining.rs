@@ -119,6 +119,7 @@ pub struct ProofTree {
 
 impl BackwardChainingEngine {
     /// Create a new backward chaining engine
+    #[must_use] 
     pub fn new(rules: Vec<SWRLRule>, max_depth: usize) -> Self {
         Self {
             rules,
@@ -596,7 +597,7 @@ impl BackwardChainingEngine {
 
                 if let Some(existing_val) = bindings.bindings.get(var) {
                     if let SWRLTerm::Individual(existing_ind) = existing_val {
-                        if existing_ind.iri().map(|iri| iri.as_str()) == Some(&ind_name) {
+                        if existing_ind.iri().map(super::super::ontology::IRI::as_str) == Some(&ind_name) {
                             Some(new_bindings)
                         } else {
                             None
@@ -882,6 +883,7 @@ impl BackwardChainingEngine {
     }
 
     /// Get statistics about the engine
+    #[must_use] 
     pub fn get_statistics(&self) -> BackwardChainingStatistics {
         BackwardChainingStatistics {
             rules_count: self.rules.len(),
@@ -898,6 +900,7 @@ impl BackwardChainingEngine {
 
 impl VariableBindings {
     /// Create new empty bindings
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             bindings: HashMap::new(),
@@ -916,6 +919,7 @@ impl VariableBindings {
     }
 
     /// Lookup binding for a variable
+    #[must_use] 
     pub fn lookup(&self, var: &SWRLVariable) -> Option<&SWRLTerm> {
         self.bindings.get(var)
     }
@@ -949,6 +953,7 @@ impl VariableBindings {
 
 impl QueryStack {
     /// Create new query stack
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
@@ -978,6 +983,7 @@ impl QueryStack {
     }
 
     /// Check if goal is on the stack
+    #[must_use] 
     pub fn contains_goal(&self, goal: &SWRLAtom) -> bool {
         self.visited.contains(goal)
     }
@@ -992,6 +998,7 @@ impl QueryStack {
 
 impl FactBase {
     /// Create new empty fact base
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             class_assertions: HashSet::new(),
@@ -1008,6 +1015,7 @@ impl FactBase {
     }
 
     /// Check if class assertion exists
+    #[must_use] 
     pub fn has_class_assertion(&self, class: &ClassExpression, individual: &Individual) -> bool {
         self.class_assertions
             .contains(&(class.clone(), individual.clone()))
@@ -1025,6 +1033,7 @@ impl FactBase {
     }
 
     /// Check if object property assertion exists
+    #[must_use] 
     pub fn has_object_property_assertion(
         &self,
         property: &ObjectPropertyExpression,
@@ -1050,6 +1059,7 @@ impl FactBase {
     }
 
     /// Check if data property assertion exists
+    #[must_use] 
     pub fn has_data_property_assertion(
         &self,
         property: &DataPropertyExpression,
@@ -1068,6 +1078,7 @@ impl FactBase {
     }
 
     /// Check if same individual assertion exists
+    #[must_use] 
     pub fn has_same_individual_assertion(&self, ind1: &Individual, ind2: &Individual) -> bool {
         self.same_individual_assertions
             .contains(&(ind1.clone(), ind2.clone()))
@@ -1081,6 +1092,7 @@ impl FactBase {
     }
 
     /// Check if different individual assertion exists
+    #[must_use] 
     pub fn has_different_individual_assertion(&self, ind1: &Individual, ind2: &Individual) -> bool {
         self.different_individual_assertions
             .contains(&(ind1.clone(), ind2.clone()))
@@ -1100,6 +1112,7 @@ impl FactBase {
     }
 
     /// Get total number of facts
+    #[must_use] 
     pub fn total_facts(&self) -> usize {
         self.class_assertions.len()
             + self.object_property_assertions.len()
