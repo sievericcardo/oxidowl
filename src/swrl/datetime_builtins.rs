@@ -18,27 +18,24 @@ fn parse_day_time_duration(duration_str: &str) -> Result<chrono::Duration> {
     let mut remaining = cleaned;
 
     // Parse hours
-    if let Some(h_pos) = remaining.find('H') {
-        if let Ok(h) = remaining[..h_pos].parse::<i64>() {
+    if let Some(h_pos) = remaining.find('H')
+        && let Ok(h) = remaining[..h_pos].parse::<i64>() {
             hours = h;
             remaining = &remaining[h_pos + 1..];
         }
-    }
 
     // Parse minutes
-    if let Some(m_pos) = remaining.find('M') {
-        if let Ok(m) = remaining[..m_pos].parse::<i64>() {
+    if let Some(m_pos) = remaining.find('M')
+        && let Ok(m) = remaining[..m_pos].parse::<i64>() {
             minutes = m;
             remaining = &remaining[m_pos + 1..];
         }
-    }
 
     // Parse seconds
-    if let Some(s_pos) = remaining.find('S') {
-        if let Ok(s) = remaining[..s_pos].parse::<i64>() {
+    if let Some(s_pos) = remaining.find('S')
+        && let Ok(s) = remaining[..s_pos].parse::<i64>() {
             seconds = s;
         }
-    }
 
     Ok(chrono::Duration::hours(hours)
         + chrono::Duration::minutes(minutes)
@@ -217,29 +214,28 @@ impl DateTimeBuiltInRegistry {
                     let days = current_number
                         .parse::<i64>()
                         .map_err(|_| crate::Error::reasoning("Invalid day value in duration"))?;
-                    duration = duration + chrono::Duration::days(days);
+                    duration += chrono::Duration::days(days);
                     current_number.clear();
                 }
                 'H' if in_time_part => {
                     let hours = current_number
                         .parse::<i64>()
                         .map_err(|_| crate::Error::reasoning("Invalid hour value in duration"))?;
-                    duration = duration + chrono::Duration::hours(hours);
+                    duration += chrono::Duration::hours(hours);
                     current_number.clear();
                 }
                 'M' if in_time_part => {
                     let minutes = current_number
                         .parse::<i64>()
                         .map_err(|_| crate::Error::reasoning("Invalid minute value in duration"))?;
-                    duration = duration + chrono::Duration::minutes(minutes);
+                    duration += chrono::Duration::minutes(minutes);
                     current_number.clear();
                 }
                 'S' if in_time_part => {
                     let seconds = current_number
                         .parse::<f64>()
                         .map_err(|_| crate::Error::reasoning("Invalid second value in duration"))?;
-                    duration = duration
-                        + chrono::Duration::nanoseconds((seconds * 1_000_000_000.0) as i64);
+                    duration += chrono::Duration::nanoseconds((seconds * 1_000_000_000.0) as i64);
                     current_number.clear();
                 }
                 ch if ch.is_ascii_digit() || ch == '.' => {
@@ -1108,7 +1104,7 @@ impl SWRLBuiltIn for TimezoneBuiltIn {
                 } else if let Some(t_pos) = datetime_str.find('T') {
                     // Look for timezone markers only after the 'T' (time part)
                     let time_part = &datetime_str[t_pos..];
-                    if let Some(tz_pos) = time_part.rfind(|c| c == '+' || c == '-') {
+                    if let Some(tz_pos) = time_part.rfind(['+', '-']) {
                         // Make sure it's actually a timezone offset (not part of seconds)
                         let tz_candidate = &time_part[tz_pos..];
                         if tz_candidate.len() >= 3

@@ -525,8 +525,8 @@ impl FaultTolerance {
                     sleep(Duration::from_millis(backoff_ms)).await;
 
                     // Try to reassign to different node if original failed
-                    if attempts > 1 {
-                        if let Ok(new_node) = self
+                    if attempts > 1
+                        && let Ok(new_node) = self
                             .find_alternative_node(&partition.assigned_node, cluster_manager)
                             .await
                         {
@@ -544,7 +544,6 @@ impl FaultTolerance {
                                 }
                             }
                         }
-                    }
                 }
             }
         }

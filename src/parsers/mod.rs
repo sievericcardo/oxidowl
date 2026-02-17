@@ -13,6 +13,7 @@ pub mod validation;
 
 /// RDF compatibility mode for parsing RDF-based formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum RdfCompatibilityMode {
     /// RDF 1.1 mode - standard reification only
     RDF11,
@@ -21,31 +22,24 @@ pub enum RdfCompatibilityMode {
     /// RDF-star mode - quoted triples with << >>
     RDFStar,
     /// Auto-detect based on content
+    #[default]
     Auto,
 }
 
-impl Default for RdfCompatibilityMode {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 /// Error verbosity level for parser error messages
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ErrorVerbosity {
     /// Minimal: just the error message
     Minimal,
     /// Standard: message + line/column information
+    #[default]
     Standard,
     /// Detailed: full context stack and token information
     Detailed,
 }
 
-impl Default for ErrorVerbosity {
-    fn default() -> Self {
-        Self::Standard
-    }
-}
 
 /// Parser configuration
 #[derive(Debug, Clone)]
@@ -657,12 +651,12 @@ impl Parser for ManchesterParser {
         let mut parser = self.clone();
         parser
             .parse_string(input)
-            .map_err(|e| Error::ontology_parsing(&format!("Manchester parsing error: {:?}", e)))
+            .map_err(|e| Error::ontology_parsing(format!("Manchester parsing error: {:?}", e)))
     }
 
     fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
         let content = std::fs::read_to_string(path)
-            .map_err(|e| Error::ontology_parsing(&format!("Failed to read file: {}", e)))?;
+            .map_err(|e| Error::ontology_parsing(format!("Failed to read file: {}", e)))?;
         self.parse(&content)
     }
 }

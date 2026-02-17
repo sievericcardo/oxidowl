@@ -127,7 +127,7 @@ impl ClassificationResult {
         let direct_hierarchy = self.compute_direct_hierarchy()?;
 
         // Create all nodes
-        for (class, _) in &direct_hierarchy {
+        for class in direct_hierarchy.keys() {
             let class_name = self.extract_class_name(class);
             let class_iri = self.extract_class_iri(class);
 
@@ -186,12 +186,11 @@ impl ClassificationResult {
                     if intermediate != superclass && intermediate != subclass {
                         // If intermediate is a superclass of subclass AND superclass is a superclass of intermediate,
                         // then subclass -> superclass is transitive (not direct)
-                        if let Some(intermediate_superclasses) = self.hierarchy.get(intermediate) {
-                            if intermediate_superclasses.contains(superclass) {
+                        if let Some(intermediate_superclasses) = self.hierarchy.get(intermediate)
+                            && intermediate_superclasses.contains(superclass) {
                                 is_direct = false;
                                 break;
                             }
-                        }
                     }
                 }
 
@@ -332,7 +331,7 @@ impl ClassificationResult {
                 let iri_str = c.iri.to_string();
                 if let Some(name) = iri_str.split('#').nth(1) {
                     name.to_string()
-                } else if let Some(name) = iri_str.split('/').last() {
+                } else if let Some(name) = iri_str.split('/').next_back() {
                     name.to_string()
                 } else {
                     iri_str

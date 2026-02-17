@@ -144,8 +144,8 @@ impl ClusterCoordinator {
         let mut locks = self.locks.lock().await;
 
         // Check if lock exists and is held
-        if let Some(existing_lock) = locks.get(&lock_id) {
-            if let Some(holder) = existing_lock.holder {
+        if let Some(existing_lock) = locks.get(&lock_id)
+            && let Some(holder) = existing_lock.holder {
                 // Check if lock has expired
                 if existing_lock.acquired_at.elapsed() < existing_lock.timeout {
                     // Lock is still held
@@ -154,7 +154,6 @@ impl ClusterCoordinator {
                 // Lock expired, can be acquired
                 debug!("Lock {} expired for holder {:?}", lock_id, holder);
             }
-        }
 
         // Acquire the lock
         let lock = DistributedLock {

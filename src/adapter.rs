@@ -336,11 +336,10 @@ impl HornedOwlAdapter {
         let mut statement_nodes = HashSet::new();
         for triple in triples {
             if let (RdfTerm::BlankNode(bn), RdfTerm::Iri(pred), RdfTerm::Iri(obj)) = 
-                (&triple.subject, &triple.predicate, &triple.object) {
-                if pred == rdf_type && obj == rdf_statement {
+                (&triple.subject, &triple.predicate, &triple.object)
+                && pred == rdf_type && obj == rdf_statement {
                     statement_nodes.insert(bn.clone());
                 }
-            }
         }
         
         // Step 2: For each statement node, find its subject/predicate/object
@@ -351,8 +350,8 @@ impl HornedOwlAdapter {
             let mut obj = None;
             
             for triple in triples {
-                if let RdfTerm::BlankNode(triple_bn) = &triple.subject {
-                    if triple_bn == bn {
+                if let RdfTerm::BlankNode(triple_bn) = &triple.subject
+                    && triple_bn == bn {
                         match &triple.predicate {
                             RdfTerm::Iri(iri) if iri == rdf_subject => {
                                 subj = Some(triple.object.clone());
@@ -366,7 +365,6 @@ impl HornedOwlAdapter {
                             _ => {}
                         }
                     }
-                }
             }
             
             // If we found all three components, create a quoted triple
@@ -380,16 +378,14 @@ impl HornedOwlAdapter {
         let triples_to_skip: HashSet<_> = triples.iter()
             .filter(|triple| {
                 // Skip if it's part of a reification pattern
-                if let RdfTerm::BlankNode(bn) = &triple.subject {
-                    if statement_nodes.contains(bn) {
-                        if let RdfTerm::Iri(pred) = &triple.predicate {
+                if let RdfTerm::BlankNode(bn) = &triple.subject
+                    && statement_nodes.contains(bn)
+                        && let RdfTerm::Iri(pred) = &triple.predicate {
                             return pred == rdf_type 
                                 || pred == rdf_subject 
                                 || pred == rdf_predicate 
                                 || pred == rdf_object;
                         }
-                    }
-                }
                 false
             })
             .collect();

@@ -316,14 +316,13 @@ impl OWL2DLValidator {
 
         // Validate property chain axioms
         for axiom in self.ontology.axioms() {
-            if let Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom {
-                if let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property
+            if let Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom
+                && let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property
                 {
                     errors.extend(
                         self.validate_property_chain(chain, &sub_prop_axiom.super_property)?,
                     );
                 }
-            }
         }
 
         Ok(errors)
@@ -474,7 +473,7 @@ impl OWL2DLValidator {
 
         // Check that only recognized datatypes are used
         // Clone axioms to avoid borrow checker issues
-        let axioms: Vec<_> = self.ontology.axioms().into_iter().cloned().collect();
+        let axioms: Vec<_> = self.ontology.axioms().iter().cloned().collect();
         for axiom in &axioms {
             self.validate_datatype_usage_in_axiom(axiom, &mut errors)?;
         }
@@ -494,8 +493,8 @@ impl OWL2DLValidator {
             }
             Axiom::DataPropertyAssertion(assertion_axiom) => {
                 // Validate the literal value against the property's range
-                if let Some(range) = self.get_data_property_range(&assertion_axiom.property) {
-                    if !self.is_literal_compatible_with_range(&assertion_axiom.value, &range) {
+                if let Some(range) = self.get_data_property_range(&assertion_axiom.property)
+                    && !self.is_literal_compatible_with_range(&assertion_axiom.value, &range) {
                         errors.push(ValidationError::new(
                             ValidationErrorType::DatatypeMismatch,
                             format!(
@@ -505,7 +504,6 @@ impl OWL2DLValidator {
                             ),
                         ));
                     }
-                }
             }
             Axiom::DatatypeDefinition(datatype_def) => {
                 // Validate the datatype definition itself
@@ -768,8 +766,8 @@ impl OWL2DLValidator {
                     }
 
                     // Direction must be "ltr" or "rtl"
-                    if let Some(dir) = direction {
-                        if dir != "ltr" && dir != "rtl" {
+                    if let Some(dir) = direction
+                        && dir != "ltr" && dir != "rtl" {
                             return Err(ValidationError::new(
                                 ValidationErrorType::InvalidDirectionalLiteral,
                                 format!(
@@ -778,11 +776,10 @@ impl OWL2DLValidator {
                                 ),
                             ));
                         }
-                    }
 
                     // Datatype should be rdf:dirLangString if direction is present
-                    if let Some(dt) = datatype {
-                        if dt.as_str() != "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString" {
+                    if let Some(dt) = datatype
+                        && dt.as_str() != "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString" {
                             return Err(ValidationError::new(
                                 ValidationErrorType::InvalidDirectionalLiteral,
                                 format!(
@@ -791,15 +788,13 @@ impl OWL2DLValidator {
                                 ),
                             ));
                         }
-                    }
                 }
                 Ok(())
             }
             crate::semantics::RdfTerm::BlankNode(id) => {
                 // Validate blank node label (RDF 1.2 well-formedness)
                 // Format: _:[A-Za-z0-9]+
-                if id.starts_with("_:") {
-                    let label = &id[2..];
+                if let Some(label) = id.strip_prefix("_:") {
                     if !label.chars().all(|c| c.is_ascii_alphanumeric()) {
                         return Err(ValidationError::new(
                             ValidationErrorType::InvalidBlankNodeLabel,
@@ -871,16 +866,14 @@ impl OWL2DLValidator {
                 Axiom::SubObjectPropertyOf(sub_prop_axiom) => {
                     if let ObjectPropertyExpression::ObjectProperty(sub_prop) =
                         &sub_prop_axiom.sub_property
-                    {
-                        if let ObjectPropertyExpression::ObjectProperty(super_prop) =
+                        && let ObjectPropertyExpression::ObjectProperty(super_prop) =
                             &sub_prop_axiom.super_property
                         {
                             self.property_hierarchy
                                 .entry(crate::ontology::IRI::from(sub_prop.iri.to_string()))
-                                .or_insert_with(Vec::new)
+                                .or_default()
                                 .push(crate::ontology::IRI::from(super_prop.iri.to_string()));
                         }
-                    }
                 }
                 Axiom::TransitiveObjectProperty(trans_axiom) => {
                     if let ObjectPropertyExpression::ObjectProperty(prop) = &trans_axiom.property {
@@ -1018,14 +1011,13 @@ impl OWL2DLValidator {
         property: &crate::ontology::DataPropertyExpression,
     ) -> Option<crate::ontology::DataRange> {
         for axiom in self.ontology.axioms() {
-            if let Axiom::DataPropertyRange(range_axiom) = axiom {
-                if self
+            if let Axiom::DataPropertyRange(range_axiom) = axiom
+                && self
                     .property_expression_matches(&range_axiom.property, property)
                     .unwrap_or(false)
                 {
                     return Some(range_axiom.range.clone());
                 }
-            }
         }
         None
     }
@@ -1324,7 +1316,7 @@ impl OWL2DLValidator {
                 ValidationErrorType::DuplicateDatatypeDefinition,
                 format!(
                     "Datatype {} is defined multiple times",
-                    datatype_def.datatype.to_string()
+                    datatype_def.datatype
                 ),
             ));
         }
@@ -1341,26 +1333,25 @@ impl OWL2DLValidator {
                 ValidationErrorType::UnsupportedDatatype,
                 format!(
                     "Cannot convert datatype expression for: {}",
-                    datatype_def.datatype.to_string()
+                    datatype_def.datatype
                 ),
             ));
         }
 
         // Check for circular datatype definitions - proper conversion and checking
-        if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range) {
-            if self.has_circular_datatype_reference(
-                &datatype_def.datatype.to_string(),
+        if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range)
+            && self.has_circular_datatype_reference(
+                datatype_def.datatype.as_ref(),
                 &internal_range,
             ) {
                 errors.push(ValidationError::new(
                     ValidationErrorType::CircularDatatypeDefinition,
                     format!(
                         "Circular reference in datatype definition: {}",
-                        datatype_def.datatype.to_string()
+                        datatype_def.datatype
                     ),
                 ));
             }
-        }
 
         Ok(())
     }
@@ -1427,7 +1418,7 @@ impl OWL2DLValidator {
                     if !self.validate_literal_value(&internal_literal) {
                         errors.push(ValidationError::new(
                             ValidationErrorType::InvalidLiteral,
-                            format!("Invalid literal in data enumeration"),
+                            "Invalid literal in data enumeration".to_string(),
                         ));
                     }
                 }
@@ -1549,7 +1540,7 @@ impl OWL2DLValidator {
             if !self.validate_literal_value(&internal_literal) {
                 errors.push(ValidationError::new(
                     ValidationErrorType::InvalidLiteral,
-                    format!("Invalid facet restriction value"),
+                    "Invalid facet restriction value".to_string(),
                 ));
             }
         }
@@ -1911,29 +1902,24 @@ impl OWL2DLValidator {
         if let (Some(min_val), Some(max_val)) = (
             min_inclusive.or(min_exclusive),
             max_inclusive.or(max_exclusive),
-        ) {
-            if let (Ok(min_num), Ok(max_num)) = (min_val.parse::<f64>(), max_val.parse::<f64>()) {
-                if min_num > max_num {
+        )
+            && let (Ok(min_num), Ok(max_num)) = (min_val.parse::<f64>(), max_val.parse::<f64>())
+                && min_num > max_num {
                     errors.push(ValidationError::new(
                         ValidationErrorType::ConflictingFacetRestrictions,
                         "Minimum value greater than maximum value".to_string(),
                     ));
                 }
-            }
-        }
 
         // Check for impossible length ranges
-        if let (Some(min_len), Some(max_len)) = (min_length, max_length) {
-            if let (Ok(min_num), Ok(max_num)) = (min_len.parse::<usize>(), max_len.parse::<usize>())
-            {
-                if min_num > max_num {
+        if let (Some(min_len), Some(max_len)) = (min_length, max_length)
+            && let (Ok(min_num), Ok(max_num)) = (min_len.parse::<usize>(), max_len.parse::<usize>())
+                && min_num > max_num {
                     errors.push(ValidationError::new(
                         ValidationErrorType::ConflictingFacetRestrictions,
                         "Minimum length greater than maximum length".to_string(),
                     ));
                 }
-            }
-        }
 
         Ok(())
     }
@@ -2087,7 +2073,7 @@ impl OWL2DLValidator {
                         ValidationErrorType::InvalidDatatype,
                         format!(
                             "Invalid regular expression pattern: {}",
-                            restriction.value.to_string()
+                            restriction.value
                         ),
                     ));
                 }
@@ -2227,8 +2213,8 @@ impl OWL2DLValidator {
 
         // Validate literal syntax
         for literal in literals {
-            if let Some(datatype) = &literal.datatype {
-                if !self.is_valid_literal_for_datatype(
+            if let Some(datatype) = &literal.datatype
+                && !self.is_valid_literal_for_datatype(
                     &literal.value,
                     &crate::ontology::IRI::from_url(datatype.clone()),
                 )? {
@@ -2243,7 +2229,6 @@ impl OWL2DLValidator {
                         location: None,
                     });
                 }
-            }
         }
 
         Ok(())

@@ -910,11 +910,10 @@ impl ExpansionStrategy for DepthFirstExpansionStrategy {
         candidates: &[ExistentialCandidate],
     ) -> Option<ExistentialCandidate> {
         // Prefer candidates from current expansion path
-        if let Some(last_node) = self.expansion_path.last() {
-            if let Some(candidate) = candidates.iter().find(|c| &c.node == last_node) {
+        if let Some(last_node) = self.expansion_path.last()
+            && let Some(candidate) = candidates.iter().find(|c| &c.node == last_node) {
                 return Some(candidate.clone());
             }
-        }
         candidates.first().cloned()
     }
 
@@ -1187,17 +1186,11 @@ mod uuid {
 
 /// Default expansion strategy wrapper
 #[derive(Debug)]
+#[derive(Default)]
 pub struct DefaultExpansionStrategy {
     inner: BreadthFirstExpansionStrategy,
 }
 
-impl Default for DefaultExpansionStrategy {
-    fn default() -> Self {
-        Self {
-            inner: BreadthFirstExpansionStrategy::new(),
-        }
-    }
-}
 
 impl ExpansionStrategy for DefaultExpansionStrategy {
     fn initialise(&mut self, context: &ExpansionContext) -> Result<()> {

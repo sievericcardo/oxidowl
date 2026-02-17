@@ -209,10 +209,10 @@ impl RdfXmlParser {
             if line.contains("xmlns") {
                 // Extract namespace URIs and prefixes
                 // This is a simplified extraction
-                if let Some(ns_start) = line.find("xmlns:") {
-                    if let Some(eq_pos) = line[ns_start..].find('=') {
-                        if let Some(quote_start) = line[ns_start + eq_pos..].find('"') {
-                            if let Some(quote_end) =
+                if let Some(ns_start) = line.find("xmlns:")
+                    && let Some(eq_pos) = line[ns_start..].find('=')
+                        && let Some(quote_start) = line[ns_start + eq_pos..].find('"')
+                            && let Some(quote_end) =
                                 line[ns_start + eq_pos + quote_start + 1..].find('"')
                             {
                                 let prefix = &line[ns_start + 6..ns_start + eq_pos];
@@ -223,9 +223,6 @@ impl RdfXmlParser {
                                 // For now, we'll store this information internally
                                 log::debug!("Found namespace: {} -> {}", prefix, uri);
                             }
-                        }
-                    }
-                }
             }
         }
         Ok(())
@@ -253,50 +250,43 @@ impl RdfXmlParser {
 
                     // Parse attributes
                     current_attributes.clear();
-                    for attr in e.attributes() {
-                        if let Ok(attr) = attr {
-                            let key = String::from_utf8_lossy(attr.key.as_ref());
-                            let value = String::from_utf8_lossy(&attr.value);
-                            current_attributes.insert(key.to_string(), value.to_string());
-                        }
+                    for attr in e.attributes().flatten() {
+                        let key = String::from_utf8_lossy(attr.key.as_ref());
+                        let value = String::from_utf8_lossy(&attr.value);
+                        current_attributes.insert(key.to_string(), value.to_string());
                     }
 
                     // Check for owl:Class elements
-                    if name == "owl:Class" || name.ends_with(":Class") {
-                        if let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
+                    if (name == "owl:Class" || name.ends_with(":Class"))
+                        && let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
                             self.add_class_declaration(class_iri, ontology)?;
                         }
-                    }
 
                     // Check for rdf:type relationships to owl:Class
-                    if name == "rdf:Description" || name.contains("Description") {
-                        if let Some(subject_iri) = self.extract_resource_iri(&current_attributes) {
+                    if (name == "rdf:Description" || name.contains("Description"))
+                        && let Some(subject_iri) = self.extract_resource_iri(&current_attributes) {
                             // Look for nested rdf:type owl:Class
                             if self.has_class_type(&current_attributes) {
                                 self.add_class_declaration(subject_iri, ontology)?;
                             }
                         }
-                    }
                 }
                 Ok(Event::Empty(ref e)) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
 
                     // Parse attributes for self-closing elements
                     current_attributes.clear();
-                    for attr in e.attributes() {
-                        if let Ok(attr) = attr {
-                            let key = String::from_utf8_lossy(attr.key.as_ref());
-                            let value = String::from_utf8_lossy(&attr.value);
-                            current_attributes.insert(key.to_string(), value.to_string());
-                        }
+                    for attr in e.attributes().flatten() {
+                        let key = String::from_utf8_lossy(attr.key.as_ref());
+                        let value = String::from_utf8_lossy(&attr.value);
+                        current_attributes.insert(key.to_string(), value.to_string());
                     }
 
                     // Handle self-closing owl:Class elements
-                    if name == "owl:Class" || name.ends_with(":Class") {
-                        if let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
+                    if (name == "owl:Class" || name.ends_with(":Class"))
+                        && let Some(class_iri) = self.extract_resource_iri(&current_attributes) {
                             self.add_class_declaration(class_iri, ontology)?;
                         }
-                    }
                 }
                 Ok(Event::Text(ref e)) => {
                     // Handle text content if needed for class declarations
@@ -690,7 +680,7 @@ impl RdfXmlParser {
             for stmt_caps in stmt_regex.captures_iter(content) {
                 if let Some(stmt_id) = stmt_caps.get(1) {
                     let stmt_id_str = stmt_id.as_str().to_string();
-                    reifications.entry(stmt_id_str).or_insert_with(HashMap::new);
+                    reifications.entry(stmt_id_str).or_default();
                 }
             }
         }
@@ -910,7 +900,7 @@ impl OntologySerializer for RdfXmlSerializer {
                     class.iri.as_str()
                 ));
             }
-            result.push_str("\n");
+            result.push('\n');
         }
 
         // Serialize object properties
@@ -923,7 +913,7 @@ impl OntologySerializer for RdfXmlSerializer {
                     prop.iri.as_str()
                 ));
             }
-            result.push_str("\n");
+            result.push('\n');
         }
 
         // Serialize data properties from axioms
@@ -955,7 +945,7 @@ impl OntologySerializer for RdfXmlSerializer {
                     prop.iri.as_str()
                 ));
             }
-            result.push_str("\n");
+            result.push('\n');
         }
 
         // Serialize individuals
@@ -969,7 +959,7 @@ impl OntologySerializer for RdfXmlSerializer {
                     ));
                 }
             }
-            result.push_str("\n");
+            result.push('\n');
         }
 
         result.push_str("</rdf:RDF>\n");

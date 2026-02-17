@@ -60,11 +60,10 @@ impl SaturationRuleSet {
         let mut changed = false;
 
         for rule in &self.rules {
-            if rule.is_applicable(node, ontology) {
-                if rule.apply(node, ontology)? {
+            if rule.is_applicable(node, ontology)
+                && rule.apply(node, ontology)? {
                     changed = true;
                 }
-            }
         }
 
         Ok(changed)
@@ -134,12 +133,11 @@ impl SaturationRule for SubClassOfRule {
         for axiom in ontology.axioms() {
             if let Axiom::SubClassOf(subclass_axiom) = axiom {
                 // If the node contains the subclass, add the superclass
-                if node.saturated_concepts.contains(&subclass_axiom.subclass) {
-                    if !node.saturated_concepts.contains(&subclass_axiom.superclass) {
+                if node.saturated_concepts.contains(&subclass_axiom.subclass)
+                    && !node.saturated_concepts.contains(&subclass_axiom.superclass) {
                         new_concepts.push(subclass_axiom.superclass.clone());
                         node.add_direct_subsumer(subclass_axiom.superclass.clone());
                     }
-                }
             }
         }
 
@@ -260,11 +258,10 @@ impl SaturationRule for DomainRule {
                     // Check if node has existential with this property
                     if let Some(property_iri) = extract_property_iri(&domain_axiom.property) {
                         for existential in &node.existentials {
-                            if existential.property == property_iri {
-                                if !node.saturated_concepts.contains(&domain_axiom.domain) {
+                            if existential.property == property_iri
+                                && !node.saturated_concepts.contains(&domain_axiom.domain) {
                                     new_concepts.push(domain_axiom.domain.clone());
                                 }
-                            }
                         }
                     }
                 }
@@ -315,13 +312,12 @@ impl SaturationRule for RangeRule {
         let mut changed = false;
 
         for axiom in ontology.axioms() {
-            if let Axiom::ObjectPropertyRange(range_axiom) = axiom {
-                if let Some(property_iri) = extract_property_iri(&range_axiom.property) {
+            if let Axiom::ObjectPropertyRange(range_axiom) = axiom
+                && let Some(property_iri) = extract_property_iri(&range_axiom.property) {
                     // Add universal restriction for this property
                     node.add_universal(property_iri, range_axiom.range.clone());
                     changed = true;
                 }
-            }
         }
 
         Ok(changed)
@@ -410,7 +406,7 @@ impl SaturationRule for PropertyChainRule {
                     // Check if sub_property is a chain
                     if let ObjectPropertyExpression::PropertyChain(chain) = &axiom.sub_property {
                         let chain_iris: Vec<IRI> = chain.iter()
-                            .filter_map(|prop| extract_property_iri(prop))
+                            .filter_map(extract_property_iri)
                             .collect();
                         let super_iri = extract_property_iri(&axiom.super_property)?;
                         return Some((chain_iris, super_iri));
@@ -469,15 +465,14 @@ impl SaturationRule for InversePropertyRule {
         // Build inverse property map
         let mut inverse_map: std::collections::HashMap<IRI, IRI> = std::collections::HashMap::new();
         for axiom in ontology.axioms() {
-            if let Axiom::InverseObjectProperties(inv_axiom) = axiom {
-                if let (Some(iri1), Some(iri2)) = (
+            if let Axiom::InverseObjectProperties(inv_axiom) = axiom
+                && let (Some(iri1), Some(iri2)) = (
                     extract_property_iri(&inv_axiom.property1),
                     extract_property_iri(&inv_axiom.property2),
                 ) {
                     inverse_map.insert(iri1.clone(), iri2.clone());
                     inverse_map.insert(iri2, iri1);
                 }
-            }
         }
 
         // For each existential restriction ∃R.C where R has inverse S,

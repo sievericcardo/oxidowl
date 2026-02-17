@@ -407,9 +407,9 @@ impl Tableau {
 
                 // Also add all equivalent classes (if any) - but only if we have equivalence closure
                 // This is an optimization to avoid expensive lookups when not needed
-                if let Some(checker) = &mut self.clause_checker {
-                    if let ClassExpression::Class(ref class) = assertion.class {
-                        if let Some(eq_closure) = checker.equivalence_closure() {
+                if let Some(checker) = &mut self.clause_checker
+                    && let ClassExpression::Class(ref class) = assertion.class
+                        && let Some(eq_closure) = checker.equivalence_closure() {
                             let concept_id = equivalence::ConceptId(class.iri.to_string());
                             let equiv_class = eq_closure.get_equivalence_class(&concept_id);
 
@@ -432,8 +432,6 @@ impl Tableau {
                                 }
                             }
                         }
-                    }
-                }
 
                 // Queue rule for expanding this concept
                 self.queue_rule_for_concept(node_id, &assertion.class)?;

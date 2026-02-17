@@ -90,13 +90,12 @@ impl TableauExecutor {
         // Main expansion loop
         while !tableau.pending_queue.is_empty() && tableau.state == TableauState::Unknown {
             // Check for timeout
-            if let Some(timeout) = tableau.config.timeout {
-                if start_time.elapsed() > timeout {
+            if let Some(timeout) = tableau.config.timeout
+                && start_time.elapsed() > timeout {
                     warn!("Tableau expansion timed out");
                     tableau.state = TableauState::Unknown;
                     break;
                 }
-            }
 
             // Get next rule application
             let rule_app = tableau.pending_queue.pop_front().ok_or_else(|| {
@@ -390,7 +389,7 @@ impl TableauExecutor {
                         .and_then(|n| n.role_successors.get(&role_name))
                         .map(|succs| {
                             // Filter successors that have the filler concept
-                            let filler_label = ConceptLabel::Complex(filler.clone().into());
+                            let filler_label = ConceptLabel::Complex(filler.clone());
                             succs.iter()
                                 .filter(|&&succ_id| {
                                     tableau.nodes.get(succ_id)
@@ -1056,7 +1055,7 @@ impl TableauExecutor {
                     if is_complement {
                         let clash = Clash {
                             clash_type: ClashType::Concept {
-                                concept: format!("C and ¬C"),
+                                concept: "C and ¬C".to_string(),
                                 node: i,
                             },
                             nodes: vec![i],

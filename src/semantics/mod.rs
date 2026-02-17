@@ -170,8 +170,7 @@ impl RdfTerm {
     /// Create a blank node term with validation (RDF 1.2 well-formedness)
     /// Blank node labels must match: _:[A-Za-z0-9]+
     pub fn blank_node_validated(id: &str) -> Result<Self> {
-        if id.starts_with("_:") {
-            let label = &id[2..];
+        if let Some(label) = id.strip_prefix("_:") {
             if Self::is_valid_blank_node_label(label) {
                 Ok(RdfTerm::BlankNode(id.to_string()))
             } else {
@@ -334,20 +333,17 @@ pub struct RdfGraph {
 
 /// RDF Version for compatibility tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum RdfVersion {
     /// RDF 1.1 (no RDF-star features)
     RDF11,
     /// RDF 1.2 (includes directionality, rdf:reifies)
     RDF12,
     /// RDF-star (includes quoted triples)
+    #[default]
     RDFStar,
 }
 
-impl Default for RdfVersion {
-    fn default() -> Self {
-        RdfVersion::RDFStar // Default to most feature-complete version
-    }
-}
 
 impl RdfGraph {
     /// Create a new empty RDF graph with RDF-star support
@@ -467,18 +463,16 @@ impl RdfGraph {
             let mut updated = t.clone();
             let mut needs_update = false;
 
-            if let RdfTerm::QuotedTriple(qt) = &updated.subject {
-                if qt.as_ref() == old {
+            if let RdfTerm::QuotedTriple(qt) = &updated.subject
+                && qt.as_ref() == old {
                     updated.subject = RdfTerm::quoted_triple(new.clone());
                     needs_update = true;
                 }
-            }
-            if let RdfTerm::QuotedTriple(qt) = &updated.object {
-                if qt.as_ref() == old {
+            if let RdfTerm::QuotedTriple(qt) = &updated.object
+                && qt.as_ref() == old {
                     updated.object = RdfTerm::quoted_triple(new.clone());
                     needs_update = true;
                 }
-            }
 
             if needs_update {
                 replaced = true;
@@ -641,7 +635,7 @@ impl RdfGraph {
         for triple in &self.triples {
             let subject_str = format!("{}", triple.subject);
             subject_map.entry(subject_str)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push((&triple.predicate, &triple.object));
         }
         
@@ -657,9 +651,9 @@ impl RdfGraph {
                     result.push_str(&self.serialize_predicate_object_xml(pred, obj));
                 }
                 result.push_str("  </rdf:Description>\n\n");
-            } else if subject.starts_with("_:") {
+            } else if let Some(node_id) = subject.strip_prefix("_:") {
                 // Blank node
-                let node_id = &subject[2..]; // Remove "_:" prefix
+                // Remove "_:" prefix
                 result.push_str(&format!("  <rdf:Description rdf:nodeID=\"{}\">\n", node_id));
                 for (pred, obj) in pred_obj_pairs {
                     result.push_str(&self.serialize_predicate_object_xml(pred, obj));

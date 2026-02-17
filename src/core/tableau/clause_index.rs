@@ -93,7 +93,7 @@ impl ClauseIndex {
                 let predicate = Self::extract_predicate(atom);
                 body_index
                     .entry(predicate)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(id);
             }
 
@@ -106,7 +106,7 @@ impl ClauseIndex {
                     let predicate = Self::extract_predicate(atom);
                     head_index
                         .entry(predicate)
-                        .or_insert_with(HashSet::new)
+                        .or_default()
                         .insert(id);
                 }
             }
@@ -122,7 +122,7 @@ impl ClauseIndex {
                 let predicate = Self::extract_predicate(atom);
                 body_index
                     .entry(predicate)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(id);
             }
 
@@ -131,7 +131,7 @@ impl ClauseIndex {
                 let predicate = Self::extract_predicate(atom);
                 head_index
                     .entry(predicate)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(id);
             }
         }

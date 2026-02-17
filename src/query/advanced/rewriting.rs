@@ -255,7 +255,7 @@ impl QueryRewriter {
             for var2 in &query_variables {
                 if var1 != var2 && var1.is_individual() && var2.is_individual() {
                     // Check if there are axioms that would justify adding a property between these variables
-                    for (property, _) in &self.tbox_index.property_inclusions {
+                    for property in self.tbox_index.property_inclusions.keys() {
                         new_atoms.push(QueryAtom::ObjectPropertyAtom {
                             subject: var1.clone(),
                             property: property.clone(),
@@ -411,28 +411,28 @@ impl QueryRewriter {
                     index
                         .class_inclusions
                         .entry(axiom.superclass.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.subclass.clone());
                 }
                 Axiom::SubObjectPropertyOf(axiom) => {
                     index
                         .property_inclusions
                         .entry(axiom.super_property.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.sub_property.clone());
                 }
                 Axiom::ObjectPropertyDomain(axiom) => {
                     index
                         .property_domains
                         .entry(axiom.property.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.domain.clone());
                 }
                 Axiom::ObjectPropertyRange(axiom) => {
                     index
                         .property_ranges
                         .entry(axiom.property.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.range.clone());
                 }
                 _ => {

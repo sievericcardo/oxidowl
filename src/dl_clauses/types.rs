@@ -204,14 +204,14 @@ impl DLClause {
         // Collect variables from head and body
         for atom in &head {
             for arg in &atom.arguments {
-                if arg.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if arg.chars().next().is_some_and(|c| c.is_uppercase()) {
                     variables.insert(arg.clone());
                 }
             }
         }
         for atom in &body {
             for arg in &atom.arguments {
-                if arg.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if arg.chars().next().is_some_and(|c| c.is_uppercase()) {
                     variables.insert(arg.clone());
                 }
             }

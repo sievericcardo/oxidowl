@@ -529,7 +529,7 @@ impl MaterializedKnowledgeBase {
     pub fn add_class_assertion(&mut self, individual: Individual, class: RLClassExpression) -> bool {
         self.class_assertions
             .entry(individual)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(class)
     }
 
@@ -542,7 +542,7 @@ impl MaterializedKnowledgeBase {
     ) -> bool {
         self.object_property_assertions
             .entry((subject, property))
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(object)
     }
 
@@ -555,7 +555,7 @@ impl MaterializedKnowledgeBase {
     ) -> bool {
         self.data_property_assertions
             .entry((subject, property))
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(value)
     }
 
@@ -652,7 +652,7 @@ impl TBoxHierarchy {
     pub fn add_class_inclusion(&mut self, subclass: RLClassExpression, superclass: RLClassExpression) {
         self.class_inclusions
             .entry(subclass)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(superclass);
     }
 
@@ -664,7 +664,7 @@ impl TBoxHierarchy {
     ) {
         self.property_inclusions
             .entry(subproperty)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(superproperty);
     }
 
@@ -672,7 +672,7 @@ impl TBoxHierarchy {
     pub fn add_domain(&mut self, property: ObjectPropertyExpression, domain: RLClassExpression) {
         self.domains
             .entry(property)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(domain);
     }
 
@@ -680,7 +680,7 @@ impl TBoxHierarchy {
     pub fn add_range(&mut self, property: ObjectPropertyExpression, range: RLClassExpression) {
         self.ranges
             .entry(property)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(range);
     }
 

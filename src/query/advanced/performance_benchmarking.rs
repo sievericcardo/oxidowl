@@ -517,7 +517,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Query benchmarks
         let mut query_results = Vec::new();
-        for (_i, (query_id, query)) in benchmark_queries.iter().enumerate() {
+        for (query_id, query) in benchmark_queries.iter() {
             let query_metrics = self
                 .benchmark_query(
                     query_id,

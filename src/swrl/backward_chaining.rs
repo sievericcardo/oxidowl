@@ -213,8 +213,8 @@ impl BackwardChainingEngine {
 
         // Then, try to resolve using rules
         for rule in &self.rules.clone() {
-            if let Some(head_atom) = rule.head.first() {
-                if let Some(unifier) = self.unify_atoms(&instantiated_goal, head_atom, bindings) {
+            if let Some(head_atom) = rule.head.first()
+                && let Some(unifier) = self.unify_atoms(&instantiated_goal, head_atom, bindings) {
                     // Try to prove the rule body
                     if self.prove_rule_body(
                         &rule.body,
@@ -233,7 +233,6 @@ impl BackwardChainingEngine {
                         proof_trees.push(proof);
                     }
                 }
-            }
         }
 
         self.query_stack.pop();
@@ -253,8 +252,8 @@ impl BackwardChainingEngine {
                 predicate,
                 argument,
             } => {
-                if let SWRLTerm::Individual(individual) = self.swrl_argument_to_term(argument) {
-                    if self.fact_base.has_class_assertion(predicate, &individual) {
+                if let SWRLTerm::Individual(individual) = self.swrl_argument_to_term(argument)
+                    && self.fact_base.has_class_assertion(predicate, &individual) {
                         solutions.push(bindings.clone());
                         proof_trees.push(ProofTree {
                             goal: goal.clone(),
@@ -264,7 +263,6 @@ impl BackwardChainingEngine {
                         });
                         return true;
                     }
-                }
             }
             SWRLAtom::ObjectPropertyAtom {
                 predicate,
@@ -274,8 +272,8 @@ impl BackwardChainingEngine {
                 if let (SWRLTerm::Individual(subj), SWRLTerm::Individual(obj)) = (
                     self.swrl_argument_to_term(first_argument),
                     self.swrl_argument_to_term(second_argument),
-                ) {
-                    if self
+                )
+                    && self
                         .fact_base
                         .has_object_property_assertion(predicate, &subj, &obj)
                     {
@@ -288,7 +286,6 @@ impl BackwardChainingEngine {
                         });
                         return true;
                     }
-                }
             }
             SWRLAtom::DataPropertyAtom {
                 predicate,
@@ -299,8 +296,7 @@ impl BackwardChainingEngine {
                     // For data properties, second argument could be a literal
                     if let SWRLTerm::Literal(value) =
                         self.swrl_data_argument_to_term(second_argument)
-                    {
-                        if self
+                        && self
                             .fact_base
                             .has_data_property_assertion(predicate, &subj, &value)
                         {
@@ -313,7 +309,6 @@ impl BackwardChainingEngine {
                             });
                             return true;
                         }
-                    }
                 }
             }
             SWRLAtom::SameIndividualAtom {
@@ -323,8 +318,8 @@ impl BackwardChainingEngine {
                 if let (SWRLTerm::Individual(ind1), SWRLTerm::Individual(ind2)) = (
                     self.swrl_argument_to_term(first_argument),
                     self.swrl_argument_to_term(second_argument),
-                ) {
-                    if self.fact_base.has_same_individual_assertion(&ind1, &ind2) {
+                )
+                    && self.fact_base.has_same_individual_assertion(&ind1, &ind2) {
                         solutions.push(bindings.clone());
                         proof_trees.push(ProofTree {
                             goal: goal.clone(),
@@ -334,7 +329,6 @@ impl BackwardChainingEngine {
                         });
                         return true;
                     }
-                }
             }
             SWRLAtom::DifferentIndividualsAtom {
                 first_argument,
@@ -343,8 +337,8 @@ impl BackwardChainingEngine {
                 if let (SWRLTerm::Individual(ind1), SWRLTerm::Individual(ind2)) = (
                     self.swrl_argument_to_term(first_argument),
                     self.swrl_argument_to_term(second_argument),
-                ) {
-                    if self
+                )
+                    && self
                         .fact_base
                         .has_different_individual_assertion(&ind1, &ind2)
                     {
@@ -357,7 +351,6 @@ impl BackwardChainingEngine {
                         });
                         return true;
                     }
-                }
             }
             SWRLAtom::BuiltInAtom {
                 predicate: _,

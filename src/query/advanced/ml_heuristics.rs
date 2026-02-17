@@ -431,7 +431,7 @@ impl StrategySelectionModel {
         }
 
         // Retrain if enough sessions have passed
-        if self.session_count % self.config.retraining_frequency == 0 {
+        if self.session_count.is_multiple_of(self.config.retraining_frequency) {
             self.retrain_model()?;
         }
 
@@ -617,7 +617,7 @@ impl ExpansionOrderPredictor {
         }
 
         // Retrain periodically
-        if self.session_count % self.config.retraining_frequency == 0 {
+        if self.session_count.is_multiple_of(self.config.retraining_frequency) {
             self.retrain_model()?;
         }
 

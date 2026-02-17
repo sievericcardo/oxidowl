@@ -219,11 +219,10 @@ impl SWRLValidator {
                 first_argument,
                 second_argument,
             } => {
-                if let ObjectPropertyExpression::PropertyChain(_) = predicate {
-                    if self.strict_mode {
+                if let ObjectPropertyExpression::PropertyChain(_) = predicate
+                    && self.strict_mode {
                         issues.push(ValidationIssue::ComplexPropertyExpression);
                     }
-                }
 
                 if let SWRLIArgument::Variable(var) = first_argument {
                     self.validate_variable_naming(&var.iri.to_string(), &mut issues);
@@ -239,9 +238,7 @@ impl SWRLValidator {
                 second_argument,
             } => {
                 // DataPropertyExpression pattern matching will always match DataProperty
-                let _prop = match predicate {
-                    DataPropertyExpression::DataProperty(prop) => prop,
-                };
+                let DataPropertyExpression::DataProperty(_prop) = predicate;
 
                 if let SWRLIArgument::Variable(var) = first_argument {
                     self.validate_variable_naming(&var.iri.to_string(), &mut issues);
@@ -308,15 +305,14 @@ impl SWRLValidator {
                 }
 
                 // Check arity
-                if let Some(expected_arity) = self.get_expected_builtin_arity(predicate) {
-                    if arguments.len() != expected_arity {
+                if let Some(expected_arity) = self.get_expected_builtin_arity(predicate)
+                    && arguments.len() != expected_arity {
                         issues.push(ValidationIssue::IncorrectBuiltInArity {
                             builtin: predicate.to_string(),
                             expected: expected_arity,
                             actual: arguments.len(),
                         });
                     }
-                }
             }
         }
 
@@ -466,9 +462,7 @@ impl SWRLValidator {
                 }
                 SWRLAtom::DataPropertyAtom { predicate, .. } => {
                     // DataPropertyExpression always matches DataProperty in this context
-                    let prop = match predicate {
-                        DataPropertyExpression::DataProperty(prop) => prop,
-                    };
+                    let DataPropertyExpression::DataProperty(prop) = predicate;
                     predicates.insert(prop.iri.to_string());
                 }
                 _ => {}
@@ -496,9 +490,7 @@ impl SWRLValidator {
                 }
                 SWRLAtom::DataPropertyAtom { predicate, .. } => {
                     // DataPropertyExpression always matches DataProperty in this context
-                    let prop = match predicate {
-                        DataPropertyExpression::DataProperty(prop) => prop,
-                    };
+                    let DataPropertyExpression::DataProperty(prop) = predicate;
                     predicates.insert(prop.iri.to_string());
                 }
                 _ => {}

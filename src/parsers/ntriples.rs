@@ -313,8 +313,7 @@ impl NTriplesParser {
             None
         };
 
-        let datatype = if rest.starts_with("^^") {
-            let datatype_str = &rest[2..];
+        let datatype = if let Some(datatype_str) = rest.strip_prefix("^^") {
             if datatype_str.starts_with('<') {
                 let end = datatype_str.find('>').ok_or_else(|| {
                     Error::ontology_parsing("Unterminated datatype IRI".to_string())

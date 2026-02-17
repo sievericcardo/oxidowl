@@ -679,7 +679,7 @@ impl BlockerCandidateIndex {
         // Add to signature index
         self.signature_index
             .entry(hash)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(node_id);
         
         // Store node's signature hash
@@ -721,14 +721,13 @@ impl BlockerCandidateIndex {
 
     /// Remove a node from the index
     pub fn remove_node(&mut self, node_id: NodeId) {
-        if let Some(hash) = self.node_signatures.remove(&node_id) {
-            if let Some(node_ids) = self.signature_index.get_mut(&hash) {
+        if let Some(hash) = self.node_signatures.remove(&node_id)
+            && let Some(node_ids) = self.signature_index.get_mut(&hash) {
                 node_ids.retain(|&id| id != node_id);
                 if node_ids.is_empty() {
                     self.signature_index.remove(&hash);
                 }
             }
-        }
         self.signature_cache.remove(&node_id);
     }
 
@@ -786,14 +785,13 @@ impl BlockingChecker for IndexedAnywhereBlocking {
         
         // Check candidates for actual subsumption
         for candidate_id in candidates {
-            if candidate_id < node.id {
-                if let Some(candidate_node) = nodes.iter().find(|n| n.id == candidate_id) {
+            if candidate_id < node.id
+                && let Some(candidate_node) = nodes.iter().find(|n| n.id == candidate_id) {
                     let candidate_signature = self.get_signature(candidate_node);
                     if signatures_subsume(&candidate_signature, &node_signature) {
                         return Some(candidate_id);
                     }
                 }
-            }
         }
         
         None

@@ -125,7 +125,7 @@ impl RdfSimpleInterpretation {
                 self.literal_interpretation
                     .get(&literal_key)
                     .cloned()
-                    .or_else(|| Some(literal_key)) // Default interpretation
+                    .or(Some(literal_key)) // Default interpretation
             }
             RdfTerm::QuotedTriple(triple) => {
                 if self.rdf11_mode {
@@ -162,7 +162,7 @@ impl RdfSimpleInterpretation {
         self.quoted_triple_interpretation
             .get(&triple_id)
             .cloned()
-            .or_else(|| {
+            .or({
                 // Default: the quoted triple denotes itself as a resource
                 Some(triple_id)
             })
@@ -441,13 +441,11 @@ impl RdfSimpleEntailment {
             }
 
             // Check nested quoted triples
-            if self.contains_quoted_triple_term(&triple.subject, quoted_triple)
-                || self.contains_quoted_triple_term(&triple.object, quoted_triple)
-            {
-                if self.enable_quoted_triple_entailment {
+            if (self.contains_quoted_triple_term(&triple.subject, quoted_triple)
+                || self.contains_quoted_triple_term(&triple.object, quoted_triple))
+                && self.enable_quoted_triple_entailment {
                     return true;
                 }
-            }
         }
 
         false

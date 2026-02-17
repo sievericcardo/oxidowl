@@ -437,14 +437,13 @@ impl ImportManager {
         // Look for import annotations
         for annotation in &ontology.annotations {
             let property_iri = &annotation.property.iri;
-            if property_iri.to_string() == "http://www.w3.org/2002/07/owl#imports" {
-                if let Some(value_iri) = match &annotation.value {
+            if property_iri.to_string() == "http://www.w3.org/2002/07/owl#imports"
+                && let Some(value_iri) = match &annotation.value {
                     AnnotationValue::IRI(iri) => Some(iri),
                     _ => None,
                 } {
                     imports.push(ImportDeclaration::new(value_iri.clone()));
                 }
-            }
         }
 
         imports
@@ -472,8 +471,8 @@ impl ImportManager {
         }
 
         // Check cache first
-        if let Ok(cache) = self.ontology_cache.read() {
-            if let Some(cached_ontology) = cache.get(&import_decl.imported_ontology_iri) {
+        if let Ok(cache) = self.ontology_cache.read()
+            && let Some(cached_ontology) = cache.get(&import_decl.imported_ontology_iri) {
                 return Ok(ImportResolutionResult {
                     ontology: Some((**cached_ontology).clone()),
                     import_iri: import_decl.imported_ontology_iri.clone(),
@@ -482,7 +481,6 @@ impl ImportManager {
                     warnings: Vec::new(),
                 });
             }
-        }
 
         // Add to dependency graph
         if let Ok(mut graph) = self.dependency_graph.write() {
@@ -527,16 +525,14 @@ impl ImportManager {
         }
 
         // Validate imported ontology if configured
-        if self.config.validate_imports {
-            if let Some(ref ontology) = result.ontology {
-                if let Err(validation_error) = self.validate_imported_ontology(ontology) {
+        if self.config.validate_imports
+            && let Some(ref ontology) = result.ontology
+                && let Err(validation_error) = self.validate_imported_ontology(ontology) {
                     result.errors.push(ImportError::ValidationError {
                         import_iri: import_decl.imported_ontology_iri.clone(),
                         error: validation_error.to_string(),
                     });
                 }
-            }
-        }
 
         Ok(result)
     }

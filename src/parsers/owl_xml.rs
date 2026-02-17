@@ -1331,9 +1331,7 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                     serialize_object_property_xml(prop)
                 )
             }
-            _ => format!(
-                "<FunctionalObjectProperty><!-- Complex property expression --></FunctionalObjectProperty>"
-            ),
+            _ => "<FunctionalObjectProperty><!-- Complex property expression --></FunctionalObjectProperty>".to_string(),
         },
         Axiom::InverseFunctionalObjectProperty(axiom) => match &axiom.property {
             crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
@@ -1342,9 +1340,7 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                     serialize_object_property_xml(prop)
                 )
             }
-            _ => format!(
-                "<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>"
-            ),
+            _ => "<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>".to_string(),
         },
         Axiom::DataPropertyAssertion(axiom) => {
             format!(

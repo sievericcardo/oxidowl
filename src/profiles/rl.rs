@@ -277,7 +277,7 @@ impl ProfileValidator for RLValidator {
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
                     ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                    &format!("Axiom type not supported in OWL 2 RL profile: {:?}", axiom),
+                    format!("Axiom type not supported in OWL 2 RL profile: {:?}", axiom),
                 ));
             }
         }
@@ -486,16 +486,13 @@ impl RLValidator {
     ) {
         // Look for patterns that combine multiple complex constructs in ways that exceed RL
         for axiom in ontology.axioms() {
-            match axiom {
-                Axiom::SubClassOf(subclass_axiom) => {
-                    // Check for complex sub-class + complex super-class combinations
-                    self.check_complex_subclass_combinations(
-                        &subclass_axiom.subclass,
-                        &subclass_axiom.superclass,
-                        report,
-                    );
-                }
-                _ => {}
+            if let Axiom::SubClassOf(subclass_axiom) = axiom {
+                // Check for complex sub-class + complex super-class combinations
+                self.check_complex_subclass_combinations(
+                    &subclass_axiom.subclass,
+                    &subclass_axiom.superclass,
+                    report,
+                );
             }
         }
     }
@@ -508,8 +505,8 @@ impl RLValidator {
         report: &mut ProfileValidationReport,
     ) {
         // Check for union in subclass position with complex superclass
-        if matches!(subclass, ClassExpression::ObjectUnionOf(_)) {
-            if !matches!(
+        if matches!(subclass, ClassExpression::ObjectUnionOf(_))
+            && !matches!(
                 superclass,
                 ClassExpression::Class(_) | ClassExpression::ObjectIntersectionOf(_)
             ) {
@@ -518,7 +515,6 @@ impl RLValidator {
                     "Complex combinations of union subclass with non-atomic superclass may not be expressible in Horn clauses",
                 ));
             }
-        }
     }
 
     /// Check for Horn clause compliance

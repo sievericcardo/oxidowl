@@ -459,7 +459,7 @@ impl DatatypeValidator {
 
     // Binary validators
     fn validate_hex_binary(&self, value: &str) -> Result<bool> {
-        Ok(value.chars().all(|c| c.is_ascii_hexdigit()) && value.len() % 2 == 0)
+        Ok(value.chars().all(|c| c.is_ascii_hexdigit()) && value.len().is_multiple_of(2))
     }
 
     fn validate_base64_binary(&self, value: &str) -> Result<bool> {
@@ -479,7 +479,7 @@ impl DatatypeValidator {
             _ => false,
         };
 
-        Ok(valid_chars && padding_ok && clean.len() % 4 == 0)
+        Ok(valid_chars && padding_ok && clean.len().is_multiple_of(4))
     }
 
     // URI validator

@@ -2129,9 +2129,8 @@ impl FunctionalParser {
             )));
         }
 
-        if iri.starts_with(':') {
+        if let Some(local) = iri.strip_prefix(':') {
             // Relative IRI with default prefix (e.g., ":Employee")
-            let local = &iri[1..];
             if let Some(base) = prefixes.get("") {
                 // Empty string key is the default prefix from ontology IRI
                 Ok(format!("{}{}", base, local))

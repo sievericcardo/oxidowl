@@ -416,7 +416,7 @@ impl TableauNode {
     pub fn add_role_successor(&mut self, role: String, successor: NodeId) {
         self.role_successors
             .entry(role)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(successor);
     }
 

@@ -205,11 +205,10 @@ impl IncrementalCacheManager {
         report.check_duration = start_time.elapsed();
 
         // Update statistics
-        if self.config.enable_statistics {
-            if let Ok(mut stats) = self.statistics.write() {
+        if self.config.enable_statistics
+            && let Ok(mut stats) = self.statistics.write() {
                 stats.consistency_checks += 1;
             }
-        }
 
         Ok(report)
     }

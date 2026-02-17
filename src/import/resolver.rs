@@ -102,13 +102,11 @@ impl ImportResolver {
             }
 
             // Try relative resolution
-            if let Some(base) = base_iri {
-                if let Ok(base_url) = Url::parse(base) {
-                    if let Ok(resolved_url) = base_url.join(import_iri) {
-                        return self.resolve_import(&resolved_url.to_string(), None).await;
+            if let Some(base) = base_iri
+                && let Ok(base_url) = Url::parse(base)
+                    && let Ok(resolved_url) = base_url.join(import_iri) {
+                        return self.resolve_import(resolved_url.as_ref(), None).await;
                     }
-                }
-            }
 
             // Try file system resolution
             for base_dir in &self.base_directories {
@@ -268,12 +266,11 @@ impl ImportResolver {
         for line in content.lines() {
             if line.contains("owl:imports") {
                 // Very basic extraction - would need proper parsing
-                if let Some(start) = line.find("\"") {
-                    if let Some(end) = line[start + 1..].find("\"") {
+                if let Some(start) = line.find("\"")
+                    && let Some(end) = line[start + 1..].find("\"") {
                         let import_iri = &line[start + 1..start + 1 + end];
                         imports.push(import_iri.to_string());
                     }
-                }
             }
         }
 

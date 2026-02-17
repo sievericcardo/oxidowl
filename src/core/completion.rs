@@ -754,8 +754,7 @@ impl CompletionRuleSet {
             concept,
             dependencies,
         } = &application.context
-        {
-            if let ClassExpression::ObjectHasSelf { property } = concept {
+            && let ClassExpression::ObjectHasSelf { property } = concept {
                 // Add a self-edge
                 result.edge_additions.push((
                     application.node.clone(),
@@ -764,7 +763,6 @@ impl CompletionRuleSet {
                     Arc::clone(dependencies),
                 ));
             }
-        }
 
         Ok(result)
     }

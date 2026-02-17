@@ -102,12 +102,12 @@ impl DisjointnessMap {
     fn add_disjoint_pair(&mut self, c1: ConceptId, c2: ConceptId) {
         self.disjoint_pairs
             .entry(c1.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(c2.clone());
 
         self.disjoint_pairs
             .entry(c2)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(c1);
     }
 
@@ -141,7 +141,7 @@ impl DisjointnessMap {
         log::debug!("Checking for equivalence-disjointness violations");
 
         // Check each equivalence class
-        for (_root, members) in &eq_closure.classes {
+        for members in eq_closure.classes.values() {
             // Skip singleton classes (no possible violations)
             if members.len() <= 1 {
                 continue;

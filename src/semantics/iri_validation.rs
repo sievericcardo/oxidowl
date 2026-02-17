@@ -7,20 +7,17 @@ use crate::{Error, Result};
 
 /// IRI validation mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum IriValidationMode {
     /// RFC 3986: ASCII-only URIs (RDF 1.1 compatible)
     RFC3986,
     /// RFC 3987: Internationalized Resource Identifiers with Unicode (RDF 1.2)
+    #[default]
     RFC3987,
     /// No validation - accept any string
     None,
 }
 
-impl Default for IriValidationMode {
-    fn default() -> Self {
-        Self::RFC3987 // Default to RDF 1.2 mode
-    }
-}
 
 /// IRI validator with configurable mode
 #[derive(Debug, Clone)]
@@ -141,7 +138,7 @@ impl IriValidator {
             // Unescaped space
             ch == ' ' ||
             // DEL and C1 control characters
-            (ch >= '\u{007F}' && ch <= '\u{009F}') ||
+            ('\u{007F}'..='\u{009F}').contains(&ch) ||
             // Characters that must be percent-encoded
             ch == '<' || ch == '>' || ch == '"' || ch == '{' || ch == '}' || 
             ch == '|' || ch == '\\' || ch == '^' || ch == '`'
@@ -186,7 +183,7 @@ impl IriValidator {
 
     /// Check if an IRI contains Unicode characters (is truly internationalized)
     pub fn is_internationalized(iri: &str) -> bool {
-        iri.chars().any(|ch| !ch.is_ascii())
+        !iri.is_ascii()
     }
 
     /// Convert IRI to URI by percent-encoding non-ASCII characters

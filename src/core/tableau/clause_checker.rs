@@ -358,11 +358,10 @@ impl ClauseChecker {
 
                 // IMPORTANT: Also include clauses with empty bodies (they always apply!)
                 for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty() && clause.head.is_empty() == false {
-                        if !candidates.iter().any(|c| c.id == clause.id) {
+                    if clause.body.is_empty() && !clause.head.is_empty()
+                        && !candidates.iter().any(|c| c.id == clause.id) {
                             candidates.push(clause);
                         }
-                    }
                 }
 
                 candidates
@@ -527,17 +526,15 @@ impl ClauseChecker {
             if !predicates.is_empty() {
                 let mut candidates = index
                     .get_candidate_clause_refs(&predicates)
-                    .into_iter()
-                    .map(|c| c.clone())
+                    .into_iter().cloned()
                     .collect::<Vec<_>>();
 
                 // Include clauses with empty bodies
                 for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty() && !clause.head.is_empty() {
-                        if !candidates.iter().any(|c| c.id == clause.id) {
+                    if clause.body.is_empty() && !clause.head.is_empty()
+                        && !candidates.iter().any(|c| c.id == clause.id) {
                             candidates.push(clause.clone());
                         }
-                    }
                 }
 
                 candidates
@@ -545,8 +542,7 @@ impl ClauseChecker {
                 index
                     .deterministic_clauses()
                     .iter()
-                    .filter(|c| c.body.is_empty())
-                    .map(|c| c.clone())
+                    .filter(|c| c.body.is_empty()).cloned()
                     .collect()
             }
         } else {
@@ -687,15 +683,13 @@ impl ClauseChecker {
         let negative_clauses: Vec<DLClause> = if let Some(index) = &self.clause_index {
             index
                 .get_negative_clauses()
-                .into_iter()
-                .map(|c| c.clone())
+                .into_iter().cloned()
                 .collect()
         } else {
             self.clauses
                 .deterministic_clauses
                 .iter()
-                .filter(|c| c.head.is_empty())
-                .map(|c| c.clone())
+                .filter(|c| c.head.is_empty()).cloned()
                 .collect()
         };
 

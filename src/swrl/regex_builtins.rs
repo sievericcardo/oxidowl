@@ -122,11 +122,10 @@ fn get_or_compile_regex(
     };
 
     // Try to get from cache first
-    if let Ok(cache_guard) = cache.lock() {
-        if let Some(regex) = cache_guard.get(&cache_key) {
+    if let Ok(cache_guard) = cache.lock()
+        && let Some(regex) = cache_guard.get(&cache_key) {
             return Ok(regex.clone());
         }
-    }
 
     // Compile new regex
     let regex = if case_insensitive {

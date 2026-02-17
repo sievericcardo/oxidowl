@@ -856,13 +856,12 @@ impl DeltaComputer {
         self.consolidate_hierarchy_updates(delta);
 
         // Update statistics
-        if let Ok(mut stats) = self.statistics.write() {
-            if original_concept_count > delta.concepts_to_recheck.len()
-                || original_hierarchy_count > delta.hierarchy_updates.len()
+        if let Ok(mut stats) = self.statistics.write()
+            && (original_concept_count > delta.concepts_to_recheck.len()
+                || original_hierarchy_count > delta.hierarchy_updates.len())
             {
                 stats.optimizations_applied += 1;
             }
-        }
 
         Ok(())
     }
@@ -1033,14 +1032,12 @@ impl DeltaComputer {
         while let Some(concept) = to_process.pop() {
             // Find all concepts that depend on this concept
             for (other_concept, node) in &saturation.nodes {
-                if node.saturated_concepts.contains(&concept)
+                if (node.saturated_concepts.contains(&concept)
                     || node.direct_subsumers.contains(&concept)
-                    || node.all_subsumers.contains(&concept)
-                {
-                    if affected.insert(other_concept.clone()) {
+                    || node.all_subsumers.contains(&concept))
+                    && affected.insert(other_concept.clone()) {
                         to_process.push(other_concept.clone());
                     }
-                }
             }
         }
 

@@ -232,20 +232,17 @@ impl QLValidator {
         report: &mut ProfileValidationReport,
     ) -> Result<(), OxidowlError> {
         for axiom in ontology.axioms() {
-            match axiom {
-                Axiom::DataPropertyRange(range_axiom) => {
-                    // Data range must be basic datatype
-                    if !self.is_ql_basic_datatype(&range_axiom.range) {
-                        report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedDataRange(format!(
-                                "{:?}",
-                                range_axiom.range
-                            )),
-                            format!("Non-basic datatype in QL range: {:?}", range_axiom.range),
-                        ));
-                    }
+            if let Axiom::DataPropertyRange(range_axiom) = axiom {
+                // Data range must be basic datatype
+                if !self.is_ql_basic_datatype(&range_axiom.range) {
+                    report.add_violation(ProfileViolation::new(
+                        ProfileViolationType::DisallowedDataRange(format!(
+                            "{:?}",
+                            range_axiom.range
+                        )),
+                        format!("Non-basic datatype in QL range: {:?}", range_axiom.range),
+                    ));
                 }
-                _ => {}
             }
         }
         Ok(())

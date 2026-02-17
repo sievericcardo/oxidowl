@@ -188,8 +188,8 @@ impl CompletionGraphCache {
                     message: format!("CompletionGraphCache generation lock poisoned: {}", e) 
                 })?;
             
-            if graph.generation == current_gen {
-                if let Some(result) = graph.has_subsumption(hash2) {
+            if graph.generation == current_gen
+                && let Some(result) = graph.has_subsumption(hash2) {
                     // Update subsumption hit stats
                     let mut stats = self.stats.write()
                         .map_err(|e| Error::Cache { 
@@ -199,7 +199,6 @@ impl CompletionGraphCache {
                     
                     return Ok(Some(result));
                 }
-            }
         }
         
         // Update subsumption miss stats

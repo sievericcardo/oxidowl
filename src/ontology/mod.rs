@@ -692,14 +692,13 @@ impl Ontology {
             let trimmed = line.trim();
             if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
                 // Extract IRI between < and >
-                if let Some(start) = trimmed.find('<') {
-                    if let Some(end) = trimmed[start..].find('>') {
+                if let Some(start) = trimmed.find('<')
+                    && let Some(end) = trimmed[start..].find('>') {
                         let iri_str = &trimmed[start + 1..start + end];
                         if iri_str.starts_with("http") {
                             return Some(IRI::new(iri_str));
                         }
                     }
-                }
             }
         }
         None
@@ -778,7 +777,7 @@ impl Ontology {
         // This creates a declaration axiom for the property
         let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
             id: self.next_axiom_id(),
-            entity: axioms::Entity::ObjectProperty(property.iri.into()),
+            entity: axioms::Entity::ObjectProperty(property.iri),
         });
         self.add_axiom(axiom);
     }
@@ -811,12 +810,11 @@ impl Ontology {
         let mut classes = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
-            if let axioms::Axiom::Declaration(decl) = axiom {
-                if let axioms::Entity::Class(iri) = &decl.entity {
+            if let axioms::Axiom::Declaration(decl) = axiom
+                && let axioms::Entity::Class(iri) = &decl.entity {
                     let class = concepts::Class { iri: iri.clone() };
                     classes.push((iri.clone(), class));
                 }
-            }
         }
 
         classes
@@ -854,24 +852,22 @@ impl Ontology {
                 // Extract from object property assertion axioms
                 axioms::Axiom::ObjectPropertyAssertion(assertion) => {
                     // Extract source
-                    if let individuals::Individual::Named(named) = &assertion.source {
-                        if !individuals
+                    if let individuals::Individual::Named(named) = &assertion.source
+                        && !individuals
                             .iter()
                             .any(|(existing_iri, _)| existing_iri == &named.iri)
                         {
                             individuals.push((named.iri.clone(), assertion.source.clone()));
                         }
-                    }
 
                     // Extract target
-                    if let individuals::Individual::Named(named) = &assertion.target {
-                        if !individuals
+                    if let individuals::Individual::Named(named) = &assertion.target
+                        && !individuals
                             .iter()
                             .any(|(existing_iri, _)| existing_iri == &named.iri)
                         {
                             individuals.push((named.iri.clone(), assertion.target.clone()));
                         }
-                    }
                 }
                 axioms::Axiom::DataPropertyAssertion(data_assertion) => {
                     // Extract individual from data property assertion
@@ -926,12 +922,11 @@ impl Ontology {
         let mut properties = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
-            if let axioms::Axiom::Declaration(decl) = axiom {
-                if let axioms::Entity::ObjectProperty(iri) = &decl.entity {
+            if let axioms::Axiom::Declaration(decl) = axiom
+                && let axioms::Entity::ObjectProperty(iri) = &decl.entity {
                     let property = ObjectProperty { iri: iri.clone() };
                     properties.push(property);
                 }
-            }
         }
 
         properties

@@ -909,11 +909,10 @@ impl AdvancedExecutionEngine {
         let start_time = Instant::now();
 
         // Step 1: Check cache if enabled
-        if self.config.enable_caching {
-            if let Some(cached_result) = self.check_cache(query).await? {
+        if self.config.enable_caching
+            && let Some(cached_result) = self.check_cache(query).await? {
                 return Ok(cached_result);
             }
-        }
 
         // Step 2: Generate optimized query plan
         let query_plan = {
@@ -1122,11 +1121,10 @@ impl AdvancedExecutionEngine {
         })?;
         let query_hash = cache.compute_query_hash(query, &self.ontology);
 
-        if let Some(entry) = cache.get_entry(&query_hash) {
-            if !cache.is_entry_expired(entry) {
+        if let Some(entry) = cache.get_entry(&query_hash)
+            && !cache.is_entry_expired(entry) {
                 return Ok(Some(entry.result.clone()));
             }
-        }
 
         Ok(None)
     }
@@ -1784,6 +1782,12 @@ impl CacheSizeTracker {
     }
 }
 
+impl Default for ExecutionStrategySelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionStrategySelector {
     pub fn new() -> Self {
         Self {
@@ -2020,7 +2024,7 @@ impl ExecutionStrategySelector {
             {
                 graph
                     .entry(subject.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(object.clone());
             }
         }
@@ -2030,11 +2034,10 @@ impl ExecutionStrategySelector {
         let mut rec_stack = HashSet::new();
 
         for var in graph.keys() {
-            if !visited.contains(var) {
-                if self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack) {
+            if !visited.contains(var)
+                && self.has_cycle_dfs(var, &graph, &mut visited, &mut rec_stack) {
                     return true;
                 }
-            }
         }
 
         false
@@ -2082,6 +2085,12 @@ impl ExecutionStrategySelector {
     }
 }
 
+impl Default for StrategySelectionModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StrategySelectionModel {
     pub fn new() -> Self {
         Self {
@@ -2097,6 +2106,12 @@ impl StrategySelectionModel {
 #[derive(Debug)]
 pub struct DefaultRankingModel {
     // Simple rule-based model as placeholder
+}
+
+impl Default for DefaultRankingModel {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DefaultRankingModel {
@@ -2166,6 +2181,12 @@ impl Default for StrategyLearningConfig {
             retraining_interval: Duration::from_secs(3600),
             min_training_samples: 100,
         }
+    }
+}
+
+impl Default for ExecutionPerformanceMonitor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2280,12 +2301,11 @@ impl ExecutionPerformanceMonitor {
 
     /// Complete atom evaluation phase
     pub fn complete_atom_evaluation(&mut self, execution_id: &ExecutionId, atoms_count: usize) {
-        if let Some(trace) = self.active_executions.get_mut(execution_id) {
-            if let Some(start) = trace.atom_evaluation_start {
+        if let Some(trace) = self.active_executions.get_mut(execution_id)
+            && let Some(start) = trace.atom_evaluation_start {
                 trace.atom_evaluation_duration = start.elapsed();
                 trace.atoms_evaluated = atoms_count;
             }
-        }
     }
 
     /// Start join phase
@@ -2297,12 +2317,11 @@ impl ExecutionPerformanceMonitor {
 
     /// Complete join phase
     pub fn complete_join_phase(&mut self, execution_id: &ExecutionId, joins_count: usize) {
-        if let Some(trace) = self.active_executions.get_mut(execution_id) {
-            if let Some(start) = trace.join_start {
+        if let Some(trace) = self.active_executions.get_mut(execution_id)
+            && let Some(start) = trace.join_start {
                 trace.join_duration = start.elapsed();
                 trace.joins_performed = joins_count;
             }
-        }
     }
 
     /// Start materialization phase
@@ -2314,16 +2333,21 @@ impl ExecutionPerformanceMonitor {
 
     /// Complete materialization phase
     pub fn complete_materialization(&mut self, execution_id: &ExecutionId) {
-        if let Some(trace) = self.active_executions.get_mut(execution_id) {
-            if let Some(start) = trace.materialization_start {
+        if let Some(trace) = self.active_executions.get_mut(execution_id)
+            && let Some(start) = trace.materialization_start {
                 trace.materialization_duration = start.elapsed();
             }
-        }
     }
 
     /// Get query profiler for accessing profiling statistics
     pub fn query_profiler(&self) -> Arc<QueryProfiler> {
         self.query_profiler.clone()
+    }
+}
+
+impl Default for PerformanceMetricsAggregator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2355,6 +2379,12 @@ impl Default for OverallPerformanceStats {
     }
 }
 
+impl Default for ExecutionAnomalyDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionAnomalyDetector {
     pub fn new() -> Self {
         Self {
@@ -2374,6 +2404,12 @@ impl Default for AnomalyThresholds {
             success_rate_threshold: 0.95,
             consecutive_failures_threshold: 5,
         }
+    }
+}
+
+impl Default for ExecutionAlertSystem {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2408,6 +2444,12 @@ impl ThreadPool {
             max_threads,
             queue_size: 0,
         }
+    }
+}
+
+impl Default for ResourceManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

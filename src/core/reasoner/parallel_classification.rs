@@ -72,11 +72,10 @@ impl ParallelClassificationScheduler {
                 }
 
                 // Skip if already determined by told subsumers
-                if let Some(subsumers) = told_subsumers.get(subclass) {
-                    if subsumers.contains(superclass) {
+                if let Some(subsumers) = told_subsumers.get(subclass)
+                    && subsumers.contains(superclass) {
                         continue;
                     }
-                }
 
                 // Assign priority based on position in hierarchy
                 let priority = priority_map.get(subclass).copied().unwrap_or(0)
@@ -186,7 +185,7 @@ impl ParallelClassificationScheduler {
                 let completed = self.completed_tests.fetch_add(1, Ordering::Relaxed) + 1;
                 let total = self.total_tests.load(Ordering::Relaxed);
 
-                if completed % 100 == 0 {
+                if completed.is_multiple_of(100) {
                     debug!("Classification progress: {}/{} ({:.1}%)", 
                            completed, total, (completed as f64 / total as f64) * 100.0);
                 }

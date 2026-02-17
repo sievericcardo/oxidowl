@@ -322,7 +322,7 @@ impl SWRLFeatureStatistics {
         println!("SWRL Feature Implementation Statistics:");
         println!("  Total Built-ins: {}", self.total_builtins);
         println!("  Feature Coverage: {:.1}%", self.feature_coverage);
-        println!("");
+        println!();
         println!("Built-ins by Category:");
         println!("  Date/Time: {}", self.datetime_builtins);
         println!("  Regex: {}", self.regex_builtins);

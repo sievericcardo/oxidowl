@@ -50,13 +50,12 @@ fn parse_iri_to_url_with_base(uri_str: &str, base: Option<&str>) -> Result<url::
     }
     
     // If we have a base URI, resolve relative URIs against it
-    if let Some(base_uri) = base {
-        if let Ok(base_url) = url::Url::parse(base_uri) {
+    if let Some(base_uri) = base
+        && let Ok(base_url) = url::Url::parse(base_uri) {
             // Resolve relative URI against base
             return base_url.join(uri_str)
                 .map_err(|e| Error::ontology_parsing(format!("Failed to resolve relative IRI '{}' against base '{}': {}", uri_str, base_uri, e)));
         }
-    }
     
     // No base URI provided - check if it looks like it has a scheme
     if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
@@ -272,11 +271,10 @@ impl TurtleParser {
         }
 
         // Extract ontology IRI if present
-        if ontology.get_iri().is_none() {
-            if let Some(iri) = Self::extract_ontology_iri_from_content(content) {
+        if ontology.get_iri().is_none()
+            && let Some(iri) = Self::extract_ontology_iri_from_content(content) {
                 ontology.set_ontology_iri(Some(iri));
             }
-        }
 
         Ok(ontology)
     }
@@ -288,14 +286,13 @@ impl TurtleParser {
             let trimmed = line.trim();
             if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
                 // Extract IRI between < and >
-                if let Some(start) = trimmed.find('<') {
-                    if let Some(end) = trimmed[start..].find('>') {
+                if let Some(start) = trimmed.find('<')
+                    && let Some(end) = trimmed[start..].find('>') {
                         let iri_str = &trimmed[start + 1..start + end];
                         if iri_str.starts_with("http") {
                             return Some(IRI::new(iri_str));
                         }
                     }
-                }
             }
         }
         None
@@ -437,8 +434,8 @@ impl TurtleParser {
     fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
         // @prefix prefix: <uri> .
         // Find the IRI within angle brackets
-        if let Some(start) = statement.find('<') {
-            if let Some(end) = statement.find('>') {
+        if let Some(start) = statement.find('<')
+            && let Some(end) = statement.find('>') {
                 let uri = &statement[start + 1..end];
 
                 // Extract prefix name (between @prefix and :)
@@ -450,17 +447,15 @@ impl TurtleParser {
                         .insert(prefix_name.to_string(), uri.to_string());
                 }
             }
-        }
         Ok(())
     }
 
     /// Parse base declaration
     fn parse_base_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
-        if let Some(start) = statement.find('<') {
-            if let Some(end) = statement.find('>') {
+        if let Some(start) = statement.find('<')
+            && let Some(end) = statement.find('>') {
                 state.base_uri = Some(statement[start + 1..end].to_string());
             }
-        }
         Ok(())
     }
 
@@ -772,7 +767,7 @@ impl TurtleParser {
                             iri: IRI::new(&predicate),
                         };
                         let literal = Literal {
-                            value: self.decode_escape_sequences(&literal_value.trim_matches('"')),
+                            value: self.decode_escape_sequences(literal_value.trim_matches('"')),
                             language: None,
                             datatype,
                         };
@@ -1190,9 +1185,9 @@ impl TurtleParser {
             let subject_class = Class::new(IRI::new(&subject_uri));
 
             // Look for intersection patterns like "[ owl:intersectionOf ( ast:Healthy ast:MoistPlant ) ]"
-            if statement.contains("owl:intersectionOf") {
-                if let Some(start) = statement.find("owl:intersectionOf") {
-                    if let Some(paren_start) = statement[start..].find('(') {
+            if statement.contains("owl:intersectionOf")
+                && let Some(start) = statement.find("owl:intersectionOf")
+                    && let Some(paren_start) = statement[start..].find('(') {
                         // Find matching closing parenthesis, handling nesting
                         let search_start = start + paren_start + 1;
                         let mut paren_depth = 1;
@@ -1385,8 +1380,6 @@ impl TurtleParser {
                             }
                         }
                     }
-                }
-            }
 
             // Fallback to simple equivalent class handling
             return self.parse_equivalent_class(statement, ontology, state);
@@ -1780,9 +1773,9 @@ impl TurtleParser {
         // Parse facet restrictions
         let mut facets = Vec::new();
 
-        if let Some(restr_start) = restriction_str.find("owl:withRestrictions") {
-            if let Some(paren_start) = restriction_str[restr_start..].find('(') {
-                if let Some(paren_end) = restriction_str[restr_start + paren_start..].find(')') {
+        if let Some(restr_start) = restriction_str.find("owl:withRestrictions")
+            && let Some(paren_start) = restriction_str[restr_start..].find('(')
+                && let Some(paren_end) = restriction_str[restr_start + paren_start..].find(')') {
                     let facets_str = &restriction_str
                         [restr_start + paren_start + 1..restr_start + paren_start + paren_end];
                     eprintln!("Parsing facets: {}", facets_str);
@@ -1814,8 +1807,6 @@ impl TurtleParser {
                         }
                     }
                 }
-            }
-        }
 
         Ok(DataRange::DatatypeRestriction {
             datatype: IRI::new(&datatype_iri),
@@ -1825,7 +1816,7 @@ impl TurtleParser {
 
     /// Parse a facet restriction like "xsd:maxExclusive \"80.0\"^^xsd:double"
     fn parse_facet(&self, facet_str: &str, state: &mut ParseState) -> Result<FacetRestriction> {
-        let parts: Vec<&str> = facet_str.trim().split_whitespace().collect();
+        let parts: Vec<&str> = facet_str.split_whitespace().collect();
         if parts.len() < 2 {
             return Err(Error::ontology_parsing("Invalid facet format"));
         }
@@ -2378,14 +2369,12 @@ impl TurtleParser {
                             // Unicode escape \uXXXX
                             chars.next(); // consume 'u'
                             let hex: String = chars.by_ref().take(4).collect();
-                            if hex.len() == 4 {
-                                if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                                    if let Some(unicode_char) = char::from_u32(code) {
+                            if hex.len() == 4
+                                && let Ok(code) = u32::from_str_radix(&hex, 16)
+                                    && let Some(unicode_char) = char::from_u32(code) {
                                         result.push(unicode_char);
                                         continue;
                                     }
-                                }
-                            }
                             // If parsing failed, keep the escape sequence
                             result.push('\\');
                             result.push('u');
@@ -2395,14 +2384,12 @@ impl TurtleParser {
                             // Unicode escape \UXXXXXXXX
                             chars.next(); // consume 'U'
                             let hex: String = chars.by_ref().take(8).collect();
-                            if hex.len() == 8 {
-                                if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                                    if let Some(unicode_char) = char::from_u32(code) {
+                            if hex.len() == 8
+                                && let Ok(code) = u32::from_str_radix(&hex, 16)
+                                    && let Some(unicode_char) = char::from_u32(code) {
                                         result.push(unicode_char);
                                         continue;
                                     }
-                                }
-                            }
                             // If parsing failed, keep the escape sequence
                             result.push('\\');
                             result.push('U');
@@ -2442,10 +2429,10 @@ impl TurtleParser {
                 Ok(result)
             } else {
                 // Handle unknown prefixes - this should be an error for proper Turtle parsing
-                return Err(Error::ontology_parsing(format!(
+                Err(Error::ontology_parsing(format!(
                     "Undefined prefix: {}",
                     prefix
-                )));
+                )))
             }
         } else if let Some(base) = &state.base_uri {
             let result = format!("{base}{name}");
@@ -2702,20 +2689,18 @@ impl OntologySerializer for TurtleSerializer {
                     }
                 }
                 crate::ontology::Axiom::ClassAssertion(assertion) => {
-                    if let ClassExpression::Class(class) = &assertion.class {
-                        if let Some(individual_iri) = assertion.individual.iri() {
+                    if let ClassExpression::Class(class) = &assertion.class
+                        && let Some(individual_iri) = assertion.individual.iri() {
                             content.push_str(&format!(
                                 "<{}> rdf:type <{}> .\n",
                                 individual_iri, class.iri
                             ));
                         }
-                    }
                 }
                 crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
                     if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
                         &assertion.property
-                    {
-                        if let (Some(source_iri), Some(target_iri)) =
+                        && let (Some(source_iri), Some(target_iri)) =
                             (assertion.source.iri(), assertion.target.iri())
                         {
                             content.push_str(&format!(
@@ -2723,7 +2708,6 @@ impl OntologySerializer for TurtleSerializer {
                                 source_iri, prop.iri, target_iri
                             ));
                         }
-                    }
                 }
                 _ => {
                     // Skip complex axioms for now

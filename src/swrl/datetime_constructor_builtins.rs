@@ -488,7 +488,7 @@ impl SWRLBuiltIn for GYearMonthBuiltIn {
         let year = extract_integer(&args[1])?;
         let month = extract_integer(&args[2])?;
 
-        if month < 1 || month > 12 {
+        if !(1..=12).contains(&month) {
             return Err(Error::reasoning("Month must be between 1 and 12"));
         }
 

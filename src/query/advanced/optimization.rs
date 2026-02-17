@@ -187,7 +187,7 @@ impl QueryOptimizer {
                 optimization_time,
                 plans_considered,
                 techniques_applied,
-                cost_confidence: self.estimate_cost_confidence(&query),
+                cost_confidence: self.estimate_cost_confidence(query),
             },
         })
     }

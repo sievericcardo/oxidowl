@@ -356,6 +356,7 @@ impl PerformanceConfig {
 
 /// Performance profile presets for different resource levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum PerformanceProfile {
     /// Low: Minimal resources (1-2 cores, basic caching, minimal memory)
     /// Good for: Embedded systems, resource-constrained environments
@@ -365,6 +366,7 @@ pub enum PerformanceProfile {
     Medium,
     /// High: Performance-focused (16+ cores, aggressive caching, SIMD, optimized memory)
     /// Good for: High-performance servers, classification workloads [DEFAULT]
+    #[default]
     High,
     /// Ultra: Maximum performance (all cores, NUMA-aware, maximum caching, maximum memory)
     /// Good for: Multi-socket servers, very large ontologies (100K+ concepts)
@@ -455,12 +457,6 @@ impl PerformanceProfile {
     }
 }
 
-impl Default for PerformanceProfile {
-    fn default() -> Self {
-        // Default to High performance profile
-        Self::High
-    }
-}
 
 impl Default for PerformanceConfig {
     fn default() -> Self {
@@ -665,18 +661,16 @@ impl ReasonerConfig {
     /// Validate the configuration settings
     pub fn validate(&self) -> Result<()> {
         // Validate timeouts
-        if let Some(timeout) = self.reasoning.timeout {
-            if timeout.as_secs() == 0 {
+        if let Some(timeout) = self.reasoning.timeout
+            && timeout.as_secs() == 0 {
                 return Err(Error::config("Timeout cannot be zero".to_string()));
             }
-        }
 
         // Validate memory limits
-        if let Some(max_memory) = self.reasoning.max_memory_mb {
-            if max_memory == 0 {
+        if let Some(max_memory) = self.reasoning.max_memory_mb
+            && max_memory == 0 {
                 return Err(Error::config("Maximum memory cannot be zero".to_string()));
             }
-        }
 
         // Validate cache settings
         if self.cache.max_cache_size_mb == 0 {

@@ -383,7 +383,7 @@ impl DatatypeManager {
             if let Some(parent) = datatype.parent_datatype() {
                 self.datatype_hierarchy
                     .entry(parent)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(datatype);
             }
         }
@@ -433,7 +433,7 @@ impl DatatypeManager {
 
     /// Add a datatype definition
     pub fn add_datatype_definition(&mut self, definition: DatatypeDefinitionAxiom) {
-        if let Ok(url) = url::Url::parse(&definition.datatype.to_string()) {
+        if let Ok(url) = url::Url::parse(definition.datatype.as_ref()) {
             self.datatype_definitions.insert(url, definition);
         }
     }
@@ -456,7 +456,7 @@ impl DatatypeManager {
     /// Validate a literal value against its datatype
     pub fn validate_literal(&self, literal: &crate::ontology::Literal) -> Result<(), OxidowlError> {
         if let Some(datatype_url) = &literal.datatype {
-            if let Ok(owl2_datatype) = OWL2Datatype::from_str(&datatype_url.to_string()) {
+            if let Ok(owl2_datatype) = OWL2Datatype::from_str(datatype_url.as_ref()) {
                 return self.validate_against_builtin_datatype(&literal.value, &owl2_datatype);
             }
 

@@ -334,12 +334,11 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
             _ => self.cache.keys().next().cloned(),
         };
 
-        if let Some(key) = key_to_evict {
-            if let Some(entry) = self.cache.remove(&key) {
+        if let Some(key) = key_to_evict
+            && let Some(entry) = self.cache.remove(&key) {
                 self.total_size_bytes -= entry.size_bytes;
                 self.evictions += 1;
             }
-        }
     }
 
     /// Get cache statistics

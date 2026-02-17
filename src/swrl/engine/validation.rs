@@ -323,11 +323,10 @@ impl GoalChecker {
 
             // Check for direct class assertions
             for axiom in ontology_guard.axioms() {
-                if let Axiom::ClassAssertion(assertion) = axiom {
-                    if self.matches_class_assertion_axiom(individual, class, assertion)? {
+                if let Axiom::ClassAssertion(assertion) = axiom
+                    && self.matches_class_assertion_axiom(individual, class, assertion)? {
                         return Ok(true);
                     }
-                }
             }
         }
 
@@ -349,13 +348,12 @@ impl GoalChecker {
             )?;
 
             for axiom in ontology_guard.axioms() {
-                if let Axiom::ObjectPropertyAssertion(assertion) = axiom {
-                    if self.matches_object_property_assertion_axiom(
+                if let Axiom::ObjectPropertyAssertion(assertion) = axiom
+                    && self.matches_object_property_assertion_axiom(
                         subject, property, object, assertion,
                     )? {
                         return Ok(true);
                     }
-                }
             }
         }
 
@@ -377,13 +375,12 @@ impl GoalChecker {
             )?;
 
             for axiom in ontology_guard.axioms() {
-                if let Axiom::DataPropertyAssertion(assertion) = axiom {
-                    if self.matches_data_property_assertion_axiom(
+                if let Axiom::DataPropertyAssertion(assertion) = axiom
+                    && self.matches_data_property_assertion_axiom(
                         subject, property, object, assertion,
                     )? {
                         return Ok(true);
                     }
-                }
             }
         }
 

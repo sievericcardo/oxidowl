@@ -37,13 +37,13 @@ impl DependencyTracker {
         // Forward: dependency -> {dependent}
         self.dependencies
             .entry(dependency)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(dependent);
         
         // Reverse: dependent -> {dependency}
         self.reverse_dependencies
             .entry(dependent)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(dependency);
     }
     

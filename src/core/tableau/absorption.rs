@@ -231,8 +231,8 @@ impl ClauseAbsorber {
         let head_atom = &clause.head[0];
 
         // Both must be concept assertions (unary predicates with same argument)
-        if body_atom.arguments.len() == 1 && head_atom.arguments.len() == 1 {
-            if body_atom.arguments[0] == head_atom.arguments[0] {
+        if body_atom.arguments.len() == 1 && head_atom.arguments.len() == 1
+            && body_atom.arguments[0] == head_atom.arguments[0] {
                 let pattern = AbsorbablePattern::ConceptImplication {
                     from_concept: body_atom.predicate.clone(),
                     to_concept: head_atom.predicate.clone(),
@@ -241,12 +241,11 @@ impl ClauseAbsorber {
                 // Record in concept implications map
                 self.concept_implications
                     .entry(body_atom.predicate.clone())
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(head_atom.predicate.clone());
 
                 return Some(pattern);
             }
-        }
 
         None
     }
@@ -273,7 +272,7 @@ impl ClauseAbsorber {
                 // Record in role domains map
                 self.role_domains
                     .entry(body_atom.predicate.clone())
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(head_atom.predicate.clone());
 
                 return Some(pattern);
@@ -307,7 +306,7 @@ impl ClauseAbsorber {
                         // Record in role ranges map
                         self.role_ranges
                             .entry(body_atom.predicate.clone())
-                            .or_insert_with(HashSet::new)
+                            .or_default()
                             .insert(head_atom.predicate.clone());
 
                         return Some(pattern);

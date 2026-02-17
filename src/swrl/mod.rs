@@ -100,14 +100,13 @@ impl SWRLExecutionContext {
 
     /// Bind a variable to a value
     pub fn bind(&mut self, variable: SWRLVariable, value: SWRLValue) -> Result<()> {
-        if let Some(existing) = self.bindings.get(&variable) {
-            if existing != &value {
+        if let Some(existing) = self.bindings.get(&variable)
+            && existing != &value {
                 return Err(Error::reasoning(format!(
                     "Variable {} already bound to different value",
                     variable.iri
                 )));
             }
-        }
         self.bindings.insert(variable, value);
         Ok(())
     }

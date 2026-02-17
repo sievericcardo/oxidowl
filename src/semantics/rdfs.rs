@@ -81,7 +81,7 @@ impl RdfsInterpretation {
     pub fn add_instance(&mut self, class: String, instance: String) {
         self.class_interpretation
             .entry(class)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(instance);
     }
 }
@@ -153,8 +153,8 @@ impl RdfsInterpretation {
         
         // 2. Range constraints: if (s, p, o) and (p, rdfs:range, c) then (o, rdf:type, c)
         for triple in &graph.triples {
-            if let Some(range_class) = self.get_property_range(&triple.predicate, graph) {
-                if let RdfTerm::Iri(object_iri) = &triple.object {
+            if let Some(range_class) = self.get_property_range(&triple.predicate, graph)
+                && let RdfTerm::Iri(object_iri) = &triple.object {
                     let type_triple = Triple {
                         subject: RdfTerm::Iri(object_iri.clone()),
                         predicate: RdfTerm::Iri(url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#type").unwrap()),
@@ -164,17 +164,16 @@ impl RdfsInterpretation {
                         return false;
                     }
                 }
-            }
         }
         
         // 3. Subclass transitivity: if (x, rdfs:subClassOf, y) and (y, rdfs:subClassOf, z) then (x, rdfs:subClassOf, z)
         for triple1 in &graph.triples {
-            if triple1.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap()) {
-                if let (RdfTerm::Iri(x), RdfTerm::Iri(y)) = (&triple1.subject, &triple1.object) {
+            if triple1.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap())
+                && let (RdfTerm::Iri(x), RdfTerm::Iri(y)) = (&triple1.subject, &triple1.object) {
                     for triple2 in &graph.triples {
                         if triple2.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap()) &&
-                           RdfTerm::Iri(y.clone()) == triple2.subject {
-                            if let RdfTerm::Iri(z) = &triple2.object {
+                           RdfTerm::Iri(y.clone()) == triple2.subject
+                            && let RdfTerm::Iri(z) = &triple2.object {
                                 let derived_triple = Triple {
                                     subject: RdfTerm::Iri(x.clone()),
                                     predicate: RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap()),
@@ -184,20 +183,18 @@ impl RdfsInterpretation {
                                     return false;
                                 }
                             }
-                        }
                     }
                 }
-            }
         }
         
         // 4. Subproperty transitivity: if (p, rdfs:subPropertyOf, q) and (q, rdfs:subPropertyOf, r) then (p, rdfs:subPropertyOf, r)
         for triple1 in &graph.triples {
-            if triple1.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf").unwrap()) {
-                if let (RdfTerm::Iri(p), RdfTerm::Iri(q)) = (&triple1.subject, &triple1.object) {
+            if triple1.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf").unwrap())
+                && let (RdfTerm::Iri(p), RdfTerm::Iri(q)) = (&triple1.subject, &triple1.object) {
                     for triple2 in &graph.triples {
                         if triple2.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf").unwrap()) &&
-                           RdfTerm::Iri(q.clone()) == triple2.subject {
-                            if let RdfTerm::Iri(r) = &triple2.object {
+                           RdfTerm::Iri(q.clone()) == triple2.subject
+                            && let RdfTerm::Iri(r) = &triple2.object {
                                 let derived_triple = Triple {
                                     subject: RdfTerm::Iri(p.clone()),
                                     predicate: RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf").unwrap()),
@@ -207,10 +204,8 @@ impl RdfsInterpretation {
                                     return false;
                                 }
                             }
-                        }
                     }
                 }
-            }
         }
         
         true
@@ -231,11 +226,10 @@ impl RdfsInterpretation {
     fn get_property_domain(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
         for triple in &graph.triples {
             if &triple.subject == property &&
-               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap()) {
-                if let RdfTerm::Iri(domain) = &triple.object {
+               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap())
+                && let RdfTerm::Iri(domain) = &triple.object {
                     return Some(domain.clone());
                 }
-            }
         }
         None
     }
@@ -244,11 +238,10 @@ impl RdfsInterpretation {
     fn get_property_range(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
         for triple in &graph.triples {
             if &triple.subject == property &&
-               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap()) {
-                if let RdfTerm::Iri(range) = &triple.object {
+               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap())
+                && let RdfTerm::Iri(range) = &triple.object {
                     return Some(range.clone());
                 }
-            }
         }
         None
     }
@@ -277,11 +270,10 @@ impl RdfsEntailmentEngine {
     fn get_property_domain(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
         for triple in &graph.triples {
             if &triple.subject == property &&
-               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap()) {
-                if let RdfTerm::Iri(domain) = &triple.object {
+               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap())
+                && let RdfTerm::Iri(domain) = &triple.object {
                     return Some(domain.clone());
                 }
-            }
         }
         None
     }
@@ -290,11 +282,10 @@ impl RdfsEntailmentEngine {
     fn get_property_range(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
         for triple in &graph.triples {
             if &triple.subject == property &&
-               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap()) {
-                if let RdfTerm::Iri(range) = &triple.object {
+               triple.predicate == RdfTerm::Iri(url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap())
+                && let RdfTerm::Iri(range) = &triple.object {
                     return Some(range.clone());
                 }
-            }
         }
         None
     }
@@ -512,7 +503,7 @@ impl RdfsEntailmentEngine {
     fn apply_rdfs5(&mut self, graph: &RdfGraph) -> Result<()> {
         let subprop_iri = RdfTerm::Iri(RDFS_SUBPROPERTY_OF.clone());
 
-        let subprop_triples: Vec<_> = graph.find_triples(None, Some(&subprop_iri), None).iter().cloned().collect();
+        let subprop_triples: Vec<_> = graph.find_triples(None, Some(&subprop_iri), None).to_vec();
         
         for triple1 in &subprop_triples {
             for triple2 in &subprop_triples {
@@ -663,7 +654,7 @@ impl RdfsEntailmentEngine {
     fn apply_rdfs11(&mut self, graph: &RdfGraph) -> Result<()> {
         let subclass_iri = RdfTerm::Iri(RDFS_SUBCLASS_OF.clone());
 
-        let subclass_triples: Vec<_> = graph.find_triples(None, Some(&subclass_iri), None).iter().cloned().collect();
+        let subclass_triples: Vec<_> = graph.find_triples(None, Some(&subclass_iri), None).to_vec();
         
         for triple1 in &subclass_triples {
             for triple2 in &subclass_triples {

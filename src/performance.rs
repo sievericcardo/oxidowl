@@ -117,13 +117,10 @@ impl MemoryTracker {
             .args(["-o", "rss=", "-p"])
             .arg(std::process::id().to_string())
             .output()
-        {
-            if let Ok(output_str) = String::from_utf8(output.stdout) {
-                if let Ok(kb) = output_str.trim().parse::<usize>() {
+            && let Ok(output_str) = String::from_utf8(output.stdout)
+                && let Ok(kb) = output_str.trim().parse::<usize>() {
                     return kb * 1024; // Convert KB to bytes
                 }
-            }
-        }
         0
     }
 
@@ -182,31 +179,27 @@ impl MemoryTracker {
         use std::process::Command;
 
         // Use vm_stat to get memory statistics
-        if let Ok(output) = Command::new("vm_stat").output() {
-            if let Ok(output_str) = String::from_utf8(output.stdout) {
+        if let Ok(output) = Command::new("vm_stat").output()
+            && let Ok(output_str) = String::from_utf8(output.stdout) {
                 let mut free_pages = 0usize;
                 let mut inactive_pages = 0usize;
 
                 for line in output_str.lines() {
                     if line.contains("Pages free:") {
-                        if let Some(value) = line.split(':').nth(1) {
-                            if let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
+                        if let Some(value) = line.split(':').nth(1)
+                            && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
                                 free_pages = pages;
                             }
-                        }
-                    } else if line.contains("Pages inactive:") {
-                        if let Some(value) = line.split(':').nth(1) {
-                            if let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
+                    } else if line.contains("Pages inactive:")
+                        && let Some(value) = line.split(':').nth(1)
+                            && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
                                 inactive_pages = pages;
                             }
-                        }
-                    }
                 }
 
                 // Page size is typically 4096 bytes on macOS
                 return (free_pages + inactive_pages) * 4096;
             }
-        }
         0
     }
 

@@ -402,7 +402,7 @@ impl IndustrialOptimizer {
 
         // Build subsequent levels
         let mut current_level = 0;
-        while current_level < levels.len() && levels[current_level].len() > 0 {
+        while current_level < levels.len() && !levels[current_level].is_empty() {
             let mut next_level = Vec::new();
 
             for concept in &levels[current_level] {
@@ -441,7 +441,7 @@ impl IndustrialOptimizer {
             let namespace = self.extract_namespace(class_iri);
             namespace_groups
                 .entry(namespace)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(ClassExpression::class(class_iri.clone()));
         }
 
@@ -1013,13 +1013,10 @@ impl DistributedClassificationResult {
                 superclasses.push("owl:Thing".to_string());
                 
                 // Check join order and strategy to identify subsumptions
-                match &result.base_plan.strategy {
-                    super::optimization::ExecutionStrategy::Tableau { expansion_order } => {
-                        // Analyze tableau expansion for subsumption relationships
-                        let _num_atoms = expansion_order.len();
-                        // In production: extract subsumptions from expansion order
-                    }
-                    _ => {}
+                if let super::optimization::ExecutionStrategy::Tableau { expansion_order } = &result.base_plan.strategy {
+                    // Analyze tableau expansion for subsumption relationships
+                    let _num_atoms = expansion_order.len();
+                    // In production: extract subsumptions from expansion order
                 }
                 
                 subsumptions.insert(concept_iri, superclasses);
@@ -1217,7 +1214,7 @@ impl DistributedProcessingCoordinator {
             for (class, supers) in &partition_result.subsumptions {
                 merged.subsumptions
                     .entry(class.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .extend(supers.iter().cloned());
             }
             

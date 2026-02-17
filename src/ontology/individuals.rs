@@ -404,10 +404,8 @@ impl IndividualStore {
                 if let Some(id) = individual.anonymous_id() {
                     self.add_anonymous_individual(id.clone());
                 }
-            } else {
-                if let Some(iri) = individual.named_iri() {
-                    self.add_named_individual(iri.clone());
-                }
+            } else if let Some(iri) = individual.named_iri() {
+                self.add_named_individual(iri.clone());
             }
         }
 

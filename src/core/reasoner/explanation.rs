@@ -123,7 +123,7 @@ impl ExplanationService {
         }
 
         // Check for individuals asserted to be in disjoint classes
-        for (_individual, assertions) in &class_assertions {
+        for assertions in class_assertions.values() {
             for (i, (class1, axiom1)) in assertions.iter().enumerate() {
                 for (class2, axiom2) in assertions.iter().skip(i + 1) {
                     // Check if these classes are disjoint
@@ -191,24 +191,21 @@ impl ExplanationService {
                 Axiom::EquivalentClasses(equiv_axiom) => {
                     if equiv_axiom.classes.contains(class) {
                         for equiv_class in &equiv_axiom.classes {
-                            if let ClassExpression::Class(cls) = equiv_class {
-                                if cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+                            if let ClassExpression::Class(cls) = equiv_class
+                                && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
                                     explanation.push(axiom.clone());
                                     break;
                                 }
-                            }
                         }
                     }
                 }
                 // Check if the class is declared as a subclass of owl:Nothing
                 Axiom::SubClassOf(subclass_axiom) => {
-                    if subclass_axiom.subclass == *class {
-                        if let ClassExpression::Class(super_cls) = &subclass_axiom.superclass {
-                            if super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+                    if subclass_axiom.subclass == *class
+                        && let ClassExpression::Class(super_cls) = &subclass_axiom.superclass
+                            && super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
                                 explanation.push(axiom.clone());
                             }
-                        }
-                    }
                 }
                 // Check for disjoint classes that cover all possibilities
                 Axiom::DisjointClasses(disjoint_axiom) => {
@@ -297,8 +294,8 @@ impl ExplanationService {
 
         // Look for direct subsumption relationships
         for axiom in ontology.axioms() {
-            if let Axiom::SubClassOf(subclass_axiom) = axiom {
-                if subclass_axiom.subclass == *current {
+            if let Axiom::SubClassOf(subclass_axiom) = axiom
+                && subclass_axiom.subclass == *current {
                     // Found a step in the chain
                     explanation.push(axiom.clone());
 
@@ -315,7 +312,6 @@ impl ExplanationService {
                     // Backtrack
                     explanation.pop();
                 }
-            }
         }
 
         visited.remove(current);

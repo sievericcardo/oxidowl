@@ -692,8 +692,8 @@ impl ObjectPropertyHierarchy {
             }
 
             // Super properties
-            if let Some(supers) = self.get_super_properties(iri) {
-                if !supers.is_empty() {
+            if let Some(supers) = self.get_super_properties(iri)
+                && !supers.is_empty() {
                     writeln!(file, "  SuperProperties:")
                         .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     for super_prop in supers {
@@ -701,11 +701,10 @@ impl ObjectPropertyHierarchy {
                             .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     }
                 }
-            }
 
             // Sub properties
-            if let Some(subs) = self.get_sub_properties(iri) {
-                if !subs.is_empty() {
+            if let Some(subs) = self.get_sub_properties(iri)
+                && !subs.is_empty() {
                     writeln!(file, "  SubProperties:")
                         .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     for sub_prop in subs {
@@ -713,11 +712,10 @@ impl ObjectPropertyHierarchy {
                             .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     }
                 }
-            }
 
             // Equivalent properties
-            if let Some(equiv) = self.get_equivalent_properties(iri) {
-                if !equiv.is_empty() {
+            if let Some(equiv) = self.get_equivalent_properties(iri)
+                && !equiv.is_empty() {
                     writeln!(file, "  EquivalentProperties:")
                         .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     for eq_prop in equiv {
@@ -725,7 +723,6 @@ impl ObjectPropertyHierarchy {
                             .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     }
                 }
-            }
 
             // Inverse property
             if let Some(inverse) = self.get_inverse_property(iri) {
@@ -995,8 +992,8 @@ impl DataPropertyHierarchy {
             }
 
             // Super properties
-            if let Some(supers) = self.get_super_properties(iri) {
-                if !supers.is_empty() {
+            if let Some(supers) = self.get_super_properties(iri)
+                && !supers.is_empty() {
                     writeln!(file, "  SuperProperties:")
                         .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     for super_prop in supers {
@@ -1004,11 +1001,10 @@ impl DataPropertyHierarchy {
                             .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     }
                 }
-            }
 
             // Sub properties
-            if let Some(subs) = self.get_sub_properties(iri) {
-                if !subs.is_empty() {
+            if let Some(subs) = self.get_sub_properties(iri)
+                && !subs.is_empty() {
                     writeln!(file, "  SubProperties:")
                         .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     for sub_prop in subs {
@@ -1016,11 +1012,10 @@ impl DataPropertyHierarchy {
                             .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     }
                 }
-            }
 
             // Equivalent properties
-            if let Some(equiv) = self.get_equivalent_properties(iri) {
-                if !equiv.is_empty() {
+            if let Some(equiv) = self.get_equivalent_properties(iri)
+                && !equiv.is_empty() {
                     writeln!(file, "  EquivalentProperties:")
                         .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     for eq_prop in equiv {
@@ -1028,7 +1023,6 @@ impl DataPropertyHierarchy {
                             .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;
                     }
                 }
-            }
 
             writeln!(file)
                 .map_err(|e| Error::io(format!("Failed to write to file: {}", e)))?;

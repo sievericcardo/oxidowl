@@ -343,7 +343,7 @@ impl SWRLParser {
 
                 Ok(SWRLArgument::Data(SWRLDArgument::Literal(Literal {
                     value: value.clone(),
-                    datatype: IRI::new(&datatype).to_url().ok(),
+                    datatype: IRI::new(datatype).to_url().ok(),
                     language: None,
                 })))
             }

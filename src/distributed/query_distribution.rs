@@ -352,7 +352,7 @@ impl QueryDistributor {
             if let Some(concept) = self.extract_concept_from_atom(atom) {
                 concept_groups
                     .entry(concept)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(atom);
             }
         }
@@ -426,7 +426,7 @@ impl QueryDistributor {
 
         // Distribute atoms to balance complexity across nodes
         let chunk_size =
-            (query.body_atoms.len() + available_nodes.len() - 1) / available_nodes.len();
+            query.body_atoms.len().div_ceil(available_nodes.len());
 
         for (i, chunk) in atoms_with_complexity.chunks(chunk_size).enumerate() {
             if chunk.is_empty() {

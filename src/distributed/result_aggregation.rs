@@ -650,11 +650,11 @@ impl ConsistencyChecker {
         let mut variable_groups: BTreeMap<String, Vec<QueryBinding>> = BTreeMap::new();
 
         for binding in bindings {
-            for (var, _) in &binding.variable_bindings {
+            for var in binding.variable_bindings.keys() {
                 let key = var.name.clone();
                 variable_groups
                     .entry(key)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(binding.clone());
             }
         }
@@ -688,10 +688,10 @@ impl QualityAssessor {
         let completeness = successful_partitions as f32 / partial_results.len() as f32;
 
         // Calculate consistency by checking binding agreement across partitions
-        let consistency = self.calculate_binding_consistency(&bindings);
+        let consistency = self.calculate_binding_consistency(bindings);
 
         // Calculate confidence based on result agreement and source count
-        let confidence = self.calculate_result_confidence(&bindings, partial_results.len());
+        let confidence = self.calculate_result_confidence(bindings, partial_results.len());
 
         // Calculate freshness based on execution timestamps
         let freshness = self.calculate_result_freshness(partial_results);
@@ -743,7 +743,7 @@ impl QualityAssessor {
             for (var, val) in &binding.variable_bindings {
                 variable_values
                     .entry(var.to_string())
-                    .or_insert_with(std::collections::HashSet::new)
+                    .or_default()
                     .insert(val.to_string());
             }
         }

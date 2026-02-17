@@ -372,6 +372,12 @@ pub struct QueryFeatureExtractor {
     query_history: RwLock<Vec<(u64, f32)>>, // (query_hash, execution_time)
 }
 
+impl Default for QueryFeatureExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryFeatureExtractor {
     pub fn new() -> Self {
         Self {
@@ -511,14 +517,12 @@ impl QueryFeatureExtractor {
             for j in (i + 1)..n {
                 if let Some(shared_vars) =
                     self.get_shared_variables(&query.body_atoms[i], &query.body_atoms[j])
-                {
-                    if !shared_vars.is_empty() {
+                    && !shared_vars.is_empty() {
                         join_graph[i].push(j);
                         join_graph[j].push(i);
                         join_variables[i].extend(shared_vars.clone());
                         join_variables[j].extend(shared_vars);
                     }
-                }
             }
         }
 
@@ -676,22 +680,17 @@ impl QueryFeatureExtractor {
 
             // Find SubClassOf axioms where current_iri is the subclass
             for axiom in ontology.axioms() {
-                if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom {
-                    if let crate::ontology::ClassExpression::Class(sub_class) =
+                if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom
+                    && let crate::ontology::ClassExpression::Class(sub_class) =
                         &sub_class_axiom.subclass
-                    {
-                        if sub_class.iri == current_iri {
+                        && sub_class.iri == current_iri {
                             // Found a superclass
                             if let crate::ontology::ClassExpression::Class(sup_class) =
                                 &sub_class_axiom.superclass
-                            {
-                                if visited.insert(sup_class.iri.clone()) {
+                                && visited.insert(sup_class.iri.clone()) {
                                     queue.push_back((sup_class.iri.clone(), depth + 1));
                                 }
-                            }
                         }
-                    }
-                }
             }
         }
 
@@ -739,9 +738,9 @@ impl QueryFeatureExtractor {
 
         // Similarity decreases with number of different bits
         let max_bits = 64.0;
-        let similarity = 1.0 - (different_bits as f32 / max_bits);
+        
 
-        similarity
+        1.0 - (different_bits as f32 / max_bits)
     }
 
     /// Calculate query fingerprint based on structure
@@ -782,7 +781,7 @@ impl QueryFeatureExtractor {
             {
                 graph
                     .entry(subject.name.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(object.name.clone());
             }
         }
@@ -896,14 +895,12 @@ impl QueryFeatureExtractor {
         #[cfg(target_os = "macos")]
         {
             use std::process::Command;
-            if let Ok(output) = Command::new("sysctl").arg("-n").arg("hw.memsize").output() {
-                if let Ok(size_str) = String::from_utf8(output.stdout) {
-                    if let Ok(bytes) = size_str.trim().parse::<f64>() {
+            if let Ok(output) = Command::new("sysctl").arg("-n").arg("hw.memsize").output()
+                && let Ok(size_str) = String::from_utf8(output.stdout)
+                    && let Ok(bytes) = size_str.trim().parse::<f64>() {
                         // Get free memory percentage (rough estimate)
                         return (bytes / 1024.0 / 1024.0 * 0.5) as f32; // Assume 50% available
                     }
-                }
-            }
         }
 
         #[cfg(target_os = "windows")]
@@ -943,30 +940,25 @@ impl QueryFeatureExtractor {
         {
             use std::process::Command;
             // Get load average on macOS
-            if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output() {
-                if let Ok(load_str) = String::from_utf8(output.stdout) {
+            if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output()
+                && let Ok(load_str) = String::from_utf8(output.stdout) {
                     // Parse "{  1.5 2.0 2.5 }" format
                     let parts: Vec<&str> = load_str
                         .trim_matches(|c| c == '{' || c == '}')
                         .split_whitespace()
                         .collect();
-                    if !parts.is_empty() {
-                        if let Ok(load) = parts[0].parse::<f32>() {
+                    if !parts.is_empty()
+                        && let Ok(load) = parts[0].parse::<f32>() {
                             // Normalize by CPU count
                             if let Ok(cpu_output) =
                                 Command::new("sysctl").arg("-n").arg("hw.ncpu").output()
-                            {
-                                if let Ok(cpu_str) = String::from_utf8(cpu_output.stdout) {
-                                    if let Ok(cpu_count) = cpu_str.trim().parse::<f32>() {
+                                && let Ok(cpu_str) = String::from_utf8(cpu_output.stdout)
+                                    && let Ok(cpu_count) = cpu_str.trim().parse::<f32>() {
                                         return (load / cpu_count).min(1.0);
                                     }
-                                }
-                            }
                             return load.min(1.0);
                         }
-                    }
                 }
-            }
         }
 
         // Fallback: moderate utilization
@@ -1840,13 +1832,13 @@ impl StrategySelectionModel {
         // Chain pattern: moderate join count, linear structure
         if features.join_count >= 2.0
             && features.join_count <= 5.0
-            && features.variable_count as f32 == features.join_count + 1.0
+            && features.variable_count == features.join_count + 1.0
         {
             return QueryPattern::Chain;
         }
 
         // Cyclic pattern: join count >= variable count (indicates cycles)
-        if features.join_count >= features.variable_count as f32 {
+        if features.join_count >= features.variable_count {
             return QueryPattern::Cyclic;
         }
 

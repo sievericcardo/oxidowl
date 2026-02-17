@@ -138,8 +138,8 @@ impl ClassificationService {
 
         // Identify pairs that need tableau expansion
         for subclass in &classes {
-            if let Some(node) = saturation_result.get_node(subclass) {
-                if node.status == SaturationStatus::RequiresFullTableau || node.status == SaturationStatus::NonDeterministic {
+            if let Some(node) = saturation_result.get_node(subclass)
+                && (node.status == SaturationStatus::RequiresFullTableau || node.status == SaturationStatus::NonDeterministic) {
                     for superclass in &classes {
                         if subclass != superclass {
                             // Check if not already determined by saturation
@@ -149,7 +149,6 @@ impl ClassificationService {
                         }
                     }
                 }
-            }
         }
 
         info!("Phase 3: {} pairs require tableau expansion", tableau_pairs.len());
@@ -185,7 +184,7 @@ impl ClassificationService {
             
             // Execute parallel subsumption checks
             let results = scheduler.execute_parallel(filtered_tasks, |sub, sup| {
-                self.check_subsumption_from_axioms(&sub, &sup, &ontology_guard)
+                self.check_subsumption_from_axioms(sub, sup, &ontology_guard)
             })?;
             
             // Collect results into hierarchy
@@ -519,15 +518,14 @@ impl ClassificationService {
         let mut unsatisfiable_classes = Vec::new();
 
         for class in &classes {
-            if let ClassExpression::Class(cls) = class {
-                if !self.task_service.check_satisfiability(
+            if let ClassExpression::Class(cls) = class
+                && !self.task_service.check_satisfiability(
                     &cls.iri.to_string(),
                     ontology,
                     statistics,
                 )? {
                     unsatisfiable_classes.push(class.clone());
                 }
-            }
         }
 
         let reasoning_time = start_time.elapsed();
@@ -595,11 +593,10 @@ impl ClassificationService {
             for axiom in ontology_guard.axioms() {
                 if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
                     // Check if the superclass matches our target
-                    if let ClassExpression::Class(super_class) = &subclass_axiom.superclass {
-                        if target_class.iri.as_str() == super_class.iri.as_str() {
+                    if let ClassExpression::Class(super_class) = &subclass_axiom.superclass
+                        && target_class.iri.as_str() == super_class.iri.as_str() {
                             subclasses.push(subclass_axiom.subclass.clone());
                         }
-                    }
                 }
             }
         }
@@ -770,12 +767,11 @@ impl ClassificationService {
 
         // First check for direct SubClassOf axioms
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                if subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass
+            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                && subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass
                 {
                     return Ok(true);
                 }
-            }
         }
 
         // Check for equivalent classes
@@ -789,8 +785,8 @@ impl ClassificationService {
                 // If subclass is equivalent to something that is a subclass of superclass
                 if classes.contains(subclass) {
                     for equiv_class in classes {
-                        if equiv_class != subclass {
-                            if self.check_subsumption_from_axioms_with_visited(
+                        if equiv_class != subclass
+                            && self.check_subsumption_from_axioms_with_visited(
                                 equiv_class,
                                 superclass,
                                 ontology,
@@ -798,7 +794,6 @@ impl ClassificationService {
                             )? {
                                 return Ok(true);
                             }
-                        }
                     }
                 }
             }
@@ -824,13 +819,11 @@ impl ClassificationService {
                 }
 
                 // If subclass is the union class and superclass is owl:Thing or a superclass of the union
-                if disjoint_union.class == *subclass {
-                    if let ClassExpression::Class(super_cls) = superclass {
-                        if super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+                if disjoint_union.class == *subclass
+                    && let ClassExpression::Class(super_cls) = superclass
+                        && super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
                             return Ok(true);
                         }
-                    }
-                }
             }
         }
 
@@ -865,8 +858,8 @@ impl ClassificationService {
 
             // Check direct subsumption
             for axiom in ontology.axioms() {
-                if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                    if subclass_axiom.subclass == current {
+                if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                    && subclass_axiom.subclass == current {
                         if subclass_axiom.superclass == *superclass {
                             return Ok(true);
                         }
@@ -875,20 +868,18 @@ impl ClassificationService {
                             stack.push(subclass_axiom.superclass.clone());
                         }
                     }
-                }
             }
         }
 
         // Check if subclass is ultimately a subclass of owl:Thing
-        if let ClassExpression::Class(super_class) = superclass {
-            if super_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
+        if let ClassExpression::Class(super_class) = superclass
+            && super_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
                 // Everything is a subclass of owl:Thing except owl:Nothing
                 if let ClassExpression::Class(sub_class) = subclass {
                     return Ok(sub_class.iri.as_str() != "http://www.w3.org/2002/07/owl#Nothing");
                 }
                 return Ok(true);
             }
-        }
 
         Ok(false)
     }
@@ -958,13 +949,12 @@ impl ClassificationService {
     ) -> Result<bool> {
         // Check for direct SubObjectPropertyOf axioms
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
-                if &sub_axiom.sub_property == subproperty
+            if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom
+                && &sub_axiom.sub_property == subproperty
                     && &sub_axiom.super_property == superproperty
                 {
                     return Ok(true);
                 }
-            }
         }
 
         // Add sophisticated property chain reasoning
@@ -982,15 +972,14 @@ impl ClassificationService {
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
                 // Check if the superproperty is involved in property chains
-                if &sub_axiom.super_property == superproperty {
-                    if let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property
+                if &sub_axiom.super_property == superproperty
+                    && let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property
                     {
                         // Check if subproperty is part of this chain or can be derived from it
                         if self.property_in_chain_or_derivable(subproperty, chain, ontology)? {
                             return Ok(true);
                         }
                     }
-                }
             }
         }
 
@@ -1033,13 +1022,12 @@ impl ClassificationService {
     ) -> Result<bool> {
         // Check for direct SubDataPropertyOf axioms
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubDataPropertyOf(sub_axiom) = axiom {
-                if &sub_axiom.sub_property == subproperty
+            if let crate::ontology::axioms::Axiom::SubDataPropertyOf(sub_axiom) = axiom
+                && &sub_axiom.sub_property == subproperty
                     && &sub_axiom.super_property == superproperty
                 {
                     return Ok(true);
                 }
-            }
         }
 
         Ok(false)
@@ -1060,15 +1048,12 @@ impl ClassificationService {
 
         // Find all class assertions for this individual
         for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(ind) = &assertion.individual {
-                    if ind.iri.as_str() == individual {
-                        if let ClassExpression::Class(class) = &assertion.class {
+            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(ind) = &assertion.individual
+                    && ind.iri.as_str() == individual
+                        && let ClassExpression::Class(class) = &assertion.class {
                             types.push(class.iri.to_string());
                         }
-                    }
-                }
-            }
         }
 
         // If direct is false, also infer types through subclass relationships
@@ -1120,22 +1105,16 @@ impl ClassificationService {
 
         // Find all object property assertions for this individual and property
         for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom {
-                if let (
+            if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom
+                && let (
                     crate::ontology::Individual::Named(subj),
                     crate::ontology::Individual::Named(obj),
                 ) = (&assertion.source, &assertion.target)
-                {
-                    if subj.iri.as_str() == individual {
-                        if let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property
-                        {
-                            if prop.iri.as_str() == property {
+                    && subj.iri.as_str() == individual
+                        && let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property
+                            && prop.iri.as_str() == property {
                                 values.push(obj.iri.to_string());
                             }
-                        }
-                    }
-                }
-            }
         }
 
         values.sort();
@@ -1160,16 +1139,14 @@ impl ClassificationService {
 
         // Find all data property assertions for this individual and property
         for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                    if subj.iri.as_str() == individual {
+            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                    && subj.iri.as_str() == individual {
                         let DataPropertyExpression::DataProperty(prop) = &assertion.property;
                         if prop.iri.as_str() == property {
                             values.push(assertion.value.to_string());
                         }
                     }
-                }
-            }
         }
 
         values.sort();
@@ -1193,9 +1170,9 @@ impl ClassificationService {
         let mut has_matching_value = false;
 
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                    if subj.iri.as_str() == individual_iri {
+            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                    && subj.iri.as_str() == individual_iri {
                         // Check if this is the right property
                         if self.data_properties_match(property, &assertion.property) {
                             // Check if the value satisfies the data range
@@ -1205,8 +1182,6 @@ impl ClassificationService {
                             }
                         }
                     }
-                }
-            }
         }
 
         Ok(has_matching_value)
@@ -1368,15 +1343,12 @@ impl ClassificationService {
                 let mut asserted_classes = Vec::new();
 
                 for axiom in ontology.axioms() {
-                    if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
-                        if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                            if subj.iri.as_str() == individual_iri {
-                                if let ClassExpression::Class(asserted_cls) = &assertion.class {
+                    if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                            && subj.iri.as_str() == individual_iri
+                                && let ClassExpression::Class(asserted_cls) = &assertion.class {
                                     asserted_classes.push(asserted_cls.iri.clone());
                                 }
-                            }
-                        }
-                    }
                 }
 
                 // Check if any of the asserted classes is a subclass of the target class
@@ -1440,9 +1412,9 @@ impl ClassificationService {
                 // and ThirstyBasil subClassOf ThirstyPlant, then it should return true
                 // We need to check all classes that are subclasses of the target
                 for axiom in ontology.axioms() {
-                    if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                        if let ClassExpression::Class(superclass) = &subclass_axiom.superclass {
-                            if superclass.iri == cls.iri {
+                    if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                        && let ClassExpression::Class(superclass) = &subclass_axiom.superclass
+                            && superclass.iri == cls.iri {
                                 // Found a subclass of our target class
                                 // Check if individual is an instance of this subclass
                                 if self.check_instance_with_datatype_reasoning(
@@ -1453,8 +1425,6 @@ impl ClassificationService {
                                     return Ok(true);
                                 }
                             }
-                        }
-                    }
                 }
 
                 // Couldn't determine membership
@@ -1504,17 +1474,12 @@ impl ClassificationService {
 
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
-                    {
-                        if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                            if subj.iri.as_str() == individual_iri {
-                                if self.data_properties_match(property, &assertion.property) {
-                                    if assertion.value.value == value.value {
+                        && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                            && subj.iri.as_str() == individual_iri
+                                && self.data_properties_match(property, &assertion.property)
+                                    && assertion.value.value == value.value {
                                         return Ok(true);
                                     }
-                                }
-                            }
-                        }
-                    }
                 }
                 Ok(false)
             }
@@ -1538,17 +1503,13 @@ impl ClassificationService {
             .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
 
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                    if subj.iri.as_str() == individual_iri {
-                        if let ClassExpression::Class(asserted_class) = &assertion.class {
-                            if asserted_class.iri == class.iri {
+            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                    && subj.iri.as_str() == individual_iri
+                        && let ClassExpression::Class(asserted_class) = &assertion.class
+                            && asserted_class.iri == class.iri {
                                 return Ok(true);
                             }
-                        }
-                    }
-                }
-            }
         }
         Ok(false)
     }
@@ -1568,9 +1529,9 @@ impl ClassificationService {
 
         // Check for direct SubClassOf axiom
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                if let ClassExpression::Class(sub) = &subclass_axiom.subclass {
-                    if let ClassExpression::Class(sup) = &subclass_axiom.superclass {
+            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                && let ClassExpression::Class(sub) = &subclass_axiom.subclass
+                    && let ClassExpression::Class(sup) = &subclass_axiom.superclass {
                         if sub.iri == *subclass_iri && sup.iri == *superclass_iri {
                             return Ok(true);
                         }
@@ -1583,8 +1544,6 @@ impl ClassificationService {
                             }
                         }
                     }
-                }
-            }
         }
 
         Ok(false)

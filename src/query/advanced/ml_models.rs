@@ -356,7 +356,7 @@ impl NeuralNetworkModel {
                         log::warn!("No activation layers in neural network");
                         continue;
                     };
-                    let target = vec![point.execution_time, point.memory_usage];
+                    let target = [point.execution_time, point.memory_usage];
                     let mut delta: Vec<f64> = output
                         .iter()
                         .zip(target.iter())

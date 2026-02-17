@@ -231,7 +231,7 @@ impl TemporalValue {
 
                 Duration::try_seconds(total_seconds)
                     .map(TemporalValue::DayTimeDuration)
-                    .ok_or_else(|| TemporalError::ArithmeticOverflow)
+                    .ok_or(TemporalError::ArithmeticOverflow)
             }
         } else {
             Err(TemporalError::InvalidDurationFormat(value.to_string()))
@@ -261,7 +261,7 @@ impl TemporalValue {
 
         Duration::try_seconds(total_seconds)
             .map(TemporalValue::DayTimeDuration)
-            .ok_or_else(|| TemporalError::ArithmeticOverflow)
+            .ok_or(TemporalError::ArithmeticOverflow)
     }
 
     /// Parse year-month duration from string

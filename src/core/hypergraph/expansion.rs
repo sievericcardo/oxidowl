@@ -526,11 +526,10 @@ impl HypertableauExpansion {
 
         for &node_id in &active_nodes {
             // Skip if already blocked
-            if let Some(node) = self.graph.get_node(node_id) {
-                if node.is_blocked {
+            if let Some(node) = self.graph.get_node(node_id)
+                && node.is_blocked {
                     continue;
                 }
-            }
 
             // Find potential blockers (subsumers)
             let subsumers = self.graph.find_subsumers(node_id);

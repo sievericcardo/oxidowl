@@ -412,8 +412,8 @@ impl CompletionGraphCache {
         // Warm tier: 3-10 accesses
         // Cold tier: <3 accesses
 
-        if let Ok(mut cache) = self.cache.write() {
-            if let Some(entry) = cache.get_mut(&signature) {
+        if let Ok(mut cache) = self.cache.write()
+            && let Some(entry) = cache.get_mut(&signature) {
                 let old_tier = entry.tier;
                 let new_tier = if access_count > 10 {
                     CacheTier::Hot
@@ -430,7 +430,6 @@ impl CompletionGraphCache {
                     self.move_between_tiers(signature, old_tier, new_tier);
                 }
             }
-        }
     }
 
     /// Move an entry between tier queues
@@ -520,8 +519,8 @@ impl CompletionGraphCache {
 
     /// Evict a single entry and return freed memory
     fn evict_entry(&self, signature: u64) -> usize {
-        if let Ok(mut cache) = self.cache.write() {
-            if let Some(entry) = cache.remove(&signature) {
+        if let Ok(mut cache) = self.cache.write()
+            && let Some(entry) = cache.remove(&signature) {
                 let freed = entry.graph.memory_size;
 
                 // Update memory usage
@@ -536,7 +535,6 @@ impl CompletionGraphCache {
 
                 return freed;
             }
-        }
         0
     }
 

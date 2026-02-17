@@ -834,11 +834,11 @@ impl CostBasedOptimizer {
                     if !shared_vars.is_empty() {
                         join_graph
                             .entry(i)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((j, shared_vars.clone()));
                         join_graph
                             .entry(j)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((i, shared_vars));
                     }
                 }
@@ -1003,7 +1003,7 @@ impl CostBasedOptimizer {
                 .iri
                 .as_str()
                 .split('#')
-                .last()
+                .next_back()
                 .unwrap_or("Class")
                 .to_string(),
             _ => "ComplexClass".to_string(),
@@ -1016,7 +1016,7 @@ impl CostBasedOptimizer {
                 .iri
                 .as_str()
                 .split('#')
-                .last()
+                .next_back()
                 .unwrap_or("Property")
                 .to_string(),
             _ => "ComplexProperty".to_string(),
@@ -1029,7 +1029,7 @@ impl CostBasedOptimizer {
                 .iri
                 .as_str()
                 .split('#')
-                .last()
+                .next_back()
                 .unwrap_or("DataProperty")
                 .to_string(),
         }
@@ -1260,12 +1260,12 @@ impl CostBasedOptimizer {
                 } => {
                     graph
                         .entry(subject.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(object.clone());
                 }
                 QueryAtom::DataPropertyAtom { subject, .. } => {
                     // Data properties create endpoints, not recursive patterns
-                    graph.entry(subject.clone()).or_insert_with(Vec::new);
+                    graph.entry(subject.clone()).or_default();
                 }
                 _ => {}
             }
@@ -1483,7 +1483,7 @@ impl CostBasedOptimizer {
 
         // If we didn't get all atoms, add remaining ones
         if ordered_atoms.len() < query.body_atoms.len() {
-            for (_i, atom) in query.body_atoms.iter().enumerate() {
+            for atom in query.body_atoms.iter() {
                 if !ordered_atoms.iter().any(|a| {
                     format!("{:?}", a) == format!("{:?}", atom)
                 }) {
@@ -1618,8 +1618,8 @@ impl CostBasedOptimizer {
 
         // Suggest query rewriting for complex class expressions
         for atom in &query.body_atoms {
-            if let QueryAtom::ClassAtom { class_expression, .. } = atom {
-                if matches!(
+            if let QueryAtom::ClassAtom { class_expression, .. } = atom
+                && matches!(
                     class_expression,
                     ClassExpression::ObjectUnionOf(_) | ClassExpression::ObjectIntersectionOf(_)
                 ) {
@@ -1631,7 +1631,6 @@ impl CostBasedOptimizer {
                         priority: Priority::Medium,
                     });
                 }
-            }
         }
 
         // Suggest join reordering if not already optimized
@@ -1791,6 +1790,12 @@ impl Default for CostBasedOptimizerConfig {
     }
 }
 
+impl Default for QueryStatistics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryStatistics {
     pub fn new() -> Self {
         Self {
@@ -1826,6 +1831,12 @@ impl CostModel {
             index_costs: HashMap::new(),
             join_costs: HashMap::new(),
         }
+    }
+}
+
+impl Default for JoinOrderOptimizer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1870,8 +1881,8 @@ impl JoinOrderOptimizer {
                 .enumerate()
                 .max_by_key(|(_, atom_idx)| {
                     let vars = self.extract_atom_variables(&atoms[**atom_idx]);
-                    let join_count = vars.iter().filter(|v| selected_vars.contains(v)).count();
-                    join_count
+                    
+                    vars.iter().filter(|v| selected_vars.contains(v)).count()
                 })
                 .unwrap();
 
@@ -2079,6 +2090,12 @@ impl Default for IndexAdvisorConfig {
     }
 }
 
+impl Default for AdvancedQueryRewriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AdvancedQueryRewriter {
     pub fn new() -> Self {
         Self {
@@ -2167,7 +2184,7 @@ impl AdvancedQueryRewriter {
         context: &RewritingContext,
     ) -> bool {
         // Check if rule conditions are met
-        if query.body_atoms.len() < 1 {
+        if query.body_atoms.is_empty() {
             return false;
         }
 
@@ -2321,13 +2338,12 @@ impl AdvancedQueryRewriter {
         
         // Selectivity factor from context statistics
         // Note: statistics is Arc<RwLock<QueryStatistics>>, needs to be locked
-        if let Ok(stats) = context.statistics.read() {
-            if stats.total_queries > 0 {
+        if let Ok(stats) = context.statistics.read()
+            && stats.total_queries > 0 {
                 // Use query count as proxy for concept selectivity
                 let selectivity = variables.len() as f64 / (stats.total_queries as f64 + 1.0);
                 cost *= 1.0 + selectivity.min(2.0); // Cap selectivity impact
             }
-        }
         
         cost
     }
@@ -2390,6 +2406,12 @@ impl AdvancedQueryRewriter {
     }
 }
 
+impl Default for AdaptiveStrategySelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AdaptiveStrategySelector {
     pub fn new() -> Self {
         Self {
@@ -2411,6 +2433,12 @@ impl Default for AdaptiveLearningConfig {
     }
 }
 
+impl Default for RewritingFeedbackSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RewritingFeedbackSystem {
     pub fn new() -> Self {
         Self {
@@ -2418,6 +2446,12 @@ impl RewritingFeedbackSystem {
             analysis_results: HashMap::new(),
             auto_adjustment: AutoAdjustmentSystem::new(),
         }
+    }
+}
+
+impl Default for AutoAdjustmentSystem {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

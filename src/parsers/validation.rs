@@ -64,8 +64,8 @@ impl SyntaxValidator {
             }
 
             // Check for malformed IRIs (unclosed angle brackets)
-            if let Some(open_pos) = trimmed.find('<') {
-                if !trimmed[open_pos..].contains('>') {
+            if let Some(open_pos) = trimmed.find('<')
+                && !trimmed[open_pos..].contains('>') {
                     // Check if it continues on next line
                     if line_num + 1 >= lines.len() || !lines[line_num + 1].contains('>') {
                         return Err(Error::ontology_parsing(format!(
@@ -74,11 +74,10 @@ impl SyntaxValidator {
                         )));
                     }
                 }
-            }
 
             // Check for invalid IRI characters in angle brackets
-            if let Some(start) = trimmed.find('<') {
-                if let Some(end_pos) = trimmed[start..].find('>') {
+            if let Some(start) = trimmed.find('<')
+                && let Some(end_pos) = trimmed[start..].find('>') {
                     let iri_content = &trimmed[start + 1..start + end_pos];
                     // IRIs should not contain unencoded spaces
                     if iri_content.contains(' ') {
@@ -89,7 +88,6 @@ impl SyntaxValidator {
                         )));
                     }
                 }
-            }
 
             // Validate literals in the line
             self.validate_turtle_literals(trimmed, line_num + 1)?;
@@ -332,8 +330,8 @@ impl SyntaxValidator {
         for prop in &cardinality_props {
             if content.contains(prop) {
                 for (line_num, line) in lines.iter().enumerate() {
-                    if line.contains(prop) {
-                        if let Some(pos) = line.find(prop) {
+                    if line.contains(prop)
+                        && let Some(pos) = line.find(prop) {
                             let after_prop = &line[pos + prop.len()..].trim();
                             let words: Vec<&str> = after_prop.split_whitespace().collect();
                             if !words.is_empty() {
@@ -376,7 +374,6 @@ impl SyntaxValidator {
                                 }
                             }
                         }
-                    }
                 }
             }
         }
@@ -720,7 +717,7 @@ impl SyntaxValidator {
         let mut ontology_count = 0;
         let mut byte_offset = 0;
 
-        for (_, ch) in content.chars().enumerate() {
+        for ch in content.chars() {
             match ch {
                 '<' => in_iri = true,
                 '>' => in_iri = false,
@@ -761,7 +758,7 @@ impl SyntaxValidator {
             in_iri = false;
             byte_offset = 0;
 
-            for (_, ch) in content.chars().enumerate() {
+            for ch in content.chars() {
                 match ch {
                     '<' => in_iri = true,
                     '>' => in_iri = false,
@@ -1080,13 +1077,12 @@ impl SyntaxValidator {
         }
 
         // Check for owl:hasKey with no properties
-        if content.contains("owl:hasKey") {
-            if content.contains("<owl:hasKey/>") || content.contains("<owl:hasKey />") {
+        if content.contains("owl:hasKey")
+            && (content.contains("<owl:hasKey/>") || content.contains("<owl:hasKey />")) {
                 return Err(Error::ontology_parsing(
                     "Empty owl:hasKey - must specify at least one property",
                 ));
             }
-        }
 
         // Check for owl:propertyChainAxiom with less than 2 properties
         if content.contains("owl:propertyChainAxiom") {
@@ -1651,8 +1647,8 @@ impl SyntaxValidator {
                         )));
                     }
 
-                    if trimmed.contains(" or)") || trimmed.contains("(or ") {
-                        if let Some(or_pos) = trimmed.find(" or") {
+                    if (trimmed.contains(" or)") || trimmed.contains("(or "))
+                        && let Some(or_pos) = trimmed.find(" or") {
                             let after_or = trimmed[or_pos + 3..].trim();
                             if after_or.is_empty() || after_or.starts_with(')') {
                                 return Err(Error::ontology_parsing(format!(
@@ -1661,7 +1657,6 @@ impl SyntaxValidator {
                                 )));
                             }
                         }
-                    }
 
                     // Validate datatype restrictions
                     if (trimmed.contains(">=")

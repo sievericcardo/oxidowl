@@ -100,7 +100,7 @@ impl Interpretation {
     pub fn add_property_relation(&mut self, property: String, subject: String, object: String) {
         self.property_interpretation
             .entry(property)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert((subject, object));
     }
 
@@ -118,7 +118,7 @@ impl Interpretation {
     pub fn add_class_instance(&mut self, class: String, instance: String) {
         self.class_interpretation
             .entry(class)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(instance);
     }
 
@@ -169,7 +169,7 @@ impl Interpretation {
                 self.literal_interpretation
                     .get(&literal_key)
                     .cloned()
-                    .or_else(|| Some(literal_key)) // Default interpretation
+                    .or(Some(literal_key)) // Default interpretation
             }
             RdfTerm::QuotedTriple(triple) => {
                 // RDF-star: quoted triples interpreted as resources
@@ -316,7 +316,7 @@ impl Interpretation {
         for (property, relations) in &other.property_interpretation {
             self.property_interpretation
                 .entry(property.clone())
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .extend(relations.iter().cloned());
         }
 
@@ -324,7 +324,7 @@ impl Interpretation {
         for (class, instances) in &other.class_interpretation {
             self.class_interpretation
                 .entry(class.clone())
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .extend(instances.iter().cloned());
         }
 
@@ -338,7 +338,7 @@ impl Interpretation {
         for (datatype, value_space) in &other.datatype_interpretation {
             self.datatype_interpretation
                 .entry(datatype.clone())
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .extend(value_space.iter().cloned());
         }
 

@@ -356,7 +356,7 @@ impl DependencyGraph {
     pub fn add_class_dependency(&mut self, dependent: Class, depends_on: Class) {
         self.class_dependencies
             .entry(dependent)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(depends_on);
         self.invalidate_transitive_cache();
     }
@@ -632,11 +632,10 @@ impl ChangeTracker {
     fn generate_invalidation_events_for_abox_change(&self, change: &ABoxChange) -> Result<()> {
         let affected_individuals = change.affected_individuals();
 
-        if !affected_individuals.is_empty() {
-            if let Ok(mut queue) = self.invalidation_queue.write() {
+        if !affected_individuals.is_empty()
+            && let Ok(mut queue) = self.invalidation_queue.write() {
                 queue.push_back(InvalidationEvent::InstanceRelations(affected_individuals));
             }
-        }
 
         Ok(())
     }

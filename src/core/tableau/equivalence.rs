@@ -146,7 +146,7 @@ impl EquivalenceClosure {
             let root = self.find(&concept);
             self.classes
                 .entry(root)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(concept);
         }
     }

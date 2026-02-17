@@ -206,11 +206,8 @@ impl ELReasoner {
 
     fn extract_role_hierarchy(&mut self) -> Result<()> {
         for axiom in &self.normalized_axioms {
-            match axiom {
-                ELAxiom::RoleInclusion { sub_role, super_role } => {
-                    self.role_hierarchy.add_inclusion(sub_role.clone(), super_role.clone());
-                }
-                _ => {}
+            if let ELAxiom::RoleInclusion { sub_role, super_role } = axiom {
+                self.role_hierarchy.add_inclusion(sub_role.clone(), super_role.clone());
             }
         }
         self.role_hierarchy.compute_transitive_closure();
@@ -503,7 +500,7 @@ impl ConceptHierarchy {
 
     /// Add a subsumption relationship
     pub fn add_subsumption(&mut self, sub: ELConcept, sup: ELConcept) {
-        self.subsumptions.entry(sub).or_insert_with(HashSet::new).insert(sup);
+        self.subsumptions.entry(sub).or_default().insert(sup);
     }
 
     /// Check if one concept subsumes another
@@ -531,7 +528,7 @@ impl ConceptHierarchy {
                     if self.is_in_transitive(i, k) && self.is_in_transitive(k, j) {
                         self.transitive_subsumptions
                             .entry(i.clone())
-                            .or_insert_with(HashSet::new)
+                            .or_default()
                             .insert(j.clone());
                     }
                 }
@@ -587,7 +584,7 @@ impl RoleHierarchy {
 
     /// Add a role inclusion
     pub fn add_inclusion(&mut self, sub_role: ObjectPropertyExpression, super_role: ObjectPropertyExpression) {
-        self.inclusions.entry(sub_role).or_insert_with(HashSet::new).insert(super_role);
+        self.inclusions.entry(sub_role).or_default().insert(super_role);
     }
 
     /// Compute transitive closure of role inclusions
@@ -605,7 +602,7 @@ impl RoleHierarchy {
                     if self.is_role_subsumed(i, k) && self.is_role_subsumed(k, j) {
                         self.transitive_inclusions
                             .entry(i.clone())
-                            .or_insert_with(HashSet::new)
+                            .or_default()
                             .insert(j.clone());
                     }
                 }
@@ -665,14 +662,11 @@ impl CompletionEngine {
         
         // Add initial inferences to queue
         for axiom in axioms {
-            match axiom {
-                ELAxiom::ConceptInclusion { lhs, rhs } => {
-                    self.queue.push_back(Inference::Subsumption {
-                        sub: lhs.clone(),
-                        sup: rhs.clone(),
-                    });
-                }
-                _ => {}
+            if let ELAxiom::ConceptInclusion { lhs, rhs } = axiom {
+                self.queue.push_back(Inference::Subsumption {
+                    sub: lhs.clone(),
+                    sup: rhs.clone(),
+                });
             }
         }
         
@@ -852,8 +846,8 @@ impl CompletionRule for ExistentialRule {
         let Inference::Subsumption { sub: filler_sub, sup: filler_sup } = inference;
         // Look for existential restrictions with this filler
         for (existing_sub, existing_sup) in &state.subsumptions {
-            if let ELConcept::Existential { role, filler } = existing_sup {
-                if filler.as_ref() == filler_sub {
+            if let ELConcept::Existential { role, filler } = existing_sup
+                && filler.as_ref() == filler_sub {
                     // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
                     new_inferences.push(Inference::Subsumption {
                         sub: existing_sub.clone(),
@@ -863,7 +857,6 @@ impl CompletionRule for ExistentialRule {
                         },
                     });
                 }
-            }
         }
         
         Ok(new_inferences)

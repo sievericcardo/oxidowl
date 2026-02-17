@@ -221,14 +221,12 @@ impl SaturationEngine {
         ontology: &Ontology,
     ) -> Result<SaturationNode> {
         // Check cache first
-        if self.config.enable_caching {
-            if let Ok(cache) = self.cache.read() {
-                if let Some(cached_node) = cache.get(concept) {
+        if self.config.enable_caching
+            && let Ok(cache) = self.cache.read()
+                && let Some(cached_node) = cache.get(concept) {
                     debug!("Found cached saturation for {:?}", concept);
                     return Ok(cached_node.clone());
                 }
-            }
-        }
 
         let mut node = SaturationNode::new(concept.clone());
         let mut iteration = 0;
@@ -278,11 +276,10 @@ impl SaturationEngine {
         );
 
         // Cache the result
-        if self.config.enable_caching {
-            if let Ok(mut cache) = self.cache.write() {
+        if self.config.enable_caching
+            && let Ok(mut cache) = self.cache.write() {
                 cache.insert(concept.clone(), node.clone());
             }
-        }
 
         Ok(node)
     }
@@ -339,11 +336,10 @@ impl SaturationEngine {
         });
 
         // Check for errors
-        if let Ok(errors_lock) = errors.lock() {
-            if !errors_lock.is_empty() {
+        if let Ok(errors_lock) = errors.lock()
+            && !errors_lock.is_empty() {
                 return Err(errors_lock[0].clone());
             }
-        }
 
         // Extract results
         let nodes = Arc::try_unwrap(nodes)
@@ -412,11 +408,10 @@ impl SaturationEngine {
 
         // Check for complementary concepts
         for concept in &node.saturated_concepts {
-            if let ClassExpression::ObjectComplementOf(complement) = concept {
-                if node.saturated_concepts.contains(complement.as_ref()) {
+            if let ClassExpression::ObjectComplementOf(complement) = concept
+                && node.saturated_concepts.contains(complement.as_ref()) {
                     return true;
                 }
-            }
         }
 
         false
@@ -475,14 +470,12 @@ impl SaturationEngine {
         while let Some(concept) = to_process.pop() {
             // Find all concepts that depend on this concept
             for (other_concept, node) in nodes {
-                if node.saturated_concepts.contains(&concept)
-                    || node.direct_subsumers.contains(&concept)
-                {
-                    if !affected.contains(other_concept) {
+                if (node.saturated_concepts.contains(&concept)
+                    || node.direct_subsumers.contains(&concept))
+                    && !affected.contains(other_concept) {
                         affected = affected.update(other_concept.clone());
                         to_process.push(other_concept.clone());
                     }
-                }
             }
         }
 

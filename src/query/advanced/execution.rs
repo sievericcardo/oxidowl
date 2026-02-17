@@ -150,7 +150,7 @@ impl QueryEngine {
     ) -> Result<Self, AdvancedQueryError> {
         let optimizer = QueryOptimizer::new(ontology.clone(), reasoning_service.clone());
         let rewriter = QueryRewriter::new(ontology.clone())
-            .map_err(|e| AdvancedQueryError::RewritingError(e))?;
+            .map_err(AdvancedQueryError::RewritingError)?;
 
         Ok(Self {
             ontology: ontology.clone(),
@@ -505,21 +505,17 @@ impl QueryEngine {
                         // Check if bindings are compatible
                         let mut compatible = true;
                         
-                        if let Some(bound_subj) = binding.get_binding(subject) {
-                            if let BoundValue::Individual(bound_individual) = bound_subj {
-                                if bound_individual != &subj {
+                        if let Some(bound_subj) = binding.get_binding(subject)
+                            && let BoundValue::Individual(bound_individual) = bound_subj
+                                && bound_individual != &subj {
                                     compatible = false;
                                 }
-                            }
-                        }
                         
-                        if let Some(bound_obj) = binding.get_binding(object) {
-                            if let BoundValue::Individual(bound_individual) = bound_obj {
-                                if bound_individual != &obj {
+                        if let Some(bound_obj) = binding.get_binding(object)
+                            && let BoundValue::Individual(bound_individual) = bound_obj
+                                && bound_individual != &obj {
                                     compatible = false;
                                 }
-                            }
-                        }
                         
                         if compatible {
                             let mut new_binding = QueryBinding::new();

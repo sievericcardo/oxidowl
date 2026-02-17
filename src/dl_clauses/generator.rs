@@ -135,13 +135,12 @@ impl DLClauseGenerator {
         while i < clauses.len() {
             let mut j = i + 1;
             while j < clauses.len() {
-                if self.can_absorb(&clauses[i], &clauses[j]) {
-                    if let Some(absorbed) = self.absorb_clauses(&clauses[i], &clauses[j]) {
+                if self.can_absorb(&clauses[i], &clauses[j])
+                    && let Some(absorbed) = self.absorb_clauses(&clauses[i], &clauses[j]) {
                         clauses[i] = absorbed;
                         clauses.remove(j);
                         continue;
                     }
-                }
                 j += 1;
             }
             i += 1;

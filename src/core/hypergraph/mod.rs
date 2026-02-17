@@ -317,7 +317,7 @@ impl Hypergraph {
         // Add to signature index
         self.signature_index
             .entry(signature)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
 
         // Add node
@@ -353,13 +353,13 @@ impl Hypergraph {
         // Update outgoing index
         self.outgoing
             .entry(from)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(edge_id);
 
         // Update incoming index
         self.incoming
             .entry(to)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(edge_id);
 
         edge_id

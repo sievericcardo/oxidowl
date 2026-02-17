@@ -811,11 +811,10 @@ impl AdvancedQueryOptimizer {
         execution_time: Duration,
         memory_used: usize,
     ) {
-        if self.config.enable_performance_monitoring {
-            if let Ok(mut monitor) = self.performance_monitor.lock() {
+        if self.config.enable_performance_monitoring
+            && let Ok(mut monitor) = self.performance_monitor.lock() {
                 monitor.record_execution(query_hash, execution_time, memory_used);
             }
-        }
     }
 }
 
@@ -944,14 +943,13 @@ impl PerformanceMonitor {
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::SubClassOf(sub_axiom) = axiom {
                     // Check if our class is the subclass
-                    if let ClassExpression::Class(c) = &sub_axiom.subclass {
-                        if c.iri == class_iri {
+                    if let ClassExpression::Class(c) = &sub_axiom.subclass
+                        && c.iri == class_iri {
                             // Extract superclass
                             if let ClassExpression::Class(super_c) = &sub_axiom.superclass {
                                 superclasses.push(super_c.iri.to_string());
                             }
                         }
-                    }
                 }
             }
             

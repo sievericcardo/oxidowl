@@ -59,7 +59,7 @@ impl QueryProcessor {
             "ASK" => self.execute_ask_query(&parsed_query, ontology),
             "CONSTRUCT" => self.execute_construct_query(&parsed_query, ontology),
             "DESCRIBE" => self.execute_describe_query(&parsed_query, ontology),
-            _ => Err(Error::reasoning(&format!(
+            _ => Err(Error::reasoning(format!(
                 "Unsupported SPARQL query type: {}",
                 parsed_query.query_type
             ))),
@@ -167,7 +167,7 @@ impl QueryProcessor {
             "GetEquivalentClasses" => self.handle_get_equivalent_classes(&parsed_request, ontology),
             "GetInstances" => self.handle_get_instances(&parsed_request, ontology),
             "GetTypes" => self.handle_get_types(&parsed_request, ontology),
-            _ => Err(Error::reasoning(&format!(
+            _ => Err(Error::reasoning(format!(
                 "Unsupported OWLlink request: {}",
                 parsed_request.request_type
             ))),
@@ -237,8 +237,8 @@ impl QueryProcessor {
             let where_clause = &query[where_start + 5..];
 
             // Extract patterns between braces
-            if let Some(brace_start) = where_clause.find('{') {
-                if let Some(brace_end) = where_clause.rfind('}') {
+            if let Some(brace_start) = where_clause.find('{')
+                && let Some(brace_end) = where_clause.rfind('}') {
                     let pattern_text = &where_clause[brace_start + 1..brace_end];
 
                     // Split by periods to get individual patterns
@@ -258,7 +258,6 @@ impl QueryProcessor {
                         }
                     }
                 }
-            }
         }
 
         Ok(patterns)
@@ -397,11 +396,10 @@ impl QueryProcessor {
         right: &HashMap<String, String>,
     ) -> bool {
         for (var, value) in left {
-            if let Some(other_value) = right.get(var) {
-                if value != other_value {
+            if let Some(other_value) = right.get(var)
+                && value != other_value {
                     return false;
                 }
-            }
         }
         true
     }
@@ -572,8 +570,8 @@ impl QueryProcessor {
         for axiom in ontology.axioms() {
             match axiom {
                 Axiom::ClassAssertion(assertion) => {
-                    if let crate::ontology::Individual::Named(named) = &assertion.individual {
-                        if named.iri.as_str() == target_iri {
+                    if let crate::ontology::Individual::Named(named) = &assertion.individual
+                        && named.iri.as_str() == target_iri {
                             let class_iri = match &assertion.class {
                                 crate::ontology::ClassExpression::Class(class) => {
                                     class.iri.as_str()
@@ -586,13 +584,12 @@ impl QueryProcessor {
                                 class_iri.to_string(),
                             ));
                         }
-                    }
                 }
                 Axiom::ObjectPropertyAssertion(assertion) => {
                     // Check if this resource is the subject
-                    if let crate::ontology::Individual::Named(subject) = &assertion.source {
-                        if subject.iri.as_str() == target_iri {
-                            if let crate::ontology::Individual::Named(object) = &assertion.target {
+                    if let crate::ontology::Individual::Named(subject) = &assertion.source
+                        && subject.iri.as_str() == target_iri
+                            && let crate::ontology::Individual::Named(object) = &assertion.target {
                                 let property_iri = match &assertion.property {
                                     crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str(),
                                     crate::ontology::ObjectPropertyExpression::InverseObjectProperty(_prop) => {
@@ -610,12 +607,10 @@ impl QueryProcessor {
                                     object.iri.as_str().to_string(),
                                 ));
                             }
-                        }
-                    }
                     // Check if this resource is the object
-                    if let crate::ontology::Individual::Named(object) = &assertion.target {
-                        if object.iri.as_str() == target_iri {
-                            if let crate::ontology::Individual::Named(subject) = &assertion.source {
+                    if let crate::ontology::Individual::Named(object) = &assertion.target
+                        && object.iri.as_str() == target_iri
+                            && let crate::ontology::Individual::Named(subject) = &assertion.source {
                                 let property_iri = match &assertion.property {
                                     crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.as_str(),
                                     crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => prop.iri.as_str(),
@@ -631,12 +626,10 @@ impl QueryProcessor {
                                     target_iri.to_string(),
                                 ));
                             }
-                        }
-                    }
                 }
                 Axiom::DataPropertyAssertion(assertion) => {
-                    if let crate::ontology::Individual::Named(subject) = &assertion.individual {
-                        if subject.iri.as_str() == target_iri {
+                    if let crate::ontology::Individual::Named(subject) = &assertion.individual
+                        && subject.iri.as_str() == target_iri {
                             let property_iri = match &assertion.property {
                                 crate::ontology::DataPropertyExpression::DataProperty(prop) => {
                                     prop.iri.as_str()
@@ -655,7 +648,6 @@ impl QueryProcessor {
                                 literal_value,
                             ));
                         }
-                    }
                 }
                 _ => {
                     // Handle other axiom types that might mention this resource
@@ -719,28 +711,25 @@ impl QueryProcessor {
         for axiom in ontology.axioms() {
             match axiom {
                 Axiom::ClassAssertion(assertion) => {
-                    if let crate::ontology::Individual::Named(individual) = &assertion.individual {
-                        if individual.iri.as_str() == target_iri {
+                    if let crate::ontology::Individual::Named(individual) = &assertion.individual
+                        && individual.iri.as_str() == target_iri {
                             triples.push((
                                 resource.to_string(),
                                 "rdf:type".to_string(),
                                 self.format_class_expression(&assertion.class),
                             ));
                         }
-                    }
                 }
                 Axiom::ObjectPropertyAssertion(assertion) => {
-                    if let crate::ontology::Individual::Named(subject) = &assertion.source {
-                        if subject.iri.as_str() == target_iri {
-                            if let crate::ontology::Individual::Named(object) = &assertion.target {
+                    if let crate::ontology::Individual::Named(subject) = &assertion.source
+                        && subject.iri.as_str() == target_iri
+                            && let crate::ontology::Individual::Named(object) = &assertion.target {
                                 triples.push((
                                     resource.to_string(),
                                     self.format_object_property(&assertion.property),
                                     format!("<{}>", object.iri),
                                 ));
                             }
-                        }
-                    }
                 }
                 _ => {}
             }
@@ -784,10 +773,8 @@ impl QueryProcessor {
     /// Handle KB satisfiability check
     fn handle_kb_satisfiable(&self, _ontology: &Ontology) -> Result<String> {
         // This would need access to the reasoner to check consistency
-        Ok(format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<BooleanResponse result="true" />"#
-        ))
+        Ok(r#"<?xml version="1.0" encoding="UTF-8"?>
+<BooleanResponse result="true" />"#.to_string())
     }
 
     /// Handle class satisfiability check
@@ -835,12 +822,12 @@ impl QueryProcessor {
                 // Create a temporary reasoner to check entailment
                 let reasoner =
                     crate::core::reasoner::Reasoner::new(crate::config::ReasonerConfig::default())?;
-                let is_entailed = reasoner.check_entailment(
+                
+                reasoner.check_entailment(
                     &axiom,
                     &std::sync::Arc::new(std::sync::RwLock::new(ontology.clone())),
                     &mut crate::core::reasoner::ReasoningStatistics::new(),
-                )?;
-                is_entailed
+                )?
             } else {
                 false
             }
@@ -1023,14 +1010,13 @@ impl QueryProcessor {
     /// Extract class expression from OWLlink XML
     fn extract_class_from_owllink(&self, xml: &str) -> Result<ClassExpression> {
         // Basic XML parsing to extract class
-        if let Some(start) = xml.find("IRI=\"") {
-            if let Some(end) = xml[start + 5..].find('"') {
+        if let Some(start) = xml.find("IRI=\"")
+            && let Some(end) = xml[start + 5..].find('"') {
                 let iri_str = &xml[start + 5..start + 5 + end];
                 return Ok(ClassExpression::Class(crate::ontology::Class {
                     iri: crate::ontology::IRI::new(iri_str),
                 }));
             }
-        }
 
         Err(Error::reasoning(
             "Could not extract class from OWLlink request",
@@ -1040,12 +1026,11 @@ impl QueryProcessor {
     /// Extract KB name from OWLlink XML
     fn extract_kb_name_from_owllink(&self, xml: &str) -> Result<String> {
         // Basic XML parsing to extract KB name
-        if let Some(start) = xml.find("kb=\"") {
-            if let Some(end) = xml[start + 4..].find('"') {
+        if let Some(start) = xml.find("kb=\"")
+            && let Some(end) = xml[start + 4..].find('"') {
                 let kb_name = &xml[start + 4..start + 4 + end];
                 return Ok(kb_name.to_string());
             }
-        }
 
         Ok("default".to_string())
     }
@@ -1053,9 +1038,9 @@ impl QueryProcessor {
     /// Extract individual from OWLlink XML
     fn extract_individual_from_owllink(&self, xml: &str) -> Result<crate::ontology::Individual> {
         // Parse named individual
-        if let Some(start) = xml.find("owl:NamedIndividual") {
-            if let Some(iri_start) = xml[start..].find("IRI=\"") {
-                if let Some(iri_end) = xml[start + iri_start + 5..].find('"') {
+        if let Some(start) = xml.find("owl:NamedIndividual")
+            && let Some(iri_start) = xml[start..].find("IRI=\"")
+                && let Some(iri_end) = xml[start + iri_start + 5..].find('"') {
                     let iri_str = &xml[start + iri_start + 5..start + iri_start + 5 + iri_end];
                     return Ok(crate::ontology::Individual::Named(
                         crate::ontology::NamedIndividual {
@@ -1063,13 +1048,11 @@ impl QueryProcessor {
                         },
                     ));
                 }
-            }
-        }
 
         // Parse anonymous individual
-        if let Some(start) = xml.find("owl:AnonymousIndividual") {
-            if let Some(id_start) = xml[start..].find("nodeID=\"") {
-                if let Some(id_end) = xml[start + id_start + 8..].find('"') {
+        if let Some(start) = xml.find("owl:AnonymousIndividual")
+            && let Some(id_start) = xml[start..].find("nodeID=\"")
+                && let Some(id_end) = xml[start + id_start + 8..].find('"') {
                     let node_id = &xml[start + id_start + 8..start + id_start + 8 + id_end];
                     return Ok(crate::ontology::Individual::Anonymous(
                         crate::ontology::AnonymousIndividual {
@@ -1077,8 +1060,6 @@ impl QueryProcessor {
                         },
                     ));
                 }
-            }
-        }
 
         Err(Error::reasoning(
             "Could not extract individual from OWLlink request",
@@ -1108,8 +1089,8 @@ impl QueryProcessor {
         }
 
         // Parse ClassAssertion axiom
-        if xml.contains("ClassAssertion") {
-            if let (Ok(class_expr), Ok(individual)) = (
+        if xml.contains("ClassAssertion")
+            && let (Ok(class_expr), Ok(individual)) = (
                 self.extract_class_from_owllink(xml),
                 self.extract_individual_from_owllink(xml),
             ) {
@@ -1122,11 +1103,10 @@ impl QueryProcessor {
                     },
                 ));
             }
-        }
 
         // Parse ObjectPropertyAssertion axiom
-        if xml.contains("ObjectPropertyAssertion") {
-            if let (Ok(property), Ok(subject), Ok(object)) = (
+        if xml.contains("ObjectPropertyAssertion")
+            && let (Ok(property), Ok(subject), Ok(object)) = (
                 self.extract_object_property_from_owllink(xml),
                 self.extract_individual_from_owllink(xml),
                 self.extract_object_individual_from_owllink(xml),
@@ -1141,7 +1121,6 @@ impl QueryProcessor {
                     },
                 ));
             }
-        }
 
         Err(Error::reasoning(
             "Could not parse axiom from OWLlink request",
@@ -1178,9 +1157,9 @@ impl QueryProcessor {
         &self,
         xml: &str,
     ) -> Result<crate::ontology::ObjectPropertyExpression> {
-        if let Some(start) = xml.find("owl:ObjectProperty") {
-            if let Some(iri_start) = xml[start..].find("IRI=\"") {
-                if let Some(iri_end) = xml[start + iri_start + 5..].find('"') {
+        if let Some(start) = xml.find("owl:ObjectProperty")
+            && let Some(iri_start) = xml[start..].find("IRI=\"")
+                && let Some(iri_end) = xml[start + iri_start + 5..].find('"') {
                     let iri_str = &xml[start + iri_start + 5..start + iri_start + 5 + iri_end];
                     let property =
                         crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(iri_str))
@@ -1189,8 +1168,6 @@ impl QueryProcessor {
                         property,
                     ));
                 }
-            }
-        }
 
         Err(Error::reasoning(
             "Could not extract object property from OWLlink request",
@@ -1212,8 +1189,8 @@ impl QueryProcessor {
                 if individual_count == 2 {
                     // This should be the object individual
                     let start_pos = search_pos + named_pos;
-                    if let Some(iri_start) = xml[start_pos..].find("IRI=\"") {
-                        if let Some(iri_end) = xml[start_pos + iri_start + 5..].find('"') {
+                    if let Some(iri_start) = xml[start_pos..].find("IRI=\"")
+                        && let Some(iri_end) = xml[start_pos + iri_start + 5..].find('"') {
                             let iri_str = &xml
                                 [start_pos + iri_start + 5..start_pos + iri_start + 5 + iri_end];
                             return Ok(crate::ontology::Individual::Named(
@@ -1222,7 +1199,6 @@ impl QueryProcessor {
                                 },
                             ));
                         }
-                    }
                 }
                 search_pos += named_pos + 20;
             } else {
@@ -1240,8 +1216,8 @@ impl QueryProcessor {
         // Look for axiom elements in the XML
         if xml.contains("SubClassOf") {
             // Extract subclass axiom
-            if let Ok(subclass) = self.extract_class_from_owllink(xml) {
-                if let Ok(superclass) = self.extract_super_class_from_owllink(xml) {
+            if let Ok(subclass) = self.extract_class_from_owllink(xml)
+                && let Ok(superclass) = self.extract_super_class_from_owllink(xml) {
                     return Ok(crate::ontology::Axiom::SubClassOf(
                         crate::ontology::axioms::SubClassOfAxiom {
                             id: 0,
@@ -1251,13 +1227,12 @@ impl QueryProcessor {
                         },
                     ));
                 }
-            }
         }
 
         if xml.contains("ClassAssertion") {
             // Extract class assertion
-            if let Ok(class_expr) = self.extract_class_from_owllink(xml) {
-                if let Ok(individual) = self.extract_individual_from_owllink(xml) {
+            if let Ok(class_expr) = self.extract_class_from_owllink(xml)
+                && let Ok(individual) = self.extract_individual_from_owllink(xml) {
                     return Ok(crate::ontology::Axiom::ClassAssertion(
                         crate::ontology::axioms::ClassAssertionAxiom {
                             id: 0,
@@ -1267,7 +1242,6 @@ impl QueryProcessor {
                         },
                     ));
                 }
-            }
         }
 
         Err(Error::reasoning(
@@ -1278,15 +1252,13 @@ impl QueryProcessor {
     /// Extract direct flag from OWLlink XML request
     fn extract_direct_flag_from_owllink(&self, xml: &str) -> Result<bool> {
         // Look for direct attribute in various query elements
-        if let Some(start) = xml.find("direct=") {
-            if let Some(quote_start) = xml[start..].find('"') {
-                if let Some(quote_end) = xml[start + quote_start + 1..].find('"') {
+        if let Some(start) = xml.find("direct=")
+            && let Some(quote_start) = xml[start..].find('"')
+                && let Some(quote_end) = xml[start + quote_start + 1..].find('"') {
                     let direct_str =
                         &xml[start + quote_start + 1..start + quote_start + 1 + quote_end];
                     return Ok(direct_str == "true");
                 }
-            }
-        }
 
         // Default to false if not specified
         Ok(false)
@@ -1307,15 +1279,14 @@ impl QueryProcessor {
                 if class_count == 2 {
                     // This should be the superclass
                     let start_pos = search_pos + class_pos;
-                    if let Some(iri_start) = xml[start_pos..].find("IRI=\"") {
-                        if let Some(iri_end) = xml[start_pos + iri_start + 5..].find('"') {
+                    if let Some(iri_start) = xml[start_pos..].find("IRI=\"")
+                        && let Some(iri_end) = xml[start_pos + iri_start + 5..].find('"') {
                             let iri_str = &xml
                                 [start_pos + iri_start + 5..start_pos + iri_start + 5 + iri_end];
                             let class =
                                 crate::ontology::Class::new(crate::ontology::IRI::new(iri_str));
                             return Ok(crate::ontology::ClassExpression::Class(class));
                         }
-                    }
                 }
                 search_pos += class_pos + 9;
             } else {

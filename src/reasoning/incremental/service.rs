@@ -292,7 +292,7 @@ impl IncrementalReasoningService {
                 let mut query_engine_guard = query_engine
                     .lock()
                     .map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
-                query_engine_guard.execute_query(&query)?
+                query_engine_guard.execute_query(query)?
             };
             QueryResult {
                 bindings: results
@@ -481,7 +481,7 @@ impl IncrementalReasoningService {
             let mut query_engine_guard = query_engine
                 .lock()
                 .map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
-            query_engine_guard.execute_query(&query)?
+            query_engine_guard.execute_query(query)?
         };
 
         Ok(result
@@ -527,11 +527,10 @@ impl IncrementalReasoningService {
     ) -> Result<()> {
         let elapsed = start_time.elapsed().as_millis() as u64;
 
-        if let Ok(mut stats) = self.statistics.write() {
-            if was_incremental {
+        if let Ok(mut stats) = self.statistics.write()
+            && was_incremental {
                 stats.time_saved_ms += elapsed * 3; // Estimate time saved vs full query
             }
-        }
 
         Ok(())
     }

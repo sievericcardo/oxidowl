@@ -330,7 +330,7 @@ impl PatternMatcher {
         rule_head: &SWRLAtom,
     ) -> Result<bool> {
         self.unification_engine.reset();
-        Ok(self.unification_engine.atoms_unify(goal, rule_head)?)
+        self.unification_engine.atoms_unify(goal, rule_head)
     }
 
     /// Find variable bindings that make atoms unify

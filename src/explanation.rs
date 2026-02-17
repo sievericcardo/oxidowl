@@ -130,7 +130,7 @@ impl ExplanationService {
                 subclass: subclass.clone(),
                 superclass: superclass.clone(),
             },
-            premises: justification.iter().map(|ax| ax.clone()).collect(),
+            premises: justification.iter().cloned().collect(),
             children: vec![],
             rule_applied: InferenceRule::Subsumption,
         };
@@ -145,7 +145,7 @@ impl ExplanationService {
         let root = ProofNode {
             id: 0,
             inference: Inference::Inconsistency,
-            premises: justification.iter().map(|ax| ax.clone()).collect(),
+            premises: justification.iter().cloned().collect(),
             children: vec![],
             rule_applied: InferenceRule::Contradiction,
         };
@@ -166,7 +166,7 @@ impl ExplanationService {
             inference: Inference::Unsatisfiability {
                 class: class.clone(),
             },
-            premises: justification.iter().map(|ax| ax.clone()).collect(),
+            premises: justification.iter().cloned().collect(),
             children: vec![],
             rule_applied: InferenceRule::Unsatisfiability,
         };
@@ -362,24 +362,22 @@ impl JustificationComputer {
                 // Check transitivity: if subclass -> intermediate and intermediate -> superclass
                 if &axiom_data.subclass == subclass {
                     for other_axiom in axioms {
-                        if let Axiom::SubClassOf(other_data) = other_axiom {
-                            if &other_data.subclass == &axiom_data.superclass
+                        if let Axiom::SubClassOf(other_data) = other_axiom
+                            && other_data.subclass == axiom_data.superclass
                                 && &other_data.superclass == superclass
                             {
                                 return true;
                             }
-                        }
                     }
                 }
             }
 
             // Check EquivalentClasses
-            if let Axiom::EquivalentClasses(axiom_data) = axiom {
-                if axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass)
+            if let Axiom::EquivalentClasses(axiom_data) = axiom
+                && axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass)
                 {
                     return true;
                 }
-            }
         }
 
         false
@@ -445,42 +443,37 @@ impl JustificationComputer {
 
         // 2. Check for class being subclass of its complement
         for axiom in axioms {
-            if let Axiom::SubClassOf(axiom_data) = axiom {
-                if let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass {
-                    if &axiom_data.subclass == inner.as_ref() {
+            if let Axiom::SubClassOf(axiom_data) = axiom
+                && let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass
+                    && &axiom_data.subclass == inner.as_ref() {
                         return true;
                     }
-                }
-            }
         }
 
         // 3. Check for empty intersections (A ⊓ ¬A ⊑ ⊥)
         for axiom in axioms {
-            if let Axiom::SubClassOf(axiom_data) = axiom {
-                if let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass {
+            if let Axiom::SubClassOf(axiom_data) = axiom
+                && let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass {
                     // Check if intersection contains both a class and its complement
                     for (i, c1) in classes.iter().enumerate() {
                         for c2 in classes.iter().skip(i + 1) {
-                            if let ClassExpression::ObjectComplementOf(inner) = c2 {
-                                if c1 == inner.as_ref() {
+                            if let ClassExpression::ObjectComplementOf(inner) = c2
+                                && c1 == inner.as_ref() {
                                     return true;
                                 }
-                            }
-                            if let ClassExpression::ObjectComplementOf(inner) = c1 {
-                                if c2 == inner.as_ref() {
+                            if let ClassExpression::ObjectComplementOf(inner) = c1
+                                && c2 == inner.as_ref() {
                                     return true;
                                 }
-                            }
                         }
                     }
                 }
-            }
         }
 
         // 4. Check for cardinality contradictions (≥n and ≤m where n > m)
         for axiom in axioms {
-            if let Axiom::SubClassOf(axiom_data) = axiom {
-                if let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass {
+            if let Axiom::SubClassOf(axiom_data) = axiom
+                && let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass {
                     let mut min_card = None;
                     let mut max_card = None;
                     
@@ -494,13 +487,11 @@ impl JustificationComputer {
                     }
                     
                     // Check if min > max for same property
-                    if let (Some((min, prop1)), Some((max, prop2))) = (min_card, max_card) {
-                        if prop1 == prop2 && min > max {
+                    if let (Some((min, prop1)), Some((max, prop2))) = (min_card, max_card)
+                        && prop1 == prop2 && min > max {
                             return true;
                         }
-                    }
                 }
-            }
         }
 
         // Without a full reasoner, we can't determine all inconsistencies
@@ -644,7 +635,7 @@ impl ProofTracker {
         if let Some(node_id) = step.node_id {
             self.node_map
                 .entry(node_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(step.clone());
         }
         self.steps.push(step);
