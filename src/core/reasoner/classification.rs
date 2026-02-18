@@ -238,10 +238,45 @@ impl ClassificationService {
             .as_ref()
             .map(std::string::ToString::to_string);
 
+        // Collect object and data property local names from the ontology signature
+        let signature = ontology_guard.signature()?;
+        let object_properties: Vec<String> = {
+            let mut props: Vec<String> = signature
+                .object_properties
+                .iter()
+                .map(|p| {
+                    let iri = p.iri.to_string();
+                    iri.rsplit_once(['#', '/'])
+                        .map(|(_, local)| local.to_string())
+                        .unwrap_or(iri)
+                })
+                .collect();
+            props.sort();
+            props.dedup();
+            props
+        };
+        let data_properties: Vec<String> = {
+            let mut props: Vec<String> = signature
+                .data_properties
+                .iter()
+                .map(|p| {
+                    let iri = p.iri.to_string();
+                    iri.rsplit_once(['#', '/'])
+                        .map(|(_, local)| local.to_string())
+                        .unwrap_or(iri)
+                })
+                .collect();
+            props.sort();
+            props.dedup();
+            props
+        };
+
         // Drop the read lock before creating result
         drop(ontology_guard);
 
-        let result = ClassificationResult::new_with_iri(hierarchy, ontology_iri);
+        let mut result = ClassificationResult::new_with_iri(hierarchy, ontology_iri);
+        result.object_properties = object_properties;
+        result.data_properties = data_properties;
 
         // Cache the result
         write_lock(

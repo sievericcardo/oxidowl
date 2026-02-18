@@ -28,6 +28,10 @@ pub enum ReasoningResult {
 pub struct ClassificationResult {
     pub hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>,
     pub ontology_iri: Option<String>,
+    /// Object properties present in the ontology (local name, super-property name)
+    pub object_properties: Vec<String>,
+    /// Data properties present in the ontology (local name)
+    pub data_properties: Vec<String>,
 }
 
 impl ClassificationResult {
@@ -36,6 +40,8 @@ impl ClassificationResult {
         Self {
             hierarchy,
             ontology_iri: None,
+            object_properties: Vec::new(),
+            data_properties: Vec::new(),
         }
     }
 
@@ -47,6 +53,8 @@ impl ClassificationResult {
         Self {
             hierarchy,
             ontology_iri,
+            object_properties: Vec::new(),
+            data_properties: Vec::new(),
         }
     }
 
@@ -278,42 +286,35 @@ impl ClassificationResult {
 
     /// Write object properties in `HermiT` format
     fn write_object_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
-        // This would be populated from actual object property classification
-        // For now, we'll write a basic structure
+        if self.object_properties.is_empty() {
+            return Ok(());
+        }
         writeln!(writer)?;
-        writeln!(
-            writer,
-            "  SubObjectPropertyOf( :containsPlant owl:topObjectProperty ) Declaration( ObjectProperty( :containsPlant ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubObjectPropertyOf( :containsPot owl:topObjectProperty ) Declaration( ObjectProperty( :containsPot ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubObjectPropertyOf( :hasLightSensor owl:topObjectProperty ) Declaration( ObjectProperty( :hasLightSensor ) )"
-        )?;
-        // Add more object properties as needed
+        let mut sorted = self.object_properties.clone();
+        sorted.sort();
+        for prop in &sorted {
+            writeln!(
+                writer,
+                "  SubObjectPropertyOf( :{prop} owl:topObjectProperty ) Declaration( ObjectProperty( :{prop} ) )"
+            )?;
+        }
         Ok(())
     }
 
-    /// Write data properties in `HermiT` format  
+    /// Write data properties in `HermiT` format
     fn write_data_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
-        // This would be populated from actual data property classification
+        if self.data_properties.is_empty() {
+            return Ok(());
+        }
         writeln!(writer)?;
-        writeln!(
-            writer,
-            "  SubDataPropertyOf( :actuatorId owl:topDataProperty ) Declaration( DataProperty( :actuatorId ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubDataPropertyOf( :plantId owl:topDataProperty ) Declaration( DataProperty( :plantId ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubDataPropertyOf( :sensorId owl:topDataProperty ) Declaration( DataProperty( :sensorId ) )"
-        )?;
-        // Add more data properties as needed
+        let mut sorted = self.data_properties.clone();
+        sorted.sort();
+        for prop in &sorted {
+            writeln!(
+                writer,
+                "  SubDataPropertyOf( :{prop} owl:topDataProperty ) Declaration( DataProperty( :{prop} ) )"
+            )?;
+        }
         Ok(())
     }
 
