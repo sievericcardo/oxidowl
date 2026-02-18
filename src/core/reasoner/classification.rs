@@ -238,18 +238,13 @@ impl ClassificationService {
             .as_ref()
             .map(std::string::ToString::to_string);
 
-        // Collect object and data property local names from the ontology signature
+        // Collect object and data property full IRIs from the ontology signature
         let signature = ontology_guard.signature()?;
         let object_properties: Vec<String> = {
             let mut props: Vec<String> = signature
                 .object_properties
                 .iter()
-                .map(|p| {
-                    let iri = p.iri.to_string();
-                    iri.rsplit_once(['#', '/'])
-                        .map(|(_, local)| local.to_string())
-                        .unwrap_or(iri)
-                })
+                .map(|p| p.iri.to_string())
                 .collect();
             props.sort();
             props.dedup();
@@ -259,12 +254,7 @@ impl ClassificationService {
             let mut props: Vec<String> = signature
                 .data_properties
                 .iter()
-                .map(|p| {
-                    let iri = p.iri.to_string();
-                    iri.rsplit_once(['#', '/'])
-                        .map(|(_, local)| local.to_string())
-                        .unwrap_or(iri)
-                })
+                .map(|p| p.iri.to_string())
                 .collect();
             props.sort();
             props.dedup();

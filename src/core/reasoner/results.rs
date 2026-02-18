@@ -104,7 +104,13 @@ impl ClassificationResult {
             .ontology_iri
             .as_deref()
             .unwrap_or("http://example.org/ontology");
-        writeln!(writer, "Prefix(:=<{ontology_iri}#>)")?;
+        // Build the base IRI for the Prefix declaration (must end with # or /)
+        let prefix_base = if ontology_iri.ends_with('#') || ontology_iri.ends_with('/') {
+            ontology_iri.to_string()
+        } else {
+            format!("{ontology_iri}#")
+        };
+        writeln!(writer, "Prefix(:=<{prefix_base}>)")?;
         writeln!(writer)?;
         writeln!(writer, "Ontology(<{ontology_iri}>")?;
         writeln!(writer)?;
@@ -113,13 +119,13 @@ impl ClassificationResult {
         let class_hierarchy = self.build_class_tree()?;
 
         // Write the class hierarchy in HermiT format
-        self.write_class_hierarchy(writer, &class_hierarchy)?;
+        self.write_class_hierarchy(writer, &class_hierarchy, &prefix_base)?;
 
         // Write object properties if available
-        self.write_object_properties(writer)?;
+        self.write_object_properties(writer, &prefix_base)?;
 
         // Write data properties if available
-        self.write_data_properties(writer)?;
+        self.write_data_properties(writer, &prefix_base)?;
 
         writeln!(writer)?;
         writeln!(writer, ")")?;
@@ -247,14 +253,26 @@ impl ClassificationResult {
         Ok(children)
     }
 
+    /// Return the correct OWL functional-syntax reference for an IRI given the declared prefix base.
+    /// Uses `:localname` short form when the IRI starts with `prefix_base`, otherwise `<fullIRI>`.
+    fn iri_ref(iri: &str, prefix_base: &str) -> String {
+        if let Some(local) = iri.strip_prefix(prefix_base) {
+            if !local.is_empty() {
+                return format!(":{local}");
+            }
+        }
+        format!("<{iri}>")
+    }
+
     /// Write class hierarchy in `HermiT` format
     fn write_class_hierarchy<W: Write>(
         &self,
         writer: &mut W,
         root_classes: &[ClassNode],
+        prefix_base: &str,
     ) -> Result<()> {
         for class in root_classes {
-            self.write_class_node(writer, class, "owl:Thing", 1)?;
+            self.write_class_node(writer, class, "owl:Thing", 1, prefix_base)?;
         }
         Ok(())
     }
@@ -264,28 +282,29 @@ impl ClassificationResult {
         &self,
         writer: &mut W,
         node: &ClassNode,
-        parent_name: &str,
+        parent_ref: &str,
         level: usize,
+        prefix_base: &str,
     ) -> Result<()> {
         let indent = "  ".repeat(level);
+        let class_ref = Self::iri_ref(&node.iri, prefix_base);
 
         // Write SubClassOf and Declaration for this class with correct parent
         writeln!(
             writer,
-            "{}SubClassOf( :{} {} ) Declaration( Class( :{} ) )",
-            indent, node.name, parent_name, node.name
+            "{indent}SubClassOf( {class_ref} {parent_ref} ) Declaration( Class( {class_ref} ) )"
         )?;
 
         // Write children with increased indentation, using this node as parent
         for child in &node.children {
-            self.write_class_node(writer, child, &format!(":{}", node.name), level + 1)?;
+            self.write_class_node(writer, child, &class_ref, level + 1, prefix_base)?;
         }
 
         Ok(())
     }
 
     /// Write object properties in `HermiT` format
-    fn write_object_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn write_object_properties<W: Write>(&self, writer: &mut W, prefix_base: &str) -> Result<()> {
         if self.object_properties.is_empty() {
             return Ok(());
         }
@@ -293,16 +312,17 @@ impl ClassificationResult {
         let mut sorted = self.object_properties.clone();
         sorted.sort();
         for prop in &sorted {
+            let prop_ref = Self::iri_ref(prop, prefix_base);
             writeln!(
                 writer,
-                "  SubObjectPropertyOf( :{prop} owl:topObjectProperty ) Declaration( ObjectProperty( :{prop} ) )"
+                "  SubObjectPropertyOf( {prop_ref} owl:topObjectProperty ) Declaration( ObjectProperty( {prop_ref} ) )"
             )?;
         }
         Ok(())
     }
 
     /// Write data properties in `HermiT` format
-    fn write_data_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn write_data_properties<W: Write>(&self, writer: &mut W, prefix_base: &str) -> Result<()> {
         if self.data_properties.is_empty() {
             return Ok(());
         }
@@ -310,9 +330,10 @@ impl ClassificationResult {
         let mut sorted = self.data_properties.clone();
         sorted.sort();
         for prop in &sorted {
+            let prop_ref = Self::iri_ref(prop, prefix_base);
             writeln!(
                 writer,
-                "  SubDataPropertyOf( :{prop} owl:topDataProperty ) Declaration( DataProperty( :{prop} ) )"
+                "  SubDataPropertyOf( {prop_ref} owl:topDataProperty ) Declaration( DataProperty( {prop_ref} ) )"
             )?;
         }
         Ok(())
