@@ -652,20 +652,20 @@ pub trait OntologyVisitor<R = ()> {
     ) -> Result<()> {
         // Visit the datatype IRI
         // (datatype field is IRI<String>, which we can't directly visit but can process)
-        
+
         // Visit the horned_owl data_range by converting it to oxidowl DataRange
         self.visit_horned_owl_data_range(&axiom.data_range)?;
-        
+
         // Visit annotations
         for annotation in &axiom.annotations {
             self.visit_horned_owl_annotation(annotation)?;
         }
-        
+
         Ok(())
     }
 
     /// Visit a horned_owl DataRange structure
-    /// 
+    ///
     /// This helper method traverses horned_owl::model::DataRange types and
     /// recursively processes their components. It enables the visitor pattern
     /// to work with foreign horned_owl types embedded in oxidowl ontologies.
@@ -674,7 +674,7 @@ pub trait OntologyVisitor<R = ()> {
         data_range: &horned_owl::model::DataRange<String>,
     ) -> Result<()> {
         use horned_owl::model::DataRange;
-        
+
         // Recursively traverse the data range structure
         // This provides a hook for visitors to process horned_owl DataRange types
         match data_range {

@@ -668,11 +668,8 @@ impl Ontology {
 
         // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
-        let mut ontology = adapter.convert_basic_ontology::<
-            std::rc::Rc<str>,
-            std::rc::Rc<str>,
-            _
-        >(&result.0)?;
+        let mut ontology =
+            adapter.convert_basic_ontology::<std::rc::Rc<str>, std::rc::Rc<str>, _>(&result.0)?;
 
         // Try to extract ontology IRI from the file by re-reading it
         // This is a workaround since horned-owl's API is complex

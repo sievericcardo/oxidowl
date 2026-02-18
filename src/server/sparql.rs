@@ -115,11 +115,7 @@
 //! ```
 
 use crate::semantics::{RdfTerm, Triple as OxidowlTriple};
-use crate::{
-    Error, Result,
-    ontology::Axiom,
-    reasoning::ReasoningService,
-};
+use crate::{Error, Result, ontology::Axiom, reasoning::ReasoningService};
 use oxigraph::{
     model::{GraphName, NamedNode, NamedOrBlankNode, Quad, Term, Triple},
     sparql::{QueryResults, SparqlEvaluator},

@@ -2202,13 +2202,12 @@ async fn execute_entailment_check(
                 // Check if adding conclusion axioms maintains consistency
                 // Clone the premise ontology and add conclusion axioms
                 info!("Premise ontology is consistent - checking entailment");
-                
+
                 // Get the premise ontology by reloading it (since reasoner doesn't expose ontology)
                 let mut test_ontology = oxidowl::ontology::Ontology::from_file(
-                    &premise,
-                    None, // Auto-detect format
+                    &premise, None, // Auto-detect format
                 )?;
-                
+
                 // Add conclusion axioms directly and check consistency
                 // For proper entailment: premise |= conclusion iff premise + ¬conclusion is inconsistent
                 // For now, add conclusion axioms directly - this checks compatibility
@@ -2216,14 +2215,14 @@ async fn execute_entailment_check(
                 for axiom in conclusion_ontology.axioms().iter() {
                     test_ontology.add_axiom(axiom.clone());
                 }
-                
+
                 // Create a new reasoner to check consistency of augmented ontology
                 let mut test_reasoner = Reasoner::new(config.clone())?;
                 test_reasoner.load_ontology(test_ontology)?;
-                
+
                 // Check consistency of augmented ontology
                 let augmented_consistent = test_reasoner.is_consistent()?;
-                
+
                 // If augmented ontology is consistent, conclusions are compatible with premises
                 // Since we're adding conclusions directly, consistent means they're compatible
                 augmented_consistent
@@ -2349,53 +2348,55 @@ async fn execute_dump_clauses(
 // Helper functions for formatting output
 
 fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationResult) {
-    use std::collections::{HashMap, HashSet, BTreeSet};
-    
+    use std::collections::{BTreeSet, HashMap, HashSet};
+
     // Build a tree structure for better visualization
     let mut children_map: HashMap<String, BTreeSet<String>> = HashMap::new();
     let mut all_classes: HashSet<String> = HashSet::new();
     let mut has_superclass: HashSet<String> = HashSet::new();
-    
+
     // Populate the hierarchy structure
     for (class, superclasses) in &hierarchy.hierarchy {
         let class_str = format_class_expression(class);
         all_classes.insert(class_str.clone());
-        
+
         for superclass in superclasses {
             let super_str = format_class_expression(superclass);
             all_classes.insert(super_str.clone());
-            
+
             // Map parent -> children
-            children_map.entry(super_str.clone())
+            children_map
+                .entry(super_str.clone())
                 .or_default()
                 .insert(class_str.clone());
             has_superclass.insert(class_str.clone());
         }
     }
-    
+
     // Find root classes (those without superclasses, or only having owl:Thing)
-    let mut roots: BTreeSet<String> = all_classes.iter()
+    let mut roots: BTreeSet<String> = all_classes
+        .iter()
         .filter(|c| !has_superclass.contains(*c) || *c == "Thing")
         .cloned()
         .collect();
-    
+
     // If we have owl:Thing, make it the single root
     if roots.contains("Thing") {
         roots.clear();
         roots.insert("Thing".to_string());
     }
-    
+
     // Statistics
     println!("=== Class Hierarchy ===");
     println!("Total classes: {}", all_classes.len());
     println!("Root classes: {}", roots.len());
     println!();
-    
+
     // Print the tree starting from roots
     for root in &roots {
         print_tree(root, &children_map, "", true, &mut HashSet::new());
     }
-    
+
     // Helper function to print tree with box-drawing characters
     fn print_tree(
         node: &str,
@@ -2406,14 +2407,24 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
     ) {
         // Prevent infinite loops in case of cycles
         if visited.contains(node) {
-            println!("{}{}  {} [cycle detected]", prefix, if is_last { "└── " } else { "├── " }, node);
+            println!(
+                "{}{}  {} [cycle detected]",
+                prefix,
+                if is_last { "└── " } else { "├── " },
+                node
+            );
             return;
         }
         visited.insert(node.to_string());
-        
+
         // Print current node
-        println!("{}{}{}", prefix, if is_last { "└── " } else { "├── " }, node);
-        
+        println!(
+            "{}{}{}",
+            prefix,
+            if is_last { "└── " } else { "├── " },
+            node
+        );
+
         // Print children
         if let Some(children) = children_map.get(node) {
             let child_count = children.len();

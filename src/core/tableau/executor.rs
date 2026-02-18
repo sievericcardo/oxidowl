@@ -567,7 +567,8 @@ impl TableauExecutor {
         // Query the clause index for clauses mentioning this class
         // Clone the clauses to avoid borrow conflicts
         let relevant_clauses: Vec<_> = if let Some(ref index) = tableau.clause_index {
-            index.get_candidate_clause_refs(&[class_iri.as_str().to_string()])
+            index
+                .get_candidate_clause_refs(&[class_iri.as_str().to_string()])
                 .into_iter()
                 .map(|c| c.clone())
                 .collect()
@@ -592,9 +593,10 @@ impl TableauExecutor {
                 atom.arguments.len() == 1 && atom.predicate == class_iri.as_str()
             }) {
                 // Check if all body atoms are satisfied at this node
-                let body_satisfied = clause.body.iter().all(|atom| {
-                    Self::check_atom_satisfied(tableau, node_id, atom)
-                });
+                let body_satisfied = clause
+                    .body
+                    .iter()
+                    .all(|atom| Self::check_atom_satisfied(tableau, node_id, atom));
 
                 if body_satisfied {
                     // Add head consequences
@@ -602,10 +604,10 @@ impl TableauExecutor {
                         // Check if this is a concept atom (single argument)
                         if head_atom.arguments.len() == 1 {
                             let concept_iri = &head_atom.predicate;
-                            
+
                             // Add the implied concept to the node
                             let implied_concept = ConceptLabel::Atomic(concept_iri.clone());
-                            
+
                             // Check if already present to avoid duplicates
                             if let Some(node) = tableau.nodes.get(node_id) {
                                 if !node.concepts.contains(&implied_concept) {
@@ -634,7 +636,7 @@ impl TableauExecutor {
         // Check if this is a concept atom (single argument)
         if atom.arguments.len() == 1 {
             let concept_iri = &atom.predicate;
-            
+
             // Check if the concept is in the node's concept set
             if let Some(node) = tableau.nodes.get(node_id) {
                 node.concepts.iter().any(|c| match c {
@@ -905,11 +907,11 @@ impl TableauExecutor {
 
                         // Query clause_checker to find all clauses mentioning this class
                         // and preemptively add their consequences to speed up reasoning
-                        if tableau.clause_checker.is_some() && tableau.config.enable_clause_optimization {
+                        if tableau.clause_checker.is_some()
+                            && tableau.config.enable_clause_optimization
+                        {
                             Self::apply_preemptive_clause_consequences(
-                                tableau,
-                                node_id,
-                                &class.iri,
+                                tableau, node_id, &class.iri,
                             )?;
                         } else {
                             // Standard approach: let completion rules discover consequences

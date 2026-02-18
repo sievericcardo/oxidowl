@@ -5,8 +5,7 @@
 //! and clash detection.
 
 use crate::{
-    Result,
-    Error,
+    Error, Result,
     core::dependency::DependencySet,
     ontology::{ClassExpression, DataProperty, Individual, ObjectPropertyExpression, Role},
 };
@@ -996,16 +995,17 @@ impl CompletionRuleSet {
                 // Create a fresh blank node for the reification
                 // Use a unique identifier based on the node and triple ID
                 let reification_node = format!("_:reif_{}_{}", application.node, triple_id);
-                
+
                 // Create the reification node as a new individual
                 result
                     .new_individuals
                     .push((reification_node.clone(), Arc::clone(dependencies)));
 
                 // Add rdf:type rdf:Statement to classify the reification node
-                let rdf_statement = ClassExpression::Class(crate::ontology::Class::new(
-                    crate::ontology::IRI::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement"),
-                ));
+                let rdf_statement =
+                    ClassExpression::Class(crate::ontology::Class::new(crate::ontology::IRI::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement",
+                    )));
                 result.concept_additions.push((
                     Individual::anonymous(reification_node.clone()),
                     rdf_statement,
@@ -1016,17 +1016,20 @@ impl CompletionRuleSet {
                 let rdf_subject_prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
                     crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
                         "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject",
-                    )).expect("Valid RDF subject property IRI"),
+                    ))
+                    .expect("Valid RDF subject property IRI"),
                 );
                 let rdf_predicate_prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
                     crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
                         "http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate",
-                    )).expect("Valid RDF predicate property IRI"),
+                    ))
+                    .expect("Valid RDF predicate property IRI"),
                 );
                 let rdf_object_prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
                     crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
                         "http://www.w3.org/1999/02/22-rdf-syntax-ns#object",
-                    )).expect("Valid RDF object property IRI"),
+                    ))
+                    .expect("Valid RDF object property IRI"),
                 );
 
                 // Parse the triple components from the triple_id (simplified for now)
@@ -1062,7 +1065,8 @@ impl CompletionRuleSet {
 
                 log::debug!(
                     "Created reification structure for node: {} with reification node: {}",
-                    application.node, reification_node
+                    application.node,
+                    reification_node
                 );
             } else {
                 log::debug!(
@@ -1091,12 +1095,15 @@ impl CompletionRuleSet {
         } = &application.context
         {
             // Extract meta-assertion components from the concept
-            if let Some((triple_id, meta_property, meta_value)) = 
-                self.extract_meta_assertion(concept) {
-                
+            if let Some((triple_id, meta_property, meta_value)) =
+                self.extract_meta_assertion(concept)
+            {
                 log::debug!(
                     "Meta-assertion rule application at node {}: triple={}, property={}, value={}",
-                    application.node, triple_id, meta_property, meta_value
+                    application.node,
+                    triple_id,
+                    meta_property,
+                    meta_value
                 );
 
                 // Validate meta-level constraints based on the property
@@ -1124,7 +1131,7 @@ impl CompletionRuleSet {
                             iri: crate::ontology::IRI::new(&meta_property),
                         },
                     ),
-                    value:crate::ontology::Literal::new(meta_value.clone()),
+                    value: crate::ontology::Literal::new(meta_value.clone()),
                 };
 
                 // Add the meta-assertion as a concept to the node
@@ -1148,7 +1155,9 @@ impl CompletionRuleSet {
 
                 log::debug!(
                     "Added meta-assertion for triple {} with {}={}",
-                    triple_id, meta_property, meta_value
+                    triple_id,
+                    meta_property,
+                    meta_value
                 );
             } else {
                 log::debug!(
@@ -1243,7 +1252,7 @@ impl CompletionRuleSet {
                 return Some(iri_str.to_string());
             }
         }
-        
+
         // Check DataHasValue patterns that might encode quoted triple metadata
         if let ClassExpression::DataHasValue { property, value } = concept {
             let prop_str = format!("{:?}", property);
@@ -1251,7 +1260,7 @@ impl CompletionRuleSet {
                 return Some(value.value.clone());
             }
         }
-        
+
         None
     }
 
@@ -1264,7 +1273,7 @@ impl CompletionRuleSet {
         // Meta-assertions are typically encoded as DataHasValue restrictions
         // where the property indicates which quoted triple and meta-property,
         // and the value is the meta-value
-        
+
         if let ClassExpression::DataHasValue { property, value } = concept {
             // Parse the property to extract triple ID and meta-property
             let property_iri = match property {
@@ -1272,7 +1281,7 @@ impl CompletionRuleSet {
                     dp.iri.as_str().to_string()
                 }
             };
-            
+
             // Check if this is a meta-property (contains "meta" or known patterns)
             if property_iri.contains("certainty")
                 || property_iri.contains("confidence")
@@ -1284,11 +1293,11 @@ impl CompletionRuleSet {
                 // The triple ID is generated consistently to enable linking
                 // meta-assertions to their target quoted triples
                 let triple_id = format!("triple_{}", self.get_fresh_id());
-                
+
                 return Some((triple_id, property_iri, value.value.clone()));
             }
         }
-        
+
         None
     }
 
@@ -1312,7 +1321,7 @@ impl CompletionRuleSet {
                 )));
             }
         }
-        
+
         if property.contains("probability") {
             // Similar validation for probability
             if let Ok(val) = value.parse::<f64>() {
@@ -1329,7 +1338,7 @@ impl CompletionRuleSet {
                 )));
             }
         }
-        
+
         // Other constraints can be added here (e.g., trust scores, timestamps)
         Ok(())
     }
@@ -1348,7 +1357,7 @@ impl CompletionRuleSet {
         // For example:
         // - certainty: 0.9 and certainty: 0.1 (contradiction)
         // - trust: high and trust: low (contradiction)
-        
+
         // Simplified implementation - always returns None
         // A full implementation would maintain a meta-assertion index
         None

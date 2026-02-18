@@ -814,7 +814,7 @@ impl QueryProcessor {
                     self.check_satisfiability_with_tableau(class_expr, ontology)?
                 }
             };
-            
+
             Ok(format!(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
 <BooleanResponse result="{is_satisfiable}" />"#
@@ -832,10 +832,10 @@ impl QueryProcessor {
         class_expr: &ClassExpression,
         ontology: &Ontology,
     ) -> Result<bool> {
+        use crate::config::ReasoningConfig;
         use crate::core::tableau::Tableau;
         use crate::core::tableau::executor::TableauExecutor;
         use crate::core::tableau::state::TableauState;
-        use crate::config::ReasoningConfig;
 
         // Create tableau configuration
         let config = ReasoningConfig::default();
@@ -851,7 +851,7 @@ impl QueryProcessor {
         // First create the root node if it doesn't exist
         if tableau.nodes.is_empty() {
             let root_id = tableau.add_node(crate::core::tableau::node::NodeType::Root)?;
-            
+
             // Add the class expression to the root node
             let concept_label = self.class_expression_to_concept_label(class_expr);
             tableau.add_concept_to_node(root_id, concept_label)?;
@@ -866,7 +866,10 @@ impl QueryProcessor {
             TableauState::Unsatisfiable => Ok(false),
             TableauState::Unknown => {
                 // If unknown, be conservative and assume satisfiable
-                log::warn!("Tableau reasoning returned Unknown state for {:?}", class_expr);
+                log::warn!(
+                    "Tableau reasoning returned Unknown state for {:?}",
+                    class_expr
+                );
                 Ok(true)
             }
         }
@@ -878,11 +881,9 @@ impl QueryProcessor {
         class_expr: &ClassExpression,
     ) -> crate::core::tableau::node::ConceptLabel {
         use crate::core::tableau::node::ConceptLabel;
-        
+
         match class_expr {
-            ClassExpression::Class(class) => {
-                ConceptLabel::Atomic(class.iri.as_str().to_string())
-            }
+            ClassExpression::Class(class) => ConceptLabel::Atomic(class.iri.as_str().to_string()),
             _ => {
                 // For complex expressions, wrap in Complex variant
                 ConceptLabel::Complex(Box::new(class_expr.clone()))

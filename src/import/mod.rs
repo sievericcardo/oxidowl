@@ -577,9 +577,9 @@ impl ImportManager {
         {
             // Full HTTP import implementation with reqwest
             use std::time::Duration;
-            
+
             info!("Fetching ontology from URL: {}", url_str);
-            
+
             // Create HTTP client with timeout
             let timeout = self.config.timeout.unwrap_or(Duration::from_secs(30));
             let client = reqwest::blocking::Client::builder()
@@ -587,29 +587,26 @@ impl ImportManager {
                 .user_agent("OxidOWL/0.10.0")
                 .redirect(reqwest::redirect::Policy::limited(5))
                 .build()
-                .map_err(|e| OxidowlError::ImportError { 
-                    message: format!("Failed to create HTTP client: {}", e)
+                .map_err(|e| OxidowlError::ImportError {
+                    message: format!("Failed to create HTTP client: {}", e),
                 })?;
-            
+
             // Make request with content negotiation
             let response = client
                 .get(url_str)
                 .header("Accept", "application/rdf+xml, text/turtle, application/owl+xml, application/x-turtle, */*")
                 .send()
-                .map_err(|e| OxidowlError::ImportError { 
+                .map_err(|e| OxidowlError::ImportError {
                     message: format!("HTTP request failed: {}", e)
                 })?;
-            
+
             // Check status
             if !response.status().is_success() {
                 return Err(OxidowlError::ImportError {
-                    message: format!(
-                        "HTTP request failed with status: {}",
-                        response.status()
-                    )
+                    message: format!("HTTP request failed with status: {}", response.status()),
                 });
             }
-            
+
             // Get content type to determine parser
             let content_type = response
                 .headers()
@@ -617,14 +614,12 @@ impl ImportManager {
                 .and_then(|v| v.to_str().ok())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "application/rdf+xml".to_string());
-            
+
             // Download content
-            let content = response
-                .text()
-                .map_err(|e| OxidowlError::ImportError { 
-                    message: format!("Failed to read response: {}", e)
-                })?;
-            
+            let content = response.text().map_err(|e| OxidowlError::ImportError {
+                message: format!("Failed to read response: {}", e),
+            })?;
+
             // Parse based on content type
             let ontology = match content_type.as_str() {
                 ct if ct.contains("turtle") || ct.contains("ttl") => {
@@ -633,14 +628,14 @@ impl ImportManager {
                 ct if ct.contains("rdf+xml") || ct.contains("owl+xml") => {
                     crate::parsers::owl_xml::parse(&content)?
                 }
-                ct if ct.contains("functional") => {
-                    crate::parsers::functional::parse(&content)?
-                }
+                ct if ct.contains("functional") => crate::parsers::functional::parse(&content)?,
                 _ => {
                     // Try to auto-detect format
                     if content.trim().starts_with("<?xml") {
                         crate::parsers::owl_xml::parse(&content)?
-                    } else if content.trim().starts_with("@prefix") || content.trim().starts_with("PREFIX") {
+                    } else if content.trim().starts_with("@prefix")
+                        || content.trim().starts_with("PREFIX")
+                    {
                         crate::parsers::turtle::parse(&content)?
                     } else {
                         return Err(OxidowlError::ParseError(format!(
@@ -650,11 +645,11 @@ impl ImportManager {
                     }
                 }
             };
-            
+
             info!("Successfully fetched and parsed ontology from {}", url_str);
             Ok(Some(ontology))
         }
-        
+
         #[cfg(not(feature = "http-imports"))]
         {
             // Fallback to well-known ontology support when HTTP imports disabled
@@ -679,7 +674,10 @@ impl ImportManager {
                 }
                 _ => {
                     // For unknown URLs, log a warning and return None
-                    warn!("HTTP imports disabled - cannot load remote ontology from URL: {}", url_str);
+                    warn!(
+                        "HTTP imports disabled - cannot load remote ontology from URL: {}",
+                        url_str
+                    );
                     warn!("Enable the 'http-imports' feature to support HTTP import fetching");
                     Ok(None)
                 }

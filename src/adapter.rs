@@ -257,8 +257,8 @@ impl HornedOwlAdapter {
         &mut self,
         horned_ce: &horned_owl::model::ClassExpression<String>,
     ) -> Result<crate::ontology::ClassExpression> {
-        use horned_owl::model::ClassExpression as HCE;
         use crate::ontology::ClassExpression as OCE;
+        use horned_owl::model::ClassExpression as HCE;
 
         match horned_ce {
             HCE::Class(c) => {
@@ -290,10 +290,7 @@ impl HornedOwlAdapter {
                     .collect();
                 Ok(OCE::ObjectOneOf(converted?))
             }
-            HCE::ObjectSomeValuesFrom {
-                ope,
-                bce,
-            } => {
+            HCE::ObjectSomeValuesFrom { ope, bce } => {
                 let prop = self.convert_object_property_expression(ope)?;
                 let ce = self.convert_class_expression(bce)?;
                 Ok(OCE::ObjectSomeValuesFrom {
@@ -301,10 +298,7 @@ impl HornedOwlAdapter {
                     filler: Box::new(ce),
                 })
             }
-            HCE::ObjectAllValuesFrom {
-                ope,
-                bce,
-            } => {
+            HCE::ObjectAllValuesFrom { ope, bce } => {
                 let prop = self.convert_object_property_expression(ope)?;
                 let ce = self.convert_class_expression(bce)?;
                 Ok(OCE::ObjectAllValuesFrom {
@@ -315,7 +309,9 @@ impl HornedOwlAdapter {
             _ => {
                 // For unsupported class expressions, create an anonymous class
                 log::warn!("Unsupported ClassExpression type, creating anonymous class");
-                Ok(OCE::Class(Class::new(IRI::new("http://www.w3.org/2002/07/owl#Thing"))))
+                Ok(OCE::Class(Class::new(IRI::new(
+                    "http://www.w3.org/2002/07/owl#Thing",
+                ))))
             }
         }
     }
@@ -325,8 +321,8 @@ impl HornedOwlAdapter {
         &mut self,
         horned_ope: &horned_owl::model::ObjectPropertyExpression<String>,
     ) -> Result<crate::ontology::ObjectPropertyExpression> {
-        use horned_owl::model::ObjectPropertyExpression as HOPE;
         use crate::ontology::ObjectPropertyExpression as OOPE;
+        use horned_owl::model::ObjectPropertyExpression as HOPE;
 
         match horned_ope {
             HOPE::ObjectProperty(op) => {
@@ -577,7 +573,7 @@ impl HornedOwlAdapter {
     }
 
     /// Convert horned-owl ontology to oxidowl ontology (basic conversion)
-    /// 
+    ///
     /// Accepts any horned-owl ontology structure and creates an oxidowl ontology.
     /// The generic parameters A and AA represent IRI and annotation types respectively.
     pub fn convert_basic_ontology<A, AA, O>(
@@ -601,7 +597,7 @@ impl HornedOwlAdapter {
         log::debug!("Converting horned-owl ontology to oxidowl format");
 
         // Comprehensive axiom conversion implementation:
-        // 
+        //
         // The horned-owl library uses trait-based ontology access. Different ontology
         // implementations (SetOntology, RcOntology, etc.) provide axiom iteration
         // through their respective trait methods.
@@ -647,7 +643,7 @@ impl HornedOwlAdapter {
     /// Convert horned-owl ontology with SWRL rules support
     ///
     /// Extracts and converts SWRL rules from a horned-owl ontology to oxidowl format.
-    /// 
+    ///
     /// SWRL rules in OWL 2 are represented as DLSafeRule axioms. This method:
     /// 1. Identifies DLSafeRule axioms in the horned-owl ontology
     /// 2. Converts each rule's head and body atoms
@@ -681,7 +677,7 @@ impl HornedOwlAdapter {
         // Reference implementation (requires horned-owl trait methods):
         // ```
         // use horned_owl::model::Axiom;
-        // 
+        //
         // for annotated_axiom in horned_ontology.iter() {
         //     if let Axiom::DLSafeRule(dl_rule) = &annotated_axiom.axiom {
         //         // Extract and convert head atoms
@@ -793,7 +789,7 @@ mod tests {
         // This test is commented out because it requires a real SetOntology instance
         // which is complex to construct for a unit test. Integration tests should
         // cover the real conversion functionality.
-        
+
         /*
         let mut adapter = HornedOwlAdapter::new();
 

@@ -164,20 +164,19 @@ impl NTriplesParser {
                 "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
                     // rdfs:subClassOf → SubClassOf axiom
                     if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
-                        let subclass = crate::ontology::Class::new(
-                            crate::ontology::IRI::new(subj_iri.as_str())
-                        );
-                        let superclass = crate::ontology::Class::new(
-                            crate::ontology::IRI::new(obj_iri.as_str())
-                        );
-                        let axiom = crate::ontology::Axiom::SubClassOf(
-                            crate::ontology::SubClassOfAxiom {
+                        let subclass = crate::ontology::Class::new(crate::ontology::IRI::new(
+                            subj_iri.as_str(),
+                        ));
+                        let superclass = crate::ontology::Class::new(crate::ontology::IRI::new(
+                            obj_iri.as_str(),
+                        ));
+                        let axiom =
+                            crate::ontology::Axiom::SubClassOf(crate::ontology::SubClassOfAxiom {
                                 id: ontology.next_axiom_id(),
                                 subclass: crate::ontology::ClassExpression::Class(subclass),
                                 superclass: crate::ontology::ClassExpression::Class(superclass),
                                 annotations: vec![],
-                            }
-                        );
+                            });
                         ontology.add_axiom(axiom);
                     }
                 }
@@ -191,9 +190,9 @@ impl NTriplesParser {
                                     crate::ontology::DeclarationAxiom {
                                         id: ontology.next_axiom_id(),
                                         entity: crate::ontology::Entity::Class(
-                                            crate::ontology::IRI::new(subj_iri.as_str())
+                                            crate::ontology::IRI::new(subj_iri.as_str()),
                                         ),
-                                    }
+                                    },
                                 );
                                 ontology.add_axiom(axiom);
                             }
@@ -201,18 +200,18 @@ impl NTriplesParser {
                             // Class assertion: individual is instance of class
                             if let Some(subj_iri) = subject.as_iri() {
                                 let individual = crate::ontology::Individual::named(
-                                    crate::ontology::IRI::new(subj_iri.as_str())
+                                    crate::ontology::IRI::new(subj_iri.as_str()),
                                 );
-                                let class = crate::ontology::Class::new(
-                                    crate::ontology::IRI::new(obj_iri.as_str())
-                                );
+                                let class = crate::ontology::Class::new(crate::ontology::IRI::new(
+                                    obj_iri.as_str(),
+                                ));
                                 let axiom = crate::ontology::Axiom::ClassAssertion(
                                     crate::ontology::ClassAssertionAxiom {
                                         id: ontology.next_axiom_id(),
                                         individual,
                                         class: crate::ontology::ClassExpression::Class(class),
                                         annotations: vec![],
-                                    }
+                                    },
                                 );
                                 ontology.add_axiom(axiom);
                             }
@@ -222,12 +221,12 @@ impl NTriplesParser {
                 "http://www.w3.org/2002/07/owl#equivalentClass" => {
                     // owl:equivalentClass → EquivalentClasses axiom
                     if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
-                        let class1 = crate::ontology::Class::new(
-                            crate::ontology::IRI::new(subj_iri.as_str())
-                        );
-                        let class2 = crate::ontology::Class::new(
-                            crate::ontology::IRI::new(obj_iri.as_str())
-                        );
+                        let class1 = crate::ontology::Class::new(crate::ontology::IRI::new(
+                            subj_iri.as_str(),
+                        ));
+                        let class2 = crate::ontology::Class::new(crate::ontology::IRI::new(
+                            obj_iri.as_str(),
+                        ));
                         let axiom = crate::ontology::Axiom::EquivalentClasses(
                             crate::ontology::EquivalentClassesAxiom {
                                 id: ontology.next_axiom_id(),
@@ -236,7 +235,7 @@ impl NTriplesParser {
                                     crate::ontology::ClassExpression::Class(class2),
                                 ],
                                 annotations: vec![],
-                            }
+                            },
                         );
                         ontology.add_axiom(axiom);
                     }
@@ -244,12 +243,12 @@ impl NTriplesParser {
                 "http://www.w3.org/2002/07/owl#disjointWith" => {
                     // owl:disjointWith → DisjointClasses axiom
                     if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
-                        let class1 = crate::ontology::Class::new(
-                            crate::ontology::IRI::new(subj_iri.as_str())
-                        );
-                        let class2 = crate::ontology::Class::new(
-                            crate::ontology::IRI::new(obj_iri.as_str())
-                        );
+                        let class1 = crate::ontology::Class::new(crate::ontology::IRI::new(
+                            subj_iri.as_str(),
+                        ));
+                        let class2 = crate::ontology::Class::new(crate::ontology::IRI::new(
+                            obj_iri.as_str(),
+                        ));
                         let axiom = crate::ontology::Axiom::DisjointClasses(
                             crate::ontology::DisjointClassesAxiom {
                                 id: ontology.next_axiom_id(),
@@ -258,7 +257,7 @@ impl NTriplesParser {
                                     crate::ontology::ClassExpression::Class(class2),
                                 ],
                                 annotations: vec![],
-                            }
+                            },
                         );
                         ontology.add_axiom(axiom);
                     }

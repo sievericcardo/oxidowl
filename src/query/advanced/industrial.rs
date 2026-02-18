@@ -762,16 +762,16 @@ impl IndustrialOptimizer {
         // Step 1: Extract axioms with signature contained in partition
         for axiom in _ontology.axioms() {
             let axiom_signature = extract_axiom_signature(axiom);
-            
+
             // Check if axiom signature overlaps with partition signature
             let overlaps = axiom_signature
                 .iter()
                 .any(|iri| partition_signature.contains(iri));
-            
+
             // Include axiom if it's relevant to this partition
             if overlaps {
                 partition_axioms.push(axiom.clone());
-                
+
                 // Identify interface classes (appear in axiom but not fully in partition)
                 for iri in &axiom_signature {
                     if !partition_signature.contains(iri) {
@@ -788,7 +788,7 @@ impl IndustrialOptimizer {
             // For each interface class, add a minimal axiom that declares it
             // This allows cross-partition references without full ontology duplication
             use crate::ontology::axioms::{Axiom, DeclarationAxiom, Entity};
-            
+
             partition_axioms.push(Axiom::Declaration(DeclarationAxiom {
                 id: 0, // Axiom IDs will be reassigned when merged
                 entity: Entity::Class(interface_iri.clone()),
@@ -801,9 +801,9 @@ impl IndustrialOptimizer {
         // - Syntactic locality-based minimization
         // - Semantic entailment checking (expensive but precise)
         // - Module extraction algorithms (e.g., ⊥-locality, ⊤-locality)
-        
+
         let final_axiom_count = partition_axioms.len();
-        
+
         log::debug!(
             "Created partition {} with {} concepts, {} axioms ({} interface classes)",
             partition.partition_id,
@@ -995,7 +995,7 @@ impl ModularClassificationResult {
         // FULL IMPLEMENTATION: Extract subsumptions from query plan execution
         // Analyze the query results and execution strategy to identify
         // hierarchical relationships between concepts
-        
+
         // Step 1: Initialize all concepts with owl:Thing as default superclass
         for concept in &module.concepts {
             if let ClassExpression::Class(c) = concept {
@@ -1013,7 +1013,7 @@ impl ModularClassificationResult {
                 // Extract subsumption information from tableau expansion pattern
                 // The expansion order indicates which concepts were expanded first
                 // This can reveal hierarchical relationships
-                
+
                 for (idx, query_atom) in expansion_order.iter().enumerate() {
                     // Extract class expressions from class atoms
                     if let super::conjunctive::QueryAtom::ClassAtom {
@@ -1023,11 +1023,11 @@ impl ModularClassificationResult {
                     {
                         if let ClassExpression::Class(c) = class_expression {
                             let concept_iri = c.iri.to_string();
-                            
+
                             // Concepts expanded earlier are typically more general (superclasses)
                             // Concepts expanded later are typically more specific (subclasses)
                             // Use expansion index as a heuristic for hierarchy depth
-                            
+
                             if let Some(superclasses) = subsumptions.get_mut(&concept_iri) {
                                 // Add hierarchical information based on expansion order
                                 // Early expansions (low index) are higher in hierarchy
@@ -1056,29 +1056,27 @@ impl ModularClassificationResult {
                         }
                     }
                 }
-                
+
                 log::debug!(
                     "Analyzed tableau expansion with {} steps, identified subsumption hierarchies",
                     expansion_order.len()
                 );
             }
-            
+
             // REWRITING-BASED ANALYSIS:
             // Query rewriting transforms queries into simpler forms
             // Rewritten queries may reveal subsumption through query containment
-            super::optimization::ExecutionStrategy::Rewriting {
-                rewritten_queries,
-            } => {
+            super::optimization::ExecutionStrategy::Rewriting { rewritten_queries } => {
                 // Analyze rewritten queries to identify subsumption relationships
                 // Query containment implies subsumption in certain cases
-                
+
                 log::debug!(
                     "Analyzed rewriting-based reasoning with {} rewritten queries",
                     rewritten_queries.len()
                 );
-                
+
                 // Query rewriting analysis for subsumption extraction:
-                // 
+                //
                 // Advanced query containment analysis could be implemented to extract
                 // subsumptions from query transformations:
                 // 1. Compare original and rewritten queries for containment relationships
@@ -1088,7 +1086,7 @@ impl ModularClassificationResult {
                 // Current implementation provides basic subsumption extraction via
                 // the initial module concept analysis above (lines 999-1005).
             }
-            
+
             // HYBRID STRATEGY:
             // Combine information from tableau and rewriting approaches
             super::optimization::ExecutionStrategy::Hybrid {
@@ -1098,23 +1096,23 @@ impl ModularClassificationResult {
                 // Merge subsumption information from both strategies
                 // Tableau expansion provides hierarchical structure
                 // Rewriting provides optimized query patterns
-                
+
                 log::debug!(
                     "Analyzed hybrid reasoning with {} tableau atoms and {} rewriting atoms",
                     tableau_atoms.len(),
                     rewriting_atoms.len()
                 );
-                
+
                 // Cross-validate relationships found by different methods
                 // Hierarchies from tableau should be consistent with rewriting results
             }
-            
+
             // DIRECT EVALUATION:
             // Simple queries don't require complex reasoning
             super::optimization::ExecutionStrategy::Direct => {
                 // Direct evaluation doesn't produce intermediate subsumption info
                 // Use default owl:Thing relationships for simple queries
-                
+
                 log::debug!("Direct evaluation - using default subsumption hierarchy");
             }
         }
@@ -1598,7 +1596,7 @@ impl From<PartitionOntology> for ConjunctiveQuery {
 fn extract_axiom_signature(axiom: &crate::ontology::axioms::Axiom) -> HashSet<IRI> {
     use crate::ontology::axioms::Axiom;
     let mut signature = HashSet::new();
-    
+
     match axiom {
         Axiom::SubClassOf(ax) => {
             extract_class_expr_signature(&ax.subclass, &mut signature);
@@ -1625,14 +1623,14 @@ fn extract_axiom_signature(axiom: &crate::ontology::axioms::Axiom) -> HashSet<IR
         // Add other axiom types as needed for comprehensive signature extraction
         _ => {}
     }
-    
+
     signature
 }
 
 /// Helper function to recursively extract IRIs from a class expression
 fn extract_class_expr_signature(expr: &ClassExpression, signature: &mut HashSet<IRI>) {
     use ClassExpression::*;
-    
+
     match expr {
         Class(c) => {
             signature.insert(c.iri.clone());

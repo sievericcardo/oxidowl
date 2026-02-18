@@ -565,7 +565,7 @@ impl SaturationRule for InversePropertyRule {
                         // For each individual in the nominal, we note that the inverse
                         // relationship should exist. In ABox reasoning, this would create
                         // edges: for ∃R.{a}, we'd have (this_node, R, a) and (a, S, this_node)
-                        
+
                         // At the concept level, we capture this by adding:
                         // 1. The inverse property points back to the set of individuals
                         node.add_existential(
@@ -590,7 +590,7 @@ impl SaturationRule for InversePropertyRule {
                                 iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
                             }),
                         );
-                        
+
                         // Additionally, if the filler itself contains restrictions,
                         // we could propagate inverse relationships through them
                         if let ClassExpression::ObjectSomeValuesFrom {
@@ -616,7 +616,7 @@ impl SaturationRule for InversePropertyRule {
                 // For ∀R.C, the inverse S relationship is more subtle
                 // In general, ∀R.C does not directly imply ∀S.X
                 // However, we can track certain patterns:
-                
+
                 match &universal.filler {
                     // If filler is a nominal {a}, we have specific individual reasoning
                     ClassExpression::ObjectOneOf(individuals) if !individuals.is_empty() => {
@@ -640,7 +640,7 @@ impl SaturationRule for InversePropertyRule {
                                 iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
                             }),
                         );
-                        
+
                         // If the filler has nested universal restrictions, propagate
                         if let ClassExpression::ObjectAllValuesFrom {
                             property: _inner_prop,

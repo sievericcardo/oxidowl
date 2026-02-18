@@ -3,9 +3,7 @@
 //! This module provides a RESTful API for accessing reasoner functionality.
 
 use crate::{
-    Error, Result,
-    explanation::ExplanationService,
-    ontology::ClassExpression,
+    Error, Result, explanation::ExplanationService, ontology::ClassExpression,
     reasoning::ReasoningService,
 };
 use serde::{Deserialize, Serialize};

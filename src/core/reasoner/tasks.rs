@@ -438,7 +438,7 @@ impl ReasoningTaskService {
     }
 
     /// Parse a class IRI string into a `ClassExpression`
-    /// 
+    ///
     /// Supports simplified Manchester-style syntax:
     /// - Named classes: `<http://example.org/Class>` or `prefix:ClassName`
     /// - Intersections: `Class1 and Class2` or `Class1 ⊓ Class2`
@@ -451,31 +451,34 @@ impl ReasoningTaskService {
     fn parse_class_expression(&self, class_iri: &str) -> Option<ClassExpression> {
         Self::parse_class_expr_str(class_iri)
     }
-    
+
     /// Parse a class expression from a string (static helper)
     fn parse_class_expr_str(class_iri: &str) -> Option<ClassExpression> {
         let trimmed = class_iri.trim();
-        
+
         // Handle empty input
         if trimmed.is_empty() {
             return None;
         }
-        
+
         // Handle special OWL classes
         if trimmed == "owl:Thing" || trimmed.ends_with("#Thing") || trimmed.ends_with("/Thing") {
             return Some(ClassExpression::Class(crate::ontology::Class {
                 iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
             }));
         }
-        if trimmed == "owl:Nothing" || trimmed.ends_with("#Nothing") || trimmed.ends_with("/Nothing") {
+        if trimmed == "owl:Nothing"
+            || trimmed.ends_with("#Nothing")
+            || trimmed.ends_with("/Nothing")
+        {
             return Some(ClassExpression::Class(crate::ontology::Class {
                 iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
             }));
         }
-        
+
         // Parse complex expressions
         // Priority order: and/or > not > restrictions > atomic
-        
+
         // Check for intersection (and, ⊓)
         if let Some(parts) = Self::split_by_operator(trimmed, &["and", "⊓"]) {
             if parts.len() >= 2 {
@@ -483,13 +486,13 @@ impl ReasoningTaskService {
                     .iter()
                     .filter_map(|p| Self::parse_class_expr_str(p))
                     .collect();
-                
+
                 if expressions.len() == parts.len() {
                     return Some(ClassExpression::ObjectIntersectionOf(expressions));
                 }
             }
         }
-        
+
         // Check for union (or, ⊔)
         if let Some(parts) = Self::split_by_operator(trimmed, &["or", "⊔"]) {
             if parts.len() >= 2 {
@@ -497,13 +500,13 @@ impl ReasoningTaskService {
                     .iter()
                     .filter_map(|p| Self::parse_class_expr_str(p))
                     .collect();
-                
+
                 if expressions.len() == parts.len() {
                     return Some(ClassExpression::ObjectUnionOf(expressions));
                 }
             }
         }
-        
+
         // Check for complement (not, ¬)
         if trimmed.starts_with("not ") {
             if let Some(inner) = Self::parse_class_expr_str(&trimmed[4..]) {
@@ -511,11 +514,12 @@ impl ReasoningTaskService {
             }
         }
         if trimmed.starts_with('¬') {
-            if let Some(inner) = Self::parse_class_expr_str(&trimmed[3..]) {  // ¬ is 3 bytes in UTF-8
+            if let Some(inner) = Self::parse_class_expr_str(&trimmed[3..]) {
+                // ¬ is 3 bytes in UTF-8
                 return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
             }
         }
-        
+
         // Check for existential restriction (some, ∃)
         if trimmed.starts_with("some ") {
             return Self::parse_restriction(trimmed, "some", true);
@@ -523,7 +527,7 @@ impl ReasoningTaskService {
         if trimmed.starts_with('∃') {
             return Self::parse_restriction(trimmed, "∃", true);
         }
-        
+
         // Check for universal restriction (only, ∀)
         if trimmed.starts_with("only ") {
             return Self::parse_restriction(trimmed, "only", false);
@@ -531,25 +535,28 @@ impl ReasoningTaskService {
         if trimmed.starts_with('∀') {
             return Self::parse_restriction(trimmed, "∀", false);
         }
-        
+
         // Check for cardinality restrictions
-        if trimmed.starts_with("min ") || trimmed.starts_with("max ") || trimmed.starts_with("exactly ") {
+        if trimmed.starts_with("min ")
+            || trimmed.starts_with("max ")
+            || trimmed.starts_with("exactly ")
+        {
             return Self::parse_cardinality(trimmed);
         }
-        
+
         // Default: treat as named class IRI
         // Handle angle brackets: <http://example.org/Class>
         let iri_str = if trimmed.starts_with('<') && trimmed.ends_with('>') {
-            &trimmed[1..trimmed.len()-1]
+            &trimmed[1..trimmed.len() - 1]
         } else {
             trimmed
         };
-        
+
         Some(ClassExpression::Class(crate::ontology::Class {
             iri: crate::ontology::IRI::from(iri_str.to_string()),
         }))
     }
-    
+
     /// Split a string by multiple operators, handling precedence
     fn split_by_operator(s: &str, operators: &[&str]) -> Option<Vec<String>> {
         for op in operators {
@@ -560,33 +567,33 @@ impl ReasoningTaskService {
         }
         None
     }
-    
+
     /// Parse a property restriction (existential or universal)
     fn parse_restriction(s: &str, keyword: &str, is_existential: bool) -> Option<ClassExpression> {
         let after_keyword = if keyword == "∃" || keyword == "∀" {
             s[keyword.len()..].trim()
         } else {
-            s[keyword.len() + 1..].trim()  // +1 for space
+            s[keyword.len() + 1..].trim() // +1 for space
         };
-        
+
         // Format: "property.Class" or "property Class"
         let parts: Vec<&str> = if after_keyword.contains('.') {
             after_keyword.splitn(2, '.').collect()
         } else {
             after_keyword.splitn(2, ' ').collect()
         };
-        
+
         if parts.len() == 2 {
             let property_iri = parts[0].trim();
             let filler_str = parts[1].trim();
-            
+
             // Create property expression
             let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
                 crate::ontology::ObjectProperty {
                     iri: crate::ontology::IRI::from(property_iri.to_string()),
-                }
+                },
             );
-            
+
             // Parse filler recursively
             if let Some(filler) = Self::parse_class_expr_str(filler_str) {
                 return if is_existential {
@@ -602,14 +609,14 @@ impl ReasoningTaskService {
                 };
             }
         }
-        
+
         None
     }
-    
+
     /// Parse cardinality restrictions
     fn parse_cardinality(s: &str) -> Option<ClassExpression> {
         let parts: Vec<&str> = s.split_whitespace().collect();
-        
+
         if parts.len() >= 3 {
             let (kind, rest_idx) = if parts[0] == "min" {
                 ("min", 1)
@@ -620,19 +627,19 @@ impl ReasoningTaskService {
             } else {
                 return None;
             };
-            
+
             // Parse cardinality number
             if let Ok(cardinality) = parts[rest_idx].parse::<u32>() {
                 if parts.len() > rest_idx + 1 {
                     let property_iri = parts[rest_idx + 1];
                     let filler_str = parts[rest_idx + 2..].join(" ");
-                    
+
                     let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
                         crate::ontology::ObjectProperty {
                             iri: crate::ontology::IRI::from(property_iri.to_string()),
-                        }
+                        },
                     );
-                    
+
                     // Parse filler recursively
                     if let Some(filler) = Self::parse_class_expr_str(&filler_str) {
                         return match kind {
@@ -657,7 +664,7 @@ impl ReasoningTaskService {
                 }
             }
         }
-        
+
         None
     }
 }

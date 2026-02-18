@@ -3,11 +3,7 @@
 //! This module implements the OWLlink protocol for reasoner communication.
 //! OWLlink is a standard protocol for accessing OWL reasoners.
 
-use crate::{
-    Error, Result,
-    ontology::ClassExpression,
-    reasoning::ReasoningService,
-};
+use crate::{Error, Result, ontology::ClassExpression, reasoning::ReasoningService};
 use quick_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};

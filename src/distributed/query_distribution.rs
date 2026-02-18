@@ -514,15 +514,17 @@ impl QueryDistributor {
     }
 
     /// Partition query with load awareness
-   async fn partition_load_aware(
+    async fn partition_load_aware(
         &self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
     ) -> Result<Vec<QueryPartition>> {
         // Implement load-aware partitioning with node capacity consideration
-        let mut partitions = self.partition_by_complexity(query, metadata, available_nodes).await?;
-        
+        let mut partitions = self
+            .partition_by_complexity(query, metadata, available_nodes)
+            .await?;
+
         // Get current load information for each node based on memory capacity
         // Higher memory capacity means lower relative load capability
         let node_loads: std::collections::HashMap<Uuid, f32> = available_nodes
@@ -533,18 +535,19 @@ impl QueryDistributor {
                 (node.id, load_factor)
             })
             .collect();
-        
+
         // Re-assign partitions based on current load
         for partition in &mut partitions {
             // Find node with lowest load factor (highest capacity)
-            if let Some((&best_node_id, _)) = node_loads.iter()
+            if let Some((&best_node_id, _)) = node_loads
+                .iter()
                 .filter(|(id, _)| available_nodes.iter().any(|n| &n.id == *id))
                 .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             {
                 partition.assigned_node = best_node_id;
             }
         }
-        
+
         Ok(partitions)
     }
 
@@ -607,13 +610,13 @@ impl QueryDistributor {
     ) -> Result<()> {
         // Analyze variable dependencies between partitions
         // A partition P1 depends on P2 if P1 uses variables that P2 binds
-        
+
         // Extract variables from each partition's query
         let partition_vars: Vec<std::collections::HashSet<String>> = partitions
             .iter()
             .map(|p| self.extract_variables(&p.partition_query))
             .collect();
-        
+
         for i in 0..partitions.len() {
             for j in 0..partitions.len() {
                 if i != j {
@@ -621,7 +624,7 @@ impl QueryDistributor {
                     let uses_vars_from_j = partition_vars[i]
                         .iter()
                         .any(|var| partition_vars[j].contains(var));
-                    
+
                     if uses_vars_from_j && self.has_dependency(&partitions[i], &partitions[j]) {
                         partitions[i].dependencies.push(partitions[j].partition_id);
                     }
@@ -631,7 +634,7 @@ impl QueryDistributor {
 
         Ok(())
     }
-    
+
     /// Extract variables from a query
     fn extract_variables(&self, query: &ConjunctiveQuery) -> std::collections::HashSet<String> {
         let mut variables = std::collections::HashSet::new();
@@ -640,11 +643,15 @@ impl QueryDistributor {
                 QueryAtom::ClassAtom { variable, .. } => {
                     variables.insert(variable.name.clone());
                 }
-                QueryAtom::ObjectPropertyAtom { subject, object, .. } => {
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
                     variables.insert(subject.name.clone());
                     variables.insert(object.name.clone());
                 }
-                QueryAtom::DataPropertyAtom { subject, literal, .. } => {
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
                     variables.insert(subject.name.clone());
                     variables.insert(literal.name.clone());
                 }
