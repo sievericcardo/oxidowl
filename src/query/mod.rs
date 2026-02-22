@@ -23,9 +23,15 @@ pub use advanced::{
     QueryAtom, QueryEngine, QueryOptimizer, QueryVariable,
 };
 
-// Re-export SparqlStore for consumers using the sparql-store feature
+// Re-export SparqlStore and vocabulary types for consumers
 #[cfg(feature = "sparql-store")]
 pub use sparql_store::SparqlStore;
+#[cfg(feature = "sparql-store")]
+pub use sparql_store::SerializationFormat;
+#[cfg(feature = "sparql-store")]
+pub use sparql_store::XsdType;
+#[cfg(feature = "sparql-store")]
+pub use sparql_store::vocabulary;
 
 use crate::ontology::Ontology;
 use crate::reasoning::ReasoningService;

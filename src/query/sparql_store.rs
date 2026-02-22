@@ -31,60 +31,327 @@ use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
 // ---------------------------------------------------------------------------
-// XSD / RDF / RDFS / OWL vocabulary constants
+// Public vocabulary: XSD / RDF / RDFS / OWL IRI constants
 // ---------------------------------------------------------------------------
 
-#[allow(dead_code)]
-mod vocab {
+/// RDF-schema vocabulary constants (XSD datatypes, RDF, RDFS, OWL 2).
+///
+/// These are re-exported at the crate level so that library consumers can
+/// reference standard IRIs without hard-coding strings:
+///
+/// ```rust,ignore
+/// use oxidowl::query::sparql_store::vocabulary;
+/// assert_eq!(vocabulary::xsd::INTEGER, "http://www.w3.org/2001/XMLSchema#integer");
+/// ```
+pub mod vocabulary {
+    /// XSD datatype IRIs (all types recognised by the RDF 1.1 / RDF-MT spec).
     pub mod xsd {
+        // ── Primitive types ────────────────────────────────────────────────
         pub const STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
-        pub const INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
-        pub const DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
         pub const BOOLEAN: &str = "http://www.w3.org/2001/XMLSchema#boolean";
         pub const DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
         pub const FLOAT: &str = "http://www.w3.org/2001/XMLSchema#float";
+        pub const DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
+        // ── Date/time ──────────────────────────────────────────────────────
+        pub const DATE_TIME: &str = "http://www.w3.org/2001/XMLSchema#dateTime";
+        pub const TIME: &str = "http://www.w3.org/2001/XMLSchema#time";
+        pub const DATE: &str = "http://www.w3.org/2001/XMLSchema#date";
+        pub const G_YEAR_MONTH: &str = "http://www.w3.org/2001/XMLSchema#gYearMonth";
+        pub const G_YEAR: &str = "http://www.w3.org/2001/XMLSchema#gYear";
+        pub const G_MONTH_DAY: &str = "http://www.w3.org/2001/XMLSchema#gMonthDay";
+        pub const G_DAY: &str = "http://www.w3.org/2001/XMLSchema#gDay";
+        pub const G_MONTH: &str = "http://www.w3.org/2001/XMLSchema#gMonth";
+        // ── Binary / URI ───────────────────────────────────────────────────
+        pub const HEX_BINARY: &str = "http://www.w3.org/2001/XMLSchema#hexBinary";
+        pub const BASE64_BINARY: &str = "http://www.w3.org/2001/XMLSchema#base64Binary";
+        pub const ANY_URI: &str = "http://www.w3.org/2001/XMLSchema#anyURI";
+        // ── String-derived ────────────────────────────────────────────────
+        pub const NORMALISED_STRING: &str =
+            "http://www.w3.org/2001/XMLSchema#normalizedString";
+        pub const TOKEN: &str = "http://www.w3.org/2001/XMLSchema#token";
+        pub const LANGUAGE: &str = "http://www.w3.org/2001/XMLSchema#language";
+        pub const NMTOKEN: &str = "http://www.w3.org/2001/XMLSchema#NMTOKEN";
+        pub const NAME: &str = "http://www.w3.org/2001/XMLSchema#Name";
+        pub const NC_NAME: &str = "http://www.w3.org/2001/XMLSchema#NCName";
+        // ── Integer hierarchy ─────────────────────────────────────────────
+        pub const INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
+        pub const NON_POSITIVE_INTEGER: &str =
+            "http://www.w3.org/2001/XMLSchema#nonPositiveInteger";
+        pub const NEGATIVE_INTEGER: &str =
+            "http://www.w3.org/2001/XMLSchema#negativeInteger";
         pub const LONG: &str = "http://www.w3.org/2001/XMLSchema#long";
         pub const INT: &str = "http://www.w3.org/2001/XMLSchema#int";
         pub const SHORT: &str = "http://www.w3.org/2001/XMLSchema#short";
         pub const BYTE: &str = "http://www.w3.org/2001/XMLSchema#byte";
+        pub const NON_NEGATIVE_INTEGER: &str =
+            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger";
+        pub const UNSIGNED_LONG: &str = "http://www.w3.org/2001/XMLSchema#unsignedLong";
+        pub const UNSIGNED_INT: &str = "http://www.w3.org/2001/XMLSchema#unsignedInt";
+        pub const UNSIGNED_SHORT: &str = "http://www.w3.org/2001/XMLSchema#unsignedShort";
+        pub const UNSIGNED_BYTE: &str = "http://www.w3.org/2001/XMLSchema#unsignedByte";
+        pub const POSITIVE_INTEGER: &str =
+            "http://www.w3.org/2001/XMLSchema#positiveInteger";
     }
+
+    /// RDF 1.1 core vocabulary IRIs.
     pub mod rdf {
         pub const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
         pub const FIRST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
         pub const REST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
         pub const NIL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+        pub const LANG_STRING: &str =
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
+        pub const HTML: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML";
+        pub const XML_LITERAL: &str =
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral";
     }
+
+    /// RDFS vocabulary IRIs.
     pub mod rdfs {
         pub const SUB_CLASS_OF: &str = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
-        pub const SUB_PROPERTY_OF: &str = "http://www.w3.org/2000/01/rdf-schema#subPropertyOf";
+        pub const SUB_PROPERTY_OF: &str =
+            "http://www.w3.org/2000/01/rdf-schema#subPropertyOf";
         pub const DOMAIN: &str = "http://www.w3.org/2000/01/rdf-schema#domain";
         pub const RANGE: &str = "http://www.w3.org/2000/01/rdf-schema#range";
         pub const LABEL: &str = "http://www.w3.org/2000/01/rdf-schema#label";
         pub const COMMENT: &str = "http://www.w3.org/2000/01/rdf-schema#comment";
+        pub const SEE_ALSO: &str = "http://www.w3.org/2000/01/rdf-schema#seeAlso";
+        pub const IS_DEFINED_BY: &str =
+            "http://www.w3.org/2000/01/rdf-schema#isDefinedBy";
+        pub const RESOURCE: &str = "http://www.w3.org/2000/01/rdf-schema#Resource";
+        pub const LITERAL: &str = "http://www.w3.org/2000/01/rdf-schema#Literal";
+        pub const CLASS: &str = "http://www.w3.org/2000/01/rdf-schema#Class";
+        pub const DATATYPE: &str = "http://www.w3.org/2000/01/rdf-schema#Datatype";
     }
+
+    /// OWL 2 vocabulary IRIs.
     pub mod owl {
         pub const CLASS: &str = "http://www.w3.org/2002/07/owl#Class";
         pub const OBJECT_PROPERTY: &str = "http://www.w3.org/2002/07/owl#ObjectProperty";
         pub const DATA_PROPERTY: &str = "http://www.w3.org/2002/07/owl#DatatypeProperty";
-        pub const ANNOTATION_PROPERTY: &str = "http://www.w3.org/2002/07/owl#AnnotationProperty";
+        pub const ANNOTATION_PROPERTY: &str =
+            "http://www.w3.org/2002/07/owl#AnnotationProperty";
         pub const NAMED_INDIVIDUAL: &str = "http://www.w3.org/2002/07/owl#NamedIndividual";
+        pub const THING: &str = "http://www.w3.org/2002/07/owl#Thing";
+        pub const NOTHING: &str = "http://www.w3.org/2002/07/owl#Nothing";
         pub const EQUIVALENT_CLASS: &str = "http://www.w3.org/2002/07/owl#equivalentClass";
         pub const DISJOINT_WITH: &str = "http://www.w3.org/2002/07/owl#disjointWith";
-        pub const EQUIVALENT_PROPERTY: &str = "http://www.w3.org/2002/07/owl#equivalentProperty";
+        pub const EQUIVALENT_PROPERTY: &str =
+            "http://www.w3.org/2002/07/owl#equivalentProperty";
         pub const INVERSE_OF: &str = "http://www.w3.org/2002/07/owl#inverseOf";
         pub const SAME_AS: &str = "http://www.w3.org/2002/07/owl#sameAs";
         pub const DIFFERENT_FROM: &str = "http://www.w3.org/2002/07/owl#differentFrom";
         pub const ALL_DIFFERENT: &str = "http://www.w3.org/2002/07/owl#AllDifferent";
-        pub const DISTINCT_MEMBERS: &str = "http://www.w3.org/2002/07/owl#distinctMembers";
-        pub const PROPERTY_DOMAIN: &str = "http://www.w3.org/2000/01/rdf-schema#domain";
-        pub const PROPERTY_RANGE: &str = "http://www.w3.org/2000/01/rdf-schema#range";
+        pub const DISTINCT_MEMBERS: &str =
+            "http://www.w3.org/2002/07/owl#distinctMembers";
+        pub const ONTOLOGY: &str = "http://www.w3.org/2002/07/owl#Ontology";
+        pub const IMPORTS: &str = "http://www.w3.org/2002/07/owl#imports";
+        pub const VERSION_IRI: &str = "http://www.w3.org/2002/07/owl#versionIRI";
     }
 }
 
-// Keep backward-compat alias used internally for literal datatype comparison.
+/// Internal shorthand alias for vocabulary::xsd used within this module.
 mod xsd {
-    pub use super::vocab::xsd::*;
+    pub use super::vocabulary::xsd::*;
 }
+/// Internal shorthand for vocabulary::rdf.
+mod vocab {
+    pub mod rdf {
+        pub use super::super::vocabulary::rdf::*;
+    }
+    pub mod rdfs {
+        pub use super::super::vocabulary::rdfs::*;
+    }
+    pub mod owl {
+        pub use super::super::vocabulary::owl::*;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// XsdType: type-safe handle for every XSD datatype in the RDF-MT spec
+// ---------------------------------------------------------------------------
+
+/// Every XSD datatype defined in the RDF 1.1 semantics specification
+/// (<https://www.w3.org/TR/2004/REC-rdf-mt-20040210/>).
+///
+/// Used with [`SparqlStore::typed_literal`] and the individual
+/// `*_literal` constructors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum XsdType {
+    // Primitive
+    /// `xsd:string`
+    String,
+    /// `xsd:boolean`
+    Boolean,
+    /// `xsd:decimal`
+    Decimal,
+    /// `xsd:float`
+    Float,
+    /// `xsd:double`
+    Double,
+    // Date / time
+    /// `xsd:dateTime`
+    DateTime,
+    /// `xsd:time`
+    Time,
+    /// `xsd:date`
+    Date,
+    /// `xsd:gYearMonth`
+    GYearMonth,
+    /// `xsd:gYear`
+    GYear,
+    /// `xsd:gMonthDay`
+    GMonthDay,
+    /// `xsd:gDay`
+    GDay,
+    /// `xsd:gMonth`
+    GMonth,
+    // Binary / URI
+    /// `xsd:hexBinary`
+    HexBinary,
+    /// `xsd:base64Binary`
+    Base64Binary,
+    /// `xsd:anyURI`
+    AnyUri,
+    // String-derived
+    /// `xsd:normalizedString`
+    NormalizedString,
+    /// `xsd:token`
+    Token,
+    /// `xsd:language`
+    Language,
+    /// `xsd:NMTOKEN`
+    Nmtoken,
+    /// `xsd:Name`
+    Name,
+    /// `xsd:NCName`
+    NcName,
+    // Integer hierarchy
+    /// `xsd:integer`
+    Integer,
+    /// `xsd:nonPositiveInteger`
+    NonPositiveInteger,
+    /// `xsd:negativeInteger`
+    NegativeInteger,
+    /// `xsd:long`
+    Long,
+    /// `xsd:int`
+    Int,
+    /// `xsd:short`
+    Short,
+    /// `xsd:byte`
+    Byte,
+    /// `xsd:nonNegativeInteger`
+    NonNegativeInteger,
+    /// `xsd:unsignedLong`
+    UnsignedLong,
+    /// `xsd:unsignedInt`
+    UnsignedInt,
+    /// `xsd:unsignedShort`
+    UnsignedShort,
+    /// `xsd:unsignedByte`
+    UnsignedByte,
+    /// `xsd:positiveInteger`
+    PositiveInteger,
+}
+
+impl XsdType {
+    /// Return the canonical IRI string for this XSD datatype.
+    #[must_use]
+    pub fn iri(self) -> &'static str {
+        use vocabulary::xsd as x;
+        match self {
+            Self::String => x::STRING,
+            Self::Boolean => x::BOOLEAN,
+            Self::Decimal => x::DECIMAL,
+            Self::Float => x::FLOAT,
+            Self::Double => x::DOUBLE,
+            Self::DateTime => x::DATE_TIME,
+            Self::Time => x::TIME,
+            Self::Date => x::DATE,
+            Self::GYearMonth => x::G_YEAR_MONTH,
+            Self::GYear => x::G_YEAR,
+            Self::GMonthDay => x::G_MONTH_DAY,
+            Self::GDay => x::G_DAY,
+            Self::GMonth => x::G_MONTH,
+            Self::HexBinary => x::HEX_BINARY,
+            Self::Base64Binary => x::BASE64_BINARY,
+            Self::AnyUri => x::ANY_URI,
+            Self::NormalizedString => x::NORMALISED_STRING,
+            Self::Token => x::TOKEN,
+            Self::Language => x::LANGUAGE,
+            Self::Nmtoken => x::NMTOKEN,
+            Self::Name => x::NAME,
+            Self::NcName => x::NC_NAME,
+            Self::Integer => x::INTEGER,
+            Self::NonPositiveInteger => x::NON_POSITIVE_INTEGER,
+            Self::NegativeInteger => x::NEGATIVE_INTEGER,
+            Self::Long => x::LONG,
+            Self::Int => x::INT,
+            Self::Short => x::SHORT,
+            Self::Byte => x::BYTE,
+            Self::NonNegativeInteger => x::NON_NEGATIVE_INTEGER,
+            Self::UnsignedLong => x::UNSIGNED_LONG,
+            Self::UnsignedInt => x::UNSIGNED_INT,
+            Self::UnsignedShort => x::UNSIGNED_SHORT,
+            Self::UnsignedByte => x::UNSIGNED_BYTE,
+            Self::PositiveInteger => x::POSITIVE_INTEGER,
+        }
+    }
+
+    /// Try to parse an IRI string back to an [`XsdType`].
+    /// Returns `None` for unknown IRIs.
+    #[must_use]
+    pub fn from_iri(iri: &str) -> Option<Self> {
+        use vocabulary::xsd as x;
+        match iri {
+            s if s == x::STRING => Some(Self::String),
+            s if s == x::BOOLEAN => Some(Self::Boolean),
+            s if s == x::DECIMAL => Some(Self::Decimal),
+            s if s == x::FLOAT => Some(Self::Float),
+            s if s == x::DOUBLE => Some(Self::Double),
+            s if s == x::DATE_TIME => Some(Self::DateTime),
+            s if s == x::TIME => Some(Self::Time),
+            s if s == x::DATE => Some(Self::Date),
+            s if s == x::G_YEAR_MONTH => Some(Self::GYearMonth),
+            s if s == x::G_YEAR => Some(Self::GYear),
+            s if s == x::G_MONTH_DAY => Some(Self::GMonthDay),
+            s if s == x::G_DAY => Some(Self::GDay),
+            s if s == x::G_MONTH => Some(Self::GMonth),
+            s if s == x::HEX_BINARY => Some(Self::HexBinary),
+            s if s == x::BASE64_BINARY => Some(Self::Base64Binary),
+            s if s == x::ANY_URI => Some(Self::AnyUri),
+            s if s == x::NORMALISED_STRING => Some(Self::NormalizedString),
+            s if s == x::TOKEN => Some(Self::Token),
+            s if s == x::LANGUAGE => Some(Self::Language),
+            s if s == x::NMTOKEN => Some(Self::Nmtoken),
+            s if s == x::NAME => Some(Self::Name),
+            s if s == x::NC_NAME => Some(Self::NcName),
+            s if s == x::INTEGER => Some(Self::Integer),
+            s if s == x::NON_POSITIVE_INTEGER => Some(Self::NonPositiveInteger),
+            s if s == x::NEGATIVE_INTEGER => Some(Self::NegativeInteger),
+            s if s == x::LONG => Some(Self::Long),
+            s if s == x::INT => Some(Self::Int),
+            s if s == x::SHORT => Some(Self::Short),
+            s if s == x::BYTE => Some(Self::Byte),
+            s if s == x::NON_NEGATIVE_INTEGER => Some(Self::NonNegativeInteger),
+            s if s == x::UNSIGNED_LONG => Some(Self::UnsignedLong),
+            s if s == x::UNSIGNED_INT => Some(Self::UnsignedInt),
+            s if s == x::UNSIGNED_SHORT => Some(Self::UnsignedShort),
+            s if s == x::UNSIGNED_BYTE => Some(Self::UnsignedByte),
+            s if s == x::POSITIVE_INTEGER => Some(Self::PositiveInteger),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for XsdType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.iri())
+    }
+}
+
+
 
 // ---------------------------------------------------------------------------
 // SparqlStore
@@ -725,6 +992,351 @@ impl SparqlStore {
     #[must_use]
     pub fn store_mut(&mut self) -> &mut Store {
         &mut self.store
+    }
+
+    // -----------------------------------------------------------------------
+    // Typed literal constructors
+    // -----------------------------------------------------------------------
+
+    /// Build a typed [`RdfTerm`] literal with an explicit XSD datatype.
+    ///
+    /// ```rust,ignore
+    /// let t = SparqlStore::typed_literal("2024-01-01", XsdType::Date);
+    /// ```
+    #[must_use]
+    pub fn typed_literal(value: &str, datatype: XsdType) -> RdfTerm {
+        let dt_url = url::Url::parse(datatype.iri()).ok();
+        RdfTerm::Literal {
+            value: value.to_owned(),
+            datatype: dt_url,
+            language: None,
+            direction: None,
+        }
+    }
+
+    /// `xsd:string` literal.
+    #[must_use]
+    pub fn string_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::String)
+    }
+
+    /// `xsd:boolean` literal (`"true"` / `"false"`).
+    #[must_use]
+    pub fn boolean_literal(value: bool) -> RdfTerm {
+        Self::typed_literal(if value { "true" } else { "false" }, XsdType::Boolean)
+    }
+
+    /// `xsd:integer` literal.
+    #[must_use]
+    pub fn integer_literal(value: i64) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Integer)
+    }
+
+    /// `xsd:decimal` literal (supply a pre-formatted string like `"3.14"`).
+    #[must_use]
+    pub fn decimal_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::Decimal)
+    }
+
+    /// `xsd:double` literal.
+    #[must_use]
+    pub fn double_literal(value: f64) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Double)
+    }
+
+    /// `xsd:float` literal.
+    #[must_use]
+    pub fn float_literal(value: f32) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Float)
+    }
+
+    /// `xsd:long` literal.
+    #[must_use]
+    pub fn long_literal(value: i64) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Long)
+    }
+
+    /// `xsd:int` literal.
+    #[must_use]
+    pub fn int_literal(value: i32) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Int)
+    }
+
+    /// `xsd:short` literal.
+    #[must_use]
+    pub fn short_literal(value: i16) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Short)
+    }
+
+    /// `xsd:byte` literal.
+    #[must_use]
+    pub fn byte_literal(value: i8) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::Byte)
+    }
+
+    /// `xsd:unsignedLong` literal.
+    #[must_use]
+    pub fn unsigned_long_literal(value: u64) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::UnsignedLong)
+    }
+
+    /// `xsd:unsignedInt` literal.
+    #[must_use]
+    pub fn unsigned_int_literal(value: u32) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::UnsignedInt)
+    }
+
+    /// `xsd:unsignedShort` literal.
+    #[must_use]
+    pub fn unsigned_short_literal(value: u16) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::UnsignedShort)
+    }
+
+    /// `xsd:unsignedByte` literal.
+    #[must_use]
+    pub fn unsigned_byte_literal(value: u8) -> RdfTerm {
+        Self::typed_literal(&value.to_string(), XsdType::UnsignedByte)
+    }
+
+    /// `xsd:dateTime` literal (ISO-8601 string, e.g. `"2024-01-01T12:00:00"`).
+    #[must_use]
+    pub fn datetime_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::DateTime)
+    }
+
+    /// `xsd:date` literal (ISO-8601 string, e.g. `"2024-01-01"`).
+    #[must_use]
+    pub fn date_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::Date)
+    }
+
+    /// `xsd:time` literal (e.g. `"12:00:00"`).
+    #[must_use]
+    pub fn time_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::Time)
+    }
+
+    /// `xsd:anyURI` literal.
+    #[must_use]
+    pub fn any_uri_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::AnyUri)
+    }
+
+    /// `xsd:hexBinary` literal.
+    #[must_use]
+    pub fn hex_binary_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::HexBinary)
+    }
+
+    /// `xsd:base64Binary` literal.
+    #[must_use]
+    pub fn base64_binary_literal(value: &str) -> RdfTerm {
+        Self::typed_literal(value, XsdType::Base64Binary)
+    }
+
+    // -----------------------------------------------------------------------
+    // Semantic query helpers
+    // -----------------------------------------------------------------------
+
+    /// Return all `rdf:type` values for `individual_iri`.
+    pub fn get_types(&self, individual_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?t WHERE {{ <{individual_iri}> <{}> ?t }}",
+            vocabulary::rdf::TYPE
+        );
+        self.collect_first_binding(&q, "t")
+    }
+
+    /// Return all individuals asserted to be of type `class_iri` via
+    /// `rdf:type`.
+    pub fn find_instances(&self, class_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?i WHERE {{ ?i <{}> <{class_iri}> }}",
+            vocabulary::rdf::TYPE
+        );
+        self.collect_first_binding(&q, "i")
+    }
+
+    /// Return all direct and inferred subclasses of `class_iri` via
+    /// `rdfs:subClassOf`.
+    pub fn find_subclasses(&self, class_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?c WHERE {{ ?c <{}> <{class_iri}> }}",
+            vocabulary::rdfs::SUB_CLASS_OF
+        );
+        self.collect_first_binding(&q, "c")
+    }
+
+    /// Return all superclasses of `class_iri` via `rdfs:subClassOf`.
+    pub fn find_superclasses(&self, class_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?c WHERE {{ <{class_iri}> <{}> ?c }}",
+            vocabulary::rdfs::SUB_CLASS_OF
+        );
+        self.collect_first_binding(&q, "c")
+    }
+
+    /// Return all `rdfs:label` values for `iri` as plain strings.
+    pub fn find_labels(&self, iri: &str) -> Result<Vec<String>> {
+        let terms = self.collect_first_binding(
+            &format!("SELECT ?l WHERE {{ <{iri}> <{}> ?l }}", vocabulary::rdfs::LABEL),
+            "l",
+        )?;
+        Ok(terms
+            .into_iter()
+            .filter_map(|t| match t {
+                RdfTerm::Literal { value, .. } => Some(value),
+                _ => None,
+            })
+            .collect())
+    }
+
+    /// Return all `rdfs:comment` values for `iri` as plain strings.
+    pub fn find_comments(&self, iri: &str) -> Result<Vec<String>> {
+        let terms = self.collect_first_binding(
+            &format!("SELECT ?c WHERE {{ <{iri}> <{}> ?c }}", vocabulary::rdfs::COMMENT),
+            "c",
+        )?;
+        Ok(terms
+            .into_iter()
+            .filter_map(|t| match t {
+                RdfTerm::Literal { value, .. } => Some(value),
+                _ => None,
+            })
+            .collect())
+    }
+
+    /// Return the `rdfs:domain` declarations for `property_iri`.
+    pub fn find_domain(&self, property_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?d WHERE {{ <{property_iri}> <{}> ?d }}",
+            vocabulary::rdfs::DOMAIN
+        );
+        self.collect_first_binding(&q, "d")
+    }
+
+    /// Return the `rdfs:range` declarations for `property_iri`.
+    pub fn find_range(&self, property_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?r WHERE {{ <{property_iri}> <{}> ?r }}",
+            vocabulary::rdfs::RANGE
+        );
+        self.collect_first_binding(&q, "r")
+    }
+
+    /// Return classes declared `owl:equivalentClass` to `class_iri`.
+    pub fn find_equivalent_classes(&self, class_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?c WHERE {{ {{ <{class_iri}> <{eq}> ?c }} UNION {{ ?c <{eq}> <{class_iri}> }} }}",
+            eq = vocabulary::owl::EQUIVALENT_CLASS
+        );
+        self.collect_first_binding(&q, "c")
+    }
+
+    /// Return classes declared `owl:disjointWith` from `class_iri`.
+    pub fn find_disjoint_classes(&self, class_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?c WHERE {{ {{ <{class_iri}> <{dw}> ?c }} UNION {{ ?c <{dw}> <{class_iri}> }} }}",
+            dw = vocabulary::owl::DISJOINT_WITH
+        );
+        self.collect_first_binding(&q, "c")
+    }
+
+    /// Return individuals declared `owl:sameAs` the given `individual_iri`.
+    pub fn find_same_as(&self, individual_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?s WHERE {{ {{ <{individual_iri}> <{sa}> ?s }} UNION {{ ?s <{sa}> <{individual_iri}> }} }}",
+            sa = vocabulary::owl::SAME_AS
+        );
+        self.collect_first_binding(&q, "s")
+    }
+
+    /// Return individuals declared `owl:differentFrom` the given `individual_iri`.
+    pub fn find_different_from(&self, individual_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?d WHERE {{ {{ <{individual_iri}> <{df}> ?d }} UNION {{ ?d <{df}> <{individual_iri}> }} }}",
+            df = vocabulary::owl::DIFFERENT_FROM
+        );
+        self.collect_first_binding(&q, "d")
+    }
+
+    /// Collect all members of an `rdf:List` starting at `list_iri`.
+    ///
+    /// Uses a SPARQL 1.1 property-path query (`rdf:rest*/rdf:first`) so that
+    /// blank-node intermediate list spine nodes are handled transparently by
+    /// the SPARQL engine.  Note: member order is determined by `rdf:rest` chain
+    /// depth; the results are returned in path order because Oxigraph evaluates
+    /// the closure in graph traversal order.
+    pub fn rdf_list_members(&self, list_iri: &str) -> Result<Vec<RdfTerm>> {
+        let first = vocabulary::rdf::FIRST;
+        let rest = vocabulary::rdf::REST;
+        let q = format!(
+            "SELECT ?member WHERE {{ <{list_iri}> (<{rest}>*/<{first}>) ?member }}"
+        );
+        self.collect_first_binding(&q, "member")
+    }
+
+    /// Find all properties whose subproperty chain includes `property_iri`
+    /// (i.e., `?p rdfs:subPropertyOf <property_iri>`).
+    pub fn find_sub_properties(&self, property_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?p WHERE {{ ?p <{}> <{property_iri}> }}",
+            vocabulary::rdfs::SUB_PROPERTY_OF
+        );
+        self.collect_first_binding(&q, "p")
+    }
+
+    /// Find all super-properties of `property_iri`
+    /// (i.e., `<property_iri> rdfs:subPropertyOf ?p`).
+    pub fn find_super_properties(&self, property_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?p WHERE {{ <{property_iri}> <{}> ?p }}",
+            vocabulary::rdfs::SUB_PROPERTY_OF
+        );
+        self.collect_first_binding(&q, "p")
+    }
+
+    /// Find all equivalent properties of `property_iri` via
+    /// `owl:equivalentProperty`.
+    pub fn find_equivalent_properties(&self, property_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?p WHERE {{ {{ <{property_iri}> <{ep}> ?p }} UNION {{ ?p <{ep}> <{property_iri}> }} }}",
+            ep = vocabulary::owl::EQUIVALENT_PROPERTY
+        );
+        self.collect_first_binding(&q, "p")
+    }
+
+    /// Return all inverse properties for `property_iri` via `owl:inverseOf`.
+    pub fn find_inverse_properties(&self, property_iri: &str) -> Result<Vec<RdfTerm>> {
+        let q = format!(
+            "SELECT ?p WHERE {{ {{ <{property_iri}> <{io}> ?p }} UNION {{ ?p <{io}> <{property_iri}> }} }}",
+            io = vocabulary::owl::INVERSE_OF
+        );
+        self.collect_first_binding(&q, "p")
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal helper: collect the first variable from SELECT results
+    // -----------------------------------------------------------------------
+
+    fn collect_first_binding(&self, sparql: &str, var: &str) -> Result<Vec<RdfTerm>> {
+        match self.run_query(sparql)? {
+            QueryResults::Solutions(solutions) => {
+                let mut out = Vec::new();
+                for sol in solutions {
+                    let sol = sol.map_err(|e| Error::Sparql {
+                        message: format!("SPARQL row error: {e}"),
+                    })?;
+                    if let Some(term) = sol.get(var) {
+                        out.push(oxterm_to_rdfterm(term));
+                    }
+                }
+                Ok(out)
+            }
+            _ => Err(Error::Sparql {
+                message: "Expected SELECT results".to_owned(),
+            }),
+        }
     }
 }
 
@@ -1736,5 +2348,219 @@ mod tests {
             RdfTerm::Literal { value, .. } => assert_eq!(value, "30"),
             other => panic!("Expected a literal, got {other:?}"),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // vocabulary / XsdType tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_vocabulary_constants_present() {
+        assert!(vocabulary::xsd::STRING.ends_with("#string"));
+        assert!(vocabulary::xsd::DATE_TIME.ends_with("#dateTime"));
+        assert!(vocabulary::xsd::HEX_BINARY.ends_with("#hexBinary"));
+        assert!(vocabulary::xsd::NON_NEGATIVE_INTEGER.ends_with("#nonNegativeInteger"));
+        assert!(vocabulary::xsd::POSITIVE_INTEGER.ends_with("#positiveInteger"));
+        assert!(vocabulary::rdf::TYPE.contains("type"));
+        assert!(vocabulary::rdf::FIRST.contains("first"));
+        assert!(vocabulary::rdfs::LABEL.contains("label"));
+        assert!(vocabulary::rdfs::COMMENT.contains("comment"));
+        assert!(vocabulary::owl::THING.contains("Thing"));
+        assert!(vocabulary::owl::NOTHING.contains("Nothing"));
+    }
+
+    #[test]
+    fn test_xsdtype_iri_round_trip() {
+        // Every XsdType should survive an iri() → from_iri() round-trip.
+        let types = [
+            XsdType::String, XsdType::Boolean, XsdType::Decimal, XsdType::Float,
+            XsdType::Double, XsdType::DateTime, XsdType::Time, XsdType::Date,
+            XsdType::GYearMonth, XsdType::GYear, XsdType::GMonthDay, XsdType::GDay,
+            XsdType::GMonth, XsdType::HexBinary, XsdType::Base64Binary, XsdType::AnyUri,
+            XsdType::NormalizedString, XsdType::Token, XsdType::Language,
+            XsdType::Nmtoken, XsdType::Name, XsdType::NcName,
+            XsdType::Integer, XsdType::NonPositiveInteger, XsdType::NegativeInteger,
+            XsdType::Long, XsdType::Int, XsdType::Short, XsdType::Byte,
+            XsdType::NonNegativeInteger, XsdType::UnsignedLong, XsdType::UnsignedInt,
+            XsdType::UnsignedShort, XsdType::UnsignedByte, XsdType::PositiveInteger,
+        ];
+        for t in types {
+            assert_eq!(XsdType::from_iri(t.iri()), Some(t), "round-trip failed for {t}");
+        }
+    }
+
+    #[test]
+    fn test_typed_literal_constructors() {
+        let s = SparqlStore::boolean_literal(true);
+        assert!(matches!(&s, RdfTerm::Literal { value, .. } if value == "true"));
+
+        let i = SparqlStore::integer_literal(42);
+        assert!(matches!(&i, RdfTerm::Literal { value, .. } if value == "42"));
+
+        let d = SparqlStore::double_literal(3.14);
+        // Check it has the xsd:double datatype IRI
+        if let RdfTerm::Literal { datatype: Some(dt), .. } = &d {
+            assert!(dt.as_str().ends_with("#double"));
+        } else {
+            panic!("expected typed literal");
+        }
+
+        let date = SparqlStore::date_literal("2024-12-31");
+        if let RdfTerm::Literal { value, datatype: Some(dt), .. } = &date {
+            assert_eq!(value, "2024-12-31");
+            assert!(dt.as_str().ends_with("#date"));
+        } else {
+            panic!("expected typed literal");
+        }
+    }
+
+    #[test]
+    fn test_typed_literal_display() {
+        // XsdType Display should return the IRI string
+        assert_eq!(
+            format!("{}", XsdType::Integer),
+            vocabulary::xsd::INTEGER
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Semantic helper tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_get_types_and_find_instances() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            "PREFIX ex: <http://example.org/> \
+             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \
+             INSERT DATA { \
+               ex:Alice rdf:type ex:Person . \
+               ex:Bob   rdf:type ex:Person \
+             }",
+        )
+        .unwrap();
+
+        let types = s.get_types("http://example.org/Alice").unwrap();
+        assert_eq!(types.len(), 1);
+
+        let instances = s.find_instances("http://example.org/Person").unwrap();
+        assert_eq!(instances.len(), 2);
+    }
+
+    #[test]
+    fn test_find_subclasses_and_superclasses() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            "PREFIX ex: <http://example.org/> \
+             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \
+             INSERT DATA { \
+               ex:Student rdfs:subClassOf ex:Person . \
+               ex:GradStudent rdfs:subClassOf ex:Student \
+             }",
+        )
+        .unwrap();
+
+        let subs = s.find_subclasses("http://example.org/Person").unwrap();
+        assert_eq!(subs.len(), 1); // Student only (not transitive by default)
+
+        let supers = s.find_superclasses("http://example.org/Student").unwrap();
+        assert_eq!(supers.len(), 1);
+    }
+
+    #[test]
+    fn test_find_labels_and_comments() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            r#"PREFIX ex: <http://example.org/>
+               PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+               INSERT DATA {
+                 ex:Alice rdfs:label "Alice Smith" .
+                 ex:Alice rdfs:comment "A test individual"
+               }"#,
+        )
+        .unwrap();
+
+        let labels = s.find_labels("http://example.org/Alice").unwrap();
+        assert_eq!(labels, vec!["Alice Smith".to_owned()]);
+
+        let comments = s.find_comments("http://example.org/Alice").unwrap();
+        assert_eq!(comments, vec!["A test individual".to_owned()]);
+    }
+
+    #[test]
+    fn test_find_domain_and_range() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            "PREFIX ex: <http://example.org/> \
+             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \
+             INSERT DATA { \
+               ex:knows rdfs:domain ex:Person . \
+               ex:knows rdfs:range  ex:Person \
+             }",
+        )
+        .unwrap();
+
+        let dom = s.find_domain("http://example.org/knows").unwrap();
+        assert_eq!(dom.len(), 1);
+
+        let rng = s.find_range("http://example.org/knows").unwrap();
+        assert_eq!(rng.len(), 1);
+    }
+
+    #[test]
+    fn test_find_equivalent_and_disjoint_classes() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            "PREFIX ex: <http://example.org/> \
+             PREFIX owl: <http://www.w3.org/2002/07/owl#> \
+             INSERT DATA { \
+               ex:Human owl:equivalentClass ex:Person . \
+               ex:Cat   owl:disjointWith    ex:Dog \
+             }",
+        )
+        .unwrap();
+
+        let eq = s.find_equivalent_classes("http://example.org/Person").unwrap();
+        assert_eq!(eq.len(), 1);
+
+        let dj = s.find_disjoint_classes("http://example.org/Cat").unwrap();
+        assert_eq!(dj.len(), 1);
+    }
+
+    #[test]
+    fn test_find_same_as_and_different_from() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            "PREFIX ex: <http://example.org/> \
+             PREFIX owl: <http://www.w3.org/2002/07/owl#> \
+             INSERT DATA { \
+               ex:Alice owl:sameAs ex:AliceSmith . \
+               ex:Alice owl:differentFrom ex:Bob \
+             }",
+        )
+        .unwrap();
+
+        let same = s.find_same_as("http://example.org/Alice").unwrap();
+        assert_eq!(same.len(), 1);
+
+        let diff = s.find_different_from("http://example.org/Alice").unwrap();
+        assert_eq!(diff.len(), 1);
+    }
+
+    #[test]
+    fn test_rdf_list_members() {
+        let mut s = SparqlStore::new().unwrap();
+        s.execute_update(
+            "PREFIX ex: <http://example.org/> \
+             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \
+             INSERT DATA { \
+               ex:myList rdf:first ex:a ; \
+                         rdf:rest  [ rdf:first ex:b ; rdf:rest rdf:nil ] \
+             }",
+        )
+        .unwrap();
+
+        let members = s.rdf_list_members("http://example.org/myList").unwrap();
+        assert_eq!(members.len(), 2);
     }
 }
