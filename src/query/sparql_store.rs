@@ -969,7 +969,7 @@ impl SparqlStore {
     // -----------------------------------------------------------------------
 
     /// Execute any SPARQL query via the Oxigraph `SparqlEvaluator` API.
-    fn run_query(&self, query: &str) -> Result<QueryResults> {
+    fn run_query(&self, query: &str) -> Result<QueryResults<'_>> {
         SparqlEvaluator::new()
             .parse_query(query)
             .map_err(|e| Error::Sparql {
