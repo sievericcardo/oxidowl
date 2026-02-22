@@ -50,26 +50,30 @@ pub struct ReasoningService {
 }
 
 impl ReasoningService {
-    /// Creates a new reasoning service with the given ontology and configuration
-    #[must_use]
-    pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
-        let reasoner = Reasoner::new(config.clone()).expect("Failed to create reasoner");
+    /// Creates a new reasoning service with the given ontology and configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the reasoner cannot be created or the ontology fails to load.
+    pub fn new(ontology: Ontology, config: ReasonerConfig) -> Result<Self> {
+        let reasoner = Reasoner::new(config.clone())
+            .map_err(|e| Error::reasoning(format!("Failed to create reasoner: {e}")))?;
         let mut reasoner_with_ontology = reasoner;
         reasoner_with_ontology
             .load_ontology(ontology.clone())
-            .expect("Failed to load ontology");
+            .map_err(|e| Error::reasoning(format!("Failed to load ontology: {e}")))?;
 
         // Initialize SWRL engine with the ontology
         let swrl_config = SWRLConfig::default();
         let mut swrl_engine = SWRLRuleEngine::new(swrl_config);
         swrl_engine.set_ontology(Arc::new(RwLock::new(ontology)));
 
-        Self {
+        Ok(Self {
             reasoner: Arc::new(RwLock::new(reasoner_with_ontology)),
             cache_manager: Arc::new(RwLock::new(CacheManager::default())),
             swrl_engine: Arc::new(RwLock::new(swrl_engine)),
             config,
-        }
+        })
     }
 
     /// Check consistency of the ontology
@@ -466,7 +470,7 @@ impl ReasoningService {
             .is_enabled(crate::config::CacheFeature::Satisfiability)
         {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let _ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash()?;
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology()
@@ -500,7 +504,7 @@ impl ReasoningService {
             .is_enabled(crate::config::CacheFeature::Satisfiability)
         {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            let _ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash()?;
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -542,7 +546,7 @@ impl ReasoningService {
                 }
 
                 // Clear caches since the ontology has been modified
-                write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
+                write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all()?;
                 log::info!(
                     "Added {} new axioms from SWRL inferences",
                     result.inferences.len()
@@ -582,7 +586,7 @@ impl ReasoningService {
             .is_enabled(crate::config::CacheFeature::Satisfiability)
         {
             let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let _ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash()?;
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology()
@@ -616,7 +620,7 @@ impl ReasoningService {
             .is_enabled(crate::config::CacheFeature::Satisfiability)
         {
             let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            let _ontology_hash = self.calculate_ontology_hash();
+            let _ontology_hash = self.calculate_ontology_hash()?;
             // Get ontology from reasoner
             let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
             if let Some(ontology) = reasoner.get_ontology() {
@@ -745,7 +749,7 @@ impl ReasoningService {
             .cache
             .is_enabled(crate::config::CacheFeature::Satisfiability)
         {
-            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
+            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all()?;
         }
 
         // Log the time taken for adding axioms
@@ -783,7 +787,7 @@ impl ReasoningService {
             .cache
             .is_enabled(crate::config::CacheFeature::Satisfiability)
         {
-            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
+            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all()?;
         }
 
         // Log the time taken for removing axioms
@@ -792,33 +796,30 @@ impl ReasoningService {
     }
 
     /// Get reasoning statistics
-    #[must_use]
-    pub fn get_statistics(&self) -> ReasoningStatistics {
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")
-            .expect("Failed to lock reasoner");
-        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")
-            .expect("Failed to lock cache")
-            .get_stats();
+    pub fn get_statistics(&self) -> Result<ReasoningStatistics> {
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
+        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")?
+            .get_stats()?;
 
         // Get statistics from the reasoner
         let reasoner_stats = reasoner.get_statistics();
 
-        ReasoningStatistics {
+        Ok(ReasoningStatistics {
             ontology_size: reasoner.get_ontology_size(),
             reasoning_time: reasoner_stats.total_reasoning_time,
             cache_stats,
-            memory_usage: self.estimate_memory_usage(),
-        }
+            memory_usage: self.estimate_memory_usage()?,
+        })
     }
 
     /// Estimate current memory usage
-    fn estimate_memory_usage(&self) -> usize {
+    fn estimate_memory_usage(&self) -> Result<usize> {
         // Simple estimation based on cache size and other factors
-        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")
-            .expect("Failed to lock cache")
-            .get_stats();
-        cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
-        (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10 // Conservative fraction of max allowed
+        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")?
+            .get_stats()?;
+        Ok(cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
+        (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10)
+        // Conservative fraction of max allowed
     }
 
     // Compute the hash of the ontology for caching
@@ -1086,15 +1087,13 @@ impl ReasoningService {
     }
 
     /// Calculate a hash for the current ontology
-    fn calculate_ontology_hash(&self) -> u64 {
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")
-            .expect("Failed to lock reasoner");
+    fn calculate_ontology_hash(&self) -> Result<u64> {
+        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
 
         // Hash based on reasoner state as a simple fingerprint
         let axiom_count = if let Some(ontology) = reasoner.get_ontology() {
-            read_lock(ontology, "reasoning: reading ontology")
-                .expect("Failed to lock ontology")
+            read_lock(ontology, "reasoning: reading ontology")?
                 .axioms()
                 .len()
         } else {
@@ -1102,7 +1101,7 @@ impl ReasoningService {
         };
         std::hash::Hash::hash(&axiom_count, &mut hasher);
 
-        std::hash::Hasher::finish(&hasher)
+        Ok(std::hash::Hasher::finish(&hasher))
     }
 
     // Synchronous wrapper methods for advanced query processing

@@ -854,6 +854,16 @@ pub mod vocabulary {
             .expect("Valid hardcoded RDF rest URL");
         pub static ref RDF_LIST: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#List")
             .expect("Valid hardcoded RDF List URL");
+        pub static ref RDF_STATEMENT: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement")
+            .expect("Valid hardcoded RDF Statement URL");
+        pub static ref RDF_SUBJECT: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#subject")
+            .expect("Valid hardcoded RDF subject URL");
+        pub static ref RDF_PREDICATE: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate")
+            .expect("Valid hardcoded RDF predicate URL");
+        pub static ref RDF_OBJECT: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#object")
+            .expect("Valid hardcoded RDF object URL");
+        pub static ref RDF_REIFIES: Url = Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#reifies")
+            .expect("Valid hardcoded RDF reifies URL");
 
         // RDFS vocabulary
         pub static ref RDFS_RESOURCE: Url = Url::parse("http://www.w3.org/2000/01/rdf-schema#Resource")

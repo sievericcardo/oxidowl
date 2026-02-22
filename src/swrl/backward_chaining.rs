@@ -218,8 +218,11 @@ impl BackwardChainingEngine {
             return Ok(());
         }
 
-        // Then, try to resolve using rules
-        for rule in &self.rules.clone() {
+        // Then, try to resolve using rules.
+        // We clone each rule individually to release the immutable borrow before
+        // the mutable `prove_rule_body` call — cheaper than cloning the whole Vec.
+        for i in 0..self.rules.len() {
+            let rule = self.rules[i].clone();
             if let Some(head_atom) = rule.head.first()
                 && let Some(unifier) = self.unify_atoms(&instantiated_goal, head_atom, bindings)
             {
@@ -228,7 +231,7 @@ impl BackwardChainingEngine {
                     // Create proof tree
                     let proof = ProofTree {
                         goal: goal.clone(),
-                        rule: Some(rule.clone()),
+                        rule: Some(rule),
                         sub_proofs: Vec::new(), // Would need to collect from body proof
                         from_facts: false,
                     };

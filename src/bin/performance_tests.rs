@@ -261,7 +261,7 @@ async fn run_memory_tests(
 
     // Basic memory usage test
     let initial_memory = get_memory_usage();
-    let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default());
+    let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default())?;
     let _result = service.is_consistent().await;
     let final_memory = get_memory_usage();
 
@@ -271,7 +271,7 @@ async fn run_memory_tests(
         println!("Running leak detection...");
         // Simple leak detection by repeating operations
         for i in 0..10 {
-            let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default());
+            let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default())?;
             let _result = service.is_consistent().await;
             if i % 3 == 0 {
                 println!("  Iteration {}: {} bytes", i, get_memory_usage());
@@ -360,7 +360,7 @@ async fn run_scalability_tests() -> Result<(), Box<dyn std::error::Error>> {
         let ontology = create_large_test_ontology(size);
         let start_time = Instant::now();
 
-        let service = ReasoningService::new(ontology, ReasonerConfig::default());
+        let service = ReasoningService::new(ontology, ReasonerConfig::default())?;
         let result = service.is_consistent().await;
 
         let duration = start_time.elapsed();
@@ -376,7 +376,7 @@ async fn run_quick_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("Running quick essential tests...");
 
     let ontology = create_simple_test_ontology();
-    let service = ReasoningService::new(ontology, ReasonerConfig::default());
+    let service = ReasoningService::new(ontology, ReasonerConfig::default())?;
 
     // Quick consistency check
     let result = service.is_consistent().await;
@@ -493,7 +493,7 @@ async fn run_consistency_benchmark(
 
     for _ in 0..config.iterations {
         let start_time = Instant::now();
-        let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default());
+        let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default())?;
         let result = service.is_consistent().await;
         let duration = start_time.elapsed();
 
@@ -539,7 +539,7 @@ async fn run_satisfiability_benchmark(
 
     for _ in 0..config.iterations {
         let start_time = Instant::now();
-        let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default());
+        let service = ReasoningService::new(ontology.clone(), ReasonerConfig::default())?;
         let result = service.is_satisfiable(&test_class).await;
         let duration = start_time.elapsed();
 
@@ -580,7 +580,7 @@ async fn run_algorithm_benchmark(
 
     for _ in 0..bench_config.iterations {
         let start_time = Instant::now();
-        let service = ReasoningService::new(ontology.clone(), reasoner_config.clone());
+        let service = ReasoningService::new(ontology.clone(), reasoner_config.clone())?;
         let result = service.is_consistent().await;
         let duration = start_time.elapsed();
 
@@ -612,7 +612,7 @@ async fn run_algorithm_benchmark(
 // Conformance test functions
 async fn test_basic_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let ontology = create_test_ontology();
-    let service = ReasoningService::new(ontology, ReasonerConfig::default());
+    let service = ReasoningService::new(ontology, ReasonerConfig::default())?;
 
     // Test that the ontology is consistent
     service.is_consistent().await?;
@@ -621,7 +621,7 @@ async fn test_basic_subclass() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn test_basic_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let ontology = create_test_ontology();
-    let service = ReasoningService::new(ontology, ReasonerConfig::default());
+    let service = ReasoningService::new(ontology, ReasonerConfig::default())?;
 
     let result = service.is_consistent().await?;
     if result {
@@ -652,7 +652,7 @@ async fn test_class_assertions() -> Result<(), Box<dyn std::error::Error>> {
         annotations: vec![],
     }));
 
-    let service = ReasoningService::new(ontology, ReasonerConfig::default());
+    let service = ReasoningService::new(ontology, ReasonerConfig::default())?;
     let result = service.is_consistent().await?;
 
     if result {

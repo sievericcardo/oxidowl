@@ -635,10 +635,10 @@ impl CacheManager {
     }
 
     /// Clear all caches
-    pub fn clear_all(&self) {
+    pub fn clear_all(&self) -> crate::Result<()> {
         self.concept_cache.clear();
         self.completion_graph_cache.clear();
-        self.quoted_triple_optimizer.clear();
+        self.quoted_triple_optimizer.clear()
     }
 
     /// Get consistency result from cache
@@ -766,8 +766,7 @@ impl CacheManager {
     }
 
     /// Get cache statistics
-    #[must_use]
-    pub fn get_stats(&self) -> CacheStats {
+    pub fn get_stats(&self) -> crate::Result<CacheStats> {
         let metrics = self.concept_cache.get_metrics();
         let total_accesses = metrics.hits + metrics.misses;
         // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
@@ -789,9 +788,9 @@ impl CacheManager {
         };
 
         // Get quoted triple optimizer stats
-        let qt_stats = self.quoted_triple_optimizer.stats();
+        let qt_stats = self.quoted_triple_optimizer.stats()?;
 
-        CacheStats {
+        Ok(CacheStats {
             concept_cache_size: self.concept_cache.size(),
             concept_cache_hit_rate: hit_rate,
             completion_graph_cache_memory: self.completion_graph_cache.memory_usage(),
@@ -803,7 +802,7 @@ impl CacheManager {
             hit_count: metrics.hits,
             miss_count: metrics.misses,
             eviction_count: metrics.evictions,
-        }
+        })
     }
 
     /// Get the concept satisfiability cache

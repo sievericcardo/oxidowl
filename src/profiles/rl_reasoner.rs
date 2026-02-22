@@ -799,8 +799,8 @@ impl TBoxHierarchy {
                             for super_sup in super_supers {
                                 if self
                                     .class_inclusions
-                                    .get_mut(sub)
-                                    .unwrap()
+                                    .entry(sub.clone())
+                                    .or_default()
                                     .insert(super_sup)
                                 {
                                     changed = true;

@@ -143,13 +143,17 @@ impl RdfsInterpretation {
     /// Check RDFS semantic conditions
     fn check_rdfs_conditions(&self, graph: &RdfGraph) -> bool {
         // RDFS semantic conditions (from RDF Schema 1.1 specification)
+        // Pre-build predicate RdfTerms once — avoids repeated URL parsing in O(n²) loops
+        let rdf_type_pred = RdfTerm::Iri(RDF_TYPE.clone());
+        let rdfs_subclass_pred = RdfTerm::Iri(RDFS_SUBCLASS_OF.clone());
+        let rdfs_subproperty_pred = RdfTerm::Iri(RDFS_SUBPROPERTY_OF.clone());
 
         // 1. Domain constraints: if (s, p, o) and (p, rdfs:domain, c) then (s, rdf:type, c)
         for triple in &graph.triples {
             if let Some(domain_class) = self.get_property_domain(&triple.predicate, graph) {
                 let type_triple = Triple {
                     subject: triple.subject.clone(),
-                    predicate: RdfTerm::Iri(RDF_TYPE.clone()),
+                    predicate: rdf_type_pred.clone(),
                     object: RdfTerm::Iri(domain_class),
                 };
                 if !self.triple_in_graph(&type_triple, graph) {
@@ -165,9 +169,7 @@ impl RdfsInterpretation {
             {
                 let type_triple = Triple {
                     subject: RdfTerm::Iri(object_iri.clone()),
-                    predicate: RdfTerm::Iri(
-                        url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#type").unwrap(),
-                    ),
+                    predicate: rdf_type_pred.clone(),
                     object: RdfTerm::Iri(range_class),
                 };
                 if !self.triple_in_graph(&type_triple, graph) {
@@ -178,27 +180,17 @@ impl RdfsInterpretation {
 
         // 3. Subclass transitivity: if (x, rdfs:subClassOf, y) and (y, rdfs:subClassOf, z) then (x, rdfs:subClassOf, z)
         for triple1 in &graph.triples {
-            if triple1.predicate
-                == RdfTerm::Iri(
-                    url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf").unwrap(),
-                )
+            if triple1.predicate == rdfs_subclass_pred
                 && let (RdfTerm::Iri(x), RdfTerm::Iri(y)) = (&triple1.subject, &triple1.object)
             {
                 for triple2 in &graph.triples {
-                    if triple2.predicate
-                        == RdfTerm::Iri(
-                            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                                .unwrap(),
-                        )
+                    if triple2.predicate == rdfs_subclass_pred
                         && RdfTerm::Iri(y.clone()) == triple2.subject
                         && let RdfTerm::Iri(z) = &triple2.object
                     {
                         let derived_triple = Triple {
                             subject: RdfTerm::Iri(x.clone()),
-                            predicate: RdfTerm::Iri(
-                                url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                                    .unwrap(),
-                            ),
+                            predicate: rdfs_subclass_pred.clone(),
                             object: RdfTerm::Iri(z.clone()),
                         };
                         if !self.triple_in_graph(&derived_triple, graph) {
@@ -211,29 +203,17 @@ impl RdfsInterpretation {
 
         // 4. Subproperty transitivity: if (p, rdfs:subPropertyOf, q) and (q, rdfs:subPropertyOf, r) then (p, rdfs:subPropertyOf, r)
         for triple1 in &graph.triples {
-            if triple1.predicate
-                == RdfTerm::Iri(
-                    url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf").unwrap(),
-                )
+            if triple1.predicate == rdfs_subproperty_pred
                 && let (RdfTerm::Iri(p), RdfTerm::Iri(q)) = (&triple1.subject, &triple1.object)
             {
                 for triple2 in &graph.triples {
-                    if triple2.predicate
-                        == RdfTerm::Iri(
-                            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf")
-                                .unwrap(),
-                        )
+                    if triple2.predicate == rdfs_subproperty_pred
                         && RdfTerm::Iri(q.clone()) == triple2.subject
                         && let RdfTerm::Iri(r) = &triple2.object
                     {
                         let derived_triple = Triple {
                             subject: RdfTerm::Iri(p.clone()),
-                            predicate: RdfTerm::Iri(
-                                url::Url::parse(
-                                    "http://www.w3.org/2000/01/rdf-schema#subPropertyOf",
-                                )
-                                .unwrap(),
-                            ),
+                            predicate: rdfs_subproperty_pred.clone(),
                             object: RdfTerm::Iri(r.clone()),
                         };
                         if !self.triple_in_graph(&derived_triple, graph) {
@@ -263,12 +243,10 @@ impl RdfsInterpretation {
 
     /// Get property domain if defined
     fn get_property_domain(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
+        let domain_pred = RdfTerm::Iri(RDFS_DOMAIN.clone());
         for triple in &graph.triples {
             if &triple.subject == property
-                && triple.predicate
-                    == RdfTerm::Iri(
-                        url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap(),
-                    )
+                && triple.predicate == domain_pred
                 && let RdfTerm::Iri(domain) = &triple.object
             {
                 return Some(domain.clone());
@@ -279,12 +257,10 @@ impl RdfsInterpretation {
 
     /// Get property range if defined
     fn get_property_range(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
+        let range_pred = RdfTerm::Iri(RDFS_RANGE.clone());
         for triple in &graph.triples {
             if &triple.subject == property
-                && triple.predicate
-                    == RdfTerm::Iri(
-                        url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap(),
-                    )
+                && triple.predicate == range_pred
                 && let RdfTerm::Iri(range) = &triple.object
             {
                 return Some(range.clone());
@@ -315,12 +291,10 @@ pub struct RdfsEntailmentEngine {
 impl RdfsEntailmentEngine {
     /// Get property domain if defined
     fn get_property_domain(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
+        let domain_pred = RdfTerm::Iri(RDFS_DOMAIN.clone());
         for triple in &graph.triples {
             if &triple.subject == property
-                && triple.predicate
-                    == RdfTerm::Iri(
-                        url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain").unwrap(),
-                    )
+                && triple.predicate == domain_pred
                 && let RdfTerm::Iri(domain) = &triple.object
             {
                 return Some(domain.clone());
@@ -331,12 +305,10 @@ impl RdfsEntailmentEngine {
 
     /// Get property range if defined
     fn get_property_range(&self, property: &RdfTerm, graph: &RdfGraph) -> Option<url::Url> {
+        let range_pred = RdfTerm::Iri(RDFS_RANGE.clone());
         for triple in &graph.triples {
             if &triple.subject == property
-                && triple.predicate
-                    == RdfTerm::Iri(
-                        url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range").unwrap(),
-                    )
+                && triple.predicate == range_pred
                 && let RdfTerm::Iri(range) = &triple.object
             {
                 return Some(range.clone());

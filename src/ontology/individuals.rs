@@ -324,12 +324,9 @@ impl IndividualStore {
         &mut self,
         iri: crate::ontology::IRI,
     ) -> &NamedIndividual {
-        if !self.named_individuals.contains_key(&iri) {
-            self.add_named_individual(NamedIndividual { iri: iri.clone() });
-        }
         self.named_individuals
-            .get(&iri)
-            .expect("Named individual should exist")
+            .entry(iri.clone())
+            .or_insert_with(|| NamedIndividual { iri })
     }
 
     /// Add an anonymous individual to the store.

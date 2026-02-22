@@ -804,7 +804,7 @@ impl Reasoner {
 
             // Clear cache since ontology has changed
             let cache = write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
-            cache.clear_all();
+            cache.clear_all()?;
 
             Ok(())
         } else {
@@ -830,7 +830,7 @@ impl Reasoner {
                     &self.cache_manager,
                     "core: clearing cache after remove_axiom",
                 )?;
-                cache.clear_all();
+                cache.clear_all()?;
             }
 
             // Return the boolean result properly wrapped
@@ -2228,7 +2228,7 @@ impl Reasoner {
         let reasoning_service = Arc::new(crate::reasoning::ReasoningService::new(
             ontology_clone,
             self.config.clone(),
-        ));
+        )?);
 
         Ok(crate::server::ServerManager::new(
             self.config.server.clone(),
@@ -2265,7 +2265,7 @@ impl Reasoner {
         let reasoning_service = Arc::new(crate::reasoning::ReasoningService::new(
             ontology_clone,
             self.config.clone(),
-        ));
+        )?);
 
         let mut server_manager = crate::server::ServerManager::with_port(reasoning_service, port);
         server_manager.start_all().await?;

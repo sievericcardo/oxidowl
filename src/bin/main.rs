@@ -707,7 +707,7 @@ async fn run_server_mode(config: ReasonerConfig, quiet: bool) -> Result<()> {
     let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(
         ontology,
         config.clone(),
-    ));
+    )?);
 
     // Create and start server manager
     let mut server_manager =
@@ -1724,7 +1724,7 @@ async fn execute_dl_query(
     let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(
         ontology_clone,
         config,
-    ));
+    )?);
 
     // Create query engine with optional namespace
     let query_engine = if let Some(ns) = namespace {

@@ -71,6 +71,11 @@ pub use server::ServerManager;
 // Export explanation service (used by server)
 pub mod explanation;
 
+// Kani formal verification harnesses — compiled only under `cargo kani` or `--features kani`.
+// Run with: cargo kani
+#[cfg(any(kani, feature = "kani"))]
+mod proofs;
+
 // pub mod utils;
 
 // Re-export main types for convenience
@@ -183,7 +188,7 @@ mod tests {
         let config = ReasonerConfig::default();
 
         // Create a reasoning service from the ontology
-        let reasoning_service = Arc::new(ReasoningService::new(ontology.clone(), config));
+        let reasoning_service = Arc::new(ReasoningService::new(ontology.clone(), config)?);
         let query_engine = query::DLQueryEngine::new(reasoning_service);
 
         // Test basic functionality

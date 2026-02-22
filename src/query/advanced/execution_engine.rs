@@ -1339,10 +1339,11 @@ impl AdvancedExecutionEngine {
         let test_ontology = Arc::new(Self::create_test_ontology());
         let context = ExecutionContext {
             ontology: test_ontology.clone(),
-            reasoning_service: Arc::new(ReasoningService::new(
-                (*test_ontology).clone(),
-                Default::default(),
-            )),
+            reasoning_service: Arc::new(
+                ReasoningService::new((*test_ontology).clone(), Default::default()).map_err(
+                    |e| AdvancedQueryError::InternalError(format!("Failed to create reasoning service: {e}")),
+                )?,
+            ),
             available_indices: Vec::new(),
             constraints,
             cache: self.result_cache.clone(),

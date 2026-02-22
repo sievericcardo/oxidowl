@@ -30,7 +30,7 @@ pub type OntologyRef = Arc<RwLock<Ontology>>;
 /// IRI (Internationalized Resource Identifier) wrapper
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct IRI {
-    value: String,
+    value: std::sync::Arc<str>,
 }
 
 impl IRI {
@@ -38,7 +38,7 @@ impl IRI {
     #[must_use]
     pub fn new(value: &str) -> Self {
         Self {
-            value: value.to_string(),
+            value: std::sync::Arc::from(value),
         }
     }
 
@@ -58,21 +58,21 @@ impl IRI {
     #[must_use]
     pub fn from_url(url: Url) -> Self {
         Self {
-            value: url.to_string(),
+            value: std::sync::Arc::from(url.to_string().as_str()),
         }
     }
 }
 
 impl From<String> for IRI {
     fn from(value: String) -> Self {
-        Self { value }
+        Self { value: std::sync::Arc::from(value.as_str()) }
     }
 }
 
 impl From<Url> for IRI {
     fn from(url: Url) -> Self {
         Self {
-            value: url.to_string(),
+            value: std::sync::Arc::from(url.to_string().as_str()),
         }
     }
 }
@@ -432,10 +432,7 @@ impl Ontology {
 
     /// Get or create the RDF graph
     pub fn get_or_create_rdf_graph(&mut self) -> &mut crate::semantics::RdfGraph {
-        if self.rdf_graph.is_none() {
-            self.rdf_graph = Some(crate::semantics::RdfGraph::new());
-        }
-        self.rdf_graph.as_mut().unwrap()
+        self.rdf_graph.get_or_insert_with(crate::semantics::RdfGraph::new)
     }
 
     /// Add an RDF triple to the ontology's RDF graph

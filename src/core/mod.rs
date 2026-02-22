@@ -38,7 +38,7 @@ pub use incremental::{
     DependencyTracker as ConceptDependencyTracker, IncrementalClassifier, IncrementalStatistics,
 };
 pub use inverted_index::{ConceptIndex, IndexStatistics};
-pub use lock_helpers::{read_lock, write_lock};
+pub use lock_helpers::{mutex_lock, read_lock, write_lock};
 pub use persistent_collections::{ConceptSet, ConceptSetPool, ConceptSetPoolStats};
 pub use reasoner::Reasoner;
 pub use saturation::{

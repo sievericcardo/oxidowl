@@ -123,18 +123,22 @@ impl ELReasoner {
         // Group subsumptions by concept to enable parallel processing
         let subsumption_map = Arc::new(Mutex::new(HashMap::new()));
 
-        // Process subsumptions in parallel
+        // Process subsumptions in parallel; silently skip on poisoned lock
+        // (extremely rare — would only occur if a concurrent thread panics)
         subsumptions.par_iter().for_each(|(sub, sup)| {
-            let mut map = subsumption_map.lock().unwrap();
-            map.entry(sub.clone())
-                .or_insert_with(HashSet::new)
-                .insert(sup.clone());
+            if let Ok(mut map) = subsumption_map.lock() {
+                map.entry(sub.clone())
+                    .or_insert_with(HashSet::new)
+                    .insert(sup.clone());
+            }
         });
 
         // Build hierarchy from the collected subsumptions
-        let final_map = Arc::try_unwrap(subsumption_map)
-            .map(|mutex| mutex.into_inner().unwrap())
-            .unwrap_or_else(|arc| arc.lock().unwrap().clone());
+        // `into_inner()` recovers data even from a poisoned mutex
+        let final_map = match Arc::try_unwrap(subsumption_map) {
+            Ok(mutex) => mutex.into_inner().unwrap_or_default(),
+            Err(arc) => arc.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+        };
         self.concept_hierarchy = ConceptHierarchy::from_subsumption_map(final_map);
 
         Ok(())

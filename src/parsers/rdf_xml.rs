@@ -14,7 +14,7 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::Ontology,
-    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
+    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple, vocabulary::*},
 };
 
 /// RDF version mode for RDF/XML parsing
@@ -547,15 +547,14 @@ impl RdfXmlParser {
                         // Store association between reification ID and quoted triple
                         // This can be used later for querying
                         // Create a meta-triple linking the statement ID to the quoted triple
+                        // Create a unique IRI for this statement node
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
-                            url::Url::parse(&format!("_:stmt_{stmt_id}")).unwrap_or_else(|_| {
-                                url::Url::parse("http://example.org/stmt").unwrap()
-                            }),
+                            url::Url::parse(&format!("http://example.org/stmt/{stmt_id}"))
+                                .map_err(|e| crate::Error::ontology_parsing(
+                                    format!("Invalid statement IRI for stmt '{stmt_id}': {e}")
+                                ))?,
                         );
-                        let reifies_pred = crate::semantics::RdfTerm::Iri(
-                            url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#reifies")
-                                .unwrap(),
-                        );
+                        let reifies_pred = crate::semantics::RdfTerm::Iri(RDF_REIFIES.clone());
 
                         let meta_triple = crate::semantics::Triple {
                             subject: stmt_iri,
@@ -573,48 +572,36 @@ impl RdfXmlParser {
                         // Store the reification pattern as separate triples
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
                             url::Url::parse(&format!("http://example.org/stmt/{stmt_id}"))
-                                .unwrap_or_else(|_| {
-                                    url::Url::parse("http://example.org/stmt").unwrap()
-                                }),
+                                .map_err(|e| crate::Error::ontology_parsing(
+                                    format!("Invalid statement IRI for stmt '{stmt_id}': {e}")
+                                ))?,
                         );
-
-                        let rdf_ns = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 
                         // rdf:type rdf:Statement
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
-                            predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}type")).unwrap(),
-                            ),
-                            object: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}Statement")).unwrap(),
-                            ),
+                            predicate: crate::semantics::RdfTerm::Iri(RDF_TYPE.clone()),
+                            object: crate::semantics::RdfTerm::Iri(RDF_STATEMENT.clone()),
                         });
 
                         // rdf:subject
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
-                            predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}subject")).unwrap(),
-                            ),
+                            predicate: crate::semantics::RdfTerm::Iri(RDF_SUBJECT.clone()),
                             object: triple.subject.clone(),
                         });
 
                         // rdf:predicate
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri.clone(),
-                            predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}predicate")).unwrap(),
-                            ),
+                            predicate: crate::semantics::RdfTerm::Iri(RDF_PREDICATE.clone()),
                             object: triple.predicate.clone(),
                         });
 
                         // rdf:object
                         graph.add_triple(crate::semantics::Triple {
                             subject: stmt_iri,
-                            predicate: crate::semantics::RdfTerm::Iri(
-                                url::Url::parse(&format!("{rdf_ns}object")).unwrap(),
-                            ),
+                            predicate: crate::semantics::RdfTerm::Iri(RDF_OBJECT.clone()),
                             object: triple.object.clone(),
                         });
                     }
