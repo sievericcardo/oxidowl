@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "0.10.0"
+version = "1.0.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using tableau algorithms with parallel computation. This project started as a test to explore the capabilities of agentic LLM tools for software development."
 license = "BSD-3-Clause"
@@ -113,7 +113,7 @@ env_logger = "0.11.8"
 tempfile = "3.24"
 
 [features]
-default = ["parallel", "cache", "high-performance", "http-imports"]
+default = ["parallel", "cache", "high-performance", "http-imports", "sparql-store"]
 profiling = ["pprof", "dhat"]
 parallel = ["rayon", "crossbeam"]
 cache = ["dashmap"]
@@ -121,10 +121,16 @@ high-performance = ["mimalloc"]
 debug = []
 server = ["warp", "tokio-tungstenite", "bytes", "futures"]
 sparql = ["oxigraph"]
+# sparql-store: in-process SPARQL (Oxigraph) without the HTTP server.
+# Enabled by default so the SMOL interpreter can query the semantic model
+# in-process every interpreter step without network round-trips.
+sparql-store = ["oxigraph"]
 explanations = []
 ml = ["candle-core", "candle-nn"]  # Machine learning features
 http-imports = ["reqwest"]  # HTTP import fetching for ontologies
 # owl-integration = ["owlapi", "rdf", "sophia"]  # Disabled until proper deps are available
+# Kani formal verification harnesses (enabled by `cargo kani` or `--features kani`)
+kani = []
 
 [[example]]
 name = "dl_query_example"
@@ -144,3 +150,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 
+# Declare `cfg(kani)` as a known condition so `#[cfg(kani)]` does not trigger
+# the `unexpected_cfg` lint.  Kani sets this flag automatically when running
+# `cargo kani`; no extra dependency is needed.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

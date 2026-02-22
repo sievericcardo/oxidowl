@@ -2225,7 +2225,7 @@ dependencies = [
 
 [[package]]
 name = "oxidowl"
-version = "0.10.0"
+version = "1.0.0"
 dependencies = [
  "bytes",
  "candle-core",

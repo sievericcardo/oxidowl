@@ -5,7 +5,7 @@
 
 use crate::{Error, Result};
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt,
     hash::{Hash, Hasher},
     sync::Arc,
@@ -33,33 +33,178 @@ pub struct Dependency {
     pub branching_point: BranchingPoint,
 }
 
-/// Set of dependencies
+// ── SortedSet<T>: Kani-compatible sorted set ─────────────────────────────────
+//
+// **Production builds** (`#[cfg(not(kani))]`): wraps `std::collections::BTreeSet<T>`
+// — O(log n) insert / contains, O(n) sorted iteration, correct set union via the
+// standard library.  This is the right choice for an OWL tableau reasoner that
+// may process large ontologies with hundreds of dependencies per derivation step.
+//
+// **Kani / CBMC builds** (`#[cfg(kani)]`): wraps a sorted, deduplicated `Vec<T>`.
+// CBMC models a `Vec` as a plain bounded array, making formal proofs tractable.
+// `BTreeSet` relies on unsafe B-tree page nodes; CBMC cannot bound their pointer
+// allocation / rotation loops, causing every proof involving even a 1-element
+// `BTreeSet` to time out or return UNDETERMINED results, regardless of whether
+// the values are concrete or symbolic.
+//
+// Both backends maintain the sorted-deduplicated invariant so `Hash` and `Eq`
+// produce identical results regardless of which backend is active.
+
+/// A sorted, deduplicated set whose backing store adapts to the build context.
+///
+/// See module-level comment for why two backends exist.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SortedSet<T: Ord> {
+    #[cfg(not(kani))]
+    inner: std::collections::BTreeSet<T>,
+    #[cfg(kani)]
+    inner: Vec<T>,
+}
+
+impl<T: Ord + fmt::Debug> fmt::Debug for SortedSet<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_set().entries(self.inner.iter()).finish()
+    }
+}
+
+impl<T: Ord + Hash> Hash for SortedSet<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Both backends iterate in ascending order — equal sets hash identically.
+        for item in self.inner.iter() {
+            item.hash(state);
+        }
+    }
+}
+
+impl<T: Ord> Default for SortedSet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Ord> SortedSet<T> {
+    /// Create an empty set.
+    #[must_use]
+    pub fn new() -> Self {
+        SortedSet {
+            #[cfg(not(kani))]
+            inner: std::collections::BTreeSet::new(),
+            #[cfg(kani)]
+            inner: Vec::new(),
+        }
+    }
+
+    /// Insert `item`.  Duplicate insertions are silently ignored (set semantics).
+    pub fn insert(&mut self, item: T) {
+        #[cfg(not(kani))]
+        {
+            self.inner.insert(item);
+        }
+        #[cfg(kani)]
+        {
+            match self.inner.binary_search(&item) {
+                Ok(_) => {}
+                Err(pos) => self.inner.insert(pos, item),
+            }
+        }
+    }
+
+    /// Returns `true` if `item` is present in the set.
+    #[must_use]
+    pub fn contains(&self, item: &T) -> bool {
+        #[cfg(not(kani))]
+        {
+            self.inner.contains(item)
+        }
+        #[cfg(kani)]
+        {
+            self.inner.binary_search(item).is_ok()
+        }
+    }
+
+    /// Returns `true` if the set contains no elements.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// Iterates over elements in ascending order.
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.inner.iter()
+    }
+
+    /// Returns a new set containing every element present in either `self` or `other`.
+    #[must_use]
+    pub fn union_with(&self, other: &SortedSet<T>) -> SortedSet<T>
+    where
+        T: Clone,
+    {
+        #[cfg(not(kani))]
+        {
+            SortedSet {
+                inner: self.inner.union(&other.inner).cloned().collect(),
+            }
+        }
+        #[cfg(kani)]
+        {
+            let mut result = self.inner.clone();
+            for item in other.inner.iter() {
+                match result.binary_search(item) {
+                    Ok(_) => {}
+                    Err(pos) => result.insert(pos, item.clone()),
+                }
+            }
+            SortedSet { inner: result }
+        }
+    }
+}
+
+impl<T: Ord> FromIterator<T> for SortedSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        #[cfg(not(kani))]
+        {
+            SortedSet {
+                inner: iter.into_iter().collect(),
+            }
+        }
+        #[cfg(kani)]
+        {
+            let mut v: Vec<T> = iter.into_iter().collect();
+            v.sort_unstable();
+            v.dedup();
+            SortedSet { inner: v }
+        }
+    }
+}
+
+/// Set of dependencies for the backtracking tableau algorithm.
+///
+/// Each field is a [`SortedSet<T>`], which uses `BTreeSet<T>` in production
+/// (O(log n) insert/contains, scales to large ontologies) and a sorted `Vec<T>`
+/// in Kani proof builds (CBMC-tractable flat-array semantics).  The sorted
+/// invariant guarantees deterministic `Hash` output for equal sets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DependencySet {
-    /// Branching points the dependency set is associated with
-    pub branching_points: BTreeSet<BranchingPoint>,
+    /// Branching points this set is associated with.
+    pub branching_points: SortedSet<BranchingPoint>,
 
-    /// Deterministic dependencies (must be satisfied)
-    pub deterministic_deps: HashSet<DependencyId>,
+    /// Deterministic dependencies (must all be satisfied).
+    pub deterministic_deps: SortedSet<DependencyId>,
 
-    /// Non-deterministic dependencies (choices made)
-    pub nondeterministic_deps: HashSet<DependencyId>,
+    /// Non-deterministic dependencies (choices made during search).
+    pub nondeterministic_deps: SortedSet<DependencyId>,
 }
 
 impl Hash for DependencySet {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // Hash branching points
-        for bp in &self.branching_points {
+        // SortedSet iterates in ascending order — equal sets always hash identically.
+        for bp in self.branching_points.iter() {
             bp.hash(state);
         }
-        // Hash deterministic dependencies
-        for dep in &self.deterministic_deps {
+        for dep in self.deterministic_deps.iter() {
             dep.hash(state);
         }
-        // Hash non-deterministic dependencies (sorted for consistency)
-        let mut sorted_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
-        sorted_deps.sort();
-        for dep in sorted_deps {
+        for dep in self.nondeterministic_deps.iter() {
             dep.hash(state);
         }
     }
@@ -186,31 +331,21 @@ pub struct DependencySetFactory {
     usage_counters: HashMap<DependencySetKey, usize>,
 }
 
-/// Key for identifying dependency sets in the factory
+/// Cache key for the `DependencySetFactory`.  Uses `SortedSet<T>` for the
+/// same reasons as `DependencySet`: BTreeSet in production, sorted Vec under Kani.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DependencySetKey {
-    branching_points: BTreeSet<BranchingPoint>,
-    deterministic_deps: HashSet<DependencyId>,
-    nondeterministic_deps: HashSet<DependencyId>,
+    branching_points: SortedSet<BranchingPoint>,
+    deterministic_deps: SortedSet<DependencyId>,
+    nondeterministic_deps: SortedSet<DependencyId>,
 }
 
 impl std::hash::Hash for DependencySetKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // SortedSet hashes in ascending order — deterministic for equal sets.
         self.branching_points.hash(state);
-
-        // Hash deterministic dependencies (sort for consistency)
-        let mut det_deps: Vec<_> = self.deterministic_deps.iter().collect();
-        det_deps.sort();
-        for dep in det_deps {
-            dep.hash(state);
-        }
-
-        // Hash non-deterministic dependencies (sort for consistency)
-        let mut nondet_deps: Vec<_> = self.nondeterministic_deps.iter().collect();
-        nondet_deps.sort();
-        for dep in nondet_deps {
-            dep.hash(state);
-        }
+        self.deterministic_deps.hash(state);
+        self.nondeterministic_deps.hash(state);
     }
 }
 
@@ -238,9 +373,9 @@ impl DependencySet {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            branching_points: BTreeSet::new(),
-            deterministic_deps: HashSet::new(),
-            nondeterministic_deps: HashSet::new(),
+            branching_points: SortedSet::new(),
+            deterministic_deps: SortedSet::new(),
+            nondeterministic_deps: SortedSet::new(),
         }
     }
 
@@ -291,21 +426,11 @@ impl DependencySet {
     #[must_use]
     pub fn union(&self, other: &DependencySet) -> Self {
         Self {
-            branching_points: self
-                .branching_points
-                .union(&other.branching_points)
-                .copied()
-                .collect(),
-            deterministic_deps: self
-                .deterministic_deps
-                .union(&other.deterministic_deps)
-                .copied()
-                .collect(),
+            branching_points: self.branching_points.union_with(&other.branching_points),
+            deterministic_deps: self.deterministic_deps.union_with(&other.deterministic_deps),
             nondeterministic_deps: self
                 .nondeterministic_deps
-                .union(&other.nondeterministic_deps)
-                .copied()
-                .collect(),
+                .union_with(&other.nondeterministic_deps),
         }
     }
 
@@ -333,7 +458,7 @@ impl DependencySet {
 
     /// Get all branching points
     #[must_use]
-    pub fn branching_points(&self) -> &BTreeSet<BranchingPoint> {
+    pub fn branching_points(&self) -> &SortedSet<BranchingPoint> {
         &self.branching_points
     }
 
@@ -592,10 +717,10 @@ impl DependencyTracker {
             }
 
             if let Some(node) = self.nodes.get(&current) {
-                for &dep in &node.dependencies.deterministic_deps {
+                for dep in node.dependencies.deterministic_deps.iter().copied() {
                     stack.push(dep);
                 }
-                for &dep in &node.dependencies.nondeterministic_deps {
+                for dep in node.dependencies.nondeterministic_deps.iter().copied() {
                     stack.push(dep);
                 }
             }
@@ -664,9 +789,9 @@ impl DependencySetFactory {
         let empty_set = Arc::new(DependencySet::new());
         let mut set_cache = HashMap::new();
         let empty_key = DependencySetKey {
-            branching_points: BTreeSet::new(),
-            deterministic_deps: HashSet::new(),
-            nondeterministic_deps: HashSet::new(),
+            branching_points: SortedSet::new(),
+            deterministic_deps: SortedSet::new(),
+            nondeterministic_deps: SortedSet::new(),
         };
         set_cache.insert(empty_key, empty_set.clone());
 
@@ -690,17 +815,17 @@ impl DependencySetFactory {
         dependencies: Vec<(DependencyId, bool)>,
     ) -> Arc<DependencySet> {
         let key = DependencySetKey {
-            branching_points: branching_points.into_iter().collect(),
+            branching_points: branching_points.into_iter().collect::<SortedSet<_>>(),
             deterministic_deps: dependencies
                 .iter()
                 .filter(|(_, is_det)| *is_det)
                 .map(|(id, _)| *id)
-                .collect(),
+                .collect::<SortedSet<_>>(),
             nondeterministic_deps: dependencies
                 .iter()
                 .filter(|(_, is_det)| !*is_det)
                 .map(|(id, _)| *id)
-                .collect(),
+                .collect::<SortedSet<_>>(),
         };
 
         if let Some(set) = self.set_cache.get(&key) {
@@ -710,8 +835,8 @@ impl DependencySetFactory {
 
         let new_set = DependencySet {
             branching_points: key.branching_points.clone(),
-            deterministic_deps: key.deterministic_deps.iter().copied().collect(),
-            nondeterministic_deps: key.nondeterministic_deps.iter().copied().collect(),
+            deterministic_deps: key.deterministic_deps.clone(),
+            nondeterministic_deps: key.nondeterministic_deps.clone(),
         };
 
         let arc_set = Arc::new(new_set);
@@ -727,18 +852,21 @@ impl DependencySetFactory {
         set1: &Arc<DependencySet>,
         set2: &Arc<DependencySet>,
     ) -> Arc<DependencySet> {
-        let branching_points: Vec<_> = set1
+        let branching_points: Vec<BranchingPoint> = set1
             .branching_points
-            .union(set2.branching_points())
+            .union_with(set2.branching_points())
+            .iter()
             .copied()
             .collect();
         let deps: Vec<_> = set1
             .deterministic_deps
-            .union(&set2.deterministic_deps)
+            .union_with(&set2.deterministic_deps)
+            .iter()
             .map(|&id| (id, true))
             .chain(
                 set1.nondeterministic_deps
-                    .union(&set2.nondeterministic_deps)
+                    .union_with(&set2.nondeterministic_deps)
+                    .iter()
                     .map(|&id| (id, false)),
             )
             .collect();
