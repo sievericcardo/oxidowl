@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
             token: None,
         })?;
     let ontology_data = ontology.read().expect("Test operation failed").clone();
-    let reasoning_service = ReasoningService::new(ontology_data.clone(), config.clone());
+    let reasoning_service = ReasoningService::new(ontology_data.clone(), config.clone())?;
 
     // 6. Create DL query engine with namespace
     let query_engine = DLQueryEngine::new_with_namespace(

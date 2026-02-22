@@ -56,7 +56,7 @@ fn test_ml_engine_creation() {
 
     let ontology = create_test_onto("creation_test", 10);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
 
     // Test with ML enabled
     let mut config = AdvancedExecutionConfig::default();
@@ -76,10 +76,8 @@ fn test_ml_vs_legacy_execution() {
 
     // ML-enabled engine
     let ontology_arc1 = Arc::new(ontology.clone());
-    let reasoning1 = Arc::new(ReasoningService::new(
-        ontology.clone(),
-        ReasonerConfig::default(),
-    ));
+    let reasoning1 = Arc::new(ReasoningService::new(ontology.clone(),
+        ReasonerConfig::default(),).expect("Failed to create ReasoningService"));
     let mut config_ml = AdvancedExecutionConfig::default();
     config_ml.enable_adaptive_strategies = true;
 
@@ -87,7 +85,7 @@ fn test_ml_vs_legacy_execution() {
 
     // Legacy engine
     let ontology_arc2 = Arc::new(ontology.clone());
-    let reasoning2 = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning2 = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
     let mut config_legacy = AdvancedExecutionConfig::default();
     config_legacy.enable_adaptive_strategies = false;
 
@@ -106,7 +104,7 @@ fn test_query_execution_basic() {
 
     let ontology = create_test_onto("exec_test", 30);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
@@ -141,7 +139,7 @@ fn test_concurrent_queries() {
 
     let ontology = create_test_onto("concurrent_test", 40);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
@@ -184,7 +182,7 @@ fn test_multiple_query_execution() {
 
     let ontology = create_test_onto("multi_test", 60);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
@@ -215,7 +213,7 @@ fn test_performance_measurement() {
 
     let ontology = create_test_onto("perf_test", 100);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
@@ -244,7 +242,7 @@ fn test_error_handling() {
 
     let ontology = create_test_onto("error_test", 20);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()));
+    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create ReasoningService"));
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;

@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
     let reasoning_service = Arc::new(oxidowl::reasoning::ReasoningService::new(
         ontology_clone,
         config.clone(),
-    ));
+    )?);
 
     let mut server_manager = oxidowl::ServerManager::new(config.server.clone(), reasoning_service);
 

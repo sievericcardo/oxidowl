@@ -20,7 +20,7 @@ mod extended_integration_tests {
     fn test_advanced_execution_engine_creation() {
         let ontology = Arc::new(Ontology::new());
         let reasoning_service =
-            Arc::new(ReasoningService::new(Ontology::new(), Default::default()));
+            Arc::new(ReasoningService::new(Ontology::new(), Default::default()).expect("Failed to create ReasoningService"));
 
         let config = AdvancedExecutionConfig {
             enable_caching: true,
@@ -45,7 +45,7 @@ mod extended_integration_tests {
     fn test_cost_based_optimizer_creation() {
         let ontology = Arc::new(Ontology::new());
         let reasoning_service =
-            Arc::new(ReasoningService::new(Ontology::new(), Default::default()));
+            Arc::new(ReasoningService::new(Ontology::new(), Default::default()).expect("Failed to create ReasoningService"));
 
         let _optimizer = CostBasedOptimizer::new(ontology, reasoning_service, Default::default());
 
@@ -160,7 +160,7 @@ mod extended_integration_tests {
     fn test_full_pipeline_creation() {
         let ontology = Arc::new(Ontology::new());
         let reasoning_service =
-            Arc::new(ReasoningService::new(Ontology::new(), Default::default()));
+            Arc::new(ReasoningService::new(Ontology::new(), Default::default()).expect("Failed to create ReasoningService"));
 
         let _optimizer = CostBasedOptimizer::new(
             ontology.clone(),

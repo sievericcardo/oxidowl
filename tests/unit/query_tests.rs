@@ -9,7 +9,7 @@ use std::sync::Arc;
 async fn test_query_engine_creation() {
     let ontology = Ontology::new();
     let config = ReasonerConfig::default();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let reasoning_service = ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     let _query_engine = DLQueryEngine::new(Arc::new(reasoning_service));
 
@@ -20,7 +20,7 @@ async fn test_query_engine_creation() {
 async fn test_basic_query_functionality() {
     let ontology = Ontology::new();
     let config = ReasonerConfig::default();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let reasoning_service = ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     let _query_engine = DLQueryEngine::new(Arc::new(reasoning_service));
 

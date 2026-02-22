@@ -58,7 +58,7 @@ async fn test_disjoint_classes_greenhouse_integration() -> Result<()> {
 
     // Test 5: Test reasoning service
     println!("\nTest 5: Testing reasoning service classification...");
-    let reasoning_service = ReasoningService::new(ontology.clone(), config);
+    let reasoning_service = ReasoningService::new(ontology.clone(), config).expect("Failed to create ReasoningService");
     let classification_result = reasoning_service.classify().await?;
     println!(
         "Classification completed with {} class relationships",
