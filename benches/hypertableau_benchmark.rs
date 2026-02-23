@@ -6,7 +6,8 @@
 //! - Behavior with varying axiom complexity
 //! - Memory usage patterns
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use oxidowl::{
     config::{ReasonerConfig, TableauAlgorithm},
     ontology::{
@@ -195,7 +196,8 @@ fn bench_linear_hierarchy(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -209,7 +211,8 @@ fn bench_linear_hierarchy(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -239,7 +242,8 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
                     rt.block_on(async {
                         let mut config = ReasonerConfig::default();
                         config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
+                        let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                         let result = reasoner.is_consistent().await;
                         black_box(result)
                     })
@@ -257,7 +261,8 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
                     rt.block_on(async {
                         let mut config = ReasonerConfig::default();
                         config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                        let reasoner = ReasoningService::new(ontology.clone(), config);
+                        let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                         let result = reasoner.is_consistent().await;
                         black_box(result)
                     })
@@ -283,7 +288,8 @@ fn bench_complex_expressions(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -297,7 +303,8 @@ fn bench_complex_expressions(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -322,7 +329,8 @@ fn bench_equivalent_classes(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -336,7 +344,8 @@ fn bench_equivalent_classes(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -361,7 +370,8 @@ fn bench_disjoint_classes(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })
@@ -375,7 +385,8 @@ fn bench_disjoint_classes(c: &mut Criterion) {
                 rt.block_on(async {
                     let mut config = ReasonerConfig::default();
                     config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
-                    let reasoner = ReasoningService::new(ontology.clone(), config);
+                    let reasoner = ReasoningService::new(ontology.clone(), config)
+                        .expect("Failed to create reasoning service");
                     let result = reasoner.is_consistent().await;
                     black_box(result)
                 })

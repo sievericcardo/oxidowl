@@ -1,5 +1,6 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
-use oxidowl::parsers::{ErrorVerbosity, FunctionalParser, ParserConfig};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
+use oxidowl::parsers::{ErrorVerbosity, FunctionalParser, Parser, ParserConfig};
 
 fn generate_test_ontology(num_classes: usize) -> String {
     let mut content = String::from(
