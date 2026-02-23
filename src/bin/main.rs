@@ -595,7 +595,7 @@ fn main() -> Result<()> {
 
     std::thread::Builder::new()
         .stack_size(STACK_SIZE)
-        .spawn(|| run_with_tokio())
+        .spawn(run_with_tokio)
         .expect("Failed to spawn main thread")
         .join()
         .expect("Main thread panicked")
@@ -2212,7 +2212,7 @@ async fn execute_entailment_check(
                 // For proper entailment: premise |= conclusion iff premise + ¬conclusion is inconsistent
                 // For now, add conclusion axioms directly - this checks compatibility
                 // In a complete implementation, we would negate the conclusions
-                for axiom in conclusion_ontology.axioms().iter() {
+                for axiom in conclusion_ontology.axioms() {
                     test_ontology.add_axiom(axiom.clone());
                 }
 
@@ -2221,11 +2221,11 @@ async fn execute_entailment_check(
                 test_reasoner.load_ontology(test_ontology)?;
 
                 // Check consistency of augmented ontology
-                let augmented_consistent = test_reasoner.is_consistent()?;
+                
 
                 // If augmented ontology is consistent, conclusions are compatible with premises
                 // Since we're adding conclusions directly, consistent means they're compatible
-                augmented_consistent
+                test_reasoner.is_consistent()?
             } else {
                 // Inconsistent premise entails everything (principle of explosion)
                 true
