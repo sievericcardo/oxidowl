@@ -12,17 +12,17 @@
 //! - `SWRLRule` safety: head variables ⊆ body variables.
 //! - Logical axiom classification (`is_logical()`).
 
+use crate::ontology::IRI;
 use crate::ontology::{
     Individual, ObjectProperty, ObjectPropertyExpression,
     axioms::{
         Axiom, AxiomTrait, AxiomType, ClassAssertionAxiom, DisjointClassesAxiom,
-        EquivalentClassesAxiom, HasKeyAxiom, ObjectPropertyDomainAxiom,
-        ObjectPropertyRangeAxiom, SWRLAtom, SWRLIArgument, SWRLRule, SWRLRuleAxiom,
-        SWRLVariable, SameIndividualAxiom, SubClassOfAxiom, SubObjectPropertyOfAxiom,
+        EquivalentClassesAxiom, HasKeyAxiom, ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom,
+        SWRLAtom, SWRLIArgument, SWRLRule, SWRLRuleAxiom, SWRLVariable, SameIndividualAxiom,
+        SubClassOfAxiom, SubObjectPropertyOfAxiom,
     },
     concepts::{Class, ClassExpression},
 };
-use crate::ontology::IRI;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,9 +39,7 @@ fn ind(s: &str) -> Individual {
 }
 
 fn prop_r() -> ObjectPropertyExpression {
-    ObjectPropertyExpression::property(
-        ObjectProperty::new(iri("r")).expect("valid IRI"),
-    )
+    ObjectPropertyExpression::property(ObjectProperty::new(iri("r")).expect("valid IRI"))
 }
 
 // ── SubClassOf ────────────────────────────────────────────────────────────────
@@ -70,8 +68,14 @@ fn axiom_sub_class_of_has_correct_type() {
     let t = AxiomType::SubClassOf;
     // SubClassOf must not be confused with any other variant.
     assert!(
-        !matches!(t, AxiomType::EquivalentClasses | AxiomType::Declaration | AxiomType::Rule
-            | AxiomType::DisjointClasses | AxiomType::SameIndividual),
+        !matches!(
+            t,
+            AxiomType::EquivalentClasses
+                | AxiomType::Declaration
+                | AxiomType::Rule
+                | AxiomType::DisjointClasses
+                | AxiomType::SameIndividual
+        ),
         "SubClassOf AxiomType is distinct from other variants"
     );
 }
@@ -105,7 +109,11 @@ fn axiom_equivalent_classes_preserves_list() {
         classes: vec![cls("A"), cls("B")],
         annotations: Vec::new(),
     };
-    assert_eq!(axiom.classes.len(), 2, "EquivalentClasses must preserve count");
+    assert_eq!(
+        axiom.classes.len(),
+        2,
+        "EquivalentClasses must preserve count"
+    );
     // Verify elements by IRI string — no Arc clone needed.
     match &axiom.classes[0] {
         ClassExpression::Class(c) => assert_eq!(c.iri.as_str(), "A", "first class preserved"),
@@ -128,7 +136,11 @@ fn axiom_disjoint_classes_preserves_list() {
         classes: vec![cls("A"), cls("B")],
         annotations: Vec::new(),
     };
-    assert_eq!(axiom.classes.len(), 2, "DisjointClasses must preserve count");
+    assert_eq!(
+        axiom.classes.len(),
+        2,
+        "DisjointClasses must preserve count"
+    );
     match &axiom.classes[0] {
         ClassExpression::Class(c) => assert_eq!(c.iri.as_str(), "A"),
         _ => panic!("expected Class(A)"),
@@ -152,7 +164,10 @@ fn axiom_class_assertion_preserves_individual_and_class() {
         class: class_expr.clone(),
         annotations: Vec::new(),
     };
-    assert_eq!(axiom.individual, individual, "individual preserved in ClassAssertion");
+    assert_eq!(
+        axiom.individual, individual,
+        "individual preserved in ClassAssertion"
+    );
     assert_eq!(axiom.class, class_expr, "class preserved in ClassAssertion");
 }
 
@@ -162,16 +177,17 @@ fn axiom_class_assertion_preserves_individual_and_class() {
 #[kani::proof]
 #[kani::unwind(4)]
 fn axiom_same_individual_preserves_list() {
-    let inds = vec![
-        ind("1"),
-        ind("2"),
-    ];
+    let inds = vec![ind("1"), ind("2")];
     let axiom = SameIndividualAxiom {
         id: 0,
         individuals: inds.clone(),
         annotations: Vec::new(),
     };
-    assert_eq!(axiom.individuals.len(), 2, "SameIndividual must preserve count");
+    assert_eq!(
+        axiom.individuals.len(),
+        2,
+        "SameIndividual must preserve count"
+    );
     assert_eq!(axiom.individuals[0], inds[0]);
     assert_eq!(axiom.individuals[1], inds[1]);
 }
@@ -189,8 +205,14 @@ fn axiom_object_property_domain_preserves_fields() {
         domain: domain.clone(),
         annotations: Vec::new(),
     };
-    assert_eq!(axiom.property, prop, "property preserved in ObjectPropertyDomain");
-    assert_eq!(axiom.domain, domain, "domain preserved in ObjectPropertyDomain");
+    assert_eq!(
+        axiom.property, prop,
+        "property preserved in ObjectPropertyDomain"
+    );
+    assert_eq!(
+        axiom.domain, domain,
+        "domain preserved in ObjectPropertyDomain"
+    );
 }
 
 // ── ObjectPropertyRange ───────────────────────────────────────────────────────
@@ -206,7 +228,10 @@ fn axiom_object_property_range_preserves_fields() {
         range: range.clone(),
         annotations: Vec::new(),
     };
-    assert_eq!(axiom.property, prop, "property preserved in ObjectPropertyRange");
+    assert_eq!(
+        axiom.property, prop,
+        "property preserved in ObjectPropertyRange"
+    );
     assert_eq!(axiom.range, range, "range preserved in ObjectPropertyRange");
 }
 
@@ -215,12 +240,8 @@ fn axiom_object_property_range_preserves_fields() {
 /// `SubObjectPropertyOf` preserves sub- and super-property.
 #[kani::proof]
 fn axiom_sub_object_prop_preserves_fields() {
-    let sub = ObjectPropertyExpression::property(
-        ObjectProperty::new(iri("p")).expect("valid IRI"),
-    );
-    let sup = ObjectPropertyExpression::property(
-        ObjectProperty::new(iri("q")).expect("valid IRI"),
-    );
+    let sub = ObjectPropertyExpression::property(ObjectProperty::new(iri("p")).expect("valid IRI"));
+    let sup = ObjectPropertyExpression::property(ObjectProperty::new(iri("q")).expect("valid IRI"));
     let axiom = SubObjectPropertyOfAxiom {
         id: 0,
         sub_property: sub.clone(),
@@ -243,12 +264,21 @@ fn axiom_has_key_preserves_class_and_properties() {
         id: 0,
         class: class_expr.clone(),
         object_properties: Vec::new(),
-        data_properties: vec![crate::ontology::DataPropertyExpression::DataProperty(data_prop)],
+        data_properties: vec![crate::ontology::DataPropertyExpression::DataProperty(
+            data_prop,
+        )],
         annotations: Vec::new(),
     };
     assert_eq!(axiom.class, class_expr, "HasKey must preserve class");
-    assert_eq!(axiom.data_properties.len(), 1, "HasKey must preserve data properties");
-    assert!(axiom.object_properties.is_empty(), "HasKey object properties preserved as empty");
+    assert_eq!(
+        axiom.data_properties.len(),
+        1,
+        "HasKey must preserve data properties"
+    );
+    assert!(
+        axiom.object_properties.is_empty(),
+        "HasKey object properties preserved as empty"
+    );
 }
 
 // ── SWRL Rule Safety ──────────────────────────────────────────────────────────
@@ -266,7 +296,10 @@ fn axiom_has_key_preserves_class_and_properties() {
 fn axiom_swrl_empty_rule_is_safe() {
     let rule = SWRLRule::new(Vec::new(), Vec::new());
     // No head atoms ⇒ head_vars = ∅ ⇒ ∅ ⊆ anything ⇒ safe.
-    assert!(rule.head.is_empty(), "empty rule has no head atoms ⇒ trivially safe");
+    assert!(
+        rule.head.is_empty(),
+        "empty rule has no head atoms ⇒ trivially safe"
+    );
 }
 
 /// A single-atom rule whose head variable equals the body variable is safe.
@@ -279,7 +312,10 @@ fn axiom_swrl_head_var_in_body_is_safe() {
     let var_x = SWRLVariable::new(iri("x"));
     let var_same = var_x.clone();
     // head_var == body_var ⇒ {?x} ⊆ {?x} ⇒ safe.
-    assert_eq!(var_x.iri, var_same.iri, "shared variable IRI ⇒ head_vars ⊆ body_vars ⇒ safe");
+    assert_eq!(
+        var_x.iri, var_same.iri,
+        "shared variable IRI ⇒ head_vars ⊆ body_vars ⇒ safe"
+    );
 }
 
 /// A rule whose head uses a variable absent from the body is unsafe.
@@ -292,7 +328,10 @@ fn axiom_swrl_head_var_not_in_body_is_unsafe() {
     let var_x = SWRLVariable::new(iri("x"));
     let var_y = SWRLVariable::new(iri("y"));
     // head_var ≠ body_var ⇒ head_var ∉ body_vars ⇒ unsafe.
-    assert_ne!(var_x.iri, var_y.iri, "different IRIs ⇒ head_var ∉ body_vars ⇒ unsafe");
+    assert_ne!(
+        var_x.iri, var_y.iri,
+        "different IRIs ⇒ head_var ∉ body_vars ⇒ unsafe"
+    );
 }
 
 /// A rule with no head atoms but a non-empty body is trivially safe.

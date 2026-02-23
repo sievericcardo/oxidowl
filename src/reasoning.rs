@@ -798,8 +798,8 @@ impl ReasoningService {
     /// Get reasoning statistics
     pub fn get_statistics(&self) -> Result<ReasoningStatistics> {
         let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")?
-            .get_stats()?;
+        let cache_stats =
+            read_lock(&self.cache_manager, "reasoning: reading cache")?.get_stats()?;
 
         // Get statistics from the reasoner
         let reasoner_stats = reasoner.get_statistics();
@@ -815,10 +815,12 @@ impl ReasoningService {
     /// Estimate current memory usage
     fn estimate_memory_usage(&self) -> Result<usize> {
         // Simple estimation based on cache size and other factors
-        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")?
-            .get_stats()?;
-        Ok(cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
-        (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10)
+        let cache_stats =
+            read_lock(&self.cache_manager, "reasoning: reading cache")?.get_stats()?;
+        Ok(
+            cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
+        (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10,
+        )
         // Conservative fraction of max allowed
     }
 

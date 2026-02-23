@@ -66,8 +66,7 @@ pub mod vocabulary {
         pub const BASE64_BINARY: &str = "http://www.w3.org/2001/XMLSchema#base64Binary";
         pub const ANY_URI: &str = "http://www.w3.org/2001/XMLSchema#anyURI";
         // ── String-derived ────────────────────────────────────────────────
-        pub const NORMALISED_STRING: &str =
-            "http://www.w3.org/2001/XMLSchema#normalizedString";
+        pub const NORMALISED_STRING: &str = "http://www.w3.org/2001/XMLSchema#normalizedString";
         pub const TOKEN: &str = "http://www.w3.org/2001/XMLSchema#token";
         pub const LANGUAGE: &str = "http://www.w3.org/2001/XMLSchema#language";
         pub const NMTOKEN: &str = "http://www.w3.org/2001/XMLSchema#NMTOKEN";
@@ -77,8 +76,7 @@ pub mod vocabulary {
         pub const INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
         pub const NON_POSITIVE_INTEGER: &str =
             "http://www.w3.org/2001/XMLSchema#nonPositiveInteger";
-        pub const NEGATIVE_INTEGER: &str =
-            "http://www.w3.org/2001/XMLSchema#negativeInteger";
+        pub const NEGATIVE_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#negativeInteger";
         pub const LONG: &str = "http://www.w3.org/2001/XMLSchema#long";
         pub const INT: &str = "http://www.w3.org/2001/XMLSchema#int";
         pub const SHORT: &str = "http://www.w3.org/2001/XMLSchema#short";
@@ -89,8 +87,7 @@ pub mod vocabulary {
         pub const UNSIGNED_INT: &str = "http://www.w3.org/2001/XMLSchema#unsignedInt";
         pub const UNSIGNED_SHORT: &str = "http://www.w3.org/2001/XMLSchema#unsignedShort";
         pub const UNSIGNED_BYTE: &str = "http://www.w3.org/2001/XMLSchema#unsignedByte";
-        pub const POSITIVE_INTEGER: &str =
-            "http://www.w3.org/2001/XMLSchema#positiveInteger";
+        pub const POSITIVE_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#positiveInteger";
     }
 
     /// RDF 1.1 core vocabulary IRIs.
@@ -99,25 +96,21 @@ pub mod vocabulary {
         pub const FIRST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
         pub const REST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
         pub const NIL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
-        pub const LANG_STRING: &str =
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
+        pub const LANG_STRING: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";
         pub const HTML: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML";
-        pub const XML_LITERAL: &str =
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral";
+        pub const XML_LITERAL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral";
     }
 
     /// RDFS vocabulary IRIs.
     pub mod rdfs {
         pub const SUB_CLASS_OF: &str = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
-        pub const SUB_PROPERTY_OF: &str =
-            "http://www.w3.org/2000/01/rdf-schema#subPropertyOf";
+        pub const SUB_PROPERTY_OF: &str = "http://www.w3.org/2000/01/rdf-schema#subPropertyOf";
         pub const DOMAIN: &str = "http://www.w3.org/2000/01/rdf-schema#domain";
         pub const RANGE: &str = "http://www.w3.org/2000/01/rdf-schema#range";
         pub const LABEL: &str = "http://www.w3.org/2000/01/rdf-schema#label";
         pub const COMMENT: &str = "http://www.w3.org/2000/01/rdf-schema#comment";
         pub const SEE_ALSO: &str = "http://www.w3.org/2000/01/rdf-schema#seeAlso";
-        pub const IS_DEFINED_BY: &str =
-            "http://www.w3.org/2000/01/rdf-schema#isDefinedBy";
+        pub const IS_DEFINED_BY: &str = "http://www.w3.org/2000/01/rdf-schema#isDefinedBy";
         pub const RESOURCE: &str = "http://www.w3.org/2000/01/rdf-schema#Resource";
         pub const LITERAL: &str = "http://www.w3.org/2000/01/rdf-schema#Literal";
         pub const CLASS: &str = "http://www.w3.org/2000/01/rdf-schema#Class";
@@ -129,21 +122,18 @@ pub mod vocabulary {
         pub const CLASS: &str = "http://www.w3.org/2002/07/owl#Class";
         pub const OBJECT_PROPERTY: &str = "http://www.w3.org/2002/07/owl#ObjectProperty";
         pub const DATA_PROPERTY: &str = "http://www.w3.org/2002/07/owl#DatatypeProperty";
-        pub const ANNOTATION_PROPERTY: &str =
-            "http://www.w3.org/2002/07/owl#AnnotationProperty";
+        pub const ANNOTATION_PROPERTY: &str = "http://www.w3.org/2002/07/owl#AnnotationProperty";
         pub const NAMED_INDIVIDUAL: &str = "http://www.w3.org/2002/07/owl#NamedIndividual";
         pub const THING: &str = "http://www.w3.org/2002/07/owl#Thing";
         pub const NOTHING: &str = "http://www.w3.org/2002/07/owl#Nothing";
         pub const EQUIVALENT_CLASS: &str = "http://www.w3.org/2002/07/owl#equivalentClass";
         pub const DISJOINT_WITH: &str = "http://www.w3.org/2002/07/owl#disjointWith";
-        pub const EQUIVALENT_PROPERTY: &str =
-            "http://www.w3.org/2002/07/owl#equivalentProperty";
+        pub const EQUIVALENT_PROPERTY: &str = "http://www.w3.org/2002/07/owl#equivalentProperty";
         pub const INVERSE_OF: &str = "http://www.w3.org/2002/07/owl#inverseOf";
         pub const SAME_AS: &str = "http://www.w3.org/2002/07/owl#sameAs";
         pub const DIFFERENT_FROM: &str = "http://www.w3.org/2002/07/owl#differentFrom";
         pub const ALL_DIFFERENT: &str = "http://www.w3.org/2002/07/owl#AllDifferent";
-        pub const DISTINCT_MEMBERS: &str =
-            "http://www.w3.org/2002/07/owl#distinctMembers";
+        pub const DISTINCT_MEMBERS: &str = "http://www.w3.org/2002/07/owl#distinctMembers";
         pub const ONTOLOGY: &str = "http://www.w3.org/2002/07/owl#Ontology";
         pub const IMPORTS: &str = "http://www.w3.org/2002/07/owl#imports";
         pub const VERSION_IRI: &str = "http://www.w3.org/2002/07/owl#versionIRI";
@@ -351,8 +341,6 @@ impl std::fmt::Display for XsdType {
     }
 }
 
-
-
 // ---------------------------------------------------------------------------
 // SparqlStore
 // ---------------------------------------------------------------------------
@@ -459,9 +447,12 @@ impl SparqlStore {
         if let Some(rdf_graph) = ontology.get_rdf_graph() {
             for oxidowl_triple in rdf_graph.triples() {
                 if let Ok(quad) = oxidowl_triple_to_quad(oxidowl_triple) {
-                    store_wrapper.store.insert(&quad).map_err(|e| Error::Sparql {
-                        message: e.to_string(),
-                    })?;
+                    store_wrapper
+                        .store
+                        .insert(&quad)
+                        .map_err(|e| Error::Sparql {
+                            message: e.to_string(),
+                        })?;
                 }
             }
         }
@@ -551,10 +542,7 @@ impl SparqlStore {
     /// Returns an error if parsing or store insertion fails.
     pub fn load_rdf(&mut self, data: &str, format: SerializationFormat) -> Result<()> {
         self.store
-            .load_from_slice(
-                RdfParser::from_format(format.into()),
-                data,
-            )
+            .load_from_slice(RdfParser::from_format(format.into()), data)
             .map_err(|e| Error::Sparql {
                 message: format!("Failed to bulk-load RDF ({format:?}): {e}"),
             })
@@ -576,7 +564,9 @@ impl SparqlStore {
         // Ensure the named graph exists
         self.store
             .insert_named_graph(graph_name.as_ref())
-            .map_err(|e| Error::Sparql { message: e.to_string() })?;
+            .map_err(|e| Error::Sparql {
+                message: e.to_string(),
+            })?;
 
         // Parse and re-insert every quad with the target graph name
         let parser = RdfParser::from_format(format.into());
@@ -615,17 +605,14 @@ impl SparqlStore {
         let graph_name = make_named_node(graph_iri)?;
         self.store
             .insert_named_graph(graph_name.as_ref())
-            .map_err(|e| Error::Sparql { message: e.to_string() })?;
+            .map_err(|e| Error::Sparql {
+                message: e.to_string(),
+            })?;
 
         let subject = rdfterm_to_oxsubject(&triple.subject)?;
         let predicate = rdfterm_to_oxpredicate(&triple.predicate)?;
         let object = rdfterm_to_oxterm(&triple.object)?;
-        let quad = Quad::new(
-            subject,
-            predicate,
-            object,
-            GraphName::NamedNode(graph_name),
-        );
+        let quad = Quad::new(subject, predicate, object, GraphName::NamedNode(graph_name));
         self.store.insert(&quad).map_err(|e| Error::Sparql {
             message: e.to_string(),
         })
@@ -639,7 +626,9 @@ impl SparqlStore {
         let graph_name = make_named_node(graph_iri)?;
         self.store
             .clear_graph(GraphNameRef::NamedNode(graph_name.as_ref()))
-            .map_err(|e| Error::Sparql { message: e.to_string() })
+            .map_err(|e| Error::Sparql {
+                message: e.to_string(),
+            })
     }
 
     /// Remove a named graph and all its triples.
@@ -650,7 +639,9 @@ impl SparqlStore {
         let graph_name = make_named_node(graph_iri)?;
         self.store
             .remove_named_graph(graph_name.as_ref())
-            .map_err(|e| Error::Sparql { message: e.to_string() })
+            .map_err(|e| Error::Sparql {
+                message: e.to_string(),
+            })
     }
 
     /// Return a list of all named-graph IRIs present in the store.
@@ -689,9 +680,7 @@ impl SparqlStore {
                     })?;
                     let row: HashMap<String, RdfTerm> = sol
                         .iter()
-                        .map(|(var, term)| {
-                            (var.as_str().to_string(), oxterm_to_rdfterm(term))
-                        })
+                        .map(|(var, term)| (var.as_str().to_string(), oxterm_to_rdfterm(term)))
                         .collect();
                     rows.push(row);
                 }
@@ -737,8 +726,7 @@ impl SparqlStore {
                 Ok(triples)
             }
             _ => Err(Error::Sparql {
-                message: "Expected CONSTRUCT/DESCRIBE query results but got SELECT/ASK"
-                    .to_string(),
+                message: "Expected CONSTRUCT/DESCRIBE query results but got SELECT/ASK".to_string(),
             }),
         }
     }
@@ -778,28 +766,25 @@ impl SparqlStore {
     ) -> Result<Vec<(RdfTerm, RdfTerm, RdfTerm, Option<String>)>> {
         // Convert the filter terms into Oxigraph's typed refs.  We hold
         // intermediate owned values so the refs stay alive.
-        let ox_subject: Option<NamedOrBlankNode> = subject
-            .map(rdfterm_to_oxsubject)
-            .transpose()?;
-        let ox_predicate: Option<NamedNode> = predicate
-            .map(rdfterm_to_oxpredicate)
-            .transpose()?;
-        let ox_object: Option<Term> = object
-            .map(rdfterm_to_oxterm)
-            .transpose()?;
-        let ox_graph: Option<NamedNode> = graph
-            .map(make_named_node)
-            .transpose()?;
+        let ox_subject: Option<NamedOrBlankNode> = subject.map(rdfterm_to_oxsubject).transpose()?;
+        let ox_predicate: Option<NamedNode> = predicate.map(rdfterm_to_oxpredicate).transpose()?;
+        let ox_object: Option<Term> = object.map(rdfterm_to_oxterm).transpose()?;
+        let ox_graph: Option<NamedNode> = graph.map(make_named_node).transpose()?;
 
         let subj_ref = ox_subject.as_ref().map(NamedOrBlankNode::as_ref);
-        let pred_ref = ox_predicate.as_ref().map(|n| NamedNodeRef::new_unchecked(n.as_str()));
+        let pred_ref = ox_predicate
+            .as_ref()
+            .map(|n| NamedNodeRef::new_unchecked(n.as_str()));
         let obj_ref = ox_object.as_ref().map(Term::as_ref);
-        let graph_ref = ox_graph.as_ref().map(|n| {
-            GraphNameRef::NamedNode(NamedNodeRef::new_unchecked(n.as_str()))
-        });
+        let graph_ref = ox_graph
+            .as_ref()
+            .map(|n| GraphNameRef::NamedNode(NamedNodeRef::new_unchecked(n.as_str())));
 
         let mut result = Vec::new();
-        for quad_result in self.store.quads_for_pattern(subj_ref, pred_ref, obj_ref, graph_ref) {
+        for quad_result in self
+            .store
+            .quads_for_pattern(subj_ref, pred_ref, obj_ref, graph_ref)
+        {
             let quad = quad_result.map_err(|e| Error::Sparql {
                 message: e.to_string(),
             })?;
@@ -876,7 +861,9 @@ impl SparqlStore {
     pub fn clear_default_graph(&mut self) -> Result<()> {
         self.store
             .clear_graph(GraphNameRef::DefaultGraph)
-            .map_err(|e| Error::Sparql { message: e.to_string() })
+            .map_err(|e| Error::Sparql {
+                message: e.to_string(),
+            })
     }
 
     // -----------------------------------------------------------------------
@@ -1179,7 +1166,10 @@ impl SparqlStore {
     /// Return all `rdfs:label` values for `iri` as plain strings.
     pub fn find_labels(&self, iri: &str) -> Result<Vec<String>> {
         let terms = self.collect_first_binding(
-            &format!("SELECT ?l WHERE {{ <{iri}> <{}> ?l }}", vocabulary::rdfs::LABEL),
+            &format!(
+                "SELECT ?l WHERE {{ <{iri}> <{}> ?l }}",
+                vocabulary::rdfs::LABEL
+            ),
             "l",
         )?;
         Ok(terms
@@ -1194,7 +1184,10 @@ impl SparqlStore {
     /// Return all `rdfs:comment` values for `iri` as plain strings.
     pub fn find_comments(&self, iri: &str) -> Result<Vec<String>> {
         let terms = self.collect_first_binding(
-            &format!("SELECT ?c WHERE {{ <{iri}> <{}> ?c }}", vocabulary::rdfs::COMMENT),
+            &format!(
+                "SELECT ?c WHERE {{ <{iri}> <{}> ?c }}",
+                vocabulary::rdfs::COMMENT
+            ),
             "c",
         )?;
         Ok(terms
@@ -1270,9 +1263,7 @@ impl SparqlStore {
     pub fn rdf_list_members(&self, list_iri: &str) -> Result<Vec<RdfTerm>> {
         let first = vocabulary::rdf::FIRST;
         let rest = vocabulary::rdf::REST;
-        let q = format!(
-            "SELECT ?member WHERE {{ <{list_iri}> (<{rest}>*/<{first}>) ?member }}"
-        );
+        let q = format!("SELECT ?member WHERE {{ <{list_iri}> (<{rest}>*/<{first}>) ?member }}");
         self.collect_first_binding(&q, "member")
     }
 
@@ -1370,9 +1361,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
                 Entity::Class(iri) => (iri.as_str(), vocab::owl::CLASS),
                 Entity::ObjectProperty(iri) => (iri.as_str(), vocab::owl::OBJECT_PROPERTY),
                 Entity::DataProperty(iri) => (iri.as_str(), vocab::owl::DATA_PROPERTY),
-                Entity::AnnotationProperty(iri) => {
-                    (iri.as_str(), vocab::owl::ANNOTATION_PROPERTY)
-                }
+                Entity::AnnotationProperty(iri) => (iri.as_str(), vocab::owl::ANNOTATION_PROPERTY),
                 Entity::NamedIndividual(iri) => (iri.as_str(), vocab::owl::NAMED_INDIVIDUAL),
                 Entity::Datatype(iri) => {
                     // owl:Datatype or rdfs:Datatype – emit rdf:type owl:Class as
@@ -1455,8 +1444,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
         Axiom::SubObjectPropertyOf(ax) => {
             if let (Some(sub), Some(sup)) = (
                 obj_prop_expr_iri_str(&ax.sub_property).and_then(|s| make_named_node(s).ok()),
-                obj_prop_expr_iri_str(&ax.super_property)
-                    .and_then(|s| make_named_node(s).ok()),
+                obj_prop_expr_iri_str(&ax.super_property).and_then(|s| make_named_node(s).ok()),
             ) {
                 triples.push(OxTriple::new(
                     sub,
@@ -1470,9 +1458,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
             let nodes: Vec<_> = ax
                 .properties
                 .iter()
-                .filter_map(|p| {
-                    obj_prop_expr_iri_str(p).and_then(|s| make_named_node(s).ok())
-                })
+                .filter_map(|p| obj_prop_expr_iri_str(p).and_then(|s| make_named_node(s).ok()))
                 .collect();
             let eq_prop = make_named_node(vocab::owl::EQUIVALENT_PROPERTY)?;
             for i in 0..nodes.len() {
@@ -1493,10 +1479,8 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
 
         Axiom::InverseObjectProperties(ax) => {
             if let (Some(p1), Some(p2)) = (
-                obj_prop_expr_iri_str(&ax.property1)
-                    .and_then(|s| make_named_node(s).ok()),
-                obj_prop_expr_iri_str(&ax.property2)
-                    .and_then(|s| make_named_node(s).ok()),
+                obj_prop_expr_iri_str(&ax.property1).and_then(|s| make_named_node(s).ok()),
+                obj_prop_expr_iri_str(&ax.property2).and_then(|s| make_named_node(s).ok()),
             ) {
                 let inv_of = make_named_node(vocab::owl::INVERSE_OF)?;
                 triples.push(OxTriple::new(p1.clone(), inv_of.clone(), p2.clone()));
@@ -1506,8 +1490,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
 
         Axiom::ObjectPropertyDomain(ax) => {
             if let (Some(prop), Some(domain)) = (
-                obj_prop_expr_iri_str(&ax.property)
-                    .and_then(|s| make_named_node(s).ok()),
+                obj_prop_expr_iri_str(&ax.property).and_then(|s| make_named_node(s).ok()),
                 class_expr_to_named_node(&ax.domain),
             ) {
                 triples.push(OxTriple::new(
@@ -1520,8 +1503,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
 
         Axiom::ObjectPropertyRange(ax) => {
             if let (Some(prop), Some(range)) = (
-                obj_prop_expr_iri_str(&ax.property)
-                    .and_then(|s| make_named_node(s).ok()),
+                obj_prop_expr_iri_str(&ax.property).and_then(|s| make_named_node(s).ok()),
                 class_expr_to_named_node(&ax.range),
             ) {
                 triples.push(OxTriple::new(
@@ -1551,9 +1533,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
                 triples.push(OxTriple::new(
                     prop,
                     make_named_node(vocab::rdf::TYPE)?,
-                    make_named_node(
-                        "http://www.w3.org/2002/07/owl#InverseFunctionalProperty",
-                    )?,
+                    make_named_node("http://www.w3.org/2002/07/owl#InverseFunctionalProperty")?,
                 ));
             }
         }
@@ -1623,10 +1603,8 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
         // ----------------------------------------------------------------
         Axiom::SubDataPropertyOf(ax) => {
             if let (Some(sub), Some(sup)) = (
-                data_prop_expr_iri_str(&ax.sub_property)
-                    .and_then(|s| make_named_node(s).ok()),
-                data_prop_expr_iri_str(&ax.super_property)
-                    .and_then(|s| make_named_node(s).ok()),
+                data_prop_expr_iri_str(&ax.sub_property).and_then(|s| make_named_node(s).ok()),
+                data_prop_expr_iri_str(&ax.super_property).and_then(|s| make_named_node(s).ok()),
             ) {
                 triples.push(OxTriple::new(
                     sub,
@@ -1638,8 +1616,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
 
         Axiom::DataPropertyDomain(ax) => {
             if let (Some(prop), Some(domain)) = (
-                data_prop_expr_iri_str(&ax.property)
-                    .and_then(|s| make_named_node(s).ok()),
+                data_prop_expr_iri_str(&ax.property).and_then(|s| make_named_node(s).ok()),
                 class_expr_to_named_node(&ax.domain),
             ) {
                 triples.push(OxTriple::new(
@@ -1651,8 +1628,8 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
         }
 
         Axiom::FunctionalDataProperty(ax) => {
-            if let Some(prop) = data_prop_expr_iri_str(&ax.property)
-                .and_then(|s| make_named_node(s).ok())
+            if let Some(prop) =
+                data_prop_expr_iri_str(&ax.property).and_then(|s| make_named_node(s).ok())
             {
                 triples.push(OxTriple::new(
                     prop,
@@ -1820,8 +1797,8 @@ fn data_prop_expr_iri_str(expr: &crate::ontology::DataPropertyExpression) -> Opt
 /// Convert an ontology `Literal` to an Oxigraph `Term` (always a `Literal` variant).
 fn ontology_literal_to_oxterm(lit: &crate::ontology::Literal) -> Result<Term> {
     let ox_lit = if let Some(lang) = &lit.language {
-        OxLiteral::new_language_tagged_literal(&lit.value, lang).map_err(|e| {
-            Error::Sparql { message: e.to_string() }
+        OxLiteral::new_language_tagged_literal(&lit.value, lang).map_err(|e| Error::Sparql {
+            message: e.to_string(),
         })?
     } else if let Some(dt_url) = &lit.datatype {
         let dt_node = make_named_node(dt_url.as_str())?;
@@ -1837,7 +1814,12 @@ pub fn oxidowl_triple_to_quad(t: &OxidowlTriple) -> Result<Quad> {
     let subject = rdfterm_to_oxsubject(&t.subject)?;
     let predicate = rdfterm_to_oxpredicate(&t.predicate)?;
     let object = rdfterm_to_oxterm(&t.object)?;
-    Ok(Quad::new(subject, predicate, object, GraphName::DefaultGraph))
+    Ok(Quad::new(
+        subject,
+        predicate,
+        object,
+        GraphName::DefaultGraph,
+    ))
 }
 
 fn rdfterm_to_oxsubject(term: &RdfTerm) -> Result<NamedOrBlankNode> {
@@ -1855,9 +1837,8 @@ fn rdfterm_to_oxsubject(term: &RdfTerm) -> Result<NamedOrBlankNode> {
             Ok(NamedOrBlankNode::BlankNode(node))
         }
         RdfTerm::QuotedTriple(_) => Err(Error::Sparql {
-            message:
-                "Quoted triples in subject position require the rdf-12 oxigraph feature"
-                    .to_string(),
+            message: "Quoted triples in subject position require the rdf-12 oxigraph feature"
+                .to_string(),
         }),
         _ => Err(Error::Sparql {
             message: format!("Invalid RDF term in subject position: {term:?}"),
@@ -1897,10 +1878,8 @@ fn rdfterm_to_oxterm(term: &RdfTerm) -> Result<Term> {
             ..
         } => {
             let lit = if let Some(lang) = language {
-                OxLiteral::new_language_tagged_literal(value, lang).map_err(|e| {
-                    Error::Sparql {
-                        message: e.to_string(),
-                    }
+                OxLiteral::new_language_tagged_literal(value, lang).map_err(|e| Error::Sparql {
+                    message: e.to_string(),
                 })?
             } else if let Some(dt_url) = datatype {
                 let dt_node = NamedNode::new(dt_url.as_str()).map_err(|e| Error::Sparql {
@@ -1913,9 +1892,8 @@ fn rdfterm_to_oxterm(term: &RdfTerm) -> Result<Term> {
             Ok(Term::Literal(lit))
         }
         RdfTerm::QuotedTriple(_) => Err(Error::Sparql {
-            message:
-                "Quoted triples in object position require the rdf-12 oxigraph feature"
-                    .to_string(),
+            message: "Quoted triples in object position require the rdf-12 oxigraph feature"
+                .to_string(),
         }),
     }
 }
@@ -1959,11 +1937,9 @@ pub fn oxterm_to_rdfterm(term: &Term) -> RdfTerm {
 
 fn ox_subject_to_rdfterm(subj: &NamedOrBlankNode) -> RdfTerm {
     match subj {
-        NamedOrBlankNode::NamedNode(n) => {
-            Url::parse(n.as_str())
-                .map(RdfTerm::Iri)
-                .unwrap_or_else(|_| RdfTerm::BlankNode(n.as_str().to_string()))
-        }
+        NamedOrBlankNode::NamedNode(n) => Url::parse(n.as_str())
+            .map(RdfTerm::Iri)
+            .unwrap_or_else(|_| RdfTerm::BlankNode(n.as_str().to_string())),
         NamedOrBlankNode::BlankNode(b) => RdfTerm::BlankNode(b.as_str().to_string()),
     }
 }
@@ -2103,10 +2079,8 @@ mod tests {
         assert!(s.is_empty().unwrap());
         assert_eq!(s.len().unwrap(), 0);
 
-        s.execute_update(
-            "PREFIX : <http://example.org/> INSERT DATA { :a :b :c }",
-        )
-        .unwrap();
+        s.execute_update("PREFIX : <http://example.org/> INSERT DATA { :a :b :c }")
+            .unwrap();
 
         assert!(!s.is_empty().unwrap());
         assert_eq!(s.len().unwrap(), 1);
@@ -2134,10 +2108,8 @@ mod tests {
     #[test]
     fn test_clear_default_graph() {
         let mut s = SparqlStore::new().unwrap();
-        s.execute_update(
-            "PREFIX : <http://example.org/> INSERT DATA { :a :b :c . :d :e :f }",
-        )
-        .unwrap();
+        s.execute_update("PREFIX : <http://example.org/> INSERT DATA { :a :b :c . :d :e :f }")
+            .unwrap();
         assert_eq!(s.len().unwrap(), 2);
 
         s.clear_default_graph().unwrap();
@@ -2147,10 +2119,8 @@ mod tests {
     #[test]
     fn test_clear_all() {
         let mut s = SparqlStore::new().unwrap();
-        s.execute_update(
-            "PREFIX : <http://example.org/> INSERT DATA { :a :b :c }",
-        )
-        .unwrap();
+        s.execute_update("PREFIX : <http://example.org/> INSERT DATA { :a :b :c }")
+            .unwrap();
         assert_eq!(s.len().unwrap(), 1);
         s.clear().unwrap();
         assert_eq!(s.len().unwrap(), 0);
@@ -2171,7 +2141,8 @@ mod tests {
     #[test]
     fn test_load_rdf_ntriples() {
         let mut s = SparqlStore::new().unwrap();
-        let nt = "<http://example.org/Alice> <http://example.org/knows> <http://example.org/Bob> .\n";
+        let nt =
+            "<http://example.org/Alice> <http://example.org/knows> <http://example.org/Bob> .\n";
         s.load_rdf(nt, SerializationFormat::NTriples).unwrap();
         assert_eq!(s.len().unwrap(), 1);
     }
@@ -2192,10 +2163,8 @@ mod tests {
     #[test]
     fn test_dump_turtle() {
         let mut s = SparqlStore::new().unwrap();
-        s.load_turtle(
-            "@prefix ex: <http://example.org/> . ex:Alice ex:knows ex:Bob .",
-        )
-        .unwrap();
+        s.load_turtle("@prefix ex: <http://example.org/> . ex:Alice ex:knows ex:Bob .")
+            .unwrap();
         // dump_turtle serialises the default graph only; result must be non-empty
         let ttl = s.dump_turtle().unwrap();
         assert!(!ttl.is_empty());
@@ -2242,9 +2211,7 @@ mod tests {
 
         // But it should appear when querying FROM the named graph
         let count_ng = s
-            .execute_select(
-                "SELECT * FROM <http://example.org/graph1> WHERE { ?s ?p ?o }",
-            )
+            .execute_select("SELECT * FROM <http://example.org/graph1> WHERE { ?s ?p ?o }")
             .unwrap()
             .len();
         assert_eq!(count_ng, 1);
@@ -2258,8 +2225,10 @@ mod tests {
             RdfTerm::iri("http://example.org/p").unwrap(),
             RdfTerm::iri("http://example.org/o").unwrap(),
         );
-        s.insert_into_named_graph(&triple, "http://example.org/g1").unwrap();
-        s.insert_into_named_graph(&triple, "http://example.org/g2").unwrap();
+        s.insert_into_named_graph(&triple, "http://example.org/g1")
+            .unwrap();
+        s.insert_into_named_graph(&triple, "http://example.org/g2")
+            .unwrap();
 
         let graphs = s.named_graphs().unwrap();
         assert_eq!(graphs.len(), 2);
@@ -2273,7 +2242,8 @@ mod tests {
             RdfTerm::iri("http://example.org/p").unwrap(),
             RdfTerm::iri("http://example.org/o").unwrap(),
         );
-        s.insert_into_named_graph(&triple, "http://example.org/g1").unwrap();
+        s.insert_into_named_graph(&triple, "http://example.org/g1")
+            .unwrap();
         assert_eq!(s.len().unwrap(), 1);
 
         s.clear_named_graph("http://example.org/g1").unwrap();
@@ -2340,7 +2310,9 @@ mod tests {
         .unwrap();
 
         let rows = s
-            .execute_select("SELECT ?age WHERE { <http://example.org/Alice> <http://example.org/age> ?age }")
+            .execute_select(
+                "SELECT ?age WHERE { <http://example.org/Alice> <http://example.org/age> ?age }",
+            )
             .unwrap();
         assert_eq!(rows.len(), 1);
         let age = rows[0].get("age").unwrap();
@@ -2373,19 +2345,48 @@ mod tests {
     fn test_xsdtype_iri_round_trip() {
         // Every XsdType should survive an iri() → from_iri() round-trip.
         let types = [
-            XsdType::String, XsdType::Boolean, XsdType::Decimal, XsdType::Float,
-            XsdType::Double, XsdType::DateTime, XsdType::Time, XsdType::Date,
-            XsdType::GYearMonth, XsdType::GYear, XsdType::GMonthDay, XsdType::GDay,
-            XsdType::GMonth, XsdType::HexBinary, XsdType::Base64Binary, XsdType::AnyUri,
-            XsdType::NormalizedString, XsdType::Token, XsdType::Language,
-            XsdType::Nmtoken, XsdType::Name, XsdType::NcName,
-            XsdType::Integer, XsdType::NonPositiveInteger, XsdType::NegativeInteger,
-            XsdType::Long, XsdType::Int, XsdType::Short, XsdType::Byte,
-            XsdType::NonNegativeInteger, XsdType::UnsignedLong, XsdType::UnsignedInt,
-            XsdType::UnsignedShort, XsdType::UnsignedByte, XsdType::PositiveInteger,
+            XsdType::String,
+            XsdType::Boolean,
+            XsdType::Decimal,
+            XsdType::Float,
+            XsdType::Double,
+            XsdType::DateTime,
+            XsdType::Time,
+            XsdType::Date,
+            XsdType::GYearMonth,
+            XsdType::GYear,
+            XsdType::GMonthDay,
+            XsdType::GDay,
+            XsdType::GMonth,
+            XsdType::HexBinary,
+            XsdType::Base64Binary,
+            XsdType::AnyUri,
+            XsdType::NormalizedString,
+            XsdType::Token,
+            XsdType::Language,
+            XsdType::Nmtoken,
+            XsdType::Name,
+            XsdType::NcName,
+            XsdType::Integer,
+            XsdType::NonPositiveInteger,
+            XsdType::NegativeInteger,
+            XsdType::Long,
+            XsdType::Int,
+            XsdType::Short,
+            XsdType::Byte,
+            XsdType::NonNegativeInteger,
+            XsdType::UnsignedLong,
+            XsdType::UnsignedInt,
+            XsdType::UnsignedShort,
+            XsdType::UnsignedByte,
+            XsdType::PositiveInteger,
         ];
         for t in types {
-            assert_eq!(XsdType::from_iri(t.iri()), Some(t), "round-trip failed for {t}");
+            assert_eq!(
+                XsdType::from_iri(t.iri()),
+                Some(t),
+                "round-trip failed for {t}"
+            );
         }
     }
 
@@ -2399,14 +2400,22 @@ mod tests {
 
         let d = SparqlStore::double_literal(3.14);
         // Check it has the xsd:double datatype IRI
-        if let RdfTerm::Literal { datatype: Some(dt), .. } = &d {
+        if let RdfTerm::Literal {
+            datatype: Some(dt), ..
+        } = &d
+        {
             assert!(dt.as_str().ends_with("#double"));
         } else {
             panic!("expected typed literal");
         }
 
         let date = SparqlStore::date_literal("2024-12-31");
-        if let RdfTerm::Literal { value, datatype: Some(dt), .. } = &date {
+        if let RdfTerm::Literal {
+            value,
+            datatype: Some(dt),
+            ..
+        } = &date
+        {
             assert_eq!(value, "2024-12-31");
             assert!(dt.as_str().ends_with("#date"));
         } else {
@@ -2417,10 +2426,7 @@ mod tests {
     #[test]
     fn test_typed_literal_display() {
         // XsdType Display should return the IRI string
-        assert_eq!(
-            format!("{}", XsdType::Integer),
-            vocabulary::xsd::INTEGER
-        );
+        assert_eq!(format!("{}", XsdType::Integer), vocabulary::xsd::INTEGER);
     }
 
     // -----------------------------------------------------------------------
@@ -2520,7 +2526,9 @@ mod tests {
         )
         .unwrap();
 
-        let eq = s.find_equivalent_classes("http://example.org/Person").unwrap();
+        let eq = s
+            .find_equivalent_classes("http://example.org/Person")
+            .unwrap();
         assert_eq!(eq.len(), 1);
 
         let dj = s.find_disjoint_classes("http://example.org/Cat").unwrap();

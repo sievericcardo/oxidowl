@@ -550,9 +550,11 @@ impl RdfXmlParser {
                         // Create a unique IRI for this statement node
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
                             url::Url::parse(&format!("http://example.org/stmt/{stmt_id}"))
-                                .map_err(|e| crate::Error::ontology_parsing(
-                                    format!("Invalid statement IRI for stmt '{stmt_id}': {e}")
-                                ))?,
+                                .map_err(|e| {
+                                    crate::Error::ontology_parsing(format!(
+                                        "Invalid statement IRI for stmt '{stmt_id}': {e}"
+                                    ))
+                                })?,
                         );
                         let reifies_pred = crate::semantics::RdfTerm::Iri(RDF_REIFIES.clone());
 
@@ -572,9 +574,11 @@ impl RdfXmlParser {
                         // Store the reification pattern as separate triples
                         let stmt_iri = crate::semantics::RdfTerm::Iri(
                             url::Url::parse(&format!("http://example.org/stmt/{stmt_id}"))
-                                .map_err(|e| crate::Error::ontology_parsing(
-                                    format!("Invalid statement IRI for stmt '{stmt_id}': {e}")
-                                ))?,
+                                .map_err(|e| {
+                                    crate::Error::ontology_parsing(format!(
+                                        "Invalid statement IRI for stmt '{stmt_id}': {e}"
+                                    ))
+                                })?,
                         );
 
                         // rdf:type rdf:Statement

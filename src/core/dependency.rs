@@ -427,7 +427,9 @@ impl DependencySet {
     pub fn union(&self, other: &DependencySet) -> Self {
         Self {
             branching_points: self.branching_points.union_with(&other.branching_points),
-            deterministic_deps: self.deterministic_deps.union_with(&other.deterministic_deps),
+            deterministic_deps: self
+                .deterministic_deps
+                .union_with(&other.deterministic_deps),
             nondeterministic_deps: self
                 .nondeterministic_deps
                 .union_with(&other.nondeterministic_deps),

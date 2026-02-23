@@ -7,7 +7,6 @@
 //! - Memory usage patterns
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
 use oxidowl::{
     config::{ReasonerConfig, TableauAlgorithm},
     ontology::{
@@ -16,6 +15,7 @@ use oxidowl::{
     },
     reasoning::ReasoningService,
 };
+use std::hint::black_box;
 
 /// Create a simple ontology with a linear class hierarchy
 /// A ⊑ B ⊑ C ⊑ ... ⊑ Z
@@ -243,7 +243,7 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
                         let mut config = ReasonerConfig::default();
                         config.reasoning.tableau_algorithm = TableauAlgorithm::Traditional;
                         let reasoner = ReasoningService::new(ontology.clone(), config)
-                        .expect("Failed to create reasoning service");
+                            .expect("Failed to create reasoning service");
                         let result = reasoner.is_consistent().await;
                         black_box(result)
                     })
@@ -262,7 +262,7 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
                         let mut config = ReasonerConfig::default();
                         config.reasoning.tableau_algorithm = TableauAlgorithm::Hypertableau;
                         let reasoner = ReasoningService::new(ontology.clone(), config)
-                        .expect("Failed to create reasoning service");
+                            .expect("Failed to create reasoning service");
                         let result = reasoner.is_consistent().await;
                         black_box(result)
                     })

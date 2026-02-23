@@ -2221,7 +2221,6 @@ async fn execute_entailment_check(
                 test_reasoner.load_ontology(test_ontology)?;
 
                 // Check consistency of augmented ontology
-                
 
                 // If augmented ontology is consistent, conclusions are compatible with premises
                 // Since we're adding conclusions directly, consistent means they're compatible

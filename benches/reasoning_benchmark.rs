@@ -8,8 +8,8 @@ use std::hint::black_box;
 fn satisfiability_benchmark(c: &mut Criterion) {
     let config = ReasonerConfig::default();
     let ontology = Ontology::new();
-    let reasoning_service = ReasoningService::new(ontology, config)
-        .expect("Failed to create reasoning service");
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create reasoning service");
 
     c.bench_function("simple_concept_satisfiability", |b| {
         b.iter(|| {

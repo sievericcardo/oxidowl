@@ -25,9 +25,9 @@ pub use advanced::{
 
 // Re-export SparqlStore and vocabulary types for consumers
 #[cfg(feature = "sparql-store")]
-pub use sparql_store::SparqlStore;
-#[cfg(feature = "sparql-store")]
 pub use sparql_store::SerializationFormat;
+#[cfg(feature = "sparql-store")]
+pub use sparql_store::SparqlStore;
 #[cfg(feature = "sparql-store")]
 pub use sparql_store::XsdType;
 #[cfg(feature = "sparql-store")]

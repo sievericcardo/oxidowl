@@ -25,7 +25,8 @@ async fn main() -> Result<()> {
 
     // Create reasoner and reasoning service
     let config = ReasonerConfig::default();
-    let reasoning_service = ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     // Example 1: Check satisfiability of a class
     println!("\n1. Checking satisfiability of 'Person':");

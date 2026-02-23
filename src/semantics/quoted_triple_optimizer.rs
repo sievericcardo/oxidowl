@@ -276,8 +276,7 @@ impl QuotedTripleCache {
         }
 
         let hash = TripleHash::from_triple(triple);
-        write_lock(&self.reification_cache, "reification cache: write")?
-            .insert(hash, reification);
+        write_lock(&self.reification_cache, "reification cache: write")?.insert(hash, reification);
         Ok(())
     }
 
@@ -307,8 +306,7 @@ impl QuotedTripleCache {
 
         let depth_size = read_lock(&self.depth_cache, "depth cache: size")?.len();
         let flatten_size = read_lock(&self.flatten_cache, "flatten cache: size")?.len();
-        let reification_size =
-            read_lock(&self.reification_cache, "reification cache: size")?.len();
+        let reification_size = read_lock(&self.reification_cache, "reification cache: size")?.len();
         Ok(depth_size + flatten_size + reification_size)
     }
 }
@@ -541,8 +539,15 @@ mod tests {
         let triple = create_test_triple();
 
         // First access - miss
-        assert!(cache.get_depth(&triple).expect("get_depth should succeed").is_none());
-        cache.cache_depth(&triple, 5).expect("cache_depth should succeed");
+        assert!(
+            cache
+                .get_depth(&triple)
+                .expect("get_depth should succeed")
+                .is_none()
+        );
+        cache
+            .cache_depth(&triple, 5)
+            .expect("cache_depth should succeed");
 
         // Second access - hit
         assert_eq!(

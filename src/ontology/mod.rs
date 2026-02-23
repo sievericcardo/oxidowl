@@ -65,7 +65,9 @@ impl IRI {
 
 impl From<String> for IRI {
     fn from(value: String) -> Self {
-        Self { value: std::sync::Arc::from(value.as_str()) }
+        Self {
+            value: std::sync::Arc::from(value.as_str()),
+        }
     }
 }
 
@@ -432,7 +434,8 @@ impl Ontology {
 
     /// Get or create the RDF graph
     pub fn get_or_create_rdf_graph(&mut self) -> &mut crate::semantics::RdfGraph {
-        self.rdf_graph.get_or_insert_with(crate::semantics::RdfGraph::new)
+        self.rdf_graph
+            .get_or_insert_with(crate::semantics::RdfGraph::new)
     }
 
     /// Add an RDF triple to the ontology's RDF graph

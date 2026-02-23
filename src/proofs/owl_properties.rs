@@ -20,7 +20,10 @@ use crate::ontology::properties::{DataPropertyCharacteristics, ObjectPropertyCha
 fn prop_characteristics_default_all_false() {
     let ch = ObjectPropertyCharacteristics::new();
     assert!(!ch.functional, "functional must default to false");
-    assert!(!ch.inverse_functional, "inverse_functional must default to false");
+    assert!(
+        !ch.inverse_functional,
+        "inverse_functional must default to false"
+    );
     assert!(!ch.symmetric, "symmetric must default to false");
     assert!(!ch.asymmetric, "asymmetric must default to false");
     assert!(!ch.reflexive, "reflexive must default to false");
@@ -32,7 +35,10 @@ fn prop_characteristics_default_all_false() {
 #[kani::proof]
 fn data_prop_characteristics_default_false() {
     let ch = DataPropertyCharacteristics::new();
-    assert!(!ch.functional, "data property functional must default to false");
+    assert!(
+        !ch.functional,
+        "data property functional must default to false"
+    );
 }
 
 // ── Single-flag set round-trips ───────────────────────────────────────────────
@@ -42,7 +48,10 @@ fn data_prop_characteristics_default_false() {
 fn prop_set_functional_preserved() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_functional(true);
-    assert!(ch.functional, "functional flag must be set after set_functional(true)");
+    assert!(
+        ch.functional,
+        "functional flag must be set after set_functional(true)"
+    );
 }
 
 /// Setting `symmetric = true` is visible via the public field.
@@ -50,7 +59,10 @@ fn prop_set_functional_preserved() {
 fn prop_set_symmetric_preserved() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_symmetric(true);
-    assert!(ch.symmetric, "symmetric flag must be set after set_symmetric(true)");
+    assert!(
+        ch.symmetric,
+        "symmetric flag must be set after set_symmetric(true)"
+    );
 }
 
 /// Setting `transitive = true` is visible via the public field.
@@ -58,7 +70,10 @@ fn prop_set_symmetric_preserved() {
 fn prop_set_transitive_preserved() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_transitive(true);
-    assert!(ch.transitive, "transitive flag must be set after set_transitive(true)");
+    assert!(
+        ch.transitive,
+        "transitive flag must be set after set_transitive(true)"
+    );
 }
 
 /// Setting `reflexive = true` is visible via the public field.
@@ -66,7 +81,10 @@ fn prop_set_transitive_preserved() {
 fn prop_set_reflexive_preserved() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_reflexive(true);
-    assert!(ch.reflexive, "reflexive flag must be set after set_reflexive(true)");
+    assert!(
+        ch.reflexive,
+        "reflexive flag must be set after set_reflexive(true)"
+    );
 }
 
 // ── Consistency invariants (OWL 2 §9) ────────────────────────────────────────
@@ -76,7 +94,10 @@ fn prop_set_reflexive_preserved() {
 fn prop_functional_only_is_consistent() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_functional(true);
-    assert!(ch.is_consistent(), "functional-only property must be consistent");
+    assert!(
+        ch.is_consistent(),
+        "functional-only property must be consistent"
+    );
 }
 
 /// A property with only `symmetric = true` must be consistent.
@@ -84,7 +105,10 @@ fn prop_functional_only_is_consistent() {
 fn prop_symmetric_only_is_consistent() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_symmetric(true);
-    assert!(ch.is_consistent(), "symmetric-only property must be consistent");
+    assert!(
+        ch.is_consistent(),
+        "symmetric-only property must be consistent"
+    );
 }
 
 /// A property with only `transitive = true` must be consistent.
@@ -92,7 +116,10 @@ fn prop_symmetric_only_is_consistent() {
 fn prop_transitive_only_is_consistent() {
     let mut ch = ObjectPropertyCharacteristics::new();
     ch.set_transitive(true);
-    assert!(ch.is_consistent(), "transitive-only property must be consistent");
+    assert!(
+        ch.is_consistent(),
+        "transitive-only property must be consistent"
+    );
 }
 
 /// A property that is simultaneously symmetric AND asymmetric violates OWL 2
@@ -150,7 +177,10 @@ fn prop_default_characteristics_is_consistent() {
 fn prop_top_bottom_distinct() {
     let top = ObjectProperty::top();
     let bottom = ObjectProperty::bottom();
-    assert_ne!(top, bottom, "owl:topObjectProperty != owl:bottomObjectProperty");
+    assert_ne!(
+        top, bottom,
+        "owl:topObjectProperty != owl:bottomObjectProperty"
+    );
 }
 
 /// `ObjectProperty::top()` IRI must be the OWL 2 top role IRI.
@@ -180,7 +210,7 @@ fn prop_bottom_iri_is_owl_bottom() {
 #[kani::proof]
 fn prop_new_preserves_iri() {
     let iri = crate::ontology::IRI::new("http://example.org/hasParent");
-    let prop = ObjectProperty::new(iri.clone())
-        .expect("ObjectProperty::new with valid IRI must succeed");
+    let prop =
+        ObjectProperty::new(iri.clone()).expect("ObjectProperty::new with valid IRI must succeed");
     assert_eq!(prop.iri, iri, "ObjectProperty::new must preserve the IRI");
 }

@@ -1341,7 +1341,11 @@ impl AdvancedExecutionEngine {
             ontology: test_ontology.clone(),
             reasoning_service: Arc::new(
                 ReasoningService::new((*test_ontology).clone(), Default::default()).map_err(
-                    |e| AdvancedQueryError::InternalError(format!("Failed to create reasoning service: {e}")),
+                    |e| {
+                        AdvancedQueryError::InternalError(format!(
+                            "Failed to create reasoning service: {e}"
+                        ))
+                    },
                 )?,
             ),
             available_indices: Vec::new(),

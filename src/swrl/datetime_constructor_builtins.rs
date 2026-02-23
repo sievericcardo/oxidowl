@@ -182,7 +182,9 @@ impl SWRLBuiltIn for DateBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -229,7 +231,9 @@ impl SWRLBuiltIn for DateTimeBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -270,7 +274,9 @@ impl SWRLBuiltIn for TimeBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -313,7 +319,9 @@ impl SWRLBuiltIn for YearMonthDurationBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -362,7 +370,9 @@ impl SWRLBuiltIn for DayTimeDurationBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -422,7 +432,9 @@ impl SWRLBuiltIn for DateTimeStampBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -461,7 +473,9 @@ impl SWRLBuiltIn for GYearBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -505,7 +519,9 @@ impl SWRLBuiltIn for GYearMonthBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .ok_or_else(|| Error::reasoning("Expected literal result from SWRL date/time built-in"))?
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),

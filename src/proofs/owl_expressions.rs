@@ -31,8 +31,7 @@ fn class_c() -> Class {
 
 fn prop_r() -> ObjectPropertyExpression {
     ObjectPropertyExpression::property(
-        ObjectProperty::new(crate::ontology::IRI::new("r"))
-            .expect("valid IRI"),
+        ObjectProperty::new(crate::ontology::IRI::new("r")).expect("valid IRI"),
     )
 }
 
@@ -44,7 +43,9 @@ fn expr_class_variant_preserves_class() {
     let cls = class_a();
     let expr = ClassExpression::Class(cls.clone());
     match expr {
-        ClassExpression::Class(inner) => assert_eq!(inner, cls, "Class variant must preserve the class"),
+        ClassExpression::Class(inner) => {
+            assert_eq!(inner, cls, "Class variant must preserve the class")
+        }
         _ => panic!("expected Class variant"),
     }
 }
@@ -54,7 +55,10 @@ fn expr_class_variant_preserves_class() {
 fn expr_thing_and_nothing_distinct() {
     let thing = ClassExpression::Class(Class::thing());
     let nothing = ClassExpression::Class(Class::nothing());
-    assert_ne!(thing, nothing, "ClassExpression::Class(Thing) != ClassExpression::Class(Nothing)");
+    assert_ne!(
+        thing, nothing,
+        "ClassExpression::Class(Thing) != ClassExpression::Class(Nothing)"
+    );
 }
 
 // ── ObjectIntersectionOf ──────────────────────────────────────────────────────
@@ -72,11 +76,15 @@ fn expr_intersection_preserves_operands() {
             assert_eq!(inner.len(), 2, "intersection must preserve operand count");
             // Verify elements by IRI string — no Arc clone needed.
             match &inner[0] {
-                ClassExpression::Class(c) => assert_eq!(c.iri.as_str(), "A", "first operand preserved"),
+                ClassExpression::Class(c) => {
+                    assert_eq!(c.iri.as_str(), "A", "first operand preserved")
+                }
                 _ => panic!("expected Class(A)"),
             }
             match &inner[1] {
-                ClassExpression::Class(c) => assert_eq!(c.iri.as_str(), "B", "second operand preserved"),
+                ClassExpression::Class(c) => {
+                    assert_eq!(c.iri.as_str(), "B", "second operand preserved")
+                }
                 _ => panic!("expected Class(B)"),
             }
         }
@@ -137,7 +145,10 @@ fn expr_complement_wraps_inner() {
     let expr = ClassExpression::ObjectComplementOf(Box::new(inner.clone()));
     match expr {
         ClassExpression::ObjectComplementOf(boxed) => {
-            assert_eq!(*boxed, inner, "complement must preserve its inner expression");
+            assert_eq!(
+                *boxed, inner,
+                "complement must preserve its inner expression"
+            );
         }
         _ => panic!("expected ObjectComplementOf"),
     }
@@ -153,7 +164,10 @@ fn expr_double_complement_preserves_innermost() {
     match double {
         ClassExpression::ObjectComplementOf(outer) => match *outer {
             ClassExpression::ObjectComplementOf(inner) => {
-                assert_eq!(*inner, base, "innermost expression preserved in double complement");
+                assert_eq!(
+                    *inner, base,
+                    "innermost expression preserved in double complement"
+                );
             }
             _ => panic!("expected inner ObjectComplementOf"),
         },
@@ -173,7 +187,10 @@ fn expr_some_values_preserves_property_and_filler() {
         filler: Box::new(filler.clone()),
     };
     match expr {
-        ClassExpression::ObjectSomeValuesFrom { property, filler: boxed } => {
+        ClassExpression::ObjectSomeValuesFrom {
+            property,
+            filler: boxed,
+        } => {
             assert_eq!(property, prop, "property preserved in SomeValuesFrom");
             assert_eq!(*boxed, filler, "filler preserved in SomeValuesFrom");
         }
@@ -193,7 +210,10 @@ fn expr_all_values_preserves_property_and_filler() {
         filler: Box::new(filler.clone()),
     };
     match expr {
-        ClassExpression::ObjectAllValuesFrom { property, filler: boxed } => {
+        ClassExpression::ObjectAllValuesFrom {
+            property,
+            filler: boxed,
+        } => {
             assert_eq!(property, prop, "property preserved in AllValuesFrom");
             assert_eq!(*boxed, filler, "filler preserved in AllValuesFrom");
         }
@@ -214,7 +234,10 @@ fn expr_some_and_all_with_same_args_are_distinct() {
         property: prop.clone(),
         filler: Box::new(filler.clone()),
     };
-    assert_ne!(some, all, "SomeValuesFrom != AllValuesFrom even with same arguments");
+    assert_ne!(
+        some, all,
+        "SomeValuesFrom != AllValuesFrom even with same arguments"
+    );
 }
 
 // ── ObjectHasSelf ─────────────────────────────────────────────────────────────
@@ -223,7 +246,9 @@ fn expr_some_and_all_with_same_args_are_distinct() {
 #[kani::proof]
 fn expr_has_self_preserves_property() {
     let prop = prop_r();
-    let expr = ClassExpression::ObjectHasSelf { property: prop.clone() };
+    let expr = ClassExpression::ObjectHasSelf {
+        property: prop.clone(),
+    };
     match expr {
         ClassExpression::ObjectHasSelf { property } => {
             assert_eq!(property, prop, "ObjectHasSelf must preserve its property");

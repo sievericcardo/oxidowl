@@ -42,9 +42,7 @@ fn mk_cls(s: &str) -> ClassExpression {
 }
 
 fn mk_prop() -> ObjectPropertyExpression {
-    ObjectPropertyExpression::property(
-        ObjectProperty::new(mk_iri("r")).expect("valid prop IRI"),
-    )
+    ObjectPropertyExpression::property(ObjectProperty::new(mk_iri("r")).expect("valid prop IRI"))
 }
 
 // ── SWRLVariable ──────────────────────────────────────────────────────────
@@ -159,7 +157,11 @@ fn swrl_object_property_atom_stores_both_variables() {
         second_argument: SWRLIArgument::Variable(y.clone()),
     };
     match atom {
-        SWRLAtom::ObjectPropertyAtom { predicate, first_argument, second_argument } => {
+        SWRLAtom::ObjectPropertyAtom {
+            predicate,
+            first_argument,
+            second_argument,
+        } => {
             assert_eq!(predicate, p, "predicate must be preserved");
             match (first_argument, second_argument) {
                 (SWRLIArgument::Variable(v1), SWRLIArgument::Variable(v2)) => {
@@ -183,15 +185,16 @@ fn swrl_same_individual_atom_stores_both_variables() {
         second_argument: SWRLIArgument::Variable(b.clone()),
     };
     match atom {
-        SWRLAtom::SameIndividualAtom { first_argument, second_argument } => {
-            match (first_argument, second_argument) {
-                (SWRLIArgument::Variable(v1), SWRLIArgument::Variable(v2)) => {
-                    assert_eq!(v1, a, "first argument must be ?a");
-                    assert_eq!(v2, b, "second argument must be ?b");
-                }
-                _ => panic!("both arguments must be variables"),
+        SWRLAtom::SameIndividualAtom {
+            first_argument,
+            second_argument,
+        } => match (first_argument, second_argument) {
+            (SWRLIArgument::Variable(v1), SWRLIArgument::Variable(v2)) => {
+                assert_eq!(v1, a, "first argument must be ?a");
+                assert_eq!(v2, b, "second argument must be ?b");
             }
-        }
+            _ => panic!("both arguments must be variables"),
+        },
         _ => panic!("expected SameIndividualAtom"),
     }
 }
@@ -212,7 +215,10 @@ fn swrl_same_individual_atom_stores_both_variables() {
 fn swrl_empty_rule_structural_safety() {
     let rule = SWRLRule::new(vec![], vec![]);
     // No head atoms ⇒ head_vars = ∅ ⇒ ∅ ⊆ anything ⇒ safe.
-    assert!(rule.head.is_empty(), "empty rule has no head atoms and is trivially safe");
+    assert!(
+        rule.head.is_empty(),
+        "empty rule has no head atoms and is trivially safe"
+    );
 }
 
 /// A rule where the single head variable equals the single body variable is safe.
@@ -226,7 +232,10 @@ fn swrl_rule_shared_var_is_safe() {
     let x = mk_var("x");
     let x2 = x.clone();
     // head_var == body_var ⇒ {?x} ⊆ {?x} ⇒ safe (SWRL §5 IRI identity).
-    assert_eq!(x.iri, x2.iri, "shared variable IRI ⇒ head_vars ⊆ body_vars ⇒ safe");
+    assert_eq!(
+        x.iri, x2.iri,
+        "shared variable IRI ⇒ head_vars ⊆ body_vars ⇒ safe"
+    );
 }
 
 /// A rule whose head variable has a different IRI from any body variable is unsafe.
@@ -238,5 +247,8 @@ fn swrl_rule_unbound_head_var_is_unsafe() {
     let x = mk_var("x");
     let y = mk_var("y");
     // head_var ≠ body_var ⇒ head_var ∉ body_vars (singleton) ⇒ unsafe.
-    assert_ne!(x.iri, y.iri, "different IRIs ⇒ head_var ∉ body_vars ⇒ unsafe");
+    assert_ne!(
+        x.iri, y.iri,
+        "different IRIs ⇒ head_var ∉ body_vars ⇒ unsafe"
+    );
 }

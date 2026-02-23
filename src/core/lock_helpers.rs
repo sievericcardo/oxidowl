@@ -116,7 +116,6 @@ pub fn mutex_lock<'a, T>(lock: &'a Mutex<T>, context: &str) -> Result<MutexGuard
         .map_err(|e| Error::lock_poisoned(format!("Mutex lock poisoned: {context} - {e}")))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

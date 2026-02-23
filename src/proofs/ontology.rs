@@ -17,7 +17,11 @@ use crate::ontology::{
 fn iri_new_preserves_str_owl_thing() {
     let s = "http://www.w3.org/2002/07/owl#Thing";
     let iri = IRI::new(s);
-    assert_eq!(iri.as_str(), s, "IRI::as_str() must return the string passed to IRI::new()");
+    assert_eq!(
+        iri.as_str(),
+        s,
+        "IRI::as_str() must return the string passed to IRI::new()"
+    );
 }
 
 /// `IRI::new(s).as_str()` round-trip for an arbitrary concrete IRI string.
@@ -58,7 +62,10 @@ fn iri_same_value_eq() {
     let s = "http://example.org/Same";
     let iri_a = IRI::new(s);
     let iri_b = IRI::new(s);
-    assert_eq!(iri_a, iri_b, "IRIs built from the same string must be equal");
+    assert_eq!(
+        iri_a, iri_b,
+        "IRIs built from the same string must be equal"
+    );
 }
 
 /// `IRI::from(String)` must produce an IRI equal to `IRI::new(&string)`.
@@ -67,7 +74,10 @@ fn iri_from_string_matches_new() {
     let s = "http://example.org/FromString";
     let via_new: IRI = IRI::new(s);
     let via_from: IRI = IRI::from(s.to_string());
-    assert_eq!(via_new, via_from, "IRI::from(String) must match IRI::new(&str)");
+    assert_eq!(
+        via_new, via_from,
+        "IRI::from(String) must match IRI::new(&str)"
+    );
 }
 
 // ── Class ─────────────────────────────────────────────────────────────────────
@@ -77,7 +87,10 @@ fn iri_from_string_matches_new() {
 fn class_thing_vs_nothing_distinct() {
     let thing = Class::thing();
     let nothing = Class::nothing();
-    assert_ne!(thing, nothing, "owl:Thing and owl:Nothing must be distinct classes");
+    assert_ne!(
+        thing, nothing,
+        "owl:Thing and owl:Nothing must be distinct classes"
+    );
 }
 
 /// `Class::thing()` must satisfy `is_thing()`.
@@ -91,21 +104,30 @@ fn class_thing_is_thing() {
 #[kani::proof]
 fn class_nothing_is_nothing() {
     let nothing = Class::nothing();
-    assert!(nothing.is_nothing(), "Class::nothing() must satisfy is_nothing()");
+    assert!(
+        nothing.is_nothing(),
+        "Class::nothing() must satisfy is_nothing()"
+    );
 }
 
 /// `Class::thing()` must not satisfy `is_nothing()`.
 #[kani::proof]
 fn class_thing_not_nothing() {
     let thing = Class::thing();
-    assert!(!thing.is_nothing(), "owl:Thing must not satisfy is_nothing()");
+    assert!(
+        !thing.is_nothing(),
+        "owl:Thing must not satisfy is_nothing()"
+    );
 }
 
 /// `Class::nothing()` must not satisfy `is_thing()`.
 #[kani::proof]
 fn class_nothing_not_thing() {
     let nothing = Class::nothing();
-    assert!(!nothing.is_thing(), "owl:Nothing must not satisfy is_thing()");
+    assert!(
+        !nothing.is_thing(),
+        "owl:Nothing must not satisfy is_thing()"
+    );
 }
 
 /// `Class::new(iri)` must preserve the provided IRI.

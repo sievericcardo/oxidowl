@@ -9,7 +9,8 @@ async fn test_swrl_engine_integration() {
 
     // Create reasoning service with SWRL integration
     let config = ReasonerConfig::default();
-    let reasoning_service = ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     // Test that SWRL methods are available and working
     let swrl_stats = reasoning_service
@@ -36,7 +37,8 @@ async fn test_swrl_execution_method_available() {
 
     // Create reasoning service
     let config = ReasonerConfig::default();
-    let reasoning_service = ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     // Test that SWRL execution method is available
     let swrl_result = reasoning_service
@@ -89,7 +91,8 @@ async fn test_swrl_rules_applied_during_reasoning() {
 
     // Create reasoning service
     let config = ReasonerConfig::default();
-    let reasoning_service = ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     // Test that we can access SWRL statistics after creating service
     let stats = reasoning_service.get_swrl_statistics().await;

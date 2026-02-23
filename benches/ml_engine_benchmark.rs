@@ -1,5 +1,4 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
 use oxidowl::{
     Ontology, ReasonerConfig, ReasoningService,
     ontology::{Class, ClassExpression, IRI},
@@ -9,6 +8,7 @@ use oxidowl::{
         QueryVariable,
     },
 };
+use std::hint::black_box;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -57,7 +57,10 @@ fn bench_strategy_selection(c: &mut Criterion) {
     for size in [10, 50, 100, 500].iter() {
         let ontology = create_ontology("strategy_bench", *size);
         let ontology_arc = Arc::new(ontology.clone());
-        let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create reasoning service"));
+        let reasoning = Arc::new(
+            ReasoningService::new(ontology, ReasonerConfig::default())
+                .expect("Failed to create reasoning service"),
+        );
 
         // ML-enabled engine
         let mut config_ml = AdvancedExecutionConfig::default();
@@ -83,10 +86,13 @@ fn bench_strategy_selection(c: &mut Criterion) {
         let mut config_legacy = AdvancedExecutionConfig::default();
         config_legacy.enable_adaptive_strategies = false;
 
-        let reasoning2 = Arc::new(ReasoningService::new(
-            create_ontology("strategy_bench", *size),
-            ReasonerConfig::default(),
-        ).expect("Failed to create reasoning service"));
+        let reasoning2 = Arc::new(
+            ReasoningService::new(
+                create_ontology("strategy_bench", *size),
+                ReasonerConfig::default(),
+            )
+            .expect("Failed to create reasoning service"),
+        );
 
         let engine_legacy = AdvancedExecutionEngine::new(
             Arc::new(create_ontology("strategy_bench", *size)),
@@ -115,7 +121,10 @@ fn bench_query_throughput(c: &mut Criterion) {
 
     let ontology = create_ontology("throughput_bench", 100);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create reasoning service"));
+    let reasoning = Arc::new(
+        ReasoningService::new(ontology, ReasonerConfig::default())
+            .expect("Failed to create reasoning service"),
+    );
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
@@ -159,10 +168,10 @@ fn bench_ml_overhead(c: &mut Criterion) {
 
     // ML-enabled
     let ontology_arc1 = Arc::new(ontology.clone());
-    let reasoning1 = Arc::new(ReasoningService::new(
-        ontology.clone(),
-        ReasonerConfig::default(),
-    ).expect("Failed to create reasoning service"));
+    let reasoning1 = Arc::new(
+        ReasoningService::new(ontology.clone(), ReasonerConfig::default())
+            .expect("Failed to create reasoning service"),
+    );
     let mut config_ml = AdvancedExecutionConfig::default();
     config_ml.enable_adaptive_strategies = true;
 
@@ -171,7 +180,10 @@ fn bench_ml_overhead(c: &mut Criterion) {
 
     // Legacy
     let ontology_arc2 = Arc::new(ontology.clone());
-    let reasoning2 = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create reasoning service"));
+    let reasoning2 = Arc::new(
+        ReasoningService::new(ontology, ReasonerConfig::default())
+            .expect("Failed to create reasoning service"),
+    );
     let mut config_legacy = AdvancedExecutionConfig::default();
     config_legacy.enable_adaptive_strategies = false;
 
@@ -209,7 +221,10 @@ fn bench_concurrent_execution(c: &mut Criterion) {
 
     let ontology = create_ontology("concurrent_bench", 150);
     let ontology_arc = Arc::new(ontology.clone());
-    let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create reasoning service"));
+    let reasoning = Arc::new(
+        ReasoningService::new(ontology, ReasonerConfig::default())
+            .expect("Failed to create reasoning service"),
+    );
 
     let mut config = AdvancedExecutionConfig::default();
     config.enable_adaptive_strategies = true;
@@ -271,7 +286,10 @@ fn bench_scalability(c: &mut Criterion) {
     for size in [100, 500, 1000, 5000].iter() {
         let ontology = create_ontology("scale_bench", *size);
         let ontology_arc = Arc::new(ontology.clone());
-        let reasoning = Arc::new(ReasoningService::new(ontology, ReasonerConfig::default()).expect("Failed to create reasoning service"));
+        let reasoning = Arc::new(
+            ReasoningService::new(ontology, ReasonerConfig::default())
+                .expect("Failed to create reasoning service"),
+        );
 
         let mut config = AdvancedExecutionConfig::default();
         config.enable_adaptive_strategies = true;

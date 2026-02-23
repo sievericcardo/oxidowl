@@ -43,7 +43,10 @@ fn dep_set_add_nondet_dep_makes_nonempty() {
 fn dep_set_add_bp_makes_nonempty() {
     let mut ds = DependencySet::new();
     ds.add_branching_point(7);
-    assert!(!ds.is_empty(), "set must be non-empty after add_branching_point");
+    assert!(
+        !ds.is_empty(),
+        "set must be non-empty after add_branching_point"
+    );
 }
 
 /// `union` with the empty set is an identity (right identity): `a ∪ ∅ == a`.
@@ -53,8 +56,8 @@ fn dep_set_add_bp_makes_nonempty() {
 #[kani::proof]
 fn dep_set_union_right_empty_identity() {
     let mut ds = DependencySet::new();
-    ds.add_dependency(1, true);   // deterministic_deps path
-    ds.add_dependency(2, false);  // nondeterministic_deps path
+    ds.add_dependency(1, true); // deterministic_deps path
+    ds.add_dependency(2, false); // nondeterministic_deps path
     ds.add_branching_point(10);
 
     let empty = DependencySet::new();
@@ -109,10 +112,10 @@ fn dep_set_union_commutativity() {
 #[kani::proof]
 fn dep_set_add_dep_monotone() {
     let mut ds = DependencySet::new();
-    ds.add_dependency(1, true);   // det — makes non-empty
+    ds.add_dependency(1, true); // det — makes non-empty
     assert!(!ds.is_empty());
 
-    ds.add_dependency(2, false);  // nondet — must stay non-empty
+    ds.add_dependency(2, false); // nondet — must stay non-empty
     assert!(!ds.is_empty(), "add_dependency must be monotone");
 }
 

@@ -9,7 +9,7 @@
 //! - `Individual` named / anonymous classification invariants.
 //! - `Ontology` initial empty-axiom state.
 
-use crate::ontology::{Individual, Ontology, IRI};
+use crate::ontology::{IRI, Individual, Ontology};
 
 // ── IRI Equality ──────────────────────────────────────────────────────────
 
@@ -56,7 +56,11 @@ fn rdf_iri_clone_equals_original() {
 fn rdf_iri_as_str_round_trip() {
     let s = "http://www.w3.org/2000/01/rdf-schema#label";
     let iri = IRI::new(s);
-    assert_eq!(iri.as_str(), s, "as_str round-trip must return original string");
+    assert_eq!(
+        iri.as_str(),
+        s,
+        "as_str round-trip must return original string"
+    );
 }
 
 // ── Individual Classification ─────────────────────────────────────────────
@@ -68,7 +72,10 @@ fn rdf_iri_as_str_round_trip() {
 fn rdf_named_individual_is_named() {
     let iri = IRI::new("http://example.org/John");
     let ind = Individual::named(iri);
-    assert!(ind.is_named(), "named individual must report is_named() == true");
+    assert!(
+        ind.is_named(),
+        "named individual must report is_named() == true"
+    );
 }
 
 /// A named individual reports `is_anonymous() == false`.
@@ -88,7 +95,10 @@ fn rdf_named_individual_is_not_anonymous() {
 #[kani::proof]
 fn rdf_anonymous_individual_is_anonymous() {
     let ind = Individual::anonymous(String::from("_:b0"));
-    assert!(ind.is_anonymous(), "anonymous individual must report is_anonymous() == true");
+    assert!(
+        ind.is_anonymous(),
+        "anonymous individual must report is_anonymous() == true"
+    );
 }
 
 /// An anonymous individual reports `is_named() == false`.
@@ -119,7 +129,11 @@ fn rdf_named_individual_iri_returns_some() {
 #[kani::proof]
 fn rdf_anonymous_individual_iri_returns_none() {
     let ind = Individual::anonymous(String::from("_:b1"));
-    assert_eq!(ind.iri(), None, "anonymous individual iri() must return None");
+    assert_eq!(
+        ind.iri(),
+        None,
+        "anonymous individual iri() must return None"
+    );
 }
 
 /// Named and anonymous individuals built with distinct kinds are not equal.
@@ -128,7 +142,10 @@ fn rdf_named_and_anonymous_are_distinct() {
     let iri = IRI::new("http://example.org/Alice");
     let named = Individual::named(iri);
     let anon = Individual::anonymous(String::from("_:b2"));
-    assert_ne!(named, anon, "named and anonymous individuals must not be equal");
+    assert_ne!(
+        named, anon,
+        "named and anonymous individuals must not be equal"
+    );
 }
 
 // ── Ontology Initial State ────────────────────────────────────────────────
@@ -139,18 +156,15 @@ fn rdf_named_and_anonymous_are_distinct() {
 #[kani::proof]
 fn rdf_ontology_new_axioms_empty() {
     let ont = Ontology::new();
-    assert!(
-        ont.axioms().is_empty(),
-        "new Ontology must have no axioms"
-    );
+    assert!(ont.axioms().is_empty(), "new Ontology must have no axioms");
 }
 
 /// A freshly created `Ontology` has no ontology IRI.
 #[kani::proof]
 fn rdf_ontology_new_has_no_iri() {
-let ont = Ontology::new();
-assert!(
-    ont.get_iri().is_none(),
-    "new Ontology must have no IRI by default"
-);
+    let ont = Ontology::new();
+    assert!(
+        ont.get_iri().is_none(),
+        "new Ontology must have no IRI by default"
+    );
 }

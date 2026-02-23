@@ -852,9 +852,7 @@ impl IndustrialOptimizer {
                 for sup in supers.iter() {
                     if let Some(super_supers) = cross_module_subsumptions.get(sup).cloned() {
                         for super_sup in super_supers {
-                            let entry = cross_module_subsumptions
-                                .entry(sub.clone())
-                                .or_default();
+                            let entry = cross_module_subsumptions.entry(sub.clone()).or_default();
                             if entry.insert(super_sup) {
                                 changed = true;
                             }
