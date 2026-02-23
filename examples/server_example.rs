@@ -15,6 +15,7 @@
 //! ```
 
 use clap::Parser;
+#[allow(unused_imports)]
 use oxidowl::{OntologyFormat, Reasoner, ReasonerConfig, Result};
 use std::path::PathBuf;
 
