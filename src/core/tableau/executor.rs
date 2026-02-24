@@ -106,8 +106,9 @@ impl TableauExecutor {
             // Apply the rule
             Self::apply_rule(tableau, rule_app)?;
 
-            // Check for clashes (fast check - only complementary concepts on updated nodes)
-            // The expensive equivalence-disjointness check was already done at initialization
+            // Re-run clash detection after every rule application so that clashes
+            // introduced by expansion (e.g. AND-rule adding A and ¬A) are caught.
+            Self::detect_clashes(tableau)?;
             if tableau.clash_detector.has_clashes() {
                 debug!("Clash detected, tableau is unsatisfiable");
                 tableau.state = TableauState::Unsatisfiable;
@@ -283,12 +284,113 @@ impl TableauExecutor {
                         let new_node_id = tableau.add_node(NodeType::Generated)?;
 
                         // Add R-edge from current node to new node
-                        let role_label = RoleLabel::Atomic(role_name);
+                        let role_label = RoleLabel::Atomic(role_name.clone());
                         tableau.add_edge(node_id, new_node_id, role_label)?;
 
                         // Add filler concept C to the new node
                         let filler_label = ConceptLabel::Complex(filler.clone());
                         tableau.add_concept_to_node(new_node_id, filler_label)?;
+
+                        // Propagate any ∀R.X concepts already on the source node to
+                        // the new successor.  This handles the case where the ALL rule
+                        // ran (finding no successors) before the SOME rule created one.
+                        let all_concepts: Vec<ClassExpression> = tableau
+                            .nodes
+                            .get(node_id)
+                            .map(|n| {
+                                n.concepts
+                                    .iter()
+                                    .filter_map(|c| {
+                                        if let ConceptLabel::Complex(expr) = c {
+                                            if let ClassExpression::ObjectAllValuesFrom {
+                                                property: p,
+                                                filler: f,
+                                            } = &**expr
+                                            {
+                                                if format!("{p:?}") == role_name {
+                                                    return Some(*f.clone());
+                                                }
+                                            }
+                                        }
+                                        None
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+
+                        for all_filler in all_concepts {
+                            let all_label = ConceptLabel::Complex(Box::new(all_filler));
+                            tableau.add_concept_to_node(new_node_id, all_label)?;
+                        }
+
+                        // Also check whether creating this successor violates any ≤n R.X
+                        // constraint at the source node (with n = 0 meaning no successors allowed).
+                        // Collect MaxCardinality concepts that restrict role `role_name`.
+                        let max_card_violations: Vec<(u32, ClassExpression)> = tableau
+                            .nodes
+                            .get(node_id)
+                            .map(|n| {
+                                n.concepts
+                                    .iter()
+                                    .filter_map(|c| {
+                                        if let ConceptLabel::Complex(expr) = c {
+                                            if let ClassExpression::ObjectMaxCardinality {
+                                                property: p,
+                                                cardinality,
+                                                filler: f,
+                                            } = &**expr
+                                            {
+                                                if format!("{p:?}") == role_name {
+                                                    return Some((*cardinality, *f.clone()));
+                                                }
+                                            }
+                                        }
+                                        None
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+
+                        for (max_n, max_filler) in max_card_violations {
+                            // Count how many R-successors now have the filler
+                            let filler_label_check = ConceptLabel::Complex(Box::new(max_filler.clone()));
+                            let count = tableau
+                                .nodes
+                                .get(node_id)
+                                .and_then(|n| n.role_successors.get(&role_name))
+                                .map(|succs| {
+                                    succs.iter().filter(|&&s| {
+                                        tableau
+                                            .nodes
+                                            .get(s)
+                                            .map(|sn| sn.concepts.contains(&filler_label_check))
+                                            .unwrap_or(false)
+                                    }).count()
+                                })
+                                .unwrap_or(0);
+
+                            if count > max_n as usize {
+                                // MaxCardinality violated – register a clash
+                                let clash = Clash {
+                                    clash_type: ClashType::Concept {
+                                        concept: format!(
+                                            "≤{max_n} {role_name}.{max_filler:?} violated"
+                                        ),
+                                        node: node_id,
+                                    },
+                                    nodes: vec![node_id],
+                                    dependencies: Arc::new(DependencySet::new()),
+                                    explanation: format!(
+                                        "Node {node_id} has ≤{max_n}R.C but {count} R-successors with C"
+                                    ),
+                                };
+                                tableau.clash_detector.add_clash(clash);
+                                tableau.statistics.increment_clashes();
+                                log::warn!(
+                                    "MaxCardinality clash at node {node_id}: ≤{max_n} successors allowed, {count} present"
+                                );
+                            }
+                        }
 
                         debug!(
                             "Applied SOME rule at node {node_id}: created successor node {new_node_id}"
@@ -1201,12 +1303,15 @@ impl TableauExecutor {
         use super::equivalence::ConceptId;
         use crate::ontology::ClassExpression;
 
-        // Only check Nominal nodes for expensive clash detection
-        // Root node and other nodes are checked via fast incremental detection
+        // Check Nominal and Generated nodes for clashes.
+        // Nominal nodes represent named individuals (ABox assertions).
+        // Generated nodes represent anonymous successors created by the SOME / AtLeast rules.
+        // Root nodes are excluded because they encode TBox axioms as concept intersections
+        // and those encodings may look like apparent clashes without being real ones.
         for (i, node) in tableau.nodes.iter().enumerate() {
-            // Skip non-Nominal nodes for expensive checks - they're handled incrementally
-            if node.node_type != NodeType::Nominal {
-                continue;
+            let check_disjointness = node.node_type == NodeType::Nominal;
+            if node.node_type == NodeType::Root {
+                continue; // Skip root – TBox encoding artifacts would produce false positives
             }
 
             // Check for concept clashes (C and ¬C)
@@ -1266,8 +1371,10 @@ impl TableauExecutor {
                 }
             }
 
-            // Check for equivalence-disjointness clashes (expensive check)
-            // This detects cases where an individual has two concepts that are equivalent and disjoint
+            // Check for disjointness clashes using the DisjointnessMap.
+            // Only applicable to Nominal nodes (named individuals) because Generated nodes
+            // contain role-filler concepts whose labels are not registered in the disjointness map.
+            if check_disjointness {
             if let Some(checker) = &mut tableau.clause_checker {
                 let node_concepts: Vec<ConceptId> = node
                     .concepts
@@ -1285,62 +1392,79 @@ impl TableauExecutor {
                     })
                     .collect();
 
-                // Early exit if not enough concepts to check
+                // Check disjointness only if we have a disjointness map
+                let has_disj_map = checker.disjointness_map().is_some();
+                if !has_disj_map {
+                    continue;
+                }
+
+                // Check self-disjointness: if C ⊥ C (class disjoint with itself) then any
+                // node containing C is unsatisfiable.
+                for c in &node_concepts {
+                    let self_disjoint = checker
+                        .disjointness_map()
+                        .map(|disj| disj.are_disjoint(c, c))
+                        .unwrap_or(false);
+                    if self_disjoint {
+                        let clash = Clash {
+                            clash_type: ClashType::Concept {
+                                concept: format!("{c:?} is self-disjoint"),
+                                node: i,
+                            },
+                            nodes: vec![i],
+                            dependencies: Arc::new(DependencySet::new()),
+                            explanation: format!(
+                                "Node {i} has concept {c:?} which is disjoint with itself"
+                            ),
+                        };
+                        tableau.clash_detector.add_clash(clash);
+                        tableau.statistics.increment_clashes();
+                        log::warn!("Self-disjoint clash at node {i}: {c:?} ⊥ {c:?}");
+                        return Ok(());
+                    }
+                }
+
+                // Early exit if fewer than two concepts to compare
                 if node_concepts.len() < 2 {
                     continue;
                 }
 
-                // Check all pairs of concepts on this node
-                let has_eq_closure = checker.equivalence_closure().is_some();
-                let has_disj_map = checker.disjointness_map().is_some();
-
-                if !has_eq_closure || !has_disj_map {
-                    continue; // Skip if we don't have the necessary data structures
-                }
-
+                // Check all pairs of concepts on this node.
+                // A clash occurs whenever two concepts on the same node are disjoint —
+                // no equivalence relationship is required.
                 for idx1 in 0..node_concepts.len() {
                     for idx2 in (idx1 + 1)..node_concepts.len() {
                         let c1 = &node_concepts[idx1];
                         let c2 = &node_concepts[idx2];
 
-                        // First check disjointness (cheaper), then equivalence
                         let are_disjoint = checker
                             .disjointness_map()
                             .map(|disj| disj.are_disjoint(c1, c2))
                             .unwrap_or(false);
 
-                        if !are_disjoint {
-                            continue; // Not disjoint, can't have the clash
-                        }
-
-                        // Only check equivalence if they're disjoint
-                        let are_equivalent = checker
-                            .equivalence_closure()
-                            .map(|eq| eq.are_equivalent(c1, c2))
-                            .unwrap_or(false);
-
-                        if are_equivalent {
+                        if are_disjoint {
                             let clash = Clash {
                                 clash_type: ClashType::Concept {
-                                    concept: format!("{c1:?} ≡ {c2:?} but {c1:?} ⊥ {c2:?}"),
+                                    concept: format!("{c1:?} ⊥ {c2:?}"),
                                     node: i,
                                 },
                                 nodes: vec![i],
                                 dependencies: Arc::new(DependencySet::new()),
                                 explanation: format!(
-                                    "Node {i} has concepts {c1:?} and {c2:?} which are both equivalent and disjoint"
+                                    "Node {i} has concepts {c1:?} and {c2:?} which are disjoint"
                                 ),
                             };
                             tableau.clash_detector.add_clash(clash);
                             tableau.statistics.increment_clashes();
                             log::warn!(
-                                "Equivalence-disjointness clash detected at node {i}: {c1:?} ≡ {c2:?} but {c1:?} ⊥ {c2:?}"
+                                "Disjointness clash at node {i}: {c1:?} ⊥ {c2:?}"
                             );
-                            return Ok(()); // Found a clash, no need to continue
+                            return Ok(());
                         }
                     }
                 }
             }
+            } // end if check_disjointness
         }
 
         Ok(())

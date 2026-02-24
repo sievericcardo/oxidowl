@@ -448,17 +448,22 @@ impl HelperMethods for super::generator::DLClauseGenerator {
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 // def:N(x) ↔ ∃R.C(x)
+                //
+                // The BACKWARD direction (∃R.C ⊑ def:N) is encoded as a Horn DL clause:
+                //   R(x,y) ∧ C(y) → def:N(x)
+                // This allows the clause checker to derive def:N when a role filler is found.
+                //
+                // The FORWARD direction (def:N ⊑ ∃R.C) is an existential introduction and
+                // cannot be expressed as a single-head Horn DL clause.  It is instead handled
+                // by the tableau's concept-unfolding mechanism: when the def:N concept label
+                // (or its equivalent named class) is added to a node the SOME rule is queued
+                // via `Tableau::concept_unfolding_rules`.  We therefore deliberately omit a
+                // forward DL clause here to avoid generating an incorrect disjunctive clause.
                 let var_y = self.fresh_variable();
                 let property_name = self.object_property_expression_to_string(property);
                 let property_atom = DLAtom::role_assertion(&property_name, variable, &var_y);
-                let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, false)?;
-
-                // Forward: def:N(x) → R(x,y) ∧ C(y)
-                def_clauses.push(DLClause::new(
-                    vec![property_atom.clone(), filler_atom.clone()],
-                    vec![def_atom.clone()],
-                    self.next_clause_id(),
-                ));
+                // Filler atom in body position (positive assertion on successor node)
+                let filler_atom = self.compile_class_expression_to_atom(filler, &var_y, true)?;
 
                 // Backward: R(x,y) ∧ C(y) → def:N(x)
                 def_clauses.push(DLClause::new(

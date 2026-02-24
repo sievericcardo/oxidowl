@@ -97,6 +97,12 @@ pub struct Tableau {
 
     /// Backtrack stack for non-deterministic choices
     backtrack_stack: Vec<BacktrackPoint>,
+
+    /// Concept unfolding rules: maps a named-class IRI string to a list of complex class
+    /// expressions that the class is subsumed by (from SubClassOf and EquivalentClasses axioms).
+    /// Used to propagate existential restrictions to individual nodes when a ClassAssertion is
+    /// processed (the forward direction of `A ≡ ∃R.C` or `A ⊑ ∃R.C`).
+    pub concept_unfolding_rules: HashMap<String, Vec<ClassExpression>>,
 }
 
 /// A backtrack point for handling non-deterministic choices
@@ -189,6 +195,7 @@ impl Tableau {
             role_cache: HashMap::new(),
             individual_map: HashMap::new(),
             backtrack_stack: Vec::new(),
+            concept_unfolding_rules: HashMap::new(),
         }
     }
 
@@ -212,6 +219,50 @@ impl Tableau {
             "Loaded {} deterministic clauses and {} disjunctive clauses from ontology",
             clause_set.deterministic_clauses.len(),
             clause_set.disjunctive_clauses.len()
+        );
+
+        // Build concept-unfolding rules from SubClassOf and EquivalentClasses axioms.
+        // These rules propagate complex superclass expressions (e.g. existential restrictions)
+        // to individual nodes during ABox reasoning when a ClassAssertion is processed.
+        self.concept_unfolding_rules.clear();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(sub) => {
+                    // A ⊑ E where E is complex: store "when A(x), also add E(x)"
+                    if let ClassExpression::Class(named) = &sub.subclass {
+                        if sub.superclass.is_complex_class_expression() {
+                            self.concept_unfolding_rules
+                                .entry(named.iri.to_string())
+                                .or_default()
+                                .push(sub.superclass.clone());
+                        }
+                    }
+                }
+                crate::ontology::Axiom::EquivalentClasses(equiv) => {
+                    // For each pair (named, complex) in EquivalentClasses, both directions
+                    // need unfolding rules since the classes are mutually equivalent.
+                    for ci in &equiv.classes {
+                        if let ClassExpression::Class(named) = ci {
+                            for cj in &equiv.classes {
+                                if std::ptr::eq(ci, cj) {
+                                    continue;
+                                }
+                                if cj.is_complex_class_expression() {
+                                    self.concept_unfolding_rules
+                                        .entry(named.iri.to_string())
+                                        .or_default()
+                                        .push(cj.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        log::info!(
+            "Built concept unfolding rules for {} named classes",
+            self.concept_unfolding_rules.len()
         );
 
         // Only create EquivalenceClosure and DisjointnessMap if the ontology has relevant axioms
@@ -434,6 +485,30 @@ impl Tableau {
 
                 // Queue rule for expanding this concept
                 self.queue_rule_for_concept(node_id, &assertion.class)?;
+
+                // Apply concept unfolding rules: if A ≡ ∃R.C or A ⊑ ∃R.C is in the ontology,
+                // add the complex superclass expression to this individual's node and queue the
+                // appropriate tableau rule (e.g. SOME rule for existential restrictions).
+                if let ClassExpression::Class(named_class) = &assertion.class {
+                    // Collect unfolding targets to avoid borrow conflict during queue_rule_for_concept
+                    let unfolding_targets: Vec<ClassExpression> = self
+                        .concept_unfolding_rules
+                        .get(&named_class.iri.to_string())
+                        .cloned()
+                        .unwrap_or_default();
+
+                    for complex_expr in unfolding_targets {
+                        let complex_label = ConceptLabel::Complex(Box::new(complex_expr.clone()));
+                        if let Some(node) = self.nodes.get_mut(node_id) {
+                            node.concepts.insert(complex_label);
+                        }
+                        self.queue_rule_for_concept(node_id, &complex_expr)?;
+                        log::debug!(
+                            "Unfolded concept {:?} to {:?} at node {}",
+                            named_class.iri, complex_expr, node_id
+                        );
+                    }
+                }
             }
 
             // Other axioms can be added as needed

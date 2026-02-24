@@ -380,40 +380,103 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
     }
 
     /// Compile `EquivalentClasses` axiom
+    ///
+    /// For each pair (Ci, Cj), generates bidirectional Horn clauses.
+    /// Complex class expressions (e.g. `ObjectSomeValuesFrom`) are handled
+    /// via auxiliary definitions so that role-level clauses are properly split
+    /// into concept-level atoms that the clause checker can evaluate.
     fn compile_equivalent_classes_axiom(
         &mut self,
         axiom: &crate::ontology::EquivalentClassesAxiom,
     ) -> Result<Vec<DLClause>> {
         let mut clauses = Vec::new();
 
+        // Helper: return (atom, def_clauses) for an expression, introducing a
+        // fresh definition name for complex expressions just as compile_subclass_axiom does.
         // Generate bidirectional implications for each pair
         for i in 0..axiom.classes.len() {
             for j in (i + 1)..axiom.classes.len() {
                 let var_x = self.fresh_variable();
+                let mut pair_clauses: Vec<DLClause> = Vec::new();
 
-                // A(x) → B(x)
-                let a_atom =
-                    self.compile_class_expression_to_atom(&axiom.classes[i], &var_x, true)?;
-                let b_atom =
-                    self.compile_class_expression_to_atom(&axiom.classes[j], &var_x, false)?;
+                // --- Compile side i ---
+                let (atom_i_body, mut def_i) = match &axiom.classes[i] {
+                    ClassExpression::ObjectSomeValuesFrom { .. }
+                    | ClassExpression::ObjectAllValuesFrom { .. }
+                    | ClassExpression::ObjectHasValue { .. }
+                    | ClassExpression::ObjectHasSelf { .. }
+                    | ClassExpression::ObjectMinCardinality { .. }
+                    | ClassExpression::ObjectMaxCardinality { .. }
+                    | ClassExpression::ObjectExactCardinality { .. } => {
+                        self.introduce_definition(&axiom.classes[i], &var_x)?
+                    }
+                    ClassExpression::ObjectIntersectionOf(ops) if ops.len() > 2 => {
+                        self.introduce_definition(&axiom.classes[i], &var_x)?
+                    }
+                    ClassExpression::ObjectUnionOf(ops) if ops.len() > 2 => {
+                        let union_clauses =
+                            self.compile_union_disjunctive_clauses(ops, &var_x)?;
+                        pair_clauses.extend(union_clauses);
+                        self.introduce_definition(&axiom.classes[i], &var_x)?
+                    }
+                    _ => {
+                        let a =
+                            self.compile_class_expression_to_atom(&axiom.classes[i], &var_x, true)?;
+                        (a, vec![])
+                    }
+                };
 
-                clauses.push(DLClause::new(
-                    vec![b_atom],
-                    vec![a_atom],
+                // --- Compile side j ---
+                let (atom_j_body, mut def_j) = match &axiom.classes[j] {
+                    ClassExpression::ObjectSomeValuesFrom { .. }
+                    | ClassExpression::ObjectAllValuesFrom { .. }
+                    | ClassExpression::ObjectHasValue { .. }
+                    | ClassExpression::ObjectHasSelf { .. }
+                    | ClassExpression::ObjectMinCardinality { .. }
+                    | ClassExpression::ObjectMaxCardinality { .. }
+                    | ClassExpression::ObjectExactCardinality { .. } => {
+                        self.introduce_definition(&axiom.classes[j], &var_x)?
+                    }
+                    ClassExpression::ObjectIntersectionOf(ops) if ops.len() > 2 => {
+                        self.introduce_definition(&axiom.classes[j], &var_x)?
+                    }
+                    ClassExpression::ObjectUnionOf(ops) if ops.len() > 2 => {
+                        let union_clauses =
+                            self.compile_union_disjunctive_clauses(ops, &var_x)?;
+                        pair_clauses.extend(union_clauses);
+                        self.introduce_definition(&axiom.classes[j], &var_x)?
+                    }
+                    _ => {
+                        let a =
+                            self.compile_class_expression_to_atom(&axiom.classes[j], &var_x, true)?;
+                        (a, vec![])
+                    }
+                };
+
+                // Collect auxiliary definition clauses first
+                pair_clauses.append(&mut def_i);
+                pair_clauses.append(&mut def_j);
+
+                // Produce head-form (positive) atoms for conclusions
+                // Using same variable as the body atoms so the clause is well-formed.
+                // atom_i_body / atom_j_body are already positive (is_positive=true);
+                // we reuse them directly in both body and head positions.
+
+                // Ci(x) → Cj(x):  body=[atom_i], head=[atom_j]
+                pair_clauses.push(DLClause::new(
+                    vec![atom_j_body.clone()],
+                    vec![atom_i_body.clone()],
                     self.next_clause_id(),
                 ));
 
-                // B(x) → A(x)
-                let a_atom_2 =
-                    self.compile_class_expression_to_atom(&axiom.classes[i], &var_x, false)?;
-                let b_atom_2 =
-                    self.compile_class_expression_to_atom(&axiom.classes[j], &var_x, true)?;
-
-                clauses.push(DLClause::new(
-                    vec![a_atom_2],
-                    vec![b_atom_2],
+                // Cj(x) → Ci(x):  body=[atom_j], head=[atom_i]
+                pair_clauses.push(DLClause::new(
+                    vec![atom_i_body.clone()],
+                    vec![atom_j_body.clone()],
                     self.next_clause_id(),
                 ));
+
+                clauses.extend(pair_clauses);
             }
         }
 
