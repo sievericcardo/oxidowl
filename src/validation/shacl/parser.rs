@@ -88,25 +88,91 @@ fn extract_shapes(store: &SparqlStore) -> Result<Vec<ShaclShape>> {
         .collect();
 
     let mut shapes = Vec::new();
+    let mut seen_keys: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for (shape_key, types) in &shape_types {
-        let shape_term = key_to_term(shape_key);
-        let is_property_shape = types.iter().any(|t| t.contains("PropertyShape"));
+    // Queue starts with directly discovered shapes.
+    let mut queue: Vec<(String, bool)> = shape_types
+        .iter()
+        .map(|(k, types)| (k.clone(), types.iter().any(|t| t.contains("PropertyShape"))))
+        .collect();
 
-        if is_property_shape {
-            let path = extract_path(store, &shape_term)?;
-            let ps = extract_property_shape(store, shape_term, path, &class_shapes)?;
-            shapes.push(ShaclShape::PropertyShape(ps));
-        } else {
-            let ns = extract_node_shape(store, shape_term, &class_shapes)?;
-            shapes.push(ShaclShape::NodeShape(ns));
+    // Fixpoint: keep extracting shapes and discovering transitively referenced ones.
+    while !queue.is_empty() {
+        let mut next_queue: Vec<(String, bool)> = Vec::new();
+
+        for (shape_key, is_property_shape) in queue.drain(..) {
+            if !seen_keys.insert(shape_key.clone()) {
+                continue; // already processed
+            }
+
+            let shape_term = key_to_term(&shape_key);
+
+            let shape = if is_property_shape {
+                let path = extract_path(store, &shape_term)?;
+                let ps = extract_property_shape(store, shape_term, path, &class_shapes)?;
+                ShaclShape::PropertyShape(ps)
+            } else {
+                let ns = extract_node_shape(store, shape_term, &class_shapes)?;
+                ShaclShape::NodeShape(ns)
+            };
+
+            // Collect all shape IDs referenced by this shape's constraints so
+            // we can transitively extract them if not yet seen.
+            let referenced = collect_referenced_shape_ids(&shape);
+            for ref_id in referenced {
+                let ref_key = term_key(&ref_id);
+                if !seen_keys.contains(&ref_key) {
+                    // Determine if the referenced shape is a PropertyShape:
+                    // it has sh:path.  Use quads_for_pattern to check safely.
+                    let pred_path = RdfTerm::iri(SH_PATH).ok();
+                    let has_path = if let Some(pred) = &pred_path {
+                        let quads = store.quads_for_pattern(Some(&ref_id), Some(pred), None, None)?;
+                        !quads.is_empty()
+                    } else {
+                        false
+                    };
+                    next_queue.push((ref_key, has_path));
+                }
+            }
+
+            shapes.push(shape);
+        }
+
+        queue = next_queue;
+    }
+
+    Ok(shapes)
+}
+
+/// Collect all shape IDs directly referenced by a shape's constraints
+/// (for `sh:or`, `sh:and`, `sh:not`, `sh:node`, `sh:property`, `sh:xone`,
+/// `sh:qualifiedValueShape`).
+fn collect_referenced_shape_ids(shape: &ShaclShape) -> Vec<RdfTerm> {
+    let constraints = match shape {
+        ShaclShape::NodeShape(ns) => &ns.constraints,
+        ShaclShape::PropertyShape(ps) => &ps.constraints,
+    };
+
+    let mut ids = Vec::new();
+    for c in constraints {
+        match c {
+            ShaclConstraint::Not(id) => ids.push(id.clone()),
+            ShaclConstraint::And(list) => ids.extend(list.iter().cloned()),
+            ShaclConstraint::Or(list) => ids.extend(list.iter().cloned()),
+            ShaclConstraint::Xone(list) => ids.extend(list.iter().cloned()),
+            ShaclConstraint::Node(id) => ids.push(id.clone()),
+            ShaclConstraint::Property(id) => ids.push(id.clone()),
+            ShaclConstraint::QualifiedValue { shape_id, .. } => ids.push(shape_id.clone()),
+            _ => {}
         }
     }
 
-    // Handle shapes only reachable via sh:property (inline blank-node shapes)
-    // These are extracted as part of NodeShape.properties above.
+    // Also include properties field of NodeShapes.
+    if let ShaclShape::NodeShape(ns) = shape {
+        ids.extend(ns.properties.iter().cloned());
+    }
 
-    Ok(shapes)
+    ids
 }
 
 fn extract_node_shape(
@@ -535,6 +601,17 @@ fn direct_objects(
     subject: &RdfTerm,
     predicate_iri: &str,
 ) -> Result<Vec<RdfTerm>> {
+    // SPARQL 1.1 treats `_:label` in query text as anonymous (ungrounded)
+    // blank nodes, so we cannot reference a specific blank node by label in a
+    // SPARQL WHERE clause.  Use the store's pattern-matching API directly for
+    // blank-node subjects to get correct results.
+    if let RdfTerm::BlankNode(_) = subject {
+        let pred_term = RdfTerm::iri(predicate_iri)
+            .map_err(|e| crate::error::Error::shacl(format!("Invalid predicate IRI {predicate_iri}: {e}")))?;
+        let quads = store.quads_for_pattern(Some(subject), Some(&pred_term), None, None)?;
+        return Ok(quads.into_iter().map(|(_, _, obj, _)| obj).collect());
+    }
+
     let subj_str = crate::validation::shacl::paths::term_to_sparql(subject);
     let query = format!(
         "SELECT ?o WHERE {{ {subj_str} <{predicate_iri}> ?o }}"
