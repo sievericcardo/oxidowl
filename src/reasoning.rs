@@ -939,6 +939,21 @@ impl ReasoningService {
             ))
         })
     }
+
+    /// Validate the loaded ontology (serialised as Turtle) against a SHACL shapes graph.
+    ///
+    /// `shapes_turtle` – Turtle-encoded SHACL shapes graph.  
+    /// `data_turtle`  – Turtle-encoded data graph to validate. Pass an empty string
+    ///                  to validate only the shapes graph itself.
+    pub fn validate_shacl(
+        &self,
+        shapes_turtle: &str,
+        data_turtle: &str,
+    ) -> Result<crate::validation::shacl::ShaclValidationReport> {
+        let mut validator =
+            crate::validation::shacl::ShaclValidator::new(shapes_turtle, data_turtle)?;
+        validator.validate()
+    }
 }
 
 /// Explanation set for reasoning entailments

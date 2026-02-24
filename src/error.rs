@@ -190,6 +190,10 @@ pub enum Error {
     /// Reification conversion error
     #[error("Reification error: {message}")]
     ReificationError { message: String },
+
+    /// SHACL validation error
+    #[error("SHACL error: {message}")]
+    Shacl { message: String },
 }
 
 // Manual Clone implementation because Backtrace doesn't implement Clone
@@ -325,6 +329,9 @@ impl Clone for Error {
                 current_version: current_version.clone(),
             },
             Error::ReificationError { message } => Error::ReificationError {
+                message: message.clone(),
+            },
+            Error::Shacl { message } => Error::Shacl {
                 message: message.clone(),
             },
         }
@@ -662,6 +669,13 @@ impl Error {
             message: message.into(),
         }
     }
+
+    /// SHACL validation error constructor
+    pub fn shacl<S: Into<String>>(message: S) -> Self {
+        Self::Shacl {
+            message: message.into(),
+        }
+    }
 }
 
 impl From<std::io::Error> for Error {
@@ -735,6 +749,7 @@ impl Error {
             | Error::InvalidDirectionalLiteral { .. }
             | Error::RdfVersionIncompatibility { .. } => ErrorCategory::Input,
             Error::ReificationError { .. } => ErrorCategory::Internal,
+            Error::Shacl { .. } => ErrorCategory::Input,
         }
     }
 
@@ -781,7 +796,8 @@ impl Error {
             | Error::InvalidQuotedTripleStructure { .. }
             | Error::InvalidDirectionalLiteral { .. }
             | Error::RdfVersionIncompatibility { .. }
-            | Error::ReificationError { .. } => false,
+            | Error::ReificationError { .. }
+            | Error::Shacl { .. } => false,
         }
     }
 }

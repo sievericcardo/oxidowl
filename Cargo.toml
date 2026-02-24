@@ -144,6 +144,10 @@ harness = false
 name = "hypertableau_benchmark"
 harness = false
 
+[[bench]]
+name = "shacl_benchmark"
+harness = false
+
 [profile.release]
 opt-level = 3
 lto = true

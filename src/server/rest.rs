@@ -43,6 +43,8 @@ impl RestApiServer {
     pub async fn start(self) -> Result<RestApiServerHandle> {
         let reasoning_service = self.reasoning_service.clone();
         let explanation_service = self.explanation_service.clone();
+        // Dedicated clone for SHACL routes (avoids multiple-move issue for other routes)
+        let shacl_service = self.reasoning_service.clone();
 
         // API routes
         let api = warp::path("api").and(warp::path("v1"));
@@ -133,6 +135,15 @@ impl RestApiServer {
             .and(warp::any().map(move || reasoning_service.clone()))
             .and_then(load_ontology_endpoint);
 
+        // SHACL validation — POST /api/v1/shacl/validate
+        let shacl_validate = api
+            .and(warp::path("shacl"))
+            .and(warp::path("validate"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || shacl_service.clone()))
+            .and_then(validate_shacl_endpoint);
+
         let routes = health
             .or(status)
             .or(consistency)
@@ -144,6 +155,7 @@ impl RestApiServer {
             .or(instances)
             .or(explain)
             .or(load_ontology)
+            .or(shacl_validate)
             .with(
                 warp::cors()
                     .allow_any_origin()
@@ -248,6 +260,15 @@ pub struct ExplanationRequest {
 pub struct LoadOntologyRequest {
     pub ontology_iri: String,
     pub format: Option<String>,
+}
+
+/// Request for SHACL validation
+#[derive(Debug, Deserialize)]
+pub struct ShaclValidateRequest {
+    /// Turtle-encoded SHACL shapes graph
+    pub shapes: String,
+    /// Turtle-encoded data graph to validate
+    pub data: String,
 }
 
 /// Response for reasoner status
@@ -494,6 +515,20 @@ async fn load_ontology_endpoint(
             "format": request.format.unwrap_or_else(|| "auto-detect".to_string())
         }),
     )))
+}
+
+async fn validate_shacl_endpoint(
+    request: ShaclValidateRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    match reasoning_service.validate_shacl(&request.shapes, &request.data) {
+        Ok(report) => Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+            "conforms": report.conforms,
+            "results": report.results.len(),
+            "report": report,
+        })))),
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    }
 }
 
 /// Parse a class expression from string using Manchester Syntax

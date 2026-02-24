@@ -112,6 +112,7 @@ pub use crate::query::{
 pub use crate::reasoning::ReasoningService;
 pub use crate::swrl::{BuiltInRegistry, SWRLInterpreter, SWRLRuleEngine, SWRLValidator};
 pub use crate::validation::{OWL2DLValidator, OWL2Profile, ValidationReport};
+pub use crate::validation::shacl::{ShaclConfig, ShaclValidator, ShaclValidationReport, ShaclValidationResult, ShaclShape, ShaclSeverity};
 
 // Re-export distributed reasoning components
 pub use crate::distributed::{

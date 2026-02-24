@@ -27,11 +27,12 @@ pub use rdf::{RdfSimpleEntailment, RdfSimpleInterpretation};
 pub use rdfs::{RdfsEntailmentEngine, RdfsInterpretation}; // Re-enabled
 
 use crate::{Error, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use url::Url;
 
 /// RDF Triple representation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Triple {
     pub subject: RdfTerm,
     pub predicate: RdfTerm,
@@ -137,7 +138,7 @@ impl Triple {
 }
 
 /// RDF Term (IRI, Blank Node, Literal, or Quoted Triple for RDF-star)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RdfTerm {
     /// IRI reference
     Iri(Url),

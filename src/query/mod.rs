@@ -178,4 +178,18 @@ impl QueryService {
     pub fn advanced_engine(&self) -> &QueryEngine {
         &self.advanced_engine
     }
+
+    /// Validate the given Turtle data graph against a SHACL shapes graph.
+    ///
+    /// Returns a [`ShaclValidationReport`](crate::validation::shacl::ShaclValidationReport)
+    /// describing every constraint violation found.
+    pub fn validate_shacl(
+        &self,
+        shapes_turtle: &str,
+        data_turtle: &str,
+    ) -> crate::Result<crate::validation::shacl::ShaclValidationReport> {
+        let mut validator =
+            crate::validation::shacl::ShaclValidator::new(shapes_turtle, data_turtle)?;
+        validator.validate()
+    }
 }
