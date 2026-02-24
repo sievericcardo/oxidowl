@@ -46,7 +46,11 @@ pub fn evaluate_sparql_constraint(
 
     let rows = match store.execute_select(&full_query) {
         Ok(r) => r,
-        Err(e) => return Err(Error::shacl(format!("sh:sparql query execution failed: {e}"))),
+        Err(e) => {
+            return Err(Error::shacl(format!(
+                "sh:sparql query execution failed: {e}"
+            )));
+        }
     };
 
     let mut results = Vec::new();
@@ -67,8 +71,16 @@ pub fn evaluate_sparql_constraint(
         let row_message = row.get("message").cloned();
 
         let mut msgs = constraint.messages.clone();
-        if let Some(RdfTerm::Literal { value: msg_text, language: lang, .. }) = row_message {
-            msgs.push(ShaclMessage { value: msg_text, language: lang });
+        if let Some(RdfTerm::Literal {
+            value: msg_text,
+            language: lang,
+            ..
+        }) = row_message
+        {
+            msgs.push(ShaclMessage {
+                value: msg_text,
+                language: lang,
+            });
         }
 
         let result_path = path_term.and_then(|t| {

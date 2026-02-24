@@ -65,16 +65,24 @@ pub fn evaluate_min_length(
     for value in values {
         match str_value(value) {
             None => out.push(make_result(
-                focus_node, value, SH_MIN_LENGTH_CONSTRAINT_COMPONENT, severity,
-                source_shape, messages,
+                focus_node,
+                value,
+                SH_MIN_LENGTH_CONSTRAINT_COMPONENT,
+                severity,
+                source_shape,
+                messages,
                 "Blank nodes have no string length",
             )),
             Some(s) => {
                 let char_count = s.chars().count() as u64;
                 if char_count < min_len {
                     out.push(make_result(
-                        focus_node, value, SH_MIN_LENGTH_CONSTRAINT_COMPONENT, severity,
-                        source_shape, messages,
+                        focus_node,
+                        value,
+                        SH_MIN_LENGTH_CONSTRAINT_COMPONENT,
+                        severity,
+                        source_shape,
+                        messages,
                         &format!("String length {char_count} < minLength {min_len}"),
                     ));
                 }
@@ -96,16 +104,24 @@ pub fn evaluate_max_length(
     for value in values {
         match str_value(value) {
             None => out.push(make_result(
-                focus_node, value, SH_MAX_LENGTH_CONSTRAINT_COMPONENT, severity,
-                source_shape, messages,
+                focus_node,
+                value,
+                SH_MAX_LENGTH_CONSTRAINT_COMPONENT,
+                severity,
+                source_shape,
+                messages,
                 "Blank nodes have no string length",
             )),
             Some(s) => {
                 let char_count = s.chars().count() as u64;
                 if char_count > max_len {
                     out.push(make_result(
-                        focus_node, value, SH_MAX_LENGTH_CONSTRAINT_COMPONENT, severity,
-                        source_shape, messages,
+                        focus_node,
+                        value,
+                        SH_MAX_LENGTH_CONSTRAINT_COMPONENT,
+                        severity,
+                        source_shape,
+                        messages,
                         &format!("String length {char_count} > maxLength {max_len}"),
                     ));
                 }
@@ -145,8 +161,12 @@ pub fn evaluate_pattern(
                 .iter()
                 .map(|v| {
                     make_result(
-                        focus_node, v, SH_PATTERN_CONSTRAINT_COMPONENT, severity,
-                        source_shape, messages,
+                        focus_node,
+                        v,
+                        SH_PATTERN_CONSTRAINT_COMPONENT,
+                        severity,
+                        source_shape,
+                        messages,
                         "Invalid sh:pattern regex",
                     )
                 })
@@ -158,15 +178,23 @@ pub fn evaluate_pattern(
     for value in values {
         match str_value(value) {
             None => out.push(make_result(
-                focus_node, value, SH_PATTERN_CONSTRAINT_COMPONENT, severity,
-                source_shape, messages,
+                focus_node,
+                value,
+                SH_PATTERN_CONSTRAINT_COMPONENT,
+                severity,
+                source_shape,
+                messages,
                 "Blank nodes cannot be matched against sh:pattern",
             )),
             Some(s) => {
                 if !re.is_match(&s) {
                     out.push(make_result(
-                        focus_node, value, SH_PATTERN_CONSTRAINT_COMPONENT, severity,
-                        source_shape, messages,
+                        focus_node,
+                        value,
+                        SH_PATTERN_CONSTRAINT_COMPONENT,
+                        severity,
+                        source_shape,
+                        messages,
                         &format!("Value does not match pattern /{pattern}/"),
                     ));
                 }
@@ -187,8 +215,7 @@ fn lang_matches(tag: &str, range: &str) -> bool {
     }
     let tag_lower = tag.to_ascii_lowercase();
     let range_lower = range.to_ascii_lowercase();
-    tag_lower == range_lower
-        || tag_lower.starts_with(&format!("{range_lower}-"))
+    tag_lower == range_lower || tag_lower.starts_with(&format!("{range_lower}-"))
 }
 
 pub fn evaluate_language_in(
@@ -202,12 +229,19 @@ pub fn evaluate_language_in(
     let mut out = Vec::new();
     for value in values {
         match value {
-            RdfTerm::Literal { language: Some(tag), .. } => {
+            RdfTerm::Literal {
+                language: Some(tag),
+                ..
+            } => {
                 let conforms = language_in.iter().any(|r| lang_matches(tag, r));
                 if !conforms {
                     out.push(make_result(
-                        focus_node, value, SH_LANGUAGE_IN_CONSTRAINT_COMPONENT,
-                        severity, source_shape, messages,
+                        focus_node,
+                        value,
+                        SH_LANGUAGE_IN_CONSTRAINT_COMPONENT,
+                        severity,
+                        source_shape,
+                        messages,
                         &format!("Language tag '{tag}' not in sh:languageIn list"),
                     ));
                 }
@@ -215,8 +249,12 @@ pub fn evaluate_language_in(
             _ => {
                 // Non-language literals and non-literals always violate
                 out.push(make_result(
-                    focus_node, value, SH_LANGUAGE_IN_CONSTRAINT_COMPONENT,
-                    severity, source_shape, messages,
+                    focus_node,
+                    value,
+                    SH_LANGUAGE_IN_CONSTRAINT_COMPONENT,
+                    severity,
+                    source_shape,
+                    messages,
                     "Value is not a language-tagged literal for sh:languageIn",
                 ));
             }
@@ -238,7 +276,11 @@ pub fn evaluate_unique_lang(
     let mut duplicate_tags: Vec<String> = Vec::new();
 
     for value in values {
-        if let RdfTerm::Literal { language: Some(tag), .. } = value {
+        if let RdfTerm::Literal {
+            language: Some(tag),
+            ..
+        } = value
+        {
             let lower_tag = tag.to_ascii_lowercase();
             let count = seen.entry(lower_tag.clone()).or_insert(0);
             *count += 1;

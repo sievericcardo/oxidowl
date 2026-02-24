@@ -47,7 +47,9 @@ fn person_data_with_violations(n: usize) -> String {
     for i in 0..n {
         if i % 10 == 0 {
             // every 10th node is missing the required name
-            buf.push_str(&format!("ex:p{i} a ex:Person ; ex:age \"{i}\"^^xsd:integer .\n"));
+            buf.push_str(&format!(
+                "ex:p{i} a ex:Person ; ex:age \"{i}\"^^xsd:integer .\n"
+            ));
         } else {
             buf.push_str(&format!(
                 "ex:p{i} a ex:Person ; ex:name \"Person {i}\"^^xsd:string ; ex:age \"{i}\"^^xsd:integer .\n"
@@ -92,9 +94,7 @@ fn bench_validate_with_violations(c: &mut Criterion) {
 fn bench_parse_shapes(c: &mut Criterion) {
     let shapes = format!("{PREFIXES}{SIMPLE_SHAPES}");
     c.bench_function("shacl/parse_shapes", |b| {
-        b.iter(|| {
-            oxidowl::validation::shacl::parser::parse_shapes_graph(&shapes).unwrap()
-        });
+        b.iter(|| oxidowl::validation::shacl::parser::parse_shapes_graph(&shapes).unwrap());
     });
 }
 

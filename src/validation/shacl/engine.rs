@@ -15,13 +15,12 @@ use crate::validation::shacl::{
         logical::{evaluate_and, evaluate_not, evaluate_or, evaluate_xone},
         other::{evaluate_closed, evaluate_has_value, evaluate_in},
         property_pair::{
-            evaluate_disjoint, evaluate_equals, evaluate_less_than,
-            evaluate_less_than_or_equals,
+            evaluate_disjoint, evaluate_equals, evaluate_less_than, evaluate_less_than_or_equals,
         },
         shape_based::{evaluate_node_constraint, evaluate_qualified_value_shape},
         string_based::{
-            evaluate_language_in, evaluate_max_length, evaluate_min_length,
-            evaluate_pattern, evaluate_unique_lang,
+            evaluate_language_in, evaluate_max_length, evaluate_min_length, evaluate_pattern,
+            evaluate_unique_lang,
         },
         value_range::{
             evaluate_max_exclusive, evaluate_max_inclusive, evaluate_min_exclusive,
@@ -107,9 +106,9 @@ impl ShaclValidator {
 
         let mut data_store = SparqlStore::new()?;
         if !data_turtle.is_empty() {
-            data_store.load_turtle(data_turtle).map_err(|e| {
-                Error::shacl(format!("Failed to load data graph: {e}"))
-            })?;
+            data_store
+                .load_turtle(data_turtle)
+                .map_err(|e| Error::shacl(format!("Failed to load data graph: {e}")))?;
         }
 
         Ok(ShaclValidator {
@@ -242,68 +241,163 @@ impl ShaclValidator {
     ) -> Result<Vec<ShaclValidationResult>> {
         match constraint {
             // ── Value type ────────────────────────────────────────────────
-            ShaclConstraint::Class(class) => {
-                evaluate_class(&self.data_store, focus_node, values, class, severity, source_shape, messages)
-            }
-            ShaclConstraint::Datatype(dt_iri) => {
-                Ok(evaluate_datatype(values, dt_iri, focus_node, severity, source_shape, messages))
-            }
-            ShaclConstraint::NodeKind(kind) => {
-                Ok(evaluate_node_kind(values, kind, focus_node, severity, source_shape, messages))
-            }
+            ShaclConstraint::Class(class) => evaluate_class(
+                &self.data_store,
+                focus_node,
+                values,
+                class,
+                severity,
+                source_shape,
+                messages,
+            ),
+            ShaclConstraint::Datatype(dt_iri) => Ok(evaluate_datatype(
+                values,
+                dt_iri,
+                focus_node,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::NodeKind(kind) => Ok(evaluate_node_kind(
+                values,
+                kind,
+                focus_node,
+                severity,
+                source_shape,
+                messages,
+            )),
 
             // ── Cardinality ───────────────────────────────────────────────
-            ShaclConstraint::MinCount(n) => {
-                Ok(evaluate_min_count(focus_node, values, *n, severity, source_shape, messages))
-            }
-            ShaclConstraint::MaxCount(n) => {
-                Ok(evaluate_max_count(focus_node, values, *n, severity, source_shape, messages))
-            }
+            ShaclConstraint::MinCount(n) => Ok(evaluate_min_count(
+                focus_node,
+                values,
+                *n,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::MaxCount(n) => Ok(evaluate_max_count(
+                focus_node,
+                values,
+                *n,
+                severity,
+                source_shape,
+                messages,
+            )),
 
             // ── Value range ───────────────────────────────────────────────
-            ShaclConstraint::MinExclusive(bound) => {
-                Ok(evaluate_min_exclusive(focus_node, values, bound, severity, source_shape, messages))
-            }
-            ShaclConstraint::MinInclusive(bound) => {
-                Ok(evaluate_min_inclusive(focus_node, values, bound, severity, source_shape, messages))
-            }
-            ShaclConstraint::MaxExclusive(bound) => {
-                Ok(evaluate_max_exclusive(focus_node, values, bound, severity, source_shape, messages))
-            }
-            ShaclConstraint::MaxInclusive(bound) => {
-                Ok(evaluate_max_inclusive(focus_node, values, bound, severity, source_shape, messages))
-            }
+            ShaclConstraint::MinExclusive(bound) => Ok(evaluate_min_exclusive(
+                focus_node,
+                values,
+                bound,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::MinInclusive(bound) => Ok(evaluate_min_inclusive(
+                focus_node,
+                values,
+                bound,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::MaxExclusive(bound) => Ok(evaluate_max_exclusive(
+                focus_node,
+                values,
+                bound,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::MaxInclusive(bound) => Ok(evaluate_max_inclusive(
+                focus_node,
+                values,
+                bound,
+                severity,
+                source_shape,
+                messages,
+            )),
 
             // ── String-based ──────────────────────────────────────────────
-            ShaclConstraint::MinLength(n) => {
-                Ok(evaluate_min_length(focus_node, values, *n, severity, source_shape, messages))
-            }
-            ShaclConstraint::MaxLength(n) => {
-                Ok(evaluate_max_length(focus_node, values, *n, severity, source_shape, messages))
-            }
-            ShaclConstraint::Pattern { pattern, flags } => {
-                Ok(evaluate_pattern(focus_node, values, pattern, flags.as_deref(), severity, source_shape, messages))
-            }
-            ShaclConstraint::LanguageIn(langs) => {
-                Ok(evaluate_language_in(focus_node, values, langs, severity, source_shape, messages))
-            }
-            ShaclConstraint::UniqueLang(_) => {
-                Ok(evaluate_unique_lang(focus_node, values, severity, source_shape, messages))
-            }
+            ShaclConstraint::MinLength(n) => Ok(evaluate_min_length(
+                focus_node,
+                values,
+                *n,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::MaxLength(n) => Ok(evaluate_max_length(
+                focus_node,
+                values,
+                *n,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::Pattern { pattern, flags } => Ok(evaluate_pattern(
+                focus_node,
+                values,
+                pattern,
+                flags.as_deref(),
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::LanguageIn(langs) => Ok(evaluate_language_in(
+                focus_node,
+                values,
+                langs,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::UniqueLang(_) => Ok(evaluate_unique_lang(
+                focus_node,
+                values,
+                severity,
+                source_shape,
+                messages,
+            )),
 
             // ── Property pair ─────────────────────────────────────────────
-            ShaclConstraint::Equals(prop) => {
-                evaluate_equals(&self.data_store, focus_node, values, prop, severity, source_shape, messages)
-            }
-            ShaclConstraint::Disjoint(prop) => {
-                evaluate_disjoint(&self.data_store, focus_node, values, prop, severity, source_shape, messages)
-            }
-            ShaclConstraint::LessThan(prop) => {
-                evaluate_less_than(&self.data_store, focus_node, values, prop, severity, source_shape, messages)
-            }
-            ShaclConstraint::LessThanOrEquals(prop) => {
-                evaluate_less_than_or_equals(&self.data_store, focus_node, values, prop, severity, source_shape, messages)
-            }
+            ShaclConstraint::Equals(prop) => evaluate_equals(
+                &self.data_store,
+                focus_node,
+                values,
+                prop,
+                severity,
+                source_shape,
+                messages,
+            ),
+            ShaclConstraint::Disjoint(prop) => evaluate_disjoint(
+                &self.data_store,
+                focus_node,
+                values,
+                prop,
+                severity,
+                source_shape,
+                messages,
+            ),
+            ShaclConstraint::LessThan(prop) => evaluate_less_than(
+                &self.data_store,
+                focus_node,
+                values,
+                prop,
+                severity,
+                source_shape,
+                messages,
+            ),
+            ShaclConstraint::LessThanOrEquals(prop) => evaluate_less_than_or_equals(
+                &self.data_store,
+                focus_node,
+                values,
+                prop,
+                severity,
+                source_shape,
+                messages,
+            ),
 
             // ── Logical ───────────────────────────────────────────────────
             ShaclConstraint::Not(inner_id) => {
@@ -312,7 +406,9 @@ impl ShaclValidator {
                     focus_node,
                     inner_id,
                     &mut |node, sid| self.conforms_to_shape(node, sid, &all_shapes_clone),
-                    severity, source_shape, messages,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
             ShaclConstraint::And(shape_ids) => {
@@ -321,7 +417,9 @@ impl ShaclValidator {
                     focus_node,
                     shape_ids,
                     &mut |node, sid| self.conforms_to_shape(node, sid, &all_shapes_clone),
-                    severity, source_shape, messages,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
             ShaclConstraint::Or(shape_ids) => {
@@ -330,7 +428,9 @@ impl ShaclValidator {
                     focus_node,
                     shape_ids,
                     &mut |node, sid| self.conforms_to_shape(node, sid, &all_shapes_clone),
-                    severity, source_shape, messages,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
             ShaclConstraint::Xone(shape_ids) => {
@@ -339,7 +439,9 @@ impl ShaclValidator {
                     focus_node,
                     shape_ids,
                     &mut |node, sid| self.conforms_to_shape(node, sid, &all_shapes_clone),
-                    severity, source_shape, messages,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
 
@@ -351,7 +453,9 @@ impl ShaclValidator {
                     values,
                     node_id,
                     &mut |node, sid| self.conforms_to_shape(node, sid, &all_shapes_clone),
-                    severity, source_shape, messages,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
             ShaclConstraint::Property(prop_id) => {
@@ -363,7 +467,8 @@ impl ShaclValidator {
                         let mut sub_results = Vec::new();
                         let ps_clone = ps.clone();
                         for value in values {
-                            let r = self.validate_focus_node(value, &ps_clone, &all_shapes_clone)?;
+                            let r =
+                                self.validate_focus_node(value, &ps_clone, &all_shapes_clone)?;
                             sub_results.extend(r);
                         }
                         Ok(sub_results)
@@ -371,7 +476,12 @@ impl ShaclValidator {
                     None => Ok(Vec::new()),
                 }
             }
-            ShaclConstraint::QualifiedValue { shape_id, min_count, max_count, .. } => {
+            ShaclConstraint::QualifiedValue {
+                shape_id,
+                min_count,
+                max_count,
+                ..
+            } => {
                 let all_shapes_clone = all_shapes.to_vec();
                 evaluate_qualified_value_shape(
                     focus_node,
@@ -380,7 +490,9 @@ impl ShaclValidator {
                     min_count.as_ref().copied(),
                     max_count.as_ref().copied(),
                     &mut |node, sid| self.conforms_to_shape(node, sid, &all_shapes_clone),
-                    severity, source_shape, messages,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
 
@@ -389,22 +501,35 @@ impl ShaclValidator {
                 // Allowed predicates = union of all sh:property/sh:path values
                 let allowed = collect_allowed_predicates(all_shapes, current_shape);
                 evaluate_closed(
-                    &self.data_store, focus_node, &allowed, ignored,
-                    severity, source_shape, messages,
+                    &self.data_store,
+                    focus_node,
+                    &allowed,
+                    ignored,
+                    severity,
+                    source_shape,
+                    messages,
                 )
             }
-            ShaclConstraint::HasValue(required) => {
-                Ok(evaluate_has_value(focus_node, values, required, severity, source_shape, messages))
-            }
-            ShaclConstraint::In(allowed) => {
-                Ok(evaluate_in(focus_node, values, allowed, severity, source_shape, messages))
-            }
+            ShaclConstraint::HasValue(required) => Ok(evaluate_has_value(
+                focus_node,
+                values,
+                required,
+                severity,
+                source_shape,
+                messages,
+            )),
+            ShaclConstraint::In(allowed) => Ok(evaluate_in(
+                focus_node,
+                values,
+                allowed,
+                severity,
+                source_shape,
+                messages,
+            )),
 
             // ── SPARQL ────────────────────────────────────────────────────
             ShaclConstraint::Sparql(sc) => {
-                evaluate_sparql_constraint(
-                    &self.data_store, focus_node, sc, severity, source_shape,
-                )
+                evaluate_sparql_constraint(&self.data_store, focus_node, sc, severity, source_shape)
             }
             ShaclConstraint::SparqlComponent(_) => {
                 // TODO: full custom component resolution requires a components
@@ -442,7 +567,9 @@ fn collect_allowed_predicates(all_shapes: &[ShaclShape], shape: &ShaclShape) -> 
     // For node shapes, look at all sh:property references
     if let ShaclShape::NodeShape(ns) = shape {
         for prop_id in &ns.properties {
-            if let Some(ShaclShape::PropertyShape(ps)) = all_shapes.iter().find(|s| s.id() == prop_id) {
+            if let Some(ShaclShape::PropertyShape(ps)) =
+                all_shapes.iter().find(|s| s.id() == prop_id)
+            {
                 if let crate::validation::shacl::model::ShaclPath::Predicate(iri) = &ps.path {
                     if let Ok(t) = RdfTerm::iri(iri) {
                         allowed.push(t);

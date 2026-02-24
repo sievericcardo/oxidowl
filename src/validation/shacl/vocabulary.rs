@@ -55,8 +55,7 @@ pub const SH_SOURCE_CONSTRAINT_COMPONENT: &str =
     "http://www.w3.org/ns/shacl#sourceConstraintComponent";
 pub const SH_RESULT_MESSAGE: &str = "http://www.w3.org/ns/shacl#resultMessage";
 pub const SH_DETAIL: &str = "http://www.w3.org/ns/shacl#detail";
-pub const SH_SHAPES_GRAPH_WELL_FORMED: &str =
-    "http://www.w3.org/ns/shacl#shapesGraphWellFormed";
+pub const SH_SHAPES_GRAPH_WELL_FORMED: &str = "http://www.w3.org/ns/shacl#shapesGraphWellFormed";
 
 // ── Value type constraints ───────────────────────────────────────────────────
 
@@ -149,14 +148,10 @@ pub const SH_AND: &str = "http://www.w3.org/ns/shacl#and";
 pub const SH_OR: &str = "http://www.w3.org/ns/shacl#or";
 pub const SH_XONE: &str = "http://www.w3.org/ns/shacl#xone";
 
-pub const SH_NOT_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#NotConstraintComponent";
-pub const SH_AND_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#AndConstraintComponent";
-pub const SH_OR_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#OrConstraintComponent";
-pub const SH_XONE_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#XoneConstraintComponent";
+pub const SH_NOT_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#NotConstraintComponent";
+pub const SH_AND_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#AndConstraintComponent";
+pub const SH_OR_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#OrConstraintComponent";
+pub const SH_XONE_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#XoneConstraintComponent";
 
 // ── Shape-based constraints ──────────────────────────────────────────────────
 
@@ -168,8 +163,7 @@ pub const SH_QUALIFIED_MAX_COUNT: &str = "http://www.w3.org/ns/shacl#qualifiedMa
 pub const SH_QUALIFIED_VALUE_SHAPES_DISJOINT: &str =
     "http://www.w3.org/ns/shacl#qualifiedValueShapesDisjoint";
 
-pub const SH_NODE_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#NodeConstraintComponent";
+pub const SH_NODE_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#NodeConstraintComponent";
 pub const SH_PROPERTY_CONSTRAINT_COMPONENT: &str =
     "http://www.w3.org/ns/shacl#PropertyConstraintComponent";
 pub const SH_QUALIFIED_MIN_COUNT_CONSTRAINT_COMPONENT: &str =
@@ -188,8 +182,7 @@ pub const SH_CLOSED_CONSTRAINT_COMPONENT: &str =
     "http://www.w3.org/ns/shacl#ClosedConstraintComponent";
 pub const SH_HAS_VALUE_CONSTRAINT_COMPONENT: &str =
     "http://www.w3.org/ns/shacl#HasValueConstraintComponent";
-pub const SH_IN_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#InConstraintComponent";
+pub const SH_IN_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#InConstraintComponent";
 
 // ── SPARQL constraints / components ─────────────────────────────────────────
 
@@ -206,13 +199,11 @@ pub const SH_SPARQL_CONSTRAINT_COMPONENT: &str =
     "http://www.w3.org/ns/shacl#SPARQLConstraintComponent";
 pub const SH_SPARQL_CONSTRAINT: &str = "http://www.w3.org/ns/shacl#SPARQLConstraint";
 pub const SH_SPARQL_ASK_VALIDATOR: &str = "http://www.w3.org/ns/shacl#SPARQLAskValidator";
-pub const SH_SPARQL_SELECT_VALIDATOR: &str =
-    "http://www.w3.org/ns/shacl#SPARQLSelectValidator";
+pub const SH_SPARQL_SELECT_VALIDATOR: &str = "http://www.w3.org/ns/shacl#SPARQLSelectValidator";
 pub const SH_SPARQL_CONSTRAINT_COMPONENT_TYPE: &str =
     "http://www.w3.org/ns/shacl#SPARQLConstraintComponent";
 
-pub const SH_CONSTRAINT_COMPONENT: &str =
-    "http://www.w3.org/ns/shacl#ConstraintComponent";
+pub const SH_CONSTRAINT_COMPONENT: &str = "http://www.w3.org/ns/shacl#ConstraintComponent";
 pub const SH_PARAMETER: &str = "http://www.w3.org/ns/shacl#parameter";
 pub const SH_VALIDATOR: &str = "http://www.w3.org/ns/shacl#validator";
 pub const SH_NODE_VALIDATOR: &str = "http://www.w3.org/ns/shacl#nodeValidator";

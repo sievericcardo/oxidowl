@@ -505,7 +505,9 @@ impl Tableau {
                         self.queue_rule_for_concept(node_id, &complex_expr)?;
                         log::debug!(
                             "Unfolded concept {:?} to {:?} at node {}",
-                            named_class.iri, complex_expr, node_id
+                            named_class.iri,
+                            complex_expr,
+                            node_id
                         );
                     }
                 }

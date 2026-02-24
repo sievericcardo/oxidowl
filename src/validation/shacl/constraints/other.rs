@@ -53,9 +53,7 @@ pub fn evaluate_closed(
     messages: &[ShaclMessage],
 ) -> Result<Vec<ShaclValidationResult>> {
     let focus_str = term_to_sparql(focus_node);
-    let query = format!(
-        "SELECT DISTINCT ?pred WHERE {{ {focus_str} ?pred ?any }}"
-    );
+    let query = format!("SELECT DISTINCT ?pred WHERE {{ {focus_str} ?pred ?any }}");
     let rows = store.execute_select(&query)?;
 
     let is_allowed = |pred_term: &RdfTerm| -> bool {

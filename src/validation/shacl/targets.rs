@@ -15,10 +15,7 @@ use crate::validation::shacl::paths::term_to_sparql;
 ///
 /// Returns a deduplicated `HashSet<RdfTerm>` containing every node that
 /// must be validated.
-pub fn resolve_targets(
-    store: &SparqlStore,
-    targets: &[ShaclTarget],
-) -> Result<HashSet<RdfTerm>> {
+pub fn resolve_targets(store: &SparqlStore, targets: &[ShaclTarget]) -> Result<HashSet<RdfTerm>> {
     let mut result: HashSet<RdfTerm> = HashSet::new();
 
     for target in targets {
@@ -29,10 +26,7 @@ pub fn resolve_targets(
     Ok(result)
 }
 
-fn resolve_single_target(
-    store: &SparqlStore,
-    target: &ShaclTarget,
-) -> Result<Vec<RdfTerm>> {
+fn resolve_single_target(store: &SparqlStore, target: &ShaclTarget) -> Result<Vec<RdfTerm>> {
     match target {
         // §2.1.3.1  sh:targetNode — the term itself is the focus node.
         ShaclTarget::TargetNode(term) => Ok(vec![term.clone()]),
@@ -53,18 +47,14 @@ fn resolve_single_target(
         // §2.1.3.3  sh:targetSubjectsOf — all subjects of a predicate.
         ShaclTarget::TargetSubjectsOf(pred) => {
             let pred_str = term_to_sparql(pred);
-            let query = format!(
-                "SELECT DISTINCT ?this WHERE {{ ?this {pred_str} ?_any }}"
-            );
+            let query = format!("SELECT DISTINCT ?this WHERE {{ ?this {pred_str} ?_any }}");
             collect_var(store, &query, "this")
         }
 
         // §2.1.3.4  sh:targetObjectsOf — all objects of a predicate.
         ShaclTarget::TargetObjectsOf(pred) => {
             let pred_str = term_to_sparql(pred);
-            let query = format!(
-                "SELECT DISTINCT ?this WHERE {{ ?_any {pred_str} ?this }}"
-            );
+            let query = format!("SELECT DISTINCT ?this WHERE {{ ?_any {pred_str} ?this }}");
             collect_var(store, &query, "this")
         }
     }

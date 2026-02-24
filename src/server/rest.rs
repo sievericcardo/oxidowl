@@ -522,11 +522,13 @@ async fn validate_shacl_endpoint(
     reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     match reasoning_service.validate_shacl(&request.shapes, &request.data) {
-        Ok(report) => Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-            "conforms": report.conforms,
-            "results": report.results.len(),
-            "report": report,
-        })))),
+        Ok(report) => Ok(warp::reply::json(&ApiResponse::success(
+            serde_json::json!({
+                "conforms": report.conforms,
+                "results": report.results.len(),
+                "report": report,
+            }),
+        ))),
         Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
 }

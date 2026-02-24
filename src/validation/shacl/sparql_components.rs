@@ -49,9 +49,9 @@ pub fn evaluate_sparql_component(
             query = substitute_this(&query, &this_str);
             query = apply_param_bindings(&query, &param_bindings);
 
-            let conforms = store.execute_ask(&query).map_err(|e| {
-                Error::shacl(format!("SPARQL ASK validator failed: {e}"))
-            })?;
+            let conforms = store
+                .execute_ask(&query)
+                .map_err(|e| Error::shacl(format!("SPARQL ASK validator failed: {e}")))?;
 
             if !conforms {
                 let msgs = build_messages(param_messages, None, value, &constraint.parameters);
@@ -60,7 +60,10 @@ pub fn evaluate_sparql_component(
                     result_path: None,
                     value: Some(value.clone()),
                     source_shape: source_shape.cloned(),
-                    source_constraint_component: constraint.source_component.clone().to_string_repr(),
+                    source_constraint_component: constraint
+                        .source_component
+                        .clone()
+                        .to_string_repr(),
                     severity: severity.clone(),
                     messages: msgs,
                     details: Vec::new(),
@@ -74,9 +77,9 @@ pub fn evaluate_sparql_component(
         query = substitute_this(&query, &this_str);
         query = apply_param_bindings(&query, &param_bindings);
 
-        let rows = store.execute_select(&query).map_err(|e| {
-            Error::shacl(format!("SPARQL SELECT validator failed: {e}"))
-        })?;
+        let rows = store
+            .execute_select(&query)
+            .map_err(|e| Error::shacl(format!("SPARQL SELECT validator failed: {e}")))?;
 
         for row in rows {
             if let Some(fail) = row.get("failure") {
@@ -89,8 +92,16 @@ pub fn evaluate_sparql_component(
             let row_msg = row.get("message").cloned();
 
             let mut msgs = param_messages.to_vec();
-            if let Some(RdfTerm::Literal { value: m, language: lang, .. }) = row_msg {
-                msgs.push(ShaclMessage { value: m, language: lang });
+            if let Some(RdfTerm::Literal {
+                value: m,
+                language: lang,
+                ..
+            }) = row_msg
+            {
+                msgs.push(ShaclMessage {
+                    value: m,
+                    language: lang,
+                });
             }
 
             out.push(ShaclValidationResult {
@@ -111,9 +122,7 @@ pub fn evaluate_sparql_component(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn build_param_bindings(
-    parameters: &[(String, RdfTerm)],
-) -> Vec<(String, String)> {
+fn build_param_bindings(parameters: &[(String, RdfTerm)]) -> Vec<(String, String)> {
     parameters
         .iter()
         .map(|(name, value)| (name.clone(), term_to_sparql(value)))
@@ -153,7 +162,9 @@ fn build_messages(
         }
         return vec![ShaclMessage::plain(msg)];
     }
-    vec![ShaclMessage::plain("Custom SPARQL-based constraint violated")]
+    vec![ShaclMessage::plain(
+        "Custom SPARQL-based constraint violated",
+    )]
 }
 
 // ── RdfTerm → String repr helper (for source_constraint_component) ─────────

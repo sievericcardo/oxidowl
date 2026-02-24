@@ -414,8 +414,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                         self.introduce_definition(&axiom.classes[i], &var_x)?
                     }
                     ClassExpression::ObjectUnionOf(ops) if ops.len() > 2 => {
-                        let union_clauses =
-                            self.compile_union_disjunctive_clauses(ops, &var_x)?;
+                        let union_clauses = self.compile_union_disjunctive_clauses(ops, &var_x)?;
                         pair_clauses.extend(union_clauses);
                         self.introduce_definition(&axiom.classes[i], &var_x)?
                     }
@@ -441,8 +440,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                         self.introduce_definition(&axiom.classes[j], &var_x)?
                     }
                     ClassExpression::ObjectUnionOf(ops) if ops.len() > 2 => {
-                        let union_clauses =
-                            self.compile_union_disjunctive_clauses(ops, &var_x)?;
+                        let union_clauses = self.compile_union_disjunctive_clauses(ops, &var_x)?;
                         pair_clauses.extend(union_clauses);
                         self.introduce_definition(&axiom.classes[j], &var_x)?
                     }

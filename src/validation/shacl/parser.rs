@@ -8,21 +8,16 @@ use std::collections::HashMap;
 use crate::error::{Error, Result};
 use crate::query::sparql_store::SparqlStore;
 use crate::semantics::RdfTerm;
-use crate::validation::shacl::{
-    model::*,
-    vocabulary::*,
-};
+use crate::validation::shacl::{model::*, vocabulary::*};
 
 /// Parse a Turtle shapes graph and return a list of `ShaclShape`s.
 ///
 /// Performs shapes graph well-formedness checks per spec Appendix B.
-pub fn parse_shapes_graph(
-    turtle: &str,
-) -> Result<(Vec<ShaclShape>, bool)> {
+pub fn parse_shapes_graph(turtle: &str) -> Result<(Vec<ShaclShape>, bool)> {
     let mut store = SparqlStore::new()?;
-    store.load_turtle(turtle).map_err(|e| {
-        Error::shacl(format!("Failed to load shapes graph: {e}"))
-    })?;
+    store
+        .load_turtle(turtle)
+        .map_err(|e| Error::shacl(format!("Failed to load shapes graph: {e}")))?;
 
     let shapes = extract_shapes(&store)?;
     let well_formed = check_well_formedness(&store, &shapes);
@@ -126,7 +121,8 @@ fn extract_shapes(store: &SparqlStore) -> Result<Vec<ShaclShape>> {
                     // it has sh:path.  Use quads_for_pattern to check safely.
                     let pred_path = RdfTerm::iri(SH_PATH).ok();
                     let has_path = if let Some(pred) = &pred_path {
-                        let quads = store.quads_for_pattern(Some(&ref_id), Some(pred), None, None)?;
+                        let quads =
+                            store.quads_for_pattern(Some(&ref_id), Some(pred), None, None)?;
                         !quads.is_empty()
                     } else {
                         false
@@ -261,10 +257,7 @@ fn extract_targets(
 
 // ── Constraints ───────────────────────────────────────────────────────────────
 
-fn extract_constraints(
-    store: &SparqlStore,
-    shape_id: &RdfTerm,
-) -> Result<Vec<ShaclConstraint>> {
+fn extract_constraints(store: &SparqlStore, shape_id: &RdfTerm) -> Result<Vec<ShaclConstraint>> {
     let mut out = Vec::new();
 
     // ── Value type ────────────────────────────────────────────────────────
@@ -323,10 +316,16 @@ fn extract_constraints(
     }
     let patterns = direct_objects(store, shape_id, SH_PATTERN)?;
     let flags_list = direct_objects(store, shape_id, SH_FLAGS)?;
-    let flags_opt = flags_list.into_iter().next().and_then(|f| string_value_of(&f));
+    let flags_opt = flags_list
+        .into_iter()
+        .next()
+        .and_then(|f| string_value_of(&f));
     for p in patterns {
         if let Some(pat) = string_value_of(&p) {
-            out.push(ShaclConstraint::Pattern { pattern: pat, flags: flags_opt.clone() });
+            out.push(ShaclConstraint::Pattern {
+                pattern: pat,
+                flags: flags_opt.clone(),
+            });
         }
     }
 
@@ -445,7 +444,12 @@ fn extract_sparql_constraint(
     let messages = messages_of(store, sparql_node)?;
     let prefixes = extract_prefix_declarations(store, sparql_node)?;
 
-    Ok(Some(SparqlConstraint { select, prefixes, messages, deactivated }))
+    Ok(Some(SparqlConstraint {
+        select,
+        prefixes,
+        messages,
+        deactivated,
+    }))
 }
 
 fn extract_prefix_declarations(
@@ -460,7 +464,10 @@ fn extract_prefix_declarations(
             let ns_vals = direct_objects(store, &decl, SH_NAMESPACE)?;
 
             if let (Some(p), Some(ns)) = (
-                prefix_vals.into_iter().next().and_then(|v| string_value_of(&v)),
+                prefix_vals
+                    .into_iter()
+                    .next()
+                    .and_then(|v| string_value_of(&v)),
                 ns_vals.into_iter().next().and_then(|v| string_value_of(&v)),
             ) {
                 prefixes.push((p, ns));
@@ -527,7 +534,9 @@ fn parse_path(store: &SparqlStore, node: &RdfTerm) -> Result<ShaclPath> {
         }
     }
 
-    Err(Error::shacl(format!("Cannot parse SHACL path from node: {node:?}")))
+    Err(Error::shacl(format!(
+        "Cannot parse SHACL path from node: {node:?}"
+    )))
 }
 
 // ── RDF List walker ───────────────────────────────────────────────────────────
@@ -606,18 +615,20 @@ fn direct_objects(
     // SPARQL WHERE clause.  Use the store's pattern-matching API directly for
     // blank-node subjects to get correct results.
     if let RdfTerm::BlankNode(_) = subject {
-        let pred_term = RdfTerm::iri(predicate_iri)
-            .map_err(|e| crate::error::Error::shacl(format!("Invalid predicate IRI {predicate_iri}: {e}")))?;
+        let pred_term = RdfTerm::iri(predicate_iri).map_err(|e| {
+            crate::error::Error::shacl(format!("Invalid predicate IRI {predicate_iri}: {e}"))
+        })?;
         let quads = store.quads_for_pattern(Some(subject), Some(&pred_term), None, None)?;
         return Ok(quads.into_iter().map(|(_, _, obj, _)| obj).collect());
     }
 
     let subj_str = crate::validation::shacl::paths::term_to_sparql(subject);
-    let query = format!(
-        "SELECT ?o WHERE {{ {subj_str} <{predicate_iri}> ?o }}"
-    );
+    let query = format!("SELECT ?o WHERE {{ {subj_str} <{predicate_iri}> ?o }}");
     let rows = store.execute_select(&query)?;
-    Ok(rows.into_iter().filter_map(|r| r.get("o").cloned()).collect())
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.get("o").cloned())
+        .collect())
 }
 
 fn extract_list_or_direct_objects(
@@ -630,9 +641,9 @@ fn extract_list_or_direct_objects(
 
 fn bool_object(store: &SparqlStore, subject: &RdfTerm, pred: &str) -> Result<bool> {
     let vals = direct_objects(store, subject, pred)?;
-    Ok(vals.into_iter().any(|v| {
-        matches!(&v, RdfTerm::Literal { value, .. } if value == "true" || value == "1")
-    }))
+    Ok(vals
+        .into_iter()
+        .any(|v| matches!(&v, RdfTerm::Literal { value, .. } if value == "true" || value == "1")))
 }
 
 fn severity_of(store: &SparqlStore, shape_id: &RdfTerm) -> Result<ShaclSeverity> {
@@ -650,7 +661,9 @@ fn messages_of(store: &SparqlStore, shape_id: &RdfTerm) -> Result<Vec<ShaclMessa
     Ok(vals
         .into_iter()
         .filter_map(|t| match t {
-            RdfTerm::Literal { value, language, .. } => Some(ShaclMessage { value, language }),
+            RdfTerm::Literal {
+                value, language, ..
+            } => Some(ShaclMessage { value, language }),
             _ => None,
         })
         .collect())

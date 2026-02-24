@@ -180,7 +180,10 @@ pub enum ShaclConstraint {
     /// `sh:maxLength`
     MaxLength(u64),
     /// `sh:pattern` (+ optional `sh:flags`)
-    Pattern { pattern: String, flags: Option<String> },
+    Pattern {
+        pattern: String,
+        flags: Option<String>,
+    },
     /// `sh:languageIn`
     LanguageIn(Vec<String>),
     /// `sh:uniqueLang`
@@ -368,9 +371,15 @@ pub struct ShaclMessage {
 
 impl ShaclMessage {
     pub fn plain(text: impl Into<String>) -> Self {
-        ShaclMessage { value: text.into(), language: None }
+        ShaclMessage {
+            value: text.into(),
+            language: None,
+        }
     }
     pub fn lang(text: impl Into<String>, lang: impl Into<String>) -> Self {
-        ShaclMessage { value: text.into(), language: Some(lang.into()) }
+        ShaclMessage {
+            value: text.into(),
+            language: Some(lang.into()),
+        }
     }
 }

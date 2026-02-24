@@ -20,9 +20,7 @@ fn cls(iri: &str) -> ClassExpression {
 }
 
 fn prop(iri: &str) -> ObjectPropertyExpression {
-    ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-        iri: IRI::new(iri),
-    })
+    ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: IRI::new(iri) })
 }
 
 fn some(p: &str, filler: ClassExpression) -> ClassExpression {
@@ -82,13 +80,12 @@ impl OntologyBuilder {
 
     fn equiv(&mut self, a: ClassExpression, b: ClassExpression) -> &mut Self {
         let id = self.id();
-        self.ontology.add_axiom(Axiom::EquivalentClasses(
-            EquivalentClassesAxiom {
+        self.ontology
+            .add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
                 id,
                 classes: vec![a, b],
                 annotations: vec![],
-            },
-        ));
+            }));
         self
     }
 
@@ -105,28 +102,26 @@ impl OntologyBuilder {
 
     fn disjoint(&mut self, a: ClassExpression, b: ClassExpression) -> &mut Self {
         let id = self.id();
-        self.ontology.add_axiom(Axiom::DisjointClasses(
-            DisjointClassesAxiom {
+        self.ontology
+            .add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
                 id,
                 classes: vec![a, b],
                 annotations: vec![],
-            },
-        ));
+            }));
         self
     }
 
     fn assert_class(&mut self, individual_iri: &str, class: ClassExpression) -> &mut Self {
         let id = self.id();
-        self.ontology.add_axiom(Axiom::ClassAssertion(
-            ClassAssertionAxiom {
+        self.ontology
+            .add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
                 id,
                 class,
                 individual: Individual::Named(NamedIndividual {
                     iri: IRI::new(individual_iri),
                 }),
                 annotations: vec![],
-            },
-        ));
+            }));
         self
     }
 
@@ -292,7 +287,10 @@ fn test_subclass_some_values_from_satisfiable() -> Result<()> {
     b.subclass(a.clone(), some("http://example.org/R", c.clone()));
 
     let mut r = reasoner_for(b.build())?;
-    assert!(r.is_class_satisfiable(&a)?, "A ⊑ ∃R.C should be satisfiable");
+    assert!(
+        r.is_class_satisfiable(&a)?,
+        "A ⊑ ∃R.C should be satisfiable"
+    );
     Ok(())
 }
 
@@ -327,7 +325,10 @@ fn test_equiv_all_values_from_satisfiable() -> Result<()> {
     b.equiv(a.clone(), all("http://example.org/R", c.clone()));
 
     let mut r = reasoner_for(b.build())?;
-    assert!(r.is_class_satisfiable(&a)?, "A ≡ ∀R.C should be satisfiable");
+    assert!(
+        r.is_class_satisfiable(&a)?,
+        "A ≡ ∀R.C should be satisfiable"
+    );
     Ok(())
 }
 
@@ -442,7 +443,10 @@ fn test_min_cardinality_satisfiable() -> Result<()> {
     b.equiv(a.clone(), min_card("http://example.org/R", 1, c.clone()));
 
     let mut r = reasoner_for(b.build())?;
-    assert!(r.is_class_satisfiable(&a)?, "A ≡ ≥1R.C should be satisfiable");
+    assert!(
+        r.is_class_satisfiable(&a)?,
+        "A ≡ ≥1R.C should be satisfiable"
+    );
     Ok(())
 }
 
@@ -563,10 +567,7 @@ fn test_concept_unfolding_rules_populated() -> Result<()> {
         tableau.concept_unfolding_rules.contains_key(a_iri),
         "Tableau concept_unfolding_rules should have an entry for class A \
          when A ≡ ∃R.C is in the ontology; existing keys: {:?}",
-        tableau
-            .concept_unfolding_rules
-            .keys()
-            .collect::<Vec<_>>()
+        tableau.concept_unfolding_rules.keys().collect::<Vec<_>>()
     );
 
     let rules = tableau.concept_unfolding_rules.get(a_iri).unwrap();

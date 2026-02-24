@@ -16,11 +16,27 @@ use crate::semantics::RdfTerm;
 pub fn compare_terms(a: &RdfTerm, b: &RdfTerm) -> Option<Ordering> {
     match (a, b) {
         (
-            RdfTerm::Literal { value: va, datatype: dta, language: la, .. },
-            RdfTerm::Literal { value: vb, datatype: dtb, language: lb, .. },
+            RdfTerm::Literal {
+                value: va,
+                datatype: dta,
+                language: la,
+                ..
+            },
+            RdfTerm::Literal {
+                value: vb,
+                datatype: dtb,
+                language: lb,
+                ..
+            },
         ) => {
-            let dta_str = dta.as_ref().map(|u| u.as_str()).unwrap_or(XSD_STRING_FALLBACK);
-            let dtb_str = dtb.as_ref().map(|u| u.as_str()).unwrap_or(XSD_STRING_FALLBACK);
+            let dta_str = dta
+                .as_ref()
+                .map(|u| u.as_str())
+                .unwrap_or(XSD_STRING_FALLBACK);
+            let dtb_str = dtb
+                .as_ref()
+                .map(|u| u.as_str())
+                .unwrap_or(XSD_STRING_FALLBACK);
 
             // Both plain string literals without types → compare as strings
             if dta_str == dtb_str {
@@ -38,9 +54,7 @@ pub fn compare_terms(a: &RdfTerm, b: &RdfTerm) -> Option<Ordering> {
             }
         }
         // IRIs compared as strings per SPARQL spec (for sh:lessThan etc.)
-        (RdfTerm::Iri(a_iri), RdfTerm::Iri(b_iri)) => {
-            Some(a_iri.as_str().cmp(b_iri.as_str()))
-        }
+        (RdfTerm::Iri(a_iri), RdfTerm::Iri(b_iri)) => Some(a_iri.as_str().cmp(b_iri.as_str())),
         _ => None,
     }
 }
@@ -106,11 +120,7 @@ fn compare_same_type(
         || dt == "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString"
     {
         // String/lang-string: language tags must match for comparison
-        if la == lb {
-            Some(va.cmp(vb))
-        } else {
-            None
-        }
+        if la == lb { Some(va.cmp(vb)) } else { None }
     } else {
         // For other types, compare lexicographically (best effort)
         Some(va.cmp(vb))
@@ -152,9 +162,7 @@ mod tests {
     fn int_lit(v: &str) -> RdfTerm {
         RdfTerm::Literal {
             value: v.to_string(),
-            datatype: Some(
-                Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap(),
-            ),
+            datatype: Some(Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap()),
             language: None,
             direction: None,
         }
@@ -163,9 +171,7 @@ mod tests {
     fn str_lit(v: &str) -> RdfTerm {
         RdfTerm::Literal {
             value: v.to_string(),
-            datatype: Some(
-                Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap(),
-            ),
+            datatype: Some(Url::parse("http://www.w3.org/2001/XMLSchema#string").unwrap()),
             language: None,
             direction: None,
         }
@@ -173,15 +179,30 @@ mod tests {
 
     #[test]
     fn numeric_comparison() {
-        assert_eq!(compare_terms(&int_lit("3"), &int_lit("5")), Some(Ordering::Less));
-        assert_eq!(compare_terms(&int_lit("5"), &int_lit("5")), Some(Ordering::Equal));
-        assert_eq!(compare_terms(&int_lit("7"), &int_lit("5")), Some(Ordering::Greater));
+        assert_eq!(
+            compare_terms(&int_lit("3"), &int_lit("5")),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            compare_terms(&int_lit("5"), &int_lit("5")),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            compare_terms(&int_lit("7"), &int_lit("5")),
+            Some(Ordering::Greater)
+        );
     }
 
     #[test]
     fn string_comparison() {
-        assert_eq!(compare_terms(&str_lit("abc"), &str_lit("abd")), Some(Ordering::Less));
-        assert_eq!(compare_terms(&str_lit("abc"), &str_lit("abc")), Some(Ordering::Equal));
+        assert_eq!(
+            compare_terms(&str_lit("abc"), &str_lit("abd")),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            compare_terms(&str_lit("abc"), &str_lit("abc")),
+            Some(Ordering::Equal)
+        );
     }
 
     #[test]

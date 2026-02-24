@@ -34,7 +34,11 @@ impl ShaclValidationReport {
     /// Create a non-conforming report from a list of results.
     pub fn non_conforming(results: Vec<ShaclValidationResult>) -> Self {
         let conforms = results.is_empty();
-        ShaclValidationReport { conforms, results, shapes_graph_well_formed: None }
+        ShaclValidationReport {
+            conforms,
+            results,
+            shapes_graph_well_formed: None,
+        }
     }
 
     /// Produce a Turtle serialization of the validation report.
@@ -109,7 +113,10 @@ impl ShaclValidationResult {
     pub fn to_turtle_inline(&self) -> String {
         let mut out = String::from("[\n      a sh:ValidationResult ;\n");
 
-        out.push_str(&format!("      sh:focusNode {} ;\n", turtle_term(&self.focus_node)));
+        out.push_str(&format!(
+            "      sh:focusNode {} ;\n",
+            turtle_term(&self.focus_node)
+        ));
         out.push_str(&format!(
             "      sh:resultSeverity <{}> ;\n",
             self.severity.as_iri()
@@ -124,10 +131,7 @@ impl ShaclValidationResult {
         }
 
         if let Some(path) = &self.result_path {
-            out.push_str(&format!(
-                "      sh:resultPath {} ;\n",
-                path_to_turtle(path)
-            ));
+            out.push_str(&format!("      sh:resultPath {} ;\n", path_to_turtle(path)));
         }
 
         if let Some(value) = &self.value {
@@ -168,7 +172,12 @@ fn turtle_term(term: &RdfTerm) -> String {
     match term {
         RdfTerm::Iri(iri) => format!("<{}>", iri.as_str()),
         RdfTerm::BlankNode(id) => format!("_:{id}"),
-        RdfTerm::Literal { value, datatype, language, .. } => {
+        RdfTerm::Literal {
+            value,
+            datatype,
+            language,
+            ..
+        } => {
             let escaped = escape_turtle_string(value);
             if let Some(lang) = language {
                 format!("\"{escaped}\"@{lang}")

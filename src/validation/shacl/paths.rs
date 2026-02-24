@@ -44,9 +44,7 @@ pub fn resolve_values(
 ) -> Result<Vec<RdfTerm>> {
     let focus_str = term_to_sparql_subject(focus_node);
     let path_expr = path.to_sparql_path();
-    let query = format!(
-        "SELECT ?value WHERE {{ {focus_str} {path_expr} ?value }}",
-    );
+    let query = format!("SELECT ?value WHERE {{ {focus_str} {path_expr} ?value }}",);
 
     let rows = store.execute_select(&query)?;
     let mut values = Vec::new();
@@ -84,7 +82,12 @@ pub fn term_to_sparql(term: &RdfTerm) -> String {
     match term {
         RdfTerm::Iri(iri) => format!("<{}>", iri.as_str()),
         RdfTerm::BlankNode(id) => format!("_:{id}"),
-        RdfTerm::Literal { value, datatype, language, .. } => {
+        RdfTerm::Literal {
+            value,
+            datatype,
+            language,
+            ..
+        } => {
             let escaped = sparql_escape_string(value);
             if let Some(lang) = language {
                 format!("\"{escaped}\"@{lang}")
@@ -123,7 +126,10 @@ mod tests {
             ShaclPath::Predicate("http://example.org/a".to_string()),
             ShaclPath::Predicate("http://example.org/b".to_string()),
         ]);
-        assert_eq!(p.to_sparql_path(), "<http://example.org/a>/<http://example.org/b>");
+        assert_eq!(
+            p.to_sparql_path(),
+            "<http://example.org/a>/<http://example.org/b>"
+        );
     }
 
     #[test]
@@ -132,7 +138,10 @@ mod tests {
             ShaclPath::Predicate("http://example.org/a".to_string()),
             ShaclPath::Predicate("http://example.org/b".to_string()),
         ]);
-        assert_eq!(p.to_sparql_path(), "(<http://example.org/a>|<http://example.org/b>)");
+        assert_eq!(
+            p.to_sparql_path(),
+            "(<http://example.org/a>|<http://example.org/b>)"
+        );
     }
 
     #[test]
