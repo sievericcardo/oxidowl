@@ -25,13 +25,31 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 
 #### Enhancements
 
-- 🎯 **EL Profile Optimization**: Polynomial-time reasoning for OWL 2 EL ontologies
+- 🎯 **OWL 2 Profile Support**: EL (polynomial), QL (query), RL (rule) optimised reasoners plus full DL validator
 - 💡 **Comprehensive Explanations**: Justification generation, proof tracking, and laconic explanations
 - 🌐 **Multi-Protocol Server Support**: OWLlink, SPARQL endpoint, and REST API interfaces
 - 📥 **Advanced Import Resolution**: Recursive imports, cycle detection, and IRI mapping
 - 🧪 **SWRL Rule Support**: Full Semantic Web Rule Language implementation with 30+ built-in predicates
+- ✅ **SHACL Validation**: Complete SHACL Core + SHACL-SPARQL backed by Oxigraph
+- 🌐 **Distributed Reasoning**: Cluster-based horizontal scaling with fault tolerance and load balancing
+- 🤖 **ML-Enhanced Queries**: Neural-network-assisted conjunctive query optimization (Candle framework)
+- 📈 **Incremental Classification**: Only re-reasons over concepts affected by ontology changes
+- 🛡️ **Formal Verification**: Kani harnesses for memory-safety proofs
+- 🗃️ **Advanced Caching**: LRU, LFU, LRUFU, TTL, and size-based eviction strategies
 
-#### v0.10.0 Highlights (Latest)
+#### v1.0.0 Highlights (Latest)
+
+- 🏗️ **OWL 2 RL Profile Reasoner**: Forward-chaining materialization with incremental update support
+- 🌐 **Distributed Reasoning**: Cluster-based horizontal scaling with automatic node discovery and fault tolerance
+- 🤖 **ML-Enhanced Query Engine**: Candle-backed neural query optimizer for conjunctive query execution
+- ✅ **SHACL Core + SHACL-SPARQL**: Full W3C SHACL validation backed by the embedded Oxigraph SPARQL store
+- 🔄 **SPARQL UPDATE**: INSERT DATA and DELETE DATA support for dynamic ontology mutation
+- 📈 **Incremental Classification**: Dependency-tracked reclassification of only affected concepts on ontology updates
+- 🔒 **Lock-Free Data Structures**: DashMap-backed caches for highly concurrent access patterns
+- 🛡️ **Kani Formal Verification**: Harnesses for memory-safety and correctness proofs via `cargo kani`
+- 🗃️ **Advanced Cache Strategies**: LRU, LFU, LRUFU, TTL and size-based eviction policies
+
+#### v0.10.0 Highlights
 
 - ⭐ **RDF-star Support**: Full implementation of quoted triples (`<< >>` syntax) for meta-level statements
 - 🔄 **RDF 1.2 Compliance**: Directional literals (`rdf:dirLangString`), well-formedness rules
@@ -56,6 +74,7 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 ## Installation
 
 For usage with Docker, see [DOCKER.md](DOCKER.md).
+For Podman, see [PODMAN.md](PODMAN.md).
 
 ### Prerequisites
 
@@ -70,6 +89,34 @@ cd oxidowl
 cargo build --release
 ```
 
+### As a Library
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxidowl = { version = "1.0", features = ["default"] }
+
+# Or with specific features:
+oxidowl = { version = "1.0", features = ["server", "ml", "sparql"] }
+```
+
+### Cargo Feature Flags
+
+| Feature | Default | Description |
+|---|---|---|
+| `parallel` | ✅ | Rayon-based multi-threaded reasoning |
+| `cache` | ✅ | DashMap-backed concurrent caches |
+| `high-performance` | ✅ | mimalloc high-performance allocator |
+| `http-imports` | ✅ | HTTP-based ontology import fetching (reqwest) |
+| `sparql-store` | ✅ | In-process Oxigraph SPARQL store |
+| `server` | ❌ | REST API, OWLlink, and SPARQL HTTP servers |
+| `sparql` | ❌ | Full Oxigraph SPARQL engine (alias for `sparql-store`) |
+| `ml` | ❌ | Candle-backed ML-enhanced query engine |
+| `explanations` | ❌ | Justification and proof generation |
+| `profiling` | ❌ | pprof flamegraph + dhat heap profiling |
+| `kani` | ❌ | Kani formal-verification harnesses |
+
 ### Running Tests
 
 ```bash
@@ -79,6 +126,9 @@ cargo test
 # Run specific test categories
 cargo test unit::reasoning
 cargo test integration::greenhouse
+
+# RDF-star integration tests
+cargo test --test rdf_star_integration_tests
 
 # Run with performance benchmarks
 cargo test --release -- --ignored
@@ -186,6 +236,7 @@ let parser = FunctionalParser::with_config(config);
 ```
 
 **Performance Impact:**
+
 - **Minimal**: Just error messages, <2% slowdown
 - **Standard**: Adds line/column info, <5% slowdown  
 - **Detailed**: Full context and tokens, overhead only on error paths
@@ -195,12 +246,14 @@ let parser = FunctionalParser::with_config(config);
 Oxidowl provides two tableau-based reasoning algorithms optimized for different ontology characteristics:
 
 #### Traditional Tableau (Default)
+
 - Classic tableau expansion with blocking
 - Best for general-purpose reasoning
 - Consistent performance across all scenarios
 - **Use when:** Ontology has many equivalent classes, large linear taxonomies, or unknown characteristics
 
 #### Hypertableau Algorithm  
+
 - Hypergraph-based structural sharing
 - **faster** for disjointness-heavy ontologies
 - **faster** for complex class expressions
@@ -442,13 +495,254 @@ let swrl_config = SWRLConfig {
 };
 ```
 
+### SHACL Validation
+
+Oxidowl implements the full [W3C SHACL specification](https://www.w3.org/TR/shacl/) — both **SHACL Core** and **SHACL-SPARQL** — backed by the embedded Oxigraph SPARQL store.
+
+```rust
+use oxidowl::validation::shacl::ShaclValidator;
+
+let shapes_ttl = r#"
+  @prefix sh:  <http://www.w3.org/ns/shacl#> .
+  @prefix ex:  <http://example.org/> .
+  @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+  ex:PersonShape a sh:NodeShape ;
+    sh:targetClass ex:Person ;
+    sh:property [
+      sh:path     ex:name ;
+      sh:datatype xsd:string ;
+      sh:minCount 1 ;
+    ] .
+"#;
+
+let data_ttl = r#"
+  @prefix ex: <http://example.org/> .
+  ex:Alice a ex:Person ; ex:name "Alice" .
+  ex:Bob   a ex:Person .   # missing ex:name — violation
+"#;
+
+let mut validator = ShaclValidator::new(shapes_ttl, data_ttl)?;
+let report = validator.validate()?;
+
+println!("conforms: {}", report.conforms);
+for result in &report.results {
+    println!("  violation at: {:?}", result.focus_node);
+}
+```
+
+**Supported SHACL constraints include:**
+
+| Category | Constraints |
+|---|---|
+| Value type | `sh:class`, `sh:datatype`, `sh:nodeKind` |
+| Cardinality | `sh:minCount`, `sh:maxCount` |
+| Value range | `sh:minExclusive/Inclusive`, `sh:maxExclusive/Inclusive` |
+| String-based | `sh:minLength`, `sh:maxLength`, `sh:pattern`, `sh:languageIn`, `sh:uniqueLang` |
+| Property pair | `sh:equals`, `sh:disjoint`, `sh:lessThan`, `sh:lessThanOrEquals` |
+| Logical | `sh:not`, `sh:and`, `sh:or`, `sh:xone` |
+| Shape-based | `sh:node`, `sh:qualifiedValueShape` |
+| Other | `sh:closed`, `sh:hasValue`, `sh:in` |
+| SPARQL | `sh:sparql` SELECT-based constraints |
+
+All five W3C target types are supported: `sh:targetClass`, `sh:targetNode`, `sh:targetSubjectsOf`, `sh:targetObjectsOf`, and implicit class targets.
+
+See [docs/SHACL.md](docs/SHACL.md) for the full constraint reference and architecture overview.
+
+### OWL 2 Profile Reasoning
+
+Oxidowl ships specialised reasoners and validators for all four OWL 2 sub-profiles, allowing ontologies to opt into lighter-weight reasoning engines when the full DL semantics are not required:
+
+| Profile | Complexity | Implementation |
+|---|---|---|
+| OWL 2 EL | Polynomial time | `ELReasoner` — completion-rule saturation |
+| OWL 2 QL | Polynomial query answering | `QLValidator` — conjunctive query rewriting |
+| OWL 2 RL | Polynomial materialisation | `RLReasoner` — forward-chaining materialisation |
+| OWL 2 DL | ExpTime-complete | Default tableau / hypertableau engine |
+
+#### OWL 2 RL Reasoner
+
+```rust
+use oxidowl::profiles::rl_reasoner::RLReasoner;
+use oxidowl::config::ReasonerConfig;
+
+let mut rl_reasoner = RLReasoner::new(ReasonerConfig::default());
+rl_reasoner.load_axioms(ontology.axioms())?;
+let classification = rl_reasoner.classify().await?;
+println!("RL materialisation complete — {} facts inferred",
+         classification.hierarchy.len());
+```
+
+#### Profile Validation
+
+```rust
+use oxidowl::profiles::{ProfileValidator, OWL2Profile};
+
+// Validate that an ontology conforms to a specific profile
+let report = ontology.validate_profile(OWL2Profile::EL)?;
+if !report.is_valid() {
+    for violation in report.violations() {
+        eprintln!("Profile violation: {:?}", violation);
+    }
+}
+```
+
+### Distributed Reasoning
+
+Oxidowl supports horizontal scaling through a built-in cluster engine. Large ontology reasoning tasks are automatically partitioned, distributed, and their results aggregated:
+
+```rust
+use oxidowl::distributed::{DistributedConfig, ClusterManager};
+
+let config = DistributedConfig {
+    node_config: NodeConfig::local(8100),
+    cluster_config: ClusterConfig {
+        discovery: DiscoveryMode::Static(vec![
+            "127.0.0.1:8101".parse()?,
+            "127.0.0.1:8102".parse()?,
+        ]),
+        heartbeat_interval: Duration::from_secs(5),
+        ..Default::default()
+    },
+    ..Default::default()
+};
+
+let cluster = ClusterManager::start(config).await?;
+let result = cluster.execute_distributed_query(query).await?;
+println!("Distributed result from {} nodes", result.node_count());
+```
+
+**Cluster capabilities:**
+
+- Automatic node discovery and health monitoring
+- Intelligent query decomposition and partitioning
+- Parallel result collection and merging
+- Automatic re-execution on node failure
+- Dynamic load balancing based on node capacity
+
+### SPARQL UPDATE
+
+Oxidowl supports dynamic ontology mutation via SPARQL `INSERT DATA` and `DELETE DATA` operations, proxied through the embedded Oxigraph store:
+
+```rust
+// INSERT DATA — add class assertions at runtime
+let insert = r#"
+    INSERT DATA {
+        <http://example.org/John> rdf:type <http://example.org/Person> .
+        <http://example.org/John> <http://example.org/age> "30" .
+    }
+"#;
+reasoner.execute_sparql_query(insert)?;
+
+// DELETE DATA — retract triples
+let delete = r#"
+    DELETE DATA {
+        <http://example.org/John> <http://example.org/age> "30" .
+    }
+"#;
+reasoner.execute_sparql_query(delete)?;
+```
+
+See [examples/sparql_update_example.rs](examples/sparql_update_example.rs) for complete usage.
+
+### ML-Enhanced Query Engine
+
+The advanced conjunctive query engine integrates a Candle-backed neural optimizer to predict join orderings, pruning strategies, and execution priorities at runtime:
+
+```rust
+use oxidowl::query::advanced::{AdvancedExecutionEngine, AdvancedExecutionConfig};
+use oxidowl::query::advanced::execution_engine::{ExecutionConstraints, ExecutionPriority};
+
+let config = AdvancedExecutionConfig::default();
+let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning.clone(), config);
+
+let constraints = ExecutionConstraints {
+    max_execution_time: Some(Duration::from_secs(10)),
+    min_confidence: Some(0.8),
+    priority: ExecutionPriority::High,
+    ..Default::default()
+};
+
+let result = engine.execute(query, constraints).await?;
+println!("Executed {} atoms with {} joins", result.atom_count, result.join_count);
+```
+
+Enable with the `ml` feature flag:
+
+```toml
+oxidowl = { version = "1.0", features = ["ml"] }
+```
+
+### Incremental Classification
+
+When ontologies are updated during a session, Oxidowl's incremental classifier re-reasons only over the concepts whose dependencies have changed, avoiding a full re-classification:
+
+```rust
+use oxidowl::core::incremental::DependencyTracker;
+
+// The reasoner automatically tracks inter-concept dependencies
+// When an axiom is added or removed, only affected concepts are re-classified
+reasoner.add_axiom(new_axiom)?;
+let delta = reasoner.classify_incrementally()?;
+
+println!("Incremental update: {} concepts reclassified (of {} total)",
+         delta.reclassified, delta.total);
+```
+
+### Formal Verification with Kani
+
+Oxidowl ships Kani proof harnesses that can be run with `cargo kani` to verify critical memory-safety and correctness properties of the core algorithms:
+
+```bash
+# Run all Kani proof harnesses (requires kani installed)
+cargo kani
+
+# Enable the kani feature manually
+cargo build --features kani
+```
+
+The harnesses cover tableau expansion rules, blocking checks, and cache invariants. See the `src/proofs/` directory for the full set of proofs.
+
+### Advanced Cache Strategies
+
+Oxidowl provides a tunable multi-strategy cache layer for blocking candidates, subsumption results, and classification outcomes:
+
+```rust
+use oxidowl::cache_strategies::{LRUCache, LFUCache, EvictionStrategy};
+
+// Choose an eviction policy suited to your workload
+let mut cache = LRUCache::new(10_000);                  // Recency-based
+let mut cache = LFUCache::with_strategy(                 // Frequency-based
+    EvictionStrategy::LRUFU, 10_000);
+
+// TTL-based expiry for time-sensitive data
+let mut ttl_cache = LRUCache::with_ttl(1_000, Duration::from_secs(60));
+```
+
+Available eviction strategies:
+
+| Strategy | Description |
+|---|---|
+| `LRU` | Evict least-recently-used entries |
+| `LFU` | Evict least-frequently-used entries |
+| `LRUFU` | Combine recency and frequency scoring |
+| `SizeBased` | Evict when aggregate byte size exceeds limit |
+| `TTL` | Evict entries older than a time-to-live threshold |
+
 ## Architecture
 
 ### Core Components
 
 - **`core`** - Core reasoning engine with tableau algorithms
-  - `reasoner.rs` - Main reasoner interface
-  - `tableau.rs` - Tableau implementation with node and edge management
+  - `reasoner/` - Main reasoner interface
+  - `tableau/` - Tableau expansion with node and edge management
+  - `blocking.rs` - Anywhere blocking with cycle detection
+  - `completion.rs` - Completion rules and caching
+  - `incremental.rs` - Dependency-tracked incremental classification
+  - `hypergraph/` - Structural-sharing hypergraph for Hypertableau
+  - `saturation/` - Rule-saturation engine for RL/EL profiles
+  - `inverted_index.rs` - Inverted index for fast concept lookup
+  - `persistent_collections.rs` - Immutable persistent data structures
 
 - **`ontology`** - Ontology representation and management (built on horned-owl)
   - `axioms.rs` - Axiom structures and operations including DisjointUnion
@@ -458,22 +752,75 @@ let swrl_config = SWRLConfig {
 
 - **`parsers`** - Input format support via horned-owl integration
   - `owl_xml.rs` - OWL XML parser with DisjointUnion support
-  - `functional.rs` - Functional syntax parser
+  - `functional.rs` - Functional syntax parser with configurable error verbosity
   - `rdf_xml.rs` - RDF/XML parser
   - `turtle.rs` - Turtle format parser
 
 - **`reasoning`** - High-level reasoning coordination
-- **`query`** - DL query engine with Manchester Syntax and union query support
+
+- **`query`** - Query engines
+  - `dl_query.rs` - DL query engine with Manchester Syntax and union query support
+  - `sparql_store.rs` - In-process Oxigraph SPARQL store wrapper
+  - `advanced/` - ML-enhanced conjunctive query execution engine
+
+- **`profiles`** - OWL 2 sub-profile support
+  - `el_reasoner.rs` - OWL 2 EL polynomial-time reasoner
+  - `ql.rs` - OWL 2 QL profile validator
+  - `rl.rs` - OWL 2 RL profile validator
+  - `rl_reasoner.rs` - OWL 2 RL forward-chaining materialisation engine
+  - `dl.rs` - OWL 2 DL validator
+  - `validator.rs` - Unified profile validation interface
+
+- **`validation`** - Structural validation
+  - `owl2_dl.rs` - OWL 2 DL validator
+  - `shacl/` - Full SHACL Core + SHACL-SPARQL engine (10+ constraint categories)
+
 - **`swrl`** - SWRL (Semantic Web Rule Language) implementation
   - `engine.rs` - SWRL rule execution engine with multiple strategies
   - `interpreter.rs` - Individual rule interpretation and execution
   - `parser.rs` - SWRL syntax parsing
   - `builtins.rs` - Core built-in predicates (math, string, boolean)
-  - `datetime_builtins.rs` - Date/time built-in predicates
+  - `datetime_builtins.rs` - Date/time built-in predicates (15+ predicates)
   - `regex_builtins.rs` - Regular expression built-in predicates
   - `validation.rs` - SWRL rule validation
+
+- **`distributed`** - Cluster-based horizontal scaling
+  - `cluster.rs` - Node discovery, health monitoring, and lifecycle
+  - `query_distribution.rs` - Intelligent query splitting and distribution
+  - `result_aggregation.rs` - Parallel result collection and merging
+  - `fault_tolerance.rs` - Failure detection and recovery strategies
+  - `load_balancing.rs` - Dynamic workload distribution
+
+- **`semantics`** - RDF, RDFS, and OWL 2 semantics
+  - RDF-star support (quoted triples, `rdf:reifies`, directional literals)
+  - RDF 1.2 compliance
+
+- **`import`** - Import resolution
+  - Recursive imports, cycle detection, and IRI-to-file mapping
+  - Optional HTTP fetching (feature `http-imports`)
+
 - **`adapter`** - Horned-OWL integration layer for enhanced parsing and modeling
-- **`config`** - Configuration management and optimization
+
+- **`explanation`** - Justification and proof generation
+
+- **`cache`** / **`cache_lockfree`** / **`cache_strategies`** - Multi-strategy caching layer
+  - LRU, LFU, LRUFU, size-based, and TTL eviction policies
+  - Lock-free DashMap-backed variant for highly concurrent access
+
+- **`performance`** / **`profiling`** - Performance monitoring and flamegraph/heap profiling
+
+- **`dl_clauses`** - DL clause generation and dumping
+
+- **`server`** *(feature `server`)* - Web interfaces
+  - `rest.rs` - REST API (port configurable)
+  - `owllink.rs` - OWLlink XML protocol
+  - `sparql.rs` - SPARQL HTTP endpoint
+
+- **`proofs`** *(feature `kani`)* - Kani formal-verification harnesses
+
+- **`config`** - Configuration management and optimisation
+
+- **`visitor`** - Visitor pattern for ontology traversal
 
 ### Algorithms
 
@@ -489,10 +836,12 @@ Oxidowl implements an efficient tableau algorithm that provides:
 
 #### Performance Optimizations
 
-- **Parallel Processing**: Multi-threaded reasoning for large ontologies
-- **Caching**: LRU caches for frequent operations
-- **Memory Management**: Optimized data structures and memory pools
-- **Incremental Reasoning**: Support for ontology updates
+- **Parallel Processing**: Multi-threaded reasoning with Rayon for large ontologies
+- **Caching**: LRU/LFU/LRUFU caches with configurable eviction policies
+- **Lock-Free Structures**: DashMap-backed caches for concurrent access  
+- **Incremental Reasoning**: Dependency-tracked reclassification on updates
+- **High-Performance Allocator**: mimalloc (feature `high-performance`)
+- **Compile-Time Hashing**: Perfect hash tables (`phf`) for O(1) keyword lookup
 
 ## Examples
 
@@ -748,14 +1097,17 @@ let (reified_term, reification_triples) = adapter.reify_rdf_term(&quoted)?;
 
 - [RDF-star Guide](docs/RDF_STAR_GUIDE.md) - Comprehensive usage guide
 - [RDF Compatibility Guide](docs/RDF_COMPATIBILITY.md) - Migration and conversion details
-- [SPARQL-star Documentation](docs/SPARQL_UPDATE.md) - Query and update operations
-- [API Reference](docs/MODULE_REFERENCE.md) - Complete API documentation
+- [SHACL Guide](docs/SHACL.md) - SHACL Core and SHACL-SPARQL reference
+- [OWL 2 Profile Reasoners](docs/PROFILE_REASONERS.md) - EL / QL / RL profile details
+- [Error Handling](docs/ERROR_HANDLING.md) - Error types and handling guide
 
 ### Examples
 
-- [examples/rdf_star_example.rs](examples/rdf_star_example.rs) - Basic RDF-star usage
-- [examples/rdf11_legacy_example.rs](examples/rdf11_legacy_example.rs) - Legacy interoperability
-- [tests/rdf_star_integration_tests.rs](tests/rdf_star_integration_tests.rs) - Integration tests
+- [examples/dl_query_example.rs](examples/dl_query_example.rs) - DL query engine usage
+- [examples/sparql_update_example.rs](examples/sparql_update_example.rs) - SPARQL INSERT/DELETE
+- [examples/server_example.rs](examples/server_example.rs) - REST / OWLlink server
+- [examples/library_usage.rs](examples/library_usage.rs) - Library API walkthrough
+- [tests/rdf_star_integration_tests.rs](tests/rdf_star_integration_tests.rs) - RDF-star integration tests
 
 ### Validation
 
@@ -785,35 +1137,49 @@ if !result.is_valid() {
 ### Test Categories
 
 - **Unit Tests**: Individual component testing
-  - Reasoning algorithms
+  - Reasoning algorithms (tableau, hypertableau, EL, RL)
   - Ontology operations
-  - Parser functionality
+  - Parser functionality (OWL XML, Functional, Turtle, RDF/XML)
   - Configuration management
   - RDF-star semantics
+  - Cache strategy correctness
 
 - **Integration Tests**: End-to-end testing
-  - Real ontology processing
-  - Algorithm comparison
-  - RDF-star workflows (19 tests)
+  - Real ontology processing (greenhouse DT ontology)
+  - Algorithm comparison (traditional vs hypertableau)
+  - RDF-star workflows
+  - SHACL validation end-to-end
+  - ML engine integration
+  - SPARQL UPDATE operations
+
+- **Benchmarks** (Criterion-based):
+  - `reasoning_benchmark` — core tableau performance
+  - `hypertableau_benchmark` — hypertableau vs traditional
+  - `shacl_benchmark` — SHACL constraint throughput
+  - `parser_benchmark` — parsing throughput
+  - `ml_engine_benchmark` — ML query engine latency
 
 ### Test Execution
 
 ```bash
-# Quick test suite
+# Quick sanity suite
 cargo test quick
 
-# Full test suite (450+ tests)
+# Full test suite
 cargo test
 
-# Performance tests (slower)
-cargo test --release performance
+# Performance tests (slower, release mode)
+cargo test --release -- --ignored
 
-# Specific test categories
-cargo test unit::reasoning
-cargo test integration::greenhouse
-
-# RDF-star integration tests
+# Specific test suites
 cargo test --test rdf_star_integration_tests
+cargo test --test shacl_tests
+cargo test --test ml_engine_integration_tests_simple
+
+# Criterion benchmarks
+cargo bench
+cargo bench --bench hypertableau_benchmark
+cargo bench --bench shacl_benchmark
 ```
 
 ## Contributing
@@ -837,28 +1203,33 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## Roadmap
 
-### Nice features to add in the future
+### Planned for future releases
 
-- [ ] OWL 2 RL profile support
-- [ ] Incremental classification
-- [ ] Distributed reasoning
-- [ ] WebAssembly compilation
+- [ ] WebAssembly (WASM) compilation
 - [ ] Python bindings
-- [ ] Docker containerization
-
-### Recently Implemented
-
-- [x] **RDF-star and RDF 1.2 support** - Complete quoted triple implementation with SPARQL-star
-- [x] **SWRL rule support** - Complete implementation with 30+ built-in predicates
-- [x] **DisjointUnion axiom support** - Full support in DL queries and reasoning
-- [x] **Advanced DL Query Engine** - Manchester Syntax with union query optimization
-
-### Performance Improvements
-
 - [ ] GPU acceleration for large-scale reasoning
-- [ ] Advanced caching strategies
-- [ ] Streaming ontology processing
-- [ ] Memory-mapped storage backends
+- [ ] Streaming / memory-mapped ontology processing
+
+### Implemented in v1.0.0
+
+- [x] **OWL 2 RL profile reasoner** — Forward-chaining materialisation with incremental update support
+- [x] **Incremental classification** — Dependency-tracked reclassification of affected concepts only
+- [x] **Distributed reasoning** — Cluster engine with automatic node discovery and fault tolerance
+- [x] **SHACL Core + SHACL-SPARQL** — Full W3C SHACL validation backed by Oxigraph
+- [x] **SPARQL UPDATE** — `INSERT DATA` / `DELETE DATA` for dynamic ontology mutation
+- [x] **ML-enhanced query engine** — Candle-backed neural conjunctive query optimizer
+- [x] **Kani formal verification** — Harnesses for memory-safety and correctness proofs
+- [x] **Advanced cache strategies** — LRU, LFU, LRUFU, size-based, TTL eviction policies
+- [x] **Lock-free data structures** — DashMap-backed caches for concurrent access
+- [x] **Docker/Podman containerisation** — Official `Dockerfile` and `docker-compose.yml`
+
+### Implemented in v0.10.0
+
+- [x] **RDF-star and RDF 1.2 support** — Complete quoted triple implementation with SPARQL-star
+- [x] **OWL 2 EL/QL/RL profile validators** — Full W3C profile validation for all sub-profiles
+- [x] **SWRL rule support** — Complete implementation with 30+ built-in predicates
+- [x] **DisjointUnion axiom support** — Full support in DL queries and reasoning
+- [x] **Advanced DL Query Engine** — Manchester Syntax with union query optimisation
 
 ## License
 
