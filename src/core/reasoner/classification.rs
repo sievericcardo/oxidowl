@@ -1534,7 +1534,9 @@ impl ClassificationService {
             ClassExpression::ObjectIntersectionOf(operands) => {
                 // Every operand must be satisfied (conjunction)
                 for operand in operands {
-                    if !self.check_instance_with_datatype_reasoning(individual, operand, ontology)? {
+                    if !self
+                        .check_instance_with_datatype_reasoning(individual, operand, ontology)?
+                    {
                         return Ok(false);
                     }
                 }
@@ -1573,7 +1575,10 @@ impl ClassificationService {
                 }
                 Ok(false)
             }
-            ClassExpression::ObjectHasValue { property, value: filler_ind } => {
+            ClassExpression::ObjectHasValue {
+                property,
+                value: filler_ind,
+            } => {
                 // ∃ r.{o} : individual must have exactly the specified individual as an r-value
                 let individual_iri = individual
                     .iri()
