@@ -375,19 +375,46 @@ impl ReasoningService {
         Ok(types.into_iter().collect())
     }
 
-    /// Check if an individual is an instance of a class expression
+    /// Check if an individual is an instance of a class expression.
+    ///
+    /// Uses the full DL-reasoning pipeline including `owl:equivalentClass` unfolding,
+    /// `owl:someValuesFrom` / `owl:hasValue` evaluation, and datatype reasoning.
+    /// This is the implementation that backs `member(classExpr)` queries.
     pub async fn is_instance_of(
         &self,
         individual: &Individual,
         class: &ClassExpression,
     ) -> Result<bool> {
-        let types = self.get_types(individual, false).await?;
-        for class_type in &types {
-            if self.is_subsumed_by(class_type, class).await? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        // Delegate directly to the core reasoner which calls
+        // check_instance_with_datatype_reasoning + tableau fallback.
+        let reasoner = write_lock(&self.reasoner, "reasoning: is_instance_of")?;
+        reasoner.is_instance_of(individual, class)
+    }
+
+    /// OWL DL membership query: is `individual` a member of `class_expr`?
+    ///
+    /// This is the Rust equivalent of the `member(owlClassExpr)` built-in in SMOL / SWRL
+    /// contexts.  It evaluates the full class expression — including `owl:someValuesFrom`
+    /// chains resolved via `owl:equivalentClass` — against the ABox.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use oxidowl::{ReasoningService, config::ReasonerConfig};
+    /// # use oxidowl::ontology::{Individual, ClassExpression, NamedIndividual, IRI};
+    /// # async fn example(svc: &ReasoningService) -> oxidowl::Result<()> {
+    /// let server = Individual::Named(NamedIndividual { iri: IRI::new("http://example.org/server1").to_url()?.into() });
+    /// let overloaded = ClassExpression::class(IRI::new("http://example.org/Overloaded"));
+    /// let is_overloaded = svc.is_member_of(&server, &overloaded).await?;
+    /// println!("Server overloaded: {is_overloaded}");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn is_member_of(
+        &self,
+        individual: &Individual,
+        class_expr: &ClassExpression,
+    ) -> Result<bool> {
+        self.is_instance_of(individual, class_expr).await
     }
 
     /// Get object property values for an individual

@@ -16,7 +16,7 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 
 - 🚀 **High Performance**: Advanced tableau algorithms with parallel computation
 - 🔧 **Complete OWL 2 DL Support**: Handles SROIQV(D) description logic with DisjointUnion axioms
-- 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, classification, and instance checking
+- 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, TBox classification, ABox realization, and full OWL DL instance checking
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
 - 🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
 - ⚡ **Dual Tableau Algorithms**: Traditional and Hypertableau (3-9x faster for disjointness reasoning)
@@ -644,6 +644,72 @@ reasoner.execute_sparql_query(delete)?;
 ```
 
 See [examples/sparql_update_example.rs](examples/sparql_update_example.rs) for complete usage.
+
+### ABox Reasoning and `member()` Queries
+
+Oxidowl performs full **OWL DL ABox classification**: given a set of individuals and a TBox, it can determine whether each individual is a member of any class expression — including complex expressions defined via `owl:equivalentClass`, `owl:someValuesFrom`, `owl:intersectionOf`, `owl:unionOf`, and `owl:hasValue`.
+
+This enables the `member(classExpr)` pattern used in SMOL/SPARQL rule engines:
+
+```rust
+use oxidowl::ontology::{ClassExpression, Individual, NamedIndividual, IRI};
+use oxidowl::ReasoningService;
+
+// Build class expression: domain:Overloaded (defined in TBox via equivalentClass + someValuesFrom)
+let overloaded = ClassExpression::class(IRI::new("http://example.org/Overloaded"));
+
+// Build individual reference
+let server = Individual::named("http://example.org/server1");
+
+// OWL DL membership query: is server ∈ Overloaded?
+// This unfolds owl:equivalentClass chains and checks owl:someValuesFrom restrictions
+let is_overloaded = reasoning_service.is_member_of(&server, &overloaded).await?;
+println!("Server is overloaded: {is_overloaded}");
+
+// Equivalent call via is_instance_of
+let also_overloaded = reasoning_service.is_instance_of(&server, &overloaded).await?;
+
+// Get all instances of a class expression (runs over every ABox individual)
+let overloaded_servers = reasoning_service.get_instances(&overloaded, false).await?;
+println!("Overloaded servers: {}", overloaded_servers.len());
+```
+
+#### How instance membership is decided
+
+The checker applies these strategies in order, falling through to the tableau only when earlier stages cannot determine the answer:
+
+| Step | What is checked |
+|---|---|
+| 1 | Explicit `owl:ClassAssertion` for the target class |
+| 2 | Subclass hierarchy — asserted type ⊑ target |
+| 3 | `owl:equivalentClass` unfolding — evaluate complex expression against the ABox |
+| 4 | Transitive `owl:subClassOf` chains up through the hierarchy |
+| Fallback | Full tableau expansion via `check_instance` |
+
+**Step 3** supports the following complex constructors in equivalent-class definitions:
+
+| Constructor | Semantics |
+|---|---|
+| `owl:intersectionOf` | All operands must be satisfied (conjunction) |
+| `owl:unionOf` | At least one operand must be satisfied (disjunction) |
+| `owl:someValuesFrom` | ≥ 1 role-filler satisfying the restriction class |
+| `owl:hasValue` | Role-filler equals the specified individual |
+| `xsd:DataSomeValuesFrom` | ≥ 1 data property value satisfying the datatype |
+| `xsd:DataHasValue` | Data property value equals the specified literal |
+
+This means ontologies where a class `C` is defined as:
+```turtle
+:Overloaded owl:equivalentClass [
+    owl:intersectionOf (
+        :Server
+        [ owl:onProperty :hasLoad ;
+          owl:someValuesFrom :HighLoad ]
+    )
+] .
+```
+will correctly classify individual `server1` as `:Overloaded` if it has:
+- an explicit `rdf:type :Server` assertion, **and**
+- an `:hasLoad` property pointing to an individual typed as `:HighLoad`.
 
 ### ML-Enhanced Query Engine
 

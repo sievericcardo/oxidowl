@@ -1252,6 +1252,22 @@ impl ClassificationService {
         Ok(has_matching_value)
     }
 
+    /// Check if two object properties match (simple IRI equality; inverse and chains are not unfolded)
+    fn object_properties_match(
+        &self,
+        prop1: &ObjectPropertyExpression,
+        prop2: &ObjectPropertyExpression,
+    ) -> bool {
+        use crate::ontology::ObjectPropertyExpression;
+        match (prop1, prop2) {
+            (
+                ObjectPropertyExpression::ObjectProperty(p1),
+                ObjectPropertyExpression::ObjectProperty(p2),
+            ) => p1.iri == p2.iri,
+            _ => false,
+        }
+    }
+
     /// Check if two data properties match
     fn data_properties_match(
         &self,
@@ -1454,10 +1470,13 @@ impl ClassificationService {
                                     }
                                 }
 
-                                // Try to match against this equivalent expression
-                                // Only handle complex expressions, not other named classes
+                                // Try to match against this equivalent expression.
+                                // Covers all complex constructors that check_complex_expression handles.
                                 match equiv_class {
                                     ClassExpression::ObjectIntersectionOf(_)
+                                    | ClassExpression::ObjectUnionOf(_)
+                                    | ClassExpression::ObjectSomeValuesFrom { .. }
+                                    | ClassExpression::ObjectHasValue { .. }
                                     | ClassExpression::DataSomeValuesFrom { .. }
                                     | ClassExpression::DataHasValue { .. } => {
                                         if self.check_complex_expression(
@@ -1513,23 +1532,69 @@ impl ClassificationService {
     ) -> Result<bool> {
         match class_expr {
             ClassExpression::ObjectIntersectionOf(operands) => {
-                // Check all operands - must all be true
+                // Every operand must be satisfied (conjunction)
                 for operand in operands {
-                    let result = match operand {
-                        // Handle named classes in intersections
-                        ClassExpression::Class(cls) => {
-                            // Check if individual is explicitly asserted to be in this class
-                            self.check_explicit_class_assertion(individual, cls, ontology)?
-                        }
-                        // Recursively check complex expressions
-                        _ => self.check_complex_expression(individual, operand, ontology)?,
-                    };
-
-                    if !result {
+                    if !self.check_instance_with_datatype_reasoning(individual, operand, ontology)? {
                         return Ok(false);
                     }
                 }
                 Ok(true)
+            }
+            ClassExpression::ObjectUnionOf(operands) => {
+                // At least one operand must be satisfied (disjunction)
+                for operand in operands {
+                    if self.check_instance_with_datatype_reasoning(individual, operand, ontology)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                // ∃ r.C : individual must have at least one r-successor that satisfies C
+                let individual_iri = individual
+                    .iri()
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) =
+                        axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.source
+                        && subj.iri.as_str() == individual_iri
+                        && self.object_properties_match(property, &assertion.property)
+                    {
+                        if self.check_instance_with_datatype_reasoning(
+                            &assertion.target,
+                            filler,
+                            ontology,
+                        )? {
+                            return Ok(true);
+                        }
+                    }
+                }
+                Ok(false)
+            }
+            ClassExpression::ObjectHasValue { property, value: filler_ind } => {
+                // ∃ r.{o} : individual must have exactly the specified individual as an r-value
+                let individual_iri = individual
+                    .iri()
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+                let filler_iri = filler_ind
+                    .iri()
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) =
+                        axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.source
+                        && subj.iri.as_str() == individual_iri
+                        && self.object_properties_match(property, &assertion.property)
+                        && let crate::ontology::Individual::Named(obj) = &assertion.target
+                        && obj.iri.as_str() == filler_iri
+                    {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 // Check if individual has a data property value that satisfies the restriction
@@ -1553,9 +1618,14 @@ impl ClassificationService {
                 }
                 Ok(false)
             }
+            // Named classes are handled by check_instance_with_datatype_reasoning;
+            // reaching this point means the caller passed a Class directly — delegate back.
+            ClassExpression::Class(_) => {
+                self.check_instance_with_datatype_reasoning(individual, class_expr, ontology)
+            }
             _ => {
-                // For other class expressions (including named classes reached here),
-                // we can't do direct checking
+                // For unsupported constructors (AllValuesFrom, cardinality, …)
+                // conservatively return false so tableau picks it up instead.
                 Ok(false)
             }
         }
