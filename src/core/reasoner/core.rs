@@ -122,9 +122,8 @@ impl Reasoner {
         let classification_tableau_factory = TableauFactory::new(config.clone())?;
 
         let task_service = ReasoningTaskService::new(task_tableau_factory);
-        let classification_service = ClassificationService::new(
-            ReasoningTaskService::new(classification_tableau_factory),
-        );
+        let classification_service =
+            ClassificationService::new(ReasoningTaskService::new(classification_tableau_factory));
 
         Ok(Self {
             ontology: None,
@@ -486,7 +485,11 @@ impl Reasoner {
     }
 
     /// Get instances of a class
-    pub fn get_instances(&mut self, class: &ClassExpression, direct: bool) -> Result<Vec<Individual>> {
+    pub fn get_instances(
+        &mut self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<Vec<Individual>> {
         if let Some(ontology_ref) = self.ontology.clone() {
             // Use the classification service to properly handle datatype reasoning
             let mut statistics = ReasoningStatistics::new();
@@ -632,8 +635,11 @@ impl Reasoner {
     pub fn classify(&mut self) -> Result<ClassificationResult> {
         if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
-            self.classification_service
-                .classify(&ontology, &mut statistics, &mut self.cache_manager)
+            self.classification_service.classify(
+                &ontology,
+                &mut statistics,
+                &mut self.cache_manager,
+            )
         } else {
             Err(Error::ontology_parsing(
                 "No ontology loaded for classification",
@@ -661,7 +667,8 @@ impl Reasoner {
         ontology: &Arc<RwLock<crate::ontology::Ontology>>,
         stats: &mut ReasoningStatistics,
     ) -> Result<bool> {
-        self.task_service.check_entailment(axiom, ontology, stats, &mut self.cache_manager)
+        self.task_service
+            .check_entailment(axiom, ontology, stats, &mut self.cache_manager)
     }
 
     /// Explain why an entailment holds

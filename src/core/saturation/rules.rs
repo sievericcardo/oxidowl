@@ -459,11 +459,12 @@ impl SaturationRule for PropertyChainRule {
                         if let ClassExpression::ObjectSomeValuesFrom { property, filler } =
                             &existential.filler
                             && let Some(r2_iri) = extract_property_iri(property)
-                                && r2_iri == *r2 {
-                                    // Found ∃R₁.(∃R₂.D), infer ∃R.D where R = super_prop
-                                    node.add_existential(super_prop.clone(), *filler.clone());
-                                    changed = true;
-                                }
+                            && r2_iri == *r2
+                        {
+                            // Found ∃R₁.(∃R₂.D), infer ∃R.D where R = super_prop
+                            node.add_existential(super_prop.clone(), *filler.clone());
+                            changed = true;
+                        }
                     }
                 }
 
@@ -475,11 +476,12 @@ impl SaturationRule for PropertyChainRule {
                         if let ClassExpression::ObjectAllValuesFrom { property, filler } =
                             &universal.filler
                             && let Some(r2_iri) = extract_property_iri(property)
-                                && r2_iri == *r2 {
-                                    // Found ∀R₁.(∀R₂.D), infer ∀R.D where R = super_prop
-                                    node.add_universal(super_prop.clone(), *filler.clone());
-                                    changed = true;
-                                }
+                            && r2_iri == *r2
+                        {
+                            // Found ∀R₁.(∀R₂.D), infer ∀R.D where R = super_prop
+                            node.add_universal(super_prop.clone(), *filler.clone());
+                            changed = true;
+                        }
                     }
                 }
 

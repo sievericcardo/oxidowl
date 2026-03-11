@@ -230,12 +230,13 @@ impl Tableau {
                 crate::ontology::Axiom::SubClassOf(sub) => {
                     // A ⊑ E where E is complex: store "when A(x), also add E(x)"
                     if let ClassExpression::Class(named) = &sub.subclass
-                        && sub.superclass.is_complex_class_expression() {
-                            self.concept_unfolding_rules
-                                .entry(named.iri.to_string())
-                                .or_default()
-                                .push(sub.superclass.clone());
-                        }
+                        && sub.superclass.is_complex_class_expression()
+                    {
+                        self.concept_unfolding_rules
+                            .entry(named.iri.to_string())
+                            .or_default()
+                            .push(sub.superclass.clone());
+                    }
                 }
                 crate::ontology::Axiom::EquivalentClasses(equiv) => {
                     // For each pair (named, complex) in EquivalentClasses, both directions

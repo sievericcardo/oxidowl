@@ -445,7 +445,6 @@ impl CompletionGraphCache {
     }
 }
 
-
 /// Cache manager that coordinates different caches
 #[derive(Debug, Clone)]
 pub struct CacheManager {

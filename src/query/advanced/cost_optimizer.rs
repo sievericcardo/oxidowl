@@ -1582,7 +1582,8 @@ impl CostBasedOptimizer {
             } else {
                 1.0
             };
-            (f64::from(base_size) * join_multiplier * (1.0 + pattern.atom_count as f64 * 0.3)) as usize
+            (f64::from(base_size) * join_multiplier * (1.0 + pattern.atom_count as f64 * 0.3))
+                as usize
         };
 
         // Calculate confidence based on available data

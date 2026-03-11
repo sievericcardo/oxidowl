@@ -1130,7 +1130,7 @@ impl CostPrediction {
         Self {
             execution_time,
             memory_usage: f64::from(features.ontology_size) * 0.001, // 1KB per axiom estimate
-            confidence: 0.5,                                     // Low confidence for baseline
+            confidence: 0.5,                                         // Low confidence for baseline
         }
     }
 }

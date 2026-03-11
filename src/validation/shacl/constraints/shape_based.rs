@@ -106,34 +106,36 @@ where
     let mut out = Vec::new();
 
     if let Some(min) = min_count
-        && count < min {
-            out.push(make_node_result(
-                focus_node,
-                None,
-                SH_QUALIFIED_MIN_COUNT_CONSTRAINT_COMPONENT,
-                severity,
-                source_shape,
-                messages,
-                &format!("sh:qualifiedMinCount: expected {min} qualified values, found {count}"),
-                Vec::new(),
-            ));
-        }
+        && count < min
+    {
+        out.push(make_node_result(
+            focus_node,
+            None,
+            SH_QUALIFIED_MIN_COUNT_CONSTRAINT_COMPONENT,
+            severity,
+            source_shape,
+            messages,
+            &format!("sh:qualifiedMinCount: expected {min} qualified values, found {count}"),
+            Vec::new(),
+        ));
+    }
 
     if let Some(max) = max_count
-        && count > max {
-            out.push(make_node_result(
-                focus_node,
-                None,
-                SH_QUALIFIED_MAX_COUNT_CONSTRAINT_COMPONENT,
-                severity,
-                source_shape,
-                messages,
-                &format!(
-                    "sh:qualifiedMaxCount: expected at most {max} qualified values, found {count}"
-                ),
-                Vec::new(),
-            ));
-        }
+        && count > max
+    {
+        out.push(make_node_result(
+            focus_node,
+            None,
+            SH_QUALIFIED_MAX_COUNT_CONSTRAINT_COMPONENT,
+            severity,
+            source_shape,
+            messages,
+            &format!(
+                "sh:qualifiedMaxCount: expected at most {max} qualified values, found {count}"
+            ),
+            Vec::new(),
+        ));
+    }
 
     Ok(out)
 }

@@ -380,10 +380,7 @@ impl FaultTolerance {
             let mut recovery_sessions: HashMap<Uuid, RecoverySession> = HashMap::new();
 
             // Start sub-components
-            if let Err(e) = failure_detector
-                .start(event_sender_clone.clone())
-                .await
-            {
+            if let Err(e) = failure_detector.start(event_sender_clone.clone()).await {
                 error!("Failure detector start failed: {e}");
             }
             if let Err(e) = recovery_manager.start(event_sender_clone.clone()).await {
@@ -666,7 +663,9 @@ impl FaultTolerance {
         let execution_timeout = Duration::from_millis(self.config.failure_detection_timeout_ms);
 
         // Execute with timeout
-        if let Ok(result) = timeout(execution_timeout, self.do_execute_partition(partition)).await { result } else {
+        if let Ok(result) = timeout(execution_timeout, self.do_execute_partition(partition)).await {
+            result
+        } else {
             // Timeout occurred
             let event = FaultToleranceEvent::NodeFailure(
                 partition.assigned_node,
@@ -763,11 +762,9 @@ impl FaultTolerance {
             .map_err(|_| Error::Internal {
                 message: "FaultTolerance actor is down".to_string(),
             })?;
-        resp_rx
-            .await
-            .map_err(|_| Error::Internal {
-                message: "FaultTolerance did not respond".to_string(),
-            })?
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "FaultTolerance did not respond".to_string(),
+        })?
     }
 
     /// Select recovery strategy based on recovery type
@@ -822,11 +819,9 @@ impl FaultTolerance {
             .map_err(|_| Error::Internal {
                 message: "FaultTolerance actor is down".to_string(),
             })?;
-        resp_rx
-            .await
-            .map_err(|_| Error::Internal {
-                message: "FaultTolerance did not respond".to_string(),
-            })?
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "FaultTolerance did not respond".to_string(),
+        })?
     }
 
     /// Stop fault tolerance monitoring

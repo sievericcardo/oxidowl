@@ -512,7 +512,9 @@ impl SyntaxValidator {
                                     )));
                                 }
                                 // Check for invalid characters in integer
-                                let start_idx = usize::from(clean_value.starts_with('+') || clean_value.starts_with('-'));
+                                let start_idx = usize::from(
+                                    clean_value.starts_with('+') || clean_value.starts_with('-'),
+                                );
                                 if !clean_value[start_idx..].chars().all(|c| c.is_ascii_digit()) {
                                     return Err(Error::ontology_parsing(format!(
                                         "Line {line_num}: Invalid integer literal: \"{clean_value}\"^^{datatype}"

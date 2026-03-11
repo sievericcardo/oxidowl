@@ -306,9 +306,10 @@ impl TableauExecutor {
                                                 property: p,
                                                 filler: f,
                                             } = &**expr
-                                                && format!("{p:?}") == role_name {
-                                                    return Some(*f.clone());
-                                                }
+                                            && format!("{p:?}") == role_name
+                                        {
+                                            return Some(*f.clone());
+                                        }
                                         None
                                     })
                                     .collect()
@@ -336,9 +337,10 @@ impl TableauExecutor {
                                                 cardinality,
                                                 filler: f,
                                             } = &**expr
-                                                && format!("{p:?}") == role_name {
-                                                    return Some((*cardinality, *f.clone()));
-                                                }
+                                            && format!("{p:?}") == role_name
+                                        {
+                                            return Some((*cardinality, *f.clone()));
+                                        }
                                         None
                                     })
                                     .collect()
@@ -669,7 +671,8 @@ impl TableauExecutor {
         let relevant_clauses: Vec<_> = if let Some(ref index) = tableau.clause_index {
             index
                 .get_candidate_clause_refs(&[class_iri.as_str().to_string()])
-                .into_iter().cloned()
+                .into_iter()
+                .cloned()
                 .collect()
         } else {
             Vec::new()
@@ -709,13 +712,14 @@ impl TableauExecutor {
 
                             // Check if already present to avoid duplicates
                             if let Some(node) = tableau.nodes.get(node_id)
-                                && !node.concepts.contains(&implied_concept) {
-                                    tableau.add_concept_to_node(node_id, implied_concept)?;
-                                    debug!(
-                                        "Preemptively added concept {} to node {} via clause {}",
-                                        concept_iri, node_id, clause.id
-                                    );
-                                }
+                                && !node.concepts.contains(&implied_concept)
+                            {
+                                tableau.add_concept_to_node(node_id, implied_concept)?;
+                                debug!(
+                                    "Preemptively added concept {} to node {} via clause {}",
+                                    concept_iri, node_id, clause.id
+                                );
+                            }
                         }
                     }
                 }
@@ -831,10 +835,12 @@ impl TableauExecutor {
         } = &rule_app.context
         {
             // Extract choice concepts from disjunctions
-            let choice_concepts = if let ClassExpression::ObjectUnionOf(concepts) = concept { concepts
-            .iter()
-            .map(|c| ConceptLabel::Complex(Box::new(c.clone())))
-            .collect() } else {
+            let choice_concepts = if let ClassExpression::ObjectUnionOf(concepts) = concept {
+                concepts
+                    .iter()
+                    .map(|c| ConceptLabel::Complex(Box::new(c.clone())))
+                    .collect()
+            } else {
                 debug!("CHOOSE rule called on non-disjunction concept");
                 return Ok(());
             };
@@ -1367,94 +1373,93 @@ impl TableauExecutor {
             // Check for disjointness clashes using the DisjointnessMap.
             // Only applicable to Nominal nodes (named individuals) because Generated nodes
             // contain role-filler concepts whose labels are not registered in the disjointness map.
-            if check_disjointness
-                && let Some(checker) = &mut tableau.clause_checker {
-                    let node_concepts: Vec<ConceptId> = node
-                        .concepts
-                        .iter()
-                        .filter_map(|concept| {
-                            if let super::node::ConceptLabel::Complex(class_expr) = concept {
-                                if let ClassExpression::Class(_) = **class_expr {
-                                    Some(ConceptId::from_class_expression(class_expr))
-                                } else {
-                                    None
-                                }
+            if check_disjointness && let Some(checker) = &mut tableau.clause_checker {
+                let node_concepts: Vec<ConceptId> = node
+                    .concepts
+                    .iter()
+                    .filter_map(|concept| {
+                        if let super::node::ConceptLabel::Complex(class_expr) = concept {
+                            if let ClassExpression::Class(_) = **class_expr {
+                                Some(ConceptId::from_class_expression(class_expr))
                             } else {
                                 None
                             }
-                        })
-                        .collect();
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
-                    // Check disjointness only if we have a disjointness map
-                    let has_disj_map = checker.disjointness_map().is_some();
-                    if !has_disj_map {
-                        continue;
+                // Check disjointness only if we have a disjointness map
+                let has_disj_map = checker.disjointness_map().is_some();
+                if !has_disj_map {
+                    continue;
+                }
+
+                // Check self-disjointness: if C ⊥ C (class disjoint with itself) then any
+                // node containing C is unsatisfiable.
+                for c in &node_concepts {
+                    let self_disjoint = checker
+                        .disjointness_map()
+                        .map(|disj| disj.are_disjoint(c, c))
+                        .unwrap_or(false);
+                    if self_disjoint {
+                        let clash = Clash {
+                            clash_type: ClashType::Concept {
+                                concept: format!("{c:?} is self-disjoint"),
+                                node: i,
+                            },
+                            nodes: vec![i],
+                            dependencies: Arc::new(DependencySet::new()),
+                            explanation: format!(
+                                "Node {i} has concept {c:?} which is disjoint with itself"
+                            ),
+                        };
+                        tableau.clash_detector.add_clash(clash);
+                        tableau.statistics.increment_clashes();
+                        log::warn!("Self-disjoint clash at node {i}: {c:?} ⊥ {c:?}");
+                        return Ok(());
                     }
+                }
 
-                    // Check self-disjointness: if C ⊥ C (class disjoint with itself) then any
-                    // node containing C is unsatisfiable.
-                    for c in &node_concepts {
-                        let self_disjoint = checker
+                // Early exit if fewer than two concepts to compare
+                if node_concepts.len() < 2 {
+                    continue;
+                }
+
+                // Check all pairs of concepts on this node.
+                // A clash occurs whenever two concepts on the same node are disjoint —
+                // no equivalence relationship is required.
+                for idx1 in 0..node_concepts.len() {
+                    for idx2 in (idx1 + 1)..node_concepts.len() {
+                        let c1 = &node_concepts[idx1];
+                        let c2 = &node_concepts[idx2];
+
+                        let are_disjoint = checker
                             .disjointness_map()
-                            .map(|disj| disj.are_disjoint(c, c))
+                            .map(|disj| disj.are_disjoint(c1, c2))
                             .unwrap_or(false);
-                        if self_disjoint {
+
+                        if are_disjoint {
                             let clash = Clash {
                                 clash_type: ClashType::Concept {
-                                    concept: format!("{c:?} is self-disjoint"),
+                                    concept: format!("{c1:?} ⊥ {c2:?}"),
                                     node: i,
                                 },
                                 nodes: vec![i],
                                 dependencies: Arc::new(DependencySet::new()),
                                 explanation: format!(
-                                    "Node {i} has concept {c:?} which is disjoint with itself"
+                                    "Node {i} has concepts {c1:?} and {c2:?} which are disjoint"
                                 ),
                             };
                             tableau.clash_detector.add_clash(clash);
                             tableau.statistics.increment_clashes();
-                            log::warn!("Self-disjoint clash at node {i}: {c:?} ⊥ {c:?}");
+                            log::warn!("Disjointness clash at node {i}: {c1:?} ⊥ {c2:?}");
                             return Ok(());
                         }
                     }
-
-                    // Early exit if fewer than two concepts to compare
-                    if node_concepts.len() < 2 {
-                        continue;
-                    }
-
-                    // Check all pairs of concepts on this node.
-                    // A clash occurs whenever two concepts on the same node are disjoint —
-                    // no equivalence relationship is required.
-                    for idx1 in 0..node_concepts.len() {
-                        for idx2 in (idx1 + 1)..node_concepts.len() {
-                            let c1 = &node_concepts[idx1];
-                            let c2 = &node_concepts[idx2];
-
-                            let are_disjoint = checker
-                                .disjointness_map()
-                                .map(|disj| disj.are_disjoint(c1, c2))
-                                .unwrap_or(false);
-
-                            if are_disjoint {
-                                let clash = Clash {
-                                    clash_type: ClashType::Concept {
-                                        concept: format!("{c1:?} ⊥ {c2:?}"),
-                                        node: i,
-                                    },
-                                    nodes: vec![i],
-                                    dependencies: Arc::new(DependencySet::new()),
-                                    explanation: format!(
-                                        "Node {i} has concepts {c1:?} and {c2:?} which are disjoint"
-                                    ),
-                                };
-                                tableau.clash_detector.add_clash(clash);
-                                tableau.statistics.increment_clashes();
-                                log::warn!("Disjointness clash at node {i}: {c1:?} ⊥ {c2:?}");
-                                return Ok(());
-                            }
-                        }
-                    }
-                } // end if check_disjointness
+                }
+            } // end if check_disjointness
         }
 
         Ok(())

@@ -137,7 +137,10 @@ impl ELReasoner {
         // `into_inner()` recovers data even from a poisoned mutex
         let final_map = match Arc::try_unwrap(subsumption_map) {
             Ok(mutex) => mutex.into_inner().unwrap_or_default(),
-            Err(arc) => arc.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone(),
+            Err(arc) => arc
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
         };
         self.concept_hierarchy = ConceptHierarchy::from_subsumption_map(final_map);
 

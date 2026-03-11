@@ -52,8 +52,7 @@ fn lb_select_node(
                 ma.partial_cmp(&mb).unwrap_or(std::cmp::Ordering::Equal)
             })
             .copied(),
-        LoadBalancingAlgorithm::WeightedRoundRobin
-        | LoadBalancingAlgorithm::Custom { .. } => nodes
+        LoadBalancingAlgorithm::WeightedRoundRobin | LoadBalancingAlgorithm::Custom { .. } => nodes
             .iter()
             .min_by(|a, b| {
                 lb_load_score(loads.get(*a))
@@ -117,8 +116,7 @@ fn lb_needs_rebalancing(
         .map(|id| lb_load_score(loads.get(id)))
         .collect();
     let mean = scores.iter().sum::<f64>() / scores.len() as f64;
-    let variance =
-        scores.iter().map(|&s| (s - mean).powi(2)).sum::<f64>() / scores.len() as f64;
+    let variance = scores.iter().map(|&s| (s - mean).powi(2)).sum::<f64>() / scores.len() as f64;
     variance > load_threshold
 }
 
@@ -206,7 +204,11 @@ impl LoadBalancer {
                         total_workload,
                         tx,
                     }) => {
-                        let _ = tx.send(lb_calculate_distribution(&nodes, total_workload, &node_loads));
+                        let _ = tx.send(lb_calculate_distribution(
+                            &nodes,
+                            total_workload,
+                            &node_loads,
+                        ));
                     }
                     Some(LoadBalancerMsg::NeedsRebalancing { nodes, tx }) => {
                         let _ = tx.send(lb_needs_rebalancing(
@@ -237,7 +239,10 @@ impl LoadBalancer {
 
     /// Update load information for a node
     pub async fn update_node_load(&self, node_id: NodeId, load: NodeLoad) -> Result<()> {
-        let _ = self.tx.send(LoadBalancerMsg::UpdateNodeLoad { node_id, load }).await;
+        let _ = self
+            .tx
+            .send(LoadBalancerMsg::UpdateNodeLoad { node_id, load })
+            .await;
         Ok(())
     }
 

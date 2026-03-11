@@ -67,17 +67,19 @@ pub fn evaluate_closed(
     let mut out = Vec::new();
     for row in rows {
         if let Some(pred) = row.get("pred")
-            && !is_rdf_type(pred) && !is_allowed(pred) {
-                out.push(simple_result(
-                    focus_node,
-                    Some(pred),
-                    SH_CLOSED_CONSTRAINT_COMPONENT,
-                    severity,
-                    source_shape,
-                    messages,
-                    "sh:closed violated: predicate not in allowed set",
-                ));
-            }
+            && !is_rdf_type(pred)
+            && !is_allowed(pred)
+        {
+            out.push(simple_result(
+                focus_node,
+                Some(pred),
+                SH_CLOSED_CONSTRAINT_COMPONENT,
+                severity,
+                source_shape,
+                messages,
+                "sh:closed violated: predicate not in allowed set",
+            ));
+        }
     }
     Ok(out)
 }

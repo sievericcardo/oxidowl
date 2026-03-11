@@ -227,16 +227,28 @@ impl ReasoningActor {
             } => {
                 let _ = reply.send(self.handle_is_subsumed_by(&subclass, &superclass));
             }
-            ReasoningRequest::GetSuperclasses { class, direct, reply } => {
+            ReasoningRequest::GetSuperclasses {
+                class,
+                direct,
+                reply,
+            } => {
                 let _ = reply.send(self.handle_get_superclasses(&class, direct));
             }
-            ReasoningRequest::GetSubclasses { class, direct, reply } => {
+            ReasoningRequest::GetSubclasses {
+                class,
+                direct,
+                reply,
+            } => {
                 let _ = reply.send(self.handle_get_subclasses(&class, direct));
             }
             ReasoningRequest::GetEquivalentClasses { class, reply } => {
                 let _ = reply.send(self.handle_get_equivalent_classes(&class));
             }
-            ReasoningRequest::GetInstances { class, direct, reply } => {
+            ReasoningRequest::GetInstances {
+                class,
+                direct,
+                reply,
+            } => {
                 let _ = reply.send(self.handle_get_instances(&class, direct));
             }
             ReasoningRequest::GetTypes {
@@ -258,8 +270,7 @@ impl ReasoningActor {
                 property,
                 reply,
             } => {
-                let _ =
-                    reply.send(self.handle_get_object_property_values(&individual, &property));
+                let _ = reply.send(self.handle_get_object_property_values(&individual, &property));
             }
             ReasoningRequest::GetDataPropertyValues {
                 individual,
@@ -350,16 +361,13 @@ impl ReasoningActor {
     fn handle_is_consistent(&mut self) -> Result<bool> {
         let start = Instant::now();
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt
-                && let Some(result) = self.cache_manager.get_consistency_result(&ont) {
-                    return Ok(result);
-                }
+                && let Some(result) = self.cache_manager.get_consistency_result(&ont)
+            {
+                return Ok(result);
+            }
         }
 
         log::info!("Executing SWRL rules before consistency check");
@@ -367,11 +375,7 @@ impl ReasoningActor {
 
         let result = self.reasoner.is_consistent()?;
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt {
                 self.cache_manager.cache_consistency_result(&ont, result);
@@ -379,11 +383,12 @@ impl ReasoningActor {
         }
 
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Consistency check timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Consistency check timed out".into(),
+            });
+        }
 
         log::info!("Consistency check completed in {:?}", start.elapsed());
         Ok(result)
@@ -392,31 +397,26 @@ impl ReasoningActor {
     fn handle_is_satisfiable(&mut self, expression: &ClassExpression) -> Result<bool> {
         let start = Instant::now();
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-            && let Some(result) = self.cache_manager.get_satisfiability_result(expression) {
-                return Ok(result);
-            }
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability)
+            && let Some(result) = self.cache_manager.get_satisfiability_result(expression)
+        {
+            return Ok(result);
+        }
 
         let result = self.reasoner.is_class_satisfiable(expression)?;
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             self.cache_manager
                 .cache_satisfiability_result(expression.clone(), result);
         }
 
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Satisfiability check timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Satisfiability check timed out".into(),
+            });
+        }
 
         log::info!("Satisfiability check completed in {:?}", start.elapsed());
         Ok(result)
@@ -429,31 +429,31 @@ impl ReasoningActor {
     ) -> Result<bool> {
         let start = Instant::now();
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-            && let Some(result) = self.cache_manager.get_subsumption_result(subclass, superclass) {
-                return Ok(result);
-            }
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability)
+            && let Some(result) = self
+                .cache_manager
+                .get_subsumption_result(subclass, superclass)
+        {
+            return Ok(result);
+        }
 
         let result = self.reasoner.is_subsumed_by(subclass, superclass)?;
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
-            self.cache_manager
-                .cache_subsumption_result(subclass.clone(), superclass.clone(), result);
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
+            self.cache_manager.cache_subsumption_result(
+                subclass.clone(),
+                superclass.clone(),
+                result,
+            );
         }
 
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Subsumption check timed out".into(),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: "Subsumption check timed out".into(),
+            });
+        }
 
         log::info!("Subsumption check completed in {:?}", start.elapsed());
         Ok(result)
@@ -467,7 +467,10 @@ impl ReasoningActor {
         let start = Instant::now();
         let superclasses = self.reasoner.get_superclasses(class, direct)?;
         self.check_timeout(start, "Direct superclass retrieval")?;
-        log::info!("Direct superclass retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Direct superclass retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(superclasses.into_iter().collect())
     }
 
@@ -479,7 +482,10 @@ impl ReasoningActor {
         let start = Instant::now();
         let subclasses = self.reasoner.get_subclasses(class, direct)?;
         self.check_timeout(start, "Direct subclass retrieval")?;
-        log::info!("Direct subclass retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Direct subclass retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(subclasses.into_iter().collect())
     }
 
@@ -490,7 +496,10 @@ impl ReasoningActor {
         let start = Instant::now();
         let classes = self.reasoner.get_equivalent_classes(class)?;
         self.check_timeout(start, "Equivalent class retrieval")?;
-        log::info!("Equivalent class retrieval completed in {:?}", start.elapsed());
+        log::info!(
+            "Equivalent class retrieval completed in {:?}",
+            start.elapsed()
+        );
         Ok(classes.into_iter().collect())
     }
 
@@ -532,7 +541,9 @@ impl ReasoningActor {
         property: &ObjectPropertyExpression,
     ) -> Result<HashSet<Individual>> {
         let start = Instant::now();
-        let values = self.reasoner.get_object_property_values(individual, property)?;
+        let values = self
+            .reasoner
+            .get_object_property_values(individual, property)?;
         self.check_timeout(start, "Object property value retrieval")?;
         log::info!(
             "Object property value retrieval completed in {:?}",
@@ -547,7 +558,9 @@ impl ReasoningActor {
         property: &DataPropertyExpression,
     ) -> Result<HashSet<crate::ontology::Literal>> {
         let start = Instant::now();
-        let result = self.reasoner.get_data_property_values(individual, property)?;
+        let result = self
+            .reasoner
+            .get_data_property_values(individual, property)?;
         self.check_timeout(start, "Data property value retrieval")?;
         let literals = result
             .into_iter()
@@ -570,17 +583,14 @@ impl ReasoningActor {
     fn handle_classify(&mut self) -> Result<ClassificationResult> {
         let start = Instant::now();
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt
-                && let Some(cached) = self.cache_manager.get_classification_result(&ont) {
-                    log::info!("Classification (cached) completed in {:?}", start.elapsed());
-                    return Ok(cached);
-                }
+                && let Some(cached) = self.cache_manager.get_classification_result(&ont)
+            {
+                log::info!("Classification (cached) completed in {:?}", start.elapsed());
+                return Ok(cached);
+            }
         }
 
         log::info!("Executing SWRL rules before classification");
@@ -589,17 +599,14 @@ impl ReasoningActor {
         let result = self.reasoner.classify()?;
 
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Classification timed out".into(),
-                });
-            }
-
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
+            && start.elapsed() > timeout
         {
+            return Err(Error::Timeout {
+                message: "Classification timed out".into(),
+            });
+        }
+
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt {
                 self.cache_manager
@@ -614,17 +621,14 @@ impl ReasoningActor {
     fn handle_realize(&mut self) -> Result<RealizationResult> {
         let start = Instant::now();
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt
-                && let Some(cached) = self.cache_manager.get_realization_result(&ont) {
-                    log::info!("Realization (cached) completed in {:?}", start.elapsed());
-                    return Ok(cached);
-                }
+                && let Some(cached) = self.cache_manager.get_realization_result(&ont)
+            {
+                log::info!("Realization (cached) completed in {:?}", start.elapsed());
+                return Ok(cached);
+            }
         }
 
         log::info!("Executing SWRL rules before realization");
@@ -633,17 +637,14 @@ impl ReasoningActor {
         let result = self.reasoner.realize()?;
 
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Realization timed out".into(),
-                });
-            }
-
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
+            && start.elapsed() > timeout
         {
+            return Err(Error::Timeout {
+                message: "Realization timed out".into(),
+            });
+        }
+
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt {
                 self.cache_manager
@@ -772,11 +773,7 @@ impl ReasoningActor {
 
         self.check_timeout(start, "Axiom addition")?;
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             self.cache_manager.clear_all()?;
         }
 
@@ -799,11 +796,7 @@ impl ReasoningActor {
 
         self.check_timeout(start, "Axiom removal")?;
 
-        if self
-            .config
-            .cache
-            .is_enabled(CacheFeature::Satisfiability)
-        {
+        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             self.cache_manager.clear_all()?;
         }
 
@@ -827,10 +820,8 @@ impl ReasoningActor {
 
     fn handle_get_ontology_iri(&mut self) -> Result<Option<crate::ontology::IRI>> {
         if let Some(ont_ref) = self.reasoner.get_ontology().cloned() {
-            let ontology = crate::core::lock_helpers::read_lock(
-                &ont_ref,
-                "actor: reading ontology IRI",
-            )?;
+            let ontology =
+                crate::core::lock_helpers::read_lock(&ont_ref, "actor: reading ontology IRI")?;
             Ok(ontology.get_iri().cloned())
         } else {
             Ok(None)
@@ -841,11 +832,12 @@ impl ReasoningActor {
 
     fn check_timeout(&self, start: Instant, operation: &str) -> Result<()> {
         if let Some(timeout) = self.config.reasoning.timeout
-            && start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: format!("{operation} timed out"),
-                });
-            }
+            && start.elapsed() > timeout
+        {
+            return Err(Error::Timeout {
+                message: format!("{operation} timed out"),
+            });
+        }
         Ok(())
     }
 }

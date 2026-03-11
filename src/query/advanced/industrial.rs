@@ -1020,37 +1020,39 @@ impl ModularClassificationResult {
                         variable: _,
                         class_expression,
                     } = query_atom
-                        && let ClassExpression::Class(c) = class_expression {
-                            let concept_iri = c.iri.to_string();
+                        && let ClassExpression::Class(c) = class_expression
+                    {
+                        let concept_iri = c.iri.to_string();
 
-                            // Concepts expanded earlier are typically more general (superclasses)
-                            // Concepts expanded later are typically more specific (subclasses)
-                            // Use expansion index as a heuristic for hierarchy depth
+                        // Concepts expanded earlier are typically more general (superclasses)
+                        // Concepts expanded later are typically more specific (subclasses)
+                        // Use expansion index as a heuristic for hierarchy depth
 
-                            if let Some(superclasses) = subsumptions.get_mut(&concept_iri) {
-                                // Add hierarchical information based on expansion order
-                                // Early expansions (low index) are higher in hierarchy
-                                if idx > 0 {
-                                    // Look at previous expansions as potential superclasses
-                                    for prev_idx in 0..idx {
-                                        if let Some(super::conjunctive::QueryAtom::ClassAtom {
-                                            variable: _,
-                                            class_expression: prev_expr,
-                                        }) = expansion_order.get(prev_idx)
-                                            && let ClassExpression::Class(prev_c) = prev_expr {
-                                                let prev_iri = prev_c.iri.to_string();
-                                                if !superclasses.contains(&prev_iri)
-                                                    && prev_iri != concept_iri
-                                                {
-                                                    // Heuristic: earlier expansions are potential superclasses
-                                                    // In a sound implementation, verify this with entailment check
-                                                    superclasses.push(prev_iri);
-                                                }
-                                            }
+                        if let Some(superclasses) = subsumptions.get_mut(&concept_iri) {
+                            // Add hierarchical information based on expansion order
+                            // Early expansions (low index) are higher in hierarchy
+                            if idx > 0 {
+                                // Look at previous expansions as potential superclasses
+                                for prev_idx in 0..idx {
+                                    if let Some(super::conjunctive::QueryAtom::ClassAtom {
+                                        variable: _,
+                                        class_expression: prev_expr,
+                                    }) = expansion_order.get(prev_idx)
+                                        && let ClassExpression::Class(prev_c) = prev_expr
+                                    {
+                                        let prev_iri = prev_c.iri.to_string();
+                                        if !superclasses.contains(&prev_iri)
+                                            && prev_iri != concept_iri
+                                        {
+                                            // Heuristic: earlier expansions are potential superclasses
+                                            // In a sound implementation, verify this with entailment check
+                                            superclasses.push(prev_iri);
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
                 }
 
                 log::debug!(
@@ -1625,7 +1627,11 @@ fn extract_axiom_signature(axiom: &crate::ontology::axioms::Axiom) -> HashSet<IR
 
 /// Helper function to recursively extract IRIs from a class expression
 fn extract_class_expr_signature(expr: &ClassExpression, signature: &mut HashSet<IRI>) {
-    use ClassExpression::{Class, ObjectIntersectionOf, ObjectUnionOf, ObjectComplementOf, ObjectSomeValuesFrom, ObjectAllValuesFrom, ObjectMinCardinality, ObjectMaxCardinality, ObjectExactCardinality};
+    use ClassExpression::{
+        Class, ObjectAllValuesFrom, ObjectComplementOf, ObjectExactCardinality,
+        ObjectIntersectionOf, ObjectMaxCardinality, ObjectMinCardinality, ObjectSomeValuesFrom,
+        ObjectUnionOf,
+    };
 
     match expr {
         Class(c) => {

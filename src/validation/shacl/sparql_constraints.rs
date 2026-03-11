@@ -58,11 +58,12 @@ pub fn evaluate_sparql_constraint(
     for row in rows {
         // Check for ?failure binding
         if let Some(failure) = row.get("failure")
-            && term_is_true_literal(failure) {
-                return Err(Error::shacl(format!(
-                    "sh:sparql constraint reports processing failure for focus node {focus_node:?}"
-                )));
-            }
+            && term_is_true_literal(failure)
+        {
+            return Err(Error::shacl(format!(
+                "sh:sparql constraint reports processing failure for focus node {focus_node:?}"
+            )));
+        }
 
         // Build result from bindings
         let value = row.get("value").cloned();
@@ -122,11 +123,12 @@ fn inject_this_binding(query: &str, values_clause: &str) -> String {
     // Find `WHERE {` (case-insensitive) and inject after the opening brace.
     let lower = query.to_ascii_lowercase();
     if let Some(pos) = lower.find("where")
-        && let Some(brace_pos) = query[pos..].find('{') {
-            let insert_at = pos + brace_pos + 1;
-            let (before, after) = query.split_at(insert_at);
-            return format!("{before} {values_clause} {after}");
-        }
+        && let Some(brace_pos) = query[pos..].find('{')
+    {
+        let insert_at = pos + brace_pos + 1;
+        let (before, after) = query.split_at(insert_at);
+        return format!("{before} {values_clause} {after}");
+    }
     // Fallback: prepend
     format!("{values_clause} {query}")
 }

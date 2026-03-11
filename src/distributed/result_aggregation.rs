@@ -416,7 +416,8 @@ impl ResultAggregator {
                 // Check if we have all results or timeout occurred
                 let elapsed = session.start_time.elapsed();
                 let has_all_results = session.partial_results.len() >= session.expected_partitions;
-                let timeout_exceeded = elapsed.as_millis() > u128::from(self.config.max_wait_time_ms);
+                let timeout_exceeded =
+                    elapsed.as_millis() > u128::from(self.config.max_wait_time_ms);
 
                 has_all_results || timeout_exceeded
             } else {

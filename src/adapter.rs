@@ -472,7 +472,8 @@ impl HornedOwlAdapter {
             &rdf_subject_term,
             &rdf_predicate_term,
             &rdf_object_term,
-        ) else {
+        )
+        else {
             unreachable!("RdfTerm::iri always returns Iri variant")
         };
 

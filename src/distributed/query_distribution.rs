@@ -310,11 +310,9 @@ impl QueryDistributor {
             .map_err(|_| Error::Internal {
                 message: "QueryDistributor actor is down".to_string(),
             })?;
-        resp_rx
-            .await
-            .map_err(|_| Error::Internal {
-                message: "QueryDistributor did not respond".to_string(),
-            })?
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "QueryDistributor did not respond".to_string(),
+        })?
     }
 
     /// Get status of a distributed query

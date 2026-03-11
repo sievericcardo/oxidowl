@@ -1114,9 +1114,7 @@ impl CompletionRuleSet {
                         nodes: vec![application.node.clone()],
                         concepts: vec![concept.clone()],
                         dependencies: Arc::clone(dependencies),
-                        explanation: format!(
-                            "Meta-constraint violation for {meta_property}: {e}"
-                        ),
+                        explanation: format!("Meta-constraint violation for {meta_property}: {e}"),
                     });
                     return Ok(result);
                 }

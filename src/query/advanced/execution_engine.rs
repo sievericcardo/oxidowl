@@ -931,7 +931,10 @@ impl AdvancedExecutionEngine {
                 .select_strategy(query.clone(), self.ontology.clone())
                 .await?
         } else {
-            let strategy = self.optimizer.select_strategy(query.clone(), query_plan).await?;
+            let strategy = self
+                .optimizer
+                .select_strategy(query.clone(), query_plan)
+                .await?;
             (strategy, None)
         };
 
@@ -957,7 +960,8 @@ impl AdvancedExecutionEngine {
             .await;
 
         if self.config.enable_adaptive_strategies {
-            self.provide_ml_feedback(query, &strategy, &result, start_time).await;
+            self.provide_ml_feedback(query, &strategy, &result, start_time)
+                .await;
         }
 
         Ok(result)
@@ -1068,7 +1072,9 @@ impl AdvancedExecutionEngine {
         self.monitor
             .start_execution(execution_id.clone(), query.clone(), strategy.to_string());
 
-        let result = if self.config.enable_parallel_execution && constraints.priority >= ExecutionPriority::High {
+        let result = if self.config.enable_parallel_execution
+            && constraints.priority >= ExecutionPriority::High
+        {
             self.execute_parallel(&execution_id, query, strategy, constraints)
                 .await
         } else {

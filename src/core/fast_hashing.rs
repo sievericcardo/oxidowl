@@ -212,7 +212,13 @@ fn compare_concepts_with_depth(
     b: &ClassExpression,
     depth: usize,
 ) -> std::cmp::Ordering {
-    use ClassExpression::{Class, ObjectIntersectionOf, ObjectUnionOf, ObjectOneOf, ObjectSomeValuesFrom, ObjectAllValuesFrom, ObjectHasValue, ObjectHasSelf, ObjectMinCardinality, ObjectMaxCardinality, ObjectExactCardinality, DataSomeValuesFrom, DataAllValuesFrom, DataHasValue, DataMinCardinality, DataMaxCardinality, DataExactCardinality, ObjectComplementOf};
+    use ClassExpression::{
+        Class, DataAllValuesFrom, DataExactCardinality, DataHasValue, DataMaxCardinality,
+        DataMinCardinality, DataSomeValuesFrom, ObjectAllValuesFrom, ObjectComplementOf,
+        ObjectExactCardinality, ObjectHasSelf, ObjectHasValue, ObjectIntersectionOf,
+        ObjectMaxCardinality, ObjectMinCardinality, ObjectOneOf, ObjectSomeValuesFrom,
+        ObjectUnionOf,
+    };
     use std::cmp::Ordering;
 
     // Prevent stack overflow on deeply nested expressions

@@ -1120,7 +1120,13 @@ impl ClassificationService {
                 });
                 if let Ok(supertypes) = {
                     let mut local_cache = CacheManager::default();
-                    self.get_superclasses(&class_expr, ontology, statistics, false, &mut local_cache)
+                    self.get_superclasses(
+                        &class_expr,
+                        ontology,
+                        statistics,
+                        false,
+                        &mut local_cache,
+                    )
                 } {
                     for supertype in supertypes {
                         if let ClassExpression::Class(class) = supertype {
@@ -1554,9 +1560,10 @@ impl ClassificationService {
                             &assertion.target,
                             filler,
                             ontology,
-                        )? {
-                            return Ok(true);
-                        }
+                        )?
+                    {
+                        return Ok(true);
+                    }
                 }
                 Ok(false)
             }

@@ -1644,11 +1644,12 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
         // ----------------------------------------------------------------
         Axiom::ClassAssertion(ax) => {
             if let Some(class_iri) = class_expr_to_named_node(&ax.class)
-                && let Some(ind_str) = individual_iri_str(&ax.individual) {
-                    let ind_iri = make_named_node(ind_str)?;
-                    let rdf_type = make_named_node(vocab::rdf::TYPE)?;
-                    triples.push(OxTriple::new(ind_iri, rdf_type, class_iri));
-                }
+                && let Some(ind_str) = individual_iri_str(&ax.individual)
+            {
+                let ind_iri = make_named_node(ind_str)?;
+                let rdf_type = make_named_node(vocab::rdf::TYPE)?;
+                triples.push(OxTriple::new(ind_iri, rdf_type, class_iri));
+            }
         }
 
         Axiom::ObjectPropertyAssertion(ax) => {
@@ -1656,23 +1657,25 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
                 && let (Some(subj_str), Some(obj_str)) = (
                     individual_iri_str(&ax.source),
                     individual_iri_str(&ax.target),
-                ) {
-                    triples.push(OxTriple::new(
-                        make_named_node(subj_str)?,
-                        make_named_node(prop_str)?,
-                        make_named_node(obj_str)?,
-                    ));
-                }
+                )
+            {
+                triples.push(OxTriple::new(
+                    make_named_node(subj_str)?,
+                    make_named_node(prop_str)?,
+                    make_named_node(obj_str)?,
+                ));
+            }
         }
 
         Axiom::DataPropertyAssertion(ax) => {
             if let Some(prop_str) = data_prop_expr_iri_str(&ax.property)
-                && let Some(ind_str) = individual_iri_str(&ax.individual) {
-                    let subj = make_named_node(ind_str)?;
-                    let pred = make_named_node(prop_str)?;
-                    let obj = ontology_literal_to_oxterm(&ax.value)?;
-                    triples.push(OxTriple::new(subj, pred, obj));
-                }
+                && let Some(ind_str) = individual_iri_str(&ax.individual)
+            {
+                let subj = make_named_node(ind_str)?;
+                let pred = make_named_node(prop_str)?;
+                let obj = ontology_literal_to_oxterm(&ax.value)?;
+                triples.push(OxTriple::new(subj, pred, obj));
+            }
         }
 
         Axiom::SameIndividual(ax) => {
@@ -1738,9 +1741,7 @@ fn axiom_to_oxtriples(axiom: &Axiom) -> Result<Vec<OxTriple>> {
                     AnnotationValue::IRI(iri) => {
                         make_named_node(iri.as_str()).ok().map(Term::NamedNode)
                     }
-                    AnnotationValue::Literal(lit) => {
-                        ontology_literal_to_oxterm(lit).ok()
-                    }
+                    AnnotationValue::Literal(lit) => ontology_literal_to_oxterm(lit).ok(),
                     AnnotationValue::AnonymousIndividual(_) => None,
                 };
                 if let Some(o) = obj {

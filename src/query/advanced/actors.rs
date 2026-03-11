@@ -11,10 +11,9 @@ use super::conjunctive::ConjunctiveQuery;
 use super::cost_optimizer::CostBasedOptimizer;
 use super::execution::{AdvancedQueryError, ConjunctiveQueryResult};
 use super::execution_engine::{
-    CacheConfig, ExecutionConstraints, ExecutionContext, ExecutionId,
-    ExecutionPerformanceMonitor, ExecutionStrategySelector,
-    ParallelExecutionConfig, ParallelTask, QueryResultCache, ResourceManager, TaskId,
-    TaskStatus, ThreadPool,
+    CacheConfig, ExecutionConstraints, ExecutionContext, ExecutionId, ExecutionPerformanceMonitor,
+    ExecutionStrategySelector, ParallelExecutionConfig, ParallelTask, QueryResultCache,
+    ResourceManager, TaskId, TaskStatus, ThreadPool,
 };
 use super::ml_core::{
     ExecutionStrategy as MLExecutionStrategy, MLHeuristicsEngine as MLEngine, QueryExecution,
@@ -109,7 +108,10 @@ pub struct OptimizerHandle {
 
 impl OptimizerHandle {
     /// Spawn the actor task and return a handle.
-    pub fn spawn(optimizer: CostBasedOptimizer, strategy_selector: ExecutionStrategySelector) -> Self {
+    pub fn spawn(
+        optimizer: CostBasedOptimizer,
+        strategy_selector: ExecutionStrategySelector,
+    ) -> Self {
         let (tx, mut rx) = mpsc::channel::<OptimizerMsg>(64);
         tokio::spawn(async move {
             let mut optimizer = optimizer;
@@ -188,7 +190,11 @@ impl OptimizerHandle {
     ) -> Result<String, AdvancedQueryError> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(OptimizerMsg::SelectStrategy { query, plan, reply: tx })
+            .send(OptimizerMsg::SelectStrategy {
+                query,
+                plan,
+                reply: tx,
+            })
             .await
             .map_err(|_| AdvancedQueryError::InternalError("OptimizerActor dead".into()))?;
         rx.await
@@ -204,7 +210,12 @@ impl OptimizerHandle {
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(OptimizerMsg::ExecuteSequential { query, strategy, constraints, reply: tx })
+            .send(OptimizerMsg::ExecuteSequential {
+                query,
+                strategy,
+                constraints,
+                reply: tx,
+            })
             .await
             .map_err(|_| AdvancedQueryError::InternalError("OptimizerActor dead".into()))?;
         rx.await
@@ -237,9 +248,8 @@ pub enum MLMsg {
     SelectStrategy {
         query: ConjunctiveQuery,
         ontology: Arc<Ontology>,
-        reply: oneshot::Sender<
-            Result<(String, Option<StrategyRecommendation>), AdvancedQueryError>,
-        >,
+        reply:
+            oneshot::Sender<Result<(String, Option<StrategyRecommendation>), AdvancedQueryError>>,
     },
     /// Fire-and-forget: add an execution record for online learning.
     ProvideFeedback {
@@ -317,7 +327,11 @@ impl MLStrategyHandle {
     ) -> Result<(String, Option<StrategyRecommendation>), AdvancedQueryError> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(MLMsg::SelectStrategy { query, ontology, reply: tx })
+            .send(MLMsg::SelectStrategy {
+                query,
+                ontology,
+                reply: tx,
+            })
             .await
             .map_err(|_| AdvancedQueryError::InternalError("MLStrategyActor dead".into()))?;
         rx.await
@@ -418,9 +432,10 @@ impl MonitorHandle {
         execution_id: ExecutionId,
         outcome: Result<ConjunctiveQueryResult, String>,
     ) {
-        let _ = self
-            .tx
-            .send(MonitorMsg::CompleteExecution { execution_id, outcome });
+        let _ = self.tx.send(MonitorMsg::CompleteExecution {
+            execution_id,
+            outcome,
+        });
     }
 }
 
@@ -439,9 +454,7 @@ pub enum TaskCoordinatorMsg {
         reply: oneshot::Sender<Option<TaskStatus>>,
     },
     /// Cancel a running or queued task.
-    CancelTask {
-        task_id: TaskId,
-    },
+    CancelTask { task_id: TaskId },
     /// Graceful shutdown.
     Shutdown,
 }
@@ -497,21 +510,15 @@ impl TaskCoordinatorHandle {
     }
 
     /// Submit a task and return its assigned `TaskId`.
-    pub async fn submit_task(
-        &self,
-        task: ParallelTask,
-    ) -> Result<TaskId, AdvancedQueryError> {
+    pub async fn submit_task(&self, task: ParallelTask) -> Result<TaskId, AdvancedQueryError> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(TaskCoordinatorMsg::SubmitTask { task, reply: tx })
             .await
-            .map_err(|_| {
-                AdvancedQueryError::InternalError("TaskCoordinatorActor dead".into())
-            })?;
-        rx.await
-            .map_err(|_| {
-                AdvancedQueryError::InternalError("TaskCoordinatorActor reply failed".into())
-            })?
+            .map_err(|_| AdvancedQueryError::InternalError("TaskCoordinatorActor dead".into()))?;
+        rx.await.map_err(|_| {
+            AdvancedQueryError::InternalError("TaskCoordinatorActor reply failed".into())
+        })?
     }
 
     /// Query the current status of a task.

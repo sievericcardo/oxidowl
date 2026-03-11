@@ -169,7 +169,10 @@ async fn test_concurrent_queries() {
         let handle = tokio::task::spawn(async move {
             let query = simple_query("var", &format!("Class{}", thread_id));
             let constraints = default_constraints();
-            engine_clone.execute_query(&query, constraints).await.is_ok()
+            engine_clone
+                .execute_query(&query, constraints)
+                .await
+                .is_ok()
         });
         handles.push(handle);
     }

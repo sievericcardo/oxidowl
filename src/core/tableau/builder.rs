@@ -215,12 +215,8 @@ impl TableauBuilder {
                     let rule = match class_expr.as_ref() {
                         ClassExpression::ObjectIntersectionOf(_) => Some(CompletionRule::And),
                         ClassExpression::ObjectUnionOf(_) => Some(CompletionRule::Or),
-                        ClassExpression::ObjectSomeValuesFrom { .. } => {
-                            Some(CompletionRule::Some)
-                        }
-                        ClassExpression::ObjectAllValuesFrom { .. } => {
-                            Some(CompletionRule::All)
-                        }
+                        ClassExpression::ObjectSomeValuesFrom { .. } => Some(CompletionRule::Some),
+                        ClassExpression::ObjectAllValuesFrom { .. } => Some(CompletionRule::All),
                         ClassExpression::ObjectMinCardinality { .. } => {
                             Some(CompletionRule::AtLeast)
                         }
@@ -232,9 +228,7 @@ impl TableauBuilder {
                         ClassExpression::DataSomeValuesFrom { .. } => {
                             Some(CompletionRule::Datatype)
                         }
-                        ClassExpression::DataAllValuesFrom { .. } => {
-                            Some(CompletionRule::Datatype)
-                        }
+                        ClassExpression::DataAllValuesFrom { .. } => Some(CompletionRule::Datatype),
                         ClassExpression::DataHasValue { .. } => Some(CompletionRule::Datatype),
                         _ => None,
                     };

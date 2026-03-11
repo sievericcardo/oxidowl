@@ -83,9 +83,10 @@ pub fn evaluate_sparql_component(
 
         for row in rows {
             if let Some(fail) = row.get("failure")
-                && matches!(fail, RdfTerm::Literal { value, .. } if value == "true") {
-                    return Err(Error::shacl("SPARQL component reports processing failure"));
-                }
+                && matches!(fail, RdfTerm::Literal { value, .. } if value == "true")
+            {
+                return Err(Error::shacl("SPARQL component reports processing failure"));
+            }
 
             let value = row.get("value").cloned();
             let row_msg = row.get("message").cloned();

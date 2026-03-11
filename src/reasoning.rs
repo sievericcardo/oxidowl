@@ -106,20 +106,23 @@ impl ReasoningService {
         F: FnOnce(oneshot::Sender<Result<T>>) -> ReasoningRequest,
         T: Send + 'static,
     {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.send(build))
-        })
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.send(build)))
     }
 
     /// Check consistency of the ontology
     pub async fn is_consistent(&self) -> Result<bool> {
-        self.send(|r| ReasoningRequest::IsConsistent { reply: r }).await
+        self.send(|r| ReasoningRequest::IsConsistent { reply: r })
+            .await
     }
 
     /// Check satisfiability of a class expression
     pub async fn is_satisfiable(&self, expression: &ClassExpression) -> Result<bool> {
         let expression = expression.clone();
-        self.send(|r| ReasoningRequest::IsSatisfiable { expression, reply: r }).await
+        self.send(|r| ReasoningRequest::IsSatisfiable {
+            expression,
+            reply: r,
+        })
+        .await
     }
 
     /// Check subsumption of two class expressions
@@ -129,7 +132,12 @@ impl ReasoningService {
         superclass: &ClassExpression,
     ) -> Result<bool> {
         let (subclass, superclass) = (subclass.clone(), superclass.clone());
-        self.send(|r| ReasoningRequest::IsSubsumedBy { subclass, superclass, reply: r }).await
+        self.send(|r| ReasoningRequest::IsSubsumedBy {
+            subclass,
+            superclass,
+            reply: r,
+        })
+        .await
     }
 
     /// Check equivalence of two class expressions
@@ -162,7 +170,12 @@ impl ReasoningService {
         direct: bool,
     ) -> Result<HashSet<ClassExpression>> {
         let class = class.clone();
-        self.send(|r| ReasoningRequest::GetSuperclasses { class, direct, reply: r }).await
+        self.send(|r| ReasoningRequest::GetSuperclasses {
+            class,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Get all direct subclasses of a class expression
@@ -172,7 +185,12 @@ impl ReasoningService {
         direct: bool,
     ) -> Result<HashSet<ClassExpression>> {
         let class = class.clone();
-        self.send(|r| ReasoningRequest::GetSubclasses { class, direct, reply: r }).await
+        self.send(|r| ReasoningRequest::GetSubclasses {
+            class,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Get all equivalent classes of a class expression
@@ -181,7 +199,8 @@ impl ReasoningService {
         class: &ClassExpression,
     ) -> Result<HashSet<ClassExpression>> {
         let class = class.clone();
-        self.send(|r| ReasoningRequest::GetEquivalentClasses { class, reply: r }).await
+        self.send(|r| ReasoningRequest::GetEquivalentClasses { class, reply: r })
+            .await
     }
 
     /// Get all instances of a class expression
@@ -191,7 +210,12 @@ impl ReasoningService {
         direct: bool,
     ) -> Result<HashSet<Individual>> {
         let class = class.clone();
-        self.send(|r| ReasoningRequest::GetInstances { class, direct, reply: r }).await
+        self.send(|r| ReasoningRequest::GetInstances {
+            class,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Get all types of an individual
@@ -201,7 +225,12 @@ impl ReasoningService {
         direct: bool,
     ) -> Result<HashSet<ClassExpression>> {
         let individual = individual.clone();
-        self.send(|r| ReasoningRequest::GetTypes { individual, direct, reply: r }).await
+        self.send(|r| ReasoningRequest::GetTypes {
+            individual,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Check if an individual is an instance of a class expression.
@@ -211,7 +240,12 @@ impl ReasoningService {
         class: &ClassExpression,
     ) -> Result<bool> {
         let (individual, class) = (individual.clone(), class.clone());
-        self.send(|r| ReasoningRequest::IsInstanceOf { individual, class, reply: r }).await
+        self.send(|r| ReasoningRequest::IsInstanceOf {
+            individual,
+            class,
+            reply: r,
+        })
+        .await
     }
 
     /// OWL DL membership query: is `individual` a member of `class_expr`?
@@ -230,8 +264,12 @@ impl ReasoningService {
         property: &ObjectPropertyExpression,
     ) -> Result<HashSet<Individual>> {
         let (individual, property) = (individual.clone(), property.clone());
-        self.send(|r| ReasoningRequest::GetObjectPropertyValues { individual, property, reply: r })
-            .await
+        self.send(|r| ReasoningRequest::GetObjectPropertyValues {
+            individual,
+            property,
+            reply: r,
+        })
+        .await
     }
 
     /// Get data property values for an individual
@@ -241,8 +279,12 @@ impl ReasoningService {
         property: &DataPropertyExpression,
     ) -> Result<HashSet<crate::ontology::Literal>> {
         let (individual, property) = (individual.clone(), property.clone());
-        self.send(|r| ReasoningRequest::GetDataPropertyValues { individual, property, reply: r })
-            .await
+        self.send(|r| ReasoningRequest::GetDataPropertyValues {
+            individual,
+            property,
+            reply: r,
+        })
+        .await
     }
 
     /// Classify the ontology (compute class hierarchy)
@@ -252,7 +294,8 @@ impl ReasoningService {
 
     /// Execute SWRL rules and apply inferences to the ontology
     pub async fn execute_swrl_rules(&self) -> Result<SWRLExecutionResult> {
-        self.send(|r| ReasoningRequest::ExecuteSwrlRules { reply: r }).await
+        self.send(|r| ReasoningRequest::ExecuteSwrlRules { reply: r })
+            .await
     }
 
     /// Execute a DL query using Manchester Syntax
@@ -278,27 +321,32 @@ impl ReasoningService {
         axiom: &crate::ontology::Axiom,
     ) -> Result<Vec<ExplanationSet>> {
         let axiom = axiom.clone();
-        self.send(|r| ReasoningRequest::ExplainEntailment { axiom, reply: r }).await
+        self.send(|r| ReasoningRequest::ExplainEntailment { axiom, reply: r })
+            .await
     }
 
     /// Get explanation for inconsistent ontology
     pub async fn explain_inconsistency(&self) -> Result<Vec<ExplanationSet>> {
-        self.send(|r| ReasoningRequest::ExplainInconsistency { reply: r }).await
+        self.send(|r| ReasoningRequest::ExplainInconsistency { reply: r })
+            .await
     }
 
     /// Add axioms incrementally to the ontology
     pub async fn add_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
-        self.send(|r| ReasoningRequest::AddAxioms { axioms, reply: r }).await
+        self.send(|r| ReasoningRequest::AddAxioms { axioms, reply: r })
+            .await
     }
 
     /// Remove axioms incrementally from the ontology
     pub async fn remove_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
-        self.send(|r| ReasoningRequest::RemoveAxioms { axioms, reply: r }).await
+        self.send(|r| ReasoningRequest::RemoveAxioms { axioms, reply: r })
+            .await
     }
 
     /// Get reasoning statistics
     pub async fn get_statistics(&self) -> Result<ReasoningStatistics> {
-        self.send(|r| ReasoningRequest::GetStatistics { reply: r }).await
+        self.send(|r| ReasoningRequest::GetStatistics { reply: r })
+            .await
     }
 
     /// Query property chain reasoning
@@ -311,7 +359,9 @@ impl ReasoningService {
             return Ok(HashSet::new());
         }
         if property_chain.len() == 1 {
-            return self.get_object_property_values(individual, &property_chain[0]).await;
+            return self
+                .get_object_property_values(individual, &property_chain[0])
+                .await;
         }
         let mut current = HashSet::new();
         current.insert(individual.clone());
@@ -331,22 +381,34 @@ impl ReasoningService {
 
     /// Get SWRL execution statistics
     pub async fn get_swrl_statistics(&self) -> Result<crate::swrl::SWRLStatistics> {
-        self.send(|r| ReasoningRequest::GetSwrlStatistics { reply: r }).await
+        self.send(|r| ReasoningRequest::GetSwrlStatistics { reply: r })
+            .await
     }
 
     /// Set SWRL rule priority
     pub async fn set_swrl_rule_priority(&self, rule_id: u64, priority: u32) -> Result<()> {
-        self.send(|r| ReasoningRequest::SetSwrlRulePriority { rule_id, priority, reply: r }).await
+        self.send(|r| ReasoningRequest::SetSwrlRulePriority {
+            rule_id,
+            priority,
+            reply: r,
+        })
+        .await
     }
 
     /// Get ordered SWRL rules by priority
     pub async fn get_swrl_rule_order(&self) -> Result<Vec<u64>> {
-        self.send(|r| ReasoningRequest::GetSwrlRuleOrder { reply: r }).await
+        self.send(|r| ReasoningRequest::GetSwrlRuleOrder { reply: r })
+            .await
     }
 
     /// Enable or disable a specific SWRL rule
     pub async fn set_swrl_rule_active(&self, rule_id: u64, active: bool) -> Result<()> {
-        self.send(|r| ReasoningRequest::SetSwrlRuleActive { rule_id, active, reply: r }).await
+        self.send(|r| ReasoningRequest::SetSwrlRuleActive {
+            rule_id,
+            active,
+            reply: r,
+        })
+        .await
     }
 
     /// Validate the loaded ontology against a SHACL shapes graph.
@@ -362,12 +424,14 @@ impl ReasoningService {
 
     /// Invalidate all caches
     pub async fn invalidate_all_caches(&self) -> Result<()> {
-        self.send(|r| ReasoningRequest::InvalidateAllCaches { reply: r }).await
+        self.send(|r| ReasoningRequest::InvalidateAllCaches { reply: r })
+            .await
     }
 
     /// Get the IRI of the current ontology
     pub async fn get_ontology_iri(&self) -> Result<Option<crate::ontology::IRI>> {
-        self.send(|r| ReasoningRequest::GetOntologyIri { reply: r }).await
+        self.send(|r| ReasoningRequest::GetOntologyIri { reply: r })
+            .await
     }
 
     /// Synchronous version of `get_instances` for use in advanced query processing
@@ -383,7 +447,11 @@ impl ReasoningService {
         class: &ClassExpression,
     ) -> Result<bool> {
         let (individual, class) = (individual.clone(), class.clone());
-        self.send_sync(|r| ReasoningRequest::IsInstanceOfSync { individual, class, reply: r })
+        self.send_sync(|r| ReasoningRequest::IsInstanceOfSync {
+            individual,
+            class,
+            reply: r,
+        })
     }
 
     /// Get object property assertions (for advanced query processing)
@@ -538,5 +606,3 @@ impl QueryInterface {
         Ok(results)
     }
 }
-
-

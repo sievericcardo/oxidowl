@@ -269,9 +269,10 @@ fn extract_constraints(store: &SparqlStore, shape_id: &RdfTerm) -> Result<Vec<Sh
     }
     for v in direct_objects(store, shape_id, SH_NODE_KIND)? {
         if let Some(iri) = iri_of(&v)
-            && let Some(kind) = ShaclNodeKind::from_iri(&iri) {
-                out.push(ShaclConstraint::NodeKind(kind));
-            }
+            && let Some(kind) = ShaclNodeKind::from_iri(&iri)
+        {
+            out.push(ShaclConstraint::NodeKind(kind));
+        }
     }
 
     // ── Cardinality ───────────────────────────────────────────────────────

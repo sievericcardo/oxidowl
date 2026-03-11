@@ -145,9 +145,7 @@ impl SparqlServer {
             port,
             bind_address,
             reasoning_service,
-            store: Arc::new(
-                Store::new().expect("Failed to create new SPARQL store"),
-            ),
+            store: Arc::new(Store::new().expect("Failed to create new SPARQL store")),
         }
     }
 

@@ -257,9 +257,10 @@ impl ClassificationResult {
     /// Uses `:localname` short form when the IRI starts with `prefix_base`, otherwise `<fullIRI>`.
     fn iri_ref(iri: &str, prefix_base: &str) -> String {
         if let Some(local) = iri.strip_prefix(prefix_base)
-            && !local.is_empty() {
-                return format!(":{local}");
-            }
+            && !local.is_empty()
+        {
+            return format!(":{local}");
+        }
         format!("<{iri}>")
     }
 

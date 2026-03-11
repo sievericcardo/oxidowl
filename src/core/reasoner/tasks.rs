@@ -138,8 +138,7 @@ impl ReasoningTaskService {
         if let (Some(sub_expr), Some(sup_expr)) = (
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
-        ) && let Some(cached_result) =
-            cache.get_subsumption_result(&sub_expr, &sup_expr)
+        ) && let Some(cached_result) = cache.get_subsumption_result(&sub_expr, &sup_expr)
         {
             debug!("Subsumption result found in cache");
             return Ok(cached_result);
@@ -452,40 +451,44 @@ impl ReasoningTaskService {
 
         // Check for intersection (and, ⊓)
         if let Some(parts) = Self::split_by_operator(trimmed, &["and", "⊓"])
-            && parts.len() >= 2 {
-                let expressions: Vec<ClassExpression> = parts
-                    .iter()
-                    .filter_map(|p| Self::parse_class_expr_str(p))
-                    .collect();
+            && parts.len() >= 2
+        {
+            let expressions: Vec<ClassExpression> = parts
+                .iter()
+                .filter_map(|p| Self::parse_class_expr_str(p))
+                .collect();
 
-                if expressions.len() == parts.len() {
-                    return Some(ClassExpression::ObjectIntersectionOf(expressions));
-                }
+            if expressions.len() == parts.len() {
+                return Some(ClassExpression::ObjectIntersectionOf(expressions));
             }
+        }
 
         // Check for union (or, ⊔)
         if let Some(parts) = Self::split_by_operator(trimmed, &["or", "⊔"])
-            && parts.len() >= 2 {
-                let expressions: Vec<ClassExpression> = parts
-                    .iter()
-                    .filter_map(|p| Self::parse_class_expr_str(p))
-                    .collect();
+            && parts.len() >= 2
+        {
+            let expressions: Vec<ClassExpression> = parts
+                .iter()
+                .filter_map(|p| Self::parse_class_expr_str(p))
+                .collect();
 
-                if expressions.len() == parts.len() {
-                    return Some(ClassExpression::ObjectUnionOf(expressions));
-                }
+            if expressions.len() == parts.len() {
+                return Some(ClassExpression::ObjectUnionOf(expressions));
             }
+        }
 
         // Check for complement (not, ¬)
         if trimmed.starts_with("not ")
-            && let Some(inner) = Self::parse_class_expr_str(&trimmed[4..]) {
-                return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
-            }
+            && let Some(inner) = Self::parse_class_expr_str(&trimmed[4..])
+        {
+            return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
+        }
         if trimmed.starts_with('¬')
-            && let Some(inner) = Self::parse_class_expr_str(&trimmed[3..]) {
-                // ¬ is 3 bytes in UTF-8
-                return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
-            }
+            && let Some(inner) = Self::parse_class_expr_str(&trimmed[3..])
+        {
+            // ¬ is 3 bytes in UTF-8
+            return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
+        }
 
         // Check for existential restriction (some, ∃)
         if trimmed.starts_with("some ") {
@@ -597,38 +600,39 @@ impl ReasoningTaskService {
 
             // Parse cardinality number
             if let Ok(cardinality) = parts[rest_idx].parse::<u32>()
-                && parts.len() > rest_idx + 1 {
-                    let property_iri = parts[rest_idx + 1];
-                    let filler_str = parts[rest_idx + 2..].join(" ");
+                && parts.len() > rest_idx + 1
+            {
+                let property_iri = parts[rest_idx + 1];
+                let filler_str = parts[rest_idx + 2..].join(" ");
 
-                    let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: crate::ontology::IRI::from(property_iri.to_string()),
-                        },
-                    );
+                let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                    crate::ontology::ObjectProperty {
+                        iri: crate::ontology::IRI::from(property_iri.to_string()),
+                    },
+                );
 
-                    // Parse filler recursively
-                    if let Some(filler) = Self::parse_class_expr_str(&filler_str) {
-                        return match kind {
-                            "min" => Some(ClassExpression::ObjectMinCardinality {
-                                cardinality,
-                                property,
-                                filler: Box::new(filler),
-                            }),
-                            "max" => Some(ClassExpression::ObjectMaxCardinality {
-                                cardinality,
-                                property,
-                                filler: Box::new(filler),
-                            }),
-                            "exactly" => Some(ClassExpression::ObjectExactCardinality {
-                                cardinality,
-                                property,
-                                filler: Box::new(filler),
-                            }),
-                            _ => None,
-                        };
-                    }
+                // Parse filler recursively
+                if let Some(filler) = Self::parse_class_expr_str(&filler_str) {
+                    return match kind {
+                        "min" => Some(ClassExpression::ObjectMinCardinality {
+                            cardinality,
+                            property,
+                            filler: Box::new(filler),
+                        }),
+                        "max" => Some(ClassExpression::ObjectMaxCardinality {
+                            cardinality,
+                            property,
+                            filler: Box::new(filler),
+                        }),
+                        "exactly" => Some(ClassExpression::ObjectExactCardinality {
+                            cardinality,
+                            property,
+                            filler: Box::new(filler),
+                        }),
+                        _ => None,
+                    };
                 }
+            }
         }
 
         None

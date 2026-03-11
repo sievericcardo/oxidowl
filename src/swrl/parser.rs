@@ -482,9 +482,9 @@ impl SWRLParser {
                     // Object property atom
                     let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
                     Ok(SWRLAtom::ObjectPropertyAtom {
-                        predicate: ObjectPropertyExpression::ObjectProperty(
-                            ObjectProperty::new(IRI::new(&prop_iri))?,
-                        ),
+                        predicate: ObjectPropertyExpression::ObjectProperty(ObjectProperty::new(
+                            IRI::new(&prop_iri),
+                        )?),
                         first_argument: match &arguments[0] {
                             SWRLArgument::Individual(arg) => arg.clone(),
                             _ => {
