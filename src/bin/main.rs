@@ -12,10 +12,21 @@ use oxidowl::{
     ontology::properties::{DataPropertyHierarchy, ObjectPropertyHierarchy},
     ontology::{DataPropertyExpression, ObjectPropertyExpression},
 };
-use std::{fs, path::PathBuf, sync::Arc, time::Instant};
+use std::{fs, path::{Path, PathBuf}, sync::Arc, time::Instant};
+
+/// Options controlling what steps are performed in full reasoning.
+#[allow(clippy::struct_excessive_bools)] // Purpose-built options bag for a reasoning pipeline
+struct FullReasoningOptions {
+    skip_classification: bool,
+    skip_object_properties: bool,
+    skip_data_properties: bool,
+    skip_consistency: bool,
+    skip_pretty_print: bool,
+}
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+#[allow(clippy::struct_excessive_bools)] // CLI flag structs naturally have many bool fields
 #[derive(Parser)]
 #[command(name = "oxidowl")]
 #[command(about = "A tableau-based reasoner for the Description Logic SROIQV(D)")]
@@ -673,7 +684,7 @@ async fn run_with_tokio() -> Result<()> {
         execute_command(command.clone(), config).await
     } else {
         // New HermiT-style flag mode
-        execute_hermit_style_flags(cli, config).await
+        execute_hermit_style_flags(cli, config)
     };
     let elapsed = start_time.elapsed();
 
@@ -759,6 +770,7 @@ async fn run_server_mode(config: ReasonerConfig, quiet: bool) -> Result<()> {
 }
 
 #[cfg(not(feature = "server"))]
+#[allow(clippy::unused_async)]
 async fn run_server_mode(_config: ReasonerConfig, _quiet: bool) -> Result<()> {
     Err(oxidowl::Error::config(
         "Server mode requires the 'server' feature to be enabled. Recompile with --features server"
@@ -766,7 +778,8 @@ async fn run_server_mode(_config: ReasonerConfig, _quiet: bool) -> Result<()> {
     ))
 }
 
-async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
+#[allow(clippy::too_many_lines)] // Monolithic HermiT-style flag dispatcher
+fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
     // Check if no input files provided and no help flags
     if cli.input.is_empty() && !cli.print_prefixes && !cli.dump_clauses {
         return Err(oxidowl::Error::io("No input files provided".to_string()));
@@ -1033,8 +1046,7 @@ async fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<
             if let Some(hierarchy) = &class_hierarchy {
                 if cli.pretty_print {
                     println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
-                    use std::io;
-                    hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
+                    hierarchy.write_hermit_style_hierarchy(&mut std::io::stdout().lock())?;
                 } else {
                     println!("\n=== CLASS HIERARCHY ===");
                     // Simple hierarchy display
@@ -1229,13 +1241,14 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
     }
 }
 
+#[allow(clippy::too_many_lines)] // Dispatch function: one arm per subcommand
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
         Commands::Load {
             input,
             output,
             format,
-        } => execute_load(input, output, format, config).await,
+        } => execute_load(&input, output, format, config),
         Commands::FullReasoning {
             input,
             output,
@@ -1245,43 +1258,42 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             skip_data_properties,
             skip_consistency,
             skip_pretty_print,
-            direct,
+            direct: _,
         } => {
             execute_full_reasoning(
-                input,
+                &input,
                 output,
                 format,
-                skip_classification,
-                skip_object_properties,
-                skip_data_properties,
-                skip_consistency,
-                skip_pretty_print,
-                direct,
+                &FullReasoningOptions {
+                    skip_classification,
+                    skip_object_properties,
+                    skip_data_properties,
+                    skip_consistency,
+                    skip_pretty_print,
+                },
                 config,
             )
-            .await
         }
         Commands::Consistency {
             input,
             output,
             format,
             class_iri,
-        } => execute_consistency_check(input, output, format, class_iri, config).await,
+        } => execute_consistency_check(&input, output, format, class_iri, config),
         Commands::Classification {
             input,
             namespace,
             output,
             format,
             pretty_print,
-        } => execute_classification(input, namespace, output, format, pretty_print, config).await,
+        } => execute_classification(&input, namespace.as_deref(), output, format, pretty_print, config),
         Commands::ClassifyObjectProperties {
             input,
             output,
             format,
             pretty_print,
         } => {
-            execute_object_property_classification(input, output, format, pretty_print, config)
-                .await
+            execute_object_property_classification(&input, output, format, pretty_print, config)
         }
         Commands::ClassifyDataProperties {
             input,
@@ -1289,59 +1301,59 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             format,
             pretty_print,
         } => {
-            execute_data_property_classification(input, output, format, pretty_print, config).await
+            execute_data_property_classification(&input, output, format, pretty_print, config)
         }
         Commands::Satisfiability {
             input,
             class_iri,
             output,
             format,
-        } => execute_satisfiability_check(input, class_iri, output, format, config).await,
+        } => execute_satisfiability_check(&input, &class_iri, output, format, config),
         Commands::Subclasses {
             input,
             class_iri,
             direct,
             output,
             format,
-        } => execute_subclasses_query(input, class_iri, direct, output, format, config).await,
+        } => execute_subclasses_query(&input, &class_iri, direct, output, format, config),
         Commands::Superclasses {
             input,
             class_iri,
             direct,
             output,
             format,
-        } => execute_superclasses_query(input, class_iri, direct, output, format, config).await,
+        } => execute_superclasses_query(&input, &class_iri, direct, output, format, config),
         Commands::EquivalentClasses {
             input,
             class_iri,
             output,
             format,
-        } => execute_equivalent_classes_query(input, class_iri, output, format, config).await,
+        } => execute_equivalent_classes_query(&input, &class_iri, output, format, config),
         Commands::UnsatisfiableClasses {
             input,
             output,
             format,
-        } => execute_unsatisfiable_classes_query(input, output, format, config).await,
+        } => execute_unsatisfiable_classes_query(&input, output, format, config),
         Commands::CheckEntailment {
             premise,
             conclusion,
             output,
             format,
-        } => execute_entailment_check(premise, conclusion, output, format, config).await,
+        } => execute_entailment_check(&premise, &conclusion, output, format, &config),
         Commands::PrintPrefixes { input, format } => {
-            execute_print_prefixes(input, format, config).await
+            execute_print_prefixes(&input, format, config)
         }
         Commands::DumpClauses {
             input,
             output,
             format,
             pretty_print,
-        } => execute_dump_clauses(input, output, format, pretty_print, config).await,
+        } => execute_dump_clauses(&input, output, format, pretty_print, config),
         Commands::Realization {
             input,
             output,
             format,
-        } => execute_realization(input, output, format, config).await,
+        } => execute_realization(&input, output, format, config),
         Commands::Query {
             input,
             query,
@@ -1373,7 +1385,7 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             .await
         }
         Commands::OwlLinkFile { input, output } => {
-            execute_owllink_file(input, output, config).await
+            execute_owllink_file(&input, output, config)
         }
         /*
         /*
@@ -1386,7 +1398,7 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             sparql,
             input,
             output,
-        } => execute_sparql_file(sparql, input, output, config).await, /*
+        } => execute_sparql_file(&sparql, input, output, config), /*
                                                                        /*
                                                                        Commands::SparqlServer { port, bind } => {
                                                                            execute_sparql_server(port, bind, config).await
@@ -1396,18 +1408,20 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
     }
 }
 
-async fn execute_full_reasoning(
-    input: Vec<PathBuf>,
+fn execute_full_reasoning(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
-    skip_classification: bool,
-    skip_object_properties: bool,
-    skip_data_properties: bool,
-    skip_consistency: bool,
-    skip_pretty_print: bool,
-    _direct: bool,
+    options: &FullReasoningOptions,
     config: ReasonerConfig,
 ) -> Result<()> {
+    let FullReasoningOptions {
+        skip_classification,
+        skip_object_properties,
+        skip_data_properties,
+        skip_consistency,
+        skip_pretty_print,
+    } = *options;
     if input.is_empty() {
         return Err(oxidowl::Error::io("No input files provided".to_string()));
     }
@@ -1422,7 +1436,7 @@ async fn execute_full_reasoning(
 
     // Step 1: Load ontologies (-l equivalent)
     info!("Step 1: Loading ontologies...");
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -1505,16 +1519,15 @@ async fn execute_full_reasoning(
     {
         println!("\n=== CLASS HIERARCHY (HermiT-style output) ===");
         // Print to stdout using HermiT format
-        use std::io;
-        hierarchy.write_hermit_style_hierarchy(&mut io::stdout().lock())?;
+        hierarchy.write_hermit_style_hierarchy(&mut std::io::stdout().lock())?;
     }
 
     println!("\nFull reasoning suite completed successfully");
     Ok(())
 }
 
-async fn execute_load(
-    input: Vec<PathBuf>,
+fn execute_load(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
@@ -1529,7 +1542,7 @@ async fn execute_load(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -1553,8 +1566,8 @@ async fn execute_load(
     Ok(())
 }
 
-async fn execute_consistency_check(
-    input: Vec<PathBuf>,
+fn execute_consistency_check(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     class_iri: Option<String>,
@@ -1570,7 +1583,7 @@ async fn execute_consistency_check(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -1601,9 +1614,9 @@ async fn execute_consistency_check(
     Ok(())
 }
 
-async fn execute_classification(
-    input: Vec<PathBuf>,
-    namespace: Option<String>,
+fn execute_classification(
+    input: &[PathBuf],
+    namespace: Option<&str>,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     pretty_print: bool,
@@ -1615,7 +1628,7 @@ async fn execute_classification(
 
     info!("Performing classification on {} file(s)", input.len());
 
-    if let Some(ref ns) = namespace {
+    if let Some(ns) = namespace {
         info!("Using default namespace: {}", ns);
     }
 
@@ -1623,7 +1636,7 @@ async fn execute_classification(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -1649,9 +1662,9 @@ async fn execute_classification(
     Ok(())
 }
 
-async fn execute_satisfiability_check(
-    input: Vec<PathBuf>,
-    class_iri: String,
+fn execute_satisfiability_check(
+    input: &[PathBuf],
+    class_iri: &str,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
@@ -1666,12 +1679,12 @@ async fn execute_satisfiability_check(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
 
-    let iri = oxidowl::ontology::IRI::new(&class_iri);
+    let iri = oxidowl::ontology::IRI::new(class_iri);
     let class = oxidowl::ontology::Class::new(iri);
     let class_expr = oxidowl::ontology::ClassExpression::Class(class);
     let is_satisfiable = reasoner.is_class_satisfiable(&class_expr)?;
@@ -1736,17 +1749,17 @@ async fn execute_dl_query(
             .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?;
         let default_namespace = ontology_guard
             .get_iri()
-            .map(|iri| {
-                let iri_str = iri.as_str();
-                if iri_str.ends_with('#') {
-                    iri_str.to_string()
-                } else if iri_str.ends_with('/') {
-                    iri_str.to_string()
-                } else {
-                    format!("{iri_str}#")
-                }
-            })
-            .unwrap_or_else(|| "http://example.org/ontology#".to_string());
+            .map_or_else(
+                || "http://example.org/ontology#".to_string(),
+                |iri| {
+                    let iri_str = iri.as_str();
+                    if iri_str.ends_with('#') || iri_str.ends_with('/') {
+                        iri_str.to_string()
+                    } else {
+                        format!("{iri_str}#")
+                    }
+                },
+            );
 
         oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, default_namespace)
     };
@@ -1798,8 +1811,8 @@ async fn execute_dl_query(
     Ok(())
 }
 
-async fn execute_realization(
-    input: PathBuf,
+fn execute_realization(
+    input: &Path,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
@@ -1809,7 +1822,7 @@ async fn execute_realization(
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
-    reasoner.load_ontology_from_file(input.as_path(), ontology_format)?;
+    reasoner.load_ontology_from_file(input, ontology_format)?;
 
     let realization = reasoner.realize()?;
 
@@ -1824,14 +1837,14 @@ async fn execute_realization(
     Ok(())
 }
 
-async fn execute_owllink_file(
-    input: PathBuf,
+fn execute_owllink_file(
+    input: &Path,
     output: Option<PathBuf>,
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Processing OWLlink file: {}", input.display());
 
-    let owllink_content = fs::read_to_string(&input)?;
+    let owllink_content = fs::read_to_string(input)?;
     let mut reasoner = Reasoner::new(config)?;
 
     // Process OWLlink request
@@ -1863,15 +1876,15 @@ async fn execute_owllink_server(
 */
 */
 
-async fn execute_sparql_file(
-    sparql: PathBuf,
+fn execute_sparql_file(
+    sparql: &Path,
     input: Option<PathBuf>,
     output: Option<PathBuf>,
     config: ReasonerConfig,
 ) -> Result<()> {
     info!("Processing SPARQL file: {}", sparql.display());
 
-    let sparql_content = fs::read_to_string(&sparql)?;
+    let sparql_content = fs::read_to_string(sparql)?;
     let mut reasoner = Reasoner::new(config)?;
 
     // Load ontology if provided
@@ -1891,8 +1904,8 @@ async fn execute_sparql_file(
     Ok(())
 }
 
-async fn execute_object_property_classification(
-    input: Vec<PathBuf>,
+fn execute_object_property_classification(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     pretty_print: bool,
@@ -1911,7 +1924,7 @@ async fn execute_object_property_classification(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -1937,8 +1950,8 @@ async fn execute_object_property_classification(
     Ok(())
 }
 
-async fn execute_data_property_classification(
-    input: Vec<PathBuf>,
+fn execute_data_property_classification(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     pretty_print: bool,
@@ -1957,7 +1970,7 @@ async fn execute_data_property_classification(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -1983,9 +1996,9 @@ async fn execute_data_property_classification(
     Ok(())
 }
 
-async fn execute_subclasses_query(
-    input: Vec<PathBuf>,
-    class_iri: String,
+fn execute_subclasses_query(
+    input: &[PathBuf],
+    class_iri: &str,
     direct: bool,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
@@ -2005,13 +2018,13 @@ async fn execute_subclasses_query(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
 
     let class_expr = oxidowl::ontology::ClassExpression::Class(oxidowl::ontology::Class {
-        iri: oxidowl::ontology::IRI::new(&class_iri).to_url()?.into(),
+        iri: oxidowl::ontology::IRI::new(class_iri).to_url()?.into(),
     });
 
     let subclasses = reasoner.get_subclasses(&class_expr, direct)?;
@@ -2032,9 +2045,9 @@ async fn execute_subclasses_query(
     Ok(())
 }
 
-async fn execute_superclasses_query(
-    input: Vec<PathBuf>,
-    class_iri: String,
+fn execute_superclasses_query(
+    input: &[PathBuf],
+    class_iri: &str,
     direct: bool,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
@@ -2054,13 +2067,13 @@ async fn execute_superclasses_query(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
 
     let class_expr = oxidowl::ontology::ClassExpression::Class(oxidowl::ontology::Class {
-        iri: oxidowl::ontology::IRI::new(&class_iri).to_url()?.into(),
+        iri: oxidowl::ontology::IRI::new(class_iri).to_url()?.into(),
     });
 
     let superclasses = reasoner.get_superclasses(&class_expr, direct)?;
@@ -2081,9 +2094,9 @@ async fn execute_superclasses_query(
     Ok(())
 }
 
-async fn execute_equivalent_classes_query(
-    input: Vec<PathBuf>,
-    class_iri: String,
+fn execute_equivalent_classes_query(
+    input: &[PathBuf],
+    class_iri: &str,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
@@ -2098,13 +2111,13 @@ async fn execute_equivalent_classes_query(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
 
     let class_expr = oxidowl::ontology::ClassExpression::Class(oxidowl::ontology::Class {
-        iri: oxidowl::ontology::IRI::new(&class_iri).to_url()?.into(),
+        iri: oxidowl::ontology::IRI::new(class_iri).to_url()?.into(),
     });
 
     let equivalent_classes = reasoner.get_equivalent_classes(&class_expr)?;
@@ -2125,8 +2138,8 @@ async fn execute_equivalent_classes_query(
     Ok(())
 }
 
-async fn execute_unsatisfiable_classes_query(
-    input: Vec<PathBuf>,
+fn execute_unsatisfiable_classes_query(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
@@ -2141,7 +2154,7 @@ async fn execute_unsatisfiable_classes_query(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -2167,12 +2180,12 @@ async fn execute_unsatisfiable_classes_query(
     Ok(())
 }
 
-async fn execute_entailment_check(
-    premise: PathBuf,
-    conclusion: PathBuf,
+fn execute_entailment_check(
+    premise: &Path,
+    conclusion: &Path,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
-    config: ReasonerConfig,
+    config: &ReasonerConfig,
 ) -> Result<()> {
     info!(
         "Checking entailment: {} |= {}",
@@ -2185,11 +2198,11 @@ async fn execute_entailment_check(
 
     // Load both premise and conclusion ontologies
     info!("Loading premise ontology from: {}", premise.display());
-    reasoner.load_ontology_from_file(&premise, ontology_format)?;
+    reasoner.load_ontology_from_file(premise, ontology_format)?;
 
     info!("Loading conclusion ontology from: {}", conclusion.display());
     let conclusion_ontology = oxidowl::ontology::Ontology::from_file(
-        &conclusion,
+        conclusion,
         None, // Auto-detect format based on file extension
     )?;
 
@@ -2205,7 +2218,7 @@ async fn execute_entailment_check(
 
                 // Get the premise ontology by reloading it (since reasoner doesn't expose ontology)
                 let mut test_ontology = oxidowl::ontology::Ontology::from_file(
-                    &premise, None, // Auto-detect format
+                    premise, None, // Auto-detect format
                 )?;
 
                 // Add conclusion axioms directly and check consistency
@@ -2258,8 +2271,8 @@ async fn execute_entailment_check(
     Ok(())
 }
 
-async fn execute_print_prefixes(
-    input: Vec<PathBuf>,
+fn execute_print_prefixes(
+    input: &[PathBuf],
     format: Option<InputFormat>,
     config: ReasonerConfig,
 ) -> Result<()> {
@@ -2273,7 +2286,7 @@ async fn execute_print_prefixes(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -2288,11 +2301,11 @@ async fn execute_print_prefixes(
     Ok(())
 }
 
-async fn execute_dump_clauses(
-    input: Vec<PathBuf>,
+fn execute_dump_clauses(
+    input: &[PathBuf],
     output: Option<PathBuf>,
     format: Option<InputFormat>,
-    pretty_print: bool,
+    _pretty_print: bool,
     config: ReasonerConfig,
 ) -> Result<()> {
     if input.is_empty() {
@@ -2305,7 +2318,7 @@ async fn execute_dump_clauses(
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load multiple ontologies if provided
-    for file in &input {
+    for file in input {
         info!("Loading ontology: {}", file.display());
         reasoner.load_ontology_from_file(file.as_path(), ontology_format)?;
     }
@@ -2319,11 +2332,7 @@ async fn execute_dump_clauses(
         info!("DL clauses saved to: {}", output_file.display());
     } else {
         // Print to stdout
-        let output_str = if pretty_print {
-            clause_set.to_hermit_format()
-        } else {
-            clause_set.to_hermit_format()
-        };
+        let output_str = clause_set.to_hermit_format();
         println!("{output_str}");
     }
 
@@ -2346,6 +2355,7 @@ async fn execute_dump_clauses(
 
 // Helper functions for formatting output
 
+#[allow(clippy::items_after_statements)]
 fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationResult) {
     use std::collections::{BTreeSet, HashMap, HashSet};
 

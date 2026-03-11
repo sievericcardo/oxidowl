@@ -13,7 +13,7 @@ use oxidowl::{
     parsers::turtle::TurtleParser,
     reasoning::ReasoningService,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 // Import the performance test modules
@@ -122,6 +122,7 @@ impl PerformanceMetrics {
     }
 
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // sample counts never exceed f64 precision in practice
     pub fn mean(&self) -> f64 {
         if self.samples.is_empty() {
             0.0
@@ -131,6 +132,7 @@ impl PerformanceMetrics {
     }
 
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // sample counts never exceed f64 precision in practice
     pub fn std_dev(&self) -> f64 {
         if self.samples.len() < 2 {
             0.0
@@ -183,7 +185,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Algorithm => run_algorithm_tests(config).await?,
         Commands::Scalability => run_scalability_tests().await?,
         Commands::Quick => run_quick_tests().await?,
-        Commands::Report { input, format } => generate_report(input, format).await?,
+        Commands::Report { input, format } => generate_report(&input, &format)?,
     }
 
     Ok(())
@@ -325,6 +327,7 @@ async fn run_conformance_tests() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[allow(clippy::cast_precision_loss)] // nanosecond ratios; precision loss is negligible for performance measurements
 async fn run_algorithm_tests(config: BenchmarkConfig) -> Result<(), Box<dyn std::error::Error>> {
     println!("Running algorithm comparison tests...");
 
@@ -390,15 +393,15 @@ async fn run_quick_tests() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn generate_report(input: PathBuf, format: String) -> Result<(), Box<dyn std::error::Error>> {
+fn generate_report(input: &Path, format: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("Generating performance report...");
 
-    let json_content = std::fs::read_to_string(&input)?;
+    let json_content = std::fs::read_to_string(input)?;
     let results: serde_json::Value = serde_json::from_str(&json_content)?;
 
-    match format.as_str() {
-        "html" => generate_html_report(&results, &input)?,
-        "markdown" => generate_markdown_report(&results, &input)?,
+    match format {
+        "html" => generate_html_report(&results, input)?,
+        "markdown" => generate_markdown_report(&results, input)?,
         "json" => {
             let pretty_json = serde_json::to_string_pretty(&results)?;
             println!("{pretty_json}");
@@ -413,7 +416,7 @@ async fn generate_report(input: PathBuf, format: String) -> Result<(), Box<dyn s
 }
 
 // Helper functions
-fn load_ontology_from_file(path: &PathBuf) -> Result<Ontology, Box<dyn std::error::Error>> {
+fn load_ontology_from_file(path: &Path) -> Result<Ontology, Box<dyn std::error::Error>> {
     let parser = TurtleParser::new();
     let content = std::fs::read_to_string(path)?;
     let ontology = parser.parse_string(&content)?;
@@ -483,6 +486,7 @@ fn create_large_test_ontology(size: usize) -> Ontology {
     ontology
 }
 
+#[allow(clippy::cast_precision_loss)] // nanosecond timings; precision loss is negligible
 async fn run_consistency_benchmark(
     ontology: &Ontology,
     config: &BenchmarkConfig,
@@ -505,12 +509,13 @@ async fn run_consistency_benchmark(
         }
     }
 
+    let avg_nanos = iterations
+        .iter()
+        .map(std::time::Duration::as_nanos)
+        .sum::<u128>()
+        / iterations.len() as u128;
     let avg_time = Duration::from_nanos(
-        (iterations
-            .iter()
-            .map(std::time::Duration::as_nanos)
-            .sum::<u128>()
-            / iterations.len() as u128) as u64,
+        u64::try_from(avg_nanos).expect("benchmark duration fits in u64"),
     );
 
     Ok(BenchmarkResult {
@@ -522,6 +527,7 @@ async fn run_consistency_benchmark(
     })
 }
 
+#[allow(clippy::cast_precision_loss)] // nanosecond timings; precision loss is negligible
 async fn run_satisfiability_benchmark(
     ontology: &Ontology,
     config: &BenchmarkConfig,
@@ -551,12 +557,13 @@ async fn run_satisfiability_benchmark(
         }
     }
 
+    let avg_nanos = iterations
+        .iter()
+        .map(std::time::Duration::as_nanos)
+        .sum::<u128>()
+        / iterations.len() as u128;
     let avg_time = Duration::from_nanos(
-        (iterations
-            .iter()
-            .map(std::time::Duration::as_nanos)
-            .sum::<u128>()
-            / iterations.len() as u128) as u64,
+        u64::try_from(avg_nanos).expect("benchmark duration fits in u64"),
     );
 
     Ok(BenchmarkResult {
@@ -568,6 +575,7 @@ async fn run_satisfiability_benchmark(
     })
 }
 
+#[allow(clippy::cast_precision_loss)] // nanosecond timings; precision loss is negligible
 async fn run_algorithm_benchmark(
     ontology: &Ontology,
     reasoner_config: &ReasonerConfig,
@@ -592,12 +600,13 @@ async fn run_algorithm_benchmark(
         }
     }
 
+    let avg_nanos = iterations
+        .iter()
+        .map(std::time::Duration::as_nanos)
+        .sum::<u128>()
+        / iterations.len() as u128;
     let avg_time = Duration::from_nanos(
-        (iterations
-            .iter()
-            .map(std::time::Duration::as_nanos)
-            .sum::<u128>()
-            / iterations.len() as u128) as u64,
+        u64::try_from(avg_nanos).expect("benchmark duration fits in u64"),
     );
 
     Ok(BenchmarkResult {
@@ -672,7 +681,7 @@ fn get_memory_usage() -> usize {
 
 fn generate_html_report(
     results: &serde_json::Value,
-    input_path: &PathBuf,
+    input_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let output_path = input_path.with_extension("html");
 
@@ -714,7 +723,7 @@ fn generate_html_report(
 
 fn generate_markdown_report(
     results: &serde_json::Value,
-    input_path: &PathBuf,
+    input_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let output_path = input_path.with_extension("md");
 
