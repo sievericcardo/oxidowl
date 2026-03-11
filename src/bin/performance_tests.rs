@@ -514,9 +514,8 @@ async fn run_consistency_benchmark(
         .map(std::time::Duration::as_nanos)
         .sum::<u128>()
         / iterations.len() as u128;
-    let avg_time = Duration::from_nanos(
-        u64::try_from(avg_nanos).expect("benchmark duration fits in u64"),
-    );
+    let avg_time =
+        Duration::from_nanos(u64::try_from(avg_nanos).expect("benchmark duration fits in u64"));
 
     Ok(BenchmarkResult {
         name: "Consistency".to_string(),
@@ -562,9 +561,8 @@ async fn run_satisfiability_benchmark(
         .map(std::time::Duration::as_nanos)
         .sum::<u128>()
         / iterations.len() as u128;
-    let avg_time = Duration::from_nanos(
-        u64::try_from(avg_nanos).expect("benchmark duration fits in u64"),
-    );
+    let avg_time =
+        Duration::from_nanos(u64::try_from(avg_nanos).expect("benchmark duration fits in u64"));
 
     Ok(BenchmarkResult {
         name: "Satisfiability".to_string(),
@@ -605,9 +603,8 @@ async fn run_algorithm_benchmark(
         .map(std::time::Duration::as_nanos)
         .sum::<u128>()
         / iterations.len() as u128;
-    let avg_time = Duration::from_nanos(
-        u64::try_from(avg_nanos).expect("benchmark duration fits in u64"),
-    );
+    let avg_time =
+        Duration::from_nanos(u64::try_from(avg_nanos).expect("benchmark duration fits in u64"));
 
     Ok(BenchmarkResult {
         name: name.to_string(),

@@ -12,7 +12,12 @@ use oxidowl::{
     ontology::properties::{DataPropertyHierarchy, ObjectPropertyHierarchy},
     ontology::{DataPropertyExpression, ObjectPropertyExpression},
 };
-use std::{fs, path::{Path, PathBuf}, sync::Arc, time::Instant};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 /// Options controlling what steps are performed in full reasoning.
 #[allow(clippy::struct_excessive_bools)] // Purpose-built options bag for a reasoning pipeline
@@ -1259,21 +1264,19 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             skip_consistency,
             skip_pretty_print,
             direct: _,
-        } => {
-            execute_full_reasoning(
-                &input,
-                output,
-                format,
-                &FullReasoningOptions {
-                    skip_classification,
-                    skip_object_properties,
-                    skip_data_properties,
-                    skip_consistency,
-                    skip_pretty_print,
-                },
-                config,
-            )
-        }
+        } => execute_full_reasoning(
+            &input,
+            output,
+            format,
+            &FullReasoningOptions {
+                skip_classification,
+                skip_object_properties,
+                skip_data_properties,
+                skip_consistency,
+                skip_pretty_print,
+            },
+            config,
+        ),
         Commands::Consistency {
             input,
             output,
@@ -1286,23 +1289,26 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             output,
             format,
             pretty_print,
-        } => execute_classification(&input, namespace.as_deref(), output, format, pretty_print, config),
+        } => execute_classification(
+            &input,
+            namespace.as_deref(),
+            output,
+            format,
+            pretty_print,
+            config,
+        ),
         Commands::ClassifyObjectProperties {
             input,
             output,
             format,
             pretty_print,
-        } => {
-            execute_object_property_classification(&input, output, format, pretty_print, config)
-        }
+        } => execute_object_property_classification(&input, output, format, pretty_print, config),
         Commands::ClassifyDataProperties {
             input,
             output,
             format,
             pretty_print,
-        } => {
-            execute_data_property_classification(&input, output, format, pretty_print, config)
-        }
+        } => execute_data_property_classification(&input, output, format, pretty_print, config),
         Commands::Satisfiability {
             input,
             class_iri,
@@ -1340,9 +1346,7 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             output,
             format,
         } => execute_entailment_check(&premise, &conclusion, output, format, &config),
-        Commands::PrintPrefixes { input, format } => {
-            execute_print_prefixes(&input, format, config)
-        }
+        Commands::PrintPrefixes { input, format } => execute_print_prefixes(&input, format, config),
         Commands::DumpClauses {
             input,
             output,
@@ -1384,9 +1388,7 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             )
             .await
         }
-        Commands::OwlLinkFile { input, output } => {
-            execute_owllink_file(&input, output, config)
-        }
+        Commands::OwlLinkFile { input, output } => execute_owllink_file(&input, output, config),
         /*
         /*
         Commands::OwlLinkServer { port, bind } => {
@@ -1399,12 +1401,12 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             input,
             output,
         } => execute_sparql_file(&sparql, input, output, config), /*
-                                                                       /*
-                                                                       Commands::SparqlServer { port, bind } => {
-                                                                           execute_sparql_server(port, bind, config).await
-                                                                       }
-                                                                       */
-                                                                       */
+                                                                  /*
+                                                                  Commands::SparqlServer { port, bind } => {
+                                                                      execute_sparql_server(port, bind, config).await
+                                                                  }
+                                                                  */
+                                                                  */
     }
 }
 
@@ -1747,19 +1749,17 @@ async fn execute_dl_query(
         let ontology_guard = ontology
             .read()
             .map_err(|_| oxidowl::Error::io("Failed to acquire ontology read lock".to_string()))?;
-        let default_namespace = ontology_guard
-            .get_iri()
-            .map_or_else(
-                || "http://example.org/ontology#".to_string(),
-                |iri| {
-                    let iri_str = iri.as_str();
-                    if iri_str.ends_with('#') || iri_str.ends_with('/') {
-                        iri_str.to_string()
-                    } else {
-                        format!("{iri_str}#")
-                    }
-                },
-            );
+        let default_namespace = ontology_guard.get_iri().map_or_else(
+            || "http://example.org/ontology#".to_string(),
+            |iri| {
+                let iri_str = iri.as_str();
+                if iri_str.ends_with('#') || iri_str.ends_with('/') {
+                    iri_str.to_string()
+                } else {
+                    format!("{iri_str}#")
+                }
+            },
+        );
 
         oxidowl::query::DLQueryEngine::new_with_namespace(reasoning_service, default_namespace)
     };
@@ -2202,8 +2202,7 @@ fn execute_entailment_check(
 
     info!("Loading conclusion ontology from: {}", conclusion.display());
     let conclusion_ontology = oxidowl::ontology::Ontology::from_file(
-        conclusion,
-        None, // Auto-detect format based on file extension
+        conclusion, None, // Auto-detect format based on file extension
     )?;
 
     // Perform entailment check using the reasoner
