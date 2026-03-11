@@ -7,7 +7,7 @@ use crate::{
     Error, Result,
     cache::CacheManager,
     core::{
-        lock_helpers::{read_lock, write_lock},
+        lock_helpers::read_lock,
         reasoner::{
             statistics::ReasoningStatistics,
             tableau::{TableauAlgorithmInstance, TableauFactory},
@@ -16,25 +16,18 @@ use crate::{
     ontology::{ClassExpression, Individual, OntologyRef},
 };
 use log::{debug, info};
-use std::{
-    sync::{Arc, RwLock},
-    time::Instant,
-};
+use std::time::Instant;
 
 /// Service for basic reasoning operations (consistency, satisfiability, subsumption)
 #[derive(Debug)]
 pub struct ReasoningTaskService {
     pub tableau_factory: TableauFactory,
-    pub cache_manager: Arc<RwLock<CacheManager>>,
 }
 
 impl ReasoningTaskService {
     /// Create a new reasoning task service
-    pub fn new(tableau_factory: TableauFactory, cache_manager: Arc<RwLock<CacheManager>>) -> Self {
-        Self {
-            tableau_factory,
-            cache_manager,
-        }
+    pub fn new(tableau_factory: TableauFactory) -> Self {
+        Self { tableau_factory }
     }
 
     /// Check if the ontology is consistent
@@ -42,6 +35,7 @@ impl ReasoningTaskService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_consistency_checks();
@@ -49,10 +43,7 @@ impl ReasoningTaskService {
         info!("Checking ontology consistency");
 
         // Check cache first
-        if let Some(cached_result) =
-            read_lock(&self.cache_manager, "tasks: reading cache for consistency")?
-                .get_consistency_result(ontology)
-        {
+        if let Some(cached_result) = cache.get_consistency_result(ontology) {
             debug!("Consistency result found in cache");
             return Ok(cached_result);
         }
@@ -68,8 +59,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_consistency_check(tableau, statistics)?;
 
         // Cache the result
-        write_lock(&self.cache_manager, "tasks: storing consistency result")?
-            .cache_consistency_result(ontology, result);
+        cache.cache_consistency_result(ontology, result);
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -84,6 +74,7 @@ impl ReasoningTaskService {
         class_iri: &str,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_satisfiability_checks();
@@ -100,11 +91,7 @@ impl ReasoningTaskService {
 
         // Check cache first
         if let Some(class_expr) = self.parse_class_expression(class_iri)
-            && let Some(cached_result) = read_lock(
-                &self.cache_manager,
-                "tasks: reading cache for satisfiability",
-            )?
-            .get_satisfiability_result(&class_expr)
+            && let Some(cached_result) = cache.get_satisfiability_result(&class_expr)
         {
             debug!("Satisfiability result found in cache for: {class_iri}");
             return Ok(cached_result);
@@ -123,8 +110,7 @@ impl ReasoningTaskService {
 
         // Cache the result
         if let Some(class_expr) = self.parse_class_expression(class_iri) {
-            write_lock(&self.cache_manager, "tasks: storing satisfiability result")?
-                .cache_satisfiability_result(class_expr, result);
+            cache.cache_satisfiability_result(class_expr, result);
         }
 
         let reasoning_time = start_time.elapsed();
@@ -141,6 +127,7 @@ impl ReasoningTaskService {
         superclass: &str,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_subsumption_checks();
@@ -152,8 +139,7 @@ impl ReasoningTaskService {
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
         ) && let Some(cached_result) =
-            read_lock(&self.cache_manager, "tasks: reading cache for subsumption")?
-                .get_subsumption_result(&sub_expr, &sup_expr)
+            cache.get_subsumption_result(&sub_expr, &sup_expr)
         {
             debug!("Subsumption result found in cache");
             return Ok(cached_result);
@@ -176,8 +162,7 @@ impl ReasoningTaskService {
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
         ) {
-            write_lock(&self.cache_manager, "tasks: storing subsumption result")?
-                .cache_subsumption_result(sub_expr, sup_expr, result);
+            cache.cache_subsumption_result(sub_expr, sup_expr, result);
         }
 
         let reasoning_time = start_time.elapsed();
@@ -194,18 +179,14 @@ impl ReasoningTaskService {
         class_expr: &ClassExpression,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
 
         info!("Checking instance relationship");
 
         // Check cache first
-        if let Some(cached_result) = read_lock(
-            &self.cache_manager,
-            "tasks: reading cache for instance check",
-        )?
-        .get_instance_result(individual, class_expr)
-        {
+        if let Some(cached_result) = cache.get_instance_result(individual, class_expr) {
             debug!("Instance result found in cache");
             return Ok(cached_result);
         }
@@ -223,11 +204,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_instance_check(tableau, statistics)?;
 
         // Cache the result
-        write_lock(&self.cache_manager, "tasks: storing instance result")?.store_instance_result(
-            individual.clone(),
-            class_expr.clone(),
-            result,
-        );
+        cache.store_instance_result(individual.clone(), class_expr.clone(), result);
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -243,17 +220,13 @@ impl ReasoningTaskService {
         superclass: &ClassExpression,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_subsumption_checks();
 
         // Check cache first
-        if let Some(cached_result) = read_lock(
-            &self.cache_manager,
-            "tasks: reading cache for subsumption expressions",
-        )?
-        .get_subsumption_result(subclass, superclass)
-        {
+        if let Some(cached_result) = cache.get_subsumption_result(subclass, superclass) {
             return Ok(cached_result);
         }
 
@@ -275,11 +248,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
 
         // Store in cache
-        write_lock(
-            &self.cache_manager,
-            "tasks: storing subsumption expressions result",
-        )?
-        .cache_subsumption_result(subclass.clone(), superclass.clone(), result);
+        cache.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -293,6 +262,7 @@ impl ReasoningTaskService {
         axiom: &crate::ontology::Axiom,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
 
@@ -305,7 +275,7 @@ impl ReasoningTaskService {
                 // Check if subclass ⊑ superclass is entailed
                 let subclass_str = format!("{:?}", subclass_axiom.subclass);
                 let superclass_str = format!("{:?}", subclass_axiom.superclass);
-                self.check_subsumption(&subclass_str, &superclass_str, ontology, statistics)?
+                self.check_subsumption(&subclass_str, &superclass_str, ontology, statistics, cache)?
             }
             crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) => {
                 // Check if individual ∈ class is entailed
@@ -314,6 +284,7 @@ impl ReasoningTaskService {
                     &class_assertion.class,
                     ontology,
                     statistics,
+                    cache,
                 )?
             }
             _ => {

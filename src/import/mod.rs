@@ -378,9 +378,9 @@ pub struct ImportManager {
     /// Configuration
     config: ImportManagerConfig,
     /// Cache of resolved ontologies
-    ontology_cache: Arc<RwLock<HashMap<IRI, Arc<Ontology>>>>,
+    ontology_cache: RwLock<HashMap<IRI, Arc<Ontology>>>,
     /// Dependency graph
-    dependency_graph: Arc<RwLock<ImportDependencyGraph>>,
+    dependency_graph: RwLock<ImportDependencyGraph>,
 }
 
 impl ImportManager {
@@ -389,8 +389,8 @@ impl ImportManager {
     pub fn new(config: ImportManagerConfig) -> Self {
         Self {
             config,
-            ontology_cache: Arc::new(RwLock::new(HashMap::new())),
-            dependency_graph: Arc::new(RwLock::new(ImportDependencyGraph::new())),
+            ontology_cache: RwLock::new(HashMap::new()),
+            dependency_graph: RwLock::new(ImportDependencyGraph::new()),
         }
     }
 

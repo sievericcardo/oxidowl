@@ -16,6 +16,7 @@ pub mod optimizer; // Advanced optimizer
 pub mod rewriting;
 
 // Core advanced components (using existing enhanced modules)
+pub mod actors; // Phase 3: execution engine actors
 pub mod cost_optimizer; // Enhanced with cost-based optimization
 pub mod execution_engine; // Enhanced with advanced execution
 

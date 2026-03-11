@@ -50,8 +50,8 @@ fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
     }
 }
 
-#[test]
-fn test_ml_engine_creation() {
+#[tokio::test]
+async fn test_ml_engine_creation() {
     println!("\n=== Test: ML Engine Creation ===");
 
     let ontology = create_test_onto("creation_test", 10);
@@ -71,8 +71,8 @@ fn test_ml_engine_creation() {
     println!("✓ ML-enabled engine created successfully");
 }
 
-#[test]
-fn test_ml_vs_legacy_execution() {
+#[tokio::test]
+async fn test_ml_vs_legacy_execution() {
     println!("\n=== Test: ML vs Legacy Execution ===");
 
     let ontology = create_test_onto("ml_legacy_test", 50);
@@ -106,8 +106,8 @@ fn test_ml_vs_legacy_execution() {
     println!("✓ Configuration variations work correctly");
 }
 
-#[test]
-fn test_query_execution_basic() {
+#[tokio::test]
+async fn test_query_execution_basic() {
     println!("\n=== Test: Basic Query Execution ===");
 
     let ontology = create_test_onto("exec_test", 30);
@@ -127,8 +127,7 @@ fn test_query_execution_basic() {
     let constraints = default_constraints();
 
     // Execute query
-    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
-    let result = rt.block_on(engine.execute_query(&query, constraints));
+    let result = engine.execute_query(&query, constraints).await;
 
     match result {
         Ok(query_result) => {
@@ -144,8 +143,8 @@ fn test_query_execution_basic() {
     }
 }
 
-#[test]
-fn test_concurrent_queries() {
+#[tokio::test]
+async fn test_concurrent_queries() {
     println!("\n=== Test: Concurrent Query Execution ===");
 
     let ontology = create_test_onto("concurrent_test", 40);
@@ -163,35 +162,33 @@ fn test_concurrent_queries() {
             .expect("Engine creation failed"),
     );
 
-    // Spawn 4 threads
+    // Spawn 4 concurrent tasks
     let mut handles = vec![];
-    for thread_id in 0..4 {
+    for thread_id in 0..4usize {
         let engine_clone = engine.clone();
-        let handle = std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
+        let handle = tokio::task::spawn(async move {
             let query = simple_query("var", &format!("Class{}", thread_id));
             let constraints = default_constraints();
-            let result = rt.block_on(engine_clone.execute_query(&query, constraints));
-            result.is_ok()
+            engine_clone.execute_query(&query, constraints).await.is_ok()
         });
         handles.push(handle);
     }
 
-    // Wait for threads
+    // Wait for tasks
     let mut success_count = 0;
     for handle in handles {
-        if handle.join().expect("Thread panicked") {
+        if handle.await.expect("Task panicked") {
             success_count += 1;
         }
     }
 
     println!("✓ Concurrent execution completed");
-    println!("  Success: {}/4 threads", success_count);
+    println!("  Success: {}/4 tasks", success_count);
     assert!(true, "Concurrent execution completed without deadlocks");
 }
 
-#[test]
-fn test_multiple_query_execution() {
+#[tokio::test]
+async fn test_multiple_query_execution() {
     println!("\n=== Test: Multiple Query Executions ===");
 
     let ontology = create_test_onto("multi_test", 60);
@@ -207,14 +204,12 @@ fn test_multiple_query_execution() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
-
     // Execute 10 queries
     let mut successful = 0;
     for i in 0..10 {
         let query = simple_query("x", &format!("Type{}", i));
         let constraints = default_constraints();
-        let result = rt.block_on(engine.execute_query(&query, constraints));
+        let result = engine.execute_query(&query, constraints).await;
         if result.is_ok() {
             successful += 1;
         }
@@ -224,8 +219,8 @@ fn test_multiple_query_execution() {
     assert!(true, "Multiple queries completed");
 }
 
-#[test]
-fn test_performance_measurement() {
+#[tokio::test]
+async fn test_performance_measurement() {
     println!("\n=== Test: Performance Measurement ===");
 
     let ontology = create_test_onto("perf_test", 100);
@@ -241,12 +236,11 @@ fn test_performance_measurement() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
     let query = simple_query("x", "Entity");
     let constraints = default_constraints();
 
     let start = Instant::now();
-    let _ = rt.block_on(engine.execute_query(&query, constraints));
+    let _ = engine.execute_query(&query, constraints).await;
     let duration = start.elapsed();
 
     println!("✓ Query execution time: {:?}", duration);
@@ -256,8 +250,8 @@ fn test_performance_measurement() {
     );
 }
 
-#[test]
-fn test_error_handling() {
+#[tokio::test]
+async fn test_error_handling() {
     println!("\n=== Test: Error Handling ===");
 
     let ontology = create_test_onto("error_test", 20);
@@ -273,8 +267,6 @@ fn test_error_handling() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    let rt = tokio::runtime::Runtime::new().expect("Test operation failed");
-
     // Test with empty query
     let empty_query = ConjunctiveQuery {
         answer_variables: vec![],
@@ -284,7 +276,7 @@ fn test_error_handling() {
     };
 
     let constraints = default_constraints();
-    let _ = rt.block_on(engine.execute_query(&empty_query, constraints));
+    let _ = engine.execute_query(&empty_query, constraints).await;
 
     println!("✓ Error handling completed without panicking");
     assert!(true, "Engine handles errors gracefully");

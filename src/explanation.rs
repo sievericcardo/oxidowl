@@ -11,16 +11,12 @@ use crate::{
     ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fmt,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, fmt};
 
 /// Main explanation service
 #[derive(Debug)]
 pub struct ExplanationService {
-    proof_tracker: Arc<Mutex<ProofTracker>>,
+    proof_tracker: ProofTracker,
     justification_computer: JustificationComputer,
     explanation_formatter: ExplanationFormatter,
 }
@@ -30,7 +26,7 @@ impl ExplanationService {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            proof_tracker: Arc::new(Mutex::new(ProofTracker::new())),
+            proof_tracker: ProofTracker::new(),
             justification_computer: JustificationComputer::new(),
             explanation_formatter: ExplanationFormatter::new(),
         }
@@ -109,10 +105,8 @@ impl ExplanationService {
     }
 
     /// Track reasoning step for proof generation
-    pub fn track_reasoning_step(&self, step: ReasoningStep) -> Result<()> {
-        if let Ok(mut tracker) = self.proof_tracker.lock() {
-            tracker.add_step(step);
-        }
+    pub fn track_reasoning_step(&mut self, step: ReasoningStep) -> Result<()> {
+        self.proof_tracker.add_step(step);
         Ok(())
     }
 

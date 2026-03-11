@@ -185,8 +185,8 @@ mod tests {
         assert!(!supports_expressivity("UNKNOWN"));
     }
 
-    #[test]
-    fn test_create_query_engine() -> Result<()> {
+    #[tokio::test]
+    async fn test_create_query_engine() -> Result<()> {
         let ontology = Ontology::new();
         let _namespace = Some("http://example.com/test#".to_string());
         let config = ReasonerConfig::default();

@@ -123,7 +123,6 @@ use oxigraph::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::RwLock;
 use warp::{Filter, Reply};
 
 /// SPARQL server for ontology querying
@@ -136,7 +135,7 @@ pub struct SparqlServer {
     /// Reasoning service
     reasoning_service: Arc<ReasoningService>,
     /// RDF store
-    store: Arc<RwLock<Store>>,
+    store: Arc<Store>,
 }
 
 impl SparqlServer {
@@ -146,9 +145,9 @@ impl SparqlServer {
             port,
             bind_address,
             reasoning_service,
-            store: Arc::new(RwLock::new(
+            store: Arc::new(
                 Store::new().expect("Failed to create new SPARQL store"),
-            )),
+            ),
         }
     }
 
@@ -217,7 +216,7 @@ impl SparqlServer {
             Error::lock_poisoned(format!("Failed to acquire read lock on ontology: {}", e))
         })?;
 
-        let mut store = self.store.write().await;
+        let store = &*self.store;
 
         // Convert ontology axioms to RDF triples and add to store
         for axiom in &ontology_guard.axioms {
@@ -532,7 +531,7 @@ pub struct SparqlTriple {
 /// Handle SPARQL query requests
 async fn handle_sparql_query(
     form: HashMap<String, String>,
-    store: Arc<RwLock<Store>>,
+    store: Arc<Store>,
     reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     let start_time = std::time::Instant::now();
@@ -544,11 +543,10 @@ async fn handle_sparql_query(
     tracing::debug!("Executing SPARQL query: {}", query_string);
 
     // Execute query using SparqlEvaluator API
-    let store_guard = store.read().await;
     let results = SparqlEvaluator::new()
         .parse_query(query_string)
         .map_err(|e| warp::reject::custom(SparqlError(format!("Query parse error: {}", e))))?
-        .on_store(&*store_guard)
+        .on_store(&*store)
         .execute()
         .map_err(|e| warp::reject::custom(SparqlError(format!("Query execution error: {}", e))))?;
 
@@ -601,7 +599,7 @@ async fn handle_sparql_query(
 /// Handle SPARQL update requests
 async fn handle_sparql_update(
     form: HashMap<String, String>,
-    store: Arc<RwLock<Store>>,
+    store: Arc<Store>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     let update_string = form
         .get("update")
@@ -610,8 +608,7 @@ async fn handle_sparql_update(
     tracing::debug!("Executing SPARQL update: {}", update_string);
 
     // Parse and execute update
-    let store_guard = store.write().await;
-    store_guard
+    store
         .update(update_string)
         .map_err(|e| warp::reject::custom(SparqlError(format!("Update execution error: {}", e))))?;
 

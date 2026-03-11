@@ -433,7 +433,7 @@ impl HornedOwlAdapter {
     /// Detect reified triples in RDF 1.1 data and convert to quoted triples
     ///
     /// This is the inverse of `reify_rdf_term`. It scans for patterns like:
-    /// ```
+    /// ```text
     /// _:bn rdf:type rdf:Statement .
     /// _:bn rdf:subject <s> .
     /// _:bn rdf:predicate <p> .

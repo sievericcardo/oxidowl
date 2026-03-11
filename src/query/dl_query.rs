@@ -159,7 +159,7 @@ impl DLQueryEngine {
         // This implements proper namespace resolution according to OWL specifications
 
         // First, try to get the ontology IRI from the reasoning service
-        if let Ok(Some(ontology_iri)) = self.reasoning_service.get_ontology_iri() {
+        if let Ok(Some(ontology_iri)) = self.reasoning_service.get_ontology_iri().await {
             let iri_string = ontology_iri.as_str();
             if !iri_string.is_empty() {
                 // Use the ontology IRI as the base for the default namespace

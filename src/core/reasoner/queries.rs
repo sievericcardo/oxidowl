@@ -902,7 +902,7 @@ impl QueryProcessor {
             // Parse the entailment query from request XML
             if let Ok(axiom) = self.parse_axiom_from_owllink(&request.request_xml) {
                 // Create a temporary reasoner to check entailment
-                let reasoner =
+                let mut reasoner =
                     crate::core::reasoner::Reasoner::new(crate::config::ReasonerConfig::default())?;
 
                 reasoner.check_entailment(
@@ -1026,7 +1026,7 @@ impl QueryProcessor {
 
         if let Some(class_expr) = &request.class_expression {
             // Create a temporary reasoner to get instances
-            let reasoner =
+            let mut reasoner =
                 crate::core::reasoner::Reasoner::new(crate::config::ReasonerConfig::default())?;
             let direct = request.direct.unwrap_or(false);
 

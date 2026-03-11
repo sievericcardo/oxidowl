@@ -8,7 +8,7 @@ use crate::{
     cache::CacheManager,
     config::PerformanceConfig,
     core::{
-        lock_helpers::{read_lock, write_lock},
+        lock_helpers::read_lock,
         reasoner::{
             datatype_validation::DatatypeValidator,
             parallel_classification::ParallelClassificationScheduler,
@@ -26,7 +26,6 @@ use crate::{
 use log::{debug, info};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
     time::Instant,
 };
 
@@ -34,20 +33,15 @@ use std::{
 #[derive(Debug)]
 pub struct ClassificationService {
     task_service: ReasoningTaskService,
-    cache_manager: Arc<RwLock<CacheManager>>,
     datatype_validator: DatatypeValidator,
     saturation_engine: SaturationEngine,
 }
 
 impl ClassificationService {
     /// Create a new classification service
-    pub fn new(
-        task_service: ReasoningTaskService,
-        cache_manager: Arc<RwLock<CacheManager>>,
-    ) -> Self {
+    pub fn new(task_service: ReasoningTaskService) -> Self {
         Self {
             task_service,
-            cache_manager,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(SaturationConfig::default()),
         }
@@ -56,12 +50,10 @@ impl ClassificationService {
     /// Create a new classification service with custom saturation config
     pub fn with_saturation_config(
         task_service: ReasoningTaskService,
-        cache_manager: Arc<RwLock<CacheManager>>,
         saturation_config: SaturationConfig,
     ) -> Self {
         Self {
             task_service,
-            cache_manager,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(saturation_config),
         }
@@ -72,16 +64,14 @@ impl ClassificationService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<ClassificationResult> {
         let start_time = Instant::now();
 
         info!("Starting classification with saturation-based optimization");
 
         // Check if we have a cached classification result
-        if let Some(cached_result) =
-            read_lock(&self.cache_manager, "classification: reading cache")?
-                .get_classification_result(ontology)
-        {
+        if let Some(cached_result) = cache.get_classification_result(ontology) {
             debug!("Classification result found in cache");
             return Ok(cached_result);
         }
@@ -269,11 +259,7 @@ impl ClassificationService {
         result.data_properties = data_properties;
 
         // Cache the result
-        write_lock(
-            &self.cache_manager,
-            "classification: storing classification result",
-        )?
-        .store_classification_result(ontology, result.clone());
+        cache.store_classification_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -455,18 +441,14 @@ impl ClassificationService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<RealizationResult> {
         let start_time = Instant::now();
 
         info!("Starting realization");
 
         // Check if we have a cached realization result
-        if let Some(cached_result) = read_lock(
-            &self.cache_manager,
-            "classification: reading cache for realization",
-        )?
-        .get_realization_result(ontology)
-        {
+        if let Some(cached_result) = cache.get_realization_result(ontology) {
             debug!("Realization result found in cache");
             return Ok(cached_result);
         }
@@ -514,7 +496,7 @@ impl ClassificationService {
                 if !is_instance {
                     is_instance = self
                         .task_service
-                        .check_instance(individual, class, ontology, statistics)?;
+                        .check_instance(individual, class, ontology, statistics, cache)?;
                 }
 
                 if is_instance {
@@ -528,11 +510,7 @@ impl ClassificationService {
         let result = RealizationResult::new(realization);
 
         // Cache the result
-        write_lock(
-            &self.cache_manager,
-            "classification: storing realization result",
-        )?
-        .store_realization_result(ontology, result.clone());
+        cache.store_realization_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -546,6 +524,7 @@ impl ClassificationService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
         let start_time = Instant::now();
 
@@ -572,6 +551,7 @@ impl ClassificationService {
                     &cls.iri.to_string(),
                     ontology,
                     statistics,
+                    cache,
                 )?
             {
                 unsatisfiable_classes.push(class.clone());
@@ -595,6 +575,7 @@ impl ClassificationService {
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
         _direct: bool,
+        cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
         let ontology_guard = read_lock(
             ontology,
@@ -614,6 +595,7 @@ impl ClassificationService {
                 &class_expr,
                 ontology,
                 statistics,
+                cache,
             )? && concept != &class_expr
             {
                 superclasses.push(class_expr);
@@ -661,6 +643,7 @@ impl ClassificationService {
         concept: &ClassExpression,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
         let ontology_guard = read_lock(
             ontology,
@@ -701,12 +684,14 @@ impl ClassificationService {
                     &class_expr,
                     ontology,
                     statistics,
+                    cache,
                 )?;
                 let subsumes_2_1 = self.task_service.check_subsumption_expressions(
                     &class_expr,
                     concept,
                     ontology,
                     statistics,
+                    cache,
                 )?;
                 if subsumes_1_2 && subsumes_2_1 {
                     equivalent_classes.push(class_expr);
@@ -724,6 +709,7 @@ impl ClassificationService {
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
         _direct: bool,
+        cache: &mut CacheManager,
     ) -> Result<Vec<Individual>> {
         let individuals = {
             let ontology_guard = read_lock(
@@ -763,7 +749,7 @@ impl ClassificationService {
             if !is_instance {
                 is_instance = self
                     .task_service
-                    .check_instance(individual, concept, ontology, statistics)?;
+                    .check_instance(individual, concept, ontology, statistics, cache)?;
             }
 
             if is_instance {
@@ -1132,9 +1118,10 @@ impl ClassificationService {
                         .expect("Failed to convert IRI to URL")
                         .into(),
                 });
-                if let Ok(supertypes) =
-                    self.get_superclasses(&class_expr, ontology, _statistics, false)
-                {
+                if let Ok(supertypes) = {
+                    let mut local_cache = CacheManager::default();
+                    self.get_superclasses(&class_expr, ontology, _statistics, false, &mut local_cache)
+                } {
                     for supertype in supertypes {
                         if let ClassExpression::Class(class) = supertype {
                             all_types.insert(class.iri.to_string());

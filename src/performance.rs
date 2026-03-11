@@ -8,7 +8,7 @@
 
 use crate::Result;
 use crate::core::lock_helpers::{read_lock, write_lock};
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 /// Memory usage snapshot
@@ -47,9 +47,9 @@ impl MemorySnapshot {
 }
 
 /// Memory tracker with platform-specific implementations
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MemoryTracker {
-    snapshots: Arc<RwLock<Vec<MemorySnapshot>>>,
+    snapshots: RwLock<Vec<MemorySnapshot>>,
     max_snapshots: usize,
 }
 
@@ -58,7 +58,7 @@ impl MemoryTracker {
     #[must_use]
     pub fn new(max_snapshots: usize) -> Self {
         Self {
-            snapshots: Arc::new(RwLock::new(Vec::new())),
+            snapshots: RwLock::new(Vec::new()),
             max_snapshots,
         }
     }
@@ -368,9 +368,9 @@ impl QueryTiming {
 }
 
 /// Query profiler that tracks execution timing
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct QueryProfiler {
-    timings: Arc<RwLock<Vec<QueryTiming>>>,
+    timings: RwLock<Vec<QueryTiming>>,
     max_timings: usize,
 }
 
@@ -379,7 +379,7 @@ impl QueryProfiler {
     #[must_use]
     pub fn new(max_timings: usize) -> Self {
         Self {
-            timings: Arc::new(RwLock::new(Vec::new())),
+            timings: RwLock::new(Vec::new()),
             max_timings,
         }
     }
@@ -469,7 +469,7 @@ pub struct QueryProfilingStats {
 }
 
 /// Performance monitor that coordinates all monitoring components
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PerformanceMonitor {
     memory_tracker: MemoryTracker,
     query_profiler: QueryProfiler,

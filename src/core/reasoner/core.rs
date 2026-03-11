@@ -88,7 +88,7 @@ pub struct Reasoner {
     ontology: Option<OntologyRef>,
 
     /// Cache manager for reasoning results
-    cache_manager: Arc<RwLock<CacheManager>>,
+    cache_manager: CacheManager,
 
     /// Tableau factory for creating reasoning algorithms
     tableau_factory: TableauFactory,
@@ -114,17 +114,16 @@ pub struct Reasoner {
 impl Reasoner {
     /// Create a new reasoner instance with the given configuration
     pub fn new(config: crate::config::ReasonerConfig) -> Result<Self> {
-        let cache_manager = Arc::new(RwLock::new(CacheManager::default()));
+        let cache_manager = CacheManager::default();
         let tableau_factory = TableauFactory::new(config.clone())?;
 
         // Create individual tableau factories for each service
         let task_tableau_factory = TableauFactory::new(config.clone())?;
         let classification_tableau_factory = TableauFactory::new(config.clone())?;
 
-        let task_service = ReasoningTaskService::new(task_tableau_factory, cache_manager.clone());
+        let task_service = ReasoningTaskService::new(task_tableau_factory);
         let classification_service = ClassificationService::new(
-            ReasoningTaskService::new(classification_tableau_factory, cache_manager.clone()),
-            cache_manager.clone(),
+            ReasoningTaskService::new(classification_tableau_factory),
         );
 
         Ok(Self {
@@ -487,15 +486,16 @@ impl Reasoner {
     }
 
     /// Get instances of a class
-    pub fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<Vec<Individual>> {
-        if let Some(ontology_ref) = &self.ontology {
+    pub fn get_instances(&mut self, class: &ClassExpression, direct: bool) -> Result<Vec<Individual>> {
+        if let Some(ontology_ref) = self.ontology.clone() {
             // Use the classification service to properly handle datatype reasoning
             let mut statistics = ReasoningStatistics::new();
             let instances = self.classification_service.get_instances(
                 class,
-                ontology_ref,
+                &ontology_ref,
                 &mut statistics,
                 direct,
+                &mut self.cache_manager,
             )?;
 
             Ok(instances)
@@ -630,10 +630,10 @@ impl Reasoner {
 
     /// Classify the ontology (compute class hierarchy)
     pub fn classify(&mut self) -> Result<ClassificationResult> {
-        if let Some(ontology) = &self.ontology {
+        if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
             self.classification_service
-                .classify(ontology, &mut statistics)
+                .classify(&ontology, &mut statistics, &mut self.cache_manager)
         } else {
             Err(Error::ontology_parsing(
                 "No ontology loaded for classification",
@@ -643,10 +643,10 @@ impl Reasoner {
 
     /// Realize the ontology (compute instance relationships)
     pub fn realize(&mut self) -> Result<RealizationResult> {
-        if let Some(ontology) = &self.ontology {
+        if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
             self.classification_service
-                .realize(ontology, &mut statistics)
+                .realize(&ontology, &mut statistics, &mut self.cache_manager)
         } else {
             Err(Error::ontology_parsing(
                 "No ontology loaded for realization",
@@ -656,12 +656,12 @@ impl Reasoner {
 
     /// Check if an axiom is entailed by the ontology
     pub fn check_entailment(
-        &self,
+        &mut self,
         axiom: &crate::ontology::Axiom,
         ontology: &Arc<RwLock<crate::ontology::Ontology>>,
         stats: &mut ReasoningStatistics,
     ) -> Result<bool> {
-        self.task_service.check_entailment(axiom, ontology, stats)
+        self.task_service.check_entailment(axiom, ontology, stats, &mut self.cache_manager)
     }
 
     /// Explain why an entailment holds
@@ -734,16 +734,21 @@ impl Reasoner {
     }
 
     /// Explain why the ontology is inconsistent
-    pub fn explain_inconsistency(&self) -> Result<Vec<crate::ontology::Axiom>> {
-        if let Some(ontology_ref) = &self.ontology {
-            let ontology = read_lock(
-                ontology_ref,
-                "core: reading ontology for explain_inconsistency",
-            )?;
+    pub fn explain_inconsistency(&mut self) -> Result<Vec<crate::ontology::Axiom>> {
+        if let Some(ontology_ref) = self.ontology.clone() {
+            // Collect all axioms first, then drop the lock before calling get_instances
+            let axioms: Vec<crate::ontology::Axiom> = {
+                let ontology = read_lock(
+                    &ontology_ref,
+                    "core: reading ontology for explain_inconsistency",
+                )?;
+                ontology.axioms().to_vec()
+            };
+
             let mut explanation = Vec::new();
 
             // Look for obvious inconsistencies
-            for axiom in ontology.axioms() {
+            for axiom in &axioms {
                 match axiom {
                     crate::ontology::Axiom::DisjointClasses(disjoint) => {
                         // Check if any individual is asserted to be in disjoint classes
@@ -759,7 +764,7 @@ impl Reasoner {
                                             if ind1.iri() == ind2.iri() {
                                                 explanation.push(axiom.clone());
                                                 // Also add the class assertions
-                                                for ont_axiom in ontology.axioms() {
+                                                for ont_axiom in &axioms {
                                                     if let crate::ontology::Axiom::ClassAssertion(
                                                         assertion,
                                                     ) = ont_axiom
@@ -803,8 +808,7 @@ impl Reasoner {
             ontology.add_axiom(axiom);
 
             // Clear cache since ontology has changed
-            let cache = write_lock(&self.cache_manager, "core: clearing cache after add_axiom")?;
-            cache.clear_all()?;
+            self.cache_manager.clear_all()?;
 
             Ok(())
         } else {
@@ -826,11 +830,7 @@ impl Reasoner {
 
             if removed {
                 // Clear cache since ontology has changed
-                let cache = write_lock(
-                    &self.cache_manager,
-                    "core: clearing cache after remove_axiom",
-                )?;
-                cache.clear_all()?;
+                self.cache_manager.clear_all()?;
             }
 
             // Return the boolean result properly wrapped
@@ -1204,7 +1204,7 @@ impl Reasoner {
     }
 
     /// Process `OWLlink` request
-    pub fn process_owllink_request(&self, request: &str) -> Result<String> {
+    pub fn process_owllink_request(&mut self, request: &str) -> Result<String> {
         // Parse OWLlink XML request
         let parsed_request = self.parse_owllink_xml(request)?;
 

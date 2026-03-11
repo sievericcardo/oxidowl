@@ -44,13 +44,13 @@ pub struct IncrementalReasoningService {
     /// Incremental cache manager
     cache_manager: Arc<IncrementalCacheManager>,
     /// Query engine for advanced queries
-    query_engine: Option<Arc<Mutex<QueryEngine>>>,
+    query_engine: Option<Mutex<QueryEngine>>,
     /// Service configuration
     config: IncrementalConfig,
     /// Performance statistics
-    statistics: Arc<RwLock<IncrementalStatistics>>,
+    statistics: RwLock<IncrementalStatistics>,
     /// Last full reasoning timestamp
-    last_full_reasoning: Arc<RwLock<Option<Instant>>>,
+    last_full_reasoning: RwLock<Option<Instant>>,
 }
 
 impl IncrementalReasoningService {
@@ -98,14 +98,14 @@ impl IncrementalReasoningService {
             cache_manager,
             query_engine: None, // Will be set when needed
             config,
-            statistics: Arc::new(RwLock::new(IncrementalStatistics::default())),
-            last_full_reasoning: Arc::new(RwLock::new(None)),
+            statistics: RwLock::new(IncrementalStatistics::default()),
+            last_full_reasoning: RwLock::new(None),
         })
     }
 
     /// Set the advanced query engine for incremental query processing
-    pub fn set_query_engine(&mut self, query_engine: Arc<Mutex<QueryEngine>>) {
-        self.query_engine = Some(query_engine);
+    pub fn set_query_engine(&mut self, query_engine: QueryEngine) {
+        self.query_engine = Some(Mutex::new(query_engine));
     }
 
     // === Incremental Operations ===

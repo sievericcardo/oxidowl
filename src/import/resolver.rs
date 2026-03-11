@@ -6,7 +6,6 @@ use crate::{Error, Result};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::Arc,
 };
 use tokio::sync::RwLock;
 use url::Url;
@@ -15,9 +14,9 @@ use url::Url;
 #[derive(Debug)]
 pub struct ImportResolver {
     /// Mapping from IRIs to resolved locations
-    iri_mappings: Arc<RwLock<HashMap<String, String>>>,
+    iri_mappings: RwLock<HashMap<String, String>>,
     /// Cache of loaded ontologies
-    ontology_cache: Arc<RwLock<HashMap<String, CachedOntology>>>,
+    ontology_cache: RwLock<HashMap<String, CachedOntology>>,
     /// Base directories for relative imports
     base_directories: Vec<PathBuf>,
     /// Whether to allow remote imports
@@ -31,8 +30,8 @@ impl ImportResolver {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            iri_mappings: Arc::new(RwLock::new(HashMap::new())),
-            ontology_cache: Arc::new(RwLock::new(HashMap::new())),
+            iri_mappings: RwLock::new(HashMap::new()),
+            ontology_cache: RwLock::new(HashMap::new()),
             base_directories: vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))],
             allow_remote: true,
             max_depth: 10,

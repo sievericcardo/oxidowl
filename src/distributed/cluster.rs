@@ -7,8 +7,7 @@ use crate::distributed::{DistributedError, NodeAddress, NodeId};
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, Instant, interval, timeout};
 use uuid::Uuid;
 
@@ -235,26 +234,33 @@ pub struct ClusterStatistics {
     pub node_events: u64,
 }
 
-/// Main cluster manager implementation
+// ─── Actor message type ─────────────────────────────────────────────────────
+
+enum ClusterQueryMsg {
+    GetClusterState {
+        tx: oneshot::Sender<ClusterState>,
+    },
+    GetNodeInfo {
+        node_id: NodeId,
+        tx: oneshot::Sender<Option<NodeInfo>>,
+    },
+    GetActiveNodes {
+        tx: oneshot::Sender<Vec<NodeInfo>>,
+    },
+    GetClusterHealth {
+        tx: oneshot::Sender<ClusterHealth>,
+    },
+}
+
+/// Main cluster manager implementation — actor handle
+#[derive(Clone)]
 pub struct ClusterManager {
-    /// Cluster configuration
-    config: crate::distributed::ClusterConfig,
-
-    /// Current cluster state
-    state: Arc<RwLock<ClusterState>>,
-
-    /// Node health monitoring
-    health_monitor: Arc<Mutex<HealthMonitor>>,
-
-    /// Node discovery service
-    discovery_service: Arc<Mutex<DiscoveryService>>,
-
     /// Event channel for cluster events
     event_sender: mpsc::UnboundedSender<ClusterEvent>,
-    event_receiver: Arc<Mutex<mpsc::UnboundedReceiver<ClusterEvent>>>,
-
+    /// State query channel
+    query_tx: mpsc::Sender<ClusterQueryMsg>,
     /// Shutdown signal
-    shutdown_tx: Option<mpsc::Sender<()>>,
+    shutdown_tx: mpsc::Sender<()>,
 }
 
 /// Cluster events
@@ -280,7 +286,7 @@ pub enum ClusterEvent {
 }
 
 impl ClusterManager {
-    /// Create a new cluster manager
+    /// Create a new cluster manager — spawns the actor task immediately
     pub async fn new(config: crate::distributed::ClusterConfig) -> Result<Self> {
         let cluster_state = ClusterState {
             cluster_id: config.cluster_name.clone(),
@@ -311,79 +317,100 @@ impl ClusterManager {
             last_updated: Instant::now(),
         };
 
-        let (event_sender, event_receiver) = mpsc::unbounded_channel();
-
-        Ok(Self {
-            config: config.clone(),
-            state: Arc::new(RwLock::new(cluster_state)),
-            health_monitor: Arc::new(Mutex::new(HealthMonitor::new(config.clone()).await?)),
-            discovery_service: Arc::new(Mutex::new(DiscoveryService::new(config).await?)),
-            event_sender,
-            event_receiver: Arc::new(Mutex::new(event_receiver)),
-            shutdown_tx: None,
-        })
-    }
-
-    /// Start cluster manager services
-    pub async fn start(&mut self) -> Result<()> {
-        info!(
-            "Starting cluster manager for cluster: {}",
-            self.config.cluster_name
-        );
-
+        let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
+        let (query_tx, mut query_rx) = mpsc::channel::<ClusterQueryMsg>(64);
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        self.shutdown_tx = Some(shutdown_tx);
 
-        // Start discovery service
-        let discovery_service = self.discovery_service.clone();
-        let event_sender = self.event_sender.clone();
-        tokio::spawn(async move {
-            let mut discovery = discovery_service.lock().await;
-            if let Err(e) = discovery.start(event_sender).await {
-                error!("Discovery service failed: {e}");
-            }
-        });
+        let health_monitor = HealthMonitor::new(config.clone()).await?;
+        let discovery_service = DiscoveryService::new(config.clone()).await?;
+        let event_sender_clone = event_sender.clone();
 
-        // Start health monitoring
-        let health_monitor = self.health_monitor.clone();
-        let event_sender = self.event_sender.clone();
-        let state = self.state.clone();
         tokio::spawn(async move {
-            let mut monitor = health_monitor.lock().await;
-            if let Err(e) = monitor.start(event_sender, state).await {
-                error!("Health monitoring failed: {e}");
-            }
-        });
+            let mut state = cluster_state;
+            let mut health_monitor = health_monitor;
+            let mut discovery_service = discovery_service;
+            let mut health_interval = interval(Duration::from_secs(30));
+            let mut discovery_interval = interval(Duration::from_secs(60));
+            // Consume the immediate first ticks so monitoring starts after the first period
+            health_interval.tick().await;
+            discovery_interval.tick().await;
 
-        // Start event processing loop
-        let event_receiver = self.event_receiver.clone();
-        let state = self.state.clone();
-        tokio::spawn(async move {
-            let mut receiver = event_receiver.lock().await;
-            while let Some(event) = receiver.recv().await {
-                if let Err(e) = Self::process_cluster_event(&state, event).await {
-                    error!("Error processing cluster event: {e}");
+            loop {
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        info!("Cluster manager shutdown signal received");
+                        if let Err(e) = health_monitor.stop().await {
+                            error!("Health monitor stop error: {e}");
+                        }
+                        if let Err(e) = discovery_service.stop().await {
+                            error!("Discovery service stop error: {e}");
+                        }
+                        break;
+                    }
+                    Some(event) = event_receiver.recv() => {
+                        if let Err(e) = Self::process_cluster_event(&mut state, event).await {
+                            error!("Error processing cluster event: {e}");
+                        }
+                    }
+                    Some(msg) = query_rx.recv() => {
+                        Self::handle_cluster_query(&state, msg);
+                    }
+                    _ = health_interval.tick() => {
+                        if let Err(e) = HealthMonitor::perform_health_checks(&state, &event_sender_clone).await {
+                            error!("Health check failed: {e}");
+                        }
+                    }
+                    _ = discovery_interval.tick() => {
+                        if let Err(e) = DiscoveryService::discover_nodes(&config, &event_sender_clone).await {
+                            error!("Node discovery failed: {e}");
+                        }
+                    }
                 }
             }
         });
 
-        // Wait for shutdown signal
-        tokio::spawn(async move {
-            shutdown_rx.recv().await;
-            info!("Cluster manager shutdown signal received");
-        });
+        Ok(Self {
+            event_sender,
+            query_tx,
+            shutdown_tx,
+        })
+    }
 
-        info!("Cluster manager started successfully");
+    /// Handle a state query from the query channel
+    fn handle_cluster_query(state: &ClusterState, msg: ClusterQueryMsg) {
+        match msg {
+            ClusterQueryMsg::GetClusterState { tx } => {
+                let _ = tx.send(state.clone());
+            }
+            ClusterQueryMsg::GetNodeInfo { node_id, tx } => {
+                let _ = tx.send(state.nodes.get(&node_id).cloned());
+            }
+            ClusterQueryMsg::GetActiveNodes { tx } => {
+                let active: Vec<NodeInfo> = state
+                    .nodes
+                    .values()
+                    .filter(|n| n.status == NodeStatus::Active)
+                    .cloned()
+                    .collect();
+                let _ = tx.send(active);
+            }
+            ClusterQueryMsg::GetClusterHealth { tx } => {
+                let _ = tx.send(state.health.clone());
+            }
+        }
+    }
+
+    /// Start cluster manager services (no-op — actor starts in `new`)
+    pub async fn start(&self) -> Result<()> {
+        info!("Cluster manager started");
         Ok(())
     }
 
     /// Process cluster events
     async fn process_cluster_event(
-        state: &Arc<RwLock<ClusterState>>,
+        cluster_state: &mut ClusterState,
         event: ClusterEvent,
     ) -> Result<()> {
-        let mut cluster_state = state.write().await;
-
         match event {
             ClusterEvent::NodeJoined(node_info) => {
                 info!("Node joined cluster: {}", node_info.id);
@@ -428,7 +455,7 @@ impl ClusterManager {
             ClusterEvent::TopologyChanged => {
                 info!("Cluster topology changed");
                 // Recalculate cluster health and statistics
-                Self::update_cluster_health(&mut cluster_state);
+                Self::update_cluster_health(cluster_state);
             }
         }
 
@@ -436,8 +463,8 @@ impl ClusterManager {
         Ok(())
     }
 
-    /// Update cluster health based on node status
-    fn update_cluster_health(state: &mut ClusterState) {
+    /// Update cluster health metrics
+    pub(crate) fn update_cluster_health(state: &mut ClusterState) {
         let mut healthy = 0;
         let mut degraded = 0;
         let mut unhealthy = 0;
@@ -495,7 +522,7 @@ impl ClusterManager {
     }
 
     /// Add a node to the cluster
-    pub async fn add_node(&mut self, node_info: NodeInfo) -> Result<()> {
+    pub async fn add_node(&self, node_info: NodeInfo) -> Result<()> {
         let event = ClusterEvent::NodeJoined(node_info);
         self.event_sender.send(event).map_err(|e| {
             DistributedError::Cluster(format!("Failed to send node join event: {e}"))
@@ -504,7 +531,7 @@ impl ClusterManager {
     }
 
     /// Remove a node from the cluster
-    pub async fn remove_node(&mut self, node_id: NodeId) -> Result<()> {
+    pub async fn remove_node(&self, node_id: NodeId) -> Result<()> {
         let event = ClusterEvent::NodeLeft(node_id);
         self.event_sender.send(event).map_err(|e| {
             DistributedError::Cluster(format!("Failed to send node leave event: {e}"))
@@ -514,53 +541,67 @@ impl ClusterManager {
 
     /// Get current cluster state
     pub async fn get_cluster_state(&self) -> Result<ClusterState> {
-        let state = self.state.read().await;
-        Ok(state.clone())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(ClusterQueryMsg::GetClusterState { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "ClusterManager actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "ClusterManager did not respond".to_string(),
+        })
     }
 
     /// Get node information by ID
     pub async fn get_node_info(&self, node_id: NodeId) -> Result<Option<NodeInfo>> {
-        let state = self.state.read().await;
-        Ok(state.nodes.get(&node_id).cloned())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(ClusterQueryMsg::GetNodeInfo {
+                node_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "ClusterManager actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "ClusterManager did not respond".to_string(),
+        })
     }
 
     /// Get all active nodes
     pub async fn get_active_nodes(&self) -> Result<Vec<NodeInfo>> {
-        let state = self.state.read().await;
-        Ok(state
-            .nodes
-            .values()
-            .filter(|node| node.status == NodeStatus::Active)
-            .cloned()
-            .collect())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(ClusterQueryMsg::GetActiveNodes { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "ClusterManager actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "ClusterManager did not respond".to_string(),
+        })
     }
 
     /// Get cluster health information
     pub async fn get_cluster_health(&self) -> Result<ClusterHealth> {
-        let state = self.state.read().await;
-        Ok(state.health.clone())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(ClusterQueryMsg::GetClusterHealth { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "ClusterManager actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "ClusterManager did not respond".to_string(),
+        })
     }
 
     /// Stop cluster manager
-    pub async fn stop(&mut self) -> Result<()> {
+    pub async fn stop(&self) -> Result<()> {
         info!("Stopping cluster manager...");
-
-        if let Some(shutdown_tx) = self.shutdown_tx.take() {
-            let _ = shutdown_tx.send(()).await;
-        }
-
-        // Stop discovery service
-        {
-            let mut discovery = self.discovery_service.lock().await;
-            discovery.stop().await?;
-        }
-
-        // Stop health monitoring
-        {
-            let mut health_monitor = self.health_monitor.lock().await;
-            health_monitor.stop().await?;
-        }
-
+        let _ = self.shutdown_tx.send(()).await;
         info!("Cluster manager stopped successfully");
         Ok(())
     }
@@ -568,6 +609,7 @@ impl ClusterManager {
 
 /// Health monitoring service
 pub struct HealthMonitor {
+    #[allow(dead_code)]
     config: crate::distributed::ClusterConfig,
     monitoring_tasks: HashMap<NodeId, tokio::task::JoinHandle<()>>,
     shutdown_tx: Option<mpsc::Sender<()>>,
@@ -583,49 +625,21 @@ impl HealthMonitor {
         })
     }
 
-    /// Start health monitoring
+    /// Start health monitoring (no-op — managed by ClusterManager actor)
     pub async fn start(
         &mut self,
-        event_sender: mpsc::UnboundedSender<ClusterEvent>,
-        state: Arc<RwLock<ClusterState>>,
+        _event_sender: mpsc::UnboundedSender<ClusterEvent>,
     ) -> Result<()> {
         info!("Starting cluster health monitoring");
-
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        self.shutdown_tx = Some(shutdown_tx);
-
-        // Start periodic health check task
-        let _config = self.config.clone();
-        tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(30)); // 30-second health checks
-
-            loop {
-                tokio::select! {
-                    _ = interval.tick() => {
-                        if let Err(e) = Self::perform_health_checks(&state, &event_sender).await {
-                            error!("Health check failed: {e}");
-                        }
-                    }
-                    _ = shutdown_rx.recv() => {
-                        info!("Health monitoring shutdown");
-                        break;
-                    }
-                }
-            }
-        });
-
         Ok(())
     }
 
     /// Perform health checks on all nodes
-    async fn perform_health_checks(
-        state: &Arc<RwLock<ClusterState>>,
+    pub(crate) async fn perform_health_checks(
+        state: &ClusterState,
         event_sender: &mpsc::UnboundedSender<ClusterEvent>,
     ) -> Result<()> {
-        let nodes = {
-            let cluster_state = state.read().await;
-            cluster_state.nodes.clone()
-        };
+        let nodes = state.nodes.clone();
 
         for (node_id, node_info) in nodes {
             // Skip health check for failed nodes

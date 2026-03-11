@@ -6,15 +6,62 @@
 use super::{ClusterConfig, ConsensusAlgorithm, NodeId};
 use crate::prelude::*;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
 
-/// Cluster coordinator for managing distributed consensus and synchronization
+// ─── Actor message type ──────────────────────────────────────────────────────────
+
+enum CoordinatorMsg {
+    AcquireLock {
+        lock_id: String,
+        node_id: NodeId,
+        timeout: Duration,
+        tx: oneshot::Sender<Result<bool>>,
+    },
+    ReleaseLock {
+        lock_id: String,
+        node_id: NodeId,
+        tx: oneshot::Sender<Result<bool>>,
+    },
+    GetLeader {
+        tx: oneshot::Sender<Result<Option<NodeId>>>,
+    },
+    SetLeader {
+        leader_id: Option<NodeId>,
+        tx: oneshot::Sender<Result<()>>,
+    },
+    IsLeader {
+        node_id: NodeId,
+        tx: oneshot::Sender<Result<bool>>,
+    },
+    GetConsensusState {
+        tx: oneshot::Sender<Result<ConsensusProtocol>>,
+    },
+    UpdateConsensusState {
+        state: ConsensusProtocol,
+        tx: oneshot::Sender<Result<()>>,
+    },
+    AddParticipant {
+        node_id: NodeId,
+        tx: oneshot::Sender<Result<()>>,
+    },
+    RemoveParticipant {
+        node_id: NodeId,
+        tx: oneshot::Sender<Result<()>>,
+    },
+    HasQuorum {
+        tx: oneshot::Sender<Result<bool>>,
+    },
+    IncrementTerm {
+        tx: oneshot::Sender<Result<u64>>,
+    },
+    Shutdown,
+}
+
+/// Cluster coordinator for managing distributed consensus and synchronization — actor handle
+#[derive(Clone)]
 pub struct ClusterCoordinator {
-    config: ClusterConfig,
-    leader: Arc<RwLock<Option<NodeId>>>,
-    locks: Arc<Mutex<HashMap<String, DistributedLock>>>,
-    consensus: Arc<RwLock<ConsensusProtocol>>,
+    tx: mpsc::Sender<CoordinatorMsg>,
 }
 
 /// Distributed lock for coordinating access to shared resources
@@ -53,7 +100,7 @@ pub struct ConsensusProtocol {
 }
 
 impl ClusterCoordinator {
-    /// Create a new cluster coordinator
+    /// Create a new cluster coordinator — spawns the actor task immediately
     pub async fn new(config: ClusterConfig) -> Result<Self> {
         let consensus = ConsensusProtocol {
             algorithm: config.consensus.algorithm.clone(),
@@ -63,17 +110,151 @@ impl ClusterCoordinator {
             quorum_size: Self::calculate_quorum_size(&config),
         };
 
-        Ok(Self {
-            config,
-            leader: Arc::new(RwLock::new(None)),
-            locks: Arc::new(Mutex::new(HashMap::new())),
-            consensus: Arc::new(RwLock::new(consensus)),
-        })
+        // Log initial consensus setup
+        match config.consensus.algorithm {
+            ConsensusAlgorithm::Raft => info!("Starting Raft consensus protocol"),
+            ConsensusAlgorithm::LeaderElection => info!("Starting leader election"),
+            ConsensusAlgorithm::None => {
+                info!("Running in single-node mode, no consensus protocol")
+            }
+        }
+
+        let (tx, mut rx) = mpsc::channel::<CoordinatorMsg>(64);
+        tokio::spawn(async move {
+            let mut leader: Option<NodeId> = None;
+            let mut locks: HashMap<String, DistributedLock> = HashMap::new();
+            let mut consensus = consensus;
+
+            loop {
+                match rx.recv().await {
+                    Some(CoordinatorMsg::AcquireLock {
+                        lock_id,
+                        node_id,
+                        timeout,
+                        tx,
+                    }) => {
+                        let result = {
+                            if let Some(existing) = locks.get(&lock_id) {
+                                if let Some(holder) = existing.holder {
+                                    if existing.acquired_at.elapsed() < existing.timeout {
+                                        Ok(false) // still held
+                                    } else {
+                                        debug!("Lock {lock_id} expired for holder {holder:?}");
+                                        locks.insert(
+                                            lock_id.clone(),
+                                            DistributedLock {
+                                                lock_id: lock_id.clone(),
+                                                holder: Some(node_id),
+                                                acquired_at: std::time::Instant::now(),
+                                                timeout,
+                                            },
+                                        );
+                                        info!("Lock {lock_id} acquired by node {node_id:?}");
+                                        Ok(true)
+                                    }
+                                } else {
+                                    locks.insert(
+                                        lock_id.clone(),
+                                        DistributedLock {
+                                            lock_id: lock_id.clone(),
+                                            holder: Some(node_id),
+                                            acquired_at: std::time::Instant::now(),
+                                            timeout,
+                                        },
+                                    );
+                                    info!("Lock {lock_id} acquired by node {node_id:?}");
+                                    Ok(true)
+                                }
+                            } else {
+                                locks.insert(
+                                    lock_id.clone(),
+                                    DistributedLock {
+                                        lock_id: lock_id.clone(),
+                                        holder: Some(node_id),
+                                        acquired_at: std::time::Instant::now(),
+                                        timeout,
+                                    },
+                                );
+                                info!("Lock {lock_id} acquired by node {node_id:?}");
+                                Ok(true)
+                            }
+                        };
+                        let _ = tx.send(result);
+                    }
+                    Some(CoordinatorMsg::ReleaseLock {
+                        lock_id,
+                        node_id,
+                        tx,
+                    }) => {
+                        let result = if let Some(lock) = locks.get(&lock_id) {
+                            if lock.holder == Some(node_id) {
+                                locks.remove(&lock_id);
+                                info!("Lock {lock_id} released by node {node_id:?}");
+                                Ok(true)
+                            } else {
+                                warn!(
+                                    "Node {:?} attempted to release lock {} held by {:?}",
+                                    node_id, lock_id, lock.holder
+                                );
+                                Ok(false)
+                            }
+                        } else {
+                            Ok(false)
+                        };
+                        let _ = tx.send(result);
+                    }
+                    Some(CoordinatorMsg::GetLeader { tx }) => {
+                        let _ = tx.send(Ok(leader));
+                    }
+                    Some(CoordinatorMsg::SetLeader { leader_id, tx }) => {
+                        leader = leader_id;
+                        if let Some(id) = leader_id {
+                            info!("Leader set to node {id:?}");
+                        } else {
+                            info!("Leader cleared (no leader)");
+                        }
+                        let _ = tx.send(Ok(()));
+                    }
+                    Some(CoordinatorMsg::IsLeader { node_id, tx }) => {
+                        let _ = tx.send(Ok(leader == Some(node_id)));
+                    }
+                    Some(CoordinatorMsg::GetConsensusState { tx }) => {
+                        let _ = tx.send(Ok(consensus.clone()));
+                    }
+                    Some(CoordinatorMsg::UpdateConsensusState { state, tx }) => {
+                        consensus = state;
+                        let _ = tx.send(Ok(()));
+                    }
+                    Some(CoordinatorMsg::AddParticipant { node_id, tx }) => {
+                        if !consensus.participants.contains(&node_id) {
+                            consensus.participants.push(node_id);
+                            info!("Added node {node_id:?} to consensus participants");
+                        }
+                        let _ = tx.send(Ok(()));
+                    }
+                    Some(CoordinatorMsg::RemoveParticipant { node_id, tx }) => {
+                        consensus.participants.retain(|&id| id != node_id);
+                        info!("Removed node {node_id:?} from consensus participants");
+                        let _ = tx.send(Ok(()));
+                    }
+                    Some(CoordinatorMsg::HasQuorum { tx }) => {
+                        let _ = tx.send(Ok(consensus.participants.len() >= consensus.quorum_size));
+                    }
+                    Some(CoordinatorMsg::IncrementTerm { tx }) => {
+                        consensus.term += 1;
+                        info!("Consensus term incremented to {}", consensus.term);
+                        let _ = tx.send(Ok(consensus.term));
+                    }
+                    Some(CoordinatorMsg::Shutdown) | None => break,
+                }
+            }
+        });
+
+        Ok(Self { tx })
     }
 
     /// Calculate quorum size based on cluster configuration
     fn calculate_quorum_size(config: &ClusterConfig) -> usize {
-        // For Raft: majority (n/2 + 1)
         match config.consensus.algorithm {
             ConsensusAlgorithm::Raft => {
                 let n = config.consensus.min_cluster_size;
@@ -84,53 +265,16 @@ impl ClusterCoordinator {
         }
     }
 
-    /// Start the cluster coordinator
-    pub async fn start(&mut self) -> Result<()> {
+    /// Start the cluster coordinator (no-op — actor starts in `new`)
+    pub async fn start(&self) -> Result<()> {
         info!("Cluster coordinator started");
-
-        // Initialize consensus protocol
-        match self.config.consensus.algorithm {
-            ConsensusAlgorithm::Raft => {
-                self.start_raft_protocol().await?;
-            }
-            ConsensusAlgorithm::LeaderElection => {
-                self.start_leader_election().await?;
-            }
-            ConsensusAlgorithm::None => {
-                // Single node, no consensus needed
-                info!("Running in single-node mode, no consensus protocol");
-            }
-        }
-
         Ok(())
     }
 
     /// Stop the cluster coordinator
-    pub async fn stop(&mut self) -> Result<()> {
+    pub async fn stop(&self) -> Result<()> {
+        let _ = self.tx.send(CoordinatorMsg::Shutdown).await;
         info!("Cluster coordinator stopped");
-
-        // Release all locks
-        let mut locks = self.locks.lock().await;
-        locks.clear();
-
-        Ok(())
-    }
-
-    /// Start Raft consensus protocol
-    async fn start_raft_protocol(&self) -> Result<()> {
-        info!("Starting Raft consensus protocol");
-        // Implementation would include:
-        // - Leader election
-        // - Log replication
-        // - Heartbeat monitoring
-        // For now, this is a stub
-        Ok(())
-    }
-
-    /// Start simple leader election
-    async fn start_leader_election(&self) -> Result<()> {
-        info!("Starting leader election");
-        // Simple leader election implementation
         Ok(())
     }
 
@@ -141,125 +285,180 @@ impl ClusterCoordinator {
         node_id: NodeId,
         timeout: std::time::Duration,
     ) -> Result<bool> {
-        let mut locks = self.locks.lock().await;
-
-        // Check if lock exists and is held
-        if let Some(existing_lock) = locks.get(&lock_id)
-            && let Some(holder) = existing_lock.holder
-        {
-            // Check if lock has expired
-            if existing_lock.acquired_at.elapsed() < existing_lock.timeout {
-                // Lock is still held
-                return Ok(false);
-            }
-            // Lock expired, can be acquired
-            debug!("Lock {lock_id} expired for holder {holder:?}");
-        }
-
-        // Acquire the lock
-        let lock = DistributedLock {
-            lock_id: lock_id.clone(),
-            holder: Some(node_id),
-            acquired_at: std::time::Instant::now(),
-            timeout,
-        };
-
-        locks.insert(lock_id.clone(), lock);
-        info!("Lock {lock_id} acquired by node {node_id:?}");
-        Ok(true)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::AcquireLock {
+                lock_id,
+                node_id,
+                timeout,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Release a distributed lock
     pub async fn release_lock(&self, lock_id: String, node_id: NodeId) -> Result<bool> {
-        let mut locks = self.locks.lock().await;
-
-        if let Some(lock) = locks.get(&lock_id) {
-            if lock.holder == Some(node_id) {
-                locks.remove(&lock_id);
-                info!("Lock {lock_id} released by node {node_id:?}");
-                return Ok(true);
-            } else {
-                warn!(
-                    "Node {:?} attempted to release lock {} held by {:?}",
-                    node_id, lock_id, lock.holder
-                );
-                return Ok(false);
-            }
-        }
-
-        // Lock doesn't exist or already released
-        Ok(false)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::ReleaseLock {
+                lock_id,
+                node_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Get current leader node
     pub async fn get_leader(&self) -> Result<Option<NodeId>> {
-        let leader = self.leader.read().await;
-        Ok(*leader)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::GetLeader { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
-    /// Set leader node (used by consensus protocol)
+    /// Set leader node
     pub async fn set_leader(&self, leader_id: Option<NodeId>) -> Result<()> {
-        let mut leader = self.leader.write().await;
-        *leader = leader_id;
-
-        if let Some(id) = leader_id {
-            info!("Leader set to node {id:?}");
-        } else {
-            info!("Leader cleared (no leader)");
-        }
-
-        Ok(())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::SetLeader {
+                leader_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Check if this node is the leader
     pub async fn is_leader(&self, node_id: NodeId) -> Result<bool> {
-        let leader = self.leader.read().await;
-        Ok(*leader == Some(node_id))
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::IsLeader {
+                node_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Get consensus state
     pub async fn get_consensus_state(&self) -> Result<ConsensusProtocol> {
-        let consensus = self.consensus.read().await;
-        Ok(consensus.clone())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::GetConsensusState { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Update consensus state
     pub async fn update_consensus_state(&self, new_state: ConsensusProtocol) -> Result<()> {
-        let mut consensus = self.consensus.write().await;
-        *consensus = new_state;
-        Ok(())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::UpdateConsensusState {
+                state: new_state,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Add node to consensus participants
     pub async fn add_participant(&self, node_id: NodeId) -> Result<()> {
-        let mut consensus = self.consensus.write().await;
-        if !consensus.participants.contains(&node_id) {
-            consensus.participants.push(node_id);
-            info!("Added node {node_id:?} to consensus participants");
-        }
-        Ok(())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::AddParticipant {
+                node_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Remove node from consensus participants
     pub async fn remove_participant(&self, node_id: NodeId) -> Result<()> {
-        let mut consensus = self.consensus.write().await;
-        consensus.participants.retain(|&id| id != node_id);
-        info!("Removed node {node_id:?} from consensus participants");
-        Ok(())
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::RemoveParticipant {
+                node_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Check if quorum is available
     pub async fn has_quorum(&self) -> Result<bool> {
-        let consensus = self.consensus.read().await;
-        Ok(consensus.participants.len() >= consensus.quorum_size)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::HasQuorum { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 
     /// Increment consensus term
     pub async fn increment_term(&self) -> Result<u64> {
-        let mut consensus = self.consensus.write().await;
-        consensus.term += 1;
-        info!("Consensus term incremented to {}", consensus.term);
-        Ok(consensus.term)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(CoordinatorMsg::IncrementTerm { tx: resp_tx })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "Coordinator actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "Coordinator did not respond".to_string(),
+        })?
     }
 }
 
