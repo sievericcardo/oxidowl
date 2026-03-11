@@ -30,7 +30,7 @@ pub enum OWL2Profile {
     /// OWL 2 QL - Query Language
     /// Optimized for query answering
     QL,
-    /// OWL 2 RL - Rule Language  
+    /// OWL 2 RL - Rule Language\
     /// Optimized for rule-based reasoning
     RL,
     /// OWL 2 DL - Description Logic

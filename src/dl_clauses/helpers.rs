@@ -359,21 +359,18 @@ impl HelperMethods for super::generator::DLClauseGenerator {
         range: &DataRange,
         variable: &str,
     ) -> Result<DLAtom> {
-        match range {
-            DataRange::Datatype(dt) => {
-                let datatype_str = format!("{dt}");
-                Ok(DLAtom::new(
-                    format!("{datatype_str}({variable})"),
-                    vec![variable.to_string()],
-                ))
-            }
-            _ => {
-                let range_string = self.data_range_to_string(range);
-                Ok(DLAtom::new(
-                    format!("{range_string}({variable})"),
-                    vec![variable.to_string()],
-                ))
-            }
+        if let DataRange::Datatype(dt) = range {
+            let datatype_str = format!("{dt}");
+            Ok(DLAtom::new(
+                format!("{datatype_str}({variable})"),
+                vec![variable.to_string()],
+            ))
+        } else {
+            let range_string = self.data_range_to_string(range);
+            Ok(DLAtom::new(
+                format!("{range_string}({variable})"),
+                vec![variable.to_string()],
+            ))
         }
     }
 
@@ -512,9 +509,8 @@ impl super::generator::DLClauseGenerator {
                 let local_name = &iri_str[namespace.len()..];
                 if prefix.is_empty() {
                     return local_name.to_string();
-                } else {
-                    return format!("{prefix}:{local_name}");
                 }
+                return format!("{prefix}:{local_name}");
             }
         }
 
@@ -540,9 +536,8 @@ impl super::generator::DLClauseGenerator {
                 let local_name = &url_str[namespace.len()..];
                 if prefix.is_empty() {
                     return local_name.to_string();
-                } else {
-                    return format!("{prefix}:{local_name}");
                 }
+                return format!("{prefix}:{local_name}");
             }
         }
 

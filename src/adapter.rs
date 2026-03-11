@@ -246,7 +246,7 @@ impl HornedOwlAdapter {
             HInd::Named(named) => self.convert_named_individual(named),
             HInd::Anonymous(anon) => {
                 // For anonymous individuals, use a debug representation
-                let anon_id = format!("_:{:?}", anon);
+                let anon_id = format!("_:{anon:?}");
                 Ok(crate::ontology::Individual::anonymous(anon_id))
             }
         }
@@ -460,21 +460,20 @@ impl HornedOwlAdapter {
         let rdf_object_term = RdfTerm::iri("http://www.w3.org/1999/02/22-rdf-syntax-ns#object")?;
 
         // Extract Urls for comparison
-        let (rdf_type, rdf_statement, rdf_subject, rdf_predicate, rdf_object) = match (
+        let (
+            RdfTerm::Iri(rdf_type),
+            RdfTerm::Iri(rdf_statement),
+            RdfTerm::Iri(rdf_subject),
+            RdfTerm::Iri(rdf_predicate),
+            RdfTerm::Iri(rdf_object),
+        ) = (
             &rdf_type_term,
             &rdf_statement_term,
             &rdf_subject_term,
             &rdf_predicate_term,
             &rdf_object_term,
-        ) {
-            (
-                RdfTerm::Iri(t),
-                RdfTerm::Iri(s),
-                RdfTerm::Iri(sub),
-                RdfTerm::Iri(pred),
-                RdfTerm::Iri(obj),
-            ) => (t, s, sub, pred, obj),
-            _ => unreachable!("RdfTerm::iri always returns Iri variant"),
+        ) else {
+            unreachable!("RdfTerm::iri always returns Iri variant")
         };
 
         // Step 1: Find all blank nodes that are rdf:Statements

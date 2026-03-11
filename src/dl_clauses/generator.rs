@@ -323,7 +323,7 @@ impl DLClauseGenerator {
     /// Add prefix from IRI
     fn add_prefix_from_iri(&mut self, iri: &str) {
         if let Some(hash_pos) = iri.rfind('#') {
-            let base = &iri[..hash_pos + 1];
+            let base = &iri[..=hash_pos];
             if !self.prefixes.values().any(|v| v == base) {
                 let prefix_name = format!("ns{}", self.prefixes.len());
                 self.prefixes.insert(prefix_name, base.to_string());

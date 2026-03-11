@@ -771,7 +771,7 @@ fn parse_inverse_functional_object_property(element: &roxmltree::Node) -> Result
 }
 
 /// Parse a `HasKey` element
-fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Result<Axiom> {
+fn parse_has_key(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
         .filter(roxmltree::Node::is_element)
@@ -782,7 +782,7 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
     }
 
     // First child should be the class
-    let class = parse_class_expression(&children[0], _base_iri)?;
+    let class = parse_class_expression(&children[0], base_iri)?;
 
     let mut object_properties = Vec::new();
     let mut data_properties = Vec::new();

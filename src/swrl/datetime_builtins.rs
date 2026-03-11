@@ -342,7 +342,7 @@ impl SWRLBuiltIn for YearFromDateTimeBuiltIn {
                 }
                 _ => {
                     // Return the extracted year
-                    Ok(SWRLValue::Integer(year as i64))
+                    Ok(SWRLValue::Integer(i64::from(year)))
                 }
             }
         } else {
@@ -546,7 +546,7 @@ impl SWRLBuiltIn for MonthFromDateTimeBuiltIn {
                         Err(Error::reasoning("Expected numeric month value"))
                     }
                 }
-                _ => Ok(SWRLValue::Integer(month as i64)),
+                _ => Ok(SWRLValue::Integer(i64::from(month))),
             }
         } else {
             Err(Error::reasoning("Cannot extract month from temporal value"))
@@ -586,7 +586,7 @@ impl SWRLBuiltIn for DayFromDateTimeBuiltIn {
                         Err(Error::reasoning("Expected numeric day value"))
                     }
                 }
-                _ => Ok(SWRLValue::Integer(day as i64)),
+                _ => Ok(SWRLValue::Integer(i64::from(day))),
             }
         } else {
             Err(Error::reasoning("Cannot extract day from temporal value"))
@@ -626,7 +626,7 @@ impl SWRLBuiltIn for HourFromDateTimeBuiltIn {
                         Err(Error::reasoning("Expected numeric hour value"))
                     }
                 }
-                _ => Ok(SWRLValue::Integer(hour as i64)),
+                _ => Ok(SWRLValue::Integer(i64::from(hour))),
             }
         } else {
             Err(Error::reasoning("Cannot extract hour from temporal value"))
@@ -666,7 +666,7 @@ impl SWRLBuiltIn for MinuteFromDateTimeBuiltIn {
                         Err(Error::reasoning("Expected numeric minute value"))
                     }
                 }
-                _ => Ok(SWRLValue::Integer(minute as i64)),
+                _ => Ok(SWRLValue::Integer(i64::from(minute))),
             }
         } else {
             Err(Error::reasoning(
@@ -708,7 +708,7 @@ impl SWRLBuiltIn for SecondFromDateTimeBuiltIn {
                         Err(Error::reasoning("Expected numeric second value"))
                     }
                 }
-                _ => Ok(SWRLValue::Integer(second as i64)),
+                _ => Ok(SWRLValue::Integer(i64::from(second))),
             }
         } else {
             Err(Error::reasoning(
@@ -939,7 +939,7 @@ impl SWRLBuiltIn for SubtractTimesYieldingDayTimeDurationBuiltIn {
             (TemporalValue::Time(t1), TemporalValue::Time(t2)) => {
                 let t1_seconds = t1.hour() * 3600 + t1.minute() * 60 + t1.second();
                 let t2_seconds = t2.hour() * 3600 + t2.minute() * 60 + t2.second();
-                (t1_seconds as i64) - (t2_seconds as i64)
+                i64::from(t1_seconds) - i64::from(t2_seconds)
             }
             _ => return Err(crate::Error::reasoning("Both arguments must be times")),
         };

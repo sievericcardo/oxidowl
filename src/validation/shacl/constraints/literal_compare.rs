@@ -31,11 +31,11 @@ pub fn compare_terms(a: &RdfTerm, b: &RdfTerm) -> Option<Ordering> {
         ) => {
             let dta_str = dta
                 .as_ref()
-                .map(|u| u.as_str())
+                .map(url::Url::as_str)
                 .unwrap_or(XSD_STRING_FALLBACK);
             let dtb_str = dtb
                 .as_ref()
-                .map(|u| u.as_str())
+                .map(url::Url::as_str)
                 .unwrap_or(XSD_STRING_FALLBACK);
 
             // Both plain string literals without types → compare as strings

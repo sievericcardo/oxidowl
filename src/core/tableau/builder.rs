@@ -211,59 +211,56 @@ impl TableauBuilder {
 
             // Queue appropriate rules for each initial concept
             for concept in &self.initial_concepts {
-                match &concept {
-                    ConceptLabel::Complex(class_expr) => {
-                        let rule = match class_expr.as_ref() {
-                            ClassExpression::ObjectIntersectionOf(_) => Some(CompletionRule::And),
-                            ClassExpression::ObjectUnionOf(_) => Some(CompletionRule::Or),
-                            ClassExpression::ObjectSomeValuesFrom { .. } => {
-                                Some(CompletionRule::Some)
-                            }
-                            ClassExpression::ObjectAllValuesFrom { .. } => {
-                                Some(CompletionRule::All)
-                            }
-                            ClassExpression::ObjectMinCardinality { .. } => {
-                                Some(CompletionRule::AtLeast)
-                            }
-                            ClassExpression::ObjectMaxCardinality { .. } => {
-                                Some(CompletionRule::AtMost)
-                            }
-                            ClassExpression::ObjectOneOf(_) => Some(CompletionRule::Nominal),
-                            ClassExpression::ObjectHasSelf { .. } => Some(CompletionRule::Self_),
-                            ClassExpression::DataSomeValuesFrom { .. } => {
-                                Some(CompletionRule::Datatype)
-                            }
-                            ClassExpression::DataAllValuesFrom { .. } => {
-                                Some(CompletionRule::Datatype)
-                            }
-                            ClassExpression::DataHasValue { .. } => Some(CompletionRule::Datatype),
-                            _ => None,
+                if let ConceptLabel::Complex(class_expr) = &concept {
+                    let rule = match class_expr.as_ref() {
+                        ClassExpression::ObjectIntersectionOf(_) => Some(CompletionRule::And),
+                        ClassExpression::ObjectUnionOf(_) => Some(CompletionRule::Or),
+                        ClassExpression::ObjectSomeValuesFrom { .. } => {
+                            Some(CompletionRule::Some)
+                        }
+                        ClassExpression::ObjectAllValuesFrom { .. } => {
+                            Some(CompletionRule::All)
+                        }
+                        ClassExpression::ObjectMinCardinality { .. } => {
+                            Some(CompletionRule::AtLeast)
+                        }
+                        ClassExpression::ObjectMaxCardinality { .. } => {
+                            Some(CompletionRule::AtMost)
+                        }
+                        ClassExpression::ObjectOneOf(_) => Some(CompletionRule::Nominal),
+                        ClassExpression::ObjectHasSelf { .. } => Some(CompletionRule::Self_),
+                        ClassExpression::DataSomeValuesFrom { .. } => {
+                            Some(CompletionRule::Datatype)
+                        }
+                        ClassExpression::DataAllValuesFrom { .. } => {
+                            Some(CompletionRule::Datatype)
+                        }
+                        ClassExpression::DataHasValue { .. } => Some(CompletionRule::Datatype),
+                        _ => None,
+                    };
+
+                    if let Some(rule) = rule {
+                        let priority = match rule {
+                            CompletionRule::And | CompletionRule::All => RulePriority::High,
+                            CompletionRule::Or | CompletionRule::Choose => RulePriority::Low,
+                            _ => RulePriority::Normal,
                         };
 
-                        if let Some(rule) = rule {
-                            let priority = match rule {
-                                CompletionRule::And | CompletionRule::All => RulePriority::High,
-                                CompletionRule::Or | CompletionRule::Choose => RulePriority::Low,
-                                _ => RulePriority::Normal,
-                            };
-
-                            let rule_app = RuleApplication {
-                                rule,
-                                node: root_id.to_string(),
-                                context: RuleContext::Concept {
-                                    concept: class_expr.as_ref().clone(),
-                                    dependencies: Arc::new(DependencySet::new()),
-                                },
-                                priority,
+                        let rule_app = RuleApplication {
+                            rule,
+                            node: root_id.to_string(),
+                            context: RuleContext::Concept {
+                                concept: class_expr.as_ref().clone(),
                                 dependencies: Arc::new(DependencySet::new()),
-                            };
+                            },
+                            priority,
+                            dependencies: Arc::new(DependencySet::new()),
+                        };
 
-                            tableau.pending_queue.push_back(rule_app);
-                        }
+                        tableau.pending_queue.push_back(rule_app);
                     }
-                    _ => {
-                        // Atomic concepts and other simple labels don't need rules
-                    }
+                } else {
+                    // Atomic concepts and other simple labels don't need rules
                 }
             }
         }

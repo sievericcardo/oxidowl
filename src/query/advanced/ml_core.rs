@@ -859,9 +859,8 @@ impl QueryFeatureExtractor {
         // Estimate based on query hash and history
         let query_hash = self.calculate_query_hash(query);
 
-        let history = match self.query_history.read() {
-            Ok(h) => h,
-            Err(_) => return 0.5, // Default if lock fails
+        let Ok(history) = self.query_history.read() else {
+            return 0.5; // Default if lock fails
         };
 
         // Count how many times similar queries appeared
@@ -1124,13 +1123,13 @@ impl CostPrediction {
     #[must_use]
     pub fn baseline(features: &QueryFeatures) -> Self {
         // Simple heuristic-based prediction
-        let execution_time = (features.atom_count as f64 * features.ontology_size as f64)
+        let execution_time = (f64::from(features.atom_count) * f64::from(features.ontology_size))
             .ln()
             .max(0.1);
 
         Self {
             execution_time,
-            memory_usage: features.ontology_size as f64 * 0.001, // 1KB per axiom estimate
+            memory_usage: f64::from(features.ontology_size) * 0.001, // 1KB per axiom estimate
             confidence: 0.5,                                     // Low confidence for baseline
         }
     }
@@ -1843,6 +1842,7 @@ impl StrategySelectionModel {
         }
 
         // Chain pattern: moderate join count, linear structure
+        #[allow(clippy::float_cmp)]
         if features.join_count >= 2.0
             && features.join_count <= 5.0
             && features.variable_count == features.join_count + 1.0
@@ -1866,8 +1866,8 @@ impl StrategySelectionModel {
 
     /// Estimate result size
     fn estimate_result_size(&self, features: &QueryFeatures) -> f64 {
-        let base_size = features.ontology_size as f64;
-        let selectivity = features.selectivity_estimate as f64;
+        let base_size = f64::from(features.ontology_size);
+        let selectivity = f64::from(features.selectivity_estimate);
         let join_factor = 0.1_f64.powi(features.join_count as i32);
 
         base_size * selectivity * join_factor

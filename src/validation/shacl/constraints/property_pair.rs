@@ -189,7 +189,7 @@ fn compare_pairs(
     for a in values {
         for b in &other_values {
             let ord = compare_terms(a, b);
-            let passes = ord.map(|o| check(o)).unwrap_or(false);
+            let passes = ord.map(&check).unwrap_or(false);
             if !passes {
                 out.push(make_result(
                     focus_node,

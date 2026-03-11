@@ -356,11 +356,10 @@ impl ReasoningActor {
             .is_enabled(CacheFeature::Satisfiability)
         {
             let ont_opt = self.reasoner.get_ontology().cloned();
-            if let Some(ont) = ont_opt {
-                if let Some(result) = self.cache_manager.get_consistency_result(&ont) {
+            if let Some(ont) = ont_opt
+                && let Some(result) = self.cache_manager.get_consistency_result(&ont) {
                     return Ok(result);
                 }
-            }
         }
 
         log::info!("Executing SWRL rules before consistency check");
@@ -379,13 +378,12 @@ impl ReasoningActor {
             }
         }
 
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
+        if let Some(timeout) = self.config.reasoning.timeout
+            && start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Consistency check timed out".into(),
                 });
             }
-        }
 
         log::info!("Consistency check completed in {:?}", start.elapsed());
         Ok(result)
@@ -398,11 +396,9 @@ impl ReasoningActor {
             .config
             .cache
             .is_enabled(CacheFeature::Satisfiability)
-        {
-            if let Some(result) = self.cache_manager.get_satisfiability_result(expression) {
+            && let Some(result) = self.cache_manager.get_satisfiability_result(expression) {
                 return Ok(result);
             }
-        }
 
         let result = self.reasoner.is_class_satisfiable(expression)?;
 
@@ -415,13 +411,12 @@ impl ReasoningActor {
                 .cache_satisfiability_result(expression.clone(), result);
         }
 
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
+        if let Some(timeout) = self.config.reasoning.timeout
+            && start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Satisfiability check timed out".into(),
                 });
             }
-        }
 
         log::info!("Satisfiability check completed in {:?}", start.elapsed());
         Ok(result)
@@ -438,11 +433,9 @@ impl ReasoningActor {
             .config
             .cache
             .is_enabled(CacheFeature::Satisfiability)
-        {
-            if let Some(result) = self.cache_manager.get_subsumption_result(subclass, superclass) {
+            && let Some(result) = self.cache_manager.get_subsumption_result(subclass, superclass) {
                 return Ok(result);
             }
-        }
 
         let result = self.reasoner.is_subsumed_by(subclass, superclass)?;
 
@@ -455,13 +448,12 @@ impl ReasoningActor {
                 .cache_subsumption_result(subclass.clone(), superclass.clone(), result);
         }
 
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
+        if let Some(timeout) = self.config.reasoning.timeout
+            && start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Subsumption check timed out".into(),
                 });
             }
-        }
 
         log::info!("Subsumption check completed in {:?}", start.elapsed());
         Ok(result)
@@ -584,12 +576,11 @@ impl ReasoningActor {
             .is_enabled(CacheFeature::Satisfiability)
         {
             let ont_opt = self.reasoner.get_ontology().cloned();
-            if let Some(ont) = ont_opt {
-                if let Some(cached) = self.cache_manager.get_classification_result(&ont) {
+            if let Some(ont) = ont_opt
+                && let Some(cached) = self.cache_manager.get_classification_result(&ont) {
                     log::info!("Classification (cached) completed in {:?}", start.elapsed());
                     return Ok(cached);
                 }
-            }
         }
 
         log::info!("Executing SWRL rules before classification");
@@ -597,13 +588,12 @@ impl ReasoningActor {
 
         let result = self.reasoner.classify()?;
 
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
+        if let Some(timeout) = self.config.reasoning.timeout
+            && start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Classification timed out".into(),
                 });
             }
-        }
 
         if self
             .config
@@ -630,12 +620,11 @@ impl ReasoningActor {
             .is_enabled(CacheFeature::Satisfiability)
         {
             let ont_opt = self.reasoner.get_ontology().cloned();
-            if let Some(ont) = ont_opt {
-                if let Some(cached) = self.cache_manager.get_realization_result(&ont) {
+            if let Some(ont) = ont_opt
+                && let Some(cached) = self.cache_manager.get_realization_result(&ont) {
                     log::info!("Realization (cached) completed in {:?}", start.elapsed());
                     return Ok(cached);
                 }
-            }
         }
 
         log::info!("Executing SWRL rules before realization");
@@ -643,13 +632,12 @@ impl ReasoningActor {
 
         let result = self.reasoner.realize()?;
 
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
+        if let Some(timeout) = self.config.reasoning.timeout
+            && start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: "Realization timed out".into(),
                 });
             }
-        }
 
         if self
             .config
@@ -852,13 +840,12 @@ impl ReasoningActor {
     // ─── helpers ────────────────────────────────────────────
 
     fn check_timeout(&self, start: Instant, operation: &str) -> Result<()> {
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
+        if let Some(timeout) = self.config.reasoning.timeout
+            && start.elapsed() > timeout {
                 return Err(Error::Timeout {
                     message: format!("{operation} timed out"),
                 });
             }
-        }
         Ok(())
     }
 }

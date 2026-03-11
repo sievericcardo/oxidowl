@@ -128,13 +128,17 @@ impl EquivalenceClosure {
         let rank2 = *self.rank.get(&root2).unwrap_or(&0);
 
         // Union by rank: attach smaller tree under larger tree
-        if rank1 < rank2 {
-            self.parent.insert(root1, root2);
-        } else if rank1 > rank2 {
-            self.parent.insert(root2, root1);
-        } else {
-            self.parent.insert(root2, root1.clone());
-            self.rank.insert(root1, rank1 + 1);
+        match rank1.cmp(&rank2) {
+            std::cmp::Ordering::Less => {
+                self.parent.insert(root1, root2);
+            }
+            std::cmp::Ordering::Greater => {
+                self.parent.insert(root2, root1);
+            }
+            std::cmp::Ordering::Equal => {
+                self.parent.insert(root2, root1.clone());
+                self.rank.insert(root1, rank1 + 1);
+            }
         }
     }
 

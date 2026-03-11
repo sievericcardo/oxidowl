@@ -144,8 +144,8 @@ impl ShaclValidator {
                 let results = self.validate_focus_node(&focus_node, shape, &shapes)?;
                 all_results.extend(results);
 
-                if let Some(max) = self.config.max_results {
-                    if all_results.len() >= max {
+                if let Some(max) = self.config.max_results
+                    && all_results.len() >= max {
                         let conforms = all_results.is_empty();
                         return Ok(ShaclValidationReport {
                             conforms,
@@ -153,7 +153,6 @@ impl ShaclValidator {
                             shapes_graph_well_formed: Some(self.shapes_graph_well_formed),
                         });
                     }
-                }
             }
         }
 
@@ -569,13 +568,10 @@ fn collect_allowed_predicates(all_shapes: &[ShaclShape], shape: &ShaclShape) -> 
         for prop_id in &ns.properties {
             if let Some(ShaclShape::PropertyShape(ps)) =
                 all_shapes.iter().find(|s| s.id() == prop_id)
-            {
-                if let crate::validation::shacl::model::ShaclPath::Predicate(iri) = &ps.path {
-                    if let Ok(t) = RdfTerm::iri(iri) {
+                && let crate::validation::shacl::model::ShaclPath::Predicate(iri) = &ps.path
+                    && let Ok(t) = RdfTerm::iri(iri) {
                         allowed.push(t);
                     }
-                }
-            }
         }
     }
 

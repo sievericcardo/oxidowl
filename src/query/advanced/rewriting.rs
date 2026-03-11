@@ -348,7 +348,7 @@ impl QueryRewriter {
                 atom_hasher.finish()
             })
             .collect();
-        atom_hashes.sort();
+        atom_hashes.sort_unstable();
 
         for hash in atom_hashes {
             hash.hash(&mut hasher);

@@ -575,7 +575,7 @@ impl PerformanceReport {
             0.0
         };
 
-        (cache_hit_ratio + incremental_ratio) / 2.0
+        f64::midpoint(cache_hit_ratio, incremental_ratio)
     }
 
     /// Get total time saved by incremental reasoning (milliseconds)

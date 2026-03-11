@@ -82,11 +82,10 @@ pub fn evaluate_sparql_component(
             .map_err(|e| Error::shacl(format!("SPARQL SELECT validator failed: {e}")))?;
 
         for row in rows {
-            if let Some(fail) = row.get("failure") {
-                if matches!(fail, RdfTerm::Literal { value, .. } if value == "true") {
+            if let Some(fail) = row.get("failure")
+                && matches!(fail, RdfTerm::Literal { value, .. } if value == "true") {
                     return Err(Error::shacl("SPARQL component reports processing failure"));
                 }
-            }
 
             let value = row.get("value").cloned();
             let row_msg = row.get("message").cloned();

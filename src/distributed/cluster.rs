@@ -678,7 +678,7 @@ impl HealthMonitor {
         let health_check_timeout = Duration::from_secs(5);
 
         match timeout(health_check_timeout, Self::ping_node(&node_info.address)).await {
-            Ok(Ok(_)) => {
+            Ok(Ok(())) => {
                 // Additional checks could go here
                 Ok(HealthStatus::Healthy)
             }

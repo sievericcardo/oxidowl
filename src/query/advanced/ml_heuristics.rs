@@ -355,7 +355,7 @@ impl MLHeuristicsEngine {
         let strategy_confidence = self.strategy_selector.get_confidence();
         let expansion_confidence = self.expansion_predictor.get_confidence();
 
-        (strategy_confidence + expansion_confidence) / 2.0
+        f64::midpoint(strategy_confidence, expansion_confidence)
     }
 }
 
@@ -503,7 +503,7 @@ impl StrategySelectionModel {
             .unwrap_or(0.5);
 
         // Combine confidences
-        (model_confidence + strategy_confidence) / 2.0
+        f64::midpoint(model_confidence, strategy_confidence)
     }
 
     fn calculate_performance_score(&self, session: &ReasoningSession) -> f64 {
@@ -518,7 +518,7 @@ impl StrategySelectionModel {
         // Memory efficiency score
         let memory_score = 1_000_000.0 / (session.memory_used as f64 + 1.0);
 
-        (time_score + memory_score) / 2.0
+        f64::midpoint(time_score, memory_score)
     }
 
     fn update_strategy_performance(&mut self, session: &ReasoningSession) {
@@ -642,7 +642,7 @@ impl ExpansionOrderPredictor {
                 query_features: point.features.clone(),
                 execution_time: point.time_penalty,
                 memory_usage: point.success_score,
-                result_size: if point.success_score > 0.5 { 1 } else { 0 },
+                result_size: usize::from(point.success_score > 0.5),
                 timestamp: point.timestamp,
             })
             .collect();

@@ -70,7 +70,7 @@ impl<T: Ord + fmt::Debug> fmt::Debug for SortedSet<T> {
 impl<T: Ord + Hash> Hash for SortedSet<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Both backends iterate in ascending order — equal sets hash identically.
-        for item in self.inner.iter() {
+        for item in &self.inner {
             item.hash(state);
         }
     }

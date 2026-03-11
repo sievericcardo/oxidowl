@@ -162,7 +162,7 @@ impl Owl2Interpretation {
 
     /// Set the domain of interpretation
     pub fn set_domain(&mut self, domain: HashSet<String>) {
-        self.domain = domain.clone();
+        self.domain.clone_from(&domain);
 
         // Update owl:Thing to contain all domain elements
         self.class_interpretation
@@ -721,9 +721,9 @@ impl Owl2Interpretation {
         } else {
             // If property has no interpretation, only ≥0 and =0 restrictions can be satisfied
             match restriction_type {
-                CardinalityType::Min if cardinality == 0 => result = self.domain.clone(),
-                CardinalityType::Max => result = self.domain.clone(),
-                CardinalityType::Exact if cardinality == 0 => result = self.domain.clone(),
+                CardinalityType::Min if cardinality == 0 => result.clone_from(&self.domain),
+                CardinalityType::Max => result.clone_from(&self.domain),
+                CardinalityType::Exact if cardinality == 0 => result.clone_from(&self.domain),
                 _ => {} // Empty result for other cases
             }
         }
@@ -1479,7 +1479,7 @@ impl Owl2ReasoningEngine {
             })?
             .clone();
 
-        for concept in current_node.concepts.iter() {
+        for concept in &current_node.concepts {
             match concept {
                 ClassExpression::ObjectIntersectionOf(concepts) => {
                     // Intersection rule: C ⊓ D means both C and D must hold

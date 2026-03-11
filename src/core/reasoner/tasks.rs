@@ -451,8 +451,8 @@ impl ReasoningTaskService {
         // Priority order: and/or > not > restrictions > atomic
 
         // Check for intersection (and, ⊓)
-        if let Some(parts) = Self::split_by_operator(trimmed, &["and", "⊓"]) {
-            if parts.len() >= 2 {
+        if let Some(parts) = Self::split_by_operator(trimmed, &["and", "⊓"])
+            && parts.len() >= 2 {
                 let expressions: Vec<ClassExpression> = parts
                     .iter()
                     .filter_map(|p| Self::parse_class_expr_str(p))
@@ -462,11 +462,10 @@ impl ReasoningTaskService {
                     return Some(ClassExpression::ObjectIntersectionOf(expressions));
                 }
             }
-        }
 
         // Check for union (or, ⊔)
-        if let Some(parts) = Self::split_by_operator(trimmed, &["or", "⊔"]) {
-            if parts.len() >= 2 {
+        if let Some(parts) = Self::split_by_operator(trimmed, &["or", "⊔"])
+            && parts.len() >= 2 {
                 let expressions: Vec<ClassExpression> = parts
                     .iter()
                     .filter_map(|p| Self::parse_class_expr_str(p))
@@ -476,20 +475,17 @@ impl ReasoningTaskService {
                     return Some(ClassExpression::ObjectUnionOf(expressions));
                 }
             }
-        }
 
         // Check for complement (not, ¬)
-        if trimmed.starts_with("not ") {
-            if let Some(inner) = Self::parse_class_expr_str(&trimmed[4..]) {
+        if trimmed.starts_with("not ")
+            && let Some(inner) = Self::parse_class_expr_str(&trimmed[4..]) {
                 return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
             }
-        }
-        if trimmed.starts_with('¬') {
-            if let Some(inner) = Self::parse_class_expr_str(&trimmed[3..]) {
+        if trimmed.starts_with('¬')
+            && let Some(inner) = Self::parse_class_expr_str(&trimmed[3..]) {
                 // ¬ is 3 bytes in UTF-8
                 return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
             }
-        }
 
         // Check for existential restriction (some, ∃)
         if trimmed.starts_with("some ") {
@@ -600,8 +596,8 @@ impl ReasoningTaskService {
             };
 
             // Parse cardinality number
-            if let Ok(cardinality) = parts[rest_idx].parse::<u32>() {
-                if parts.len() > rest_idx + 1 {
+            if let Ok(cardinality) = parts[rest_idx].parse::<u32>()
+                && parts.len() > rest_idx + 1 {
                     let property_iri = parts[rest_idx + 1];
                     let filler_str = parts[rest_idx + 2..].join(" ");
 
@@ -633,7 +629,6 @@ impl ReasoningTaskService {
                         };
                     }
                 }
-            }
         }
 
         None

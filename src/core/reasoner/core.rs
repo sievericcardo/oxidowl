@@ -243,7 +243,7 @@ impl Reasoner {
                     log::info!("Pre-consistency check detected inconsistency");
                     return Ok(false);
                 }
-                Ok(_) => {
+                Ok(()) => {
                     log::info!("Pre-consistency check passed, proceeding to tableau");
                 }
             }
@@ -2130,7 +2130,7 @@ impl Reasoner {
         prefixes: &mut std::collections::HashMap<String, String>,
     ) {
         if let Some(hash_pos) = iri.rfind('#') {
-            let base = &iri[..hash_pos + 1];
+            let base = &iri[..=hash_pos];
             if !prefixes.values().any(|v| v == base) {
                 // Try to detect common namespaces
                 let prefix_name = match base {

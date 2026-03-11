@@ -99,9 +99,9 @@ impl SWRLBuiltIn for UnionBuiltIn {
                     coll2.split(',').map(str::trim).collect()
                 };
 
-                let union: HashSet<&str> = items1.union(&items2).cloned().collect();
+                let union: HashSet<&str> = items1.union(&items2).copied().collect();
                 let mut union_vec: Vec<&str> = union.into_iter().collect();
-                union_vec.sort();
+                union_vec.sort_unstable();
 
                 let union_str = union_vec.join(",");
                 Ok(SWRLValue::Boolean(*result == union_str))

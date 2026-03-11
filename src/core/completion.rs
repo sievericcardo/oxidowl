@@ -1035,9 +1035,9 @@ impl CompletionRuleSet {
                 // Parse the triple components from the triple_id (simplified for now)
                 // In a complete implementation, this would extract actual subject/predicate/object
                 // from the semantic layer's Triple structure
-                let subject_node = format!("{}#subject", triple_id);
-                let predicate_node = format!("{}#predicate", triple_id);
-                let object_node = format!("{}#object", triple_id);
+                let subject_node = format!("{triple_id}#subject");
+                let predicate_node = format!("{triple_id}#predicate");
+                let object_node = format!("{triple_id}#object");
 
                 // Add edges: reification_node --rdf:subject--> subject
                 result.role_additions.push((
@@ -1115,8 +1115,7 @@ impl CompletionRuleSet {
                         concepts: vec![concept.clone()],
                         dependencies: Arc::clone(dependencies),
                         explanation: format!(
-                            "Meta-constraint violation for {}: {}",
-                            meta_property, e
+                            "Meta-constraint violation for {meta_property}: {e}"
                         ),
                     });
                     return Ok(result);
@@ -1154,10 +1153,7 @@ impl CompletionRuleSet {
                 }
 
                 log::debug!(
-                    "Added meta-assertion for triple {} with {}={}",
-                    triple_id,
-                    meta_property,
-                    meta_value
+                    "Added meta-assertion for triple {triple_id} with {meta_property}={meta_value}"
                 );
             } else {
                 log::debug!(
@@ -1255,7 +1251,7 @@ impl CompletionRuleSet {
 
         // Check DataHasValue patterns that might encode quoted triple metadata
         if let ClassExpression::DataHasValue { property, value } = concept {
-            let prop_str = format!("{:?}", property);
+            let prop_str = format!("{property:?}");
             if prop_str.contains("quotedTripleRef") {
                 return Some(value.value.clone());
             }
@@ -1310,14 +1306,12 @@ impl CompletionRuleSet {
             if let Ok(val) = value.parse::<f64>() {
                 if !(0.0..=1.0).contains(&val) {
                     return Err(Error::reasoning(format!(
-                        "Certainty/confidence value {} out of range [0, 1]",
-                        val
+                        "Certainty/confidence value {val} out of range [0, 1]"
                     )));
                 }
             } else {
                 return Err(Error::reasoning(format!(
-                    "Invalid numeric value for certainty: {}",
-                    value
+                    "Invalid numeric value for certainty: {value}"
                 )));
             }
         }
@@ -1327,14 +1321,12 @@ impl CompletionRuleSet {
             if let Ok(val) = value.parse::<f64>() {
                 if !(0.0..=1.0).contains(&val) {
                     return Err(Error::reasoning(format!(
-                        "Probability value {} out of range [0, 1]",
-                        val
+                        "Probability value {val} out of range [0, 1]"
                     )));
                 }
             } else {
                 return Err(Error::reasoning(format!(
-                    "Invalid numeric value for probability: {}",
-                    value
+                    "Invalid numeric value for probability: {value}"
                 )));
             }
         }

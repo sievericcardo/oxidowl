@@ -867,8 +867,7 @@ impl QueryProcessor {
             TableauState::Unknown => {
                 // If unknown, be conservative and assume satisfiable
                 log::warn!(
-                    "Tableau reasoning returned Unknown state for {:?}",
-                    class_expr
+                    "Tableau reasoning returned Unknown state for {class_expr:?}"
                 );
                 Ok(true)
             }

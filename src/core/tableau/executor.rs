@@ -301,17 +301,14 @@ impl TableauExecutor {
                                 n.concepts
                                     .iter()
                                     .filter_map(|c| {
-                                        if let ConceptLabel::Complex(expr) = c {
-                                            if let ClassExpression::ObjectAllValuesFrom {
+                                        if let ConceptLabel::Complex(expr) = c
+                                            && let ClassExpression::ObjectAllValuesFrom {
                                                 property: p,
                                                 filler: f,
                                             } = &**expr
-                                            {
-                                                if format!("{p:?}") == role_name {
+                                                && format!("{p:?}") == role_name {
                                                     return Some(*f.clone());
                                                 }
-                                            }
-                                        }
                                         None
                                     })
                                     .collect()
@@ -333,18 +330,15 @@ impl TableauExecutor {
                                 n.concepts
                                     .iter()
                                     .filter_map(|c| {
-                                        if let ConceptLabel::Complex(expr) = c {
-                                            if let ClassExpression::ObjectMaxCardinality {
+                                        if let ConceptLabel::Complex(expr) = c
+                                            && let ClassExpression::ObjectMaxCardinality {
                                                 property: p,
                                                 cardinality,
                                                 filler: f,
                                             } = &**expr
-                                            {
-                                                if format!("{p:?}") == role_name {
+                                                && format!("{p:?}") == role_name {
                                                     return Some((*cardinality, *f.clone()));
                                                 }
-                                            }
-                                        }
                                         None
                                     })
                                     .collect()
@@ -607,7 +601,7 @@ impl TableauExecutor {
         }
 
         // Redirect all edges pointing to source to point to target instead
-        for edge in tableau.edges.iter_mut() {
+        for edge in &mut tableau.edges {
             if edge.to == source {
                 edge.to = target;
             }
@@ -617,7 +611,7 @@ impl TableauExecutor {
         }
 
         // Update role successors in all nodes
-        for node in tableau.nodes.iter_mut() {
+        for node in &mut tableau.nodes {
             for successors in node.role_successors.values_mut() {
                 if successors.contains(&source) {
                     successors.remove(&source);
@@ -675,8 +669,7 @@ impl TableauExecutor {
         let relevant_clauses: Vec<_> = if let Some(ref index) = tableau.clause_index {
             index
                 .get_candidate_clause_refs(&[class_iri.as_str().to_string()])
-                .into_iter()
-                .map(|c| c.clone())
+                .into_iter().cloned()
                 .collect()
         } else {
             Vec::new()
@@ -715,15 +708,14 @@ impl TableauExecutor {
                             let implied_concept = ConceptLabel::Atomic(concept_iri.clone());
 
                             // Check if already present to avoid duplicates
-                            if let Some(node) = tableau.nodes.get(node_id) {
-                                if !node.concepts.contains(&implied_concept) {
+                            if let Some(node) = tableau.nodes.get(node_id)
+                                && !node.concepts.contains(&implied_concept) {
                                     tableau.add_concept_to_node(node_id, implied_concept)?;
                                     debug!(
                                         "Preemptively added concept {} to node {} via clause {}",
                                         concept_iri, node_id, clause.id
                                     );
                                 }
-                            }
                         }
                     }
                 }
@@ -839,15 +831,12 @@ impl TableauExecutor {
         } = &rule_app.context
         {
             // Extract choice concepts from disjunctions
-            let choice_concepts = match concept {
-                ClassExpression::ObjectUnionOf(concepts) => concepts
-                    .iter()
-                    .map(|c| ConceptLabel::Complex(Box::new(c.clone())))
-                    .collect(),
-                _ => {
-                    debug!("CHOOSE rule called on non-disjunction concept");
-                    return Ok(());
-                }
+            let choice_concepts = if let ClassExpression::ObjectUnionOf(concepts) = concept { concepts
+            .iter()
+            .map(|c| ConceptLabel::Complex(Box::new(c.clone())))
+            .collect() } else {
+                debug!("CHOOSE rule called on non-disjunction concept");
+                return Ok(());
             };
 
             // Create backtrack point for this choice
@@ -1378,8 +1367,8 @@ impl TableauExecutor {
             // Check for disjointness clashes using the DisjointnessMap.
             // Only applicable to Nominal nodes (named individuals) because Generated nodes
             // contain role-filler concepts whose labels are not registered in the disjointness map.
-            if check_disjointness {
-                if let Some(checker) = &mut tableau.clause_checker {
+            if check_disjointness
+                && let Some(checker) = &mut tableau.clause_checker {
                     let node_concepts: Vec<ConceptId> = node
                         .concepts
                         .iter()
@@ -1465,8 +1454,7 @@ impl TableauExecutor {
                             }
                         }
                     }
-                }
-            } // end if check_disjointness
+                } // end if check_disjointness
         }
 
         Ok(())

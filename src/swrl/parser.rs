@@ -190,7 +190,7 @@ impl SWRLParser {
             return Err(self.error("Rule head cannot be empty"));
         }
 
-        Ok(SWRLRule { body, head })
+        Ok(SWRLRule { head, body })
     }
 
     /// Parse a list of atoms (connected by conjunction)
@@ -454,57 +454,54 @@ impl SWRLParser {
                 }
 
                 // Check if second argument is literal (data property) or individual (object property)
-                match &arguments[1] {
-                    SWRLArgument::Data(_) => {
-                        // Data property atom
-                        let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
-                        Ok(SWRLAtom::DataPropertyAtom {
-                            predicate: DataPropertyExpression::DataProperty(DataProperty {
-                                iri: IRI::new(&prop_iri),
-                            }),
-                            first_argument: match &arguments[0] {
-                                SWRLArgument::Individual(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "First argument must be individual in data property atom",
-                                    ));
-                                }
-                            },
-                            second_argument: match &arguments[1] {
-                                SWRLArgument::Data(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "Second argument must be data in data property atom",
-                                    ));
-                                }
-                            },
-                        })
-                    }
-                    _ => {
-                        // Object property atom
-                        let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
-                        Ok(SWRLAtom::ObjectPropertyAtom {
-                            predicate: ObjectPropertyExpression::ObjectProperty(
-                                ObjectProperty::new(IRI::new(&prop_iri))?,
-                            ),
-                            first_argument: match &arguments[0] {
-                                SWRLArgument::Individual(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "First argument must be individual in object property atom",
-                                    ));
-                                }
-                            },
-                            second_argument: match &arguments[1] {
-                                SWRLArgument::Individual(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "Second argument must be individual in object property atom",
-                                    ));
-                                }
-                            },
-                        })
-                    }
+                if let SWRLArgument::Data(_) = &arguments[1] {
+                    // Data property atom
+                    let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
+                    Ok(SWRLAtom::DataPropertyAtom {
+                        predicate: DataPropertyExpression::DataProperty(DataProperty {
+                            iri: IRI::new(&prop_iri),
+                        }),
+                        first_argument: match &arguments[0] {
+                            SWRLArgument::Individual(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "First argument must be individual in data property atom",
+                                ));
+                            }
+                        },
+                        second_argument: match &arguments[1] {
+                            SWRLArgument::Data(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "Second argument must be data in data property atom",
+                                ));
+                            }
+                        },
+                    })
+                } else {
+                    // Object property atom
+                    let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
+                    Ok(SWRLAtom::ObjectPropertyAtom {
+                        predicate: ObjectPropertyExpression::ObjectProperty(
+                            ObjectProperty::new(IRI::new(&prop_iri))?,
+                        ),
+                        first_argument: match &arguments[0] {
+                            SWRLArgument::Individual(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "First argument must be individual in object property atom",
+                                ));
+                            }
+                        },
+                        second_argument: match &arguments[1] {
+                            SWRLArgument::Individual(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "Second argument must be individual in object property atom",
+                                ));
+                            }
+                        },
+                    })
                 }
             }
             _ => {

@@ -917,7 +917,7 @@ impl ForwardChainingEngine {
     ) -> Result<bool> {
         let mut new_facts = Vec::new();
 
-        for (individual, classes) in kb.class_assertions.iter() {
+        for (individual, classes) in &kb.class_assertions {
             for class in classes {
                 for superclass in tbox.get_superclasses(class) {
                     new_facts.push((individual.clone(), superclass));
@@ -944,7 +944,7 @@ impl ForwardChainingEngine {
     ) -> Result<bool> {
         let mut new_facts = Vec::new();
 
-        for ((subject, property), _) in kb.object_property_assertions.iter() {
+        for (subject, property) in kb.object_property_assertions.keys() {
             for domain_class in tbox.get_domains(property) {
                 new_facts.push((subject.clone(), domain_class));
             }
@@ -969,7 +969,7 @@ impl ForwardChainingEngine {
     ) -> Result<bool> {
         let mut new_facts = Vec::new();
 
-        for ((_, property), objects) in kb.object_property_assertions.iter() {
+        for ((_, property), objects) in &kb.object_property_assertions {
             for range_class in tbox.get_ranges(property) {
                 for object in objects {
                     new_facts.push((object.clone(), range_class.clone()));
@@ -1064,7 +1064,7 @@ impl ForwardChainingEngine {
             .collect();
 
         // Apply symmetry
-        for ((subject, property), objects) in kb.object_property_assertions.iter() {
+        for ((subject, property), objects) in &kb.object_property_assertions {
             if symmetric_props.contains(property) {
                 for object in objects {
                     new_facts.push((object.clone(), property.clone(), subject.clone()));

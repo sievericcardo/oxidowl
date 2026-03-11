@@ -2181,11 +2181,11 @@ async fn execute_entailment_check(
     );
 
     let mut reasoner = Reasoner::new(config.clone())?;
-    let _ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
+    let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     // Load both premise and conclusion ontologies
     info!("Loading premise ontology from: {}", premise.display());
-    reasoner.load_ontology_from_file(&premise, _ontology_format)?;
+    reasoner.load_ontology_from_file(&premise, ontology_format)?;
 
     info!("Loading conclusion ontology from: {}", conclusion.display());
     let conclusion_ontology = oxidowl::ontology::Ontology::from_file(

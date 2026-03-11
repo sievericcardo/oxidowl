@@ -1086,7 +1086,7 @@ impl ClassificationService {
         individual: &str,
         direct: bool,
         ontology: &OntologyRef,
-        _statistics: &mut ReasoningStatistics,
+        statistics: &mut ReasoningStatistics,
     ) -> Result<Vec<String>> {
         info!("Getting types for individual: {individual}");
 
@@ -1120,7 +1120,7 @@ impl ClassificationService {
                 });
                 if let Ok(supertypes) = {
                     let mut local_cache = CacheManager::default();
-                    self.get_superclasses(&class_expr, ontology, _statistics, false, &mut local_cache)
+                    self.get_superclasses(&class_expr, ontology, statistics, false, &mut local_cache)
                 } {
                     for supertype in supertypes {
                         if let ClassExpression::Class(class) = supertype {
@@ -1550,15 +1550,13 @@ impl ClassificationService {
                         && let crate::ontology::Individual::Named(subj) = &assertion.source
                         && subj.iri.as_str() == individual_iri
                         && self.object_properties_match(property, &assertion.property)
-                    {
-                        if self.check_instance_with_datatype_reasoning(
+                        && self.check_instance_with_datatype_reasoning(
                             &assertion.target,
                             filler,
                             ontology,
                         )? {
                             return Ok(true);
                         }
-                    }
                 }
                 Ok(false)
             }

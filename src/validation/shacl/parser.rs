@@ -34,8 +34,8 @@ fn extract_shapes(store: &SparqlStore) -> Result<Vec<ShaclShape>> {
     //  - it has any sh:target*, sh:path, or constraint parameter
     let query = format!(
         "PREFIX sh: <{SH_NS}> \
-         PREFIX rdf: <{rdf}> \
-         PREFIX rdfs: <{rdfs}> \
+         PREFIX rdf: <{RDF_NS}> \
+         PREFIX rdfs: <{RDFS_NS}> \
          SELECT DISTINCT ?shape ?type WHERE {{ \
              {{ ?shape rdf:type sh:NodeShape . BIND(<{SH_NODE_SHAPE}> AS ?type) }} \
              UNION \
@@ -46,8 +46,6 @@ fn extract_shapes(store: &SparqlStore) -> Result<Vec<ShaclShape>> {
              UNION \
              {{ ?shape sh:path ?_ . BIND(<{SH_PROPERTY_SHAPE}> AS ?type) }} \
          }}",
-        rdf = RDF_NS,
-        rdfs = RDFS_NS,
     );
 
     let rows = store.execute_select(&query)?;
@@ -270,11 +268,10 @@ fn extract_constraints(store: &SparqlStore, shape_id: &RdfTerm) -> Result<Vec<Sh
         }
     }
     for v in direct_objects(store, shape_id, SH_NODE_KIND)? {
-        if let Some(iri) = iri_of(&v) {
-            if let Some(kind) = ShaclNodeKind::from_iri(&iri) {
+        if let Some(iri) = iri_of(&v)
+            && let Some(kind) = ShaclNodeKind::from_iri(&iri) {
                 out.push(ShaclConstraint::NodeKind(kind));
             }
-        }
     }
 
     // ── Cardinality ───────────────────────────────────────────────────────
@@ -435,9 +432,8 @@ fn extract_sparql_constraint(
     sparql_node: &RdfTerm,
 ) -> Result<Option<SparqlConstraint>> {
     let selects = direct_objects(store, sparql_node, SH_SELECT)?;
-    let select = match selects.into_iter().next().and_then(|v| string_value_of(&v)) {
-        Some(s) => s,
-        None => return Ok(None),
+    let Some(select) = selects.into_iter().next().and_then(|v| string_value_of(&v)) else {
+        return Ok(None);
     };
 
     let deactivated = bool_object(store, sparql_node, SH_DEACTIVATED)?;
@@ -588,18 +584,17 @@ fn term_key(term: &RdfTerm) -> String {
     match term {
         RdfTerm::Iri(iri) => format!("<{}>", iri.as_str()),
         RdfTerm::BlankNode(id) => format!("_:{id}"),
-        RdfTerm::Literal { value, .. } => format!("\"{}\"", value),
+        RdfTerm::Literal { value, .. } => format!("\"{value}\""),
         RdfTerm::QuotedTriple(_) => "<<>>".to_string(),
     }
 }
 
 /// Reconstruct an `RdfTerm` from a term key (inverse of `term_key`).
 fn key_to_term(key: &str) -> RdfTerm {
-    if key.starts_with('<') && key.ends_with('>') {
-        let iri = &key[1..key.len() - 1];
+    if let Some(iri) = key.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
         RdfTerm::iri(iri).unwrap_or_else(|_| RdfTerm::BlankNode(key.to_string()))
-    } else if key.starts_with("_:") {
-        RdfTerm::BlankNode(key[2..].to_string())
+    } else if let Some(bn) = key.strip_prefix("_:") {
+        RdfTerm::BlankNode(bn.to_string())
     } else {
         RdfTerm::BlankNode(key.to_string())
     }

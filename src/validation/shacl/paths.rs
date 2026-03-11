@@ -16,11 +16,11 @@ impl ShaclPath {
         match self {
             ShaclPath::Predicate(iri) => format!("<{iri}>"),
             ShaclPath::Sequence(steps) => {
-                let parts: Vec<String> = steps.iter().map(|s| s.to_sparql_path()).collect();
+                let parts: Vec<String> = steps.iter().map(super::model::ShaclPath::to_sparql_path).collect();
                 parts.join("/")
             }
             ShaclPath::Alternative(alts) => {
-                let parts: Vec<String> = alts.iter().map(|a| a.to_sparql_path()).collect();
+                let parts: Vec<String> = alts.iter().map(super::model::ShaclPath::to_sparql_path).collect();
                 format!("({})", parts.join("|"))
             }
             ShaclPath::Inverse(inner) => format!("^({})", inner.to_sparql_path()),

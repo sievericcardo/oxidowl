@@ -664,11 +664,10 @@ impl ClauseChecker {
                     explanation: description,
                     node_id: node.id,
                 });
-            } else {
-                // No violation - cache this
-                if let Some(cache) = &mut self.check_cache {
-                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
-                }
+            }
+            // No violation - cache this
+            if let Some(cache) = &mut self.check_cache {
+                cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
             }
         }
 

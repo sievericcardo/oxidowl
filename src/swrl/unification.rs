@@ -246,13 +246,12 @@ impl UnificationEngine {
             // Variable to individual
             (SWRLIArgument::Variable(v), individual) | (individual, SWRLIArgument::Variable(v)) => {
                 let v_iri = &v.iri;
-                match bindings.get(v_iri) {
-                    Some(existing) => existing == individual, // Must match existing binding
-                    None => {
-                        // Bind variable to individual
-                        bindings.insert(v_iri.clone(), individual.clone());
-                        true
-                    }
+                if let Some(existing) = bindings.get(v_iri) {
+                    existing == individual // Must match existing binding
+                } else {
+                    // Bind variable to individual
+                    bindings.insert(v_iri.clone(), individual.clone());
+                    true
                 }
             }
             // Individual to individual

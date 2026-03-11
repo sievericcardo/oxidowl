@@ -1034,6 +1034,7 @@ impl CostBasedOptimizer {
     }
 
     /// Estimate result size for query
+    #[allow(clippy::cast_possible_wrap)] // atom/join counts in a query are always << i32::MAX
     fn estimate_result_size(&self, query: &ConjunctiveQuery, stats: &QueryStatistics) -> usize {
         // Look for similar queries in statistics
         let pattern = self.analyze_query_pattern(query);
@@ -1045,7 +1046,7 @@ impl CostBasedOptimizer {
             let base_size = 1000;
             let reduction_factor = 0.6_f64; // Each atom reduces by ~40%
             let atoms = query.body_atoms.len() as u32;
-            (base_size as f64 * reduction_factor.powi(atoms as i32)) as usize
+            (f64::from(base_size) * reduction_factor.powi(atoms as i32)) as usize
         }
     }
 
@@ -1485,7 +1486,7 @@ impl CostBasedOptimizer {
 
         // If we didn't get all atoms, add remaining ones
         if ordered_atoms.len() < query.body_atoms.len() {
-            for atom in query.body_atoms.iter() {
+            for atom in &query.body_atoms {
                 if !ordered_atoms
                     .iter()
                     .any(|a| format!("{a:?}") == format!("{atom:?}"))
@@ -1524,6 +1525,7 @@ impl CostBasedOptimizer {
         Vec::new()
     }
 
+    #[allow(clippy::cast_possible_wrap)] // join_count is a small integer, always << i32::MAX
     fn estimate_performance(
         &self,
         query: &ConjunctiveQuery,
@@ -1575,11 +1577,12 @@ impl CostBasedOptimizer {
             let base_size = 100;
             let join_multiplier = if pattern.join_count > 0 {
                 // Each join typically reduces result size
-                0.5_f64.powi(pattern.join_count as i32)
+                let exp = pattern.join_count as i32;
+                0.5_f64.powi(exp)
             } else {
                 1.0
             };
-            (base_size as f64 * join_multiplier * (1.0 + pattern.atom_count as f64 * 0.3)) as usize
+            (f64::from(base_size) * join_multiplier * (1.0 + pattern.atom_count as f64 * 0.3)) as usize
         };
 
         // Calculate confidence based on available data

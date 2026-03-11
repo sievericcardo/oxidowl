@@ -98,7 +98,7 @@ impl NodeFingerprint {
             .iter()
             .map(|(role, successors)| {
                 let mut sorted_successors: Vec<NodeId> = successors.iter().copied().collect();
-                sorted_successors.sort();
+                sorted_successors.sort_unstable();
                 (role.clone(), sorted_successors)
             })
             .collect();
@@ -229,15 +229,12 @@ impl CheckResultCache {
         clause_id: usize,
     ) -> Option<&CachedCheckResult> {
         let key = CacheKey::new(fingerprint, clause_id);
-        match self.cache.get(&key) {
-            Some(result) => {
-                self.hits += 1;
-                Some(result)
-            }
-            None => {
-                self.misses += 1;
-                None
-            }
+        if let Some(result) = self.cache.get(&key) {
+            self.hits += 1;
+            Some(result)
+        } else {
+            self.misses += 1;
+            None
         }
     }
 

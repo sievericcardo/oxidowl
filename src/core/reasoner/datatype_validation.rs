@@ -32,12 +32,9 @@ impl DatatypeValidator {
 
     /// Validate that a literal conforms to its declared datatype
     pub fn validate_literal(&self, literal: &Literal) -> Result<bool> {
-        let datatype_url = match &literal.datatype {
-            Some(url) => url,
-            None => {
-                // No datatype means xsd:string
-                return Ok(true);
-            }
+        let Some(datatype_url) = &literal.datatype else {
+            // No datatype means xsd:string
+            return Ok(true);
         };
 
         let datatype_iri_str = datatype_url.as_str();

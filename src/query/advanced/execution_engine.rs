@@ -1068,18 +1068,13 @@ impl AdvancedExecutionEngine {
         self.monitor
             .start_execution(execution_id.clone(), query.clone(), strategy.to_string());
 
-        let result = match self.config.enable_parallel_execution
-            && constraints.priority >= ExecutionPriority::High
-        {
-            true => {
-                self.execute_parallel(&execution_id, query, strategy, constraints)
-                    .await
-            }
-            false => {
-                self.optimizer
-                    .execute_sequential(query.clone(), strategy.to_string(), constraints)
-                    .await
-            }
+        let result = if self.config.enable_parallel_execution && constraints.priority >= ExecutionPriority::High {
+            self.execute_parallel(&execution_id, query, strategy, constraints)
+                .await
+        } else {
+            self.optimizer
+                .execute_sequential(query.clone(), strategy.to_string(), constraints)
+                .await
         };
 
         // Fire-and-forget: record completion; convert error to String for the message
@@ -1802,7 +1797,7 @@ impl ExecutionStrategySelector {
 
         // Normalize by maximum possible joins
         let max_joins = (n * (n - 1)) / 2;
-        (join_count as f64 / max_joins as f64) * 10.0
+        (f64::from(join_count) / max_joins as f64) * 10.0
     }
 
     /// Check if two atoms share a variable

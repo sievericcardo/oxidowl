@@ -578,7 +578,7 @@ impl ImportManager {
             // Full HTTP import implementation with reqwest
             use std::time::Duration;
 
-            info!("Fetching ontology from URL: {}", url_str);
+            info!("Fetching ontology from URL: {url_str}");
 
             // Create HTTP client with timeout
             let timeout = self.config.timeout.unwrap_or(Duration::from_secs(30));
@@ -588,7 +588,7 @@ impl ImportManager {
                 .redirect(reqwest::redirect::Policy::limited(5))
                 .build()
                 .map_err(|e| OxidowlError::ImportError {
-                    message: format!("Failed to create HTTP client: {}", e),
+                    message: format!("Failed to create HTTP client: {e}"),
                 })?;
 
             // Make request with content negotiation
@@ -597,7 +597,7 @@ impl ImportManager {
                 .header("Accept", "application/rdf+xml, text/turtle, application/owl+xml, application/x-turtle, */*")
                 .send()
                 .map_err(|e| OxidowlError::ImportError {
-                    message: format!("HTTP request failed: {}", e)
+                    message: format!("HTTP request failed: {e}")
                 })?;
 
             // Check status
@@ -612,12 +612,12 @@ impl ImportManager {
                 .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .unwrap_or_else(|| "application/rdf+xml".to_string());
 
             // Download content
             let content = response.text().map_err(|e| OxidowlError::ImportError {
-                message: format!("Failed to read response: {}", e),
+                message: format!("Failed to read response: {e}"),
             })?;
 
             // Parse based on content type
@@ -639,14 +639,13 @@ impl ImportManager {
                         crate::parsers::turtle::parse(&content)?
                     } else {
                         return Err(OxidowlError::ParseError(format!(
-                            "Unknown content type: {}",
-                            content_type
+                            "Unknown content type: {content_type}"
                         )));
                     }
                 }
             };
 
-            info!("Successfully fetched and parsed ontology from {}", url_str);
+            info!("Successfully fetched and parsed ontology from {url_str}");
             Ok(Some(ontology))
         }
 
@@ -902,10 +901,10 @@ fn collect_namespace_from_iri(
 
     // Extract namespace (everything before the last # or /)
     if let Some(pos) = iri_str.rfind('#') {
-        let namespace = &iri_str[..pos + 1];
+        let namespace = &iri_str[..=pos];
         namespaces.insert(namespace.to_string());
     } else if let Some(pos) = iri_str.rfind('/') {
-        let namespace = &iri_str[..pos + 1];
+        let namespace = &iri_str[..=pos];
         namespaces.insert(namespace.to_string());
     }
 }
@@ -916,10 +915,10 @@ fn collect_namespace_from_url(url: &url::Url, namespaces: &mut std::collections:
 
     // Extract namespace (everything before the last # or /)
     if let Some(pos) = url_str.rfind('#') {
-        let namespace = &url_str[..pos + 1];
+        let namespace = &url_str[..=pos];
         namespaces.insert(namespace.to_string());
     } else if let Some(pos) = url_str.rfind('/') {
-        let namespace = &url_str[..pos + 1];
+        let namespace = &url_str[..=pos];
         namespaces.insert(namespace.to_string());
     }
 }

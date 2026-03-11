@@ -91,7 +91,7 @@ impl SWRLExecutionContext {
     /// Pop bindings from stack
     pub fn pop_bindings(&mut self) -> Option<HashMap<SWRLVariable, SWRLValue>> {
         if let Some(bindings) = self.binding_stack.pop() {
-            self.bindings = bindings.clone();
+            self.bindings.clone_from(&bindings);
             Some(bindings)
         } else {
             None

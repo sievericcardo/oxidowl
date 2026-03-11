@@ -602,10 +602,10 @@ impl IndustrialOptimizer {
                 ClassExpression::ObjectAllValuesFrom { .. } => 5.0,
                 ClassExpression::ObjectMinCardinality { cardinality, .. }
                 | ClassExpression::ObjectMaxCardinality { cardinality, .. } => {
-                    10.0 + (*cardinality as f64 * 2.0)
+                    10.0 + (f64::from(*cardinality) * 2.0)
                 }
                 ClassExpression::ObjectExactCardinality { cardinality, .. } => {
-                    12.0 + (*cardinality as f64 * 2.0)
+                    12.0 + (f64::from(*cardinality) * 2.0)
                 }
                 ClassExpression::ObjectOneOf(inds) => 3.0 + (inds.len() as f64 * 0.5),
                 _ => 2.0,
@@ -736,7 +736,7 @@ impl IndustrialOptimizer {
     fn create_partition_ontology(
         &self,
         partition: &OntologyPartition,
-        _ontology: &Ontology,
+        ontology: &Ontology,
     ) -> Result<PartitionOntology, OptimizationError> {
         // Extract partition-specific ontology
         // Partitions are complete subsets that can be reasoned over independently
@@ -760,7 +760,7 @@ impl IndustrialOptimizer {
         let mut interface_classes = HashSet::new();
 
         // Step 1: Extract axioms with signature contained in partition
-        for axiom in _ontology.axioms() {
+        for axiom in ontology.axioms() {
             let axiom_signature = extract_axiom_signature(axiom);
 
             // Check if axiom signature overlaps with partition signature
@@ -849,7 +849,7 @@ impl IndustrialOptimizer {
                 .collect();
 
             for (sub, supers) in entries {
-                for sup in supers.iter() {
+                for sup in &supers {
                     if let Some(super_supers) = cross_module_subsumptions.get(sup).cloned() {
                         for super_sup in super_supers {
                             let entry = cross_module_subsumptions.entry(sub.clone()).or_default();
@@ -1020,8 +1020,7 @@ impl ModularClassificationResult {
                         variable: _,
                         class_expression,
                     } = query_atom
-                    {
-                        if let ClassExpression::Class(c) = class_expression {
+                        && let ClassExpression::Class(c) = class_expression {
                             let concept_iri = c.iri.to_string();
 
                             // Concepts expanded earlier are typically more general (superclasses)
@@ -1038,8 +1037,7 @@ impl ModularClassificationResult {
                                             variable: _,
                                             class_expression: prev_expr,
                                         }) = expansion_order.get(prev_idx)
-                                        {
-                                            if let ClassExpression::Class(prev_c) = prev_expr {
+                                            && let ClassExpression::Class(prev_c) = prev_expr {
                                                 let prev_iri = prev_c.iri.to_string();
                                                 if !superclasses.contains(&prev_iri)
                                                     && prev_iri != concept_iri
@@ -1049,12 +1047,10 @@ impl ModularClassificationResult {
                                                     superclasses.push(prev_iri);
                                                 }
                                             }
-                                        }
                                     }
                                 }
                             }
                         }
-                    }
                 }
 
                 log::debug!(
@@ -1629,7 +1625,7 @@ fn extract_axiom_signature(axiom: &crate::ontology::axioms::Axiom) -> HashSet<IR
 
 /// Helper function to recursively extract IRIs from a class expression
 fn extract_class_expr_signature(expr: &ClassExpression, signature: &mut HashSet<IRI>) {
-    use ClassExpression::*;
+    use ClassExpression::{Class, ObjectIntersectionOf, ObjectUnionOf, ObjectComplementOf, ObjectSomeValuesFrom, ObjectAllValuesFrom, ObjectMinCardinality, ObjectMaxCardinality, ObjectExactCardinality};
 
     match expr {
         Class(c) => {

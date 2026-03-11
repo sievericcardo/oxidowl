@@ -216,11 +216,10 @@ impl HypertableauExpansion {
                     // No backtracking possible - unsatisfiable
                     self.state = ExpansionState::Unsatisfiable;
                     break;
-                } else {
-                    // Backtrack to last choice point
-                    self.backtrack()?;
-                    self.stats.backtracks += 1;
                 }
+                // Backtrack to last choice point
+                self.backtrack()?;
+                self.stats.backtracks += 1;
             }
 
             // Check for blocking opportunities

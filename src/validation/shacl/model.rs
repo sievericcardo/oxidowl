@@ -265,8 +265,10 @@ pub struct SparqlComponentConstraint {
 
 /// SHACL validation result severity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ShaclSeverity {
     /// `sh:Violation` (most severe, default)
+    #[default]
     Violation,
     /// `sh:Warning`
     Warning,
@@ -276,11 +278,6 @@ pub enum ShaclSeverity {
     Custom(String),
 }
 
-impl Default for ShaclSeverity {
-    fn default() -> Self {
-        ShaclSeverity::Violation
-    }
-}
 
 impl ShaclSeverity {
     /// Return the IRI for this severity.

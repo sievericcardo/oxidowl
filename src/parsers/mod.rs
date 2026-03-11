@@ -141,10 +141,9 @@ pub fn extract_first_crosssyntax_section(content: &str) -> String {
                 // This is the first actual section marker, skip it and start collecting
                 in_first_section = true;
                 continue;
-            } else {
-                // We've reached the second section, stop
-                break;
             }
+            // We've reached the second section, stop
+            break;
         }
         if in_first_section {
             result.push_str(line);

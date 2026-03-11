@@ -79,14 +79,13 @@ impl ImportResolver {
                     "http" | "https" => {
                         if self.allow_remote {
                             return self.create_resolved_import(import_iri, import_iri).await;
-                        } else {
-                            return Err(Error::import_error(format!(
-                                "Remote imports disabled: {import_iri}"
-                            )));
                         }
+                        return Err(Error::import_error(format!(
+                            "Remote imports disabled: {import_iri}"
+                        )));
                     }
                     "file" => {
-                        let path = url.to_file_path().map_err(|_| {
+                        let path = url.to_file_path().map_err(|()| {
                             Error::import_error(format!("Invalid file URL: {import_iri}"))
                         })?;
                         return self

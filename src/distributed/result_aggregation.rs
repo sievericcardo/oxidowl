@@ -416,7 +416,7 @@ impl ResultAggregator {
                 // Check if we have all results or timeout occurred
                 let elapsed = session.start_time.elapsed();
                 let has_all_results = session.partial_results.len() >= session.expected_partitions;
-                let timeout_exceeded = elapsed.as_millis() > self.config.max_wait_time_ms as u128;
+                let timeout_exceeded = elapsed.as_millis() > u128::from(self.config.max_wait_time_ms);
 
                 has_all_results || timeout_exceeded
             } else {
@@ -554,7 +554,7 @@ impl ResultAggregator {
     /// Get status of active aggregation sessions
     pub async fn get_active_sessions(&self) -> Result<Vec<Uuid>> {
         let active_sessions = self.active_sessions.read().await;
-        Ok(active_sessions.keys().cloned().collect())
+        Ok(active_sessions.keys().copied().collect())
     }
 }
 

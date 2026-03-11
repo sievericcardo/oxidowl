@@ -147,31 +147,28 @@ pub fn evaluate_pattern(
     // 'm' (multi-line), 'x' (extended whitespace), 'q' (literal).
     // Rust's regex crate supports 'i', 's', 'm', 'x'.
     let flag_str = flags.unwrap_or("");
-    let re = match RegexBuilder::new(pattern)
+    let Ok(re) = RegexBuilder::new(pattern)
         .case_insensitive(flag_str.contains('i'))
         .dot_matches_new_line(flag_str.contains('s'))
         .multi_line(flag_str.contains('m'))
         .ignore_whitespace(flag_str.contains('x'))
         .build()
-    {
-        Ok(r) => r,
-        Err(_) => {
-            // Ill-formed pattern → all values violate
-            return values
-                .iter()
-                .map(|v| {
-                    make_result(
-                        focus_node,
-                        v,
-                        SH_PATTERN_CONSTRAINT_COMPONENT,
-                        severity,
-                        source_shape,
-                        messages,
-                        "Invalid sh:pattern regex",
-                    )
-                })
-                .collect();
-        }
+    else {
+        // Ill-formed pattern → all values violate
+        return values
+            .iter()
+            .map(|v| {
+                make_result(
+                    focus_node,
+                    v,
+                    SH_PATTERN_CONSTRAINT_COMPONENT,
+                    severity,
+                    source_shape,
+                    messages,
+                    "Invalid sh:pattern regex",
+                )
+            })
+            .collect();
     };
 
     let mut out = Vec::new();

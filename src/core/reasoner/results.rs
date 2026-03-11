@@ -256,11 +256,10 @@ impl ClassificationResult {
     /// Return the correct OWL functional-syntax reference for an IRI given the declared prefix base.
     /// Uses `:localname` short form when the IRI starts with `prefix_base`, otherwise `<fullIRI>`.
     fn iri_ref(iri: &str, prefix_base: &str) -> String {
-        if let Some(local) = iri.strip_prefix(prefix_base) {
-            if !local.is_empty() {
+        if let Some(local) = iri.strip_prefix(prefix_base)
+            && !local.is_empty() {
                 return format!(":{local}");
             }
-        }
         format!("<{iri}>")
     }
 

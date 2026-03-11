@@ -212,7 +212,7 @@ fn compare_concepts_with_depth(
     b: &ClassExpression,
     depth: usize,
 ) -> std::cmp::Ordering {
-    use ClassExpression::*;
+    use ClassExpression::{Class, ObjectIntersectionOf, ObjectUnionOf, ObjectOneOf, ObjectSomeValuesFrom, ObjectAllValuesFrom, ObjectHasValue, ObjectHasSelf, ObjectMinCardinality, ObjectMaxCardinality, ObjectExactCardinality, DataSomeValuesFrom, DataAllValuesFrom, DataHasValue, DataMinCardinality, DataMaxCardinality, DataExactCardinality, ObjectComplementOf};
     use std::cmp::Ordering;
 
     // Prevent stack overflow on deeply nested expressions
@@ -249,7 +249,7 @@ fn compare_concepts_with_depth(
             ia.len().cmp(&ib.len()).then_with(|| {
                 for (ind_a, ind_b) in ia.iter().zip(ib.iter()) {
                     match compare_individuals(ind_a, ind_b) {
-                        Ordering::Equal => continue,
+                        Ordering::Equal => {}
                         other => return other,
                     }
                 }
@@ -447,7 +447,7 @@ fn compare_concept_lists_with_depth(
     a.len().cmp(&b.len()).then_with(|| {
         for (ca, cb) in a.iter().zip(b.iter()) {
             match compare_concepts_with_depth(ca, cb, depth) {
-                Ordering::Equal => continue,
+                Ordering::Equal => {}
                 other => return other,
             }
         }
@@ -500,7 +500,7 @@ fn compare_object_properties_with_depth(
         ) => ca.len().cmp(&cb.len()).then_with(|| {
             for (prop_a, prop_b) in ca.iter().zip(cb.iter()) {
                 match compare_object_properties_with_depth(prop_a, prop_b, depth + 1) {
-                    Ordering::Equal => continue,
+                    Ordering::Equal => {}
                     other => return other,
                 }
             }
@@ -555,7 +555,7 @@ fn compare_data_ranges_with_depth(
             ra.len().cmp(&rb.len()).then_with(|| {
                 for (range_a, range_b) in ra.iter().zip(rb.iter()) {
                     match compare_data_ranges_with_depth(range_a, range_b, depth + 1) {
-                        Ordering::Equal => continue,
+                        Ordering::Equal => {}
                         other => return other,
                     }
                 }
@@ -566,7 +566,7 @@ fn compare_data_ranges_with_depth(
             ra.len().cmp(&rb.len()).then_with(|| {
                 for (range_a, range_b) in ra.iter().zip(rb.iter()) {
                     match compare_data_ranges_with_depth(range_a, range_b, depth + 1) {
-                        Ordering::Equal => continue,
+                        Ordering::Equal => {}
                         other => return other,
                     }
                 }
@@ -580,7 +580,7 @@ fn compare_data_ranges_with_depth(
             la.len().cmp(&lb.len()).then_with(|| {
                 for (lit_a, lit_b) in la.iter().zip(lb.iter()) {
                     match compare_literals(lit_a, lit_b) {
-                        Ordering::Equal => continue,
+                        Ordering::Equal => {}
                         other => return other,
                     }
                 }

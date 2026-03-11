@@ -197,7 +197,7 @@ impl LinearRegressionModel {
         let correlation = self.calculate_correlation(&exec_actuals, data);
 
         self.accuracy_metrics = AccuracyMetrics {
-            mean_absolute_error: (exec_mae + memory_mae) / 2.0,
+            mean_absolute_error: f64::midpoint(exec_mae, memory_mae),
             root_mean_square_error: exec_rmse,
             correlation_coefficient: correlation,
             prediction_count: data.len(),
@@ -468,7 +468,7 @@ impl NeuralNetworkModel {
             let prediction = self.forward(&point.query_features);
             let exec_error = (prediction[0] - point.execution_time).abs();
             let memory_error = (prediction[1] - point.memory_usage).abs();
-            errors.push((exec_error + memory_error) / 2.0);
+            errors.push(f64::midpoint(exec_error, memory_error));
         }
 
         let mae = errors.iter().sum::<f64>() / errors.len() as f64;
@@ -664,7 +664,7 @@ impl PerformancePredictionModel for EnsembleModel {
                 let memory_pred = self.predict_memory_usage(&point.query_features);
                 let exec_error = (exec_pred - point.execution_time).abs();
                 let memory_error = (memory_pred - point.memory_usage).abs();
-                errors.push((exec_error + memory_error) / 2.0);
+                errors.push(f64::midpoint(exec_error, memory_error));
             }
 
             let mae = errors.iter().sum::<f64>() / errors.len() as f64;

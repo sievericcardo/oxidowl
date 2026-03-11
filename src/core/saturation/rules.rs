@@ -458,15 +458,12 @@ impl SaturationRule for PropertyChainRule {
                         // Check if the filler C contains ∃R₂.D
                         if let ClassExpression::ObjectSomeValuesFrom { property, filler } =
                             &existential.filler
-                        {
-                            if let Some(r2_iri) = extract_property_iri(property) {
-                                if r2_iri == *r2 {
+                            && let Some(r2_iri) = extract_property_iri(property)
+                                && r2_iri == *r2 {
                                     // Found ∃R₁.(∃R₂.D), infer ∃R.D where R = super_prop
                                     node.add_existential(super_prop.clone(), *filler.clone());
                                     changed = true;
                                 }
-                            }
-                        }
                     }
                 }
 
@@ -477,15 +474,12 @@ impl SaturationRule for PropertyChainRule {
                         // Check if the filler C contains ∀R₂.D
                         if let ClassExpression::ObjectAllValuesFrom { property, filler } =
                             &universal.filler
-                        {
-                            if let Some(r2_iri) = extract_property_iri(property) {
-                                if r2_iri == *r2 {
+                            && let Some(r2_iri) = extract_property_iri(property)
+                                && r2_iri == *r2 {
                                     // Found ∀R₁.(∀R₂.D), infer ∀R.D where R = super_prop
                                     node.add_universal(super_prop.clone(), *filler.clone());
                                     changed = true;
                                 }
-                            }
-                        }
                     }
                 }
 

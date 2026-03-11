@@ -396,7 +396,7 @@ impl FaultTolerance {
                         FaultQueryMsg::ShouldAttempt { node_id, tx } => {
                             let should = circuit_breakers
                                 .get(&node_id)
-                                .map(|b| b.should_attempt())
+                                .map(CircuitBreaker::should_attempt)
                                 .unwrap_or(true);
                             let _ = tx.send(should);
                         }
@@ -414,7 +414,7 @@ impl FaultTolerance {
                         FaultQueryMsg::GetCircuitBreaker { node_id, tx } => {
                             let state = circuit_breakers
                                 .get(&node_id)
-                                .map(|b| b.get_state())
+                                .map(CircuitBreaker::get_state)
                                 .unwrap_or(CircuitBreakerState::Closed);
                             let _ = tx.send(state);
                         }
@@ -466,7 +466,7 @@ impl FaultTolerance {
                             let result = checkpoint_manager
                                 .create_checkpoint(checkpoint_id, description.clone())
                                 .await
-                                .map(|_| {
+                                .map(|()| {
                                     let _ = event_sender_clone.send(
                                         FaultToleranceEvent::CheckpointCreated(checkpoint_id, description),
                                     );
@@ -666,22 +666,19 @@ impl FaultTolerance {
         let execution_timeout = Duration::from_millis(self.config.failure_detection_timeout_ms);
 
         // Execute with timeout
-        match timeout(execution_timeout, self.do_execute_partition(partition)).await {
-            Ok(result) => result,
-            Err(_) => {
-                // Timeout occurred
-                let event = FaultToleranceEvent::NodeFailure(
-                    partition.assigned_node,
-                    FailureType::QueryTimeout,
-                );
-                let _ = self.event_sender.send(event);
+        if let Ok(result) = timeout(execution_timeout, self.do_execute_partition(partition)).await { result } else {
+            // Timeout occurred
+            let event = FaultToleranceEvent::NodeFailure(
+                partition.assigned_node,
+                FailureType::QueryTimeout,
+            );
+            let _ = self.event_sender.send(event);
 
-                Err(DistributedError::FaultTolerance(format!(
-                    "Query execution timeout on node {}",
-                    partition.assigned_node
-                ))
-                .into())
-            }
+            Err(DistributedError::FaultTolerance(format!(
+                "Query execution timeout on node {}",
+                partition.assigned_node
+            ))
+            .into())
         }
     }
 
@@ -963,7 +960,7 @@ impl RecoveryManager {
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    _ = sleep(Duration::from_secs(10)) => {
+                    () = sleep(Duration::from_secs(10)) => {
                         debug!("Checking recovery progress");
                     }
                     _ = shutdown_rx.recv() => {

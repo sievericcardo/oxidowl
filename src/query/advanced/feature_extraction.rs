@@ -182,7 +182,7 @@ impl DLQueryFeatureExtractor {
 
         // Query tree depth (for nested expressions)
         let max_depth = self.calculate_max_expression_depth(query);
-        features.push(max_depth as f64);
+        features.push(f64::from(max_depth));
 
         features
     }

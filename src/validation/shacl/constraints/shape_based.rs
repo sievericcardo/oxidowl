@@ -105,8 +105,8 @@ where
 
     let mut out = Vec::new();
 
-    if let Some(min) = min_count {
-        if count < min {
+    if let Some(min) = min_count
+        && count < min {
             out.push(make_node_result(
                 focus_node,
                 None,
@@ -118,10 +118,9 @@ where
                 Vec::new(),
             ));
         }
-    }
 
-    if let Some(max) = max_count {
-        if count > max {
+    if let Some(max) = max_count
+        && count > max {
             out.push(make_node_result(
                 focus_node,
                 None,
@@ -135,7 +134,6 @@ where
                 Vec::new(),
             ));
         }
-    }
 
     Ok(out)
 }

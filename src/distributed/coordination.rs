@@ -115,7 +115,7 @@ impl ClusterCoordinator {
             ConsensusAlgorithm::Raft => info!("Starting Raft consensus protocol"),
             ConsensusAlgorithm::LeaderElection => info!("Starting leader election"),
             ConsensusAlgorithm::None => {
-                info!("Running in single-node mode, no consensus protocol")
+                info!("Running in single-node mode, no consensus protocol");
             }
         }
 
@@ -472,12 +472,7 @@ impl DistributedLock {
     /// Get remaining time before lock expires
     #[must_use]
     pub fn time_remaining(&self) -> Option<std::time::Duration> {
-        let elapsed = self.acquired_at.elapsed();
-        if elapsed < self.timeout {
-            Some(self.timeout - elapsed)
-        } else {
-            None
-        }
+        self.timeout.checked_sub(self.acquired_at.elapsed())
     }
 }
 

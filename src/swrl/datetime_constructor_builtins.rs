@@ -2,7 +2,14 @@
 //!
 //! This module implements constructor built-ins for creating date, time, and duration values.
 
-#![allow(dead_code)]
+// Datetime operations use intentional numeric casts (e.g., seconds/microseconds fields
+// are always within valid range; truncation and sign handling are deliberate).
+#![allow(
+    dead_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+)]
 
 use crate::error::{Error, Result};
 use crate::ontology::{IRI, Literal};

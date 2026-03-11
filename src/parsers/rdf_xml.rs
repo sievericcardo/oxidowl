@@ -630,7 +630,7 @@ impl RdfXmlParser {
 
         // Pattern: <rdf:Description rdf:about="resource"><rdf:reifies><<triple>></rdf:reifies></rdf:Description>
         // Simplified regex for rdf:reifies detection
-        if let Ok(regex) = regex::Regex::new(r#"rdf:reifies[^>]*>(.*?)</.*?:reifies>"#) {
+        if let Ok(regex) = regex::Regex::new(r"rdf:reifies[^>]*>(.*?)</.*?:reifies>") {
             for caps in regex.captures_iter(content) {
                 if let Some(reified_content) = caps.get(1) {
                     let content_str = reified_content.as_str().trim();

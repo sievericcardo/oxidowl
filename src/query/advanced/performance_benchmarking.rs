@@ -417,7 +417,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Query benchmarks
         let mut query_results = Vec::new();
-        for (query_id, query) in benchmark_queries.iter() {
+        for (query_id, query) in &benchmark_queries {
             let query_metrics = self
                 .benchmark_query(query_id, query, &galen_ontology, optimizer, ml_heuristics)
                 .await?;
@@ -464,7 +464,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Query benchmarks
         let mut query_results = Vec::new();
-        for (query_id, query) in benchmark_queries.iter() {
+        for (query_id, query) in &benchmark_queries {
             let query_metrics = self
                 .benchmark_query(query_id, query, &go_ontology, optimizer, ml_heuristics)
                 .await?;
@@ -515,7 +515,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Query benchmarks
         let mut query_results = Vec::new();
-        for (query_id, query) in benchmark_queries.iter() {
+        for (query_id, query) in &benchmark_queries {
             let query_metrics = self
                 .benchmark_query(
                     query_id,
