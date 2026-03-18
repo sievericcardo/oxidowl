@@ -17,7 +17,10 @@ impl ValueSpaceHandler for IntegerValueSpace {
     }
 
     fn normalise(&self, value: &str) -> String {
-        value.parse::<i128>().map(|n| n.to_string()).unwrap_or_else(|_| value.to_string())
+        value
+            .parse::<i128>()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|_| value.to_string())
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {
@@ -26,7 +29,12 @@ impl ValueSpaceHandler for IntegerValueSpace {
         Ok(pa == pb)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         let v = parse_i128(value)?;
         check_numeric_facet_i128(v, facet_iri, facet_value)
     }
@@ -58,7 +66,8 @@ impl ValueSpaceHandler for DecimalValueSpace {
     }
 
     fn normalise(&self, value: &str) -> String {
-        value.parse::<f64>()
+        value
+            .parse::<f64>()
             .map(|f| format!("{f}"))
             .unwrap_or_else(|_| value.to_string())
     }
@@ -69,7 +78,12 @@ impl ValueSpaceHandler for DecimalValueSpace {
         Ok((pa - pb).abs() < f64::EPSILON)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         let v = parse_f64(value)?;
         check_numeric_facet_f64(v, facet_iri, facet_value)
     }
@@ -92,12 +106,16 @@ pub struct FloatValueSpace {
 impl FloatValueSpace {
     #[must_use]
     pub fn xsd_float() -> Self {
-        Self { datatype: "http://www.w3.org/2001/XMLSchema#float" }
+        Self {
+            datatype: "http://www.w3.org/2001/XMLSchema#float",
+        }
     }
 
     #[must_use]
     pub fn xsd_double() -> Self {
-        Self { datatype: "http://www.w3.org/2001/XMLSchema#double" }
+        Self {
+            datatype: "http://www.w3.org/2001/XMLSchema#double",
+        }
     }
 }
 
@@ -132,7 +150,12 @@ impl ValueSpaceHandler for FloatValueSpace {
         Ok(pa == pb)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         if value == "NaN" {
             // NaN does not satisfy ordering constraints.
             return Ok(false);
@@ -205,8 +228,14 @@ mod tests {
     #[test]
     fn test_integer_facets() {
         let h = IntegerValueSpace;
-        assert!(h.satisfies_facet("5", "http://www.w3.org/2001/XMLSchema#minInclusive", "1").unwrap());
-        assert!(!h.satisfies_facet("0", "http://www.w3.org/2001/XMLSchema#minExclusive", "0").unwrap());
+        assert!(
+            h.satisfies_facet("5", "http://www.w3.org/2001/XMLSchema#minInclusive", "1")
+                .unwrap()
+        );
+        assert!(
+            !h.satisfies_facet("0", "http://www.w3.org/2001/XMLSchema#minExclusive", "0")
+                .unwrap()
+        );
     }
 
     #[test]

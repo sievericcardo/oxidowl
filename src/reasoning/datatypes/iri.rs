@@ -31,7 +31,12 @@ impl ValueSpaceHandler for IriValueSpace {
         Ok(a == b)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         match facet_iri {
             "http://www.w3.org/2001/XMLSchema#minLength" => {
                 let min: usize = facet_value.parse().map_err(|_| {
@@ -46,9 +51,8 @@ impl ValueSpaceHandler for IriValueSpace {
                 Ok(value.len() <= max)
             }
             "http://www.w3.org/2001/XMLSchema#pattern" => {
-                let re = regex::Regex::new(facet_value).map_err(|e| {
-                    Error::invalid_input(format!("Invalid pattern: {e}"))
-                })?;
+                let re = regex::Regex::new(facet_value)
+                    .map_err(|e| Error::invalid_input(format!("Invalid pattern: {e}")))?;
                 Ok(re.is_match(value))
             }
             "http://www.w3.org/2001/XMLSchema#enumeration" => {

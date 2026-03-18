@@ -6,8 +6,8 @@
 
 use dashmap::DashMap;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// A cached set of class expressions (stored as IRIs / Manchester strings).
@@ -62,7 +62,10 @@ impl ConsequencesCache {
     pub fn cache_subclasses(&self, class: &str, direct: bool, subs: HashSet<String>) {
         self.subclasses.insert(
             (class.to_string(), direct),
-            ClassSet { classes: subs, computed_at: Instant::now() },
+            ClassSet {
+                classes: subs,
+                computed_at: Instant::now(),
+            },
         );
     }
 
@@ -76,7 +79,10 @@ impl ConsequencesCache {
     pub fn cache_superclasses(&self, class: &str, direct: bool, supers: HashSet<String>) {
         self.superclasses.insert(
             (class.to_string(), direct),
-            ClassSet { classes: supers, computed_at: Instant::now() },
+            ClassSet {
+                classes: supers,
+                computed_at: Instant::now(),
+            },
         );
     }
 
@@ -90,7 +96,10 @@ impl ConsequencesCache {
     pub fn cache_equivalent(&self, class: &str, equivs: HashSet<String>) {
         self.equivalent.insert(
             class.to_string(),
-            ClassSet { classes: equivs, computed_at: Instant::now() },
+            ClassSet {
+                classes: equivs,
+                computed_at: Instant::now(),
+            },
         );
     }
 
@@ -119,7 +128,10 @@ impl ConsequencesCache {
     pub fn cache_instances(&self, class: &str, direct: bool, inds: HashSet<String>) {
         self.instances.insert(
             (class.to_string(), direct),
-            IndividualSet { individuals: inds, computed_at: Instant::now() },
+            IndividualSet {
+                individuals: inds,
+                computed_at: Instant::now(),
+            },
         );
     }
 
@@ -148,7 +160,10 @@ impl ConsequencesCache {
     pub fn cache_types(&self, individual: &str, direct: bool, types: HashSet<String>) {
         self.types.insert(
             (individual.to_string(), direct),
-            ClassSet { classes: types, computed_at: Instant::now() },
+            ClassSet {
+                classes: types,
+                computed_at: Instant::now(),
+            },
         );
     }
 

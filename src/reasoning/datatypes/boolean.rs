@@ -30,7 +30,12 @@ impl ValueSpaceHandler for BooleanValueSpace {
         Ok(na == nb)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         match facet_iri {
             "http://www.w3.org/2001/XMLSchema#pattern" => {
                 // Simple regex would go here; for now exact match.
@@ -56,8 +61,8 @@ impl ValueSpaceHandler for BooleanValueSpace {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::ValueSpaceHandler;
+    use super::*;
 
     #[test]
     fn test_valid() {

@@ -136,15 +136,9 @@ pub enum OWLlinkRequestType {
         super_class: String,
     },
     /// Check if two classes are equivalent
-    AreClassesEquivalent {
-        class_a: String,
-        class_b: String,
-    },
+    AreClassesEquivalent { class_a: String, class_b: String },
     /// Check if two classes are disjoint
-    AreClassesDisjoint {
-        class_a: String,
-        class_b: String,
-    },
+    AreClassesDisjoint { class_a: String, class_b: String },
     /// Check if an axiom is entailed
     IsEntailed { axiom: String },
     /// Classify ontology
@@ -481,11 +475,10 @@ async fn process_owllink_request(
                 .get_equivalent_classes(&class_expr)
                 .await
                 .map_err(|e| Error::ReasoningError(e.to_string()))?;
-            let class_iris: Vec<String> = equiv
-                .into_iter()
-                .map(|c| format!("{:?}", c))
-                .collect();
-            OWLlinkResponseType::Classes { classes: class_iris }
+            let class_iris: Vec<String> = equiv.into_iter().map(|c| format!("{:?}", c)).collect();
+            OWLlinkResponseType::Classes {
+                classes: class_iris,
+            }
         }
 
         OWLlinkRequestType::GetTypes { individual, direct } => {
@@ -495,7 +488,9 @@ async fn process_owllink_request(
                 .await
                 .map_err(|e| Error::ReasoningError(e.to_string()))?;
             let class_iris: Vec<String> = types.into_iter().map(|c| format!("{:?}", c)).collect();
-            OWLlinkResponseType::Classes { classes: class_iris }
+            OWLlinkResponseType::Classes {
+                classes: class_iris,
+            }
         }
 
         OWLlinkRequestType::GetFlattenedTypes { individual } => {
@@ -505,17 +500,23 @@ async fn process_owllink_request(
                 .await
                 .map_err(|e| Error::ReasoningError(e.to_string()))?;
             let class_iris: Vec<String> = types.into_iter().map(|c| format!("{:?}", c)).collect();
-            OWLlinkResponseType::Classes { classes: class_iris }
+            OWLlinkResponseType::Classes {
+                classes: class_iris,
+            }
         }
 
         OWLlinkRequestType::GetSameIndividuals { individual: _ } => {
             // Not yet implemented in ReasoningService; return empty.
-            OWLlinkResponseType::Individuals { individuals: vec![] }
+            OWLlinkResponseType::Individuals {
+                individuals: vec![],
+            }
         }
 
         OWLlinkRequestType::GetDifferentIndividuals { individual: _ } => {
             // Not yet implemented in ReasoningService; return empty.
-            OWLlinkResponseType::Individuals { individuals: vec![] }
+            OWLlinkResponseType::Individuals {
+                individuals: vec![],
+            }
         }
 
         OWLlinkRequestType::AreIndividualsRelated {
@@ -529,25 +530,29 @@ async fn process_owllink_request(
             OWLlinkResponseType::BooleanResponse { result: false }
         }
 
-        OWLlinkRequestType::GetSubObjectProperties { object_property: _, direct: _ } => {
-            OWLlinkResponseType::Properties { properties: vec![] }
-        }
+        OWLlinkRequestType::GetSubObjectProperties {
+            object_property: _,
+            direct: _,
+        } => OWLlinkResponseType::Properties { properties: vec![] },
 
-        OWLlinkRequestType::GetSuperObjectProperties { object_property: _, direct: _ } => {
-            OWLlinkResponseType::Properties { properties: vec![] }
-        }
+        OWLlinkRequestType::GetSuperObjectProperties {
+            object_property: _,
+            direct: _,
+        } => OWLlinkResponseType::Properties { properties: vec![] },
 
         OWLlinkRequestType::GetEquivalentObjectProperties { object_property: _ } => {
             OWLlinkResponseType::Properties { properties: vec![] }
         }
 
-        OWLlinkRequestType::GetSubDataProperties { data_property: _, direct: _ } => {
-            OWLlinkResponseType::Properties { properties: vec![] }
-        }
+        OWLlinkRequestType::GetSubDataProperties {
+            data_property: _,
+            direct: _,
+        } => OWLlinkResponseType::Properties { properties: vec![] },
 
-        OWLlinkRequestType::GetSuperDataProperties { data_property: _, direct: _ } => {
-            OWLlinkResponseType::Properties { properties: vec![] }
-        }
+        OWLlinkRequestType::GetSuperDataProperties {
+            data_property: _,
+            direct: _,
+        } => OWLlinkResponseType::Properties { properties: vec![] },
 
         OWLlinkRequestType::GetEquivalentDataProperties { data_property: _ } => {
             OWLlinkResponseType::Properties { properties: vec![] }
@@ -571,7 +576,7 @@ fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
 
 /// Build a named `Individual` from an IRI string.
 fn parse_individual(iri: &str) -> Result<crate::ontology::Individual> {
-    use crate::ontology::{Individual, IRI, NamedIndividual};
+    use crate::ontology::{IRI, Individual, NamedIndividual};
     Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri) }))
 }
 

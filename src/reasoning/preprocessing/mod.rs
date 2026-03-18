@@ -21,20 +21,20 @@ pub mod role_automata;
 pub use absorption::{MergedAbsorptionResult, TriggeredImplicationAbsorber, TriggeredPattern};
 pub use common_disjunct::{CommonDisjunctExtractor, CommonDisjunctResult, CommonDisjunctStats};
 pub use disjunct_sorting::{
-    ConceptStatCollector, ConceptStats, DisjunctSortingStrategy, DisjunctSorter,
+    ConceptStatCollector, ConceptStats, DisjunctSorter, DisjunctSortingStrategy,
 };
 pub use nominal_schema::{
-    GroundedNominalSchema, NominalSchemaExtractor, NominalSchemaGrounder,
-    NominalSchemaStats, NominalSchemaTemplate, TemplateAtom,
+    GroundedNominalSchema, NominalSchemaExtractor, NominalSchemaGrounder, NominalSchemaStats,
+    NominalSchemaTemplate, TemplateAtom,
 };
 pub use role_automata::{
-    RoleAutomaton, RoleAutomataRegistry, RoleAutomataStats, RoleAxioms, build_registry,
+    RoleAutomataRegistry, RoleAutomataStats, RoleAutomaton, RoleAxioms, build_registry,
 };
 /// Alias kept for backward-compatibility.
 pub type RoleAutomata = role_automata::RoleAutomaton;
 
-use crate::dl_clauses::DLClauseSet;
 use crate::core::tableau::absorption::ClauseAbsorber;
+use crate::dl_clauses::DLClauseSet;
 
 /// Configuration for the preprocessing pipeline.
 #[derive(Debug, Clone)]
@@ -113,7 +113,9 @@ impl PreprocessingPipeline {
 
     #[must_use]
     pub fn with_defaults() -> Self {
-        Self { config: PreprocessingConfig::default() }
+        Self {
+            config: PreprocessingConfig::default(),
+        }
     }
 
     /// Run all enabled preprocessing stages on `clause_set`.
@@ -166,8 +168,7 @@ impl PreprocessingPipeline {
         // ── Stage 5: Nominal Schema Extraction & Grounding ───────────────────
         let grounded_nominal_schemas = if self.config.enable_nominal_schemas {
             let extractor = NominalSchemaExtractor::default();
-            let grounder =
-                NominalSchemaGrounder::new(self.config.known_individuals.clone());
+            let grounder = NominalSchemaGrounder::new(self.config.known_individuals.clone());
             let mut ns_stats = NominalSchemaStats::default();
             let groundings = grounder.ground(&extractor, &mut ns_stats);
             stats.nominal_groundings = ns_stats.groundings_produced;

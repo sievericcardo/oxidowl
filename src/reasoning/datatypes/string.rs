@@ -12,22 +12,30 @@ pub struct StringValueSpace {
 impl StringValueSpace {
     #[must_use]
     pub fn xsd_string() -> Self {
-        Self { datatype: "http://www.w3.org/2001/XMLSchema#string" }
+        Self {
+            datatype: "http://www.w3.org/2001/XMLSchema#string",
+        }
     }
 
     #[must_use]
     pub fn xsd_normalized_string() -> Self {
-        Self { datatype: "http://www.w3.org/2001/XMLSchema#normalizedString" }
+        Self {
+            datatype: "http://www.w3.org/2001/XMLSchema#normalizedString",
+        }
     }
 
     #[must_use]
     pub fn xsd_token() -> Self {
-        Self { datatype: "http://www.w3.org/2001/XMLSchema#token" }
+        Self {
+            datatype: "http://www.w3.org/2001/XMLSchema#token",
+        }
     }
 
     #[must_use]
     pub fn rdf_lang_string() -> Self {
-        Self { datatype: "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString" }
+        Self {
+            datatype: "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString",
+        }
     }
 }
 
@@ -49,10 +57,7 @@ impl ValueSpaceHandler for StringValueSpace {
             }
             "http://www.w3.org/2001/XMLSchema#token" => {
                 // Normalise whitespace and collapse internal spaces.
-                let collapsed: String = value
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let collapsed: String = value.split_whitespace().collect::<Vec<_>>().join(" ");
                 collapsed
             }
             _ => value.to_string(),
@@ -63,7 +68,12 @@ impl ValueSpaceHandler for StringValueSpace {
         Ok(self.normalise(a) == self.normalise(b))
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         match facet_iri {
             "http://www.w3.org/2001/XMLSchema#minLength" => {
                 let min: usize = facet_value.parse().map_err(|_| {
@@ -78,16 +88,15 @@ impl ValueSpaceHandler for StringValueSpace {
                 Ok(value.chars().count() <= max)
             }
             "http://www.w3.org/2001/XMLSchema#length" => {
-                let len: usize = facet_value.parse().map_err(|_| {
-                    Error::invalid_input(format!("Invalid length: {facet_value}"))
-                })?;
+                let len: usize = facet_value
+                    .parse()
+                    .map_err(|_| Error::invalid_input(format!("Invalid length: {facet_value}")))?;
                 Ok(value.chars().count() == len)
             }
             "http://www.w3.org/2001/XMLSchema#pattern" => {
                 // Use regex crate if available.
-                let re = regex::Regex::new(facet_value).map_err(|e| {
-                    Error::invalid_input(format!("Invalid pattern facet: {e}"))
-                })?;
+                let re = regex::Regex::new(facet_value)
+                    .map_err(|e| Error::invalid_input(format!("Invalid pattern facet: {e}")))?;
                 Ok(re.is_match(value))
             }
             "http://www.w3.org/2001/XMLSchema#enumeration" => {
@@ -112,14 +121,20 @@ impl ValueSpaceHandler for StringValueSpace {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::ValueSpaceHandler;
+    use super::*;
 
     #[test]
     fn test_min_length_facet() {
         let h = StringValueSpace::xsd_string();
-        assert!(h.satisfies_facet("hello", "http://www.w3.org/2001/XMLSchema#minLength", "3").unwrap());
-        assert!(!h.satisfies_facet("hi", "http://www.w3.org/2001/XMLSchema#minLength", "3").unwrap());
+        assert!(
+            h.satisfies_facet("hello", "http://www.w3.org/2001/XMLSchema#minLength", "3")
+                .unwrap()
+        );
+        assert!(
+            !h.satisfies_facet("hi", "http://www.w3.org/2001/XMLSchema#minLength", "3")
+                .unwrap()
+        );
     }
 
     #[test]

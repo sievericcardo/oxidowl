@@ -18,7 +18,7 @@
 //! | `FrequencyAsc`  | Prefer frequent concepts (appear in many axioms) |
 //! | `Lexicographic` | Deterministic stable sort by IRI string |
 
-use crate::dl_clauses::{DLClause};
+use crate::dl_clauses::DLClause;
 use std::collections::HashMap;
 
 /// Available disjunct ordering strategies.
@@ -100,7 +100,10 @@ impl DisjunctSorter {
         strategy: DisjunctSortingStrategy,
         concept_stats: HashMap<String, ConceptStats>,
     ) -> Self {
-        Self { strategy, concept_stats }
+        Self {
+            strategy,
+            concept_stats,
+        }
     }
 
     /// Sort disjuncts in a single clause's head in place.
@@ -185,8 +188,7 @@ mod tests {
             id: "t".to_string(),
             variables: Default::default(),
         };
-        let sorter =
-            DisjunctSorter::new(DisjunctSortingStrategy::Lexicographic, HashMap::new());
+        let sorter = DisjunctSorter::new(DisjunctSortingStrategy::Lexicographic, HashMap::new());
         sorter.sort_clause(&mut clause);
         let names: Vec<_> = clause.head.iter().map(|a| a.predicate.as_str()).collect();
         assert_eq!(names, vec!["Animal", "Mammal", "Zebra"]);
@@ -195,8 +197,20 @@ mod tests {
     #[test]
     fn test_cheap_first() {
         let mut stats = HashMap::new();
-        stats.insert("Expensive".to_string(), ConceptStats { estimated_cost: 10, ..Default::default() });
-        stats.insert("Cheap".to_string(), ConceptStats { estimated_cost: 1, ..Default::default() });
+        stats.insert(
+            "Expensive".to_string(),
+            ConceptStats {
+                estimated_cost: 10,
+                ..Default::default()
+            },
+        );
+        stats.insert(
+            "Cheap".to_string(),
+            ConceptStats {
+                estimated_cost: 1,
+                ..Default::default()
+            },
+        );
         let mut clause = DLClause {
             body: vec![],
             head: vec![atom("Expensive"), atom("Cheap")],

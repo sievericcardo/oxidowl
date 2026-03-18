@@ -37,7 +37,12 @@ impl ValueSpaceHandler for DateTimeValueSpace {
         Ok(da == db)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         let v = parse_datetime(value)?;
         let fv = parse_datetime(facet_value)?;
         match facet_iri {
@@ -81,7 +86,12 @@ impl ValueSpaceHandler for DateValueSpace {
         Ok(da == db)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         let v = NaiveDate::parse_from_str(value, "%Y-%m-%d")
             .map_err(|_| Error::invalid_input(format!("Invalid date: {value}")))?;
         let fv = NaiveDate::parse_from_str(facet_value, "%Y-%m-%d")
@@ -91,7 +101,9 @@ impl ValueSpaceHandler for DateValueSpace {
             "http://www.w3.org/2001/XMLSchema#maxInclusive" => Ok(v <= fv),
             "http://www.w3.org/2001/XMLSchema#minExclusive" => Ok(v > fv),
             "http://www.w3.org/2001/XMLSchema#maxExclusive" => Ok(v < fv),
-            other => Err(Error::invalid_input(format!("Unsupported date facet: {other}"))),
+            other => Err(Error::invalid_input(format!(
+                "Unsupported date facet: {other}"
+            ))),
         }
     }
 
@@ -127,7 +139,12 @@ impl ValueSpaceHandler for TimeValueSpace {
         Ok(ta == tb)
     }
 
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error> {
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error> {
         let v = parse_time(value)?;
         let fv = parse_time(facet_value)?;
         match facet_iri {
@@ -135,7 +152,9 @@ impl ValueSpaceHandler for TimeValueSpace {
             "http://www.w3.org/2001/XMLSchema#maxInclusive" => Ok(v <= fv),
             "http://www.w3.org/2001/XMLSchema#minExclusive" => Ok(v > fv),
             "http://www.w3.org/2001/XMLSchema#maxExclusive" => Ok(v < fv),
-            other => Err(Error::invalid_input(format!("Unsupported time facet: {other}"))),
+            other => Err(Error::invalid_input(format!(
+                "Unsupported time facet: {other}"
+            ))),
         }
     }
 
@@ -174,10 +193,13 @@ mod tests {
     #[test]
     fn test_date_facet() {
         let h = DateValueSpace;
-        assert!(h.satisfies_facet(
-            "2024-06-01",
-            "http://www.w3.org/2001/XMLSchema#minInclusive",
-            "2024-01-01",
-        ).unwrap());
+        assert!(
+            h.satisfies_facet(
+                "2024-06-01",
+                "http://www.w3.org/2001/XMLSchema#minInclusive",
+                "2024-01-01",
+            )
+            .unwrap()
+        );
     }
 }

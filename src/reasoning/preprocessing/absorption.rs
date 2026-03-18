@@ -16,23 +16,17 @@
 //! | `ExistentialTriggered`  | `C ⊑ ∃R.D` → emit a create-edge rule keyed on trigger concept `C` |
 //! | `UniversalTriggered`    | `C ⊑ ∀R.D` → emit an all-successors rule |
 
-use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
 use crate::core::tableau::absorption::{AbsorbablePattern, ClauseAbsorber};
-use std::collections::{HashMap};
+use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
+use std::collections::HashMap;
 
 /// Extended absorption pattern that covers triggered GCI forms.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TriggeredPattern {
     /// `C ⊑ D`  — trigger on C, add D
-    TriggeredImplication {
-        trigger: String,
-        implied: String,
-    },
+    TriggeredImplication { trigger: String, implied: String },
     /// `C ⊑ ¬D` — trigger on C, clash when D is also present
-    NegativeTriggered {
-        trigger: String,
-        negated: String,
-    },
+    NegativeTriggered { trigger: String, negated: String },
     /// `C ⊑ ∃R.D`  — trigger on C, create R-successor labelled D
     ExistentialTriggered {
         trigger: String,
@@ -125,10 +119,18 @@ impl TriggeredImplicationAbsorber {
 
     fn try_absorb(&mut self, clause: &DLClause) {
         // Attempt patterns in priority order.
-        if self.try_triggered_implication(clause) { return; }
-        if self.try_negative_triggered(clause) { return; }
-        if self.try_existential_triggered(clause) { return; }
-        if self.try_universal_triggered(clause) { return; }
+        if self.try_triggered_implication(clause) {
+            return;
+        }
+        if self.try_negative_triggered(clause) {
+            return;
+        }
+        if self.try_existential_triggered(clause) {
+            return;
+        }
+        if self.try_universal_triggered(clause) {
+            return;
+        }
 
         // Cannot absorb.
         self.remaining.push(clause.clone());
@@ -139,10 +141,7 @@ impl TriggeredImplicationAbsorber {
         // A disjunctive clause A(x) → B(x) ∨ C(x) can be partially absorbed
         // when the body is a single concept: emit conjunction trigger for both heads.
         // We only absorb two-disjunct heads for now.
-        if clause.body.len() == 1
-            && clause.head.len() == 2
-            && clause.body[0].arguments.len() == 1
-        {
+        if clause.body.len() == 1 && clause.head.len() == 2 && clause.body[0].arguments.len() == 1 {
             let trigger = clause.body[0].predicate.clone();
             let h0 = &clause.head[0];
             let h1 = &clause.head[1];
@@ -155,10 +154,7 @@ impl TriggeredImplicationAbsorber {
                 };
                 let idx = self.patterns.len();
                 self.patterns.push(pattern);
-                self.trigger_index
-                    .entry(trigger)
-                    .or_default()
-                    .push(idx);
+                self.trigger_index.entry(trigger).or_default().push(idx);
                 self.stats.conjunction_absorbed += 1;
                 return true;
             }
@@ -255,7 +251,8 @@ impl TriggeredImplicationAbsorber {
 
         if let (Some(role), Some(filler)) = (role_atom, filler_atom) {
             // The filler variable should match role's second argument.
-            if role.arguments.len() == 2 && filler.arguments.len() == 1
+            if role.arguments.len() == 2
+                && filler.arguments.len() == 1
                 && role.arguments[1] == filler.arguments[0]
             {
                 let pattern = TriggeredPattern::ExistentialTriggered {
@@ -367,7 +364,10 @@ mod tests {
 
     #[test]
     fn test_triggered_implication() {
-        let clause = make_clause(vec![atom("Animal", &["x"])], vec![atom("LivingThing", &["x"])]);
+        let clause = make_clause(
+            vec![atom("Animal", &["x"])],
+            vec![atom("LivingThing", &["x"])],
+        );
         let mut set = DLClauseSet::default();
         set.deterministic_clauses.push(clause);
         let absorber = TriggeredImplicationAbsorber::absorb(&set);
@@ -377,10 +377,7 @@ mod tests {
 
     #[test]
     fn test_negative_triggered() {
-        let clause = make_clause(
-            vec![atom("Animal", &["x"]), atom("Plant", &["x"])],
-            vec![],
-        );
+        let clause = make_clause(vec![atom("Animal", &["x"]), atom("Plant", &["x"])], vec![]);
         let mut set = DLClauseSet::default();
         set.deterministic_clauses.push(clause);
         let absorber = TriggeredImplicationAbsorber::absorb(&set);

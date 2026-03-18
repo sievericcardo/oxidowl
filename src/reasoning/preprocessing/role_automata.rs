@@ -62,7 +62,11 @@ impl RoleAutomaton {
                 s.insert(1);
                 s
             },
-            transitions: vec![Transition { from: 0, role: role.to_string(), to: 1 }],
+            transitions: vec![Transition {
+                from: 0,
+                role: role.to_string(),
+                to: 1,
+            }],
         }
     }
 
@@ -104,8 +108,16 @@ impl RoleAutomaton {
             initial: 0,
             accepting,
             transitions: vec![
-                Transition { from: 0, role: role.to_string(), to: 1 },
-                Transition { from: 1, role: role.to_string(), to: 1 }, // self-loop
+                Transition {
+                    from: 0,
+                    role: role.to_string(),
+                    to: 1,
+                },
+                Transition {
+                    from: 1,
+                    role: role.to_string(),
+                    to: 1,
+                }, // self-loop
             ],
         }
     }
@@ -291,9 +303,10 @@ mod tests {
         let axioms = RoleAxioms {
             atomic_roles: vec!["hasParent".to_string()],
             transitive_roles: vec!["hasAncestor".to_string()],
-            role_chains: vec![
-                ("hasGrandParent".to_string(), vec!["hasParent".to_string(), "hasParent".to_string()])
-            ],
+            role_chains: vec![(
+                "hasGrandParent".to_string(),
+                vec!["hasParent".to_string(), "hasParent".to_string()],
+            )],
         };
         let (registry, stats) = build_registry(&axioms);
         assert_eq!(stats.atomic_roles, 1);

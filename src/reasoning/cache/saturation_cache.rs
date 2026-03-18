@@ -7,8 +7,8 @@
 
 use dashmap::DashMap;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A subsumption fact: `sub ⊑ super`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -41,7 +41,10 @@ impl SaturationCache {
 
     /// Record a subsumption `sub ⊑ super` derived by saturation.
     pub fn record_subsumption(&self, sub: String, sup: String) {
-        self.cache.entry(sub.clone()).or_default().insert(sup.clone());
+        self.cache
+            .entry(sub.clone())
+            .or_default()
+            .insert(sup.clone());
         self.inverted.entry(sup).or_default().insert(sub);
     }
 

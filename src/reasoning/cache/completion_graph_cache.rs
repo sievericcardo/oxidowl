@@ -9,8 +9,8 @@
 //! concept labels per node, and the satisfiability verdict.
 
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Compact representation of a completion graph outcome.
@@ -30,7 +30,12 @@ pub struct CompletionGraphSummary {
 
 impl CompletionGraphSummary {
     #[must_use]
-    pub fn new(satisfiable: bool, node_count: usize, edge_count: usize, root_labels: Vec<String>) -> Self {
+    pub fn new(
+        satisfiable: bool,
+        node_count: usize,
+        edge_count: usize,
+        root_labels: Vec<String>,
+    ) -> Self {
         Self {
             satisfiable,
             node_count,
@@ -78,7 +83,10 @@ impl CompletionGraphCache {
     }
 
     /// Look up the cached summary for an initial concept set.
-    pub fn get(&self, concepts: impl IntoIterator<Item = String>) -> Option<CompletionGraphSummary> {
+    pub fn get(
+        &self,
+        concepts: impl IntoIterator<Item = String>,
+    ) -> Option<CompletionGraphSummary> {
         let key = GraphCacheKey::new(concepts);
         if let Some(summary) = self.cache.get(&key) {
             if summary.cached_at.elapsed() < self.ttl {
@@ -93,7 +101,11 @@ impl CompletionGraphCache {
     }
 
     /// Store a completion graph summary.
-    pub fn insert(&self, concepts: impl IntoIterator<Item = String>, summary: CompletionGraphSummary) {
+    pub fn insert(
+        &self,
+        concepts: impl IntoIterator<Item = String>,
+        summary: CompletionGraphSummary,
+    ) {
         if self.cache.len() >= self.max_size {
             // Simple FIFO-ish eviction.
             if let Some(key) = self.cache.iter().next().map(|e| e.key().clone()) {

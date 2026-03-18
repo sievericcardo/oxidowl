@@ -9,8 +9,8 @@
 //! Thread-safe via `DashMap`.
 
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// The expansion result for a node that was successfully satisfied.
@@ -105,7 +105,8 @@ impl SatExpanderCache {
             }
         }
         let sig = ExpansionSignature::new(concepts);
-        self.cache.insert(sig, ExpanderCacheEntry::new(added, successors));
+        self.cache
+            .insert(sig, ExpanderCacheEntry::new(added, successors));
     }
 
     #[must_use]
@@ -139,7 +140,11 @@ mod tests {
     #[test]
     fn test_insert_and_retrieve() {
         let cache = SatExpanderCache::default();
-        cache.insert(["A".to_string(), "B".to_string()], vec!["C".to_string()], vec![]);
+        cache.insert(
+            ["A".to_string(), "B".to_string()],
+            vec!["C".to_string()],
+            vec![],
+        );
         let result = cache.get(["B".to_string(), "A".to_string()]); // order shouldn't matter
         assert!(result.is_some());
         assert_eq!(result.unwrap().added_concepts, vec!["C".to_string()]);

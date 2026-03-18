@@ -21,7 +21,7 @@
 //! data structures and preprocessing pipeline; integration with the main
 //! tableau requires wiring into `core::tableau::executor`.
 
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 /// A concept variable used inside a nominal schema (e.g., `z` in `{z}`).
 pub type ConceptVariable = String;
@@ -47,9 +47,16 @@ pub enum TemplateAtom {
     /// A ground concept atom: `Concept(x)`.
     Concept { concept: String, var: String },
     /// A nominal schema atom: `{z}(x)` — the nominal is the individual bound to `z`.
-    NominalSchema { schema_var: ConceptVariable, node_var: String },
+    NominalSchema {
+        schema_var: ConceptVariable,
+        node_var: String,
+    },
     /// A role atom: `R(x, y)`.
-    Role { role: String, from: String, to: String },
+    Role {
+        role: String,
+        from: String,
+        to: String,
+    },
 }
 
 /// A grounded instance of a nominal schema template, where all concept
@@ -169,13 +176,19 @@ fn ground_template(
 }
 
 /// Ground a single template atom.
-fn ground_atom(atom: &TemplateAtom, assignment: &HashMap<ConceptVariable, String>) -> Option<GroundAtom> {
+fn ground_atom(
+    atom: &TemplateAtom,
+    assignment: &HashMap<ConceptVariable, String>,
+) -> Option<GroundAtom> {
     match atom {
         TemplateAtom::Concept { concept, var } => Some(GroundAtom {
             predicate: concept.clone(),
             arguments: vec![var.clone()],
         }),
-        TemplateAtom::NominalSchema { schema_var, node_var } => {
+        TemplateAtom::NominalSchema {
+            schema_var,
+            node_var,
+        } => {
             // Replace the nominal schema with the concrete individual.
             let individual = assignment.get(schema_var)?;
             Some(GroundAtom {
@@ -224,12 +237,14 @@ mod tests {
         let template = NominalSchemaTemplate {
             id: "t1".to_string(),
             variables: vec!["z".to_string()],
-            body_atoms: vec![
-                TemplateAtom::Concept { concept: "Human".to_string(), var: "x".to_string() },
-            ],
-            head_atoms: vec![
-                TemplateAtom::NominalSchema { schema_var: "z".to_string(), node_var: "x".to_string() },
-            ],
+            body_atoms: vec![TemplateAtom::Concept {
+                concept: "Human".to_string(),
+                var: "x".to_string(),
+            }],
+            head_atoms: vec![TemplateAtom::NominalSchema {
+                schema_var: "z".to_string(),
+                node_var: "x".to_string(),
+            }],
         };
 
         let mut extractor = NominalSchemaExtractor::default();
@@ -240,7 +255,10 @@ mod tests {
 
         // One grounding per individual.
         assert_eq!(groundings.len(), 2);
-        let preds: Vec<&str> = groundings.iter().map(|g| g.ground_head[0].predicate.as_str()).collect();
+        let preds: Vec<&str> = groundings
+            .iter()
+            .map(|g| g.ground_head[0].predicate.as_str())
+            .collect();
         assert!(preds.contains(&"Nominal_Alice"));
         assert!(preds.contains(&"Nominal_Bob"));
     }

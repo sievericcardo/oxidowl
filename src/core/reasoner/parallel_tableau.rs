@@ -8,12 +8,7 @@
 use crate::{
     Result,
     config::PerformanceConfig,
-    core::{
-        reasoner::{
-            tableau::{TableauFactory},
-        },
-        saturation::cycle_detection::CycleDetector,
-    },
+    core::{reasoner::tableau::TableauFactory, saturation::cycle_detection::CycleDetector},
     ontology::{ClassExpression, Ontology},
 };
 use log::{debug, info};
@@ -269,9 +264,6 @@ mod tests {
         let expr = ClassExpression::Class(Class {
             iri: IRI::new("http://example.org/Foo"),
         });
-        assert_eq!(
-            iri_from_class_expression(&expr),
-            "http://example.org/Foo"
-        );
+        assert_eq!(iri_from_class_expression(&expr), "http://example.org/Foo");
     }
 }

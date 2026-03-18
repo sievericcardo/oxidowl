@@ -59,7 +59,12 @@ pub trait ValueSpaceHandler: Send + Sync + std::fmt::Debug {
     /// * `value`       — The literal value being checked.
     /// * `facet_iri`   — The XSD facet IRI (e.g. `xsd:minInclusive`).
     /// * `facet_value` — The facet parameter value.
-    fn satisfies_facet(&self, value: &str, facet_iri: &str, facet_value: &str) -> Result<bool, Error>;
+    fn satisfies_facet(
+        &self,
+        value: &str,
+        facet_iri: &str,
+        facet_value: &str,
+    ) -> Result<bool, Error>;
 
     /// Whether the value space is finite (e.g. `xsd:boolean` has 2 values).
     fn is_finite(&self) -> bool;
@@ -89,7 +94,9 @@ impl ValueSpaceRegistry {
     /// Create a registry pre-populated with all built-in handlers.
     #[must_use]
     pub fn default_registry() -> Self {
-        let mut r = Self { handlers: HashMap::new() };
+        let mut r = Self {
+            handlers: HashMap::new(),
+        };
 
         r.register(Arc::new(BooleanValueSpace));
         r.register(Arc::new(StringValueSpace::xsd_string()));
@@ -110,7 +117,8 @@ impl ValueSpaceRegistry {
 
     /// Register a custom handler (overrides any existing handler for that IRI).
     pub fn register(&mut self, handler: Arc<dyn ValueSpaceHandler>) {
-        self.handlers.insert(handler.datatype_iri().to_string(), handler);
+        self.handlers
+            .insert(handler.datatype_iri().to_string(), handler);
     }
 
     /// Look up the handler for a datatype IRI.
@@ -130,15 +138,12 @@ impl ValueSpaceRegistry {
     }
 
     /// Check whether two literals of the same datatype represent equal values.
-    pub fn are_equal(
-        &self,
-        datatype_iri: &str,
-        a: &str,
-        b: &str,
-    ) -> Result<bool, Error> {
+    pub fn are_equal(&self, datatype_iri: &str, a: &str, b: &str) -> Result<bool, Error> {
         match self.handlers.get(datatype_iri) {
             Some(h) => h.are_equal(a, b),
-            None => Err(Error::invalid_input(format!("Unknown datatype: {datatype_iri}"))),
+            None => Err(Error::invalid_input(format!(
+                "Unknown datatype: {datatype_iri}"
+            ))),
         }
     }
 
@@ -152,7 +157,9 @@ impl ValueSpaceRegistry {
     ) -> Result<bool, Error> {
         match self.handlers.get(datatype_iri) {
             Some(h) => h.satisfies_facet(value, facet_iri, facet_value),
-            None => Err(Error::invalid_input(format!("Unknown datatype: {datatype_iri}"))),
+            None => Err(Error::invalid_input(format!(
+                "Unknown datatype: {datatype_iri}"
+            ))),
         }
     }
 
@@ -160,14 +167,19 @@ impl ValueSpaceRegistry {
     pub fn detect_clash(&self, datatype_iri: &str, values: &[&str]) -> Result<bool, Error> {
         match self.handlers.get(datatype_iri) {
             Some(h) => Ok(h.is_clash(values)),
-            None => Err(Error::invalid_input(format!("Unknown datatype: {datatype_iri}"))),
+            None => Err(Error::invalid_input(format!(
+                "Unknown datatype: {datatype_iri}"
+            ))),
         }
     }
 
     /// List all registered datatype IRIs.
     #[must_use]
     pub fn registered_datatypes(&self) -> Vec<&str> {
-        self.handlers.keys().map(std::string::String::as_str).collect()
+        self.handlers
+            .keys()
+            .map(std::string::String::as_str)
+            .collect()
     }
 }
 
@@ -178,24 +190,39 @@ mod tests {
     #[test]
     fn test_registry_lookup() {
         let reg = ValueSpaceRegistry::default_registry();
-        assert!(reg.get("http://www.w3.org/2001/XMLSchema#integer").is_some());
-        assert!(reg.get("http://www.w3.org/2001/XMLSchema#boolean").is_some());
+        assert!(
+            reg.get("http://www.w3.org/2001/XMLSchema#integer")
+                .is_some()
+        );
+        assert!(
+            reg.get("http://www.w3.org/2001/XMLSchema#boolean")
+                .is_some()
+        );
         assert!(reg.get("http://example.org/custom").is_none());
     }
 
     #[test]
     fn test_validate_literal() {
         let reg = ValueSpaceRegistry::default_registry();
-        assert!(reg.validate_literal("http://www.w3.org/2001/XMLSchema#integer", "42").unwrap());
-        assert!(!reg.validate_literal("http://www.w3.org/2001/XMLSchema#integer", "3.14").unwrap());
+        assert!(
+            reg.validate_literal("http://www.w3.org/2001/XMLSchema#integer", "42")
+                .unwrap()
+        );
+        assert!(
+            !reg.validate_literal("http://www.w3.org/2001/XMLSchema#integer", "3.14")
+                .unwrap()
+        );
     }
 
     #[test]
     fn test_boolean_clash_via_registry() {
         let reg = ValueSpaceRegistry::default_registry();
-        assert!(reg.detect_clash(
-            "http://www.w3.org/2001/XMLSchema#boolean",
-            &["true", "false"],
-        ).unwrap());
+        assert!(
+            reg.detect_clash(
+                "http://www.w3.org/2001/XMLSchema#boolean",
+                &["true", "false"],
+            )
+            .unwrap()
+        );
     }
 }

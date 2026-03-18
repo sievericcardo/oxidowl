@@ -109,7 +109,11 @@ impl CommonDisjunctExtractor {
         };
 
         for cd in &common_disjuncts {
-            let shortcut = build_shortcut_clause(&cd.concept, &cd.clause_indices, &clause_set.disjunctive_clauses);
+            let shortcut = build_shortcut_clause(
+                &cd.concept,
+                &cd.clause_indices,
+                &clause_set.disjunctive_clauses,
+            );
             rewritten.disjunctive_clauses.push(shortcut);
         }
 
@@ -151,9 +155,9 @@ fn build_shortcut_clause(
             .body
             .iter()
             .filter(|a| {
-                clause_indices.iter().all(|&idx| {
-                    clauses[idx].body.iter().any(|b| b.predicate == a.predicate)
-                })
+                clause_indices
+                    .iter()
+                    .all(|&idx| clauses[idx].body.iter().any(|b| b.predicate == a.predicate))
             })
             .cloned()
             .collect();

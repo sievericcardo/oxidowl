@@ -18,9 +18,9 @@
 //!   subset check against stored minimal signatures.
 
 use dashmap::DashMap;
-use std::hash::{Hash};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::hash::Hash;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A concept-set signature — a canonically-sorted set of concept names.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -111,7 +111,10 @@ impl UnsatCache {
         }
 
         // Subset check: any cached sig that is a subset of the query implies unsat.
-        let found = self.cache.iter().any(|entry| entry.key().is_subset_of(&query));
+        let found = self
+            .cache
+            .iter()
+            .any(|entry| entry.key().is_subset_of(&query));
         if found {
             self.hits.fetch_add(1, Ordering::Relaxed);
         } else {

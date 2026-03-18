@@ -636,7 +636,7 @@ fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
 
 /// Build a named `Individual` from an IRI string.
 fn individual_from_iri(iri: &str) -> Result<crate::ontology::Individual> {
-    use crate::ontology::{Individual, IRI, NamedIndividual};
+    use crate::ontology::{IRI, Individual, NamedIndividual};
     Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri) }))
 }
 
@@ -650,14 +650,19 @@ async fn get_types_endpoint(
         Ok(ind) => ind,
         Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     };
-    match reasoning_service.get_types(&ind, request.direct.unwrap_or(false)).await {
+    match reasoning_service
+        .get_types(&ind, request.direct.unwrap_or(false))
+        .await
+    {
         Ok(types) => {
             let iris: Vec<String> = types.into_iter().map(|c| format!("{:?}", c)).collect();
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-                "individual": request.individual,
-                "types": iris,
-                "direct": request.direct.unwrap_or(false)
-            }))))
+            Ok(warp::reply::json(&ApiResponse::success(
+                serde_json::json!({
+                    "individual": request.individual,
+                    "types": iris,
+                    "direct": request.direct.unwrap_or(false)
+                }),
+            )))
         }
         Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
@@ -669,10 +674,12 @@ async fn get_same_individuals_endpoint(
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     // ReasoningService doesn't yet expose get_same_individuals; return empty list.
     let empty: Vec<String> = vec![];
-    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-        "individual": request.individual,
-        "same_individuals": empty,
-    }))))
+    Ok(warp::reply::json(&ApiResponse::success(
+        serde_json::json!({
+            "individual": request.individual,
+            "same_individuals": empty,
+        }),
+    )))
 }
 
 async fn get_different_individuals_endpoint(
@@ -680,10 +687,12 @@ async fn get_different_individuals_endpoint(
     _reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     let empty: Vec<String> = vec![];
-    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-        "individual": request.individual,
-        "different_individuals": empty,
-    }))))
+    Ok(warp::reply::json(&ApiResponse::success(
+        serde_json::json!({
+            "individual": request.individual,
+            "different_individuals": empty,
+        }),
+    )))
 }
 
 async fn get_equivalent_classes_endpoint(
@@ -697,10 +706,12 @@ async fn get_equivalent_classes_endpoint(
     match reasoning_service.get_equivalent_classes(&class_expr).await {
         Ok(equiv) => {
             let iris: Vec<String> = equiv.into_iter().map(|c| format!("{:?}", c)).collect();
-            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-                "class_expression": request.class_expression,
-                "equivalent_classes": iris
-            }))))
+            Ok(warp::reply::json(&ApiResponse::success(
+                serde_json::json!({
+                    "class_expression": request.class_expression,
+                    "equivalent_classes": iris
+                }),
+            )))
         }
         Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
     }
@@ -711,12 +722,14 @@ async fn check_entailment_endpoint(
     _reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
     // Full entailment checking requires axiom parsing; return stub.
-    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
-        "axiom_type": request.axiom_type,
-        "axiom": request.axiom,
-        "entailed": false,
-        "note": "Full axiom entailment checking not yet implemented"
-    }))))
+    Ok(warp::reply::json(&ApiResponse::success(
+        serde_json::json!({
+            "axiom_type": request.axiom_type,
+            "axiom": request.axiom,
+            "entailed": false,
+            "note": "Full axiom entailment checking not yet implemented"
+        }),
+    )))
 }
 
 /// Handle warp rejections

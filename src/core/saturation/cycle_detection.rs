@@ -140,9 +140,10 @@ impl CycleDetector {
         // Propagate low-link to parent (Tarjan relaxation step).
         if let Some(parent) = parent_iri
             && let Some(mut parent_state) = self.concept_state.get_mut(parent)
-                && low_link < parent_state.low_link {
-                    parent_state.low_link = low_link;
-                }
+            && low_link < parent_state.low_link
+        {
+            parent_state.low_link = low_link;
+        }
     }
 
     /// Reset the detector state. Call this between independent saturation runs.
@@ -248,10 +249,7 @@ mod tests {
     #[test]
     fn test_classify_role_cycle() {
         assert_eq!(
-            classify_cycle_type(&[
-                "http://example.org/hasParent".to_string(),
-                "B".to_string()
-            ]),
+            classify_cycle_type(&["http://example.org/hasParent".to_string(), "B".to_string()]),
             CycleType::RoleCycle
         );
     }
