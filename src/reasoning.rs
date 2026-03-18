@@ -10,6 +10,12 @@
 pub mod actor;
 // Incremental reasoning framework
 pub mod incremental;
+// Konclude-inspired preprocessing pipeline
+pub mod preprocessing;
+// Multi-level tableau caching
+pub mod cache;
+// Datatype value space handlers
+pub mod datatypes;
 
 // Re-export core reasoner types for public API
 pub use crate::core::reasoner::{

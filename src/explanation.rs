@@ -288,7 +288,7 @@ pub enum InferenceRule {
 /// Justification computer for finding minimal axiom sets
 #[derive(Debug)]
 pub struct JustificationComputer {
-    cache: std::cell::RefCell<HashMap<String, Vec<Axiom>>>,
+    cache: std::sync::Mutex<HashMap<String, Vec<Axiom>>>,
 }
 
 impl JustificationComputer {
@@ -296,7 +296,7 @@ impl JustificationComputer {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            cache: std::cell::RefCell::new(HashMap::new()),
+            cache: std::sync::Mutex::new(HashMap::new()),
         }
     }
 

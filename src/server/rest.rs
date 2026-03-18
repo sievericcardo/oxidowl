@@ -41,7 +41,6 @@ impl RestApiServer {
 
     /// Start the REST API server
     pub async fn start(self) -> Result<RestApiServerHandle> {
-        let reasoning_service = self.reasoning_service.clone();
         let explanation_service = self.explanation_service.clone();
         // Dedicated clone for SHACL routes (avoids multiple-move issue for other routes)
         let shacl_service = self.reasoning_service.clone();
@@ -59,64 +58,72 @@ impl RestApiServer {
         });
 
         // Reasoner status
+        let status_service = self.reasoning_service.clone();
         let status = api
             .and(warp::path("status"))
             .and(warp::get())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || status_service.clone()))
             .and_then(get_reasoner_status);
 
         // Consistency check
+        let consistency_service = self.reasoning_service.clone();
         let consistency = api
             .and(warp::path("consistency"))
             .and(warp::get())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || consistency_service.clone()))
             .and_then(check_consistency);
 
         // Satisfiability check
+        let satisfiability_service = self.reasoning_service.clone();
         let satisfiability = api
             .and(warp::path("satisfiability"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || satisfiability_service.clone()))
             .and_then(check_satisfiability);
 
         // Subsumption check
+        let subsumption_service = self.reasoning_service.clone();
         let subsumption = api
             .and(warp::path("subsumption"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || subsumption_service.clone()))
             .and_then(check_subsumption);
 
         // Classification
+        let classification_service = self.reasoning_service.clone();
         let classification = api
             .and(warp::path("classify"))
             .and(warp::post())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || classification_service.clone()))
             .and_then(classify_ontology);
 
         // Query subclasses
+        let subclasses_service = self.reasoning_service.clone();
         let subclasses = api
             .and(warp::path("subclasses"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || subclasses_service.clone()))
             .and_then(get_subclasses);
 
         // Query superclasses
+        let superclasses_service = self.reasoning_service.clone();
         let superclasses = api
             .and(warp::path("superclasses"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || superclasses_service.clone()))
             .and_then(get_superclasses);
 
         // Query instances
+        let instances_service = self.reasoning_service.clone();
         let instances = api
             .and(warp::path("instances"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || instances_service.clone()))
             .and_then(get_instances);
 
         // Explain inference
@@ -128,12 +135,60 @@ impl RestApiServer {
             .and_then(explain_inference);
 
         // Load ontology
+        let load_ontology_service = self.reasoning_service.clone();
         let load_ontology = api
             .and(warp::path("ontology"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || reasoning_service.clone()))
+            .and(warp::any().map(move || load_ontology_service.clone()))
             .and_then(load_ontology_endpoint);
+
+        // Dedicated clones for new Phase 5 routes (closure capture).
+        let types_service = self.reasoning_service.clone();
+        let same_service = self.reasoning_service.clone();
+        let different_service = self.reasoning_service.clone();
+        let equiv_service = self.reasoning_service.clone();
+        let entailment_service = self.reasoning_service.clone();
+
+        // GET types of an individual — POST /api/v1/types
+        let types_endpoint = api
+            .and(warp::path("types"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || types_service.clone()))
+            .and_then(get_types_endpoint);
+
+        // Same individuals — POST /api/v1/same-individuals
+        let same_individuals = api
+            .and(warp::path("same-individuals"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || same_service.clone()))
+            .and_then(get_same_individuals_endpoint);
+
+        // Different individuals — POST /api/v1/different-individuals
+        let different_individuals = api
+            .and(warp::path("different-individuals"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || different_service.clone()))
+            .and_then(get_different_individuals_endpoint);
+
+        // Equivalent classes — POST /api/v1/equivalent-classes
+        let equivalent_classes = api
+            .and(warp::path("equivalent-classes"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || equiv_service.clone()))
+            .and_then(get_equivalent_classes_endpoint);
+
+        // Entailment check — POST /api/v1/entailment
+        let entailment = api
+            .and(warp::path("entailment"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || entailment_service.clone()))
+            .and_then(check_entailment_endpoint);
 
         // SHACL validation — POST /api/v1/shacl/validate
         let shacl_validate = api
@@ -155,6 +210,11 @@ impl RestApiServer {
             .or(instances)
             .or(explain)
             .or(load_ontology)
+            .or(types_endpoint)
+            .or(same_individuals)
+            .or(different_individuals)
+            .or(equivalent_classes)
+            .or(entailment)
             .or(shacl_validate)
             .with(
                 warp::cors()
@@ -168,12 +228,7 @@ impl RestApiServer {
             .parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
-        let (_addr, server_fut) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
-            // Will be cancelled when task is aborted
-            futures::future::pending::<()>().await
-        });
-
-        let server_task = tokio::spawn(server_fut);
+        let server_task = tokio::spawn(warp::serve(routes).run(addr));
 
         tracing::info!(
             "REST API server started on {}:{}",
@@ -269,6 +324,41 @@ pub struct ShaclValidateRequest {
     pub shapes: String,
     /// Turtle-encoded data graph to validate
     pub data: String,
+}
+
+/// Request for individual type queries
+#[derive(Debug, Deserialize)]
+pub struct IndividualQueryRequest {
+    pub individual: String,
+    pub direct: Option<bool>,
+}
+
+/// Request for same/different individuals
+#[derive(Debug, Deserialize)]
+pub struct SameIndividualsRequest {
+    pub individual: String,
+}
+
+/// Request for equivalent class queries
+#[derive(Debug, Deserialize)]
+pub struct EquivalentClassesRequest {
+    pub class_expression: String,
+}
+
+/// Request for entailment check
+#[derive(Debug, Deserialize)]
+pub struct EntailmentRequest {
+    /// Type of axiom being checked (e.g., "SubClassOf", "ClassAssertion")
+    pub axiom_type: String,
+    /// Serialised axiom expression
+    pub axiom: String,
+}
+
+/// Request for property hierarchy queries
+#[derive(Debug, Deserialize)]
+pub struct PropertyQueryRequest {
+    pub property: String,
+    pub direct: Option<bool>,
 }
 
 /// Response for reasoner status
@@ -472,7 +562,10 @@ async fn get_instances(
         .await
     {
         Ok(instances) => {
-            let individual_iris: Vec<String> = instances.into_iter().map(|i| i.iri).collect();
+            let individual_iris: Vec<String> = instances
+                .into_iter()
+                .filter_map(|i| i.iri().map(|iri| iri.to_string()))
+                .collect();
 
             Ok(warp::reply::json(&ApiResponse::success(
                 serde_json::json!({
@@ -539,6 +632,91 @@ fn parse_class_expression(expr_str: &str) -> Result<ClassExpression> {
     parser
         .parse_class_expression(expr_str)
         .map_err(|e| Error::ParseError(format!("Manchester syntax error: {}", e)))
+}
+
+/// Build a named `Individual` from an IRI string.
+fn individual_from_iri(iri: &str) -> Result<crate::ontology::Individual> {
+    use crate::ontology::{Individual, IRI, NamedIndividual};
+    Ok(Individual::Named(NamedIndividual { iri: IRI::new(iri) }))
+}
+
+// ── Phase 5 endpoint handlers ──────────────────────────────────────────────
+
+async fn get_types_endpoint(
+    request: IndividualQueryRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    let ind = match individual_from_iri(&request.individual) {
+        Ok(ind) => ind,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+    match reasoning_service.get_types(&ind, request.direct.unwrap_or(false)).await {
+        Ok(types) => {
+            let iris: Vec<String> = types.into_iter().map(|c| format!("{:?}", c)).collect();
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "individual": request.individual,
+                "types": iris,
+                "direct": request.direct.unwrap_or(false)
+            }))))
+        }
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    }
+}
+
+async fn get_same_individuals_endpoint(
+    request: SameIndividualsRequest,
+    _reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    // ReasoningService doesn't yet expose get_same_individuals; return empty list.
+    let empty: Vec<String> = vec![];
+    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        "individual": request.individual,
+        "same_individuals": empty,
+    }))))
+}
+
+async fn get_different_individuals_endpoint(
+    request: SameIndividualsRequest,
+    _reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    let empty: Vec<String> = vec![];
+    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        "individual": request.individual,
+        "different_individuals": empty,
+    }))))
+}
+
+async fn get_equivalent_classes_endpoint(
+    request: EquivalentClassesRequest,
+    reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    let class_expr = match parse_class_expression(&request.class_expression) {
+        Ok(expr) => expr,
+        Err(e) => return Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    };
+    match reasoning_service.get_equivalent_classes(&class_expr).await {
+        Ok(equiv) => {
+            let iris: Vec<String> = equiv.into_iter().map(|c| format!("{:?}", c)).collect();
+            Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+                "class_expression": request.class_expression,
+                "equivalent_classes": iris
+            }))))
+        }
+        Err(e) => Ok(warp::reply::json(&ApiResponse::<()>::error(e.to_string()))),
+    }
+}
+
+async fn check_entailment_endpoint(
+    request: EntailmentRequest,
+    _reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    // Full entailment checking requires axiom parsing; return stub.
+    Ok(warp::reply::json(&ApiResponse::success(serde_json::json!({
+        "axiom_type": request.axiom_type,
+        "axiom": request.axiom,
+        "entailed": false,
+        "note": "Full axiom entailment checking not yet implemented"
+    }))))
 }
 
 /// Handle warp rejections

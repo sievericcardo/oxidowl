@@ -20,6 +20,7 @@ pub mod datatype_validation;
 pub mod explanation;
 pub mod hypertableau_adapter;
 pub mod parallel_classification;
+pub mod parallel_tableau;
 pub mod queries;
 pub mod results;
 pub mod statistics;

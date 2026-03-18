@@ -289,6 +289,22 @@ impl ServerConfig {
     }
 }
 
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            features: EnumSet::empty(),
+            port: 8080,
+            bind_address: "127.0.0.1".to_string(),
+            max_connections: 100,
+            request_timeout: Duration::from_secs(30),
+            max_request_size: 50 * 1024 * 1024,
+            owllink_port: 8081,
+            sparql_port: 8082,
+            rest_api_port: 8080,
+        }
+    }
+}
+
 /// Logging configuration for the reasoner
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
