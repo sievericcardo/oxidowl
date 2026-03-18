@@ -129,7 +129,7 @@ impl ParallelTableauExpander {
         let start = Instant::now();
         let total = tasks.len();
 
-        info!("Starting parallel tableau expansion: {} tasks", total);
+        info!("Starting parallel tableau expansion: {total} tasks");
 
         let _shared_log = Arc::new(SharedResultLog::new());
 
@@ -153,8 +153,7 @@ impl ParallelTableauExpander {
 
                 if cycle_detected {
                     debug!(
-                        "Cycle detected for concept '{}'; marking as satisfiable (safe default)",
-                        concept_iri
+                        "Cycle detected for concept '{concept_iri}'; marking as satisfiable (safe default)"
                     );
                     return Ok(TableauExpansionResult {
                         concept: task.concept,

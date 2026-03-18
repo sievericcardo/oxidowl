@@ -58,7 +58,7 @@ impl SaturationCache {
         let result = self
             .cache
             .get(sub)
-            .map_or(false, |supers| supers.contains(sup));
+            .is_some_and(|supers| supers.contains(sup));
         if result {
             self.hits.fetch_add(1, Ordering::Relaxed);
         } else {

@@ -95,7 +95,7 @@ impl ValueSpaceHandler for StringValueSpace {
                 Ok(facet_value.split('|').any(|v| v == value))
             }
             _ => Err(Error::invalid_input(format!(
-                "Unsupported facet '{}' for string type", facet_iri
+                "Unsupported facet '{facet_iri}' for string type"
             ))),
         }
     }

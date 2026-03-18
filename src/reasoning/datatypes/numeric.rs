@@ -128,6 +128,7 @@ impl ValueSpaceHandler for FloatValueSpace {
         }
         let pa = parse_f64(a)?;
         let pb = parse_f64(b)?;
+        #[allow(clippy::float_cmp)]
         Ok(pa == pb)
     }
 

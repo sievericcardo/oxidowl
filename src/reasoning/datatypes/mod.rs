@@ -167,7 +167,7 @@ impl ValueSpaceRegistry {
     /// List all registered datatype IRIs.
     #[must_use]
     pub fn registered_datatypes(&self) -> Vec<&str> {
-        self.handlers.keys().map(|s| s.as_str()).collect()
+        self.handlers.keys().map(std::string::String::as_str).collect()
     }
 }
 

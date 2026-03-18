@@ -152,12 +152,12 @@ fn ground_template(
     let ground_body = template
         .body_atoms
         .iter()
-        .flat_map(|atom| ground_atom(atom, assignment))
+        .filter_map(|atom| ground_atom(atom, assignment))
         .collect();
     let ground_head = template
         .head_atoms
         .iter()
-        .flat_map(|atom| ground_atom(atom, assignment))
+        .filter_map(|atom| ground_atom(atom, assignment))
         .collect();
 
     GroundedNominalSchema {

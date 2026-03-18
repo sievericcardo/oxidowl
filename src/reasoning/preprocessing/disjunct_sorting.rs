@@ -115,8 +115,8 @@ impl DisjunctSorter {
             match strategy {
                 DisjunctSortingStrategy::ClashFirst => {
                     // Known-unsatisfiable concepts first.
-                    let ua = sa.map_or(false, |s| s.known_unsatisfiable);
-                    let ub = sb.map_or(false, |s| s.known_unsatisfiable);
+                    let ua = sa.is_some_and(|s| s.known_unsatisfiable);
+                    let ub = sb.is_some_and(|s| s.known_unsatisfiable);
                     ub.cmp(&ua) // true > false, so unsatisfiable goes first
                 }
                 DisjunctSortingStrategy::CheapFirst => {

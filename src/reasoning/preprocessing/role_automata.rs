@@ -249,7 +249,7 @@ pub fn build_registry(axioms: &RoleAxioms) -> (RoleAutomataRegistry, RoleAutomat
     }
 
     for (name, chain) in &axioms.role_chains {
-        let refs: Vec<&str> = chain.iter().map(|s| s.as_str()).collect();
+        let refs: Vec<&str> = chain.iter().map(std::string::String::as_str).collect();
         registry.register_chain(name, &refs);
         stats.chain_roles += 1;
     }

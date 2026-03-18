@@ -37,7 +37,7 @@ impl ValueSpaceHandler for BooleanValueSpace {
                 Ok(value == facet_value)
             }
             _ => Err(Error::invalid_input(format!(
-                "Unsupported facet '{}' for xsd:boolean", facet_iri
+                "Unsupported facet '{facet_iri}' for xsd:boolean"
             ))),
         }
     }

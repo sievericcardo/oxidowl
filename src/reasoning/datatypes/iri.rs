@@ -55,7 +55,7 @@ impl ValueSpaceHandler for IriValueSpace {
                 Ok(facet_value.split('|').any(|v| v == value))
             }
             other => Err(Error::invalid_input(format!(
-                "Unsupported facet '{}' for xsd:anyURI", other
+                "Unsupported facet '{other}' for xsd:anyURI"
             ))),
         }
     }

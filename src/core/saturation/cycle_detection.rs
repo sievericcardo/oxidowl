@@ -138,13 +138,11 @@ impl CycleDetector {
         };
 
         // Propagate low-link to parent (Tarjan relaxation step).
-        if let Some(parent) = parent_iri {
-            if let Some(mut parent_state) = self.concept_state.get_mut(parent) {
-                if low_link < parent_state.low_link {
+        if let Some(parent) = parent_iri
+            && let Some(mut parent_state) = self.concept_state.get_mut(parent)
+                && low_link < parent_state.low_link {
                     parent_state.low_link = low_link;
                 }
-            }
-        }
     }
 
     /// Reset the detector state. Call this between independent saturation runs.
