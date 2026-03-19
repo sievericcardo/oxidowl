@@ -62,7 +62,7 @@ fn test_new_built_ins_integration() {
     );
 
     // Test the built-in registry
-    let registry = BuiltInRegistry::new();
+    let _registry = BuiltInRegistry::new();
 
     // Verify some of our new built-ins are recognized
     // Note: The actual implementation might use different namespaces

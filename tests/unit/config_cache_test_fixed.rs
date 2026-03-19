@@ -39,6 +39,7 @@ fn test_instance_cache_operations() {
     drop(cache);
 }
 
+#[allow(unused)]
 fn create_test_ontology() -> OntologyRef {
     std::sync::Arc::new(std::sync::RwLock::new(Ontology::new()))
 }

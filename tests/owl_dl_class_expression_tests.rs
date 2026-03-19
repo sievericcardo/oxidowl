@@ -111,6 +111,7 @@ impl OntologyBuilder {
         self
     }
 
+    #[allow(unused)]
     fn assert_class(&mut self, individual_iri: &str, class: ClassExpression) -> &mut Self {
         let id = self.id();
         self.ontology
@@ -152,7 +153,7 @@ fn test_equivalent_named_classes_satisfiable() -> Result<()> {
     let a = cls("http://example.org/A");
     let c = cls("http://example.org/C");
     b.equiv(a.clone(), c.clone());
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A should be satisfiable when A ≡ C"
@@ -167,7 +168,7 @@ fn test_equivalent_and_disjoint_named_classes_unsatisfiable() -> Result<()> {
     let c = cls("http://example.org/C");
     b.equiv(a.clone(), c.clone());
     b.disjoint(a.clone(), c.clone());
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     // A ≡ C and A ⊥ C → A (and C) are unsatisfiable
     assert!(
         !r.is_class_satisfiable(&a)?,
@@ -220,7 +221,7 @@ fn test_equivalent_class_some_values_from_satisfiable() -> Result<()> {
     let exist_r_c = some("http://example.org/R", c.clone());
     b.equiv(a.clone(), exist_r_c.clone());
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A should be satisfiable when A ≡ ∃R.C (no contradiction exists)"
@@ -245,7 +246,7 @@ fn test_equivalent_some_values_from_unsatisfiable_empty_filler() -> Result<()> {
     // D ⊑ A  (so D needs an R-successor in C, but C is empty)
     b.subclass(d.clone(), a.clone());
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
 
     // C ⊥ C means C cannot have any members
     assert!(
@@ -266,7 +267,7 @@ fn test_equivalent_some_values_from_disjoint_with_self() -> Result<()> {
     b.equiv(a.clone(), exist_r_c.clone());
     b.disjoint(a.clone(), exist_r_c.clone());
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         !r.is_class_satisfiable(&a)?,
         "A should be unsatisfiable when A ≡ ∃R.C and A ⊥ ∃R.C"
@@ -286,7 +287,7 @@ fn test_subclass_some_values_from_satisfiable() -> Result<()> {
     let c = cls("http://example.org/C");
     b.subclass(a.clone(), some("http://example.org/R", c.clone()));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A ⊑ ∃R.C should be satisfiable"
@@ -304,7 +305,7 @@ fn test_subclass_some_and_all_clash() -> Result<()> {
     b.subclass(a.clone(), some("http://example.org/R", c.clone()));
     b.subclass(a.clone(), all("http://example.org/R", not_c.clone()));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         !r.is_class_satisfiable(&a)?,
         "A should be unsatisfiable when A ⊑ ∃R.C and A ⊑ ∀R.¬C"
@@ -324,7 +325,7 @@ fn test_equiv_all_values_from_satisfiable() -> Result<()> {
     let c = cls("http://example.org/C");
     b.equiv(a.clone(), all("http://example.org/R", c.clone()));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A ≡ ∀R.C should be satisfiable"
@@ -346,7 +347,7 @@ fn test_equiv_intersection_satisfiable() -> Result<()> {
     let expr = intersection(vec![b_cls.clone(), some("http://example.org/R", c.clone())]);
     b.equiv(a.clone(), expr);
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A ≡ B ⊓ ∃R.C should be satisfiable"
@@ -364,7 +365,7 @@ fn test_intersection_with_disjoint_unsatisfiable() -> Result<()> {
     b.equiv(b_cls.clone(), intersection(vec![a.clone(), c.clone()]));
     b.disjoint(a.clone(), c.clone());
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         !r.is_class_satisfiable(&b_cls)?,
         "B should be unsatisfiable when B ≡ A ⊓ C and A ⊥ C"
@@ -385,7 +386,7 @@ fn test_equiv_union_satisfiable() -> Result<()> {
     let c = cls("http://example.org/C");
     b.equiv(a.clone(), union(vec![b_cls.clone(), c.clone()]));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A ≡ B ⊔ C should be satisfiable"
@@ -405,7 +406,7 @@ fn test_equiv_complement_satisfiable() -> Result<()> {
     let b_cls = cls("http://example.org/B");
     b.equiv(a.clone(), complement(b_cls.clone()));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(r.is_class_satisfiable(&a)?, "A ≡ ¬B should be satisfiable");
     Ok(())
 }
@@ -422,7 +423,7 @@ fn test_class_and_complement_unsatisfiable() -> Result<()> {
         intersection(vec![a.clone(), complement(a.clone())]),
     );
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         !r.is_class_satisfiable(&b_cls)?,
         "B ≡ A ⊓ ¬A should be unsatisfiable"
@@ -442,7 +443,7 @@ fn test_min_cardinality_satisfiable() -> Result<()> {
     let c = cls("http://example.org/C");
     b.equiv(a.clone(), min_card("http://example.org/R", 1, c.clone()));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A ≡ ≥1R.C should be satisfiable"
@@ -459,7 +460,7 @@ fn test_max_zero_cardinality_with_some_unsatisfiable() -> Result<()> {
     b.subclass(a.clone(), some("http://example.org/R", c.clone()));
     b.subclass(a.clone(), max_card("http://example.org/R", 0, c.clone()));
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         !r.is_class_satisfiable(&a)?,
         "A should be unsatisfiable when A ⊑ ∃R.C and A ⊑ ≤0R.C"
@@ -600,7 +601,7 @@ fn test_equiv_some_with_intersection_filler() -> Result<()> {
         some("http://example.org/R", intersection(vec![b_cls, c])),
     );
 
-    let mut r = reasoner_for(b.build())?;
+    let r = reasoner_for(b.build())?;
     assert!(
         r.is_class_satisfiable(&a)?,
         "A ≡ ∃R.(B ⊓ C) should be satisfiable"
@@ -626,7 +627,7 @@ fn test_equiv_parent_has_child_person() -> Result<()> {
         "Parent ≡ ∃hasChild.Person should produce DL clauses"
     );
 
-    let mut r = reasoner_for(ontology)?;
+    let r = reasoner_for(ontology)?;
     assert!(
         r.is_class_satisfiable(&parent)?,
         "Parent ≡ ∃hasChild.Person should be satisfiable"
@@ -653,7 +654,7 @@ fn test_equiv_grandparent_nested_existentials() -> Result<()> {
         "GrandParent ≡ ∃hasChild.(∃hasChild.Person) should produce clauses"
     );
 
-    let mut r = reasoner_for(ontology)?;
+    let r = reasoner_for(ontology)?;
     assert!(
         r.is_class_satisfiable(&grandparent)?,
         "GrandParent ≡ ∃hasChild.(∃hasChild.Person) should be satisfiable"
