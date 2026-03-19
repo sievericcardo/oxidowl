@@ -2,7 +2,7 @@
 
 A high-performance Description Logic reasoner for OWL 2 DL ontologies, implemented in Rust with advanced tableau algorithms, parallel computation, and integrated horned-owl support.
 
-[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![License: LGPL-3.0](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
 [![Rust](https://img.shields.io/badge/rust-1.88+-orange.svg)](https://www.rust-lang.org)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#installation)
 
@@ -36,6 +36,10 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 📈 **Incremental Classification**: Only re-reasons over concepts affected by ontology changes
 - 🛡️ **Formal Verification**: Kani harnesses for memory-safety proofs
 - 🗃️ **Advanced Caching**: LRU, LFU, LRUFU, TTL, and size-based eviction strategies
+- ⚙️ **Advanced Preprocessing Pipeline**: Triggered-implication absorption, common-disjunct extraction, disjunct sorting, role automata construction, and nominal-schema processing
+- 🔢 **Datatype Value Space Handlers**: XSD-compliant value-space reasoning for boolean, string, numeric, datetime, and IRI datatypes
+- 🔁 **Parallel Tableau Expansion**: Rayon-powered parallel tableau node expansion for large ontologies
+- 🔍 **Saturation Cycle Detection**: DashMap-backed cycle detector for the saturation engine with atomic counters
 
 #### v1.0.0 Highlights (Latest)
 
@@ -48,6 +52,12 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 🔒 **Lock-Free Data Structures**: DashMap-backed caches for highly concurrent access patterns
 - 🛡️ **Kani Formal Verification**: Harnesses for memory-safety and correctness proofs via `cargo kani`
 - 🗃️ **Advanced Cache Strategies**: LRU, LFU, LRUFU, TTL and size-based eviction policies
+- ⚙️ **Advanced Preprocessing Pipeline**: Triggered-implication absorption, common-disjunct extraction, disjunct sorting, role automata, and nominal-schema processing
+- 🧮 **Multi-Level Tableau Caching**: Dedicated caches for unsatisfiability, SAT expansion, completion graphs, saturation results, and consequences
+- 🔁 **Parallel Tableau Expansion**: `ParallelTableauExpander` powered by Rayon for large-ontology node expansion
+- 🔢 **Datatype Value Space Handlers**: XSD-compliant `ValueSpaceHandler` trait and `ValueSpaceRegistry` for boolean, string, numeric, datetime, and IRI value spaces
+- 🔍 **Saturation Cycle Detection**: `CycleDetector` with DashMap and atomics to guard the saturation engine against infinite loops
+- 🌐 **Enhanced Server Completeness**: 15+ additional OWLlink request variants and 5 new REST routes
 
 #### v0.10.0 Highlights
 
@@ -801,12 +811,14 @@ Available eviction strategies:
 
 - **`core`** - Core reasoning engine with tableau algorithms
   - `reasoner/` - Main reasoner interface
+    - `parallel_tableau.rs` — `ParallelTableauExpander` (Rayon-based parallel node expansion)
   - `tableau/` - Tableau expansion with node and edge management
   - `blocking.rs` - Anywhere blocking with cycle detection
   - `completion.rs` - Completion rules and caching
   - `incremental.rs` - Dependency-tracked incremental classification
   - `hypergraph/` - Structural-sharing hypergraph for Hypertableau
   - `saturation/` - Rule-saturation engine for RL/EL profiles
+    - `cycle_detection.rs` — `CycleDetector` (DashMap + atomic counters)
   - `inverted_index.rs` - Inverted index for fast concept lookup
   - `persistent_collections.rs` - Immutable persistent data structures
 
@@ -823,6 +835,20 @@ Available eviction strategies:
   - `turtle.rs` - Turtle format parser
 
 - **`reasoning`** - High-level reasoning coordination
+  - `preprocessing/` - Advanced preprocessing pipeline
+    - `absorption.rs` — Triggered-implication absorber
+    - `common_disjunct.rs` — Common-disjunct extractor
+    - `disjunct_sorting.rs` — Disjunct sorter
+    - `role_automata.rs` — Role automaton builder
+    - `nominal_schema.rs` — Nominal-schema processor
+  - `cache/` - Multi-level tableau caching layer
+    - `unsat_cache.rs` — Unsatisfiability result cache
+    - `sat_expander_cache.rs` — SAT expander node cache
+    - `completion_graph_cache.rs` — Completion graph cache
+    - `saturation_cache.rs` — Saturation result cache
+    - `consequences_cache.rs` — Consequence cache
+  - `datatypes/` - XSD datatype value-space handlers
+    - `boolean.rs`, `string.rs`, `numeric.rs`, `datetime.rs`, `iri.rs`
 
 - **`query`** - Query engines
   - `dl_query.rs` - DL query engine with Manchester Syntax and union query support
@@ -1288,6 +1314,12 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - [x] **Advanced cache strategies** — LRU, LFU, LRUFU, size-based, TTL eviction policies
 - [x] **Lock-free data structures** — DashMap-backed caches for concurrent access
 - [x] **Docker/Podman containerisation** — Official `Dockerfile` and `docker-compose.yml`
+- [x] **Advanced preprocessing pipeline** — Triggered-implication absorption, common-disjunct extraction, disjunct sorting, role automata, nominal-schema processing
+- [x] **Multi-level tableau caching** — Dedicated caches for unsatisfiability, SAT expansion, completion graphs, saturation, and consequences
+- [x] **Parallel tableau expansion** — `ParallelTableauExpander` with Rayon for large-ontology node expansion
+- [x] **Datatype value-space handlers** — XSD-compliant `ValueSpaceHandler` trait for boolean, string, numeric, datetime, and IRI datatypes
+- [x] **Saturation cycle detection** — `CycleDetector` to guard saturation engine against infinite loops
+- [x] **Enhanced server completeness** — 15+ new OWLlink request variants and 5 new REST API routes
 
 ### Implemented in v0.10.0
 
@@ -1299,7 +1331,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## License
 
-This project is licensed under the BSD 3-Clause License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Lesser General Public License v3.0 (LGPL-3.0) — see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
