@@ -8,7 +8,7 @@ A high-performance Description Logic reasoner for OWL 2 DL ontologies, implement
 
 ## Overview
 
-Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms while leveraging Rust's memory safety and performance characteristics.
+Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), supporting nearly all features of OWL 2 DL. Built on the robust [horned-owl](https://github.com/phillord/horned-owl) foundation, it implements efficient tableau algorithms while leveraging Rust's memory safety and performance characteristics. Inspired by [Konclude](https://github.com/konclude/Konclude) and [HermiT](https://github.com/owlcs/hermit-reasoner).
 
 ### Key Features
 

@@ -167,7 +167,7 @@ impl RLReasoner {
 
     /// Build `TBox` hierarchy from RL axioms
     fn build_tbox(&mut self) -> Result<()> {
-        for axiom in &self.rl_axioms {
+        for axiom in self.rl_axioms.clone() {
             match axiom {
                 RLAxiom::SubClassOf {
                     subclass,
@@ -184,12 +184,34 @@ impl RLReasoner {
                         .add_property_inclusion(subproperty.clone(), superproperty.clone());
                 }
                 RLAxiom::EquivalentClasses { classes } => {
-                    // Add bidirectional inclusions
+                    // Add bidirectional inclusions and extract complex definitions
                     for i in 0..classes.len() {
                         for j in 0..classes.len() {
                             if i != j {
                                 self.tbox
                                     .add_class_inclusion(classes[i].clone(), classes[j].clone());
+                            }
+                        }
+                    }
+                    // Record structural definitions (named_class ≡ complex)
+                    let named: Vec<_> = classes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, c)| matches!(c, RLClassExpression::Class(_)))
+                        .collect();
+                    for (ni, nc) in &named {
+                        for (ci, cc) in classes.iter().enumerate() {
+                            if ci == *ni { continue; }
+                            match cc {
+                                RLClassExpression::SomeValuesFrom { property, filler } =>
+                                    self.tbox.some_values_from_defs.push(((*nc).clone(), property.clone(), (**filler).clone())),
+                                RLClassExpression::AllValuesFrom { property, filler } =>
+                                    self.tbox.all_values_from_defs.push(((*nc).clone(), property.clone(), (**filler).clone())),
+                                RLClassExpression::HasValue { property, value } =>
+                                    self.tbox.has_value_defs.push(((*nc).clone(), property.clone(), value.clone())),
+                                RLClassExpression::Intersection(operands) =>
+                                    self.tbox.intersection_defs.push(((*nc).clone(), operands.clone())),
+                                _ => {}
                             }
                         }
                     }
@@ -199,6 +221,22 @@ impl RLReasoner {
                 }
                 RLAxiom::Range { property, range } => {
                     self.tbox.add_range(property.clone(), range.clone());
+                }
+                RLAxiom::InverseProperty { property, inverse } => {
+                    self.tbox.inverse_properties.push((property.clone(), inverse.clone()));
+                    self.tbox.inverse_properties.push((inverse.clone(), property.clone()));
+                }
+                RLAxiom::ReflexiveProperty { property } => {
+                    self.tbox.reflexive_properties.insert(property.clone());
+                }
+                RLAxiom::FunctionalObjectProperty { property } => {
+                    self.tbox.functional_properties.insert(property.clone());
+                }
+                RLAxiom::PropertyChain { chain, superproperty } => {
+                    self.tbox.property_chains.push((chain.clone(), superproperty.clone()));
+                }
+                RLAxiom::OneOf { class, individuals } => {
+                    self.tbox.one_of_defs.push((class.clone(), individuals.clone()));
                 }
                 _ => {}
             }
@@ -210,7 +248,7 @@ impl RLReasoner {
 
     /// Initialize `ABox` with assertions from ontology
     fn initialize_abox(&mut self) -> Result<()> {
-        for axiom in &self.rl_axioms {
+        for axiom in self.rl_axioms.clone() {
             match axiom {
                 RLAxiom::ClassAssertion { class, individual } => {
                     self.materialized_facts
@@ -237,6 +275,16 @@ impl RLReasoner {
                         property.clone(),
                         value.clone(),
                     );
+                }
+                RLAxiom::SameAs { left, right } => {
+                    self.materialized_facts.add_same_as(left.clone(), right.clone());
+                }
+                RLAxiom::OneOf { class, individuals } => {
+                    // Each individual in the OneOf is an instance of the class
+                    for ind in &individuals {
+                        self.materialized_facts
+                            .add_class_assertion(ind.clone(), class.clone());
+                    }
                 }
                 _ => {}
             }
@@ -345,6 +393,30 @@ impl RLReasoner {
             .map(RLAxiom::to_general_axiom)
             .collect()
     }
+
+    /// Number of materialized facts in the ABox
+    pub fn materialized_facts_count(&self) -> usize {
+        self.materialized_facts.fact_count()
+    }
+
+    /// Iterate class assertion pairs as (Individual, Vec<ClassExpression>) for
+    /// syncing back into the main ontology.
+    pub fn class_assertion_pairs(
+        &self,
+    ) -> Vec<(Individual, Vec<crate::ontology::ClassExpression>)> {
+        self.materialized_facts
+            .class_assertion_iter()
+            .map(|(ind, classes)| {
+                (
+                    ind.clone(),
+                    classes
+                        .iter()
+                        .map(RLClassExpression::to_class_expression)
+                        .collect(),
+                )
+            })
+            .collect()
+    }
 }
 
 /// RL-specific axiom representation
@@ -393,6 +465,30 @@ pub enum RLAxiom {
     TransitiveProperty { property: ObjectPropertyExpression },
     /// `SymmetricProperty`
     SymmetricProperty { property: ObjectPropertyExpression },
+    /// InverseOf(P, Q)
+    InverseProperty {
+        property: ObjectPropertyExpression,
+        inverse: ObjectPropertyExpression,
+    },
+    /// Reflexive(P)
+    ReflexiveProperty { property: ObjectPropertyExpression },
+    /// Functional(P)
+    FunctionalObjectProperty { property: ObjectPropertyExpression },
+    /// sameAs(a, b)
+    SameAs {
+        left: Individual,
+        right: Individual,
+    },
+    /// C ≡ {a, b, ...}
+    OneOf {
+        class: RLClassExpression,
+        individuals: Vec<Individual>,
+    },
+    /// P1 ∘ P2 ⊆ P3
+    PropertyChain {
+        chain: Vec<ObjectPropertyExpression>,
+        superproperty: ObjectPropertyExpression,
+    },
 }
 
 impl RLAxiom {
@@ -421,6 +517,43 @@ impl RLAxiom {
                 subproperty: sub_property.clone(),
                 superproperty: super_property.clone(),
             }),
+            Axiom::TransitiveObjectProperty(ax) => {
+                Some(RLAxiom::TransitiveProperty { property: ax.property.clone() })
+            }
+            Axiom::SymmetricObjectProperty(ax) => {
+                Some(RLAxiom::SymmetricProperty { property: ax.property.clone() })
+            }
+            Axiom::InverseObjectProperties(ax) => {
+                Some(RLAxiom::InverseProperty {
+                    property: ax.property1.clone(),
+                    inverse: ax.property2.clone(),
+                })
+            }
+            Axiom::ReflexiveObjectProperty(ax) => {
+                Some(RLAxiom::ReflexiveProperty { property: ax.property.clone() })
+            }
+            Axiom::FunctionalObjectProperty(ax) => {
+                Some(RLAxiom::FunctionalObjectProperty { property: ax.property.clone() })
+            }
+            Axiom::SameIndividual(ax) => {
+                // Emit pairs
+                if ax.individuals.len() >= 2 {
+                    Some(RLAxiom::SameAs {
+                        left: ax.individuals[0].clone(),
+                        right: ax.individuals[1].clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            Axiom::EquivalentClasses(ax) => {
+                let classes: Option<Vec<_>> = ax
+                    .classes
+                    .iter()
+                    .map(RLClassExpression::from_class_expression)
+                    .collect();
+                classes.map(|c| RLAxiom::EquivalentClasses { classes: c })
+            }
             Axiom::ClassAssertion(ClassAssertionAxiom {
                 class, individual, ..
             }) => {
@@ -439,6 +572,25 @@ impl RLAxiom {
                 property: property.clone(),
                 subject: source.clone(),
                 object: target.clone(),
+            }),
+            Axiom::ObjectPropertyDomain(ax) => {
+                let domain = RLClassExpression::from_class_expression(&ax.domain);
+                domain.map(|d| RLAxiom::Domain {
+                    property: ax.property.clone(),
+                    domain: d,
+                })
+            }
+            Axiom::ObjectPropertyRange(ax) => {
+                let range = RLClassExpression::from_class_expression(&ax.range);
+                range.map(|r| RLAxiom::Range {
+                    property: ax.property.clone(),
+                    range: r,
+                })
+            }
+            Axiom::DataPropertyAssertion(ax) => Some(RLAxiom::DataPropertyAssertion {
+                property: ax.property.clone(),
+                subject: ax.individual.clone(),
+                value: ax.value.value.clone(),
             }),
             _ => None,
         }
@@ -511,6 +663,11 @@ pub enum RLClassExpression {
         property: ObjectPropertyExpression,
         filler: Box<RLClassExpression>,
     },
+    /// HasValue restriction: ∃p.{v}
+    HasValue {
+        property: ObjectPropertyExpression,
+        value: Individual,
+    },
 }
 
 impl RLClassExpression {
@@ -537,6 +694,12 @@ impl RLClassExpression {
                         property: property.clone(),
                         filler: Box::new(rl_filler),
                     }
+                })
+            }
+            ClassExpression::ObjectHasValue { property, value } => {
+                Some(RLClassExpression::HasValue {
+                    property: property.clone(),
+                    value: value.clone(),
                 })
             }
             _ => None,
@@ -567,6 +730,22 @@ impl RLClassExpression {
                     filler: Box::new(filler.to_class_expression()),
                 }
             }
+            RLClassExpression::HasValue { property, value } => {
+                ClassExpression::ObjectHasValue {
+                    property: property.clone(),
+                    value: value.clone(),
+                }
+            }
+        }
+    }
+
+    /// Return the IRI string if this is a named class
+    #[must_use]
+    pub fn named_iri(&self) -> Option<&str> {
+        if let RLClassExpression::Class(c) = self {
+            Some(c.iri.as_str())
+        } else {
+            None
         }
     }
 }
@@ -581,6 +760,8 @@ pub struct MaterializedKnowledgeBase {
         HashMap<(Individual, ObjectPropertyExpression), HashSet<Individual>>,
     /// Data property assertions: (subject, property) -> values
     data_property_assertions: HashMap<(Individual, DataPropertyExpression), HashSet<String>>,
+    /// SameAs links: individual -> equivalent individuals
+    same_as: HashMap<Individual, HashSet<Individual>>,
 }
 
 impl Default for MaterializedKnowledgeBase {
@@ -597,6 +778,7 @@ impl MaterializedKnowledgeBase {
             class_assertions: HashMap::new(),
             object_property_assertions: HashMap::new(),
             data_property_assertions: HashMap::new(),
+            same_as: HashMap::new(),
         }
     }
 
@@ -717,6 +899,61 @@ impl MaterializedKnowledgeBase {
         }
         individuals
     }
+
+    /// Add a sameAs link (both directions)
+    pub fn add_same_as(&mut self, left: Individual, right: Individual) -> bool {
+        let a = self.same_as.entry(left.clone()).or_default().insert(right.clone());
+        let b = self.same_as.entry(right).or_default().insert(left);
+        a || b
+    }
+
+    /// Get all individuals sameAs the given one (including self)
+    #[must_use]
+    pub fn get_same_as_group(&self, ind: &Individual) -> HashSet<Individual> {
+        let mut group = HashSet::new();
+        group.insert(ind.clone());
+        if let Some(others) = self.same_as.get(ind) {
+            group.extend(others.iter().cloned());
+        }
+        group
+    }
+
+    /// Iterate over class assertions (individual -> classes)
+    pub fn class_assertion_iter(
+        &self,
+    ) -> impl Iterator<Item = (&Individual, &HashSet<RLClassExpression>)> {
+        self.class_assertions.iter()
+    }
+
+    /// Iterate over object property assertions
+    pub fn object_property_assertion_iter(
+        &self,
+    ) -> impl Iterator<Item = (&(Individual, ObjectPropertyExpression), &HashSet<Individual>)> {
+        self.object_property_assertions.iter()
+    }
+
+    /// Iterate over same-as links
+    pub fn same_as_iter(&self) -> impl Iterator<Item = (&Individual, &HashSet<Individual>)> {
+        self.same_as.iter()
+    }
+
+    /// Collect same-as pairs as owned Vec for use while mutating kb
+    pub fn same_as_iter_pairs(&self) -> Vec<(Individual, Vec<Individual>)> {
+        self.same_as
+            .iter()
+            .map(|(ind, partners)| (ind.clone(), partners.iter().cloned().collect()))
+            .collect()
+    }
+
+    /// Get all instances of an RL class expression
+    #[must_use]
+    pub fn get_instances_of_rl_class(&self, class: &RLClassExpression) -> HashSet<Individual> {
+        self.class_assertions
+            .iter()
+            .filter(|(_, classes)| classes.contains(class))
+            .map(|(ind, _)| ind.clone())
+            .collect()
+    }
 }
 
 /// `TBox` hierarchy
@@ -730,6 +967,24 @@ pub struct TBoxHierarchy {
     domains: HashMap<ObjectPropertyExpression, HashSet<RLClassExpression>>,
     /// Ranges
     ranges: HashMap<ObjectPropertyExpression, HashSet<RLClassExpression>>,
+    /// HasValue definitions: C ≡ ∃p.{v}  →  (class, property, individual)
+    pub has_value_defs: Vec<(RLClassExpression, ObjectPropertyExpression, Individual)>,
+    /// SomeValuesFrom definitions: C ≡ ∃p.D  →  (class, property, filler)
+    pub some_values_from_defs: Vec<(RLClassExpression, ObjectPropertyExpression, RLClassExpression)>,
+    /// AllValuesFrom definitions: C ⊑ ∀p.D  →  (class, property, filler)
+    pub all_values_from_defs: Vec<(RLClassExpression, ObjectPropertyExpression, RLClassExpression)>,
+    /// Intersection definitions: C ≡ D1 ⊓ ... ⊓ Dn  →  (class, members)
+    pub intersection_defs: Vec<(RLClassExpression, Vec<RLClassExpression>)>,
+    /// InverseOf pairs: (P, Q) means InverseOf(P, Q)
+    pub inverse_properties: Vec<(ObjectPropertyExpression, ObjectPropertyExpression)>,
+    /// Reflexive properties
+    pub reflexive_properties: HashSet<ObjectPropertyExpression>,
+    /// Functional properties
+    pub functional_properties: HashSet<ObjectPropertyExpression>,
+    /// Property chains: (chain, superproperty)
+    pub property_chains: Vec<(Vec<ObjectPropertyExpression>, ObjectPropertyExpression)>,
+    /// OneOf definitions: C ≡ {a, b, c}
+    pub one_of_defs: Vec<(RLClassExpression, Vec<Individual>)>,
 }
 
 impl Default for TBoxHierarchy {
@@ -747,6 +1002,15 @@ impl TBoxHierarchy {
             property_inclusions: HashMap::new(),
             domains: HashMap::new(),
             ranges: HashMap::new(),
+            has_value_defs: Vec::new(),
+            some_values_from_defs: Vec::new(),
+            all_values_from_defs: Vec::new(),
+            intersection_defs: Vec::new(),
+            inverse_properties: Vec::new(),
+            reflexive_properties: HashSet::new(),
+            functional_properties: HashSet::new(),
+            property_chains: Vec::new(),
+            one_of_defs: Vec::new(),
         }
     }
 
@@ -893,13 +1157,24 @@ impl ForwardChainingEngine {
 
             let mut facts_added = false;
 
-            // Apply RL rules
-            facts_added |= self.apply_subclass_rule(kb, tbox)?;
-            facts_added |= self.apply_domain_rule(kb, tbox)?;
-            facts_added |= self.apply_range_rule(kb, tbox)?;
+            // Structural rules first
+            facts_added |= self.apply_has_value_rule(kb, tbox)?;
+            facts_added |= self.apply_some_values_from_rule(kb, tbox)?;
+            facts_added |= self.apply_all_values_from_rule(kb, tbox)?;
+            facts_added |= self.apply_intersection_rule(kb, tbox)?;
+            // Property rules
             facts_added |= self.apply_property_chain_rule(kb, axioms)?;
             facts_added |= self.apply_transitive_rule(kb, axioms)?;
             facts_added |= self.apply_symmetric_rule(kb, axioms)?;
+            facts_added |= self.apply_inverse_property_rule(kb, tbox)?;
+            facts_added |= self.apply_reflexive_property_rule(kb, tbox)?;
+            // Class hierarchy
+            facts_added |= self.apply_subclass_rule(kb, tbox)?;
+            facts_added |= self.apply_domain_rule(kb, tbox)?;
+            facts_added |= self.apply_range_rule(kb, tbox)?;
+            // Identity / equality
+            facts_added |= self.apply_same_as_rule(kb)?;
+            facts_added |= self.apply_functional_property_rule(kb, tbox)?;
 
             if !facts_added {
                 break;
@@ -988,14 +1263,294 @@ impl ForwardChainingEngine {
         Ok(added)
     }
 
-    /// Apply property chain rule (simplified)
+    /// Apply property chain rule: P1 ∘ P2 ⊆ P3 → P1(x,y) ∧ P2(y,z) ⟹ P3(x,z)
     fn apply_property_chain_rule(
         &mut self,
-        _kb: &mut MaterializedKnowledgeBase,
-        _axioms: &[RLAxiom],
+        kb: &mut MaterializedKnowledgeBase,
+        axioms: &[RLAxiom],
     ) -> Result<bool> {
-        // Simplified implementation
-        Ok(false)
+        let mut new_facts = Vec::new();
+        let chains: Vec<(Vec<ObjectPropertyExpression>, ObjectPropertyExpression)> = axioms
+            .iter()
+            .filter_map(|ax| match ax {
+                RLAxiom::PropertyChain { chain, superproperty } =>
+                    Some((chain.clone(), superproperty.clone())),
+                _ => None,
+            })
+            .collect();
+
+        for (chain, sup) in &chains {
+            if chain.len() != 2 { continue; }
+            let p1 = &chain[0];
+            let p2 = &chain[1];
+            let pairs1: Vec<_> = kb
+                .object_property_assertions
+                .iter()
+                .filter(|((_, p), _)| p == p1)
+                .flat_map(|((s, _), objs)| objs.iter().map(move |o| (s.clone(), o.clone())))
+                .collect();
+            let pairs2: Vec<_> = kb
+                .object_property_assertions
+                .iter()
+                .filter(|((_, p), _)| p == p2)
+                .flat_map(|((s, _), objs)| objs.iter().map(move |o| (s.clone(), o.clone())))
+                .collect();
+            for (x, y) in &pairs1 {
+                for (y2, z) in &pairs2 {
+                    if y == y2 {
+                        new_facts.push((x.clone(), sup.clone(), z.clone()));
+                    }
+                }
+            }
+        }
+
+        let mut added = false;
+        for (s, p, o) in new_facts {
+            if kb.add_object_property_assertion(s, p, o) {
+                added = true;
+                self.rules_fired += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply hasValue rule: ∃p.{v}(C) → P(x,v) where x:C
+    fn apply_has_value_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        let mut new_facts = Vec::new();
+
+        for (named_class, property, value_ind) in &tbox.has_value_defs {
+            for ((subj, prop), objects) in &kb.object_property_assertions {
+                if prop == property && objects.contains(value_ind) {
+                    new_facts.push((subj.clone(), named_class.clone()));
+                }
+            }
+        }
+
+        let mut added = false;
+        for (ind, cls) in new_facts {
+            if kb.add_class_assertion(ind, cls) {
+                added = true;
+                self.rules_fired += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply someValuesFrom rule: ∃p.D(C) → P(x,y) ∧ y:D ⟹ x:C
+    fn apply_some_values_from_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        let mut new_facts = Vec::new();
+
+        for (named_class, property, filler) in &tbox.some_values_from_defs {
+            for ((subj, prop), objects) in &kb.object_property_assertions {
+                if prop == property {
+                    for obj in objects {
+                        let obj_classes = kb.get_classes(obj);
+                        if obj_classes.contains(filler) {
+                            new_facts.push((subj.clone(), named_class.clone()));
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut added = false;
+        for (ind, cls) in new_facts {
+            if kb.add_class_assertion(ind, cls) {
+                added = true;
+                self.rules_fired += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply allValuesFrom rule: ∀p.D, P(x,y) ∧ x:C ⟹ y:D
+    fn apply_all_values_from_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        let mut new_facts = Vec::new();
+
+        for (named_class, property, filler) in &tbox.all_values_from_defs {
+            // Find all subjects that are instances of named_class
+            let subjects = kb.get_instances_of_rl_class(named_class);
+            for subj in &subjects {
+                let key = (subj.clone(), property.clone());
+                if let Some(objects) = kb.object_property_assertions.get(&key) {
+                    for obj in objects.clone() {
+                        new_facts.push((obj.clone(), filler.clone()));
+                    }
+                }
+            }
+        }
+
+        let mut added = false;
+        for (ind, cls) in new_facts {
+            if kb.add_class_assertion(ind, cls) {
+                added = true;
+                self.rules_fired += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply intersection rule: C ≡ D1 ⊓ D2 ⊓ …, x:D1 ∧ x:D2 ∧ … ⟹ x:C
+    fn apply_intersection_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        let mut new_facts = Vec::new();
+
+        for (named_class, members) in &tbox.intersection_defs {
+            for (ind, classes) in &kb.class_assertions {
+                if members.iter().all(|m| classes.contains(m)) {
+                    new_facts.push((ind.clone(), named_class.clone()));
+                }
+            }
+        }
+
+        let mut added = false;
+        for (ind, cls) in new_facts {
+            if kb.add_class_assertion(ind, cls) {
+                added = true;
+                self.rules_fired += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply inverse property rule: InvOf(P,Q), P(x,y) ⟹ Q(y,x)
+    fn apply_inverse_property_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        let mut new_facts = Vec::new();
+
+        for (prop, inverse) in &tbox.inverse_properties {
+            for ((subj, p), objects) in &kb.object_property_assertions {
+                if p == prop {
+                    for obj in objects {
+                        new_facts.push((obj.clone(), inverse.clone(), subj.clone()));
+                    }
+                }
+            }
+        }
+
+        let mut added = false;
+        for (s, p, o) in new_facts {
+            if kb.add_object_property_assertion(s, p, o) {
+                added = true;
+                self.rules_fired += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply reflexive property rule: ReflexiveObjectProperty(P), x:owl:Thing ⟹ P(x,x)
+    fn apply_reflexive_property_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        if tbox.reflexive_properties.is_empty() {
+            return Ok(false);
+        }
+        let all_inds: Vec<Individual> = kb.get_all_individuals().into_iter().collect();
+        let mut added = false;
+        for prop in &tbox.reflexive_properties {
+            for ind in &all_inds {
+                if kb.add_object_property_assertion(ind.clone(), prop.clone(), ind.clone()) {
+                    added = true;
+                    self.rules_fired += 1;
+                }
+            }
+        }
+        Ok(added)
+    }
+
+    /// Apply sameAs rule: SameAs(a,b), a:C ⟹ b:C; P(a,x) ⟹ P(b,x); P(x,a) ⟹ P(x,b)
+    fn apply_same_as_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+    ) -> Result<bool> {
+        let mut new_class_facts = Vec::new();
+        let mut new_prop_facts = Vec::new();
+
+        for (ind, partners) in kb.same_as_iter_pairs() {
+            let ind_classes = kb.get_classes(&ind).into_iter().collect::<Vec<_>>();
+            for partner in &partners {
+                for cls in &ind_classes {
+                    new_class_facts.push((partner.clone(), cls.clone()));
+                }
+            }
+            // also propagate property assertions
+            let ind_as_subj: Vec<_> = kb
+                .object_property_assertions
+                .iter()
+                .filter(|((s, _), _)| s == &ind)
+                .flat_map(|((_, p), objs)| objs.iter().map(move |o| (p.clone(), o.clone())))
+                .collect();
+            for partner in &partners {
+                for (prop, obj) in &ind_as_subj {
+                    new_prop_facts.push((partner.clone(), prop.clone(), obj.clone()));
+                }
+            }
+        }
+
+        let mut added = false;
+        for (ind, cls) in new_class_facts {
+            if kb.add_class_assertion(ind, cls) { added = true; self.rules_fired += 1; }
+        }
+        for (s, p, o) in new_prop_facts {
+            if kb.add_object_property_assertion(s, p, o) { added = true; self.rules_fired += 1; }
+        }
+        Ok(added)
+    }
+
+    /// Apply functional property rule: Func(P), P(x,y), P(x,z) ⟹ SameAs(y,z)
+    fn apply_functional_property_rule(
+        &mut self,
+        kb: &mut MaterializedKnowledgeBase,
+        tbox: &TBoxHierarchy,
+    ) -> Result<bool> {
+        let mut new_same_as = Vec::new();
+
+        for prop in &tbox.functional_properties {
+            // Group objects by subject
+            let mut by_subject: HashMap<Individual, Vec<Individual>> = HashMap::new();
+            for ((subj, p), objects) in &kb.object_property_assertions {
+                if p == prop {
+                    let entry = by_subject.entry(subj.clone()).or_default();
+                    for obj in objects {
+                        entry.push(obj.clone());
+                    }
+                }
+            }
+            for (_, objects) in &by_subject {
+                if objects.len() >= 2 {
+                    let canonical = objects[0].clone();
+                    for other in objects.iter().skip(1) {
+                        new_same_as.push((canonical.clone(), other.clone()));
+                    }
+                }
+            }
+        }
+
+        let mut added = false;
+        for (a, b) in new_same_as {
+            if kb.add_same_as(a, b) { added = true; self.rules_fired += 1; }
+        }
+        Ok(added)
     }
 
     /// Apply transitive rule: P(x, y) ∧ P(y, z) ∧ Trans(P) ⟹ P(x, z)

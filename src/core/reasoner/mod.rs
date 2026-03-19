@@ -19,6 +19,8 @@ pub mod core;
 pub mod datatype_validation;
 pub mod explanation;
 pub mod hypertableau_adapter;
+#[cfg(feature = "sparql-store")]
+pub mod oxigraph_store;
 pub mod parallel_classification;
 pub mod parallel_tableau;
 pub mod queries;

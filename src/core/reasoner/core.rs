@@ -31,6 +31,21 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+/// Statistics returned by ABox materialization operations.
+#[derive(Debug, Default, Clone)]
+pub struct MaterializationStats {
+    /// Number of forward-chaining rules fired
+    pub rules_fired: u64,
+    /// Number of new facts added to the ABox
+    pub facts_added: usize,
+    /// Number of fixpoint iterations
+    pub iterations: u64,
+    /// Total elapsed time in milliseconds
+    pub duration_ms: u64,
+    /// Number of SPARQL INSERT rules run
+    pub sparql_rules_run: u64,
+}
+
 /// `OWLlink` request structure
 #[derive(Debug, Clone)]
 struct OWLlinkRequest {
@@ -109,6 +124,20 @@ pub struct Reasoner {
     /// Explanation service
     #[allow(dead_code)]
     explanation_service: ExplanationService,
+
+    /// Optional RL forward-chaining reasoner (rebuilt on demand)
+    #[allow(dead_code)]
+    rl_reasoner: Option<Box<crate::profiles::rl_reasoner::RLReasoner>>,
+
+    /// Custom SPARQL INSERT WHERE rules for ABox materialization
+    sparql_materialization_rules: Vec<String>,
+
+    /// Flag indicating that the Oxigraph store should be rebuilt
+    materialization_stale: std::sync::atomic::AtomicBool,
+
+    /// Oxigraph-backed SPARQL store (lazy-initialised, interior-mutable)
+    #[cfg(feature = "sparql-store")]
+    oxigraph_store: std::sync::Mutex<Option<crate::core::reasoner::oxigraph_store::OxigraphStore>>,
 }
 
 impl Reasoner {
@@ -135,6 +164,11 @@ impl Reasoner {
             classification_service,
             query_processor: QueryProcessor::new(),
             explanation_service: ExplanationService::new(),
+            rl_reasoner: None,
+            sparql_materialization_rules: Vec::new(),
+            materialization_stale: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "sparql-store")]
+            oxigraph_store: std::sync::Mutex::new(None),
         })
     }
 
@@ -816,6 +850,8 @@ impl Reasoner {
 
             // Clear cache since ontology has changed
             self.cache_manager.clear_all()?;
+            self.materialization_stale
+                .store(true, std::sync::atomic::Ordering::Relaxed);
 
             Ok(())
         } else {
@@ -868,6 +904,9 @@ impl Reasoner {
     /// Load an ontology into the reasoner
     pub fn load_ontology(&mut self, ontology: crate::ontology::Ontology) -> Result<()> {
         self.ontology = Some(Arc::new(RwLock::new(ontology)));
+        self.materialization_stale
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.rl_reasoner = None;
         Ok(())
     }
 
@@ -1383,7 +1422,17 @@ impl Reasoner {
 
     /// Execute SPARQL query
     pub fn execute_sparql_query(&self, query: &str) -> Result<String> {
-        // Parse SPARQL query
+        // If the Oxigraph store is loaded, delegate full SPARQL 1.1 evaluation to it
+        #[cfg(feature = "sparql-store")]
+        {
+            if let Ok(guard) = self.oxigraph_store.lock() {
+                if let Some(store) = guard.as_ref() {
+                    return store.execute_query(query);
+                }
+            }
+        }
+
+        // Fallback: custom string-based parser for basic cases
         let parsed_query = self.parse_sparql_query(query)?;
 
         match parsed_query.query_type.as_str() {
@@ -2277,5 +2326,229 @@ impl Reasoner {
         let mut server_manager = crate::server::ServerManager::with_port(reasoning_service, port);
         server_manager.start_all().await?;
         Ok(server_manager)
+    }
+
+    // -------------------------------------------------------------------------
+    // ABox materialization and SPARQL classification
+    // -------------------------------------------------------------------------
+
+    /// Materialize ABox facts using native OWL 2 RL forward-chaining rules.
+    ///
+    /// Returns statistics about the materialization run.
+    pub fn materialize_abox(&mut self) -> Result<MaterializationStats> {
+        let ontology_ref = self
+            .ontology
+            .as_ref()
+            .ok_or_else(|| Error::reasoning("No ontology loaded for ABox materialization"))?
+            .clone();
+
+        let start = std::time::Instant::now();
+
+        let mut rl = crate::profiles::rl_reasoner::RLReasoner::new(self.config.clone());
+        {
+            let ontology = read_lock(&ontology_ref, "core: reading ontology for materialize_abox")?;
+            rl.initialize(&ontology)?;
+        }
+        rl.materialize()?;
+
+        let facts_added = rl.materialized_facts_count();
+
+        // Push inferred ClassAssertions back into the ontology
+        {
+            use crate::ontology::{axioms::ClassAssertionAxiom, Axiom};
+            let mut ont_w =
+                write_lock(&ontology_ref, "core: writing inferred class assertions")?;
+            for (ind, classes) in rl.class_assertion_pairs() {
+                for cls in classes {
+                    ont_w.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
+                        id: 0,
+                        individual: ind.clone(),
+                        class: cls,
+                        annotations: Vec::new(),
+                    }));
+                }
+            }
+        }
+
+        // Store the RL reasoner for later queries
+        self.rl_reasoner = Some(Box::new(rl));
+        self.materialization_stale
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+
+        // Mark Oxigraph store as stale so it gets rebuilt on next SPARQL query
+        #[cfg(feature = "sparql-store")]
+        if let Ok(mut guard) = self.oxigraph_store.lock() {
+            *guard = None;
+        }
+
+        Ok(MaterializationStats {
+            rules_fired: 0,
+            facts_added,
+            iterations: 0,
+            duration_ms: start.elapsed().as_millis() as u64,
+            sparql_rules_run: 0,
+        })
+    }
+
+    /// Add a custom SPARQL INSERT WHERE rule to run during ABox classification.
+    pub fn add_sparql_materialization_rule(&mut self, sparql: &str) {
+        self.sparql_materialization_rules.push(sparql.to_owned());
+    }
+
+    /// Run SPARQL-based ABox classification using Oxigraph.
+    ///
+    /// Loads the ontology + any materialized facts into an Oxigraph in-memory
+    /// store, executes a fixpoint loop of INSERT WHERE rules, then syncs the
+    /// newly inferred `rdf:type` triples back into the ontology as
+    /// `ClassAssertion` axioms.
+    #[cfg(feature = "sparql-store")]
+    pub fn run_sparql_abox_classification(&mut self) -> Result<MaterializationStats> {
+        use crate::core::reasoner::oxigraph_store::OxigraphStore;
+
+        let ontology_ref = self
+            .ontology
+            .as_ref()
+            .ok_or_else(|| {
+                Error::reasoning("No ontology loaded for SPARQL ABox classification")
+            })?
+            .clone();
+
+        let start = std::time::Instant::now();
+        let store = OxigraphStore::new()?;
+
+        {
+            let ontology =
+                read_lock(&ontology_ref, "core: reading ontology for sparql classification")?;
+            store.load_from_ontology(&ontology)?;
+        }
+
+        // Built-in OWL 2 RL SPARQL rules -----------------------------------------
+        let builtin_rules = [
+            // Rule 1: subClassOf propagation
+            "INSERT { ?x a ?C } WHERE { ?x a ?B . ?B <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?C . FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
+            // Rule 2: hasValue restriction
+            "INSERT { ?x a ?C } WHERE { ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . ?R <http://www.w3.org/2002/07/owl#onProperty> ?P . ?R <http://www.w3.org/2002/07/owl#hasValue> ?V . ?x ?P ?V . FILTER NOT EXISTS { ?x a ?C } }",
+            // Rule 3: someValuesFrom restriction
+            "INSERT { ?x a ?C } WHERE { ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . ?R <http://www.w3.org/2002/07/owl#onProperty> ?P . ?R <http://www.w3.org/2002/07/owl#someValuesFrom> ?D . ?x ?P ?y . ?y a ?D . FILTER NOT EXISTS { ?x a ?C } }",
+            // Rule 4: domain-based
+            "INSERT { ?x a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#domain> ?C . FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
+            // Rule 5: range-based
+            "INSERT { ?y a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#range> ?C . FILTER NOT EXISTS { ?y a ?C } FILTER(isIRI(?C)) }",
+            // Rule 6: equivalentClass (symmetric)
+            "INSERT { ?x a ?C } WHERE { ?x a ?D . { ?D <http://www.w3.org/2002/07/owl#equivalentClass> ?C } UNION { ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?D } FILTER(?C != ?D) FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
+        ];
+
+        let all_rules: Vec<&str> = builtin_rules
+            .iter()
+            .copied()
+            .chain(
+                self.sparql_materialization_rules
+                    .iter()
+                    .map(String::as_str),
+            )
+            .collect();
+
+        let max_iterations = 20usize;
+        let mut total_sparql_runs = 0u64;
+
+        for _ in 0..max_iterations {
+            let mut changed = false;
+            for rule in &all_rules {
+                let count = store.execute_update(rule)?;
+                if count > 0 {
+                    changed = true;
+                }
+                total_sparql_runs += 1;
+            }
+            if !changed {
+                break;
+            }
+        }
+
+        // Sync newly inferred ClassAssertions back into the ontology
+        let class_query = "SELECT ?x ?C WHERE { ?x a ?C . FILTER(isIRI(?x)) FILTER(isIRI(?C)) }";
+        let json_result = store.execute_query(class_query)?;
+        let parsed: serde_json::Value = serde_json::from_str(&json_result)
+            .map_err(|e| Error::reasoning(format!("Failed to parse SPARQL result: {e}")))?;
+
+        let mut facts_added = 0usize;
+        if let Some(bindings) = parsed["results"]["bindings"].as_array() {
+            let mut ont_w =
+                write_lock(&ontology_ref, "core: writing SPARQL inferred assertions")?;
+            for binding in bindings {
+                let ind_iri = binding["x"]["value"].as_str().unwrap_or("").to_owned();
+                let cls_iri = binding["C"]["value"].as_str().unwrap_or("").to_owned();
+                if ind_iri.is_empty() || cls_iri.is_empty() {
+                    continue;
+                }
+                // Skip owl:Thing / owl:Nothing / rdf:type etc. as class assertions
+                if cls_iri.starts_with("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+                    || cls_iri
+                        == "http://www.w3.org/2002/07/owl#Thing"
+                    || cls_iri
+                        == "http://www.w3.org/2002/07/owl#Nothing"
+                {
+                    continue;
+                }
+                use crate::ontology::{
+                    Class, Individual, IRI, NamedIndividual,
+                    axioms::ClassAssertionAxiom, Axiom,
+                };
+                let axiom = Axiom::ClassAssertion(ClassAssertionAxiom {
+                    id: 0,
+                    individual: Individual::Named(NamedIndividual {
+                        iri: IRI::new(&ind_iri),
+                    }),
+                    class: crate::ontology::ClassExpression::Class(Class::new(IRI::new(&cls_iri))),
+                    annotations: Vec::new(),
+                });
+                ont_w.add_axiom(axiom);
+                facts_added += 1;
+            }
+        }
+
+        // Cache the store for subsequent SPARQL queries
+        if let Ok(mut guard) = self.oxigraph_store.lock() {
+            *guard = Some(store);
+        }
+        self.materialization_stale
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+
+        Ok(MaterializationStats {
+            rules_fired: 0,
+            facts_added,
+            iterations: 0,
+            duration_ms: start.elapsed().as_millis() as u64,
+            sparql_rules_run: total_sparql_runs,
+        })
+    }
+
+    /// Execute a SPARQL CONSTRUCT / INSERT WHERE via Oxigraph and return the
+    /// number of triples that were added.
+    #[cfg(feature = "sparql-store")]
+    pub fn execute_construct_update(&mut self, sparql: &str) -> Result<usize> {
+        use crate::core::reasoner::oxigraph_store::OxigraphStore;
+
+        let mut guard = self
+            .oxigraph_store
+            .lock()
+            .map_err(|_| Error::reasoning("Oxigraph store mutex poisoned"))?;
+
+        if guard.is_none() {
+            let ontology_ref = self
+                .ontology
+                .as_ref()
+                .ok_or_else(|| Error::reasoning("No ontology loaded"))?
+                .clone();
+            let store = OxigraphStore::new()?;
+            let ont = read_lock(&ontology_ref, "core: reading ontology for construct_update")?;
+            store.load_from_ontology(&ont)?;
+            *guard = Some(store);
+        }
+
+        guard
+            .as_ref()
+            .unwrap()
+            .execute_update(sparql)
     }
 }
