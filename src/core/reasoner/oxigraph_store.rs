@@ -45,8 +45,7 @@ const OWL_TRANSITIVE: &str = "http://www.w3.org/2002/07/owl#TransitiveProperty";
 const OWL_SYMMETRIC: &str = "http://www.w3.org/2002/07/owl#SymmetricProperty";
 const OWL_REFLEXIVE: &str = "http://www.w3.org/2002/07/owl#ReflexiveProperty";
 const OWL_FUNCTIONAL: &str = "http://www.w3.org/2002/07/owl#FunctionalProperty";
-const OWL_INVERSE_FUNCTIONAL: &str =
-    "http://www.w3.org/2002/07/owl#InverseFunctionalProperty";
+const OWL_INVERSE_FUNCTIONAL: &str = "http://www.w3.org/2002/07/owl#InverseFunctionalProperty";
 const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 #[allow(unused)]
@@ -124,7 +123,11 @@ impl OxigraphStore {
                 let prop_node = named(&prop_iri);
                 for obj in objects {
                     if let Some(obj_iri) = individual_iri(obj) {
-                        self.insert(default_quad(subj_node.clone(), prop_node.clone(), named(&obj_iri)))?;
+                        self.insert(default_quad(
+                            subj_node.clone(),
+                            prop_node.clone(),
+                            named(&obj_iri),
+                        ))?;
                     }
                 }
             }
@@ -136,7 +139,11 @@ impl OxigraphStore {
                 let same_as = named(OWL_SAME_AS);
                 for right in rights {
                     if let Some(right_iri) = individual_iri(right) {
-                        self.insert(default_quad(left_node.clone(), same_as.clone(), named(&right_iri)))?;
+                        self.insert(default_quad(
+                            left_node.clone(),
+                            same_as.clone(),
+                            named(&right_iri),
+                        ))?;
                     }
                 }
             }
@@ -148,18 +155,23 @@ impl OxigraphStore {
     pub fn execute_query(&self, sparql: &str) -> Result<String> {
         let results = SparqlEvaluator::new()
             .parse_query(sparql)
-            .map_err(|e| Error::Sparql { message: format!("SPARQL parse error: {e}") })?
+            .map_err(|e| Error::Sparql {
+                message: format!("SPARQL parse error: {e}"),
+            })?
             .on_store(&self.store)
             .execute()
-            .map_err(|e| Error::Sparql { message: format!("SPARQL execute error: {e}") })?;
+            .map_err(|e| Error::Sparql {
+                message: format!("SPARQL execute error: {e}"),
+            })?;
 
         match results {
             QueryResults::Solutions(solutions) => {
                 let mut bindings: Vec<serde_json::Value> = Vec::new();
                 let mut vars: Vec<String> = Vec::new();
                 for sol in solutions {
-                    let sol = sol
-                        .map_err(|e| Error::Sparql { message: e.to_string() })?;
+                    let sol = sol.map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
                     if vars.is_empty() {
                         vars = sol.iter().map(|(v, _)| v.as_str().to_string()).collect();
                     }
@@ -183,7 +195,9 @@ impl OxigraphStore {
             QueryResults::Graph(graph) => {
                 let mut triples = Vec::new();
                 for triple in graph {
-                    let t = triple.map_err(|e| Error::Sparql { message: e.to_string() })?;
+                    let t = triple.map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
                     triples.push(serde_json::json!({
                         "subject": term_to_json(&t.subject.into()),
                         "predicate": term_to_json(&t.predicate.into()),
@@ -202,18 +216,18 @@ impl OxigraphStore {
     /// Execute a SPARQL UPDATE (INSERT WHERE / DELETE WHERE), returns count of new triples (estimated)
     pub fn execute_update(&self, sparql: &str) -> Result<usize> {
         let before = self.store.len().unwrap_or(0);
-        self.store
-            .update(sparql)
-            .map_err(|e| Error::Sparql { message: format!("SPARQL update error: {e}") })?;
+        self.store.update(sparql).map_err(|e| Error::Sparql {
+            message: format!("SPARQL update error: {e}"),
+        })?;
         let after = self.store.len().unwrap_or(0);
         Ok(after.saturating_sub(before))
     }
 
     /// Insert a single quad into the store
     pub fn insert(&self, quad: Quad) -> Result<()> {
-        self.store
-            .insert(&quad)
-            .map_err(|e| Error::Sparql { message: format!("Store insert error: {e}") })
+        self.store.insert(&quad).map_err(|e| Error::Sparql {
+            message: format!("Store insert error: {e}"),
+        })
     }
 
     /// Number of quads in the store
@@ -257,7 +271,10 @@ impl OxigraphStore {
         }
     }
 
-    fn load_class_assertion(&self, ax: &crate::ontology::axioms::ClassAssertionAxiom) -> Result<()> {
+    fn load_class_assertion(
+        &self,
+        ax: &crate::ontology::axioms::ClassAssertionAxiom,
+    ) -> Result<()> {
         if let Some(ind_iri) = individual_iri(&ax.individual) {
             let ind = named(&ind_iri);
             let class_term = self.class_expr_to_term(&ax.class)?;
@@ -297,13 +314,20 @@ impl OxigraphStore {
         }
     }
 
-    fn load_same_individual(&self, ax: &crate::ontology::axioms::SameIndividualAxiom) -> Result<()> {
+    fn load_same_individual(
+        &self,
+        ax: &crate::ontology::axioms::SameIndividualAxiom,
+    ) -> Result<()> {
         let same_as = named(OWL_SAME_AS);
         let iris: Vec<_> = ax.individuals.iter().filter_map(individual_iri).collect();
         for i in 0..iris.len() {
             for j in 0..iris.len() {
                 if i != j {
-                    self.insert(default_quad(named(&iris[i]), same_as.clone(), named(&iris[j])))?;
+                    self.insert(default_quad(
+                        named(&iris[i]),
+                        same_as.clone(),
+                        named(&iris[j]),
+                    ))?;
                 }
             }
         }
@@ -333,9 +357,10 @@ impl OxigraphStore {
         for i in 0..terms.len() {
             for j in 0..terms.len() {
                 if i != j
-                    && let Some(left) = term_to_named_or_blank(&terms[i]) {
-                        self.insert(default_quad(left, equiv.clone(), terms[j].clone()))?;
-                    }
+                    && let Some(left) = term_to_named_or_blank(&terms[i])
+                {
+                    self.insert(default_quad(left, equiv.clone(), terms[j].clone()))?;
+                }
             }
         }
         Ok(())
@@ -361,10 +386,17 @@ impl OxigraphStore {
         Ok(())
     }
 
-    fn load_obj_domain(&self, ax: &crate::ontology::axioms::ObjectPropertyDomainAxiom) -> Result<()> {
+    fn load_obj_domain(
+        &self,
+        ax: &crate::ontology::axioms::ObjectPropertyDomainAxiom,
+    ) -> Result<()> {
         if let Some(prop_iri) = obj_prop_iri_from_expr(&ax.property) {
             let domain_term = self.class_expr_to_term(&ax.domain)?;
-            self.insert(default_quad(named(&prop_iri), named(RDFS_DOMAIN), domain_term))
+            self.insert(default_quad(
+                named(&prop_iri),
+                named(RDFS_DOMAIN),
+                domain_term,
+            ))
         } else {
             Ok(())
         }
@@ -373,18 +405,29 @@ impl OxigraphStore {
     fn load_obj_range(&self, ax: &crate::ontology::axioms::ObjectPropertyRangeAxiom) -> Result<()> {
         if let Some(prop_iri) = obj_prop_iri_from_expr(&ax.property) {
             let range_term = self.class_expr_to_term(&ax.range)?;
-            self.insert(default_quad(named(&prop_iri), named(RDFS_RANGE), range_term))
+            self.insert(default_quad(
+                named(&prop_iri),
+                named(RDFS_RANGE),
+                range_term,
+            ))
         } else {
             Ok(())
         }
     }
 
-    fn load_sub_obj_prop(&self, ax: &crate::ontology::axioms::SubObjectPropertyOfAxiom) -> Result<()> {
+    fn load_sub_obj_prop(
+        &self,
+        ax: &crate::ontology::axioms::SubObjectPropertyOfAxiom,
+    ) -> Result<()> {
         if let (Some(sub_iri), Some(sup_iri)) = (
             obj_prop_iri_from_expr(&ax.sub_property),
             obj_prop_iri_from_expr(&ax.super_property),
         ) {
-            self.insert(default_quad(named(&sub_iri), named(RDFS_SUBPROP_OF), named(&sup_iri)))
+            self.insert(default_quad(
+                named(&sub_iri),
+                named(RDFS_SUBPROP_OF),
+                named(&sup_iri),
+            ))
         } else {
             Ok(())
         }
@@ -406,33 +449,61 @@ impl OxigraphStore {
         }
     }
 
-    fn load_transitive(&self, ax: &crate::ontology::axioms::TransitiveObjectPropertyAxiom) -> Result<()> {
+    fn load_transitive(
+        &self,
+        ax: &crate::ontology::axioms::TransitiveObjectPropertyAxiom,
+    ) -> Result<()> {
         if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
-            self.insert(default_quad(named(&iri), named(RDF_TYPE), named(OWL_TRANSITIVE)))
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_TRANSITIVE),
+            ))
         } else {
             Ok(())
         }
     }
 
-    fn load_symmetric(&self, ax: &crate::ontology::axioms::SymmetricObjectPropertyAxiom) -> Result<()> {
+    fn load_symmetric(
+        &self,
+        ax: &crate::ontology::axioms::SymmetricObjectPropertyAxiom,
+    ) -> Result<()> {
         if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
-            self.insert(default_quad(named(&iri), named(RDF_TYPE), named(OWL_SYMMETRIC)))
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_SYMMETRIC),
+            ))
         } else {
             Ok(())
         }
     }
 
-    fn load_reflexive(&self, ax: &crate::ontology::axioms::ReflexiveObjectPropertyAxiom) -> Result<()> {
+    fn load_reflexive(
+        &self,
+        ax: &crate::ontology::axioms::ReflexiveObjectPropertyAxiom,
+    ) -> Result<()> {
         if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
-            self.insert(default_quad(named(&iri), named(RDF_TYPE), named(OWL_REFLEXIVE)))
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_REFLEXIVE),
+            ))
         } else {
             Ok(())
         }
     }
 
-    fn load_functional(&self, ax: &crate::ontology::axioms::FunctionalObjectPropertyAxiom) -> Result<()> {
+    fn load_functional(
+        &self,
+        ax: &crate::ontology::axioms::FunctionalObjectPropertyAxiom,
+    ) -> Result<()> {
         if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
-            self.insert(default_quad(named(&iri), named(RDF_TYPE), named(OWL_FUNCTIONAL)))
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_FUNCTIONAL),
+            ))
         } else {
             Ok(())
         }
@@ -443,7 +514,11 @@ impl OxigraphStore {
         ax: &crate::ontology::axioms::InverseFunctionalObjectPropertyAxiom,
     ) -> Result<()> {
         if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
-            self.insert(default_quad(named(&iri), named(RDF_TYPE), named(OWL_INVERSE_FUNCTIONAL)))
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_INVERSE_FUNCTIONAL),
+            ))
         } else {
             Ok(())
         }
@@ -456,34 +531,70 @@ impl OxigraphStore {
 
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 let bn = fresh_blank();
-                self.insert(default_quad(bn.clone(), named(RDF_TYPE), named(OWL_RESTRICTION)))?;
+                self.insert(default_quad(
+                    bn.clone(),
+                    named(RDF_TYPE),
+                    named(OWL_RESTRICTION),
+                ))?;
                 if let Some(prop_iri) = obj_prop_iri_from_expr(property) {
-                    self.insert(default_quad(bn.clone(), named(OWL_ON_PROPERTY), named(&prop_iri)))?;
+                    self.insert(default_quad(
+                        bn.clone(),
+                        named(OWL_ON_PROPERTY),
+                        named(&prop_iri),
+                    ))?;
                 }
                 let filler_term = self.class_expr_to_term(filler)?;
-                self.insert(default_quad(bn.clone(), named(OWL_SOME_VALUES_FROM), filler_term))?;
+                self.insert(default_quad(
+                    bn.clone(),
+                    named(OWL_SOME_VALUES_FROM),
+                    filler_term,
+                ))?;
                 Ok(Term::BlankNode(bn))
             }
 
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 let bn = fresh_blank();
-                self.insert(default_quad(bn.clone(), named(RDF_TYPE), named(OWL_RESTRICTION)))?;
+                self.insert(default_quad(
+                    bn.clone(),
+                    named(RDF_TYPE),
+                    named(OWL_RESTRICTION),
+                ))?;
                 if let Some(prop_iri) = obj_prop_iri_from_expr(property) {
-                    self.insert(default_quad(bn.clone(), named(OWL_ON_PROPERTY), named(&prop_iri)))?;
+                    self.insert(default_quad(
+                        bn.clone(),
+                        named(OWL_ON_PROPERTY),
+                        named(&prop_iri),
+                    ))?;
                 }
                 let filler_term = self.class_expr_to_term(filler)?;
-                self.insert(default_quad(bn.clone(), named(OWL_ALL_VALUES_FROM), filler_term))?;
+                self.insert(default_quad(
+                    bn.clone(),
+                    named(OWL_ALL_VALUES_FROM),
+                    filler_term,
+                ))?;
                 Ok(Term::BlankNode(bn))
             }
 
             ClassExpression::ObjectHasValue { property, value } => {
                 let bn = fresh_blank();
-                self.insert(default_quad(bn.clone(), named(RDF_TYPE), named(OWL_RESTRICTION)))?;
+                self.insert(default_quad(
+                    bn.clone(),
+                    named(RDF_TYPE),
+                    named(OWL_RESTRICTION),
+                ))?;
                 if let Some(prop_iri) = obj_prop_iri_from_expr(property) {
-                    self.insert(default_quad(bn.clone(), named(OWL_ON_PROPERTY), named(&prop_iri)))?;
+                    self.insert(default_quad(
+                        bn.clone(),
+                        named(OWL_ON_PROPERTY),
+                        named(&prop_iri),
+                    ))?;
                 }
                 if let Some(val_iri) = individual_iri(value) {
-                    self.insert(default_quad(bn.clone(), named(OWL_HAS_VALUE), named(&val_iri)))?;
+                    self.insert(default_quad(
+                        bn.clone(),
+                        named(OWL_HAS_VALUE),
+                        named(&val_iri),
+                    ))?;
                 }
                 Ok(Term::BlankNode(bn))
             }
@@ -492,7 +603,11 @@ impl OxigraphStore {
                 let bn = fresh_blank();
                 self.insert(default_quad(bn.clone(), named(RDF_TYPE), named(OWL_CLASS)))?;
                 let list_head = self.build_rdf_list_class(exprs)?;
-                self.insert(default_quad(bn.clone(), named(OWL_INTERSECTION_OF), list_head))?;
+                self.insert(default_quad(
+                    bn.clone(),
+                    named(OWL_INTERSECTION_OF),
+                    list_head,
+                ))?;
                 Ok(Term::BlankNode(bn))
             }
 
@@ -533,7 +648,11 @@ impl OxigraphStore {
         let head = fresh_blank();
         let head_term = Term::BlankNode(head.clone());
         if let Some(ind_iri) = individual_iri(&individuals[0]) {
-            self.insert(default_quad(head.clone(), named(RDF_FIRST), named(&ind_iri)))?;
+            self.insert(default_quad(
+                head.clone(),
+                named(RDF_FIRST),
+                named(&ind_iri),
+            ))?;
         }
         let rest = self.build_rdf_list_individuals(&individuals[1..])?;
         self.insert(default_quad(head, named(RDF_REST), rest))?;
@@ -638,7 +757,10 @@ fn term_to_json(term: &Term) -> serde_json::Value {
             if let Some(lang) = l.language() {
                 obj.insert("xml:lang".to_string(), serde_json::json!(lang));
             } else {
-                obj.insert("datatype".to_string(), serde_json::json!(l.datatype().as_str()));
+                obj.insert(
+                    "datatype".to_string(),
+                    serde_json::json!(l.datatype().as_str()),
+                );
             }
             serde_json::Value::Object(obj)
         }

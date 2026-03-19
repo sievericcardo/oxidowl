@@ -1426,9 +1426,10 @@ impl Reasoner {
         #[cfg(feature = "sparql-store")]
         {
             if let Ok(guard) = self.oxigraph_store.lock()
-                && let Some(store) = guard.as_ref() {
-                    return store.execute_query(query);
-                }
+                && let Some(store) = guard.as_ref()
+            {
+                return store.execute_query(query);
+            }
         }
 
         // Fallback: custom string-based parser for basic cases
@@ -2354,9 +2355,8 @@ impl Reasoner {
 
         // Push inferred ClassAssertions back into the ontology
         {
-            use crate::ontology::{axioms::ClassAssertionAxiom, Axiom};
-            let mut ont_w =
-                write_lock(&ontology_ref, "core: writing inferred class assertions")?;
+            use crate::ontology::{Axiom, axioms::ClassAssertionAxiom};
+            let mut ont_w = write_lock(&ontology_ref, "core: writing inferred class assertions")?;
             for (ind, classes) in rl.class_assertion_pairs() {
                 for cls in classes {
                     ont_w.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
@@ -2407,17 +2407,17 @@ impl Reasoner {
         let ontology_ref = self
             .ontology
             .as_ref()
-            .ok_or_else(|| {
-                Error::reasoning("No ontology loaded for SPARQL ABox classification")
-            })?
+            .ok_or_else(|| Error::reasoning("No ontology loaded for SPARQL ABox classification"))?
             .clone();
 
         let start = std::time::Instant::now();
         let store = OxigraphStore::new()?;
 
         {
-            let ontology =
-                read_lock(&ontology_ref, "core: reading ontology for sparql classification")?;
+            let ontology = read_lock(
+                &ontology_ref,
+                "core: reading ontology for sparql classification",
+            )?;
             store.load_from_ontology(&ontology)?;
         }
 
@@ -2440,11 +2440,7 @@ impl Reasoner {
         let all_rules: Vec<&str> = builtin_rules
             .iter()
             .copied()
-            .chain(
-                self.sparql_materialization_rules
-                    .iter()
-                    .map(String::as_str),
-            )
+            .chain(self.sparql_materialization_rules.iter().map(String::as_str))
             .collect();
 
         let max_iterations = 20usize;
@@ -2472,8 +2468,7 @@ impl Reasoner {
 
         let mut facts_added = 0usize;
         if let Some(bindings) = parsed["results"]["bindings"].as_array() {
-            let mut ont_w =
-                write_lock(&ontology_ref, "core: writing SPARQL inferred assertions")?;
+            let mut ont_w = write_lock(&ontology_ref, "core: writing SPARQL inferred assertions")?;
             for binding in bindings {
                 let ind_iri = binding["x"]["value"].as_str().unwrap_or("").to_owned();
                 let cls_iri = binding["C"]["value"].as_str().unwrap_or("").to_owned();
@@ -2482,16 +2477,13 @@ impl Reasoner {
                 }
                 // Skip owl:Thing / owl:Nothing / rdf:type etc. as class assertions
                 if cls_iri.starts_with("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-                    || cls_iri
-                        == "http://www.w3.org/2002/07/owl#Thing"
-                    || cls_iri
-                        == "http://www.w3.org/2002/07/owl#Nothing"
+                    || cls_iri == "http://www.w3.org/2002/07/owl#Thing"
+                    || cls_iri == "http://www.w3.org/2002/07/owl#Nothing"
                 {
                     continue;
                 }
                 use crate::ontology::{
-                    Class, Individual, IRI, NamedIndividual,
-                    axioms::ClassAssertionAxiom, Axiom,
+                    Axiom, Class, IRI, Individual, NamedIndividual, axioms::ClassAssertionAxiom,
                 };
                 let axiom = Axiom::ClassAssertion(ClassAssertionAxiom {
                     id: 0,
@@ -2545,9 +2537,6 @@ impl Reasoner {
             *guard = Some(store);
         }
 
-        guard
-            .as_ref()
-            .unwrap()
-            .execute_update(sparql)
+        guard.as_ref().unwrap().execute_update(sparql)
     }
 }

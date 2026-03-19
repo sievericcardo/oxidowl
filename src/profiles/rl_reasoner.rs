@@ -201,16 +201,26 @@ impl RLReasoner {
                         .collect();
                     for (ni, nc) in &named {
                         for (ci, cc) in classes.iter().enumerate() {
-                            if ci == *ni { continue; }
+                            if ci == *ni {
+                                continue;
+                            }
                             match cc {
-                                RLClassExpression::SomeValuesFrom { property, filler } =>
-                                    self.tbox.some_values_from_defs.push(((*nc).clone(), property.clone(), (**filler).clone())),
-                                RLClassExpression::AllValuesFrom { property, filler } =>
-                                    self.tbox.all_values_from_defs.push(((*nc).clone(), property.clone(), (**filler).clone())),
-                                RLClassExpression::HasValue { property, value } =>
-                                    self.tbox.has_value_defs.push(((*nc).clone(), property.clone(), value.clone())),
-                                RLClassExpression::Intersection(operands) =>
-                                    self.tbox.intersection_defs.push(((*nc).clone(), operands.clone())),
+                                RLClassExpression::SomeValuesFrom { property, filler } => self
+                                    .tbox
+                                    .some_values_from_defs
+                                    .push(((*nc).clone(), property.clone(), (**filler).clone())),
+                                RLClassExpression::AllValuesFrom { property, filler } => self
+                                    .tbox
+                                    .all_values_from_defs
+                                    .push(((*nc).clone(), property.clone(), (**filler).clone())),
+                                RLClassExpression::HasValue { property, value } => self
+                                    .tbox
+                                    .has_value_defs
+                                    .push(((*nc).clone(), property.clone(), value.clone())),
+                                RLClassExpression::Intersection(operands) => self
+                                    .tbox
+                                    .intersection_defs
+                                    .push(((*nc).clone(), operands.clone())),
                                 _ => {}
                             }
                         }
@@ -223,8 +233,12 @@ impl RLReasoner {
                     self.tbox.add_range(property.clone(), range.clone());
                 }
                 RLAxiom::InverseProperty { property, inverse } => {
-                    self.tbox.inverse_properties.push((property.clone(), inverse.clone()));
-                    self.tbox.inverse_properties.push((inverse.clone(), property.clone()));
+                    self.tbox
+                        .inverse_properties
+                        .push((property.clone(), inverse.clone()));
+                    self.tbox
+                        .inverse_properties
+                        .push((inverse.clone(), property.clone()));
                 }
                 RLAxiom::ReflexiveProperty { property } => {
                     self.tbox.reflexive_properties.insert(property.clone());
@@ -232,11 +246,18 @@ impl RLReasoner {
                 RLAxiom::FunctionalObjectProperty { property } => {
                     self.tbox.functional_properties.insert(property.clone());
                 }
-                RLAxiom::PropertyChain { chain, superproperty } => {
-                    self.tbox.property_chains.push((chain.clone(), superproperty.clone()));
+                RLAxiom::PropertyChain {
+                    chain,
+                    superproperty,
+                } => {
+                    self.tbox
+                        .property_chains
+                        .push((chain.clone(), superproperty.clone()));
                 }
                 RLAxiom::OneOf { class, individuals } => {
-                    self.tbox.one_of_defs.push((class.clone(), individuals.clone()));
+                    self.tbox
+                        .one_of_defs
+                        .push((class.clone(), individuals.clone()));
                 }
                 _ => {}
             }
@@ -277,7 +298,8 @@ impl RLReasoner {
                     );
                 }
                 RLAxiom::SameAs { left, right } => {
-                    self.materialized_facts.add_same_as(left.clone(), right.clone());
+                    self.materialized_facts
+                        .add_same_as(left.clone(), right.clone());
                 }
                 RLAxiom::OneOf { class, individuals } => {
                     // Each individual in the OneOf is an instance of the class
@@ -475,10 +497,7 @@ pub enum RLAxiom {
     /// Functional(P)
     FunctionalObjectProperty { property: ObjectPropertyExpression },
     /// sameAs(a, b)
-    SameAs {
-        left: Individual,
-        right: Individual,
-    },
+    SameAs { left: Individual, right: Individual },
     /// C ≡ {a, b, ...}
     OneOf {
         class: RLClassExpression,
@@ -517,24 +536,22 @@ impl RLAxiom {
                 subproperty: sub_property.clone(),
                 superproperty: super_property.clone(),
             }),
-            Axiom::TransitiveObjectProperty(ax) => {
-                Some(RLAxiom::TransitiveProperty { property: ax.property.clone() })
-            }
-            Axiom::SymmetricObjectProperty(ax) => {
-                Some(RLAxiom::SymmetricProperty { property: ax.property.clone() })
-            }
-            Axiom::InverseObjectProperties(ax) => {
-                Some(RLAxiom::InverseProperty {
-                    property: ax.property1.clone(),
-                    inverse: ax.property2.clone(),
-                })
-            }
-            Axiom::ReflexiveObjectProperty(ax) => {
-                Some(RLAxiom::ReflexiveProperty { property: ax.property.clone() })
-            }
-            Axiom::FunctionalObjectProperty(ax) => {
-                Some(RLAxiom::FunctionalObjectProperty { property: ax.property.clone() })
-            }
+            Axiom::TransitiveObjectProperty(ax) => Some(RLAxiom::TransitiveProperty {
+                property: ax.property.clone(),
+            }),
+            Axiom::SymmetricObjectProperty(ax) => Some(RLAxiom::SymmetricProperty {
+                property: ax.property.clone(),
+            }),
+            Axiom::InverseObjectProperties(ax) => Some(RLAxiom::InverseProperty {
+                property: ax.property1.clone(),
+                inverse: ax.property2.clone(),
+            }),
+            Axiom::ReflexiveObjectProperty(ax) => Some(RLAxiom::ReflexiveProperty {
+                property: ax.property.clone(),
+            }),
+            Axiom::FunctionalObjectProperty(ax) => Some(RLAxiom::FunctionalObjectProperty {
+                property: ax.property.clone(),
+            }),
             Axiom::SameIndividual(ax) => {
                 // Emit pairs
                 if ax.individuals.len() >= 2 {
@@ -730,12 +747,10 @@ impl RLClassExpression {
                     filler: Box::new(filler.to_class_expression()),
                 }
             }
-            RLClassExpression::HasValue { property, value } => {
-                ClassExpression::ObjectHasValue {
-                    property: property.clone(),
-                    value: value.clone(),
-                }
-            }
+            RLClassExpression::HasValue { property, value } => ClassExpression::ObjectHasValue {
+                property: property.clone(),
+                value: value.clone(),
+            },
         }
     }
 
@@ -902,7 +917,11 @@ impl MaterializedKnowledgeBase {
 
     /// Add a sameAs link (both directions)
     pub fn add_same_as(&mut self, left: Individual, right: Individual) -> bool {
-        let a = self.same_as.entry(left.clone()).or_default().insert(right.clone());
+        let a = self
+            .same_as
+            .entry(left.clone())
+            .or_default()
+            .insert(right.clone());
         let b = self.same_as.entry(right).or_default().insert(left);
         a || b
     }
@@ -928,7 +947,12 @@ impl MaterializedKnowledgeBase {
     /// Iterate over object property assertions
     pub fn object_property_assertion_iter(
         &self,
-    ) -> impl Iterator<Item = (&(Individual, ObjectPropertyExpression), &HashSet<Individual>)> {
+    ) -> impl Iterator<
+        Item = (
+            &(Individual, ObjectPropertyExpression),
+            &HashSet<Individual>,
+        ),
+    > {
         self.object_property_assertions.iter()
     }
 
@@ -970,9 +994,17 @@ pub struct TBoxHierarchy {
     /// HasValue definitions: C ≡ ∃p.{v}  →  (class, property, individual)
     pub has_value_defs: Vec<(RLClassExpression, ObjectPropertyExpression, Individual)>,
     /// SomeValuesFrom definitions: C ≡ ∃p.D  →  (class, property, filler)
-    pub some_values_from_defs: Vec<(RLClassExpression, ObjectPropertyExpression, RLClassExpression)>,
+    pub some_values_from_defs: Vec<(
+        RLClassExpression,
+        ObjectPropertyExpression,
+        RLClassExpression,
+    )>,
     /// AllValuesFrom definitions: C ⊑ ∀p.D  →  (class, property, filler)
-    pub all_values_from_defs: Vec<(RLClassExpression, ObjectPropertyExpression, RLClassExpression)>,
+    pub all_values_from_defs: Vec<(
+        RLClassExpression,
+        ObjectPropertyExpression,
+        RLClassExpression,
+    )>,
     /// Intersection definitions: C ≡ D1 ⊓ ... ⊓ Dn  →  (class, members)
     pub intersection_defs: Vec<(RLClassExpression, Vec<RLClassExpression>)>,
     /// InverseOf pairs: (P, Q) means InverseOf(P, Q)
@@ -1273,14 +1305,18 @@ impl ForwardChainingEngine {
         let chains: Vec<(Vec<ObjectPropertyExpression>, ObjectPropertyExpression)> = axioms
             .iter()
             .filter_map(|ax| match ax {
-                RLAxiom::PropertyChain { chain, superproperty } =>
-                    Some((chain.clone(), superproperty.clone())),
+                RLAxiom::PropertyChain {
+                    chain,
+                    superproperty,
+                } => Some((chain.clone(), superproperty.clone())),
                 _ => None,
             })
             .collect();
 
         for (chain, sup) in &chains {
-            if chain.len() != 2 { continue; }
+            if chain.len() != 2 {
+                continue;
+            }
             let p1 = &chain[0];
             let p2 = &chain[1];
             let pairs1: Vec<_> = kb
@@ -1479,10 +1515,7 @@ impl ForwardChainingEngine {
     }
 
     /// Apply sameAs rule: SameAs(a,b), a:C ⟹ b:C; P(a,x) ⟹ P(b,x); P(x,a) ⟹ P(x,b)
-    fn apply_same_as_rule(
-        &mut self,
-        kb: &mut MaterializedKnowledgeBase,
-    ) -> Result<bool> {
+    fn apply_same_as_rule(&mut self, kb: &mut MaterializedKnowledgeBase) -> Result<bool> {
         let mut new_class_facts = Vec::new();
         let mut new_prop_facts = Vec::new();
 
@@ -1509,10 +1542,16 @@ impl ForwardChainingEngine {
 
         let mut added = false;
         for (ind, cls) in new_class_facts {
-            if kb.add_class_assertion(ind, cls) { added = true; self.rules_fired += 1; }
+            if kb.add_class_assertion(ind, cls) {
+                added = true;
+                self.rules_fired += 1;
+            }
         }
         for (s, p, o) in new_prop_facts {
-            if kb.add_object_property_assertion(s, p, o) { added = true; self.rules_fired += 1; }
+            if kb.add_object_property_assertion(s, p, o) {
+                added = true;
+                self.rules_fired += 1;
+            }
         }
         Ok(added)
     }
@@ -1548,7 +1587,10 @@ impl ForwardChainingEngine {
 
         let mut added = false;
         for (a, b) in new_same_as {
-            if kb.add_same_as(a, b) { added = true; self.rules_fired += 1; }
+            if kb.add_same_as(a, b) {
+                added = true;
+                self.rules_fired += 1;
+            }
         }
         Ok(added)
     }

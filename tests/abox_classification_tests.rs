@@ -19,9 +19,7 @@ use oxidowl::{
 };
 
 fn make_named_ind(iri: &str) -> Individual {
-    Individual::Named(NamedIndividual {
-        iri: IRI::new(iri),
-    })
+    Individual::Named(NamedIndividual { iri: IRI::new(iri) })
 }
 
 fn named_class(iri: &str) -> ClassExpression {
@@ -29,9 +27,7 @@ fn named_class(iri: &str) -> ClassExpression {
 }
 
 fn named_prop(iri: &str) -> ObjectPropertyExpression {
-    ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty::new(IRI::new(iri)).expect("valid IRI"),
-    )
+    ObjectPropertyExpression::ObjectProperty(ObjectProperty::new(IRI::new(iri)).expect("valid IRI"))
 }
 
 fn make_ontology_with_axioms(axioms: Vec<Axiom>) -> Ontology {
@@ -298,7 +294,10 @@ fn test_reasoner_materialize_abox() {
     reasoner.load_ontology(ont).expect("load_ontology");
     let stats = reasoner.materialize_abox().expect("materialize_abox");
 
-    assert!(stats.facts_added > 0, "At least one fact should be materialized");
+    assert!(
+        stats.facts_added > 0,
+        "At least one fact should be materialized"
+    );
 }
 
 // ─── SPARQL-based classification via Oxigraph ─────────────────────────────────
