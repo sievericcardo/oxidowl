@@ -332,11 +332,10 @@ impl OxigraphStore {
         let equiv = named(OWL_EQUIV_CLASS);
         for i in 0..terms.len() {
             for j in 0..terms.len() {
-                if i != j {
-                    if let Some(left) = term_to_named_or_blank(&terms[i]) {
+                if i != j
+                    && let Some(left) = term_to_named_or_blank(&terms[i]) {
                         self.insert(default_quad(left, equiv.clone(), terms[j].clone()))?;
                     }
-                }
             }
         }
         Ok(())

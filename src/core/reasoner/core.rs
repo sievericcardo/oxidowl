@@ -1425,11 +1425,10 @@ impl Reasoner {
         // If the Oxigraph store is loaded, delegate full SPARQL 1.1 evaluation to it
         #[cfg(feature = "sparql-store")]
         {
-            if let Ok(guard) = self.oxigraph_store.lock() {
-                if let Some(store) = guard.as_ref() {
+            if let Ok(guard) = self.oxigraph_store.lock()
+                && let Some(store) = guard.as_ref() {
                     return store.execute_query(query);
                 }
-            }
         }
 
         // Fallback: custom string-based parser for basic cases

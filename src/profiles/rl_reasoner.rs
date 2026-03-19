@@ -1536,7 +1536,7 @@ impl ForwardChainingEngine {
                     }
                 }
             }
-            for (_, objects) in &by_subject {
+            for objects in by_subject.values() {
                 if objects.len() >= 2 {
                     let canonical = objects[0].clone();
                     for other in objects.iter().skip(1) {
