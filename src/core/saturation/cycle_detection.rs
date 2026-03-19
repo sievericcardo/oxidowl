@@ -177,7 +177,10 @@ impl CycleDetector {
 fn classify_cycle_type(path: &[String]) -> CycleType {
     let has_role = path.iter().any(|iri| {
         let lower = iri.to_lowercase();
-        lower.contains("property") || lower.contains("#has") || lower.contains("/has") || lower.contains("role")
+        lower.contains("property")
+            || lower.contains("#has")
+            || lower.contains("/has")
+            || lower.contains("role")
     });
     if has_role {
         return CycleType::RoleCycle;
