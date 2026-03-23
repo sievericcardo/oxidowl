@@ -2422,20 +2422,109 @@ impl Reasoner {
         }
 
         // Built-in OWL 2 RL SPARQL rules -----------------------------------------
-        let builtin_rules = [
-            // Rule 1: subClassOf propagation
-            "INSERT { ?x a ?C } WHERE { ?x a ?B . ?B <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?C . FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
-            // Rule 2: hasValue restriction
-            "INSERT { ?x a ?C } WHERE { ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . ?R <http://www.w3.org/2002/07/owl#onProperty> ?P . ?R <http://www.w3.org/2002/07/owl#hasValue> ?V . ?x ?P ?V . FILTER NOT EXISTS { ?x a ?C } }",
-            // Rule 3: someValuesFrom restriction
-            "INSERT { ?x a ?C } WHERE { ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . ?R <http://www.w3.org/2002/07/owl#onProperty> ?P . ?R <http://www.w3.org/2002/07/owl#someValuesFrom> ?D . ?x ?P ?y . ?y a ?D . FILTER NOT EXISTS { ?x a ?C } }",
-            // Rule 4: domain-based
+        let builtin_rules = abox_classification_rules();
+        let _rules_marker = &[
+            // Rule 1: hasValue restriction — C ≡ (p hasValue v)
+            "INSERT { ?x a ?C } \
+            WHERE { \
+              ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . \
+              ?R <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+                   <http://www.w3.org/2002/07/owl#Restriction> ; \
+                 <http://www.w3.org/2002/07/owl#onProperty> ?P ; \
+                 <http://www.w3.org/2002/07/owl#hasValue>    ?V . \
+              ?x ?P ?V . \
+              FILTER NOT EXISTS { ?x a ?C } \
+            }",
+            // Rule 2: someValuesFrom restriction — C ≡ (p someValuesFrom D)
+            "INSERT { ?x a ?C } \
+            WHERE { \
+              ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . \
+              ?R <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+                   <http://www.w3.org/2002/07/owl#Restriction> ; \
+                 <http://www.w3.org/2002/07/owl#onProperty>    ?P ; \
+                 <http://www.w3.org/2002/07/owl#someValuesFrom> ?D . \
+              ?x ?P ?y . \
+              ?y a ?D . \
+              FILTER NOT EXISTS { ?x a ?C } \
+            }",
+            // Rule 3a: named class equivalence C ≡ D → D instances become C instances
+            "INSERT { ?x a ?C } \
+            WHERE { \
+              ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?D . \
+              FILTER(!isBlank(?D)) \
+              ?x a ?D . \
+              FILTER NOT EXISTS { ?x a ?C } \
+            }",
+            // Rule 3b: named class equivalence C ≡ D → C instances become D instances
+            "INSERT { ?x a ?D } \
+            WHERE { \
+              ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?D . \
+              FILTER(!isBlank(?D)) \
+              ?x a ?C . \
+              FILTER NOT EXISTS { ?x a ?D } \
+            }",
+            // Rule 4: intersectionOf( DataSomeValuesFrom(dp, xsd:double range), DataHasValue(hvp, hv) )
+            "INSERT { ?x a ?C } \
+            WHERE { \
+              ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+              ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+              ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r_range . \
+              ?r_range <http://www.w3.org/2002/07/owl#onProperty>    ?dp . \
+              ?r_range <http://www.w3.org/2002/07/owl#someValuesFrom> ?dr . \
+              ?dr <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+              ?dr <http://www.w3.org/2002/07/owl#withRestrictions> ?flist . \
+              ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r_hv . \
+              ?r_hv <http://www.w3.org/2002/07/owl#onProperty> ?hvp . \
+              ?r_hv <http://www.w3.org/2002/07/owl#hasValue>    ?hv . \
+              FILTER(?r_range != ?r_hv) \
+              ?x ?dp  ?numval . \
+              ?x ?hvp ?hv . \
+              OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_mi . \
+                         ?f_mi <http://www.w3.org/2001/XMLSchema#minInclusive> ?minI . } \
+              OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_me . \
+                         ?f_me <http://www.w3.org/2001/XMLSchema#minExclusive> ?minE . } \
+              OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_xi . \
+                         ?f_xi <http://www.w3.org/2001/XMLSchema#maxInclusive> ?maxI . } \
+              OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_xe . \
+                         ?f_xe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?maxE . } \
+              FILTER((!BOUND(?minI) || ?numval >= ?minI) && \
+                     (!BOUND(?minE) || ?numval >  ?minE) && \
+                     (!BOUND(?maxI) || ?numval <= ?maxI) && \
+                     (!BOUND(?maxE) || ?numval <  ?maxE)) \
+              FILTER NOT EXISTS { ?x a ?C } \
+            }",
+            // Rule 5: pure named-class intersectionOf — all members must be named classes
+            //         and x must be an instance of every one of them
+            "INSERT { ?x a ?C } \
+            WHERE { \
+              ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+              ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+              FILTER NOT EXISTS { \
+                ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?m . \
+                FILTER(isBlank(?m)) \
+              } \
+              FILTER NOT EXISTS { \
+                ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?m2 . \
+                FILTER NOT EXISTS { ?x a ?m2 } \
+              } \
+              ?ilist <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?m1 . \
+              ?x a ?m1 . \
+              FILTER NOT EXISTS { ?x a ?C } \
+            }",
+            // Rule 6: rdfs:subClassOf propagation
+            "INSERT { ?x a ?super } \
+            WHERE { \
+              ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?super . \
+              FILTER(!isBlank(?super)) \
+              ?x a ?sub . \
+              FILTER NOT EXISTS { ?x a ?super } \
+            }",
+            // Rule 7: rdfs:domain propagation
             "INSERT { ?x a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#domain> ?C . FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
-            // Rule 5: range-based
+            // Rule 8: rdfs:range propagation
             "INSERT { ?y a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#range> ?C . FILTER NOT EXISTS { ?y a ?C } FILTER(isIRI(?C)) }",
-            // Rule 6: equivalentClass (symmetric)
-            "INSERT { ?x a ?C } WHERE { ?x a ?D . { ?D <http://www.w3.org/2002/07/owl#equivalentClass> ?C } UNION { ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?D } FILTER(?C != ?D) FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
         ];
+        let _ = _rules_marker;
 
         let all_rules: Vec<&str> = builtin_rules
             .iter()
@@ -2539,4 +2628,135 @@ impl Reasoner {
 
         guard.as_ref().unwrap().execute_update(sparql)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Public rule set — usable independently of the Reasoner struct
+// ---------------------------------------------------------------------------
+
+/// Returns the complete set of built-in OWL 2 ABox classification SPARQL
+/// INSERT-WHERE rules that oxidowl applies during `run_sparql_abox_classification`.
+///
+/// Expose this so external projects that manage their own Oxigraph store can
+/// run exactly the same rule set without duplicating or hard-coding the queries:
+///
+/// ```rust,ignore
+/// for _ in 0..20 {
+///     for rule in oxidowl::abox_classification_rules() {
+///         store.execute_update(rule)?;
+///     }
+/// }
+/// ```
+///
+/// The rules cover:
+/// 1. `hasValue` restriction (`C ≡ (p hasValue v)`)
+/// 2. `someValuesFrom` restriction (`C ≡ (p someValuesFrom D)`)
+/// 3a. Named-class equivalence — `D` instances become `C` instances
+/// 3b. Named-class equivalence — `C` instances become `D` instances
+/// 4. `intersectionOf(DataSomeValuesFrom(dp, xsd:double range), DataHasValue(hvp, hv))`
+/// 5. Pure named-class `intersectionOf`
+/// 6. `rdfs:subClassOf` propagation
+/// 7. `rdfs:domain` propagation
+/// 8. `rdfs:range` propagation
+pub fn abox_classification_rules() -> &'static [&'static str] {
+    &[
+        // Rule 1: hasValue restriction — C ≡ (p hasValue v)
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . \
+          ?R <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+               <http://www.w3.org/2002/07/owl#Restriction> ; \
+             <http://www.w3.org/2002/07/owl#onProperty> ?P ; \
+             <http://www.w3.org/2002/07/owl#hasValue>    ?V . \
+          ?x ?P ?V . \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 2: someValuesFrom restriction — C ≡ (p someValuesFrom D)
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?R . \
+          ?R <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+               <http://www.w3.org/2002/07/owl#Restriction> ; \
+             <http://www.w3.org/2002/07/owl#onProperty>    ?P ; \
+             <http://www.w3.org/2002/07/owl#someValuesFrom> ?D . \
+          ?x ?P ?y . \
+          ?y a ?D . \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 3a: named class equivalence C ≡ D → D instances become C instances
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?D . \
+          FILTER(!isBlank(?D)) \
+          ?x a ?D . \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 3b: named class equivalence C ≡ D → C instances become D instances
+        "INSERT { ?x a ?D } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?D . \
+          FILTER(!isBlank(?D)) \
+          ?x a ?C . \
+          FILTER NOT EXISTS { ?x a ?D } \
+        }",
+        // Rule 4: intersectionOf( DataSomeValuesFrom(dp, xsd:double range), DataHasValue(hvp, hv) )
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+          ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r_range . \
+          ?r_range <http://www.w3.org/2002/07/owl#onProperty>    ?dp . \
+          ?r_range <http://www.w3.org/2002/07/owl#someValuesFrom> ?dr . \
+          ?dr <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+          ?dr <http://www.w3.org/2002/07/owl#withRestrictions> ?flist . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r_hv . \
+          ?r_hv <http://www.w3.org/2002/07/owl#onProperty> ?hvp . \
+          ?r_hv <http://www.w3.org/2002/07/owl#hasValue>    ?hv . \
+          FILTER(?r_range != ?r_hv) \
+          ?x ?dp  ?numval . \
+          ?x ?hvp ?hv . \
+          OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_mi . \
+                     ?f_mi <http://www.w3.org/2001/XMLSchema#minInclusive> ?minI . } \
+          OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_me . \
+                     ?f_me <http://www.w3.org/2001/XMLSchema#minExclusive> ?minE . } \
+          OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_xi . \
+                     ?f_xi <http://www.w3.org/2001/XMLSchema#maxInclusive> ?maxI . } \
+          OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_xe . \
+                     ?f_xe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?maxE . } \
+          FILTER((!BOUND(?minI) || ?numval >= ?minI) && \
+                 (!BOUND(?minE) || ?numval >  ?minE) && \
+                 (!BOUND(?maxI) || ?numval <= ?maxI) && \
+                 (!BOUND(?maxE) || ?numval <  ?maxE)) \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 5: pure named-class intersectionOf
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+          ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?m . \
+            FILTER(isBlank(?m)) \
+          } \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?m2 . \
+            FILTER NOT EXISTS { ?x a ?m2 } \
+          } \
+          ?ilist <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?m1 . \
+          ?x a ?m1 . \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 6: rdfs:subClassOf propagation
+        "INSERT { ?x a ?super } \
+        WHERE { \
+          ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?super . \
+          FILTER(!isBlank(?super)) \
+          ?x a ?sub . \
+          FILTER NOT EXISTS { ?x a ?super } \
+        }",
+        // Rule 7: rdfs:domain propagation
+        "INSERT { ?x a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#domain> ?C . FILTER NOT EXISTS { ?x a ?C } FILTER(isIRI(?C)) }",
+        // Rule 8: rdfs:range propagation
+        "INSERT { ?y a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#range> ?C . FILTER NOT EXISTS { ?y a ?C } FILTER(isIRI(?C)) }",
+    ]
 }

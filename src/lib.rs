@@ -198,7 +198,7 @@ pub use crate::distributed::{
 
 // Re-export error types
 pub use crate::config::{PerformanceConfig, PerformanceProfile, ReasonerConfig, TableauAlgorithm};
-pub use crate::core::reasoner::{ReasoningResult, ReasoningTask};
+pub use crate::core::reasoner::{ReasoningResult, ReasoningTask, abox_classification_rules};
 pub use crate::error::{Error, Result};
 pub use crate::ontology::{
     ClassExpression, IRI, Individual, Ontology, OntologyFormat, OntologyRef,

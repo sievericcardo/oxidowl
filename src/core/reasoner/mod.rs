@@ -52,3 +52,4 @@ pub use self::{
     },
     tasks::ReasoningTaskService,
 };
+pub use self::core::abox_classification_rules;
