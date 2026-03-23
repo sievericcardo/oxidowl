@@ -2651,8 +2651,9 @@ impl Reasoner {
 /// The rules cover:
 /// 1. `hasValue` restriction (`C ≡ (p hasValue v)`)
 /// 2. `someValuesFrom` restriction (`C ≡ (p someValuesFrom D)`)
-/// 3a. Named-class equivalence — `D` instances become `C` instances
-/// 3b. Named-class equivalence — `C` instances become `D` instances
+/// 3.  Named-class equivalence (`C ≡ D`) — both directions to ensure completeness
+///     3a. Named-class equivalence — `D` instances become `C` instances
+///     3b. Named-class equivalence — `C` instances become `D` instances
 /// 4. `intersectionOf(DataSomeValuesFrom(dp, xsd:double range), DataHasValue(hvp, hv))`
 /// 5. Pure named-class `intersectionOf`
 /// 6. `rdfs:subClassOf` propagation
