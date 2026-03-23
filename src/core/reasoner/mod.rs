@@ -31,6 +31,7 @@ pub mod tasks;
 
 // Re-export the main types for backwards compatibility
 // This allows existing code to continue using the same import paths
+pub use self::core::abox_classification_rules;
 pub use self::{
     classification::ClassificationService,
     consistency::PreConsistencyChecker,
@@ -52,4 +53,3 @@ pub use self::{
     },
     tasks::ReasoningTaskService,
 };
-pub use self::core::abox_classification_rules;
