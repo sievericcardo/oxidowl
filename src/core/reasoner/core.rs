@@ -2423,7 +2423,7 @@ impl Reasoner {
 
         // Built-in OWL 2 RL SPARQL rules -----------------------------------------
         let builtin_rules = abox_classification_rules();
-        let _rules_marker = &[
+        let rules_marker = &[
             // Rule 1: hasValue restriction — C ≡ (p hasValue v)
             "INSERT { ?x a ?C } \
             WHERE { \
@@ -2524,7 +2524,7 @@ impl Reasoner {
             // Rule 8: rdfs:range propagation
             "INSERT { ?y a ?C } WHERE { ?x ?P ?y . ?P <http://www.w3.org/2000/01/rdf-schema#range> ?C . FILTER NOT EXISTS { ?y a ?C } FILTER(isIRI(?C)) }",
         ];
-        let _ = _rules_marker;
+        let _ = rules_marker;
 
         let all_rules: Vec<&str> = builtin_rules
             .iter()
