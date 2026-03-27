@@ -2038,12 +2038,9 @@ impl TurtleParser {
                 continue;
             }
             // Read annotation predicate
-            let ap_str = match self.resolve_token(&annot_tokens[idx], state) {
-                Ok(s) => s,
-                Err(_) => {
-                    idx += 1;
-                    continue;
-                }
+            let Ok(ap_str) = self.resolve_token(&annot_tokens[idx], state) else {
+                idx += 1;
+                continue;
             };
             idx += 1;
             if idx >= annot_tokens.len() {
@@ -2053,13 +2050,11 @@ impl TurtleParser {
             let ao_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
             idx += 1;
             // Skip optional language tag or datatype keyword after a literal
-            if idx < annot_tokens.len() {
-                if let Token::Keyword(kw) = &annot_tokens[idx] {
-                    if kw.starts_with("^^") || (kw.starts_with('@') && kw.len() > 1) {
+            if idx < annot_tokens.len()
+                && let Token::Keyword(kw) = &annot_tokens[idx]
+                    && (kw.starts_with("^^") || (kw.starts_with('@') && kw.len() > 1)) {
                         idx += 1;
                     }
-                }
-            }
             let ap_term = str_to_term(&ap_str);
             rdf_graph.add_triple(crate::semantics::Triple::new(
                 reifier_term.clone(),
