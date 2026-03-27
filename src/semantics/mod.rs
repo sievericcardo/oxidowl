@@ -430,9 +430,7 @@ impl RdfTerm {
             RdfTerm::QuotedTriple(triple) => {
                 RdfTerm::BlankNode(format!("_:qt_{}", triple.hash_id()))
             }
-            RdfTerm::TripleTerm(triple) => {
-                RdfTerm::BlankNode(format!("_:tt_{}", triple.hash_id()))
-            }
+            RdfTerm::TripleTerm(triple) => RdfTerm::BlankNode(format!("_:tt_{}", triple.hash_id())),
             other => other.clone(),
         }
     }
@@ -696,29 +694,31 @@ impl RdfGraph {
             } else {
                 // Complex triple with quoted/triple-term components
                 // Need to reify the quoted triples
-                let new_subject = if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.subject {
-                    let stmt_id = format!("_:stmt{reification_counter}");
-                    reification_counter += 1;
-                    let reified = qt.to_rdf11_reification(&stmt_id)?;
-                    for t in reified {
-                        result.add_triple(t);
-                    }
-                    RdfTerm::BlankNode(stmt_id)
-                } else {
-                    triple.subject.to_rdf11()
-                };
+                let new_subject =
+                    if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.subject {
+                        let stmt_id = format!("_:stmt{reification_counter}");
+                        reification_counter += 1;
+                        let reified = qt.to_rdf11_reification(&stmt_id)?;
+                        for t in reified {
+                            result.add_triple(t);
+                        }
+                        RdfTerm::BlankNode(stmt_id)
+                    } else {
+                        triple.subject.to_rdf11()
+                    };
 
-                let new_object = if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.object {
-                    let stmt_id = format!("_:stmt{reification_counter}");
-                    reification_counter += 1;
-                    let reified = qt.to_rdf11_reification(&stmt_id)?;
-                    for t in reified {
-                        result.add_triple(t);
-                    }
-                    RdfTerm::BlankNode(stmt_id)
-                } else {
-                    triple.object.to_rdf11()
-                };
+                let new_object =
+                    if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.object {
+                        let stmt_id = format!("_:stmt{reification_counter}");
+                        reification_counter += 1;
+                        let reified = qt.to_rdf11_reification(&stmt_id)?;
+                        for t in reified {
+                            result.add_triple(t);
+                        }
+                        RdfTerm::BlankNode(stmt_id)
+                    } else {
+                        triple.object.to_rdf11()
+                    };
 
                 result.add_triple(Triple::new(
                     new_subject,
@@ -1242,7 +1242,10 @@ mod tests {
         let mut set = HashSet::new();
         set.insert(a);
         // Inserting an equal term should not grow the set
-        assert!(!set.insert(b), "Hash must be consistent with case-insensitive equality");
+        assert!(
+            !set.insert(b),
+            "Hash must be consistent with case-insensitive equality"
+        );
     }
 
     #[test]
@@ -1289,9 +1292,15 @@ mod tests {
     fn test_rdf_version_from_str() {
         use std::str::FromStr;
         assert_eq!(RdfVersion::from_str("1.1").unwrap(), RdfVersion::RDF11);
-        assert_eq!(RdfVersion::from_str("1.2-basic").unwrap(), RdfVersion::RDF12Basic);
+        assert_eq!(
+            RdfVersion::from_str("1.2-basic").unwrap(),
+            RdfVersion::RDF12Basic
+        );
         assert_eq!(RdfVersion::from_str("1.2").unwrap(), RdfVersion::RDF12);
-        assert_eq!(RdfVersion::from_str("rdf-star").unwrap(), RdfVersion::RDFStar);
+        assert_eq!(
+            RdfVersion::from_str("rdf-star").unwrap(),
+            RdfVersion::RDFStar
+        );
         assert!(RdfVersion::from_str("2.0").is_err());
     }
 

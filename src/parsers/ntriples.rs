@@ -409,10 +409,9 @@ impl NTriplesParser {
             if let Some(dash_pos) = tag.find("--") {
                 let lang = tag[..dash_pos].to_string();
                 let dir = tag[dash_pos + 2..].to_string();
-                let dt = url::Url::parse(
-                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString",
-                )
-                .ok();
+                let dt =
+                    url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString")
+                        .ok();
                 (Some(lang), Some(dir), dt)
             } else {
                 (Some(tag.to_string()), None, None)

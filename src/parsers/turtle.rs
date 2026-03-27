@@ -540,7 +540,10 @@ impl TurtleParser {
         }
 
         // RDF 1.2: handle annotation blocks {| pred obj ; pred obj |}
-        if let Some(open_idx) = tokens.iter().position(|t| matches!(t, Token::AnnotationOpen)) {
+        if let Some(open_idx) = tokens
+            .iter()
+            .position(|t| matches!(t, Token::AnnotationOpen))
+        {
             return self.process_annotation_block(tokens, open_idx, ontology, state);
         }
 
@@ -1970,9 +1973,7 @@ impl TurtleParser {
             .position(|t| matches!(t, Token::AnnotationClose))
             .map(|p| p + open_idx)
             .ok_or_else(|| {
-                Error::ontology_parsing(
-                    "Unmatched {| in annotation block — missing |}".to_string(),
-                )
+                Error::ontology_parsing("Unmatched {| in annotation block — missing |}".to_string())
             })?;
 
         // Main tokens (strip trailing Period/Semicolon/AnnotationOpen)
@@ -1994,7 +1995,12 @@ impl TurtleParser {
         let object_str = self.resolve_token(&main_tokens[2], state)?;
 
         // Process the main triple through the OWL pipeline
-        self.process_enhanced_triple(ontology, subject_str.clone(), predicate_str.clone(), object_str.clone())?;
+        self.process_enhanced_triple(
+            ontology,
+            subject_str.clone(),
+            predicate_str.clone(),
+            object_str.clone(),
+        )?;
 
         // Ensure the RDF graph is initialised
         if ontology.rdf_graph.is_none() {
@@ -2052,9 +2058,10 @@ impl TurtleParser {
             // Skip optional language tag or datatype keyword after a literal
             if idx < annot_tokens.len()
                 && let Token::Keyword(kw) = &annot_tokens[idx]
-                    && (kw.starts_with("^^") || (kw.starts_with('@') && kw.len() > 1)) {
-                        idx += 1;
-                    }
+                && (kw.starts_with("^^") || (kw.starts_with('@') && kw.len() > 1))
+            {
+                idx += 1;
+            }
             let ap_term = str_to_term(&ap_str);
             rdf_graph.add_triple(crate::semantics::Triple::new(
                 reifier_term.clone(),
@@ -2072,7 +2079,12 @@ impl TurtleParser {
         {
             // Reconstruct a statement from remaining tokens — handle via semicolon logic
             let remaining: Vec<Token> = std::iter::once(main_tokens[0].clone())
-                .chain(after_close.iter().filter(|t| !matches!(t, Token::Period)).cloned())
+                .chain(
+                    after_close
+                        .iter()
+                        .filter(|t| !matches!(t, Token::Period))
+                        .cloned(),
+                )
                 .collect();
             if remaining.len() >= 3 {
                 self.parse_semicolon_statement(&remaining, ontology, state)?;

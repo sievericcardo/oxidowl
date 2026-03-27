@@ -145,7 +145,9 @@ fn refine_labels(triples: &[&Triple], labels: &HashMap<String, String>) -> HashM
 
     // Any blank nodes that had no triples keep their original label.
     for (id, label) in labels {
-        new_labels.entry(id.clone()).or_insert_with(|| label.clone());
+        new_labels
+            .entry(id.clone())
+            .or_insert_with(|| label.clone());
     }
 
     new_labels
@@ -155,10 +157,7 @@ fn refine_labels(triples: &[&Triple], labels: &HashMap<String, String>) -> HashM
 fn term_signature(term: &RdfTerm, labels: &HashMap<String, String>) -> String {
     match term {
         RdfTerm::Iri(url) => format!("<{url}>"),
-        RdfTerm::BlankNode(id) => labels
-            .get(id)
-            .cloned()
-            .unwrap_or_else(|| format!("_:{id}")),
+        RdfTerm::BlankNode(id) => labels.get(id).cloned().unwrap_or_else(|| format!("_:{id}")),
         RdfTerm::Literal {
             value,
             datatype,

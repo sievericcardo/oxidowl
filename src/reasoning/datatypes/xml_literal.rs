@@ -39,10 +39,7 @@ impl ValueSpaceHandler for XmlLiteralValueSpace {
     /// Canonical form: collapse internal whitespace sequences to a single space,
     /// trim leading/trailing whitespace (approximation of XML C14N).
     fn normalise(&self, value: &str) -> String {
-        value
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
+        value.split_whitespace().collect::<Vec<_>>().join(" ")
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {

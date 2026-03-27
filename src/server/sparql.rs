@@ -185,12 +185,16 @@ impl SparqlServer {
             .and(warp::any().map(move || graph_store.clone()))
             .and_then(handle_graph_export);
 
-        let routes = sparql_query.or(sparql_update).or(health).or(graph_export).with(
-            warp::cors()
-                .allow_any_origin()
-                .allow_headers(vec!["content-type"])
-                .allow_methods(vec!["GET", "POST"]),
-        );
+        let routes = sparql_query
+            .or(sparql_update)
+            .or(health)
+            .or(graph_export)
+            .with(
+                warp::cors()
+                    .allow_any_origin()
+                    .allow_headers(vec!["content-type"])
+                    .allow_methods(vec!["GET", "POST"]),
+            );
 
         let addr: SocketAddr = format!("{}:{}", self.bind_address, self.port)
             .parse()
