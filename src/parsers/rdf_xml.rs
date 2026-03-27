@@ -514,16 +514,18 @@ impl RdfXmlParser {
             // Store reified triples in ontology RDF graph
             let graph = ontology.get_or_create_rdf_graph();
             for (reifier_id, triple) in reified_triples {
-                // Add the reified triple to the graph
-                graph.add_triple(triple.clone());
+                // Create a reifier RdfTerm from the reifier_id string
+                let reifier_term = if reifier_id.starts_with("_:") {
+                    crate::semantics::RdfTerm::BlankNode(reifier_id)
+                } else {
+                    match url::Url::parse(&reifier_id) {
+                        Ok(url) => crate::semantics::RdfTerm::Iri(url),
+                        Err(_) => crate::semantics::RdfTerm::BlankNode(format!("_:{reifier_id}")),
+                    }
+                };
 
-                // Add the reifier resource as metadata
-                // Create a quoted triple term for RDF-star representation
-                let quoted_triple_term = crate::semantics::RdfTerm::QuotedTriple(Box::new(triple));
-
-                // You could add additional triples linking the reifier to the quoted triple
-                // This is implementation-specific based on your needs
-                let _ = (reifier_id, quoted_triple_term); // Placeholder for future implementation
+                // Add `reifier rdf:reifies <<s p o>>` using the RDF 1.2 API
+                graph.add_reifying_triple(reifier_term, triple);
             }
         }
 

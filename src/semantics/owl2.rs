@@ -303,6 +303,7 @@ impl Owl2Interpretation {
                 }
             }
             RdfTerm::QuotedTriple(quoted) => self.quoted_triple_to_id(quoted),
+            RdfTerm::TripleTerm(triple) => self.quoted_triple_to_id(triple),
         }
     }
 
@@ -1278,6 +1279,11 @@ impl SemanticInterpretation for Owl2Interpretation {
             RdfTerm::Literal { value, .. } => Some(value.clone()),
             RdfTerm::QuotedTriple(triple) => {
                 // RDF-star: quoted triples as individuals
+                let triple_id = format!("<<{triple}>>");
+                Some(triple_id)
+            }
+            RdfTerm::TripleTerm(triple) => {
+                // RDF 1.2: triple terms as individuals
                 let triple_id = format!("<<{triple}>>");
                 Some(triple_id)
             }

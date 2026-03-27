@@ -812,6 +812,11 @@ impl OWL2DLValidator {
                 }
                 Ok(())
             }
+            crate::semantics::RdfTerm::TripleTerm(inner_triple) => {
+                // RDF 1.2 triple terms: validate as embedded triples (object-position only)
+                self.validate_quoted_triple_structure(inner_triple)?;
+                Ok(())
+            }
             crate::semantics::RdfTerm::Iri(_) => Ok(()),
         }
     }

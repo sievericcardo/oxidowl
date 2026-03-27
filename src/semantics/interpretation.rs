@@ -185,6 +185,11 @@ impl Interpretation {
                 let triple_id = format!("<<{triple}>>");
                 Some(triple_id)
             }
+            RdfTerm::TripleTerm(triple) => {
+                // RDF 1.2 triple term: interpreted as a resource
+                let triple_id = format!("<<{triple}>>");
+                Some(triple_id)
+            }
         }
     }
 

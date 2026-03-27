@@ -117,7 +117,8 @@
 use crate::semantics::{RdfTerm, Triple as OxidowlTriple};
 use crate::{Error, Result, ontology::Axiom, reasoning::ReasoningService};
 use oxigraph::{
-    model::{GraphName, NamedNode, NamedOrBlankNode, Quad, Term, Triple},
+    io::RdfFormat,
+    model::{GraphName, GraphNameRef, NamedNode, NamedOrBlankNode, Quad, Term, Triple},
     sparql::{QueryResults, SparqlEvaluator},
     store::Store,
 };
@@ -177,7 +178,14 @@ impl SparqlServer {
             .and(warp::get())
             .map(|| warp::reply::json(&serde_json::json!({"status": "ok"})));
 
-        let routes = sparql_query.or(sparql_update).or(health).with(
+        // Graph export endpoint — returns the default graph as N-Triples (RDF 1.2)
+        let graph_store = self.store.clone();
+        let graph_export = warp::path("graph")
+            .and(warp::get())
+            .and(warp::any().map(move || graph_store.clone()))
+            .and_then(handle_graph_export);
+
+        let routes = sparql_query.or(sparql_update).or(health).or(graph_export).with(
             warp::cors()
                 .allow_any_origin()
                 .allow_headers(vec!["content-type"])
@@ -614,6 +622,29 @@ async fn handle_sparql_update(
         "status": "success",
         "message": "Update executed successfully"
     })))
+}
+
+/// Handle RDF graph export requests.
+///
+/// Serializes the default graph as N-Triples and returns it with the
+/// `Content-Type: application/n-triples; version=1.2` header per the
+/// RDF 1.2 specification for HTTP content negotiation.
+async fn handle_graph_export(
+    store: Arc<Store>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    let mut buffer: Vec<u8> = Vec::new();
+    store
+        .dump_graph_to_writer(GraphNameRef::DefaultGraph, RdfFormat::NTriples, &mut buffer)
+        .map_err(|e| warp::reject::custom(SparqlError(format!("Serialization error: {e}"))))?;
+
+    let body = String::from_utf8(buffer)
+        .map_err(|e| warp::reject::custom(SparqlError(format!("UTF-8 error: {e}"))))?;
+
+    Ok(warp::reply::with_header(
+        body,
+        "Content-Type",
+        "application/n-triples; version=1.2",
+    ))
 }
 
 /// Convert Oxigraph term to SPARQL value

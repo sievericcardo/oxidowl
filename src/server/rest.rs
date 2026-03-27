@@ -199,6 +199,17 @@ impl RestApiServer {
             .and(warp::any().map(move || shacl_service.clone()))
             .and_then(validate_shacl_endpoint);
 
+        // Ontology RDF export — GET /api/v1/ontology/export
+        // Returns the currently loaded ontology serialized as Turtle with
+        // Content-Type: text/turtle; version=1.2 per the RDF 1.2 HTTP spec.
+        let export_service = self.reasoning_service.clone();
+        let ontology_export = api
+            .and(warp::path("ontology"))
+            .and(warp::path("export"))
+            .and(warp::get())
+            .and(warp::any().map(move || export_service.clone()))
+            .and_then(export_ontology_endpoint);
+
         let routes = health
             .or(status)
             .or(consistency)
@@ -216,6 +227,7 @@ impl RestApiServer {
             .or(equivalent_classes)
             .or(entailment)
             .or(shacl_validate)
+            .or(ontology_export)
             .with(
                 warp::cors()
                     .allow_any_origin()
@@ -757,4 +769,29 @@ async fn handle_rejection(
     let json = warp::reply::json(&ApiResponse::<()>::error(message.to_string()));
 
     Ok(warp::reply::with_status(json, code))
+}
+
+/// Export the loaded ontology as Turtle.
+///
+/// Returns `Content-Type: text/turtle; version=1.2` as required by the
+/// RDF 1.2 specification when serving RDF 1.2 content over HTTP.
+async fn export_ontology_endpoint(
+    reasoning_service: Arc<ReasoningService>,
+) -> std::result::Result<impl Reply, warp::Rejection> {
+    match reasoning_service.get_serialized_turtle().await {
+        Ok(turtle) => Ok(warp::reply::with_header(
+            turtle,
+            "Content-Type",
+            "text/turtle; version=1.2",
+        )),
+        Err(e) => {
+            // Return an error body still labelled as Turtle so the Content-Type
+            // is consistent; the body starts with `# Error:` to signal failure.
+            Ok(warp::reply::with_header(
+                format!("# Error: {e}\n"),
+                "Content-Type",
+                "text/turtle; version=1.2",
+            ))
+        }
+    }
 }

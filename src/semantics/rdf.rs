@@ -140,6 +140,15 @@ impl RdfSimpleInterpretation {
                     self.interpret_quoted_triple(triple)
                 }
             }
+            RdfTerm::TripleTerm(triple) => {
+                if self.rdf11_mode {
+                    // In RDF 1.1/1.2-basic mode, triple terms are not supported
+                    None
+                } else {
+                    // RDF 1.2: triple terms interpreted as resources
+                    self.interpret_quoted_triple(triple)
+                }
+            }
         }
     }
 
@@ -194,6 +203,15 @@ impl RdfSimpleInterpretation {
             }
             RdfTerm::QuotedTriple(triple) => {
                 // Recursive canonical form for nested quoted triples
+                format!(
+                    "<<{} {} {}>>",
+                    self.term_to_canonical_form(&triple.subject),
+                    self.term_to_canonical_form(&triple.predicate),
+                    self.term_to_canonical_form(&triple.object)
+                )
+            }
+            RdfTerm::TripleTerm(triple) => {
+                // RDF 1.2 triple term: same canonical form as quoted triple
                 format!(
                     "<<{} {} {}>>",
                     self.term_to_canonical_form(&triple.subject),

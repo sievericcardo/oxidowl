@@ -7,12 +7,14 @@
 //! - OWL 2 Direct Semantics: <https://www.w3.org/TR/owl2-direct-semantics>/
 
 pub mod entailment;
+pub mod graph_isomorphism;
 pub mod interpretation;
 pub mod iri_validation;
 pub mod owl2;
 pub mod quoted_triple_optimizer;
 pub mod rdf;
 pub mod rdfs; // Re-enabled after fixing type system issues
+pub mod skolemization;
 
 // Re-export main types for convenience
 pub use entailment::{EntailmentChecker, EntailmentRegime, Owl2RlEngine};
@@ -51,20 +53,20 @@ impl Triple {
     }
 
     /// Calculate the nesting depth of this triple
-    /// Returns 0 for flat triples, >0 for nested quoted triples
+    /// Returns 0 for flat triples, >0 for nested quoted/triple-term triples
     #[must_use]
     pub fn depth(&self) -> usize {
         let subject_depth = match &self.subject {
-            RdfTerm::QuotedTriple(t) => 1 + t.depth(),
+            RdfTerm::QuotedTriple(t) | RdfTerm::TripleTerm(t) => 1 + t.depth(),
             _ => 0,
         };
         let object_depth = match &self.object {
-            RdfTerm::QuotedTriple(t) => 1 + t.depth(),
+            RdfTerm::QuotedTriple(t) | RdfTerm::TripleTerm(t) => 1 + t.depth(),
             _ => 0,
         };
-        // Predicates typically shouldn't be quoted triples, but check anyway
+        // Predicates typically shouldn't be quoted/triple-term triples, but check anyway
         let predicate_depth = match &self.predicate {
-            RdfTerm::QuotedTriple(t) => 1 + t.depth(),
+            RdfTerm::QuotedTriple(t) | RdfTerm::TripleTerm(t) => 1 + t.depth(),
             _ => 0,
         };
         subject_depth.max(object_depth).max(predicate_depth)
@@ -77,17 +79,17 @@ impl Triple {
         let mut result = vec![self.clone()];
 
         // Extract from subject
-        if let RdfTerm::QuotedTriple(t) = &self.subject {
+        if let RdfTerm::QuotedTriple(t) | RdfTerm::TripleTerm(t) = &self.subject {
             result.extend(t.flatten());
         }
 
         // Extract from predicate (unusual but possible)
-        if let RdfTerm::QuotedTriple(t) = &self.predicate {
+        if let RdfTerm::QuotedTriple(t) | RdfTerm::TripleTerm(t) = &self.predicate {
             result.extend(t.flatten());
         }
 
         // Extract from object
-        if let RdfTerm::QuotedTriple(t) = &self.object {
+        if let RdfTerm::QuotedTriple(t) | RdfTerm::TripleTerm(t) = &self.object {
             result.extend(t.flatten());
         }
 
@@ -137,8 +139,8 @@ impl Triple {
     }
 }
 
-/// RDF Term (IRI, Blank Node, Literal, or Quoted Triple for RDF-star)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// RDF Term (IRI, Blank Node, Literal, Quoted Triple for RDF-star, or Triple Term for RDF 1.2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RdfTerm {
     /// IRI reference
     Iri(Url),
@@ -154,8 +156,69 @@ pub enum RdfTerm {
         direction: Option<String>,
     },
     /// Quoted triple (RDF-star support)
-    /// Allows triples to be used as subjects or objects
+    /// Allows triples to be used as subjects *or* objects
     QuotedTriple(Box<Triple>),
+    /// Triple term (RDF 1.2) — can ONLY appear in object position
+    TripleTerm(Box<Triple>),
+}
+
+// Manual PartialEq: language tags are compared case-insensitively per RDF 1.2 §3.4
+impl PartialEq for RdfTerm {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (RdfTerm::Iri(a), RdfTerm::Iri(b)) => a == b,
+            (RdfTerm::BlankNode(a), RdfTerm::BlankNode(b)) => a == b,
+            (
+                RdfTerm::Literal {
+                    value: v1,
+                    datatype: dt1,
+                    language: lang1,
+                    direction: dir1,
+                },
+                RdfTerm::Literal {
+                    value: v2,
+                    datatype: dt2,
+                    language: lang2,
+                    direction: dir2,
+                },
+            ) => {
+                v1 == v2
+                    && dt1 == dt2
+                    && lang1.as_deref().map(str::to_ascii_lowercase)
+                        == lang2.as_deref().map(str::to_ascii_lowercase)
+                    && dir1 == dir2
+            }
+            (RdfTerm::QuotedTriple(a), RdfTerm::QuotedTriple(b)) => a == b,
+            (RdfTerm::TripleTerm(a), RdfTerm::TripleTerm(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for RdfTerm {}
+
+impl std::hash::Hash for RdfTerm {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            RdfTerm::Iri(url) => url.hash(state),
+            RdfTerm::BlankNode(id) => id.hash(state),
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+                direction,
+            } => {
+                value.hash(state);
+                datatype.as_ref().map(Url::as_str).hash(state);
+                // Hash the lowercased language tag for case-insensitive equality
+                language.as_deref().map(str::to_ascii_lowercase).hash(state);
+                direction.hash(state);
+            }
+            RdfTerm::QuotedTriple(triple) => triple.hash(state),
+            RdfTerm::TripleTerm(triple) => triple.hash(state),
+        }
+    }
 }
 
 impl RdfTerm {
@@ -287,6 +350,18 @@ impl RdfTerm {
         matches!(self, RdfTerm::QuotedTriple(_))
     }
 
+    /// Check if term is a triple term (RDF 1.2 object-only embedded triple)
+    #[must_use]
+    pub fn is_triple_term(&self) -> bool {
+        matches!(self, RdfTerm::TripleTerm(_))
+    }
+
+    /// Check if term is any embedded triple (QuotedTriple or TripleTerm)
+    #[must_use]
+    pub fn is_embedded_triple(&self) -> bool {
+        matches!(self, RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_))
+    }
+
     /// Get IRI if this is an IRI term
     #[must_use]
     pub fn as_iri(&self) -> Option<&Url> {
@@ -305,6 +380,30 @@ impl RdfTerm {
         }
     }
 
+    /// Get inner triple if this is a triple term (RDF 1.2)
+    #[must_use]
+    pub fn as_triple_term(&self) -> Option<&Triple> {
+        match self {
+            RdfTerm::TripleTerm(triple) => Some(triple),
+            _ => None,
+        }
+    }
+
+    /// Get inner triple from either QuotedTriple or TripleTerm
+    #[must_use]
+    pub fn as_embedded_triple(&self) -> Option<&Triple> {
+        match self {
+            RdfTerm::QuotedTriple(triple) | RdfTerm::TripleTerm(triple) => Some(triple),
+            _ => None,
+        }
+    }
+
+    /// Create a triple term (RDF 1.2 — object position only)
+    #[must_use]
+    pub fn triple_term(triple: Triple) -> Self {
+        RdfTerm::TripleTerm(Box::new(triple))
+    }
+
     /// Create a quoted triple term
     #[must_use]
     pub fn quoted_triple(triple: Triple) -> Self {
@@ -318,23 +417,36 @@ impl RdfTerm {
             RdfTerm::Iri(iri) => Some(iri.as_str()),
             RdfTerm::BlankNode(id) => Some(id),
             RdfTerm::Literal { value, .. } => Some(value),
-            RdfTerm::QuotedTriple(_) => None, // Quoted triples don't have simple string representation
+            // Embedded triples don't have simple string representations
+            RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => None,
         }
     }
 
     /// Convert to RDF 1.1 compatible term by stripping RDF-star features
-    /// Quoted triples are converted to blank nodes
+    /// Quoted triples and triple terms are converted to blank nodes
     #[must_use]
     pub fn to_rdf11(&self) -> Self {
         match self {
             RdfTerm::QuotedTriple(triple) => {
-                // Convert quoted triple to a blank node for RDF 1.1 compatibility
-                // The actual reification should be done at the graph level
                 RdfTerm::BlankNode(format!("_:qt_{}", triple.hash_id()))
+            }
+            RdfTerm::TripleTerm(triple) => {
+                RdfTerm::BlankNode(format!("_:tt_{}", triple.hash_id()))
             }
             other => other.clone(),
         }
     }
+}
+
+/// A reifying triple: a resource (`reifier`) that asserts something about an embedded triple.
+///
+/// Per RDF 1.2, this is represented as: `reifier rdf:reifies <<subject predicate object>>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReifyingTriple {
+    /// The reifier — an IRI or blank node that reifies the triple term.
+    pub reifier: RdfTerm,
+    /// The triple being reified.
+    pub triple_term: Triple,
 }
 
 /// RDF Graph - a set of RDF triples with RDF-star support
@@ -351,11 +463,40 @@ pub struct RdfGraph {
 pub enum RdfVersion {
     /// RDF 1.1 (no RDF-star features)
     RDF11,
-    /// RDF 1.2 (includes directionality, rdf:reifies)
+    /// RDF 1.2 Basic (dirLangString + rdf:reifies, but no triple terms)
+    RDF12Basic,
+    /// RDF 1.2 (full — includes triple terms in object position)
     RDF12,
-    /// RDF-star (includes quoted triples)
+    /// RDF-star (includes quoted triples in subject+object)
     #[default]
     RDFStar,
+}
+
+impl std::fmt::Display for RdfVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RdfVersion::RDF11 => write!(f, "1.1"),
+            RdfVersion::RDF12Basic => write!(f, "1.2-basic"),
+            RdfVersion::RDF12 => write!(f, "1.2"),
+            RdfVersion::RDFStar => write!(f, "rdf-star"),
+        }
+    }
+}
+
+impl std::str::FromStr for RdfVersion {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "1.1" => Ok(RdfVersion::RDF11),
+            "1.2-basic" => Ok(RdfVersion::RDF12Basic),
+            "1.2" => Ok(RdfVersion::RDF12),
+            "rdf-star" | "rdf*" => Ok(RdfVersion::RDFStar),
+            other => Err(Error::ontology_parsing(format!(
+                "Unknown RDF version: '{other}'. Expected '1.1', '1.2-basic', '1.2', or 'rdf-star'"
+            ))),
+        }
+    }
 }
 
 impl RdfGraph {
@@ -455,21 +596,21 @@ impl RdfGraph {
             .collect()
     }
 
-    /// Extract all quoted triples from the graph (including nested ones)
+    /// Extract all quoted triples and triple terms from the graph (including nested ones)
     #[must_use]
     pub fn extract_quoted_triples(&self) -> Vec<Triple> {
         let mut result = Vec::new();
         for triple in &self.triples {
             // Check subject
-            if let RdfTerm::QuotedTriple(qt) = &triple.subject {
+            if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.subject {
                 result.extend(qt.flatten());
             }
             // Check predicate (unusual but possible)
-            if let RdfTerm::QuotedTriple(qt) = &triple.predicate {
+            if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.predicate {
                 result.extend(qt.flatten());
             }
             // Check object
-            if let RdfTerm::QuotedTriple(qt) = &triple.object {
+            if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.object {
                 result.extend(qt.flatten());
             }
         }
@@ -492,10 +633,22 @@ impl RdfGraph {
                 updated.subject = RdfTerm::quoted_triple(new.clone());
                 needs_update = true;
             }
+            if let RdfTerm::TripleTerm(qt) = &updated.subject
+                && qt.as_ref() == old
+            {
+                updated.subject = RdfTerm::triple_term(new.clone());
+                needs_update = true;
+            }
             if let RdfTerm::QuotedTriple(qt) = &updated.object
                 && qt.as_ref() == old
             {
                 updated.object = RdfTerm::quoted_triple(new.clone());
+                needs_update = true;
+            }
+            if let RdfTerm::TripleTerm(qt) = &updated.object
+                && qt.as_ref() == old
+            {
+                updated.object = RdfTerm::triple_term(new.clone());
                 needs_update = true;
             }
 
@@ -531,16 +684,19 @@ impl RdfGraph {
         for triple in &self.triples {
             // Check if triple contains quoted triples
             let has_quoted = triple.subject.is_quoted_triple()
+                || triple.subject.is_triple_term()
                 || triple.predicate.is_quoted_triple()
-                || triple.object.is_quoted_triple();
+                || triple.predicate.is_triple_term()
+                || triple.object.is_quoted_triple()
+                || triple.object.is_triple_term();
 
             if !has_quoted {
                 // Simple triple, just add it
                 result.add_triple(triple.clone());
             } else {
-                // Complex triple with quoted components
+                // Complex triple with quoted/triple-term components
                 // Need to reify the quoted triples
-                let new_subject = if let RdfTerm::QuotedTriple(qt) = &triple.subject {
+                let new_subject = if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.subject {
                     let stmt_id = format!("_:stmt{reification_counter}");
                     reification_counter += 1;
                     let reified = qt.to_rdf11_reification(&stmt_id)?;
@@ -552,7 +708,7 @@ impl RdfGraph {
                     triple.subject.to_rdf11()
                 };
 
-                let new_object = if let RdfTerm::QuotedTriple(qt) = &triple.object {
+                let new_object = if let RdfTerm::QuotedTriple(qt) | RdfTerm::TripleTerm(qt) = &triple.object {
                     let stmt_id = format!("_:stmt{reification_counter}");
                     reification_counter += 1;
                     let reified = qt.to_rdf11_reification(&stmt_id)?;
@@ -581,6 +737,68 @@ impl RdfGraph {
         self.triples = rdf11_graph.triples;
         self.rdf_version = RdfVersion::RDF11;
         Ok(())
+    }
+
+    /// Detect the minimum RDF version required to represent this graph's contents.
+    ///
+    /// - Returns `RDF12` if any triple term (`TripleTerm` in object position) is present.
+    /// - Returns `RDF12` if any dirLangString (literal with `direction`) is present.
+    /// - Returns `RDFStar` if any quoted triple (`QuotedTriple`) is present.
+    /// - Returns `RDF11` otherwise.
+    #[must_use]
+    pub fn detect_version(&self) -> RdfVersion {
+        let mut has_quoted = false;
+        let mut has_rdf12 = false;
+
+        for triple in &self.triples {
+            for term in [&triple.subject, &triple.predicate, &triple.object] {
+                match term {
+                    RdfTerm::TripleTerm(_) => has_rdf12 = true,
+                    RdfTerm::QuotedTriple(_) => has_quoted = true,
+                    RdfTerm::Literal { direction, .. } if direction.is_some() => {
+                        has_rdf12 = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if has_rdf12 {
+            RdfVersion::RDF12
+        } else if has_quoted {
+            RdfVersion::RDFStar
+        } else {
+            RdfVersion::RDF11
+        }
+    }
+
+    /// Return all reifying triples — triples where predicate is `rdf:reifies`
+    /// and the object is an embedded triple (triple term or quoted triple).
+    #[must_use]
+    pub fn reifying_triples(&self) -> Vec<ReifyingTriple> {
+        use vocabulary::RDF_REIFIES;
+        let reifies_term = RdfTerm::Iri(RDF_REIFIES.clone());
+        self.triples
+            .iter()
+            .filter(|t| t.predicate == reifies_term)
+            .filter_map(|t| {
+                t.object.as_embedded_triple().map(|inner| ReifyingTriple {
+                    reifier: t.subject.clone(),
+                    triple_term: inner.clone(),
+                })
+            })
+            .collect()
+    }
+
+    /// Add a reifying triple: `reifier rdf:reifies <<s p o>>`.
+    ///
+    /// `reifier` should be an IRI or blank node.
+    /// The embedded triple is stored as a `TripleTerm`.
+    pub fn add_reifying_triple(&mut self, reifier: RdfTerm, triple_term: Triple) {
+        use vocabulary::RDF_REIFIES;
+        let reifies_pred = RdfTerm::Iri(RDF_REIFIES.clone());
+        let object = RdfTerm::TripleTerm(Box::new(triple_term));
+        self.add_triple(Triple::new(reifier, reifies_pred, object));
     }
 
     /// Merge another graph into this one
@@ -772,8 +990,8 @@ impl RdfGraph {
                     format!("    <{}>{}</{}>\n", local, Self::xml_escape(value), local)
                 }
             }
-            RdfTerm::QuotedTriple(_) => {
-                // RDF-star quoted triple - represent as blank node reference
+            RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => {
+                // RDF-star/RDF-1.2 embedded triple — represent as blank node reference
                 format!(
                     "    <{} rdf:nodeID=\"qt_{}\" />\n",
                     local,
@@ -981,6 +1199,14 @@ impl std::fmt::Display for RdfTerm {
                     triple.subject, triple.predicate, triple.object
                 )
             }
+            RdfTerm::TripleTerm(triple) => {
+                // RDF 1.2 triple term (object-only): << subject predicate object >>
+                write!(
+                    f,
+                    "<< {} {} {} >>",
+                    triple.subject, triple.predicate, triple.object
+                )
+            }
         }
     }
 }
@@ -994,6 +1220,124 @@ impl std::fmt::Display for Triple {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── RDF 1.2 compliance tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_language_tag_case_insensitive_equality() {
+        // RDF 1.2 §3.4: language tags are case-insensitive
+        let a = RdfTerm::language_literal("chat", "fr");
+        let b = RdfTerm::language_literal("chat", "FR");
+        let c = RdfTerm::language_literal("chat", "Fr");
+        assert_eq!(a, b, "\"chat\"@fr must equal \"chat\"@FR");
+        assert_eq!(a, c, "\"chat\"@fr must equal \"chat\"@Fr");
+        assert_eq!(b, c, "\"chat\"@FR must equal \"chat\"@Fr");
+    }
+
+    #[test]
+    fn test_language_tag_case_insensitive_hash() {
+        use std::collections::HashSet;
+        let a = RdfTerm::language_literal("hello", "en");
+        let b = RdfTerm::language_literal("hello", "EN");
+        let mut set = HashSet::new();
+        set.insert(a);
+        // Inserting an equal term should not grow the set
+        assert!(!set.insert(b), "Hash must be consistent with case-insensitive equality");
+    }
+
+    #[test]
+    fn test_triple_term_variant() {
+        let s = RdfTerm::iri("http://example.org/s").unwrap();
+        let p = RdfTerm::iri("http://example.org/p").unwrap();
+        let o = RdfTerm::iri("http://example.org/o").unwrap();
+        let inner = Triple::new(s, p, o);
+
+        let tt = RdfTerm::triple_term(inner.clone());
+        assert!(tt.is_triple_term());
+        assert!(!tt.is_quoted_triple());
+        assert!(tt.is_embedded_triple());
+        assert_eq!(tt.as_triple_term(), Some(&inner));
+    }
+
+    #[test]
+    fn test_reifying_triple_helpers() {
+        let mut graph = RdfGraph::new();
+
+        let s = RdfTerm::iri("http://example.org/s").unwrap();
+        let p = RdfTerm::iri("http://example.org/p").unwrap();
+        let o = RdfTerm::iri("http://example.org/o").unwrap();
+        let inner = Triple::new(s, p, o);
+
+        let reifier = RdfTerm::iri("http://example.org/reifier").unwrap();
+        graph.add_reifying_triple(reifier.clone(), inner.clone());
+
+        let reifying = graph.reifying_triples();
+        assert_eq!(reifying.len(), 1);
+        assert_eq!(reifying[0].reifier, reifier);
+        assert_eq!(reifying[0].triple_term, inner);
+    }
+
+    #[test]
+    fn test_rdf_version_display() {
+        assert_eq!(RdfVersion::RDF11.to_string(), "1.1");
+        assert_eq!(RdfVersion::RDF12Basic.to_string(), "1.2-basic");
+        assert_eq!(RdfVersion::RDF12.to_string(), "1.2");
+        assert_eq!(RdfVersion::RDFStar.to_string(), "rdf-star");
+    }
+
+    #[test]
+    fn test_rdf_version_from_str() {
+        use std::str::FromStr;
+        assert_eq!(RdfVersion::from_str("1.1").unwrap(), RdfVersion::RDF11);
+        assert_eq!(RdfVersion::from_str("1.2-basic").unwrap(), RdfVersion::RDF12Basic);
+        assert_eq!(RdfVersion::from_str("1.2").unwrap(), RdfVersion::RDF12);
+        assert_eq!(RdfVersion::from_str("rdf-star").unwrap(), RdfVersion::RDFStar);
+        assert!(RdfVersion::from_str("2.0").is_err());
+    }
+
+    #[test]
+    fn test_detect_version_rdf11() {
+        let mut graph = RdfGraph::new();
+        let s = RdfTerm::iri("http://example.org/s").unwrap();
+        let p = RdfTerm::iri("http://example.org/p").unwrap();
+        let o = RdfTerm::literal("hello");
+        graph.add_triple(Triple::new(s, p, o));
+        assert_eq!(graph.detect_version(), RdfVersion::RDF11);
+    }
+
+    #[test]
+    fn test_detect_version_rdfstar() {
+        let mut graph = RdfGraph::new();
+        let s = RdfTerm::iri("http://example.org/s").unwrap();
+        let p = RdfTerm::iri("http://example.org/p").unwrap();
+        let o = RdfTerm::iri("http://example.org/o").unwrap();
+        let inner = Triple::new(s.clone(), p.clone(), o.clone());
+        let qt = RdfTerm::quoted_triple(inner);
+        graph.add_triple(Triple::new(qt, p, o));
+        assert_eq!(graph.detect_version(), RdfVersion::RDFStar);
+    }
+
+    #[test]
+    fn test_detect_version_rdf12_triple_term() {
+        let mut graph = RdfGraph::new();
+        let s = RdfTerm::iri("http://example.org/s").unwrap();
+        let p = RdfTerm::iri("http://example.org/p").unwrap();
+        let o = RdfTerm::iri("http://example.org/o").unwrap();
+        let inner = Triple::new(s, p.clone(), o.clone());
+        let tt = RdfTerm::triple_term(inner);
+        graph.add_triple(Triple::new(tt, p, o));
+        assert_eq!(graph.detect_version(), RdfVersion::RDF12);
+    }
+
+    #[test]
+    fn test_detect_version_rdf12_dir_lang_string() {
+        let mut graph = RdfGraph::new();
+        let s = RdfTerm::iri("http://example.org/s").unwrap();
+        let p = RdfTerm::iri("http://example.org/p").unwrap();
+        let o = RdfTerm::dir_lang_string("مرحبا", "ar", "rtl").unwrap();
+        graph.add_triple(Triple::new(s, p, o));
+        assert_eq!(graph.detect_version(), RdfVersion::RDF12);
+    }
 
     #[test]
     fn test_rdf_term_creation() {

@@ -179,6 +179,10 @@ enum Token {
     RightAngleBrackets,
     /// RDF-star: quoted triple as a term
     QuotedTriple(Box<RdfTriple>),
+    /// RDF 1.2: {| to start an annotation block
+    AnnotationOpen,
+    /// RDF 1.2: |} to close an annotation block
+    AnnotationClose,
 }
 
 /// Parser state for handling complex structures
@@ -431,6 +435,13 @@ impl TurtleParser {
             return self.parse_base_declaration(trimmed, state);
         }
 
+        // Handle @version directive (RDF 1.2): e.g. `@version "1.2" .`
+        if trimmed.starts_with("@version") {
+            // Parse and silently accept the version string; version detection
+            // uses the graph-level detect_version() API.
+            return Ok(());
+        }
+
         // Parse as triple statement
         self.parse_triple_statement(trimmed, ontology, state)
     }
@@ -501,6 +512,7 @@ impl TurtleParser {
             || tokens.iter().any(|t| matches!(t, Token::LeftBracket))
             || tokens.iter().any(|t| matches!(t, Token::LeftParen))
             || tokens.iter().any(|t| matches!(t, Token::Comma))
+            || tokens.iter().any(|t| matches!(t, Token::AnnotationOpen))
         {
             return self.parse_semicolon_statement(&tokens, ontology, state);
         }
@@ -525,6 +537,11 @@ impl TurtleParser {
     ) -> Result<()> {
         if tokens.is_empty() {
             return Ok(());
+        }
+
+        // RDF 1.2: handle annotation blocks {| pred obj ; pred obj |}
+        if let Some(open_idx) = tokens.iter().position(|t| matches!(t, Token::AnnotationOpen)) {
+            return self.process_annotation_block(tokens, open_idx, ontology, state);
         }
 
         // Check for special case: subject ( collection ) . (no explicit predicate)
@@ -729,8 +746,8 @@ impl TurtleParser {
                         let literal_value = lit_value.clone();
                         start_index += 1; // Move past literal
 
-                        // Check if there's a type annotation (^^datatype)
-                        let datatype = if start_index < tokens.len() {
+                        // Check for type annotation (^^datatype) or language tag (@lang[--dir])
+                        let (language, datatype) = if start_index < tokens.len() {
                             let next_token = &tokens[start_index];
                             match next_token {
                                 Token::Keyword(kw) if kw.starts_with("^^") => {
@@ -757,12 +774,27 @@ impl TurtleParser {
                                         };
 
                                     let dt_iri = IRI::new(&resolved_dt);
-                                    dt_iri.to_url().ok()
+                                    (None, dt_iri.to_url().ok())
                                 }
-                                _ => None,
+                                Token::Keyword(kw) if kw.starts_with('@') && kw.len() > 1 => {
+                                    // RDF 1.2: language tag, optionally with base direction
+                                    let tag = &kw[1..]; // strip leading @
+                                    start_index += 1;
+                                    if let Some(dash_pos) = tag.find("--") {
+                                        let lang = tag[..dash_pos].to_string();
+                                        let dt = url::Url::parse(
+                                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString",
+                                        )
+                                        .ok();
+                                        (Some(lang), dt)
+                                    } else {
+                                        (Some(tag.to_string()), None)
+                                    }
+                                }
+                                _ => (None, None),
                             }
                         } else {
-                            None
+                            (None, None)
                         };
 
                         // Create DataPropertyAssertion
@@ -774,7 +806,7 @@ impl TurtleParser {
                         };
                         let literal = Literal {
                             value: self.decode_escape_sequences(literal_value.trim_matches('"')),
-                            language: None,
+                            language,
                             datatype,
                         };
 
@@ -1921,6 +1953,140 @@ impl TurtleParser {
         Ok(())
     }
 
+    /// Desugar an RDF 1.2 annotation block `{| ap ao ; ap2 ao2 |}` into
+    /// `rdf:reifies` triples stored in `ontology.rdf_graph`.
+    ///
+    /// The token sequence is: `[ main tokens... ] {| [ annot tokens... ] |} [ . ]`
+    fn process_annotation_block(
+        &self,
+        tokens: &[Token],
+        open_idx: usize,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
+        // Locate the matching AnnotationClose
+        let close_idx = tokens[open_idx..]
+            .iter()
+            .position(|t| matches!(t, Token::AnnotationClose))
+            .map(|p| p + open_idx)
+            .ok_or_else(|| {
+                Error::ontology_parsing(
+                    "Unmatched {| in annotation block — missing |}".to_string(),
+                )
+            })?;
+
+        // Main tokens (strip trailing Period/Semicolon/AnnotationOpen)
+        let main_tokens: Vec<Token> = tokens[..open_idx]
+            .iter()
+            .filter(|t| !matches!(t, Token::Period | Token::Semicolon))
+            .cloned()
+            .collect();
+
+        if main_tokens.len() < 3 {
+            return Err(Error::ontology_parsing(
+                "Annotation block requires at least subject, predicate, object".to_string(),
+            ));
+        }
+
+        // Resolve s/p/o strings from main tokens
+        let subject_str = self.resolve_token(&main_tokens[0], state)?;
+        let predicate_str = self.resolve_token(&main_tokens[1], state)?;
+        let object_str = self.resolve_token(&main_tokens[2], state)?;
+
+        // Process the main triple through the OWL pipeline
+        self.process_enhanced_triple(ontology, subject_str.clone(), predicate_str.clone(), object_str.clone())?;
+
+        // Ensure the RDF graph is initialised
+        if ontology.rdf_graph.is_none() {
+            ontology.rdf_graph = Some(crate::semantics::RdfGraph::new());
+        }
+        let rdf_graph = ontology.rdf_graph.as_mut().expect("just initialised");
+
+        // Helper: convert a resolved IRI/blank string to RdfTerm
+        let str_to_term = |s: &str| -> crate::semantics::RdfTerm {
+            if s.starts_with("_:") {
+                crate::semantics::RdfTerm::BlankNode(s.to_string())
+            } else {
+                crate::semantics::RdfTerm::iri(s)
+                    .unwrap_or_else(|_| crate::semantics::RdfTerm::BlankNode(s.to_string()))
+            }
+        };
+
+        let s_term = str_to_term(&subject_str);
+        let p_term = str_to_term(&predicate_str);
+        let o_term = self.token_to_rdf_term(&main_tokens[2], state)?;
+
+        // Generate a fresh blank node for the reifier
+        let reifier_id = format!("_:b_annot_{}", state.blank_node_counter);
+        state.blank_node_counter += 1;
+        let reifier_term = crate::semantics::RdfTerm::BlankNode(reifier_id);
+
+        // Add `reifier rdf:reifies <<s p o>>`
+        let inner_triple = crate::semantics::Triple::new(s_term, p_term, o_term);
+        rdf_graph.add_reifying_triple(reifier_term.clone(), inner_triple);
+
+        // Process annotation predicate-object pairs from annot_tokens
+        let annot_tokens = &tokens[open_idx + 1..close_idx];
+        let mut idx = 0;
+        while idx + 1 < annot_tokens.len() {
+            // Skip punctuation
+            if matches!(
+                annot_tokens[idx],
+                Token::Semicolon | Token::Period | Token::Comma
+            ) {
+                idx += 1;
+                continue;
+            }
+            // Read annotation predicate
+            let ap_str = match self.resolve_token(&annot_tokens[idx], state) {
+                Ok(s) => s,
+                Err(_) => {
+                    idx += 1;
+                    continue;
+                }
+            };
+            idx += 1;
+            if idx >= annot_tokens.len() {
+                break;
+            }
+            // Read annotation object
+            let ao_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
+            idx += 1;
+            // Skip optional language tag or datatype keyword after a literal
+            if idx < annot_tokens.len() {
+                if let Token::Keyword(kw) = &annot_tokens[idx] {
+                    if kw.starts_with("^^") || (kw.starts_with('@') && kw.len() > 1) {
+                        idx += 1;
+                    }
+                }
+            }
+            let ap_term = str_to_term(&ap_str);
+            rdf_graph.add_triple(crate::semantics::Triple::new(
+                reifier_term.clone(),
+                ap_term,
+                ao_term,
+            ));
+        }
+
+        // Process any remaining main tokens after `AnnotationClose` (e.g., further `;` pred obj)
+        let after_close = &tokens[close_idx + 1..];
+        if !after_close.is_empty()
+            && !after_close
+                .iter()
+                .all(|t| matches!(t, Token::Period | Token::Semicolon))
+        {
+            // Reconstruct a statement from remaining tokens — handle via semicolon logic
+            let remaining: Vec<Token> = std::iter::once(main_tokens[0].clone())
+                .chain(after_close.iter().filter(|t| !matches!(t, Token::Period)).cloned())
+                .collect();
+            if remaining.len() >= 3 {
+                self.parse_semicolon_statement(&remaining, ontology, state)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn tokenize_statement(&self, statement: &str) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
@@ -2080,6 +2246,32 @@ impl TurtleParser {
                         current_token.clear();
                     }
                     tokens.push(Token::Semicolon);
+                }
+                '{' if !in_iri && !in_literal => {
+                    // RDF 1.2: {| starts an annotation block
+                    if i + 1 < chars.len() && chars[i + 1] == '|' {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::AnnotationOpen);
+                        i += 1; // skip the |
+                    } else {
+                        current_token.push(ch);
+                    }
+                }
+                '|' if !in_iri && !in_literal => {
+                    // RDF 1.2: |} closes an annotation block
+                    if i + 1 < chars.len() && chars[i + 1] == '}' {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::AnnotationClose);
+                        i += 1; // skip the }
+                    } else {
+                        current_token.push(ch);
+                    }
                 }
                 '.' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {

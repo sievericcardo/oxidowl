@@ -37,6 +37,14 @@ impl StringValueSpace {
             datatype: "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString",
         }
     }
+
+    /// Handler for `rdf:dirLangString` (RDF 1.2 directional language-tagged strings).
+    #[must_use]
+    pub fn rdf_dir_lang_string() -> Self {
+        Self {
+            datatype: "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString",
+        }
+    }
 }
 
 impl ValueSpaceHandler for StringValueSpace {

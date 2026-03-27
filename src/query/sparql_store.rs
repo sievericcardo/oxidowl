@@ -1889,7 +1889,7 @@ fn rdfterm_to_oxterm(term: &RdfTerm) -> Result<Term> {
             };
             Ok(Term::Literal(lit))
         }
-        RdfTerm::QuotedTriple(_) => Err(Error::Sparql {
+        RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => Err(Error::Sparql {
             message: "Quoted triples in object position require the rdf-12 oxigraph feature"
                 .to_string(),
         }),

@@ -22,15 +22,21 @@
 
 pub mod boolean;
 pub mod datetime;
+pub mod html;
 pub mod iri;
+pub mod json;
 pub mod numeric;
 pub mod string;
+pub mod xml_literal;
 
 pub use boolean::BooleanValueSpace;
 pub use datetime::{DateTimeValueSpace, DateValueSpace, TimeValueSpace};
+pub use html::HtmlValueSpace;
 pub use iri::IriValueSpace;
+pub use json::JsonValueSpace;
 pub use numeric::{DecimalValueSpace, FloatValueSpace, IntegerValueSpace};
 pub use string::StringValueSpace;
+pub use xml_literal::XmlLiteralValueSpace;
 
 use crate::error::Error;
 use std::collections::HashMap;
@@ -103,6 +109,7 @@ impl ValueSpaceRegistry {
         r.register(Arc::new(StringValueSpace::xsd_normalized_string()));
         r.register(Arc::new(StringValueSpace::xsd_token()));
         r.register(Arc::new(StringValueSpace::rdf_lang_string()));
+        r.register(Arc::new(StringValueSpace::rdf_dir_lang_string()));
         r.register(Arc::new(IntegerValueSpace));
         r.register(Arc::new(DecimalValueSpace));
         r.register(Arc::new(FloatValueSpace::xsd_float()));
@@ -111,6 +118,9 @@ impl ValueSpaceRegistry {
         r.register(Arc::new(DateValueSpace));
         r.register(Arc::new(TimeValueSpace));
         r.register(Arc::new(IriValueSpace));
+        r.register(Arc::new(JsonValueSpace));
+        r.register(Arc::new(HtmlValueSpace));
+        r.register(Arc::new(XmlLiteralValueSpace));
 
         r
     }

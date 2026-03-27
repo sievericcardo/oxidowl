@@ -22,7 +22,7 @@ fn str_value(term: &RdfTerm) -> Option<String> {
     match term {
         RdfTerm::Iri(iri) => Some(iri.as_str().to_string()),
         RdfTerm::Literal { value, .. } => Some(value.clone()),
-        RdfTerm::BlankNode(_) | RdfTerm::QuotedTriple(_) => None,
+        RdfTerm::BlankNode(_) | RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => None,
     }
 }
 

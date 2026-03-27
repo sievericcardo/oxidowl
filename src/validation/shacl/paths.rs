@@ -78,7 +78,7 @@ pub fn term_to_sparql_subject(term: &RdfTerm) -> String {
             // string; callers should skip path resolution for literals.
             String::new()
         }
-        RdfTerm::QuotedTriple(_) => String::new(),
+        RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => String::new(),
     }
 }
 
@@ -103,7 +103,7 @@ pub fn term_to_sparql(term: &RdfTerm) -> String {
                 format!("\"{escaped}\"")
             }
         }
-        RdfTerm::QuotedTriple(_) => "\"_quoted_triple_\"".to_string(),
+        RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => "\"_quoted_triple_\"".to_string(),
     }
 }
 

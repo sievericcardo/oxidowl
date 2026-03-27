@@ -586,7 +586,7 @@ fn term_key(term: &RdfTerm) -> String {
         RdfTerm::Iri(iri) => format!("<{}>", iri.as_str()),
         RdfTerm::BlankNode(id) => format!("_:{id}"),
         RdfTerm::Literal { value, .. } => format!("\"{value}\""),
-        RdfTerm::QuotedTriple(_) => "<<>>".to_string(),
+        RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => "<<>>".to_string(),
     }
 }
 

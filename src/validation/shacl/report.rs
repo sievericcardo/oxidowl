@@ -187,7 +187,7 @@ fn turtle_term(term: &RdfTerm) -> String {
                 format!("\"{escaped}\"")
             }
         }
-        RdfTerm::QuotedTriple(_) => "\"_quoted_triple_\"".to_string(),
+        RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => "\"_quoted_triple_\"".to_string(),
     }
 }
 

@@ -133,6 +133,10 @@ pub enum ReasoningRequest {
     GetOntologyIri {
         reply: oneshot::Sender<Result<Option<crate::ontology::IRI>>>,
     },
+    /// Export the ontology serialized as Turtle (RDF 1.2).
+    GetSerializedTurtle {
+        reply: oneshot::Sender<Result<String>>,
+    },
     /// Synchronous bridge: used by `get_instances_sync` (called from non-async query engine)
     GetInstancesSync {
         class: ClassExpression,
@@ -334,6 +338,9 @@ impl ReasoningActor {
             }
             ReasoningRequest::GetOntologyIri { reply } => {
                 let _ = reply.send(self.handle_get_ontology_iri());
+            }
+            ReasoningRequest::GetSerializedTurtle { reply } => {
+                let _ = reply.send(self.handle_get_serialized_turtle());
             }
             ReasoningRequest::GetInstancesSync { class, reply } => {
                 let result = self
@@ -825,6 +832,20 @@ impl ReasoningActor {
             Ok(ontology.get_iri().cloned())
         } else {
             Ok(None)
+        }
+    }
+
+    fn handle_get_serialized_turtle(&mut self) -> Result<String> {
+        use crate::parsers::{OntologySerializer, TurtleSerializer};
+        if let Some(ont_ref) = self.reasoner.get_ontology().cloned() {
+            let ontology =
+                crate::core::lock_helpers::read_lock(&ont_ref, "actor: serializing ontology")?;
+            TurtleSerializer::default()
+                .serialize(&*ontology)
+                .map_err(|e| Error::reasoning(format!("Turtle serialization failed: {e}")))
+        } else {
+            // No ontology loaded — return an empty Turtle document.
+            Ok(String::from("# No ontology loaded\n"))
         }
     }
 

@@ -399,36 +399,44 @@ impl NTriplesParser {
         let value = chars[1..i].iter().collect::<String>();
         let rest = &s[i + 1..];
 
-        // Check for language tag or datatype
-        let language = if rest.starts_with('@') {
+        // Check for language tag (optionally with base-direction: @lang--dir) or datatype
+        let (language, direction, datatype) = if rest.starts_with('@') {
             let end = rest
                 .find(|c: char| c.is_whitespace() || c == '.' || c == '>')
                 .unwrap_or(rest.len());
-            Some(rest[1..end].to_string())
-        } else {
-            None
-        };
-
-        let datatype = if let Some(datatype_str) = rest.strip_prefix("^^") {
+            let tag = &rest[1..end];
+            // RDF 1.2: split on '--' to separate language tag from base direction
+            if let Some(dash_pos) = tag.find("--") {
+                let lang = tag[..dash_pos].to_string();
+                let dir = tag[dash_pos + 2..].to_string();
+                let dt = url::Url::parse(
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString",
+                )
+                .ok();
+                (Some(lang), Some(dir), dt)
+            } else {
+                (Some(tag.to_string()), None, None)
+            }
+        } else if let Some(datatype_str) = rest.strip_prefix("^^") {
             if datatype_str.starts_with('<') {
                 let end = datatype_str.find('>').ok_or_else(|| {
                     Error::ontology_parsing("Unterminated datatype IRI".to_string())
                 })?;
                 let url = url::Url::parse(&datatype_str[1..end])
                     .map_err(|e| Error::ontology_parsing(format!("Invalid datatype IRI: {e}")))?;
-                Some(url)
+                (None, None, Some(url))
             } else {
-                None
+                (None, None, None)
             }
         } else {
-            None
+            (None, None, None)
         };
 
         Ok(RdfTerm::Literal {
             value,
             datatype,
             language,
-            direction: None,
+            direction,
         })
     }
 

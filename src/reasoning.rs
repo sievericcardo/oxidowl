@@ -440,6 +440,15 @@ impl ReasoningService {
             .await
     }
 
+    /// Serialize the current ontology as Turtle (RDF 1.2).
+    ///
+    /// The caller is responsible for setting the appropriate HTTP
+    /// `Content-Type: text/turtle; version=1.2` response header.
+    pub async fn get_serialized_turtle(&self) -> Result<String> {
+        self.send(|r| ReasoningRequest::GetSerializedTurtle { reply: r })
+            .await
+    }
+
     /// Synchronous version of `get_instances` for use in advanced query processing
     pub fn get_instances_sync(&self, class: &ClassExpression) -> Result<Vec<Individual>> {
         let class = class.clone();
