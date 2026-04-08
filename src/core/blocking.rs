@@ -8,9 +8,9 @@ use crate::{
     config::{BlockingStrategy as ConfigBlockingStrategy, ReasoningConfig},
     core::tableau::{ConceptLabel, NodeId, TableauNode},
 };
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 
 /// Compute a deterministic sort key for a [`ConceptLabel`] using its `Hash` impl.
 /// Zero-allocation alternative to `format!("{c:?}")`.

@@ -5,8 +5,8 @@
 
 use crate::{Error, Result, core::hash_concept, ontology::ClassExpression};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 
 /// Cached completion graph for a concept
 #[derive(Debug, Clone)]
@@ -142,10 +142,11 @@ impl CompletionGraphCache {
         })?;
 
         if let Some(graph) = inner.graphs.get(&concept_hash)
-            && graph.generation == inner.generation {
-                self.cache_hits_count.fetch_add(1, Ordering::Relaxed);
-                return Ok(Some(graph.clone()));
-            }
+            && graph.generation == inner.generation
+        {
+            self.cache_hits_count.fetch_add(1, Ordering::Relaxed);
+            return Ok(Some(graph.clone()));
+        }
 
         self.cache_misses_count.fetch_add(1, Ordering::Relaxed);
         Ok(None)
@@ -176,12 +177,14 @@ impl CompletionGraphCache {
 
         if let Some(graph) = inner.graphs.get(&hash1)
             && graph.generation == inner.generation
-                && let Some(result) = graph.has_subsumption(hash2) {
-                    self.subsumption_hits_count.fetch_add(1, Ordering::Relaxed);
-                    return Ok(Some(result));
-                }
+            && let Some(result) = graph.has_subsumption(hash2)
+        {
+            self.subsumption_hits_count.fetch_add(1, Ordering::Relaxed);
+            return Ok(Some(result));
+        }
 
-        self.subsumption_misses_count.fetch_add(1, Ordering::Relaxed);
+        self.subsumption_misses_count
+            .fetch_add(1, Ordering::Relaxed);
         Ok(None)
     }
 
