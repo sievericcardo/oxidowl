@@ -141,12 +141,11 @@ impl CompletionGraphCache {
             message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
 
-        if let Some(graph) = inner.graphs.get(&concept_hash) {
-            if graph.generation == inner.generation {
+        if let Some(graph) = inner.graphs.get(&concept_hash)
+            && graph.generation == inner.generation {
                 self.cache_hits_count.fetch_add(1, Ordering::Relaxed);
                 return Ok(Some(graph.clone()));
             }
-        }
 
         self.cache_misses_count.fetch_add(1, Ordering::Relaxed);
         Ok(None)
@@ -175,14 +174,12 @@ impl CompletionGraphCache {
             message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
 
-        if let Some(graph) = inner.graphs.get(&hash1) {
-            if graph.generation == inner.generation {
-                if let Some(result) = graph.has_subsumption(hash2) {
+        if let Some(graph) = inner.graphs.get(&hash1)
+            && graph.generation == inner.generation
+                && let Some(result) = graph.has_subsumption(hash2) {
                     self.subsumption_hits_count.fetch_add(1, Ordering::Relaxed);
                     return Ok(Some(result));
                 }
-            }
-        }
 
         self.subsumption_misses_count.fetch_add(1, Ordering::Relaxed);
         Ok(None)
