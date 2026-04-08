@@ -6,6 +6,7 @@
 use crate::{Error, Result, core::hash_concept, ontology::ClassExpression};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Cached completion graph for a concept
 #[derive(Debug, Clone)]
@@ -52,17 +53,32 @@ impl CompletionGraph {
     }
 }
 
-/// Cache for completion graphs with generation-based invalidation
+/// Combined inner state for the completion graph cache.
+/// Consolidating graphs + generation into one lock eliminates the triple-lock
+/// pattern that previously required up to 3 sequential `RwLock` acquisitions
+/// per cache lookup.
+#[derive(Debug, Default)]
+struct CompletionCacheInner {
+    graphs: HashMap<u64, CompletionGraph>,
+    generation: u64,
+}
+
+/// Cache for completion graphs with generation-based invalidation.
+///
+/// Uses a single `RwLock<CompletionCacheInner>` for graph data and generation,
+/// plus `AtomicU64` counters for stats so that reads never block on stats writes.
 #[derive(Debug)]
 pub struct CompletionGraphCache {
-    /// Map from concept hash to completion graph
-    graphs: Arc<RwLock<HashMap<u64, CompletionGraph>>>,
-
-    /// Current generation for cache invalidation
-    current_generation: Arc<RwLock<u64>>,
-
-    /// Statistics
-    stats: Arc<RwLock<CacheStatistics>>,
+    /// Single lock covering graphs + generation (replaces the previous 3 separate
+    /// `RwLock`s that caused sequential lock acquisition in every hot-path call).
+    inner: Arc<RwLock<CompletionCacheInner>>,
+    // Lock-free stats counters.
+    total_queries: Arc<AtomicU64>,
+    cache_hits_count: Arc<AtomicU64>,
+    cache_misses_count: Arc<AtomicU64>,
+    subsumption_hits_count: Arc<AtomicU64>,
+    subsumption_misses_count: Arc<AtomicU64>,
+    invalidations_count: Arc<AtomicU64>,
 }
 
 /// Statistics for completion graph cache
@@ -104,9 +120,13 @@ impl CompletionGraphCache {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            graphs: Arc::new(RwLock::new(HashMap::new())),
-            current_generation: Arc::new(RwLock::new(0)),
-            stats: Arc::new(RwLock::new(CacheStatistics::default())),
+            inner: Arc::new(RwLock::new(CompletionCacheInner::default())),
+            total_queries: Arc::new(AtomicU64::new(0)),
+            cache_hits_count: Arc::new(AtomicU64::new(0)),
+            cache_misses_count: Arc::new(AtomicU64::new(0)),
+            subsumption_hits_count: Arc::new(AtomicU64::new(0)),
+            subsumption_misses_count: Arc::new(AtomicU64::new(0)),
+            invalidations_count: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -114,51 +134,30 @@ impl CompletionGraphCache {
     pub fn get(&self, concept: &ClassExpression) -> Result<Option<CompletionGraph>> {
         let concept_hash = hash_concept(concept);
 
-        // Update stats
-        {
-            let mut stats = self.stats.write().map_err(|e| Error::Cache {
-                message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-            })?;
-            stats.total_queries += 1;
-        }
+        self.total_queries.fetch_add(1, Ordering::Relaxed);
 
-        let graphs = self.graphs.read().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache read lock poisoned: {e}"),
+        // Single lock acquisition covers both graphs and generation lookup.
+        let inner = self.inner.read().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
 
-        if let Some(graph) = graphs.get(&concept_hash) {
-            // Check if graph is still valid (generation matches)
-            let current_gen = *self.current_generation.read().map_err(|e| Error::Cache {
-                message: format!("CompletionGraphCache generation lock poisoned: {e}"),
-            })?;
-
-            if graph.generation == current_gen {
-                // Update hit stats
-                let mut stats = self.stats.write().map_err(|e| Error::Cache {
-                    message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-                })?;
-                stats.cache_hits += 1;
-
+        if let Some(graph) = inner.graphs.get(&concept_hash) {
+            if graph.generation == inner.generation {
+                self.cache_hits_count.fetch_add(1, Ordering::Relaxed);
                 return Ok(Some(graph.clone()));
             }
         }
 
-        // Update miss stats
-        let mut stats = self.stats.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-        })?;
-        stats.cache_misses += 1;
-
+        self.cache_misses_count.fetch_add(1, Ordering::Relaxed);
         Ok(None)
     }
 
     /// Store a completion graph
     pub fn put(&self, graph: CompletionGraph) -> Result<()> {
-        let mut graphs = self.graphs.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache write lock poisoned: {e}"),
+        let mut inner = self.inner.write().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
-
-        graphs.insert(graph.concept_hash, graph);
+        inner.graphs.insert(graph.concept_hash, graph);
         Ok(())
     }
 
@@ -171,35 +170,21 @@ impl CompletionGraphCache {
         let hash1 = hash_concept(concept1);
         let hash2 = hash_concept(concept2);
 
-        let graphs = self.graphs.read().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache read lock poisoned: {e}"),
+        // Single lock — was previously 3 sequential lock acquisitions.
+        let inner = self.inner.read().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
 
-        if let Some(graph) = graphs.get(&hash1) {
-            // Check generation
-            let current_gen = *self.current_generation.read().map_err(|e| Error::Cache {
-                message: format!("CompletionGraphCache generation lock poisoned: {e}"),
-            })?;
-
-            if graph.generation == current_gen
-                && let Some(result) = graph.has_subsumption(hash2)
-            {
-                // Update subsumption hit stats
-                let mut stats = self.stats.write().map_err(|e| Error::Cache {
-                    message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-                })?;
-                stats.subsumption_hits += 1;
-
-                return Ok(Some(result));
+        if let Some(graph) = inner.graphs.get(&hash1) {
+            if graph.generation == inner.generation {
+                if let Some(result) = graph.has_subsumption(hash2) {
+                    self.subsumption_hits_count.fetch_add(1, Ordering::Relaxed);
+                    return Ok(Some(result));
+                }
             }
         }
 
-        // Update subsumption miss stats
-        let mut stats = self.stats.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-        })?;
-        stats.subsumption_misses += 1;
-
+        self.subsumption_misses_count.fetch_add(1, Ordering::Relaxed);
         Ok(None)
     }
 
@@ -213,11 +198,11 @@ impl CompletionGraphCache {
         let hash1 = hash_concept(concept1);
         let hash2 = hash_concept(concept2);
 
-        let mut graphs = self.graphs.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache write lock poisoned: {e}"),
+        let mut inner = self.inner.write().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
 
-        if let Some(graph) = graphs.get_mut(&hash1) {
+        if let Some(graph) = inner.graphs.get_mut(&hash1) {
             graph.cache_subsumption(hash2, subsumes);
         }
 
@@ -226,76 +211,64 @@ impl CompletionGraphCache {
 
     /// Invalidate cache (increment generation)
     pub fn invalidate(&self) -> Result<()> {
-        let mut generation_guard = self.current_generation.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache generation lock poisoned: {e}"),
+        let mut inner = self.inner.write().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
-        *generation_guard += 1;
-
-        // Update invalidation stats
-        let mut stats = self.stats.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-        })?;
-        stats.invalidations += 1;
-
+        inner.generation += 1;
+        self.invalidations_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
     /// Selective invalidation - only invalidate affected concepts
     pub fn invalidate_concepts(&self, affected_concepts: &[u64]) -> Result<()> {
-        let mut graphs = self.graphs.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache write lock poisoned: {e}"),
+        let mut inner = self.inner.write().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
 
         for hash in affected_concepts {
-            graphs.remove(hash);
+            inner.graphs.remove(hash);
         }
 
-        // Update invalidation stats
-        let mut stats = self.stats.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-        })?;
-        stats.invalidations += 1;
-
+        self.invalidations_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
     /// Get current generation
     pub fn current_generation(&self) -> Result<u64> {
-        let generation_guard = self.current_generation.read().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache generation lock poisoned: {e}"),
+        let inner = self.inner.read().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
-        Ok(*generation_guard)
+        Ok(inner.generation)
     }
 
     /// Get cache statistics
     pub fn statistics(&self) -> Result<CacheStatistics> {
-        let stats = self.stats.read().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache stats lock poisoned: {e}"),
-        })?;
-        Ok(stats.clone())
+        Ok(CacheStatistics {
+            total_queries: self.total_queries.load(Ordering::Relaxed) as usize,
+            cache_hits: self.cache_hits_count.load(Ordering::Relaxed) as usize,
+            cache_misses: self.cache_misses_count.load(Ordering::Relaxed) as usize,
+            subsumption_hits: self.subsumption_hits_count.load(Ordering::Relaxed) as usize,
+            subsumption_misses: self.subsumption_misses_count.load(Ordering::Relaxed) as usize,
+            invalidations: self.invalidations_count.load(Ordering::Relaxed) as usize,
+        })
     }
 
     /// Clear all cached graphs
     pub fn clear(&self) -> Result<()> {
-        let mut graphs = self.graphs.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache write lock poisoned: {e}"),
+        let mut inner = self.inner.write().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
-        graphs.clear();
-
-        let mut generation_guard = self.current_generation.write().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache generation lock poisoned: {e}"),
-        })?;
-        *generation_guard += 1;
-
+        inner.graphs.clear();
+        inner.generation += 1;
         Ok(())
     }
 
     /// Get cache size
     pub fn size(&self) -> Result<usize> {
-        let graphs = self.graphs.read().map_err(|e| Error::Cache {
-            message: format!("CompletionGraphCache read lock poisoned: {e}"),
+        let inner = self.inner.read().map_err(|e| Error::Cache {
+            message: format!("CompletionGraphCache lock poisoned: {e}"),
         })?;
-        Ok(graphs.len())
+        Ok(inner.graphs.len())
     }
 }
 

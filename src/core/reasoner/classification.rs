@@ -115,12 +115,14 @@ impl ClassificationService {
             saturation_result.statistics.concepts_requiring_tableau
         );
 
-        // Add subsumers discovered through saturation
+        // Add subsumers discovered through saturation.
+        // Use `entry(concept.clone())` + `extend(iter().cloned())` to avoid
+        // cloning the full subsumers HashSet into a temporary before extending.
         for (concept, subsumers) in &saturation_result.subsumptions {
-            let entry = hierarchy
+            hierarchy
                 .entry(concept.clone())
-                .or_insert_with(HashSet::new);
-            entry.extend(subsumers.clone());
+                .or_insert_with(HashSet::new)
+                .extend(subsumers.iter().cloned());
         }
 
         // === PHASE 3: Tableau expansion for complex cases ===
@@ -155,8 +157,11 @@ impl ClassificationService {
 
         // Get performance configuration for parallel execution
         let perf_config = PerformanceConfig::from_env();
+        // Lower threshold from 100 to 16: parallelism pays off earlier since rayon's
+        // work-stealing scheduler has very low per-task overhead relative to a full
+        // tableau expansion.
         let use_parallel = perf_config.is_enabled(crate::config::PerformanceFeature::LockFree)
-            && total_tableau_pairs > 100;
+            && total_tableau_pairs > 16;
 
         if use_parallel {
             info!("Using parallel classification for {total_tableau_pairs} subsumption checks");

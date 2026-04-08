@@ -185,8 +185,11 @@ impl LockFreeConceptCache {
             return;
         }
 
-        // Check size and evict if necessary
-        while self.size.load(Ordering::Relaxed) >= self.config.max_size {
+        // If the cache is at or over capacity, evict one entry then insert.
+        // Use a single conditional eviction instead of a spin-loop so we never
+        // busy-loop when multiple threads race to insert simultaneously.
+        let current_size = self.size.load(Ordering::Relaxed);
+        if current_size >= self.config.max_size {
             self.evict_one();
         }
 

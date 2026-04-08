@@ -9,6 +9,17 @@ use crate::{
     core::tableau::{ConceptLabel, NodeId, TableauNode},
 };
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+
+/// Compute a deterministic sort key for a [`ConceptLabel`] using its `Hash` impl.
+/// Zero-allocation alternative to `format!("{c:?}")`.
+#[inline]
+fn concept_sort_key(c: &ConceptLabel) -> u64 {
+    let mut h = DefaultHasher::new();
+    c.hash(&mut h);
+    h.finish()
+}
 
 /// Trait for blocking checkers
 pub trait BlockingChecker: Send + Sync + std::fmt::Debug {
@@ -100,7 +111,8 @@ impl BlockingChecker for AnywhereBlocking {
         }
 
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        // Sort by pre-computed hash key — zero allocation vs format!("{:?}") string sort.
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -169,7 +181,7 @@ impl BlockingChecker for AncestorBlocking {
 
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -227,7 +239,7 @@ impl BlockingChecker for PairwiseBlocking {
 
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -395,7 +407,7 @@ impl BlockingChecker for SingleBlocking {
         }
 
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -657,17 +669,14 @@ impl BlockerCandidateIndex {
 
     /// Compute a hash for a signature
     fn compute_signature_hash(signature: &[ConceptLabel]) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
         let mut hasher = DefaultHasher::new();
 
-        // Sort signature for deterministic hashing
+        // Sort signature for deterministic hashing — use hash keys to avoid allocations.
         let mut sorted_sig: Vec<_> = signature.iter().collect();
-        sorted_sig.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        sorted_sig.sort_unstable_by_key(|c| concept_sort_key(c));
 
         for concept in sorted_sig {
-            format!("{concept:?}").hash(&mut hasher);
+            concept.hash(&mut hasher);
         }
 
         hasher.finish()
