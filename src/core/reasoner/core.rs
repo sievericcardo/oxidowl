@@ -2701,6 +2701,9 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER NOT EXISTS { ?x a ?D } \
         }",
         // Rule 4: intersectionOf( DataSomeValuesFrom(dp, xsd:double range), DataHasValue(hvp, hv) )
+        //   Only fires for pure 2-item (double + hasValue) intersections.  Guards prevent firing
+        //   for 3-item (integer+double+hasValue) Overheating/Underheating classes and 4-item
+        //   (integer+double+double+hasValue) Operational classes, which are handled by Rules 4b/4d.
         "INSERT { ?x a ?C } \
         WHERE { \
           ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
@@ -2714,6 +2717,18 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?r_hv <http://www.w3.org/2002/07/owl#onProperty> ?hvp . \
           ?r_hv <http://www.w3.org/2002/07/owl#hasValue>    ?hv . \
           FILTER(?r_range != ?r_hv) \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r_int_ex . \
+            ?r_int_ex <http://www.w3.org/2002/07/owl#someValuesFrom> ?di_ex . \
+            ?di_ex <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#integer> . \
+          } \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r_dbl2 . \
+            ?r_dbl2 <http://www.w3.org/2002/07/owl#onProperty> ?dp . \
+            ?r_dbl2 <http://www.w3.org/2002/07/owl#someValuesFrom> ?dd2 . \
+            ?dd2 <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+            FILTER(?r_dbl2 != ?r_range) \
+          } \
           ?x ?dp  ?numval . \
           ?x ?hvp ?hv . \
           OPTIONAL { ?flist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f_mi . \
@@ -2728,6 +2743,184 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
                  (!BOUND(?minE) || ?numval >  ?minE) && \
                  (!BOUND(?maxI) || ?numval <= ?maxI) && \
                  (!BOUND(?maxE) || ?numval <  ?maxE)) \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 4b: intersectionOf( DataSomeValuesFrom(ip, xsd:integer range),
+        //                           DataSomeValuesFrom(dp, xsd:double range),
+        //                           DataHasValue(hvp, hv) )
+        //   Handles Overheating, Underheating, AND Maintenance pump classes (3-item intersection
+        //   with exactly one integer restriction, one double restriction, and one hasValue
+        //   restriction).  All combinations of integer facets are supported:
+        //   - maxExclusive / maxInclusive (Overheating, Underheating: life < threshold)
+        //   - minInclusive / minExclusive (Maintenance: life >= threshold)
+        //   FILTER NOT EXISTS prevents firing when a second double restriction exists for the
+        //   same property (that 4-item Operational pattern is handled by Rule 4d instead).
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+          ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4b_int . \
+          ?r4b_int <http://www.w3.org/2002/07/owl#onProperty>    ?ip . \
+          ?r4b_int <http://www.w3.org/2002/07/owl#someValuesFrom> ?di . \
+          ?di <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#integer> . \
+          ?di <http://www.w3.org/2002/07/owl#withRestrictions> ?fi . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4b_dbl . \
+          ?r4b_dbl <http://www.w3.org/2002/07/owl#onProperty>    ?dp . \
+          ?r4b_dbl <http://www.w3.org/2002/07/owl#someValuesFrom> ?dd . \
+          ?dd <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+          ?dd <http://www.w3.org/2002/07/owl#withRestrictions> ?fd . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4b_hv . \
+          ?r4b_hv <http://www.w3.org/2002/07/owl#onProperty> ?hvp . \
+          ?r4b_hv <http://www.w3.org/2002/07/owl#hasValue>    ?hv . \
+          FILTER(?r4b_int != ?r4b_dbl && ?r4b_int != ?r4b_hv && ?r4b_dbl != ?r4b_hv) \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4b_dbl2 . \
+            ?r4b_dbl2 <http://www.w3.org/2002/07/owl#onProperty>    ?dp . \
+            ?r4b_dbl2 <http://www.w3.org/2002/07/owl#someValuesFrom> ?dd2 . \
+            ?dd2 <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+            FILTER(?r4b_dbl2 != ?r4b_dbl) \
+          } \
+          ?x ?ip ?intval . \
+          ?x ?dp ?dblval . \
+          ?x ?hvp ?hv . \
+          OPTIONAL { ?fi (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_ixe . \
+                     ?f4b_ixe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?ixE . } \
+          OPTIONAL { ?fi (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_ixi . \
+                     ?f4b_ixi <http://www.w3.org/2001/XMLSchema#maxInclusive> ?ixI . } \
+          OPTIONAL { ?fi (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_ini . \
+                     ?f4b_ini <http://www.w3.org/2001/XMLSchema#minInclusive> ?inI . } \
+          OPTIONAL { ?fi (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_ine . \
+                     ?f4b_ine <http://www.w3.org/2001/XMLSchema#minExclusive> ?inE . } \
+          OPTIONAL { ?fd (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_dmi . \
+                     ?f4b_dmi <http://www.w3.org/2001/XMLSchema#minInclusive> ?dminI . } \
+          OPTIONAL { ?fd (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_dme . \
+                     ?f4b_dme <http://www.w3.org/2001/XMLSchema#minExclusive> ?dminE . } \
+          OPTIONAL { ?fd (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_dxi . \
+                     ?f4b_dxi <http://www.w3.org/2001/XMLSchema#maxInclusive> ?dmaxI . } \
+          OPTIONAL { ?fd (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4b_dxe . \
+                     ?f4b_dxe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?dmaxE . } \
+          FILTER((!BOUND(?ixE)   || ?intval  < ?ixE)   && \
+                 (!BOUND(?ixI)   || ?intval  <= ?ixI)  && \
+                 (!BOUND(?inI)   || ?intval  >= ?inI)  && \
+                 (!BOUND(?inE)   || ?intval  >  ?inE)  && \
+                 (!BOUND(?dminI) || ?dblval  >= ?dminI) && \
+                 (!BOUND(?dminE) || ?dblval  >  ?dminE) && \
+                 (!BOUND(?dmaxI) || ?dblval  <= ?dmaxI) && \
+                 (!BOUND(?dmaxE) || ?dblval  <  ?dmaxE)) \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 4d: intersectionOf( DataSomeValuesFrom(ip, xsd:integer range),
+        //                           DataSomeValuesFrom(dp, xsd:double minInclusive lo),
+        //                           DataSomeValuesFrom(dp, xsd:double maxInclusive hi),
+        //                           DataHasValue(hvp, hv) )
+        //   Handles Operational pump classes where temperature must fall in a closed interval
+        //   [lo, hi] AND pumpLifeTime must be below a threshold.  Both double bounds must appear
+        //   as DISTINCT intersection members for the SAME property.
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+          ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4d_int . \
+          ?r4d_int <http://www.w3.org/2002/07/owl#onProperty>    ?ip . \
+          ?r4d_int <http://www.w3.org/2002/07/owl#someValuesFrom> ?di4d . \
+          ?di4d <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#integer> . \
+          ?di4d <http://www.w3.org/2002/07/owl#withRestrictions> ?fi4d . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4d_lo . \
+          ?r4d_lo <http://www.w3.org/2002/07/owl#onProperty>    ?dp4d . \
+          ?r4d_lo <http://www.w3.org/2002/07/owl#someValuesFrom> ?dlo . \
+          ?dlo <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+          ?dlo <http://www.w3.org/2002/07/owl#withRestrictions> ?flo . \
+          ?flo (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4d_lo_n . \
+          ?f4d_lo_n <http://www.w3.org/2001/XMLSchema#minInclusive> ?loVal . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4d_hi . \
+          ?r4d_hi <http://www.w3.org/2002/07/owl#onProperty>    ?dp4d . \
+          ?r4d_hi <http://www.w3.org/2002/07/owl#someValuesFrom> ?dhi . \
+          ?dhi <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+          ?dhi <http://www.w3.org/2002/07/owl#withRestrictions> ?fhi . \
+          ?fhi (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4d_hi_n . \
+          ?f4d_hi_n <http://www.w3.org/2001/XMLSchema#maxInclusive> ?hiVal . \
+          FILTER(?r4d_lo != ?r4d_hi) \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4d_hv . \
+          ?r4d_hv <http://www.w3.org/2002/07/owl#onProperty> ?hvp4d . \
+          ?r4d_hv <http://www.w3.org/2002/07/owl#hasValue>    ?hv4d . \
+          FILTER(?r4d_int != ?r4d_lo && ?r4d_int != ?r4d_hi && ?r4d_int != ?r4d_hv && \
+                 ?r4d_lo != ?r4d_hv && ?r4d_hi != ?r4d_hv) \
+          ?x ?ip ?intval4d . \
+          ?x ?dp4d ?numval4d . \
+          ?x ?hvp4d ?hv4d . \
+          OPTIONAL { ?fi4d (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4d_ixe . \
+                     ?f4d_ixe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?ixE4d . } \
+          FILTER((!BOUND(?ixE4d) || ?intval4d < ?ixE4d) && \
+                 ?numval4d >= ?loVal && \
+                 ?numval4d <= ?hiVal) \
+          FILTER NOT EXISTS { ?x a ?C } \
+        }",
+        // Rule 4e: intersectionOf( DataSomeValuesFrom(dp, xsd:double lo_range),
+        //                           DataSomeValuesFrom(dp, xsd:double hi_range),
+        //                           DataHasValue(hvp, hv) )
+        //   Handles plant Unhealthy state classes (UnhealthyX pattern): a 3-item intersection
+        //   with exactly TWO double restrictions on the SAME property (lower + upper bound) and
+        //   ONE hasValue restriction on a different property (e.g. familyName).
+        //   All combinations of min/maxInclusive and min/maxExclusive facets are supported.
+        //   FILTER NOT EXISTS guards exclude integer-bearing patterns (Rules 4b/4d) and
+        //   intersections with more than two double restrictions for the same property.
+        "INSERT { ?x a ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+          ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4e_lo . \
+          ?r4e_lo <http://www.w3.org/2002/07/owl#onProperty>    ?dp4e . \
+          ?r4e_lo <http://www.w3.org/2002/07/owl#someValuesFrom> ?dlo4e . \
+          ?dlo4e <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+          ?dlo4e <http://www.w3.org/2002/07/owl#withRestrictions> ?flo4e . \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4e_hi . \
+          ?r4e_hi <http://www.w3.org/2002/07/owl#onProperty>    ?dp4e . \
+          ?r4e_hi <http://www.w3.org/2002/07/owl#someValuesFrom> ?dhi4e . \
+          ?dhi4e <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+          ?dhi4e <http://www.w3.org/2002/07/owl#withRestrictions> ?fhi4e . \
+          FILTER(?r4e_lo != ?r4e_hi) \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4e_hv . \
+          ?r4e_hv <http://www.w3.org/2002/07/owl#onProperty> ?hvp4e . \
+          ?r4e_hv <http://www.w3.org/2002/07/owl#hasValue>    ?hv4e . \
+          FILTER(?r4e_lo != ?r4e_hv && ?r4e_hi != ?r4e_hv) \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4e_dbl3 . \
+            ?r4e_dbl3 <http://www.w3.org/2002/07/owl#onProperty>    ?dp4e . \
+            ?r4e_dbl3 <http://www.w3.org/2002/07/owl#someValuesFrom> ?dd4e3 . \
+            ?dd4e3 <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#double> . \
+            FILTER(?r4e_dbl3 != ?r4e_lo && ?r4e_dbl3 != ?r4e_hi) \
+          } \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?r4e_int . \
+            ?r4e_int <http://www.w3.org/2002/07/owl#someValuesFrom> ?di4e . \
+            ?di4e <http://www.w3.org/2002/07/owl#onDatatype> <http://www.w3.org/2001/XMLSchema#integer> . \
+          } \
+          OPTIONAL { ?flo4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_lomi . \
+                     ?f4e_lomi <http://www.w3.org/2001/XMLSchema#minInclusive> ?loMinI4e . } \
+          OPTIONAL { ?flo4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_lome . \
+                     ?f4e_lome <http://www.w3.org/2001/XMLSchema#minExclusive> ?loMinE4e . } \
+          OPTIONAL { ?flo4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_loxi . \
+                     ?f4e_loxi <http://www.w3.org/2001/XMLSchema#maxInclusive> ?loMaxI4e . } \
+          OPTIONAL { ?flo4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_loxe . \
+                     ?f4e_loxe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?loMaxE4e . } \
+          OPTIONAL { ?fhi4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_himi . \
+                     ?f4e_himi <http://www.w3.org/2001/XMLSchema#minInclusive> ?hiMinI4e . } \
+          OPTIONAL { ?fhi4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_hime . \
+                     ?f4e_hime <http://www.w3.org/2001/XMLSchema#minExclusive> ?hiMinE4e . } \
+          OPTIONAL { ?fhi4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_hixi . \
+                     ?f4e_hixi <http://www.w3.org/2001/XMLSchema#maxInclusive> ?hiMaxI4e . } \
+          OPTIONAL { ?fhi4e (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?f4e_hixe . \
+                     ?f4e_hixe <http://www.w3.org/2001/XMLSchema#maxExclusive> ?hiMaxE4e . } \
+          ?x ?dp4e ?numval4e . \
+          ?x ?hvp4e ?hv4e . \
+          FILTER((!BOUND(?loMinI4e) || ?numval4e >= ?loMinI4e) && \
+                 (!BOUND(?loMinE4e) || ?numval4e >  ?loMinE4e) && \
+                 (!BOUND(?loMaxI4e) || ?numval4e <= ?loMaxI4e) && \
+                 (!BOUND(?loMaxE4e) || ?numval4e <  ?loMaxE4e) && \
+                 (!BOUND(?hiMinI4e) || ?numval4e >= ?hiMinI4e) && \
+                 (!BOUND(?hiMinE4e) || ?numval4e >  ?hiMinE4e) && \
+                 (!BOUND(?hiMaxI4e) || ?numval4e <= ?hiMaxI4e) && \
+                 (!BOUND(?hiMaxE4e) || ?numval4e <  ?hiMaxE4e)) \
           FILTER NOT EXISTS { ?x a ?C } \
         }",
         // Rule 5: pure named-class intersectionOf
