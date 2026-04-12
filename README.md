@@ -91,6 +91,41 @@ For Podman, see [PODMAN.md](PODMAN.md).
 - Rust 1.88 or higher
 - Cargo (comes with Rust)
 
+### System Dependencies
+
+Oxidowl uses [Oxigraph](https://github.com/oxigraph/oxigraph) with the `rocksdb` feature, which compiles [RocksDB](https://rocksdb.org/) from source during the build. This requires a **C++17-capable compiler** and **CMake** to be installed on your system.
+
+#### Linux (Ubuntu / Debian)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential cmake clang libclang-dev
+```
+
+#### Linux (Fedora / RHEL / Rocky)
+
+```bash
+sudo dnf install gcc-c++ cmake clang clang-devel
+```
+
+#### macOS
+
+Xcode Command Line Tools provide the necessary compiler. CMake can be installed via Homebrew:
+
+```bash
+xcode-select --install
+brew install cmake
+```
+
+#### Windows
+
+Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the **"Desktop development with C++"** workload selected. CMake is bundled with Visual Studio, or can be installed separately from [cmake.org](https://cmake.org/download/).
+
+> **Note**: If you do not need the on-disk SPARQL store you can opt out of the RocksDB dependency by disabling the `sparql-store` and `sparql` features in your `Cargo.toml`:
+> ```toml
+> oxidowl = { version = "1.0", default-features = false }
+> ```
+
 ### From Source
 
 ```bash
