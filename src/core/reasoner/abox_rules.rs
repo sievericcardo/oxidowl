@@ -24,15 +24,16 @@
 //! 8. `rdfs:range` propagation
 //! 9. `owl:unionOf` (OWL 2 RL cls-uni) — union member → union class
 //! 10. `intersectionOf` member propagation (OWL 2 RL cls-int2) — intersection class → each named member
-//! 11a/11b. `owl:sameAs` type propagation (OWL 2 RL eq-rep-s/o) — both directions
+//!     11a/11b. `owl:sameAs` type propagation (OWL 2 RL eq-rep-s/o) — both directions
 //! 12. `hasValue` restriction via `rdfs:subClassOf` (OWL 2 RL cls-hv1 general)
 //! 13. `someValuesFrom` restriction via `rdfs:subClassOf` (OWL 2 RL cls-svf1 general)
-//! 14a. `allValuesFrom` via `equivalentClass` (OWL 2 RL cls-avf)
-//! 14b. `allValuesFrom` via `rdfs:subClassOf` (OWL 2 RL cls-avf general form)
+//! 14. `allValuesFrom` restriction via `rdfs:subClassOf` (OWL 2 RL cls-avf1 general) — three patterns:
+//!     14a. `allValuesFrom` via `equivalentClass` (OWL 2 RL cls-avf)
+//!     14b. `allValuesFrom` via `rdfs:subClassOf` (OWL 2 RL cls-avf general form)
 //! 15. `rdfs:subPropertyOf` propagation (OWL 2 RL prp-spo1) — property enabler
 //! 16. `owl:TransitiveProperty` propagation (OWL 2 RL prp-trp)
 //! 17. `owl:SymmetricProperty` propagation (OWL 2 RL prp-symp)
-//! 18a/18b. `owl:inverseOf` propagation (OWL 2 RL prp-inv1/inv2) — both directions
+//!     18a/18b. `owl:inverseOf` propagation (OWL 2 RL prp-inv1/inv2) — both directions
 
 /// Returns the complete set of built-in OWL 2 ABox classification SPARQL
 /// INSERT-WHERE rules that oxidowl applies during `run_sparql_abox_classification`.
