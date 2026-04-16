@@ -199,6 +199,8 @@ pub use crate::distributed::{
 // Re-export error types
 pub use crate::config::{PerformanceConfig, PerformanceProfile, ReasonerConfig, TableauAlgorithm};
 pub use crate::core::reasoner::{ReasoningResult, ReasoningTask, abox_classification_rules};
+#[cfg(feature = "sparql-store")]
+pub use crate::core::reasoner::extract_owl_rules_from_tbox;
 pub use crate::error::{Error, Result};
 pub use crate::ontology::{
     ClassExpression, IRI, Individual, Ontology, OntologyFormat, OntologyRef,

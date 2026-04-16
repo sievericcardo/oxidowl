@@ -28,10 +28,15 @@ pub mod results;
 pub mod statistics;
 pub mod tableau;
 pub mod tasks;
+pub mod abox_rules;
+#[cfg(feature = "sparql-store")]
+pub mod tbox_rules;
 
 // Re-export the main types for backwards compatibility
 // This allows existing code to continue using the same import paths
-pub use self::core::abox_classification_rules;
+pub use self::abox_rules::abox_classification_rules;
+#[cfg(feature = "sparql-store")]
+pub use self::tbox_rules::extract_owl_rules_from_tbox;
 pub use self::{
     classification::ClassificationService,
     consistency::PreConsistencyChecker,
