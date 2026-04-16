@@ -177,7 +177,12 @@ pub fn extract_owl_rules_from_tbox(store: &SparqlStore) -> Vec<String> {
                 if !is_iri(c) || !is_iri(dp) || !is_iri(hvp) || !is_iri(fp) {
                     continue;
                 }
-                let key = (c.to_string(), dp.to_string(), hvp.to_string(), hv.to_string());
+                let key = (
+                    c.to_string(),
+                    dp.to_string(),
+                    hvp.to_string(),
+                    hv.to_string(),
+                );
                 let facets = double_intersections.entry(key).or_default();
                 let fv_s = fv.to_string();
                 if let RdfTerm::Iri(fp_url) = fp {

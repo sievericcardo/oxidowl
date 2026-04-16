@@ -13,6 +13,7 @@
 //! - `statistics`: Performance metrics and statistics
 //! - `results`: Result types for various reasoning operations
 
+pub mod abox_rules;
 pub mod classification;
 pub mod consistency;
 pub mod core;
@@ -28,7 +29,6 @@ pub mod results;
 pub mod statistics;
 pub mod tableau;
 pub mod tasks;
-pub mod abox_rules;
 #[cfg(feature = "sparql-store")]
 pub mod tbox_rules;
 
