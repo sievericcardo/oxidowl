@@ -514,7 +514,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?y ?Q ?x . \
           FILTER NOT EXISTS { ?x ?P ?y } \
         }",
-
         // ── Equality rules (OWL 2 RL Table 4) ────────────────────────────────────
 
         // Rule 19: eq-sym — owl:sameAs symmetry
@@ -524,7 +523,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?x != ?y) \
           FILTER NOT EXISTS { ?y <http://www.w3.org/2002/07/owl#sameAs> ?x } \
         }",
-
         // Rule 20: eq-trans — owl:sameAs transitivity
         "INSERT { ?x <http://www.w3.org/2002/07/owl#sameAs> ?z } \
         WHERE { \
@@ -533,7 +531,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?x != ?z) \
           FILTER NOT EXISTS { ?x <http://www.w3.org/2002/07/owl#sameAs> ?z } \
         }",
-
         // Rule 21: eq-rep-s (general) — propagate property assertions through sameAs on subject
         //   Excludes rdf:type (covered by Rules 11a/11b) and owl:sameAs itself.
         "INSERT { ?s2 ?p ?o } \
@@ -545,7 +542,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?p != <http://www.w3.org/2002/07/owl#sameAs>) \
           FILTER NOT EXISTS { ?s2 ?p ?o } \
         }",
-
         // Rule 22: eq-rep-o (general) — propagate property assertions through sameAs on object
         //   Excludes rdf:type and owl:sameAs.
         "INSERT { ?s ?p ?o2 } \
@@ -557,7 +553,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?p != <http://www.w3.org/2002/07/owl#sameAs>) \
           FILTER NOT EXISTS { ?s ?p ?o2 } \
         }",
-
         // ── Property rules (OWL 2 RL Table 5) ────────────────────────────────────
 
         // Rule 23: prp-fp — FunctionalProperty: two objects of the same subject → sameAs
@@ -570,7 +565,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?y1 != ?y2) \
           FILTER NOT EXISTS { ?y1 <http://www.w3.org/2002/07/owl#sameAs> ?y2 } \
         }",
-
         // Rule 24: prp-ifp — InverseFunctionalProperty: two subjects for same object → sameAs
         "INSERT { ?x1 <http://www.w3.org/2002/07/owl#sameAs> ?x2 } \
         WHERE { \
@@ -581,7 +575,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?x1 != ?x2) \
           FILTER NOT EXISTS { ?x1 <http://www.w3.org/2002/07/owl#sameAs> ?x2 } \
         }",
-
         // Rule 25: prp-eqp1 — equivalentProperty: forward propagation of property assertions
         "INSERT { ?x ?p2 ?y } \
         WHERE { \
@@ -590,7 +583,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?x ?p1 ?y . \
           FILTER NOT EXISTS { ?x ?p2 ?y } \
         }",
-
         // Rule 26: prp-eqp2 — equivalentProperty: backward propagation of property assertions
         "INSERT { ?x ?p1 ?y } \
         WHERE { \
@@ -599,7 +591,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?x ?p2 ?y . \
           FILTER NOT EXISTS { ?x ?p1 ?y } \
         }",
-
         // Rule 27: prp-spo2 — propertyChainAxiom (length-2 chains only)
         //   For ?p owl:propertyChainAxiom (?p1 ?p2): ?u1 ?p1 ?u2, ?u2 ?p2 ?u3 → ?u1 ?p ?u3.
         "INSERT { ?u1 ?p ?u3 } \
@@ -614,7 +605,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?u2 ?p2 ?u3 . \
           FILTER NOT EXISTS { ?u1 ?p ?u3 } \
         }",
-
         // ── Class rules (OWL 2 RL Table 6) ───────────────────────────────────────
 
         // Rule 28: cls-svf1 (raw) — someValuesFrom restriction → assert blank-node restriction type
@@ -631,7 +621,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?v <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?y . \
           FILTER NOT EXISTS { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
         }",
-
         // Rule 29: cls-svf2 — someValuesFrom owl:Thing: any value for property satisfies restriction
         "INSERT { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
         WHERE { \
@@ -640,7 +629,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?u ?p ?v . \
           FILTER NOT EXISTS { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
         }",
-
         // Rule 30: cls-hv1 — hasValue restriction → derive the required property assertion
         //   If ?u is of type a hasValue restriction, assert the property value for ?u.
         "INSERT { ?u ?p ?y } \
@@ -650,7 +638,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x . \
           FILTER NOT EXISTS { ?u ?p ?y } \
         }",
-
         // Rule 31: cls-hv2 (raw) — hasValue restriction → assert blank-node restriction type
         //   Needed so cls-int1 can fire for intersections that mix hasValue restrictions.
         "INSERT { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
@@ -662,7 +649,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?u ?p ?y . \
           FILTER NOT EXISTS { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
         }",
-
         // Rule 32: cls-oo — owl:oneOf: every enumerated individual is an instance of the class
         "INSERT { ?yi <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
         WHERE { \
@@ -670,7 +656,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?x (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?yi . \
           FILTER NOT EXISTS { ?yi <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
         }",
-
         // Rule 33: cls-int1 (general) — direct owl:intersectionOf on named class
         //   Fires when a named class directly carries owl:intersectionOf (rare in OWL/XML but
         //   valid) and the individual is typed as every member class.
@@ -686,7 +671,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?y <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?m1 . \
           FILTER NOT EXISTS { ?y <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
         }",
-
         // Rule 34: cls-int2 (general) — direct owl:intersectionOf member propagation on named class
         "INSERT { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?member } \
         WHERE { \
@@ -697,7 +681,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c . \
           FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?member } \
         }",
-
         // Rule 35: cls-uni (general) — direct owl:unionOf on named class
         "INSERT { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
         WHERE { \
@@ -708,7 +691,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?member . \
           FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
         }",
-
         // Rule 36: cls-int1 via equivalentClass (general — allows typed blank-node members)
         //   Supplement to Rule 5: fires when the equivalentClass blank-node intersection
         //   has some members that are blank-node restrictions (typed via Rules 28/31).
@@ -724,7 +706,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?m1 . \
           FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?C } \
         }",
-
         // ── Schema rules (OWL 2 RL Table 9) ──────────────────────────────────────
 
         // Rule 37: scm-sco — rdfs:subClassOf transitivity
@@ -737,7 +718,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?c3)) \
           FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c3 } \
         }",
-
         // Rule 38a: scm-eqc1 forward — equivalentClass → subClassOf
         "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
         WHERE { \
@@ -745,7 +725,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?c1)) FILTER(!isBlank(?c2)) \
           FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
         }",
-
         // Rule 38b: scm-eqc1 backward — equivalentClass → subClassOf (reverse direction)
         "INSERT { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
         WHERE { \
@@ -753,7 +732,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?c1)) FILTER(!isBlank(?c2)) \
           FILTER NOT EXISTS { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
         }",
-
         // Rule 39: scm-eqc2 — mutual rdfs:subClassOf → owl:equivalentClass
         "INSERT { ?c1 <http://www.w3.org/2002/07/owl#equivalentClass> ?c2 } \
         WHERE { \
@@ -763,7 +741,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?c1 != ?c2) \
           FILTER NOT EXISTS { ?c1 <http://www.w3.org/2002/07/owl#equivalentClass> ?c2 } \
         }",
-
         // Rule 40: scm-spo — rdfs:subPropertyOf transitivity
         "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p3 } \
         WHERE { \
@@ -772,7 +749,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?p3)) \
           FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p3 } \
         }",
-
         // Rule 41a: scm-eqp1 forward — equivalentProperty → subPropertyOf
         "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 } \
         WHERE { \
@@ -780,7 +756,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?p1)) FILTER(!isBlank(?p2)) \
           FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 } \
         }",
-
         // Rule 41b: scm-eqp1 backward — equivalentProperty → subPropertyOf (reverse direction)
         "INSERT { ?p2 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p1 } \
         WHERE { \
@@ -788,7 +763,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?p1)) FILTER(!isBlank(?p2)) \
           FILTER NOT EXISTS { ?p2 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p1 } \
         }",
-
         // Rule 42: scm-eqp2 — mutual rdfs:subPropertyOf → owl:equivalentProperty
         "INSERT { ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 } \
         WHERE { \
@@ -798,7 +772,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(?p1 != ?p2) \
           FILTER NOT EXISTS { ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 } \
         }",
-
         // Rule 43: scm-dom1 — rdfs:domain propagation through rdfs:subClassOf
         //   If P rdfs:domain C1 and C1 rdfs:subClassOf C2, infer P rdfs:domain C2.
         "INSERT { ?p <http://www.w3.org/2000/01/rdf-schema#domain> ?c2 } \
@@ -808,7 +781,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?c2)) \
           FILTER NOT EXISTS { ?p <http://www.w3.org/2000/01/rdf-schema#domain> ?c2 } \
         }",
-
         // Rule 44: scm-dom2 — rdfs:domain propagation through rdfs:subPropertyOf
         //   If P2 rdfs:domain C and P1 rdfs:subPropertyOf P2, infer P1 rdfs:domain C.
         "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#domain> ?c } \
@@ -817,7 +789,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
           FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#domain> ?c } \
         }",
-
         // Rule 45: scm-rng1 — rdfs:range propagation through rdfs:subClassOf
         //   If P rdfs:range C1 and C1 rdfs:subClassOf C2, infer P rdfs:range C2.
         "INSERT { ?p <http://www.w3.org/2000/01/rdf-schema#range> ?c2 } \
@@ -827,7 +798,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?c2)) \
           FILTER NOT EXISTS { ?p <http://www.w3.org/2000/01/rdf-schema#range> ?c2 } \
         }",
-
         // Rule 46: scm-rng2 — rdfs:range propagation through rdfs:subPropertyOf
         //   If P2 rdfs:range C and P1 rdfs:subPropertyOf P2, infer P1 rdfs:range C.
         "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#range> ?c } \
@@ -836,7 +806,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
           FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#range> ?c } \
         }",
-
         // Rule 47: scm-int — intersectionOf class → rdfs:subClassOf each member
         //   Infers that the intersection class is a subclass of every component class.
         "INSERT { ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?ci } \
@@ -847,7 +816,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?ci)) \
           FILTER NOT EXISTS { ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?ci } \
         }",
-
         // Rule 48: scm-uni — each union member → rdfs:subClassOf the union class
         "INSERT { ?ci <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c } \
         WHERE { \
@@ -857,7 +825,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           FILTER(!isBlank(?ci)) \
           FILTER NOT EXISTS { ?ci <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c } \
         }",
-
         // Rule 49: scm-svf1 — someValuesFrom class subsumption
         //   If c1 = ∃p.y1, c2 = ∃p.y2, y1 ⊑ y2, then c1 ⊑ c2.
         "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
@@ -869,7 +836,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?y1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?y2 . \
           FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
         }",
-
         // Rule 50: scm-svf2 — someValuesFrom property subsumption
         //   If c1 = ∃p1.y, c2 = ∃p2.y, p1 ⊑ p2, then c1 ⊑ c2.
         "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
@@ -881,7 +847,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
           FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
         }",
-
         // Rule 51: scm-avf1 — allValuesFrom class subsumption
         //   If c1 = ∀p.y1, c2 = ∀p.y2, y1 ⊑ y2, then c1 ⊑ c2.
         "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
@@ -893,7 +858,6 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?y1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?y2 . \
           FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
         }",
-
         // Rule 52: scm-avf2 — allValuesFrom property subsumption (REVERSED direction)
         //   If c1 = ∀p1.y, c2 = ∀p2.y, p1 ⊑ p2, then c2 ⊑ c1.
         //   (A stronger property constraint on a broader property range ⟹ more specific class.)
