@@ -11,29 +11,69 @@
 //! }
 //! ```
 //!
-//! The rules cover:
-//! 1. `hasValue` restriction (`C ≡ (p hasValue v)`) — via `equivalentClass`
-//! 2. `someValuesFrom` restriction (`C ≡ (p someValuesFrom D)`) — via `equivalentClass`
-//! 3.  Named-class equivalence (`C ≡ D`) — both directions
-//!     3a. `D` instances become `C` instances
-//!     3b. `C` instances become `D` instances
-//! 4. `intersectionOf(DataSomeValuesFrom(dp, xsd:double range), DataHasValue(hvp, hv))`
-//! 5. Pure named-class `intersectionOf`
-//! 6. `rdfs:subClassOf` propagation
-//! 7. `rdfs:domain` propagation
-//! 8. `rdfs:range` propagation
-//! 9. `owl:unionOf` (OWL 2 RL cls-uni) — union member → union class
-//! 10. `intersectionOf` member propagation (OWL 2 RL cls-int2) — intersection class → each named member
-//!     11a/11b. `owl:sameAs` type propagation (OWL 2 RL eq-rep-s/o) — both directions
-//! 12. `hasValue` restriction via `rdfs:subClassOf` (OWL 2 RL cls-hv1 general)
-//! 13. `someValuesFrom` restriction via `rdfs:subClassOf` (OWL 2 RL cls-svf1 general)
-//! 14. `allValuesFrom` restriction via `rdfs:subClassOf` (OWL 2 RL cls-avf1 general) — three patterns:
-//!     14a. `allValuesFrom` via `equivalentClass` (OWL 2 RL cls-avf)
-//!     14b. `allValuesFrom` via `rdfs:subClassOf` (OWL 2 RL cls-avf general form)
-//! 15. `rdfs:subPropertyOf` propagation (OWL 2 RL prp-spo1) — property enabler
-//! 16. `owl:TransitiveProperty` propagation (OWL 2 RL prp-trp)
-//! 17. `owl:SymmetricProperty` propagation (OWL 2 RL prp-symp)
-//!     18a/18b. `owl:inverseOf` propagation (OWL 2 RL prp-inv1/inv2) — both directions
+//! **Coverage vs. OWL 2 RL (W3C, Tables 4–9)**
+//!
+//! *Positive classification rules* (INSERT-WHERE, implemented here):
+//!
+//! | Rule | Description |
+//! |------|-------------|
+//! | 1    | `cls-hv2` via `equivalentClass` |
+//! | 2    | `cls-svf1` via `equivalentClass` |
+//! | 3a/b | `cax-eqc1/2` — named-class equivalence, both directions |
+//! | 4/4b/4d/4e | Specialised intersection + data-range + `hasValue` patterns |
+//! | 5    | `cls-int1` — pure named-class `intersectionOf` via `equivalentClass` |
+//! | 6    | `cax-sco` — `rdfs:subClassOf` propagation |
+//! | 7    | `prp-dom` — `rdfs:domain` propagation |
+//! | 8    | `prp-rng` — `rdfs:range` propagation |
+//! | 9    | `cls-uni` — `owl:unionOf` (via `equivalentClass`) |
+//! | 10   | `cls-int2` — intersection → member propagation (via `equivalentClass`) |
+//! | 11a/b| `eq-rep-s/o` — `owl:sameAs` type propagation, both directions |
+//! | 12   | `cls-hv2` via `rdfs:subClassOf` |
+//! | 13   | `cls-svf1` via `rdfs:subClassOf` |
+//! | 14a/b| `cls-avf` via `equivalentClass` and `rdfs:subClassOf` |
+//! | 15   | `prp-spo1` — `rdfs:subPropertyOf` propagation |
+//! | 16   | `prp-trp` — `owl:TransitiveProperty` |
+//! | 17   | `prp-symp` — `owl:SymmetricProperty` |
+//! | 18a/b| `prp-inv1/2` — `owl:inverseOf`, both directions |
+//! | 19   | `eq-sym` — `owl:sameAs` symmetry |
+//! | 20   | `eq-trans` — `owl:sameAs` transitivity |
+//! | 21   | `eq-rep-s` (general) — property-assertion propagation via `sameAs`, subject side |
+//! | 22   | `eq-rep-o` (general) — property-assertion propagation via `sameAs`, object side |
+//! | 23   | `prp-fp` — `owl:FunctionalProperty` → `owl:sameAs` |
+//! | 24   | `prp-ifp` — `owl:InverseFunctionalProperty` → `owl:sameAs` |
+//! | 25   | `prp-eqp1` — `owl:equivalentProperty` forward |
+//! | 26   | `prp-eqp2` — `owl:equivalentProperty` backward |
+//! | 27   | `prp-spo2` — `owl:propertyChainAxiom` (length-2 chains) |
+//! | 28   | `cls-svf1` (raw) — `someValuesFrom` → blank-node restriction type |
+//! | 29   | `cls-svf2` — `someValuesFrom owl:Thing` |
+//! | 30   | `cls-hv1` — `hasValue` restriction → property assertion |
+//! | 31   | `cls-hv2` (raw) — `hasValue` → blank-node restriction type |
+//! | 32   | `cls-oo` — `owl:oneOf` enumeration → type each member |
+//! | 33   | `cls-int1` (general) — direct `owl:intersectionOf` on named class |
+//! | 34   | `cls-int2` (general) — direct `owl:intersectionOf` member propagation |
+//! | 35   | `cls-uni` (general) — direct `owl:unionOf` on named class |
+//! | 36   | `cls-int1` via `equivalentClass` — allows typed blank-node members |
+//! | 37   | `scm-sco` — `rdfs:subClassOf` transitivity |
+//! | 38a/b| `scm-eqc1` — `owl:equivalentClass` → `rdfs:subClassOf`, both directions |
+//! | 39   | `scm-eqc2` — mutual `rdfs:subClassOf` → `owl:equivalentClass` |
+//! | 40   | `scm-spo` — `rdfs:subPropertyOf` transitivity |
+//! | 41a/b| `scm-eqp1` — `owl:equivalentProperty` → `rdfs:subPropertyOf`, both directions |
+//! | 42   | `scm-eqp2` — mutual `rdfs:subPropertyOf` → `owl:equivalentProperty` |
+//! | 43   | `scm-dom1` — domain + `rdfs:subClassOf` chain |
+//! | 44   | `scm-dom2` — domain + `rdfs:subPropertyOf` chain |
+//! | 45   | `scm-rng1` — range + `rdfs:subClassOf` chain |
+//! | 46   | `scm-rng2` — range + `rdfs:subPropertyOf` chain |
+//! | 47   | `scm-int` — `owl:intersectionOf` → `rdfs:subClassOf` each member |
+//! | 48   | `scm-uni` — each union member `rdfs:subClassOf` the union class |
+//! | 49   | `scm-svf1` — `someValuesFrom` with filler class subsumption |
+//! | 50   | `scm-svf2` — `someValuesFrom` with property subsumption |
+//! | 51   | `scm-avf1` — `allValuesFrom` with filler class subsumption |
+//! | 52   | `scm-avf2` — `allValuesFrom` with property subsumption (reversed direction) |
+//!
+//! *Consistency-detection rules* (derive `false`; require separate validation, **not** INSERT-WHERE):
+//! `eq-diff1/2/3`, `cls-nothing2`, `cls-com`, `cls-maxc1/2`, `cls-maxqc1–4`,
+//! `cax-dw`, `cax-adc`, `prp-irp`, `prp-asyp`, `prp-pdw`, `prp-adp`, `prp-npa1/2`,
+//! `prp-key` (derives `owl:sameAs`, but requires arbitrary-length key lists).
 
 /// Returns the complete set of built-in OWL 2 ABox classification SPARQL
 /// INSERT-WHERE rules that oxidowl applies during `run_sparql_abox_classification`.
@@ -473,6 +513,398 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?P <http://www.w3.org/2002/07/owl#inverseOf> ?Q . \
           ?y ?Q ?x . \
           FILTER NOT EXISTS { ?x ?P ?y } \
+        }",
+
+        // ── Equality rules (OWL 2 RL Table 4) ────────────────────────────────────
+
+        // Rule 19: eq-sym — owl:sameAs symmetry
+        "INSERT { ?y <http://www.w3.org/2002/07/owl#sameAs> ?x } \
+        WHERE { \
+          ?x <http://www.w3.org/2002/07/owl#sameAs> ?y . \
+          FILTER(?x != ?y) \
+          FILTER NOT EXISTS { ?y <http://www.w3.org/2002/07/owl#sameAs> ?x } \
+        }",
+
+        // Rule 20: eq-trans — owl:sameAs transitivity
+        "INSERT { ?x <http://www.w3.org/2002/07/owl#sameAs> ?z } \
+        WHERE { \
+          ?x <http://www.w3.org/2002/07/owl#sameAs> ?y . \
+          ?y <http://www.w3.org/2002/07/owl#sameAs> ?z . \
+          FILTER(?x != ?z) \
+          FILTER NOT EXISTS { ?x <http://www.w3.org/2002/07/owl#sameAs> ?z } \
+        }",
+
+        // Rule 21: eq-rep-s (general) — propagate property assertions through sameAs on subject
+        //   Excludes rdf:type (covered by Rules 11a/11b) and owl:sameAs itself.
+        "INSERT { ?s2 ?p ?o } \
+        WHERE { \
+          ?s1 <http://www.w3.org/2002/07/owl#sameAs> ?s2 . \
+          ?s1 ?p ?o . \
+          FILTER(!isBlank(?s2)) \
+          FILTER(?p != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>) \
+          FILTER(?p != <http://www.w3.org/2002/07/owl#sameAs>) \
+          FILTER NOT EXISTS { ?s2 ?p ?o } \
+        }",
+
+        // Rule 22: eq-rep-o (general) — propagate property assertions through sameAs on object
+        //   Excludes rdf:type and owl:sameAs.
+        "INSERT { ?s ?p ?o2 } \
+        WHERE { \
+          ?o1 <http://www.w3.org/2002/07/owl#sameAs> ?o2 . \
+          ?s ?p ?o1 . \
+          FILTER(!isBlank(?o2)) \
+          FILTER(?p != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>) \
+          FILTER(?p != <http://www.w3.org/2002/07/owl#sameAs>) \
+          FILTER NOT EXISTS { ?s ?p ?o2 } \
+        }",
+
+        // ── Property rules (OWL 2 RL Table 5) ────────────────────────────────────
+
+        // Rule 23: prp-fp — FunctionalProperty: two objects of the same subject → sameAs
+        "INSERT { ?y1 <http://www.w3.org/2002/07/owl#sameAs> ?y2 } \
+        WHERE { \
+          ?p <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+               <http://www.w3.org/2002/07/owl#FunctionalProperty> . \
+          ?x ?p ?y1 . \
+          ?x ?p ?y2 . \
+          FILTER(?y1 != ?y2) \
+          FILTER NOT EXISTS { ?y1 <http://www.w3.org/2002/07/owl#sameAs> ?y2 } \
+        }",
+
+        // Rule 24: prp-ifp — InverseFunctionalProperty: two subjects for same object → sameAs
+        "INSERT { ?x1 <http://www.w3.org/2002/07/owl#sameAs> ?x2 } \
+        WHERE { \
+          ?p <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+               <http://www.w3.org/2002/07/owl#InverseFunctionalProperty> . \
+          ?x1 ?p ?y . \
+          ?x2 ?p ?y . \
+          FILTER(?x1 != ?x2) \
+          FILTER NOT EXISTS { ?x1 <http://www.w3.org/2002/07/owl#sameAs> ?x2 } \
+        }",
+
+        // Rule 25: prp-eqp1 — equivalentProperty: forward propagation of property assertions
+        "INSERT { ?x ?p2 ?y } \
+        WHERE { \
+          ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 . \
+          FILTER(!isBlank(?p2)) \
+          ?x ?p1 ?y . \
+          FILTER NOT EXISTS { ?x ?p2 ?y } \
+        }",
+
+        // Rule 26: prp-eqp2 — equivalentProperty: backward propagation of property assertions
+        "INSERT { ?x ?p1 ?y } \
+        WHERE { \
+          ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 . \
+          FILTER(!isBlank(?p1)) \
+          ?x ?p2 ?y . \
+          FILTER NOT EXISTS { ?x ?p1 ?y } \
+        }",
+
+        // Rule 27: prp-spo2 — propertyChainAxiom (length-2 chains only)
+        //   For ?p owl:propertyChainAxiom (?p1 ?p2): ?u1 ?p1 ?u2, ?u2 ?p2 ?u3 → ?u1 ?p ?u3.
+        "INSERT { ?u1 ?p ?u3 } \
+        WHERE { \
+          ?p <http://www.w3.org/2002/07/owl#propertyChainAxiom> ?chain . \
+          ?chain <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?p1 ; \
+                 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>  ?tail . \
+          ?tail  <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?p2 ; \
+                 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> \
+                   <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> . \
+          ?u1 ?p1 ?u2 . \
+          ?u2 ?p2 ?u3 . \
+          FILTER NOT EXISTS { ?u1 ?p ?u3 } \
+        }",
+
+        // ── Class rules (OWL 2 RL Table 6) ───────────────────────────────────────
+
+        // Rule 28: cls-svf1 (raw) — someValuesFrom restriction → assert blank-node restriction type
+        //   Needed so cls-int1 can fire for intersections that mix blank-node restrictions.
+        "INSERT { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
+        WHERE { \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+               <http://www.w3.org/2002/07/owl#Restriction> . \
+          ?x <http://www.w3.org/2002/07/owl#someValuesFrom> ?y . \
+          FILTER(!isBlank(?y)) \
+          FILTER(?y != <http://www.w3.org/2002/07/owl#Thing>) \
+          ?x <http://www.w3.org/2002/07/owl#onProperty> ?p . \
+          ?u ?p ?v . \
+          ?v <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?y . \
+          FILTER NOT EXISTS { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
+        }",
+
+        // Rule 29: cls-svf2 — someValuesFrom owl:Thing: any value for property satisfies restriction
+        "INSERT { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
+        WHERE { \
+          ?x <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.w3.org/2002/07/owl#Thing> . \
+          ?x <http://www.w3.org/2002/07/owl#onProperty> ?p . \
+          ?u ?p ?v . \
+          FILTER NOT EXISTS { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
+        }",
+
+        // Rule 30: cls-hv1 — hasValue restriction → derive the required property assertion
+        //   If ?u is of type a hasValue restriction, assert the property value for ?u.
+        "INSERT { ?u ?p ?y } \
+        WHERE { \
+          ?x <http://www.w3.org/2002/07/owl#hasValue>   ?y . \
+          ?x <http://www.w3.org/2002/07/owl#onProperty> ?p . \
+          ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x . \
+          FILTER NOT EXISTS { ?u ?p ?y } \
+        }",
+
+        // Rule 31: cls-hv2 (raw) — hasValue restriction → assert blank-node restriction type
+        //   Needed so cls-int1 can fire for intersections that mix hasValue restrictions.
+        "INSERT { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
+        WHERE { \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+               <http://www.w3.org/2002/07/owl#Restriction> . \
+          ?x <http://www.w3.org/2002/07/owl#hasValue>   ?y . \
+          ?x <http://www.w3.org/2002/07/owl#onProperty> ?p . \
+          ?u ?p ?y . \
+          FILTER NOT EXISTS { ?u <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?x } \
+        }",
+
+        // Rule 32: cls-oo — owl:oneOf: every enumerated individual is an instance of the class
+        "INSERT { ?yi <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
+        WHERE { \
+          ?c <http://www.w3.org/2002/07/owl#oneOf> ?x . \
+          ?x (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?yi . \
+          FILTER NOT EXISTS { ?yi <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
+        }",
+
+        // Rule 33: cls-int1 (general) — direct owl:intersectionOf on named class
+        //   Fires when a named class directly carries owl:intersectionOf (rare in OWL/XML but
+        //   valid) and the individual is typed as every member class.
+        "INSERT { ?y <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
+        WHERE { \
+          ?c <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          FILTER(!isBlank(?c)) \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?m . \
+            FILTER NOT EXISTS { ?y <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?m } \
+          } \
+          ?ilist <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?m1 . \
+          ?y <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?m1 . \
+          FILTER NOT EXISTS { ?y <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
+        }",
+
+        // Rule 34: cls-int2 (general) — direct owl:intersectionOf member propagation on named class
+        "INSERT { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?member } \
+        WHERE { \
+          ?c <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          FILTER(!isBlank(?c)) \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?member . \
+          FILTER(!isBlank(?member)) \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c . \
+          FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?member } \
+        }",
+
+        // Rule 35: cls-uni (general) — direct owl:unionOf on named class
+        "INSERT { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
+        WHERE { \
+          ?c <http://www.w3.org/2002/07/owl#unionOf> ?ulist . \
+          FILTER(!isBlank(?c)) \
+          ?ulist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?member . \
+          FILTER(!isBlank(?member)) \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?member . \
+          FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?c } \
+        }",
+
+        // Rule 36: cls-int1 via equivalentClass (general — allows typed blank-node members)
+        //   Supplement to Rule 5: fires when the equivalentClass blank-node intersection
+        //   has some members that are blank-node restrictions (typed via Rules 28/31).
+        "INSERT { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?C } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#equivalentClass> ?bn . \
+          ?bn <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          FILTER NOT EXISTS { \
+            ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?m . \
+            FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?m } \
+          } \
+          ?ilist <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?m1 . \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?m1 . \
+          FILTER NOT EXISTS { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?C } \
+        }",
+
+        // ── Schema rules (OWL 2 RL Table 9) ──────────────────────────────────────
+
+        // Rule 37: scm-sco — rdfs:subClassOf transitivity
+        //   Materialises transitive closure so that scm-dom1/rng1 and other schema rules
+        //   fire across multi-hop subclass chains without needing extra fixpoint iterations.
+        "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c3 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 . \
+          ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c3 . \
+          FILTER(!isBlank(?c3)) \
+          FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c3 } \
+        }",
+
+        // Rule 38a: scm-eqc1 forward — equivalentClass → subClassOf
+        "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2002/07/owl#equivalentClass> ?c2 . \
+          FILTER(!isBlank(?c1)) FILTER(!isBlank(?c2)) \
+          FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        }",
+
+        // Rule 38b: scm-eqc1 backward — equivalentClass → subClassOf (reverse direction)
+        "INSERT { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2002/07/owl#equivalentClass> ?c2 . \
+          FILTER(!isBlank(?c1)) FILTER(!isBlank(?c2)) \
+          FILTER NOT EXISTS { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
+        }",
+
+        // Rule 39: scm-eqc2 — mutual rdfs:subClassOf → owl:equivalentClass
+        "INSERT { ?c1 <http://www.w3.org/2002/07/owl#equivalentClass> ?c2 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 . \
+          ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 . \
+          FILTER(!isBlank(?c1)) FILTER(!isBlank(?c2)) \
+          FILTER(?c1 != ?c2) \
+          FILTER NOT EXISTS { ?c1 <http://www.w3.org/2002/07/owl#equivalentClass> ?c2 } \
+        }",
+
+        // Rule 40: scm-spo — rdfs:subPropertyOf transitivity
+        "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p3 } \
+        WHERE { \
+          ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
+          ?p2 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p3 . \
+          FILTER(!isBlank(?p3)) \
+          FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p3 } \
+        }",
+
+        // Rule 41a: scm-eqp1 forward — equivalentProperty → subPropertyOf
+        "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 } \
+        WHERE { \
+          ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 . \
+          FILTER(!isBlank(?p1)) FILTER(!isBlank(?p2)) \
+          FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 } \
+        }",
+
+        // Rule 41b: scm-eqp1 backward — equivalentProperty → subPropertyOf (reverse direction)
+        "INSERT { ?p2 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p1 } \
+        WHERE { \
+          ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 . \
+          FILTER(!isBlank(?p1)) FILTER(!isBlank(?p2)) \
+          FILTER NOT EXISTS { ?p2 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p1 } \
+        }",
+
+        // Rule 42: scm-eqp2 — mutual rdfs:subPropertyOf → owl:equivalentProperty
+        "INSERT { ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 } \
+        WHERE { \
+          ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
+          ?p2 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p1 . \
+          FILTER(!isBlank(?p1)) FILTER(!isBlank(?p2)) \
+          FILTER(?p1 != ?p2) \
+          FILTER NOT EXISTS { ?p1 <http://www.w3.org/2002/07/owl#equivalentProperty> ?p2 } \
+        }",
+
+        // Rule 43: scm-dom1 — rdfs:domain propagation through rdfs:subClassOf
+        //   If P rdfs:domain C1 and C1 rdfs:subClassOf C2, infer P rdfs:domain C2.
+        "INSERT { ?p <http://www.w3.org/2000/01/rdf-schema#domain> ?c2 } \
+        WHERE { \
+          ?p <http://www.w3.org/2000/01/rdf-schema#domain> ?c1 . \
+          ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 . \
+          FILTER(!isBlank(?c2)) \
+          FILTER NOT EXISTS { ?p <http://www.w3.org/2000/01/rdf-schema#domain> ?c2 } \
+        }",
+
+        // Rule 44: scm-dom2 — rdfs:domain propagation through rdfs:subPropertyOf
+        //   If P2 rdfs:domain C and P1 rdfs:subPropertyOf P2, infer P1 rdfs:domain C.
+        "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#domain> ?c } \
+        WHERE { \
+          ?p2 <http://www.w3.org/2000/01/rdf-schema#domain> ?c . \
+          ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
+          FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#domain> ?c } \
+        }",
+
+        // Rule 45: scm-rng1 — rdfs:range propagation through rdfs:subClassOf
+        //   If P rdfs:range C1 and C1 rdfs:subClassOf C2, infer P rdfs:range C2.
+        "INSERT { ?p <http://www.w3.org/2000/01/rdf-schema#range> ?c2 } \
+        WHERE { \
+          ?p <http://www.w3.org/2000/01/rdf-schema#range> ?c1 . \
+          ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 . \
+          FILTER(!isBlank(?c2)) \
+          FILTER NOT EXISTS { ?p <http://www.w3.org/2000/01/rdf-schema#range> ?c2 } \
+        }",
+
+        // Rule 46: scm-rng2 — rdfs:range propagation through rdfs:subPropertyOf
+        //   If P2 rdfs:range C and P1 rdfs:subPropertyOf P2, infer P1 rdfs:range C.
+        "INSERT { ?p1 <http://www.w3.org/2000/01/rdf-schema#range> ?c } \
+        WHERE { \
+          ?p2 <http://www.w3.org/2000/01/rdf-schema#range> ?c . \
+          ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
+          FILTER NOT EXISTS { ?p1 <http://www.w3.org/2000/01/rdf-schema#range> ?c } \
+        }",
+
+        // Rule 47: scm-int — intersectionOf class → rdfs:subClassOf each member
+        //   Infers that the intersection class is a subclass of every component class.
+        "INSERT { ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?ci } \
+        WHERE { \
+          ?c <http://www.w3.org/2002/07/owl#intersectionOf> ?ilist . \
+          FILTER(!isBlank(?c)) \
+          ?ilist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?ci . \
+          FILTER(!isBlank(?ci)) \
+          FILTER NOT EXISTS { ?c <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?ci } \
+        }",
+
+        // Rule 48: scm-uni — each union member → rdfs:subClassOf the union class
+        "INSERT { ?ci <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c } \
+        WHERE { \
+          ?c <http://www.w3.org/2002/07/owl#unionOf> ?ulist . \
+          FILTER(!isBlank(?c)) \
+          ?ulist (<http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>) ?ci . \
+          FILTER(!isBlank(?ci)) \
+          FILTER NOT EXISTS { ?ci <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c } \
+        }",
+
+        // Rule 49: scm-svf1 — someValuesFrom class subsumption
+        //   If c1 = ∃p.y1, c2 = ∃p.y2, y1 ⊑ y2, then c1 ⊑ c2.
+        "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2002/07/owl#someValuesFrom> ?y1 . \
+          ?c1 <http://www.w3.org/2002/07/owl#onProperty>     ?p . \
+          ?c2 <http://www.w3.org/2002/07/owl#someValuesFrom> ?y2 . \
+          ?c2 <http://www.w3.org/2002/07/owl#onProperty>     ?p . \
+          ?y1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?y2 . \
+          FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        }",
+
+        // Rule 50: scm-svf2 — someValuesFrom property subsumption
+        //   If c1 = ∃p1.y, c2 = ∃p2.y, p1 ⊑ p2, then c1 ⊑ c2.
+        "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2002/07/owl#someValuesFrom> ?y . \
+          ?c1 <http://www.w3.org/2002/07/owl#onProperty>     ?p1 . \
+          ?c2 <http://www.w3.org/2002/07/owl#someValuesFrom> ?y . \
+          ?c2 <http://www.w3.org/2002/07/owl#onProperty>     ?p2 . \
+          ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
+          FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        }",
+
+        // Rule 51: scm-avf1 — allValuesFrom class subsumption
+        //   If c1 = ∀p.y1, c2 = ∀p.y2, y1 ⊑ y2, then c1 ⊑ c2.
+        "INSERT { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2002/07/owl#allValuesFrom> ?y1 . \
+          ?c1 <http://www.w3.org/2002/07/owl#onProperty>    ?p . \
+          ?c2 <http://www.w3.org/2002/07/owl#allValuesFrom> ?y2 . \
+          ?c2 <http://www.w3.org/2002/07/owl#onProperty>    ?p . \
+          ?y1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?y2 . \
+          FILTER NOT EXISTS { ?c1 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c2 } \
+        }",
+
+        // Rule 52: scm-avf2 — allValuesFrom property subsumption (REVERSED direction)
+        //   If c1 = ∀p1.y, c2 = ∀p2.y, p1 ⊑ p2, then c2 ⊑ c1.
+        //   (A stronger property constraint on a broader property range ⟹ more specific class.)
+        "INSERT { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
+        WHERE { \
+          ?c1 <http://www.w3.org/2002/07/owl#allValuesFrom> ?y . \
+          ?c1 <http://www.w3.org/2002/07/owl#onProperty>    ?p1 . \
+          ?c2 <http://www.w3.org/2002/07/owl#allValuesFrom> ?y . \
+          ?c2 <http://www.w3.org/2002/07/owl#onProperty>    ?p2 . \
+          ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
+          FILTER NOT EXISTS { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
         }",
     ]
 }
