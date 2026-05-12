@@ -2263,10 +2263,10 @@ impl OWL2DLValidator {
             match axiom {
                 crate::ontology::Axiom::SubClassOf(axiom)
                     if (self.is_complex_class_expression(&axiom.subclass)
-                        || self.is_complex_class_expression(&axiom.superclass))
-                    => {
-                        has_complex_class_expressions = true;
-                    }
+                        || self.is_complex_class_expression(&axiom.superclass)) =>
+                {
+                    has_complex_class_expressions = true;
+                }
                 crate::ontology::Axiom::EquivalentClasses(axiom) => {
                     for class in &axiom.classes {
                         if self.is_complex_class_expression(class) {

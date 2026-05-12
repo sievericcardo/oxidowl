@@ -202,15 +202,16 @@ impl RLValidator {
                 }
             }
             Axiom::ClassAssertion(class_axiom)
-                if !matches!(&class_axiom.class, ClassExpression::Class(_)) => {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedClassExpression(format!(
-                            "{:?}",
-                            class_axiom.class
-                        )),
-                        "Only atomic classes allowed in assertions in OWL 2 RL profile",
-                    ));
-                }
+                if !matches!(&class_axiom.class, ClassExpression::Class(_)) =>
+            {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedClassExpression(format!(
+                        "{:?}",
+                        class_axiom.class
+                    )),
+                    "Only atomic classes allowed in assertions in OWL 2 RL profile",
+                ));
+            }
             _ => {} // Other axioms checked elsewhere
         }
     }
@@ -516,22 +517,20 @@ impl RLValidator {
         // Check for constructs that would violate this property
         for axiom in ontology.axioms() {
             match axiom {
-                Axiom::DisjointClasses(disjoint_axiom)
-                    if disjoint_axiom.classes.len() > 2 => {
-                        // Pairwise disjointness is preferred for Horn clause translation
-                        report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
-                            "Multi-way disjoint classes may not translate efficiently to Horn clauses",
-                        ));
-                    }
-                Axiom::EquivalentClasses(equiv_axiom)
-                    if equiv_axiom.classes.len() > 2 => {
-                        // Pairwise equivalences are preferred
-                        report.add_violation(ProfileViolation::new(
+                Axiom::DisjointClasses(disjoint_axiom) if disjoint_axiom.classes.len() > 2 => {
+                    // Pairwise disjointness is preferred for Horn clause translation
+                    report.add_violation(ProfileViolation::new(
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                        "Multi-way disjoint classes may not translate efficiently to Horn clauses",
+                    ));
+                }
+                Axiom::EquivalentClasses(equiv_axiom) if equiv_axiom.classes.len() > 2 => {
+                    // Pairwise equivalences are preferred
+                    report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                             "Multi-way equivalent classes should be expressed as pairwise equivalences for Horn clause translation",
                         ));
-                    }
+                }
                 _ => {}
             }
         }

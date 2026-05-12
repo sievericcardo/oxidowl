@@ -728,9 +728,10 @@ impl DeltaComputer {
                     match change {
                         ABoxChange::ClassAssertionAdded { class, .. }
                         | ABoxChange::ClassAssertionRemoved { class, .. }
-                            if class == class_expression => {
-                                return Ok(true);
-                            }
+                            if class == class_expression =>
+                        {
+                            return Ok(true);
+                        }
                         _ => {}
                     }
                 }
@@ -754,9 +755,10 @@ impl DeltaComputer {
                     match change {
                         ABoxChange::ObjectPropertyAssertionAdded { property: prop, .. }
                         | ABoxChange::ObjectPropertyAssertionRemoved { property: prop, .. }
-                            if prop == property => {
-                                return Ok(true);
-                            }
+                            if prop == property =>
+                        {
+                            return Ok(true);
+                        }
                         _ => {}
                     }
                 }
@@ -767,9 +769,10 @@ impl DeltaComputer {
                     match change {
                         ABoxChange::DataPropertyAssertionAdded { property: prop, .. }
                         | ABoxChange::DataPropertyAssertionRemoved { property: prop, .. }
-                            if prop == property => {
-                                return Ok(true);
-                            }
+                            if prop == property =>
+                        {
+                            return Ok(true);
+                        }
                         _ => {}
                     }
                 }

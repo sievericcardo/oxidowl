@@ -140,15 +140,16 @@ impl ExplanationService {
                     explanation.push(axiom.clone());
                 }
                 Axiom::ObjectPropertyAssertion(prop_assertion)
-                    if functional_properties.contains(&prop_assertion.property) => {
-                        property_assertions
-                            .entry((
-                                prop_assertion.source.clone(),
-                                prop_assertion.property.clone(),
-                            ))
-                            .or_insert_with(Vec::new)
-                            .push((prop_assertion.target.clone(), axiom.clone()));
-                    }
+                    if functional_properties.contains(&prop_assertion.property) =>
+                {
+                    property_assertions
+                        .entry((
+                            prop_assertion.source.clone(),
+                            prop_assertion.property.clone(),
+                        ))
+                        .or_insert_with(Vec::new)
+                        .push((prop_assertion.target.clone(), axiom.clone()));
+                }
                 _ => {}
             }
         }
@@ -177,17 +178,16 @@ impl ExplanationService {
         for axiom in ontology.axioms() {
             match axiom {
                 // Check if the class is declared equivalent to owl:Nothing
-                Axiom::EquivalentClasses(equiv_axiom)
-                    if equiv_axiom.classes.contains(class) => {
-                        for equiv_class in &equiv_axiom.classes {
-                            if let ClassExpression::Class(cls) = equiv_class
-                                && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
-                            {
-                                explanation.push(axiom.clone());
-                                break;
-                            }
+                Axiom::EquivalentClasses(equiv_axiom) if equiv_axiom.classes.contains(class) => {
+                    for equiv_class in &equiv_axiom.classes {
+                        if let ClassExpression::Class(cls) = equiv_class
+                            && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+                        {
+                            explanation.push(axiom.clone());
+                            break;
                         }
                     }
+                }
                 // Check if the class is declared as a subclass of owl:Nothing
                 Axiom::SubClassOf(subclass_axiom) => {
                     if subclass_axiom.subclass == *class
@@ -199,9 +199,10 @@ impl ExplanationService {
                 }
                 // Check for disjoint classes that cover all possibilities
                 Axiom::DisjointClasses(disjoint_axiom)
-                    if disjoint_axiom.classes.contains(class) => {
-                        explanation.push(axiom.clone());
-                    }
+                    if disjoint_axiom.classes.contains(class) =>
+                {
+                    explanation.push(axiom.clone());
+                }
                 // Check for contradictory restrictions
                 _ => {
                     // More sophisticated analysis would be needed for complex class expressions
@@ -226,16 +227,16 @@ impl ExplanationService {
             match axiom {
                 Axiom::SubClassOf(subclass_axiom)
                     if subclass_axiom.subclass == *subclass
-                        && subclass_axiom.superclass == *superclass
-                    => {
-                        explanation.push(axiom.clone());
-                    }
+                        && subclass_axiom.superclass == *superclass =>
+                {
+                    explanation.push(axiom.clone());
+                }
                 Axiom::EquivalentClasses(equiv_axiom)
                     if equiv_axiom.classes.contains(subclass)
-                        && equiv_axiom.classes.contains(superclass)
-                    => {
-                        explanation.push(axiom.clone());
-                    }
+                        && equiv_axiom.classes.contains(superclass) =>
+                {
+                    explanation.push(axiom.clone());
+                }
                 _ => {}
             }
         }
@@ -319,28 +320,30 @@ impl ExplanationService {
         for axiom in ontology.axioms() {
             match axiom {
                 Axiom::ClassAssertion(class_assertion)
-                    if class_assertion.individual == *individual => {
-                        // Check if the asserted class is our target or a subclass
-                        if class_assertion.class == *class {
+                    if class_assertion.individual == *individual =>
+                {
+                    // Check if the asserted class is our target or a subclass
+                    if class_assertion.class == *class {
+                        explanation.push(axiom.clone());
+                    } else {
+                        // Look for subsumption relationship
+                        let subsumption_explanation =
+                            self.explain_subsumption(&class_assertion.class, class, ontology)?;
+                        if !subsumption_explanation.is_empty() {
                             explanation.push(axiom.clone());
-                        } else {
-                            // Look for subsumption relationship
-                            let subsumption_explanation =
-                                self.explain_subsumption(&class_assertion.class, class, ontology)?;
-                            if !subsumption_explanation.is_empty() {
-                                explanation.push(axiom.clone());
-                                explanation.extend(subsumption_explanation);
-                            }
+                            explanation.extend(subsumption_explanation);
                         }
                     }
+                }
                 // Look for property assertions that might infer class membership
                 Axiom::ObjectPropertyAssertion(prop_assertion)
-                    if (prop_assertion.source == *individual || prop_assertion.target == *individual)
-                    => {
-                        // Check if this property assertion contributes to class membership
-                        // This would require more sophisticated reasoning about property restrictions
-                        explanation.push(axiom.clone());
-                    }
+                    if (prop_assertion.source == *individual
+                        || prop_assertion.target == *individual) =>
+                {
+                    // Check if this property assertion contributes to class membership
+                    // This would require more sophisticated reasoning about property restrictions
+                    explanation.push(axiom.clone());
+                }
                 _ => {}
             }
         }

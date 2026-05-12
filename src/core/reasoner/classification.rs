@@ -493,10 +493,8 @@ impl ClassificationService {
                     if matches!(&ax.subclass, ClassExpression::Class(_))
                         && matches!(&ax.superclass, ClassExpression::Class(_)) =>
                 {
-                    if let (
-                        ClassExpression::Class(sub),
-                        ClassExpression::Class(sup),
-                    ) = (&ax.subclass, &ax.superclass)
+                    if let (ClassExpression::Class(sub), ClassExpression::Class(sup)) =
+                        (&ax.subclass, &ax.superclass)
                     {
                         superclass_map
                             .entry(sub.iri.clone())
@@ -594,7 +592,9 @@ impl ClassificationService {
                             } else {
                                 // Class is in the hierarchy but not in the signature (e.g. owl:Thing)
                                 instance_classes.insert(ClassExpression::Class(
-                                    crate::ontology::Class { iri: sup_iri.clone() },
+                                    crate::ontology::Class {
+                                        iri: sup_iri.clone(),
+                                    },
                                 ));
                             }
                         }
@@ -1595,9 +1595,10 @@ impl ClassificationService {
                                             individual,
                                             equiv_class,
                                             ontology,
-                                        )? => {
-                                            return Ok(true);
-                                        }
+                                        )? =>
+                                    {
+                                        return Ok(true);
+                                    }
                                     _ => {}
                                 }
                             }
@@ -1625,19 +1626,18 @@ impl ClassificationService {
                                     &subclass_axiom.superclass
                                 && superclass.iri == current_iri
                                 && let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass
-                                    && !visited_s4.contains(&sub_cls.iri) {
-                                        visited_s4.insert(sub_cls.iri.clone());
-                                        // Check only direct assertion — no recursive call.
-                                        if self.check_explicit_class_assertion(
-                                            individual,
-                                            sub_cls,
-                                            ontology,
-                                        )? {
-                                            return Ok(true);
-                                        }
-                                        worklist.push_back(sub_cls.iri.clone());
-                                    }
-                                // Complex subclass expressions are handled by the tableau.
+                                && !visited_s4.contains(&sub_cls.iri)
+                            {
+                                visited_s4.insert(sub_cls.iri.clone());
+                                // Check only direct assertion — no recursive call.
+                                if self
+                                    .check_explicit_class_assertion(individual, sub_cls, ontology)?
+                                {
+                                    return Ok(true);
+                                }
+                                worklist.push_back(sub_cls.iri.clone());
+                            }
+                            // Complex subclass expressions are handled by the tableau.
                         }
                     }
                 }
@@ -1801,10 +1801,8 @@ impl ClassificationService {
 
         // Iterative BFS through the superclass hierarchy to avoid stack overflow
         // on deep or cyclic class graphs.
-        let mut worklist: std::collections::VecDeque<IRI> =
-            std::collections::VecDeque::new();
-        let mut visited: std::collections::HashSet<IRI> =
-            std::collections::HashSet::new();
+        let mut worklist: std::collections::VecDeque<IRI> = std::collections::VecDeque::new();
+        let mut visited: std::collections::HashSet<IRI> = std::collections::HashSet::new();
         worklist.push_back(subclass_iri.clone());
         visited.insert(subclass_iri.clone());
 

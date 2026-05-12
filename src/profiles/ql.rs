@@ -436,15 +436,16 @@ impl QLValidator {
                 }
             }
             Axiom::ClassAssertion(class_axiom)
-                if !self.is_ql_basic_class_expression(&class_axiom.class) => {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedClassExpression(format!(
-                            "{:?}",
-                            class_axiom.class
-                        )),
-                        "Class expression in assertion not allowed in OWL 2 QL profile".to_string(),
-                    ));
-                }
+                if !self.is_ql_basic_class_expression(&class_axiom.class) =>
+            {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedClassExpression(format!(
+                        "{:?}",
+                        class_axiom.class
+                    )),
+                    "Class expression in assertion not allowed in OWL 2 QL profile".to_string(),
+                ));
+            }
             _ => {} // Other axioms checked elsewhere
         }
     }

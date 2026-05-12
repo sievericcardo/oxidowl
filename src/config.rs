@@ -578,7 +578,7 @@ impl Default for ReasoningConfig {
             expansion_strategy: ExpansionStrategy::CreationOrder,
             features,
             timeout: Some(Duration::from_mins(5)), // 5 minutes
-            max_memory_mb: Some(4096),               // 4 GB
+            max_memory_mb: Some(4096),             // 4 GB
             incremental_reasoning: false,
             max_expansion_depth: 100,
             ignore_unsupported_datatypes: false,
@@ -610,7 +610,7 @@ impl Default for ReasonerConfig {
                 expansion_strategy: ExpansionStrategy::CreationOrder,
                 features: reasoning_features,
                 timeout: Some(Duration::from_mins(5)), // 5 minutes
-                max_memory_mb: Some(4096),               // 4 GB
+                max_memory_mb: Some(4096),             // 4 GB
                 incremental_reasoning: false,
                 max_expansion_depth: 100,
                 ignore_unsupported_datatypes: false,

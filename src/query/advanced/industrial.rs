@@ -673,23 +673,25 @@ impl IndustrialOptimizer {
         for axiom in ontology.axioms() {
             match axiom {
                 crate::ontology::Axiom::SubClassOf(ax)
-                    if (chunk.contains(&ax.subclass) || chunk.contains(&ax.superclass)) => {
-                        // Add related concepts
-                        if !concepts.contains(&ax.subclass) {
-                            concepts.push(ax.subclass.clone());
-                        }
-                        if !concepts.contains(&ax.superclass) {
-                            concepts.push(ax.superclass.clone());
-                        }
+                    if (chunk.contains(&ax.subclass) || chunk.contains(&ax.superclass)) =>
+                {
+                    // Add related concepts
+                    if !concepts.contains(&ax.subclass) {
+                        concepts.push(ax.subclass.clone());
                     }
+                    if !concepts.contains(&ax.superclass) {
+                        concepts.push(ax.superclass.clone());
+                    }
+                }
                 crate::ontology::Axiom::EquivalentClasses(ax)
-                    if ax.classes.iter().any(|c| chunk.contains(c)) => {
-                        for class_expr in &ax.classes {
-                            if !concepts.contains(class_expr) {
-                                concepts.push(class_expr.clone());
-                            }
+                    if ax.classes.iter().any(|c| chunk.contains(c)) =>
+                {
+                    for class_expr in &ax.classes {
+                        if !concepts.contains(class_expr) {
+                            concepts.push(class_expr.clone());
                         }
                     }
+                }
                 _ => {}
             }
         }

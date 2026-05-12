@@ -2256,24 +2256,26 @@ impl TurtleParser {
                 }
                 '{' if !in_iri && !in_literal
                     // RDF 1.2: {| starts an annotation block
-                    && i + 1 < chars.len() && chars[i + 1] == '|' => {
-                        if !current_token.is_empty() {
-                            self.add_token_from_string(&current_token, &mut tokens);
-                            current_token.clear();
-                        }
-                        tokens.push(Token::AnnotationOpen);
-                        i += 1; // skip the |
+                    && i + 1 < chars.len() && chars[i + 1] == '|' =>
+                {
+                    if !current_token.is_empty() {
+                        self.add_token_from_string(&current_token, &mut tokens);
+                        current_token.clear();
                     }
+                    tokens.push(Token::AnnotationOpen);
+                    i += 1; // skip the |
+                }
                 '|' if !in_iri && !in_literal
                     // RDF 1.2: |} closes an annotation block
-                    && i + 1 < chars.len() && chars[i + 1] == '}' => {
-                        if !current_token.is_empty() {
-                            self.add_token_from_string(&current_token, &mut tokens);
-                            current_token.clear();
-                        }
-                        tokens.push(Token::AnnotationClose);
-                        i += 1; // skip the }
+                    && i + 1 < chars.len() && chars[i + 1] == '}' =>
+                {
+                    if !current_token.is_empty() {
+                        self.add_token_from_string(&current_token, &mut tokens);
+                        current_token.clear();
                     }
+                    tokens.push(Token::AnnotationClose);
+                    i += 1; // skip the }
+                }
                 '.' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
