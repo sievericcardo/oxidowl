@@ -279,7 +279,7 @@ impl HypertableauExpansion {
 
             // Queue expansions (separate loop to avoid borrow conflicts)
             for (concept_name, concept_expr) in
-                concept_names.into_iter().zip(concept_exprs.into_iter())
+                concept_names.into_iter().zip(concept_exprs)
             {
                 self.queue_expansion(
                     task.node_id,

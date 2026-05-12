@@ -368,26 +368,24 @@ impl Reasoner {
             // Check all class expressions in the ontology for subsumption
             for axiom in ontology.axioms() {
                 match axiom {
-                    crate::ontology::Axiom::SubClassOf(subclass_axiom) => {
+                    crate::ontology::Axiom::SubClassOf(subclass_axiom)
                         // If the subclass is our target class, the superclass is a superclass
-                        if self.classes_equivalent(&subclass_axiom.subclass, class)? {
+                        if self.classes_equivalent(&subclass_axiom.subclass, class)? => {
                             superclasses.push(subclass_axiom.superclass.clone());
                         }
-                    }
-                    crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
+                    crate::ontology::Axiom::EquivalentClasses(equiv_axiom)
                         // For equivalent classes, all others are both sub and superclasses
                         if equiv_axiom
                             .classes
                             .iter()
                             .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
-                        {
+                        => {
                             for other_class in &equiv_axiom.classes {
                                 if !self.classes_equivalent(other_class, class).unwrap_or(false) {
                                     superclasses.push(other_class.clone());
                                 }
                             }
                         }
-                    }
                     _ => {}
                 }
             }
@@ -425,26 +423,24 @@ impl Reasoner {
             // Check all class expressions in the ontology for subsumption
             for axiom in ontology.axioms() {
                 match axiom {
-                    crate::ontology::Axiom::SubClassOf(subclass_axiom) => {
+                    crate::ontology::Axiom::SubClassOf(subclass_axiom)
                         // If the superclass is our target class, the subclass is a subclass
-                        if self.classes_equivalent(&subclass_axiom.superclass, class)? {
+                        if self.classes_equivalent(&subclass_axiom.superclass, class)? => {
                             subclasses.push(subclass_axiom.subclass.clone());
                         }
-                    }
-                    crate::ontology::Axiom::EquivalentClasses(equiv_axiom) => {
+                    crate::ontology::Axiom::EquivalentClasses(equiv_axiom)
                         // For equivalent classes, all others are both sub and superclasses
                         if equiv_axiom
                             .classes
                             .iter()
                             .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
-                        {
+                        => {
                             for other_class in &equiv_axiom.classes {
                                 if !self.classes_equivalent(other_class, class).unwrap_or(false) {
                                     subclasses.push(other_class.clone());
                                 }
                             }
                         }
-                    }
                     _ => {}
                 }
             }
@@ -725,24 +721,22 @@ impl Reasoner {
                     // Look for axioms that support this subsumption
                     for ont_axiom in ontology.axioms() {
                         match ont_axiom {
-                            crate::ontology::Axiom::SubClassOf(ont_subclass) => {
+                            crate::ontology::Axiom::SubClassOf(ont_subclass)
                                 // Direct support or transitive support: A ⊑ B, B ⊑ C → A ⊑ C
-                                if (ont_subclass.subclass == subclass_axiom.subclass
+                                if ((ont_subclass.subclass == subclass_axiom.subclass
                                     && ont_subclass.superclass == subclass_axiom.superclass)
                                     || ont_subclass.superclass == subclass_axiom.subclass
-                                    || ont_subclass.subclass == subclass_axiom.superclass
-                                {
+                                    || ont_subclass.subclass == subclass_axiom.superclass)
+                                => {
                                     explanation.push(ont_axiom.clone());
                                 }
-                            }
-                            crate::ontology::Axiom::EquivalentClasses(equiv) => {
+                            crate::ontology::Axiom::EquivalentClasses(equiv)
                                 // Equivalence support
-                                if equiv.classes.contains(&subclass_axiom.subclass)
-                                    || equiv.classes.contains(&subclass_axiom.superclass)
-                                {
+                                if (equiv.classes.contains(&subclass_axiom.subclass)
+                                    || equiv.classes.contains(&subclass_axiom.superclass))
+                                => {
                                     explanation.push(ont_axiom.clone());
                                 }
-                            }
                             _ => {}
                         }
                     }

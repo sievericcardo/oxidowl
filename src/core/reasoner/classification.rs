@@ -291,15 +291,14 @@ impl ClassificationService {
 
         for axiom in ontology.axioms() {
             match axiom {
-                crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
+                crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom)
                     // Direct told subsumption
-                    if classes.contains(&subclass_axiom.subclass) {
+                    if classes.contains(&subclass_axiom.subclass) => {
                         let entry = hierarchy
                             .entry(subclass_axiom.subclass.clone())
                             .or_insert_with(HashSet::new);
                         entry.insert(subclass_axiom.superclass.clone());
                     }
-                }
                 crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) => {
                     // Equivalent classes are mutual subsumers
                     for class1 in &equiv_axiom.classes {
@@ -1591,15 +1590,14 @@ impl ClassificationService {
                                     | ClassExpression::ObjectSomeValuesFrom { .. }
                                     | ClassExpression::ObjectHasValue { .. }
                                     | ClassExpression::DataSomeValuesFrom { .. }
-                                    | ClassExpression::DataHasValue { .. } => {
+                                    | ClassExpression::DataHasValue { .. }
                                         if self.check_complex_expression(
                                             individual,
                                             equiv_class,
                                             ontology,
-                                        )? {
+                                        )? => {
                                             return Ok(true);
                                         }
-                                    }
                                     _ => {}
                                 }
                             }
@@ -1626,9 +1624,8 @@ impl ClassificationService {
                                 && let ClassExpression::Class(superclass) =
                                     &subclass_axiom.superclass
                                 && superclass.iri == current_iri
-                            {
-                                if let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass {
-                                    if !visited_s4.contains(&sub_cls.iri) {
+                                && let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass
+                                    && !visited_s4.contains(&sub_cls.iri) {
                                         visited_s4.insert(sub_cls.iri.clone());
                                         // Check only direct assertion — no recursive call.
                                         if self.check_explicit_class_assertion(
@@ -1640,9 +1637,7 @@ impl ClassificationService {
                                         }
                                         worklist.push_back(sub_cls.iri.clone());
                                     }
-                                }
                                 // Complex subclass expressions are handled by the tableau.
-                            }
                         }
                     }
                 }

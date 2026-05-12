@@ -2216,25 +2216,22 @@ impl AdvancedQueryRewriter {
         // Check specific applicability conditions
         for condition in &rule.conditions {
             match condition {
-                ApplicabilityCondition::MinComplexity(_min_complexity) => {
+                ApplicabilityCondition::MinComplexity(_min_complexity)
                     // Would calculate actual complexity
-                    if query.body_atoms.len() < 2 {
+                    if query.body_atoms.len() < 2 => {
                         return false;
                     }
-                }
                 ApplicabilityCondition::MaxComplexity(_max_complexity) => {
                     // Would check if query is too complex
                 }
-                ApplicabilityCondition::MinImprovement(min_imp) => {
-                    if rule.expected_improvement < *min_imp {
+                ApplicabilityCondition::MinImprovement(min_imp)
+                    if rule.expected_improvement < *min_imp => {
                         return false;
                     }
-                }
-                ApplicabilityCondition::IndexAvailable(idx_name) => {
-                    if !context.available_indices.contains(idx_name) {
+                ApplicabilityCondition::IndexAvailable(idx_name)
+                    if !context.available_indices.contains(idx_name) => {
                         return false;
                     }
-                }
                 _ => {
                     // Other conditions
                 }
@@ -2506,7 +2503,7 @@ impl Default for AutoAdjustmentConfig {
             enable_auto_adjustment: false, // Conservative default
             adjustment_threshold: 0.8,
             min_feedback_samples: 50,
-            adjustment_frequency: Duration::from_secs(3600), // 1 hour
+            adjustment_frequency: Duration::from_hours(1), // 1 hour
             conservative_mode: true,
         }
     }

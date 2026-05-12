@@ -727,11 +727,10 @@ impl DeltaComputer {
                 for change in abox_changes {
                     match change {
                         ABoxChange::ClassAssertionAdded { class, .. }
-                        | ABoxChange::ClassAssertionRemoved { class, .. } => {
-                            if class == class_expression {
+                        | ABoxChange::ClassAssertionRemoved { class, .. }
+                            if class == class_expression => {
                                 return Ok(true);
                             }
-                        }
                         _ => {}
                     }
                 }
@@ -741,12 +740,11 @@ impl DeltaComputer {
                 for change in tbox_changes {
                     match change {
                         TBoxChange::ObjectPropertyAdded { property: prop, .. }
-                        | TBoxChange::ObjectPropertyRemoved { property: prop, .. } => {
+                        | TBoxChange::ObjectPropertyRemoved { property: prop, .. }
                             // Simplified check - would need more sophisticated property matching
-                            if format!("{property:?}").contains(&prop.iri.to_string()) {
+                            if format!("{property:?}").contains(&prop.iri.to_string()) => {
                                 return Ok(true);
                             }
-                        }
                         _ => {}
                     }
                 }
@@ -755,11 +753,10 @@ impl DeltaComputer {
                 for change in abox_changes {
                     match change {
                         ABoxChange::ObjectPropertyAssertionAdded { property: prop, .. }
-                        | ABoxChange::ObjectPropertyAssertionRemoved { property: prop, .. } => {
-                            if prop == property {
+                        | ABoxChange::ObjectPropertyAssertionRemoved { property: prop, .. }
+                            if prop == property => {
                                 return Ok(true);
                             }
-                        }
                         _ => {}
                     }
                 }
@@ -769,11 +766,10 @@ impl DeltaComputer {
                 for change in abox_changes {
                     match change {
                         ABoxChange::DataPropertyAssertionAdded { property: prop, .. }
-                        | ABoxChange::DataPropertyAssertionRemoved { property: prop, .. } => {
-                            if prop == property {
+                        | ABoxChange::DataPropertyAssertionRemoved { property: prop, .. }
+                            if prop == property => {
                                 return Ok(true);
                             }
-                        }
                         _ => {}
                     }
                 }

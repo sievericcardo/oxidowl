@@ -405,7 +405,7 @@ impl FaultTolerance {
                         FaultQueryMsg::RecordFailure { node_id } => {
                             let breaker = circuit_breakers
                                 .entry(node_id)
-                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_secs(60)));
+                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_mins(1)));
                             breaker.record_failure();
                         }
                         FaultQueryMsg::GetCircuitBreaker { node_id, tx } => {
@@ -896,7 +896,7 @@ impl FailureDetector {
 
         // Start periodic health checks
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_millis(5000)); // 5-second checks
+            let mut interval = interval(Duration::from_secs(5)); // 5-second checks
 
             loop {
                 tokio::select! {

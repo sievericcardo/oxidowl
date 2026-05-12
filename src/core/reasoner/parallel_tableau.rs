@@ -131,7 +131,7 @@ impl ParallelTableauExpander {
         // Sort tasks by priority (highest first) so that high-value tests
         // are dispatched to workers early.
         let mut sorted_tasks = tasks;
-        sorted_tasks.sort_unstable_by(|a, b| b.priority.cmp(&a.priority));
+        sorted_tasks.sort_unstable_by_key(|b| std::cmp::Reverse(b.priority));
 
         let cycle_detector = Arc::clone(&self.cycle_detector);
 

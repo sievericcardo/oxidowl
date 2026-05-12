@@ -2254,32 +2254,26 @@ impl TurtleParser {
                     }
                     tokens.push(Token::Semicolon);
                 }
-                '{' if !in_iri && !in_literal => {
+                '{' if !in_iri && !in_literal
                     // RDF 1.2: {| starts an annotation block
-                    if i + 1 < chars.len() && chars[i + 1] == '|' {
+                    && i + 1 < chars.len() && chars[i + 1] == '|' => {
                         if !current_token.is_empty() {
                             self.add_token_from_string(&current_token, &mut tokens);
                             current_token.clear();
                         }
                         tokens.push(Token::AnnotationOpen);
                         i += 1; // skip the |
-                    } else {
-                        current_token.push(ch);
                     }
-                }
-                '|' if !in_iri && !in_literal => {
+                '|' if !in_iri && !in_literal
                     // RDF 1.2: |} closes an annotation block
-                    if i + 1 < chars.len() && chars[i + 1] == '}' {
+                    && i + 1 < chars.len() && chars[i + 1] == '}' => {
                         if !current_token.is_empty() {
                             self.add_token_from_string(&current_token, &mut tokens);
                             current_token.clear();
                         }
                         tokens.push(Token::AnnotationClose);
                         i += 1; // skip the }
-                    } else {
-                        current_token.push(ch);
                     }
-                }
                 '.' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);

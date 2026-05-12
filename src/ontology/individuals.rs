@@ -355,35 +355,32 @@ impl IndividualStore {
     pub fn add_assertion(&mut self, assertion: IndividualAssertion) -> Result<(), Error> {
         // Validate the assertion before adding it
         match &assertion {
-            IndividualAssertion::ClassAssertion { individual, class } => {
-                if !self.is_valid_class_assertion(individual, class) {
+            IndividualAssertion::ClassAssertion { individual, class }
+                if !self.is_valid_class_assertion(individual, class) => {
                     return Err(Error::InvalidAssertion {
                         message: "Invalid class assertion".to_string(),
                     });
                 }
-            }
             IndividualAssertion::ObjectPropertyAssertion {
                 subject,
                 object,
                 property,
-            } => {
-                if !self.is_valid_object_property_assertion(subject, object, property) {
+            }
+                if !self.is_valid_object_property_assertion(subject, object, property) => {
                     return Err(Error::InvalidAssertion {
                         message: "Invalid object property assertion".to_string(),
                     });
                 }
-            }
             IndividualAssertion::DataPropertyAssertion {
                 subject,
                 value,
                 property,
-            } => {
-                if !self.is_valid_data_property_assertion(subject, value, property) {
+            }
+                if !self.is_valid_data_property_assertion(subject, value, property) => {
                     return Err(Error::InvalidAssertion {
                         message: "Invalid data property assertion".to_string(),
                     });
                 }
-            }
             _ => {}
         }
 

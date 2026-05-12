@@ -920,9 +920,9 @@ impl SyntaxValidator {
                         depth -= 1;
                     }
                 }
-                Ok(Event::Text(ref e)) => {
+                Ok(Event::Text(ref e))
                     // Check if there's significant text content directly under rdf:RDF
-                    if inside_rdf_root && depth == 0 {
+                    if inside_rdf_root && depth == 0 => {
                         let text = String::from_utf8_lossy(e);
                         let trimmed_text = text.trim();
                         // If there's non-whitespace text directly in rdf:RDF, it's invalid
@@ -932,7 +932,6 @@ impl SyntaxValidator {
                             )));
                         }
                     }
-                }
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     return Err(Error::ontology_parsing(format!(

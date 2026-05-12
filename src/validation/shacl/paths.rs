@@ -50,7 +50,7 @@ pub fn resolve_values(
 ) -> Result<Vec<RdfTerm>> {
     let focus_str = term_to_sparql_subject(focus_node);
     let path_expr = path.to_sparql_path();
-    let query = format!("SELECT ?value WHERE {{ {focus_str} {path_expr} ?value }}",);
+    let query = format!("SELECT ?value WHERE {{ {focus_str} {path_expr} ?value }}");
 
     let rows = store.execute_select(&query)?;
     let mut values = Vec::new();

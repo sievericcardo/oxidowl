@@ -89,7 +89,7 @@ impl ParallelClassificationScheduler {
         }
 
         // Sort by priority (higher priority first)
-        tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
+        tasks.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
         self.total_tests.store(tasks.len(), Ordering::Relaxed);
         info!("Scheduled {} parallel subsumption tests", tasks.len());

@@ -116,9 +116,9 @@ impl QLValidator {
                         }
                     }
                 }
-                Axiom::ClassAssertion(class_assertion) => {
+                Axiom::ClassAssertion(class_assertion)
                     // Class must be basic
-                    if !self.is_ql_basic_class_expression(&class_assertion.class) {
+                    if !self.is_ql_basic_class_expression(&class_assertion.class) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -127,7 +127,6 @@ impl QLValidator {
                             format!("Non-basic class in assertion: {:?}", class_assertion.class),
                         ));
                     }
-                }
                 _ => {}
             }
         }
@@ -170,9 +169,9 @@ impl QLValidator {
                         ));
                     }
                 }
-                Axiom::ObjectPropertyDomain(domain_axiom) => {
+                Axiom::ObjectPropertyDomain(domain_axiom)
                     // Domain must be basic class expression
-                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) {
+                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -181,10 +180,9 @@ impl QLValidator {
                             format!("Non-basic domain in QL: {:?}", domain_axiom.domain),
                         ));
                     }
-                }
-                Axiom::ObjectPropertyRange(range_axiom) => {
+                Axiom::ObjectPropertyRange(range_axiom)
                     // Range must be basic class expression
-                    if !self.is_ql_basic_class_expression(&range_axiom.range) {
+                    if !self.is_ql_basic_class_expression(&range_axiom.range) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -193,10 +191,9 @@ impl QLValidator {
                             format!("Non-basic range in QL: {:?}", range_axiom.range),
                         ));
                     }
-                }
-                Axiom::DataPropertyDomain(domain_axiom) => {
+                Axiom::DataPropertyDomain(domain_axiom)
                     // Domain must be basic class expression
-                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) {
+                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -205,10 +202,9 @@ impl QLValidator {
                             format!("Non-basic domain in QL: {:?}", domain_axiom.domain),
                         ));
                     }
-                }
-                Axiom::ClassAssertion(class_axiom) => {
+                Axiom::ClassAssertion(class_axiom)
                     // Class must be basic
-                    if !self.is_ql_basic_class_expression(&class_axiom.class) {
+                    if !self.is_ql_basic_class_expression(&class_axiom.class) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -217,7 +213,6 @@ impl QLValidator {
                             format!("Non-basic class in assertion: {:?}", class_axiom.class),
                         ));
                     }
-                }
                 _ => {}
             }
         }
@@ -440,8 +435,8 @@ impl QLValidator {
                     ));
                 }
             }
-            Axiom::ClassAssertion(class_axiom) => {
-                if !self.is_ql_basic_class_expression(&class_axiom.class) {
+            Axiom::ClassAssertion(class_axiom)
+                if !self.is_ql_basic_class_expression(&class_axiom.class) => {
                     report.add_violation(ProfileViolation::new(
                         ProfileViolationType::DisallowedClassExpression(format!(
                             "{:?}",
@@ -450,7 +445,6 @@ impl QLValidator {
                         "Class expression in assertion not allowed in OWL 2 QL profile".to_string(),
                     ));
                 }
-            }
             _ => {} // Other axioms checked elsewhere
         }
     }
