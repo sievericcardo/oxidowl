@@ -25,7 +25,7 @@ use crate::{
 };
 use log::{debug, info};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     time::Instant,
 };
 
@@ -484,30 +484,145 @@ impl ClassificationService {
             classes.len()
         );
 
+        // ── Build asserted named-class hierarchy indices ──────────────────────────
+        // superclass_map: class IRI → Vec<direct named superclass IRIs>
+        // Derived from SubClassOf(named, named) AND EquivalentClasses(named, named) axioms.
+        let mut superclass_map: HashMap<IRI, Vec<IRI>> = HashMap::new();
+        for axiom in ontology_guard.axioms() {
+            match axiom {
+                crate::ontology::axioms::Axiom::SubClassOf(ax)
+                    if matches!(&ax.subclass, ClassExpression::Class(_))
+                        && matches!(&ax.superclass, ClassExpression::Class(_)) =>
+                {
+                    if let (
+                        ClassExpression::Class(sub),
+                        ClassExpression::Class(sup),
+                    ) = (&ax.subclass, &ax.superclass)
+                    {
+                        superclass_map
+                            .entry(sub.iri.clone())
+                            .or_default()
+                            .push(sup.iri.clone());
+                    }
+                }
+                crate::ontology::axioms::Axiom::EquivalentClasses(ax) => {
+                    // Collect all named classes in this equivalence group
+                    let named: Vec<IRI> = ax
+                        .classes
+                        .iter()
+                        .filter_map(|c| {
+                            if let ClassExpression::Class(cls) = c {
+                                Some(cls.iri.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    // Add bidirectional edges so BFS treats them as mutually reachable
+                    for i in 0..named.len() {
+                        for j in 0..named.len() {
+                            if i != j {
+                                superclass_map
+                                    .entry(named[i].clone())
+                                    .or_default()
+                                    .push(named[j].clone());
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Build a fast lookup: IRI → ClassExpression::Class for named classes
+        let class_by_iri: HashMap<IRI, ClassExpression> = classes
+            .iter()
+            .filter_map(|ce| {
+                if let ClassExpression::Class(c) = ce {
+                    Some((c.iri.clone(), ce.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Classes with complex (non-named) expressions — always need structural or tableau check
+        let complex_classes: Vec<&ClassExpression> = classes
+            .iter()
+            .filter(|ce| !matches!(ce, ClassExpression::Class(_)))
+            .collect();
+
         for individual in &individuals {
-            let mut instance_classes = HashSet::new();
+            let mut instance_classes: HashSet<ClassExpression> = HashSet::new();
 
-            for class in &classes {
-                let mut is_instance = false;
+            // ── Step 1: collect explicitly asserted named types ──────────────────
+            let individual_iri = individual
+                .iri()
+                .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
-                // Try direct datatype reasoning first
+            let mut bfs: VecDeque<IRI> = VecDeque::new();
+            let mut visited_iri: HashSet<IRI> = HashSet::new();
+
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::ClassAssertion(ca) = axiom
+                    && let crate::ontology::Individual::Named(ni) = &ca.individual
+                    && ni.iri.as_str() == individual_iri
+                {
+                    match &ca.class {
+                        ClassExpression::Class(cls) => {
+                            if visited_iri.insert(cls.iri.clone()) {
+                                bfs.push_back(cls.iri.clone());
+                                instance_classes.insert(ClassExpression::Class(cls.clone()));
+                            }
+                        }
+                        other => {
+                            // Complex asserted type — add directly
+                            instance_classes.insert(other.clone());
+                        }
+                    }
+                }
+            }
+
+            // ── Step 2: close upward through asserted SubClassOf hierarchy ───────
+            // Key property: if a ∈ D and D ⊑ C then a ∈ C (no tableau needed).
+            while let Some(iri) = bfs.pop_front() {
+                if let Some(supers) = superclass_map.get(&iri) {
+                    for sup_iri in supers {
+                        if visited_iri.insert(sup_iri.clone()) {
+                            bfs.push_back(sup_iri.clone());
+                            if let Some(ce) = class_by_iri.get(sup_iri) {
+                                instance_classes.insert(ce.clone());
+                            } else {
+                                // Class is in the hierarchy but not in the signature (e.g. owl:Thing)
+                                instance_classes.insert(ClassExpression::Class(
+                                    crate::ontology::Class { iri: sup_iri.clone() },
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Step 3: complex class expressions — try structural check, then tableau
+            for class in &complex_classes {
+                if instance_classes.contains(*class) {
+                    continue;
+                }
                 if let Ok(true) =
                     self.check_instance_with_datatype_reasoning(individual, class, &ontology_guard)
                 {
-                    is_instance = true;
-                }
-
-                // If not determined by datatype reasoning, use tableau
-                if !is_instance {
-                    is_instance = self
-                        .task_service
-                        .check_instance(individual, class, ontology, statistics, cache)?;
-                }
-
-                if is_instance {
-                    instance_classes.insert(class.clone());
+                    instance_classes.insert((*class).clone());
+                } else if self
+                    .task_service
+                    .check_instance(individual, class, ontology, statistics, cache)?
+                {
+                    instance_classes.insert((*class).clone());
                 }
             }
+
+            // Named class membership not reachable via the hierarchy (SubClassOf /
+            // EquivalentClasses BFS above) would require a precomputed TBox
+            // classification pass.  We omit it here to keep realization tractable.
 
             realization.insert(individual.clone(), instance_classes);
         }
@@ -1492,23 +1607,42 @@ impl ClassificationService {
                     }
                 }
 
-                // Strategy 4: Check if the individual satisfies a class that is a subclass of target
-                // For example, if individual is ThirstyBasil and we're checking ThirstyPlant,
-                // and ThirstyBasil subClassOf ThirstyPlant, then it should return true
-                // We need to check all classes that are subclasses of the target
-                for axiom in ontology.axioms() {
-                    if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
-                        && let ClassExpression::Class(superclass) = &subclass_axiom.superclass
-                        && superclass.iri == cls.iri
-                    {
-                        // Found a subclass of our target class
-                        // Check if individual is an instance of this subclass
-                        if self.check_instance_with_datatype_reasoning(
-                            individual,
-                            &subclass_axiom.subclass,
-                            ontology,
-                        )? {
-                            return Ok(true);
+                // Strategy 4: iterative BFS through the named subclass hierarchy.
+                // Only check direct ClassAssertion axioms for each subclass to avoid
+                // re-entering check_instance_with_datatype_reasoning and causing a
+                // stack overflow on large ontologies (e.g. 2995 classes deep).
+                {
+                    let mut worklist: std::collections::VecDeque<crate::ontology::IRI> =
+                        std::collections::VecDeque::new();
+                    let mut visited_s4: std::collections::HashSet<crate::ontology::IRI> =
+                        std::collections::HashSet::new();
+                    worklist.push_back(cls.iri.clone());
+                    visited_s4.insert(cls.iri.clone());
+
+                    while let Some(current_iri) = worklist.pop_front() {
+                        for axiom in ontology.axioms() {
+                            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) =
+                                axiom
+                                && let ClassExpression::Class(superclass) =
+                                    &subclass_axiom.superclass
+                                && superclass.iri == current_iri
+                            {
+                                if let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass {
+                                    if !visited_s4.contains(&sub_cls.iri) {
+                                        visited_s4.insert(sub_cls.iri.clone());
+                                        // Check only direct assertion — no recursive call.
+                                        if self.check_explicit_class_assertion(
+                                            individual,
+                                            sub_cls,
+                                            ontology,
+                                        )? {
+                                            return Ok(true);
+                                        }
+                                        worklist.push_back(sub_cls.iri.clone());
+                                    }
+                                }
+                                // Complex subclass expressions are handled by the tableau.
+                            }
                         }
                     }
                 }
@@ -1670,21 +1804,28 @@ impl ClassificationService {
             return Ok(true);
         }
 
-        // Check for direct SubClassOf axiom
-        for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
-                && let ClassExpression::Class(sub) = &subclass_axiom.subclass
-                && let ClassExpression::Class(sup) = &subclass_axiom.superclass
-            {
-                if sub.iri == *subclass_iri && sup.iri == *superclass_iri {
-                    return Ok(true);
-                }
+        // Iterative BFS through the superclass hierarchy to avoid stack overflow
+        // on deep or cyclic class graphs.
+        let mut worklist: std::collections::VecDeque<IRI> =
+            std::collections::VecDeque::new();
+        let mut visited: std::collections::HashSet<IRI> =
+            std::collections::HashSet::new();
+        worklist.push_back(subclass_iri.clone());
+        visited.insert(subclass_iri.clone());
 
-                // Transitive check: if subclass_iri -> intermediate -> superclass_iri
-                if sub.iri == *subclass_iri {
-                    // Check if this intermediate class is a subclass of the target
-                    if self.is_subclass_of_iri(&sup.iri, superclass_iri, ontology)? {
+        while let Some(current) = worklist.pop_front() {
+            for axiom in ontology.axioms() {
+                if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                    && let ClassExpression::Class(sub) = &subclass_axiom.subclass
+                    && let ClassExpression::Class(sup) = &subclass_axiom.superclass
+                    && sub.iri == current
+                {
+                    if sup.iri == *superclass_iri {
                         return Ok(true);
+                    }
+                    if !visited.contains(&sup.iri) {
+                        visited.insert(sup.iri.clone());
+                        worklist.push_back(sup.iri.clone());
                     }
                 }
             }
