@@ -492,6 +492,10 @@ impl FunctionalParser {
                 // Simple SWRL rule parsing with minimal overhead
                 position = self.parse_swrl_rule(tokens, position)?;
             }
+            "SubObjectPropertyOf" => {
+                position =
+                    self.parse_sub_object_property_of(tokens, position, ontology, prefixes)?;
+            }
             _ => {
                 // Skip unknown constructs
                 position += 1;
@@ -755,8 +759,41 @@ impl FunctionalParser {
 
         let token = &tokens[position];
 
+        // Handle ObjectPropertyChain
+        if token == "ObjectPropertyChain" {
+            position += 1; // Skip "ObjectPropertyChain"
+            if position < tokens.len() && tokens[position] == "(" {
+                position += 1; // Skip "("
+
+                let mut chain: Vec<crate::ontology::ObjectPropertyExpression> = Vec::new();
+                while position < tokens.len() && tokens[position] != ")" {
+                    let (prop, new_pos) =
+                        self.parse_object_property_expression(tokens, position, prefixes)?;
+                    chain.push(prop);
+                    position = new_pos;
+                }
+
+                if position < tokens.len() && tokens[position] == ")" {
+                    position += 1; // Skip ")"
+                }
+
+                if chain.len() < 2 {
+                    return Err(Error::ontology_parsing(
+                        "ObjectPropertyChain must contain at least 2 properties".to_string(),
+                    ));
+                }
+
+                Ok((
+                    crate::ontology::ObjectPropertyExpression::PropertyChain(chain),
+                    position,
+                ))
+            } else {
+                Err(Error::ontology_parsing(
+                    "Expected '(' after ObjectPropertyChain".to_string(),
+                ))
+            }
         // Handle ObjectInverseOf
-        if token == "ObjectInverseOf" {
+        } else if token == "ObjectInverseOf" {
             position += 1; // Skip "ObjectInverseOf"
             if position < tokens.len() && tokens[position] == "(" {
                 position += 1; // Skip "("
@@ -806,6 +843,46 @@ impl FunctionalParser {
                 position,
             ))
         }
+    }
+
+    /// Parse `SubObjectPropertyOf` axiom:
+    /// `SubObjectPropertyOf`(<sub> <super>) where sub may be `ObjectPropertyChain`(...)
+    fn parse_sub_object_property_of(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        ontology: &mut Ontology,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<usize> {
+        position += 1; // Skip "SubObjectPropertyOf"
+        if position < tokens.len() && tokens[position] == "(" {
+            position += 1; // Skip "("
+
+            position = self.skip_annotations(tokens, position);
+
+            // Parse sub-property (simple IRI, ObjectInverseOf, or ObjectPropertyChain)
+            let (sub_property, new_pos) =
+                self.parse_object_property_expression(tokens, position, prefixes)?;
+            position = new_pos;
+
+            // Parse super-property
+            let (super_property, new_pos) =
+                self.parse_object_property_expression(tokens, position, prefixes)?;
+            position = new_pos;
+
+            let axiom = crate::ontology::SubObjectPropertyOfAxiom {
+                id: generate_axiom_id(),
+                sub_property,
+                super_property,
+                annotations: vec![],
+            };
+            ontology.add_axiom(crate::ontology::Axiom::SubObjectPropertyOf(axiom));
+
+            if position < tokens.len() && tokens[position] == ")" {
+                position += 1; // Skip ")"
+            }
+        }
+        Ok(position)
     }
 
     /// Parse a data range from tokens

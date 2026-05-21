@@ -228,10 +228,10 @@ impl Tableau {
         for axiom in ontology.axioms() {
             match axiom {
                 crate::ontology::Axiom::SubClassOf(sub) => {
-                    // A ⊑ E where E is complex: store "when A(x), also add E(x)"
-                    if let ClassExpression::Class(named) = &sub.subclass
-                        && sub.superclass.is_complex_class_expression()
-                    {
+                    // A ⊑ E (named or complex): store "when A(x), also add E(x)".
+                    // Named superclasses (e.g. A ⊑ B) are included so that the
+                    // complement clash A ⊑ B, A ⊑ ¬B is detected on Nominal nodes.
+                    if let ClassExpression::Class(named) = &sub.subclass {
                         self.concept_unfolding_rules
                             .entry(named.iri.to_string())
                             .or_default()

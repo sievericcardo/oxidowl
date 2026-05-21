@@ -207,6 +207,42 @@ impl Reasoner {
                     return Ok(true);
                 }
             }
+
+            // Transitive closure: BFS through SubClassOf and EquivalentClasses chains.
+            // Handles A ⊑ B, B ⊑ C → A ⊑ C (any depth).
+            let mut queue: std::collections::VecDeque<ClassExpression> =
+                std::collections::VecDeque::new();
+            let mut visited: std::collections::HashSet<ClassExpression> =
+                std::collections::HashSet::new();
+            queue.push_back(subclass.clone());
+            visited.insert(subclass.clone());
+
+            while let Some(current) = queue.pop_front() {
+                for axiom in ontology_ref.axioms() {
+                    match axiom {
+                        crate::ontology::Axiom::SubClassOf(ax) if ax.subclass == current => {
+                            if &ax.superclass == superclass {
+                                return Ok(true);
+                            }
+                            if !visited.contains(&ax.superclass) {
+                                visited.insert(ax.superclass.clone());
+                                queue.push_back(ax.superclass.clone());
+                            }
+                        }
+                        crate::ontology::Axiom::EquivalentClasses(eq)
+                            if eq.classes.contains(&current) =>
+                        {
+                            for cls in &eq.classes {
+                                if cls != &current && !visited.contains(cls) {
+                                    visited.insert(cls.clone());
+                                    queue.push_back(cls.clone());
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
 
         // Check using built-in OWL semantics
@@ -272,7 +308,7 @@ impl Reasoner {
             let mut pre_checker = crate::core::reasoner::PreConsistencyChecker::new(&ontology_ref)?;
 
             // If pre-check detects inconsistency, return early
-            match pre_checker.check() {
+            match pre_checker.check(&ontology_ref) {
                 Err(_) => {
                     log::info!("Pre-consistency check detected inconsistency");
                     return Ok(false);
