@@ -41,7 +41,7 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 🔁 **Parallel Tableau Expansion**: Rayon-powered parallel tableau node expansion for large ontologies
 - 🔍 **Saturation Cycle Detection**: DashMap-backed cycle detector for the saturation engine with atomic counters
 
-#### v1.0.0 Highlights (Latest)
+#### v1.0.0 Highlights
 
 - 🏗️ **OWL 2 RL Profile Reasoner**: Forward-chaining materialization with incremental update support
 - 🌐 **Distributed Reasoning**: Cluster-based horizontal scaling with automatic node discovery and fault tolerance
@@ -58,6 +58,11 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 - 🔢 **Datatype Value Space Handlers**: XSD-compliant `ValueSpaceHandler` trait and `ValueSpaceRegistry` for boolean, string, numeric, datetime, and IRI value spaces
 - 🔍 **Saturation Cycle Detection**: `CycleDetector` with DashMap and atomics to guard the saturation engine against infinite loops
 - 🌐 **Enhanced Server Completeness**: 15+ additional OWLlink request variants and 5 new REST routes
+- ✅ **W3C OWL 2 Conformance Test Suite**: 63 tests covering all six W3C test categories (consistency, inconsistency, entailment, non-entailment, profile conformance, syntax round-trip) across all five OWL 2 profiles
+- 🔗 **Transitive SubClassOf Closure**: `is_subclass_of` now traverses multi-hop subsumption chains via BFS (A⊑B, B⊑C ⊢ A⊑C), correctly handling deep class hierarchies
+- ⚡ **Pre-consistency Fast Checks**: O(n) axiom scans detect `ClassAssertion(owl:Nothing :x)`, `SubClassOf(owl:Thing owl:Nothing)`, and functional property violations before tableau invocation
+- 🏗️ **Named-class Concept Unfolding**: Tableau now stores `SubClassOf(:A :B)` as unfolding rules alongside complex expressions, enabling complement-clash detection for nominal nodes
+- 🔗 **ObjectPropertyChain Functional Syntax**: Parser now handles `SubObjectPropertyOf(ObjectPropertyChain(:p :q) :r)` per the W3C OWL 2 Functional Syntax specification
 
 #### v0.10.0 Highlights
 
@@ -1303,6 +1308,9 @@ cargo test --test rdf_star_integration_tests
 cargo test --test shacl_tests
 cargo test --test ml_engine_integration_tests_simple
 
+# W3C OWL 2 conformance suite (63 tests)
+cargo test --test owl2_conformance_suite
+
 # Criterion benchmarks
 cargo bench
 cargo bench --bench hypertableau_benchmark
@@ -1355,6 +1363,11 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - [x] **Datatype value-space handlers** — XSD-compliant `ValueSpaceHandler` trait for boolean, string, numeric, datetime, and IRI datatypes
 - [x] **Saturation cycle detection** — `CycleDetector` to guard saturation engine against infinite loops
 - [x] **Enhanced server completeness** — 15+ new OWLlink request variants and 5 new REST API routes
+- [x] **W3C OWL 2 Conformance Test Suite** — 63 tests covering consistency, inconsistency, entailment, non-entailment, profile conformance, and syntax round-trip across all five OWL 2 profiles
+- [x] **Transitive SubClassOf closure** — BFS-based multi-hop subsumption in `is_subclass_of` (A⊑B, B⊑C ⊢ A⊑C)
+- [x] **Pre-consistency fast checks** — O(n) axiom scans for owl:Nothing assertions, owl:Thing⊑owl:Nothing, and functional property violations before tableau invocation
+- [x] **Named-class concept unfolding** — Tableau unfolding rules for `SubClassOf(:A :B)` enabling complement-clash detection on nominal nodes
+- [x] **ObjectPropertyChain functional syntax** — `SubObjectPropertyOf(ObjectPropertyChain(:p :q) :r)` now parsed and emitted correctly
 
 ### Implemented in v0.10.0
 
