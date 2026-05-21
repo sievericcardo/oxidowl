@@ -64,15 +64,13 @@ impl PreConsistencyChecker {
 
         // Check 1: ClassAssertion(owl:Nothing :x) is directly inconsistent.
         for axiom in ontology.axioms() {
-            if let crate::ontology::Axiom::ClassAssertion(ca) = axiom {
-                if let ClassExpression::Class(cls) = &ca.class {
-                    if cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
+            if let crate::ontology::Axiom::ClassAssertion(ca) = axiom
+                && let ClassExpression::Class(cls) = &ca.class
+                    && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
                         return Err(crate::error::Error::reasoning(
                             "Inconsistency: individual asserted to be in owl:Nothing",
                         ));
                     }
-                }
-            }
         }
 
         // Check 2: SubClassOf(owl:Thing owl:Nothing) is tautologically inconsistent.
@@ -99,11 +97,10 @@ impl PreConsistencyChecker {
         let mut functional_props: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         for axiom in ontology.axioms() {
-            if let crate::ontology::Axiom::FunctionalObjectProperty(fp) = axiom {
-                if let ObjectPropertyExpression::ObjectProperty(op) = &fp.property {
+            if let crate::ontology::Axiom::FunctionalObjectProperty(fp) = axiom
+                && let ObjectPropertyExpression::ObjectProperty(op) = &fp.property {
                     functional_props.insert(op.iri.as_str().to_string());
                 }
-            }
         }
 
         if !functional_props.is_empty() {
@@ -111,8 +108,8 @@ impl PreConsistencyChecker {
             let mut prop_targets: std::collections::HashMap<(String, String), Vec<String>> =
                 std::collections::HashMap::new();
             for axiom in ontology.axioms() {
-                if let crate::ontology::Axiom::ObjectPropertyAssertion(opa) = axiom {
-                    if let ObjectPropertyExpression::ObjectProperty(op) = &opa.property {
+                if let crate::ontology::Axiom::ObjectPropertyAssertion(opa) = axiom
+                    && let ObjectPropertyExpression::ObjectProperty(op) = &opa.property {
                         let prop_iri = op.iri.as_str().to_string();
                         if functional_props.contains(&prop_iri) {
                             let src = format!("{:?}", opa.source);
@@ -120,7 +117,6 @@ impl PreConsistencyChecker {
                             prop_targets.entry((prop_iri, src)).or_default().push(tgt);
                         }
                     }
-                }
             }
 
             // Collect class memberships of each individual (key = Debug string of Individual).
@@ -153,18 +149,15 @@ impl PreConsistencyChecker {
                             continue;
                         }
                         for ax in ontology.axioms() {
-                            if let crate::ontology::Axiom::SubClassOf(sub) = ax {
-                                if &sub.subclass == ci {
-                                    if let ClassExpression::ObjectComplementOf(inner) = &sub.superclass {
-                                        if inner.as_ref() == cj {
+                            if let crate::ontology::Axiom::SubClassOf(sub) = ax
+                                && &sub.subclass == ci
+                                    && let ClassExpression::ObjectComplementOf(inner) = &sub.superclass
+                                        && inner.as_ref() == cj {
                                             return Err(crate::error::Error::reasoning(
                                                 "Inconsistency: functional property forces individuals \
                                                  with mutually exclusive class memberships to be equal",
                                             ));
                                         }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
