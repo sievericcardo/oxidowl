@@ -15,12 +15,8 @@
 use std::sync::{Arc, RwLock};
 
 use oxidowl::{
-    OWL2ProfileValidator,
-    Reasoner, ReasonerConfig,
-    core::reasoner::ReasoningStatistics,
-    ontology::Ontology,
-    parsers::FunctionalParser,
-    profiles::OWL2Profile,
+    OWL2ProfileValidator, Reasoner, ReasonerConfig, core::reasoner::ReasoningStatistics,
+    ontology::Ontology, parsers::FunctionalParser, profiles::OWL2Profile,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,9 +40,11 @@ impl ConformanceTestRunner {
     /// Assert that the given ontology is **consistent**.
     fn expect_consistent(fs: &str) {
         let ontology = Self::parse(fs);
-        let mut reasoner = Reasoner::new(ReasonerConfig::default())
-            .expect("Failed to create Reasoner");
-        reasoner.load_ontology(ontology).expect("Failed to load ontology");
+        let mut reasoner =
+            Reasoner::new(ReasonerConfig::default()).expect("Failed to create Reasoner");
+        reasoner
+            .load_ontology(ontology)
+            .expect("Failed to load ontology");
         let result = reasoner.is_consistent().expect("Consistency check failed");
         assert!(result, "Expected ontology to be consistent");
     }
@@ -54,9 +52,11 @@ impl ConformanceTestRunner {
     /// Assert that the given ontology is **inconsistent**.
     fn expect_inconsistent(fs: &str) {
         let ontology = Self::parse(fs);
-        let mut reasoner = Reasoner::new(ReasonerConfig::default())
-            .expect("Failed to create Reasoner");
-        reasoner.load_ontology(ontology).expect("Failed to load ontology");
+        let mut reasoner =
+            Reasoner::new(ReasonerConfig::default()).expect("Failed to create Reasoner");
+        reasoner
+            .load_ontology(ontology)
+            .expect("Failed to load ontology");
         let result = reasoner.is_consistent().expect("Consistency check failed");
         assert!(!result, "Expected ontology to be inconsistent");
     }
@@ -71,9 +71,11 @@ impl ConformanceTestRunner {
         use oxidowl::ontology::axioms::Axiom;
         let premise = Self::parse(premise_fs);
         let conclusion = Self::parse(conclusion_fs);
-        let mut reasoner = Reasoner::new(ReasonerConfig::default())
-            .expect("Failed to create Reasoner");
-        reasoner.load_ontology(premise).expect("Failed to load premise ontology");
+        let mut reasoner =
+            Reasoner::new(ReasonerConfig::default()).expect("Failed to create Reasoner");
+        reasoner
+            .load_ontology(premise)
+            .expect("Failed to load premise ontology");
 
         for axiom in conclusion.axioms() {
             match axiom {
@@ -116,8 +118,8 @@ impl ConformanceTestRunner {
         let premise = Self::parse(premise_fs);
         let conclusion = Self::parse(conclusion_fs);
         let premise_ref = Arc::new(RwLock::new(premise));
-        let mut reasoner = Reasoner::new(ReasonerConfig::default())
-            .expect("Failed to create Reasoner");
+        let mut reasoner =
+            Reasoner::new(ReasonerConfig::default()).expect("Failed to create Reasoner");
         let mut stats = ReasoningStatistics::default();
 
         let mut any_not_entailed = false;
