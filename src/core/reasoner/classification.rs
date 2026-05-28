@@ -1,4 +1,4 @@
-//! Classification and realization operations
+//! Classification and realisation operations
 //!
 //! This module implements complex reasoning operations like building class hierarchies,
 //! property classification, and individual type inference.
@@ -12,7 +12,7 @@ use crate::{
         reasoner::{
             datatype_validation::DatatypeValidator,
             parallel_classification::ParallelClassificationScheduler,
-            results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
+            results::{ClassificationResult, PropertyClassificationResult, RealisationResult},
             statistics::ReasoningStatistics,
             tasks::ReasoningTaskService,
         },
@@ -29,7 +29,7 @@ use std::{
     time::Instant,
 };
 
-/// Service for complex reasoning operations like classification and realization
+/// Service for complex reasoning operations like classification and realisation
 #[derive(Debug)]
 pub struct ClassificationService {
     task_service: ReasoningTaskService,
@@ -440,25 +440,25 @@ impl ClassificationService {
         Ok(result)
     }
 
-    /// Perform realization (find most specific classes for individuals)
+    /// Perform realisation (find most specific classes for individuals)
     pub fn realize(
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
         cache: &mut CacheManager,
-    ) -> Result<RealizationResult> {
+    ) -> Result<RealisationResult> {
         let start_time = Instant::now();
 
-        info!("Starting realization");
+        info!("Starting realisation");
 
-        // Check if we have a cached realization result
-        if let Some(cached_result) = cache.get_realization_result(ontology) {
-            debug!("Realization result found in cache");
+        // Check if we have a cached realisation result
+        if let Some(cached_result) = cache.get_realisation_result(ontology) {
+            debug!("Realisation result found in cache");
             return Ok(cached_result);
         }
 
         let ontology_guard =
-            read_lock(ontology, "classification: reading ontology for realization")?;
+            read_lock(ontology, "classification: reading ontology for realisation")?;
 
         // Get all named individuals and classes
         let individuals: Vec<Individual> = ontology_guard
@@ -475,7 +475,7 @@ impl ClassificationService {
             .map(|c| ClassExpression::Class(c.clone()))
             .collect();
 
-        let mut realization = HashMap::new();
+        let mut realisation = HashMap::new();
 
         info!(
             "Realizing {} individuals against {} classes",
@@ -621,20 +621,20 @@ impl ClassificationService {
 
             // Named class membership not reachable via the hierarchy (SubClassOf /
             // EquivalentClasses BFS above) would require a precomputed TBox
-            // classification pass.  We omit it here to keep realization tractable.
+            // classification pass.  We omit it here to keep realisation tractable.
 
-            realization.insert(individual.clone(), instance_classes);
+            realisation.insert(individual.clone(), instance_classes);
         }
 
-        let result = RealizationResult::new(realization);
+        let result = RealisationResult::new(realisation);
 
         // Cache the result
-        cache.store_realization_result(ontology, result.clone());
+        cache.store_realisation_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
 
-        info!("Realization completed in {reasoning_time:?}");
+        info!("Realisation completed in {reasoning_time:?}");
         Ok(result)
     }
 

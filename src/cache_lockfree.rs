@@ -130,7 +130,7 @@ impl Default for LockFreeCacheConfig {
                 | CacheFeature::Subsumption
                 | CacheFeature::Satisfiability
                 | CacheFeature::Classification
-                | CacheFeature::Realization,
+                | CacheFeature::Realisation,
         }
     }
 }

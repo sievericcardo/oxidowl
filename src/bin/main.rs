@@ -460,13 +460,13 @@ enum Commands {
         pretty_print: bool,
     },
 
-    /// Perform individual realization
-    Realization {
+    /// Perform individual realisation
+    Realisation {
         /// Input ontology file
         #[arg(short, long, value_name = "FILE")]
         input: PathBuf,
 
-        /// Output file for realization results
+        /// Output file for realisation results
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
 
@@ -1353,11 +1353,11 @@ async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()
             format,
             pretty_print,
         } => execute_dump_clauses(&input, output, format, pretty_print, config),
-        Commands::Realization {
+        Commands::Realisation {
             input,
             output,
             format,
-        } => execute_realization(&input, output, format, config),
+        } => execute_realisation(&input, output, format, config),
         Commands::Query {
             input,
             query,
@@ -1811,27 +1811,27 @@ async fn execute_dl_query(
     Ok(())
 }
 
-fn execute_realization(
+fn execute_realisation(
     input: &Path,
     output: Option<PathBuf>,
     format: Option<InputFormat>,
     config: ReasonerConfig,
 ) -> Result<()> {
-    info!("Performing realization on: {}", input.display());
+    info!("Performing realisation on: {}", input.display());
 
     let mut reasoner = Reasoner::new(config)?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
     reasoner.load_ontology_from_file(input, ontology_format)?;
 
-    let realization = reasoner.realize()?;
+    let realisation = reasoner.realize()?;
 
-    info!("Realization completed");
+    info!("Realisation completed");
 
     if let Some(output_path) = output {
-        realization.save_to_file(output_path)?;
+        realisation.save_to_file(output_path)?;
     } else {
-        println!("Realization completed. Use -o to save results.");
+        println!("Realisation completed. Use -o to save results.");
     }
 
     Ok(())

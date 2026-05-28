@@ -19,7 +19,7 @@ pub mod datatypes;
 
 // Re-export core reasoner types for public API
 pub use crate::core::reasoner::{
-    ClassificationResult, RealizationResult, ReasoningResult, ReasoningTask,
+    ClassificationResult, RealisationResult, ReasoningResult, ReasoningTask,
 };
 
 // Re-export incremental reasoning types for public API
@@ -317,7 +317,7 @@ impl ReasoningService {
     }
 
     /// Realize the ontology (compute individuals' types)
-    pub async fn realize(&self) -> Result<RealizationResult> {
+    pub async fn realize(&self) -> Result<RealisationResult> {
         self.send(|r| ReasoningRequest::Realize { reply: r }).await
     }
 

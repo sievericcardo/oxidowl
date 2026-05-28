@@ -281,7 +281,7 @@ pub enum ReasoningTask {
         superclass: ClassExpression,
     },
     Classification,
-    Realization,
+    Realisation,
     InstanceCheck {
         individual: Individual,
         class: ClassExpression,

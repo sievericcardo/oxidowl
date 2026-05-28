@@ -1,7 +1,7 @@
 //! Result types for reasoning operations
 //!
 //! This module contains all the result structures returned by various reasoning operations,
-//! including classification results, realization results, and property classification results.
+//! including classification results, realisation results, and property classification results.
 
 use crate::{
     Result,
@@ -20,7 +20,7 @@ pub enum ReasoningResult {
     Classes(HashSet<ClassExpression>),
     Individuals(HashSet<Individual>),
     ClassificationResult(ClassificationResult),
-    RealizationResult(RealizationResult),
+    RealisationResult(RealisationResult),
 }
 
 /// Classification result containing class hierarchy
@@ -437,13 +437,13 @@ impl PropertyClassificationResult {
     }
 }
 
-/// Realization result containing individual types
+/// Realisation result containing individual types
 #[derive(Debug, Clone)]
-pub struct RealizationResult {
+pub struct RealisationResult {
     pub types: HashMap<Individual, HashSet<ClassExpression>>,
 }
 
-impl RealizationResult {
+impl RealisationResult {
     #[must_use]
     pub fn new(types: HashMap<Individual, HashSet<ClassExpression>>) -> Self {
         Self { types }

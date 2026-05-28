@@ -5,7 +5,7 @@
 //!
 //! - `core`: Main reasoner structure and ontology loading
 //! - `tasks`: Basic reasoning operations (consistency, satisfiability, subsumption)
-//! - `classification`: Complex operations (classification, realization)
+//! - `classification`: Complex operations (classification, realisation)
 //! - `tableau`: Tableau algorithm integration and factories
 //! - `consistency`: Pre-consistency checking for fast inconsistency detection
 //! - `queries`: SPARQL and `OWLlink` query processing
@@ -49,7 +49,7 @@ pub use self::{
     },
     queries::{OwllinkRequest, QueryProcessor, SparqlQuery, TriplePattern},
     results::{
-        ClassificationResult, PropertyClassificationResult, RealizationResult, ReasoningResult,
+        ClassificationResult, PropertyClassificationResult, RealisationResult, ReasoningResult,
     },
     statistics::ReasoningStatistics,
     tableau::{

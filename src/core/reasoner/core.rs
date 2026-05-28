@@ -14,7 +14,7 @@ use crate::{
             classification::ClassificationService,
             explanation::ExplanationService,
             queries::QueryProcessor,
-            results::{ClassificationResult, RealizationResult},
+            results::{ClassificationResult, RealisationResult},
             statistics::ReasoningStatistics,
             tableau::TableauFactory,
             tasks::ReasoningTaskService,
@@ -715,14 +715,14 @@ impl Reasoner {
     }
 
     /// Realize the ontology (compute instance relationships)
-    pub fn realize(&mut self) -> Result<RealizationResult> {
+    pub fn realize(&mut self) -> Result<RealisationResult> {
         if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
             self.classification_service
                 .realize(&ontology, &mut statistics, &mut self.cache_manager)
         } else {
             Err(Error::ontology_parsing(
-                "No ontology loaded for realization",
+                "No ontology loaded for realisation",
             ))
         }
     }

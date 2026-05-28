@@ -16,7 +16,7 @@ Oxidowl is a tableau-based reasoner for the Description Logic SROIQV(D), support
 
 - 🚀 **High Performance**: Advanced tableau algorithms with parallel computation
 - 🔧 **Complete OWL 2 DL Support**: Handles SROIQV(D) description logic with DisjointUnion axioms
-- 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, TBox classification, ABox realization, and full OWL DL instance checking
+- 🧠 **Multiple Reasoning Tasks**: Consistency, satisfiability, TBox classification, ABox realisation, and full OWL DL instance checking
 - 📊 **DL Query Engine**: Manchester Syntax support with union queries and DisjointUnion detection
 - 🔄 **Multiple Input Formats**: OWL XML, Functional Syntax, RDF/XML, Turtle, N-Triples via horned-owl
 - ⚡ **Dual Tableau Algorithms**: Traditional and Hypertableau (3-9x faster for disjointness reasoning)

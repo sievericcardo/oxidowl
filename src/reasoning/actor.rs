@@ -17,7 +17,7 @@ use crate::{
     config::{CacheFeature, ReasonerConfig},
     core::{
         lock_helpers::write_lock,
-        reasoner::{ClassificationResult, RealizationResult, Reasoner},
+        reasoner::{ClassificationResult, RealisationResult, Reasoner},
     },
     ontology::{ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression},
     reasoning::{ExplanationSet, ReasoningStatistics},
@@ -91,7 +91,7 @@ pub enum ReasoningRequest {
         reply: oneshot::Sender<Result<ClassificationResult>>,
     },
     Realize {
-        reply: oneshot::Sender<Result<RealizationResult>>,
+        reply: oneshot::Sender<Result<RealisationResult>>,
     },
     ExecuteSwrlRules {
         reply: oneshot::Sender<Result<SWRLExecutionResult>>,
@@ -625,20 +625,20 @@ impl ReasoningActor {
         Ok(result)
     }
 
-    fn handle_realize(&mut self) -> Result<RealizationResult> {
+    fn handle_realize(&mut self) -> Result<RealisationResult> {
         let start = Instant::now();
 
         if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt
-                && let Some(cached) = self.cache_manager.get_realization_result(&ont)
+                && let Some(cached) = self.cache_manager.get_realisation_result(&ont)
             {
-                log::info!("Realization (cached) completed in {:?}", start.elapsed());
+                log::info!("Realisation (cached) completed in {:?}", start.elapsed());
                 return Ok(cached);
             }
         }
 
-        log::info!("Executing SWRL rules before realization");
+        log::info!("Executing SWRL rules before realisation");
         self.handle_execute_swrl_rules()?;
 
         let result = self.reasoner.realize()?;
@@ -647,7 +647,7 @@ impl ReasoningActor {
             && start.elapsed() > timeout
         {
             return Err(Error::Timeout {
-                message: "Realization timed out".into(),
+                message: "Realisation timed out".into(),
             });
         }
 
@@ -655,11 +655,11 @@ impl ReasoningActor {
             let ont_opt = self.reasoner.get_ontology().cloned();
             if let Some(ont) = ont_opt {
                 self.cache_manager
-                    .store_realization_result(&ont, result.clone());
+                    .store_realisation_result(&ont, result.clone());
             }
         }
 
-        log::info!("Realization completed in {:?}", start.elapsed());
+        log::info!("Realisation completed in {:?}", start.elapsed());
         Ok(result)
     }
 

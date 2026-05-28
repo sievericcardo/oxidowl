@@ -7,7 +7,7 @@
 use crate::{
     ontology::{ClassExpression, Individual, OntologyRef},
     performance::MemoryTracker,
-    reasoning::{ClassificationResult, RealizationResult},
+    reasoning::{ClassificationResult, RealisationResult},
     semantics::quoted_triple_optimizer::{QuotedTripleOptimizer, QuotedTripleOptimizerConfig},
 };
 
@@ -29,8 +29,8 @@ pub enum CacheFeature {
     Satisfiability,
     /// Cache for classification results
     Classification,
-    /// Cache for realization results
-    Realization,
+    /// Cache for realisation results
+    Realisation,
     /// Cache for completion graphs
     CompletionGraph,
     /// Cache for RDF-star quoted triples
@@ -108,7 +108,7 @@ impl Default for CacheConfig {
                 | CacheFeature::Subsumption
                 | CacheFeature::Satisfiability
                 | CacheFeature::Classification
-                | CacheFeature::Realization
+                | CacheFeature::Realisation
                 | CacheFeature::CompletionGraph
                 | CacheFeature::QuotedTriple,
             completion_graph_max_memory_mb: 512,
@@ -571,14 +571,14 @@ impl CacheManager {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
-    /// Get realization result from cache
-    pub fn get_realization_result(&self, _ontology: &OntologyRef) -> Option<RealizationResult> {
+    /// Get realisation result from cache
+    pub fn get_realisation_result(&self, _ontology: &OntologyRef) -> Option<RealisationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
-    /// Store realization result in cache
-    pub fn store_realization_result(&self, _ontology: &OntologyRef, _result: RealizationResult) {
+    /// Store realisation result in cache
+    pub fn store_realisation_result(&self, _ontology: &OntologyRef, _result: RealisationResult) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -624,14 +624,14 @@ impl CacheManager {
         self.store_classification_result(ontology, result);
     }
 
-    /// Get realization cache
-    pub fn realization(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
-        self.get_realization_result(ontology)
+    /// Get realisation cache
+    pub fn realisation(&self, ontology: &OntologyRef) -> Option<RealisationResult> {
+        self.get_realisation_result(ontology)
     }
 
-    /// Store realization cache
-    pub fn store_realization(&self, ontology: &OntologyRef, result: RealizationResult) {
-        self.store_realization_result(ontology, result);
+    /// Store realisation cache
+    pub fn store_realisation(&self, ontology: &OntologyRef, result: RealisationResult) {
+        self.store_realisation_result(ontology, result);
     }
 
     /// Get cache statistics

@@ -406,7 +406,7 @@ async fn get_reasoner_status(
         features: vec![
             "Consistency Checking".to_string(),
             "Classification".to_string(),
-            "Realization".to_string(),
+            "Realisation".to_string(),
             "Explanation Generation".to_string(),
             "SWRL Rules".to_string(),
         ],
