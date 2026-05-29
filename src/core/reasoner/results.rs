@@ -200,9 +200,10 @@ impl ClassificationResult {
             let mut indirect: HashSet<&ClassExpression> = HashSet::new();
             for intermediate in all_superclasses {
                 if intermediate != subclass
-                    && let Some(intermediate_supers) = self.hierarchy.get(intermediate) {
-                        indirect.extend(intermediate_supers.iter());
-                    }
+                    && let Some(intermediate_supers) = self.hierarchy.get(intermediate)
+                {
+                    indirect.extend(intermediate_supers.iter());
+                }
             }
 
             // Direct superclasses = all_superclasses minus those reachable indirectly.
@@ -272,7 +273,11 @@ impl ClassificationResult {
                     // All children of this node have been processed: pop and assemble.
                     let (iri, name, _, built) = stack.pop().unwrap();
                     // Children are already in pre-sorted order from the index.
-                    let node = ClassNode { name, iri, children: built };
+                    let node = ClassNode {
+                        name,
+                        iri,
+                        children: built,
+                    };
                     if let Some(parent_frame) = stack.last_mut() {
                         parent_frame.3.push(node);
                     } else {
