@@ -272,11 +272,7 @@ impl ClassificationService {
         info!(
             "Classification completed in {:?} ({}x speedup expected from saturation)",
             reasoning_time,
-            if tableau_checks > 0 {
-                classes.len() * classes.len() / tableau_checks
-            } else {
-                1
-            }
+            (classes.len() * classes.len()).checked_div(tableau_checks).unwrap_or(1)
         );
         Ok(result)
     }
