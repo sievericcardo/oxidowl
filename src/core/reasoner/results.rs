@@ -199,11 +199,10 @@ impl ClassificationResult {
             // for A whenever C ∈ ancestors(B) for some B ∈ superclasses(A), B ≠ A.
             let mut indirect: HashSet<&ClassExpression> = HashSet::new();
             for intermediate in all_superclasses {
-                if intermediate != subclass {
-                    if let Some(intermediate_supers) = self.hierarchy.get(intermediate) {
+                if intermediate != subclass
+                    && let Some(intermediate_supers) = self.hierarchy.get(intermediate) {
                         indirect.extend(intermediate_supers.iter());
                     }
-                }
             }
 
             // Direct superclasses = all_superclasses minus those reachable indirectly.
@@ -262,7 +261,7 @@ impl ClassificationResult {
 
             loop {
                 let top = stack.last_mut().unwrap();
-                let num_children = children_index.get(&top.0).map_or(0, |v| v.len());
+                let num_children = children_index.get(&top.0).map_or(0, std::vec::Vec::len);
 
                 if top.2 < num_children {
                     // Push the next unvisited child onto the stack.

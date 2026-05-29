@@ -330,7 +330,7 @@ impl ClusterManager {
             let mut health_monitor = health_monitor;
             let mut discovery_service = discovery_service;
             let mut health_interval = interval(Duration::from_secs(30));
-            let mut discovery_interval = interval(Duration::from_secs(60));
+            let mut discovery_interval = interval(Duration::from_mins(1));
             // Consume the immediate first ticks so monitoring starts after the first period
             health_interval.tick().await;
             discovery_interval.tick().await;
@@ -741,7 +741,7 @@ impl DiscoveryService {
 
         let config = self.config.clone();
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(60)); // Discovery every minute
+            let mut interval = interval(Duration::from_mins(1)); // Discovery every minute
 
             loop {
                 tokio::select! {

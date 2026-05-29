@@ -125,7 +125,7 @@ impl Default for LockFreeCacheConfig {
     fn default() -> Self {
         Self {
             max_size: 10000,
-            ttl: Duration::from_secs(3600),
+            ttl: Duration::from_hours(1),
             features: CacheFeature::Concept
                 | CacheFeature::Subsumption
                 | CacheFeature::Satisfiability
