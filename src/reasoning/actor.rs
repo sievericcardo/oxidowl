@@ -187,7 +187,7 @@ impl ReasoningActor {
     /// Main event loop. Returns when all senders are dropped or the shutdown
     /// signal fires.
     pub async fn run(mut self, mut shutdown: oneshot::Receiver<()>) {
-        const MAINTENANCE_INTERVAL: Duration = Duration::from_mins(1);
+        const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(60);
         let mut maintenance = tokio::time::interval(MAINTENANCE_INTERVAL);
         // Skip the immediate first tick so maintenance doesn't fire at t=0.
         maintenance.tick().await;

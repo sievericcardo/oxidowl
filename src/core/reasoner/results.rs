@@ -182,37 +182,36 @@ impl ClassificationResult {
         Ok(root_classes)
     }
 
-    /// Compute direct subsumption relationships (remove transitive relationships)
+    /// Compute direct subsumption relationships (remove transitive relationships).
+    ///
+    /// Given that `self.hierarchy` stores the full transitive closure, an edge A→C is
+    /// *direct* (belongs to the Hasse diagram) iff C does NOT appear in the ancestor
+    /// set of any other superclass B of A.  Collecting those indirect ancestors in one
+    /// pass makes this O(n × k) instead of the naïve O(n × k²) triple-loop.
     fn compute_direct_hierarchy(
         &self,
     ) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
         let mut direct_hierarchy = HashMap::new();
 
         for (subclass, all_superclasses) in &self.hierarchy {
-            let mut direct_superclasses = HashSet::new();
-
-            // For each superclass, check if it's a direct parent (not implied by transitivity)
-            for superclass in all_superclasses {
-                let mut is_direct = true;
-
-                // Check if there's an intermediate class that makes this relationship transitive
-                for intermediate in all_superclasses {
-                    if intermediate != superclass && intermediate != subclass {
-                        // If intermediate is a superclass of subclass AND superclass is a superclass of intermediate,
-                        // then subclass -> superclass is transitive (not direct)
-                        if let Some(intermediate_superclasses) = self.hierarchy.get(intermediate)
-                            && intermediate_superclasses.contains(superclass)
-                        {
-                            is_direct = false;
-                            break;
-                        }
+            // Collect every ancestor reachable from `subclass` in ≥ 2 steps.
+            // If the stored hierarchy is the full transitive closure, C is non-direct
+            // for A whenever C ∈ ancestors(B) for some B ∈ superclasses(A), B ≠ A.
+            let mut indirect: HashSet<&ClassExpression> = HashSet::new();
+            for intermediate in all_superclasses {
+                if intermediate != subclass {
+                    if let Some(intermediate_supers) = self.hierarchy.get(intermediate) {
+                        indirect.extend(intermediate_supers.iter());
                     }
                 }
-
-                if is_direct {
-                    direct_superclasses.insert(superclass.clone());
-                }
             }
+
+            // Direct superclasses = all_superclasses minus those reachable indirectly.
+            let direct_superclasses: HashSet<ClassExpression> = all_superclasses
+                .iter()
+                .filter(|sc| !indirect.contains(sc))
+                .cloned()
+                .collect();
 
             direct_hierarchy.insert(subclass.clone(), direct_superclasses);
         }
@@ -220,37 +219,73 @@ impl ClassificationResult {
         Ok(direct_hierarchy)
     }
 
-    /// Build children for a specific class IRI using direct hierarchy
+    /// Build children for a specific class IRI using direct hierarchy.
+    ///
+    /// Iterative post-order DFS replaces the former recursive implementation to
+    /// avoid stack overflows on deep class hierarchies (e.g. `ore_ont_9881.owl`).
     fn build_children_for_iri_direct(
         &self,
         parent_iri: &str,
         direct_hierarchy: &HashMap<ClassExpression, HashSet<ClassExpression>>,
     ) -> Result<Vec<ClassNode>> {
-        let mut children = Vec::new();
-
-        // Find all classes that are direct children of this parent
+        // Step 1: build a parent-IRI → [(child_iri, child_name)] index in one pass.
+        let mut children_index: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for (subclass, direct_superclasses) in direct_hierarchy {
             let subclass_iri = self.extract_class_iri(subclass);
-
-            // Check if this parent is a direct superclass
+            let child_name = self.extract_class_name(subclass);
             for superclass in direct_superclasses {
                 let super_iri = self.extract_class_iri(superclass);
-                if super_iri == parent_iri {
-                    let child_name = self.extract_class_name(subclass);
-                    let child_node = ClassNode {
-                        name: child_name,
-                        iri: subclass_iri.clone(),
-                        children: self
-                            .build_children_for_iri_direct(&subclass_iri, direct_hierarchy)?,
-                    };
-                    children.push(child_node);
-                    break;
+                children_index
+                    .entry(super_iri)
+                    .or_default()
+                    .push((subclass_iri.clone(), child_name.clone()));
+            }
+        }
+        // Pre-sort each entry so that the output order matches the original
+        // (children sorted by name at each level).
+        for v in children_index.values_mut() {
+            v.sort_by(|a, b| a.1.cmp(&b.1));
+        }
+
+        // Step 2: iterative DFS rooted at parent_iri.
+        // Stack entry: (iri, name, next_child_index, built_children_so_far)
+        let root_children = match children_index.get(parent_iri) {
+            Some(v) if !v.is_empty() => v.clone(),
+            _ => return Ok(vec![]),
+        };
+
+        let mut output: Vec<ClassNode> = Vec::new();
+        for (start_iri, start_name) in root_children {
+            // Each iteration of this outer loop builds one complete subtree.
+            let mut stack: Vec<(String, String, usize, Vec<ClassNode>)> =
+                vec![(start_iri, start_name, 0, Vec::new())];
+
+            loop {
+                let top = stack.last_mut().unwrap();
+                let num_children = children_index.get(&top.0).map_or(0, |v| v.len());
+
+                if top.2 < num_children {
+                    // Push the next unvisited child onto the stack.
+                    let (child_iri, child_name) = children_index[&top.0][top.2].clone();
+                    top.2 += 1;
+                    stack.push((child_iri, child_name, 0, Vec::new()));
+                } else {
+                    // All children of this node have been processed: pop and assemble.
+                    let (iri, name, _, built) = stack.pop().unwrap();
+                    // Children are already in pre-sorted order from the index.
+                    let node = ClassNode { name, iri, children: built };
+                    if let Some(parent_frame) = stack.last_mut() {
+                        parent_frame.3.push(node);
+                    } else {
+                        output.push(node);
+                        break;
+                    }
                 }
             }
         }
 
-        children.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(children)
+        output.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(output)
     }
 
     /// Return the correct OWL functional-syntax reference for an IRI given the declared prefix base.

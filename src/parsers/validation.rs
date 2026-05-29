@@ -694,14 +694,18 @@ impl SyntaxValidator {
         // Check parenthesis matching
         let mut paren_depth = 0;
         let mut in_iri = false;
+        let mut in_string = false;
+        let mut prev_char = '\0';
         let mut ontology_count = 0;
         let mut byte_offset = 0;
 
         for ch in content.chars() {
             match ch {
-                '<' => in_iri = true,
-                '>' => in_iri = false,
-                '(' if !in_iri => {
+                // Toggle string state on unescaped quote (outside IRI literals).
+                '"' if !in_iri && prev_char != '\\' => in_string = !in_string,
+                '<' if !in_string => in_iri = true,
+                '>' if !in_string => in_iri = false,
+                '(' if !in_iri && !in_string => {
                     paren_depth += 1;
                     // Check if this starts an Ontology declaration
                     if byte_offset > 0 {
@@ -712,7 +716,7 @@ impl SyntaxValidator {
                         }
                     }
                 }
-                ')' if !in_iri => {
+                ')' if !in_iri && !in_string => {
                     paren_depth -= 1;
                     if paren_depth < 0 {
                         return Err(Error::ontology_parsing("Unmatched closing parenthesis"));
@@ -720,6 +724,7 @@ impl SyntaxValidator {
                 }
                 _ => {}
             }
+            prev_char = ch;
             byte_offset += ch.len_utf8();
         }
 
@@ -735,13 +740,16 @@ impl SyntaxValidator {
             let mut depth = 0;
             let mut max_depth_at_ontology = 0;
             in_iri = false;
+            in_string = false;
+            prev_char = '\0';
             byte_offset = 0;
 
             for ch in content.chars() {
                 match ch {
-                    '<' => in_iri = true,
-                    '>' => in_iri = false,
-                    '(' if !in_iri => {
+                    '"' if !in_iri && prev_char != '\\' => in_string = !in_string,
+                    '<' if !in_string => in_iri = true,
+                    '>' if !in_string => in_iri = false,
+                    '(' if !in_iri && !in_string => {
                         depth += 1;
                         if byte_offset > 0 {
                             let prefix = &content[..byte_offset].trim_end();
@@ -755,9 +763,10 @@ impl SyntaxValidator {
                             }
                         }
                     }
-                    ')' if !in_iri => depth -= 1,
+                    ')' if !in_iri && !in_string => depth -= 1,
                     _ => {}
                 }
+                prev_char = ch;
                 byte_offset += ch.len_utf8();
             }
         }

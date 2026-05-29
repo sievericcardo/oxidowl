@@ -1611,6 +1611,25 @@ impl ClassificationService {
                 // re-entering check_instance_with_datatype_reasoning and causing a
                 // stack overflow on large ontologies (e.g. 2995 classes deep).
                 {
+                    // Pre-build a superclass-IRI → [subclass Class] index in one pass so
+                    // that the BFS inner loop is an O(1) lookup instead of a full axiom
+                    // scan on every frontier step (O(n×m) → O(n+m)).
+                    let mut subclass_index: std::collections::HashMap<
+                        crate::ontology::IRI,
+                        Vec<crate::ontology::concepts::Class>,
+                    > = std::collections::HashMap::new();
+                    for axiom in ontology.axioms() {
+                        if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                            && let ClassExpression::Class(superclass) = &subclass_axiom.superclass
+                            && let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass
+                        {
+                            subclass_index
+                                .entry(superclass.iri.clone())
+                                .or_default()
+                                .push(sub_cls.clone());
+                        }
+                    }
+
                     let mut worklist: std::collections::VecDeque<crate::ontology::IRI> =
                         std::collections::VecDeque::new();
                     let mut visited_s4: std::collections::HashSet<crate::ontology::IRI> =
@@ -1619,26 +1638,21 @@ impl ClassificationService {
                     visited_s4.insert(cls.iri.clone());
 
                     while let Some(current_iri) = worklist.pop_front() {
-                        for axiom in ontology.axioms() {
-                            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) =
-                                axiom
-                                && let ClassExpression::Class(superclass) =
-                                    &subclass_axiom.superclass
-                                && superclass.iri == current_iri
-                                && let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass
-                                && !visited_s4.contains(&sub_cls.iri)
-                            {
-                                visited_s4.insert(sub_cls.iri.clone());
-                                // Check only direct assertion — no recursive call.
-                                if self
-                                    .check_explicit_class_assertion(individual, sub_cls, ontology)?
-                                {
-                                    return Ok(true);
+                        if let Some(sub_classes) = subclass_index.get(&current_iri) {
+                            for sub_cls in sub_classes {
+                                if !visited_s4.contains(&sub_cls.iri) {
+                                    visited_s4.insert(sub_cls.iri.clone());
+                                    // Check only direct assertion — no recursive call.
+                                    if self.check_explicit_class_assertion(
+                                        individual, sub_cls, ontology,
+                                    )? {
+                                        return Ok(true);
+                                    }
+                                    worklist.push_back(sub_cls.iri.clone());
                                 }
-                                worklist.push_back(sub_cls.iri.clone());
                             }
-                            // Complex subclass expressions are handled by the tableau.
                         }
+                        // Complex subclass expressions are handled by the tableau.
                     }
                 }
 

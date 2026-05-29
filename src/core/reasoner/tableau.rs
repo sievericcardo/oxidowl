@@ -92,7 +92,7 @@ impl TableauFactory {
                     super::hypertableau_adapter::HypertableauRunner::for_consistency(ontology)?;
                 Ok(Box::new(runner))
             }
-            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimised => {
                 log::info!("Creating traditional tableau runner for consistency checking");
                 let tableau = self.tableau_builder.build_for_consistency(ontology)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
@@ -115,7 +115,7 @@ impl TableauFactory {
                 )?;
                 Ok(Box::new(runner))
             }
-            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimised => {
                 log::info!("Creating traditional tableau runner for subsumption checking");
                 // Convert ClassExpression to string for the current tableau builder interface
                 let subclass_str = &format!("{subclass}");
@@ -144,7 +144,7 @@ impl TableauFactory {
                 )?;
                 Ok(Box::new(runner))
             }
-            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimised => {
                 log::info!("Creating traditional tableau runner for satisfiability checking");
                 // Convert ClassExpression to string for the current tableau builder interface
                 let class_str = &format!("{class_expr}");

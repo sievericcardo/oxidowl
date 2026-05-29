@@ -58,10 +58,10 @@ impl Default for MLHeuristicsConfig {
     fn default() -> Self {
         Self {
             enable_online_learning: true,
-            model_update_interval: Duration::from_hours(1), // 1 hour
+            model_update_interval: Duration::from_secs(3600), // 1 hour
             training_batch_size: 32,
             learning_rate: 0.001,
-            checkpoint_interval: Duration::from_hours(2), // 2 hours
+            checkpoint_interval: Duration::from_secs(7200), // 2 hours
             enable_ensembling: false,
             model_storage_dir: PathBuf::from("./ml_models"),
             min_training_samples: 100,

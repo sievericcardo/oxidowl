@@ -136,7 +136,7 @@ impl CompletionGraphCache {
 
 impl Default for CompletionGraphCache {
     fn default() -> Self {
-        Self::new(10_000, Duration::from_hours(1))
+        Self::new(10_000, Duration::from_secs(3600))
     }
 }
 

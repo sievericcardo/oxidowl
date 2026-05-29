@@ -258,10 +258,16 @@ impl ExplanationService {
     ) -> Result<bool> {
         // Use a simple depth-first search to find subsumption chains
         let mut visited = HashSet::new();
-        self.find_subsumption_path(subclass, superclass, ontology, explanation, &mut visited)
+        self.find_subsumption_path(subclass, superclass, ontology, explanation, &mut visited, 0)
     }
 
-    /// Recursively find a path from subclass to superclass
+    /// Maximum DFS depth for subsumption-path search, to prevent stack overflow
+    /// on pathologically deep or cyclic subsumption chains.
+    const MAX_SEARCH_DEPTH: usize = 2000;
+
+    /// Recursively find a path from subclass to superclass.
+    ///
+    /// The `depth` parameter guards against stack overflow on deep hierarchies.
     #[allow(dead_code)]
     fn find_subsumption_path(
         &self,
@@ -270,7 +276,11 @@ impl ExplanationService {
         ontology: &Ontology,
         explanation: &mut Vec<Axiom>,
         visited: &mut HashSet<ClassExpression>,
+        depth: usize,
     ) -> Result<bool> {
+        if depth >= Self::MAX_SEARCH_DEPTH {
+            return Ok(false);
+        }
         if visited.contains(current) {
             return Ok(false);
         }
@@ -294,6 +304,7 @@ impl ExplanationService {
                     ontology,
                     explanation,
                     visited,
+                    depth + 1,
                 )? {
                     return Ok(true);
                 }
