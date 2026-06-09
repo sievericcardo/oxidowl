@@ -460,7 +460,8 @@ enum Commands {
         pretty_print: bool,
     },
 
-    /// Perform individual realisation
+    /// Perform individual realisation (alias: instantiation)
+    #[command(alias = "instantiation")]
     Realisation {
         /// Input ontology file
         #[arg(short, long, value_name = "FILE")]

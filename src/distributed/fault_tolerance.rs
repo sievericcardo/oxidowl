@@ -405,7 +405,7 @@ impl FaultTolerance {
                         FaultQueryMsg::RecordFailure { node_id } => {
                             let breaker = circuit_breakers
                                 .entry(node_id)
-                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_mins(1)));
+                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_secs(1 * 60)));
                             breaker.record_failure();
                         }
                         FaultQueryMsg::GetCircuitBreaker { node_id, tx } => {

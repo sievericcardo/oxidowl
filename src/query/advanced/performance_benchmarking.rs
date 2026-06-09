@@ -719,7 +719,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Run query optimization with timeout
         let result = tokio::time::timeout(
-            Duration::from_mins(1), // 1 minute timeout for queries
+            Duration::from_secs(1 * 60), // 1 minute timeout for queries
             async { optimizer.optimize_advanced(query) },
         )
         .await;
@@ -744,7 +744,7 @@ impl PerformanceBenchmarkingSystem {
                 error_message: Some(format!("Query error: {e:?}")),
             }),
             Err(_) => Ok(SingleQueryMeasurement {
-                execution_time: Duration::from_mins(1),
+                execution_time: Duration::from_secs(1 * 60),
                 success: false,
                 result_size: 0,
                 optimization_effectiveness: 0.0,

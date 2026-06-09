@@ -129,7 +129,7 @@ impl SatExpanderCache {
 
 impl Default for SatExpanderCache {
     fn default() -> Self {
-        Self::new(50_000, Duration::from_hours(1))
+        Self::new(50_000, Duration::from_secs(1 * 3600))
     }
 }
 

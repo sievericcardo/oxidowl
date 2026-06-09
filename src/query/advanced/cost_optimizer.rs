@@ -2503,7 +2503,7 @@ impl Default for AutoAdjustmentConfig {
             enable_auto_adjustment: false, // Conservative default
             adjustment_threshold: 0.8,
             min_feedback_samples: 50,
-            adjustment_frequency: Duration::from_hours(1), // 1 hour
+            adjustment_frequency: Duration::from_secs(1 * 3600), // 1 hour
             conservative_mode: true,
         }
     }

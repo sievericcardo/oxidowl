@@ -556,7 +556,7 @@ impl Default for TableauConfig {
     fn default() -> Self {
         Self {
             max_depth: 100,
-            timeout: Some(Duration::from_mins(5)),
+            timeout: Some(Duration::from_secs(5 * 60)),
             blocking_enabled: true,
             optimization_enabled: true,
             rdf11_mode: false,                // RDF-star enabled by default
@@ -577,7 +577,7 @@ impl Default for ReasoningConfig {
             blocking_strategy: BlockingStrategy::Anywhere,
             expansion_strategy: ExpansionStrategy::CreationOrder,
             features,
-            timeout: Some(Duration::from_mins(5)), // 5 minutes
+            timeout: Some(Duration::from_secs(5 * 60)), // 5 minutes
             max_memory_mb: Some(4096),             // 4 GB
             incremental_reasoning: false,
             max_expansion_depth: 100,
@@ -609,7 +609,7 @@ impl Default for ReasonerConfig {
                 blocking_strategy: BlockingStrategy::Anywhere,
                 expansion_strategy: ExpansionStrategy::CreationOrder,
                 features: reasoning_features,
-                timeout: Some(Duration::from_mins(5)), // 5 minutes
+                timeout: Some(Duration::from_secs(5 * 60)), // 5 minutes
                 max_memory_mb: Some(4096),             // 4 GB
                 incremental_reasoning: false,
                 max_expansion_depth: 100,
@@ -621,7 +621,7 @@ impl Default for ReasonerConfig {
             cache: CacheConfig {
                 features: cache_features,
                 max_cache_size_mb: 1024, // 1 GB
-                cache_ttl: Some(Duration::from_hours(1)),
+                cache_ttl: Some(Duration::from_secs(1 * 3600)),
                 eviction_strategy: CacheEvictionStrategy::LRU,
                 persistence: false,
             },
@@ -749,7 +749,7 @@ impl ReasonerConfig {
         config.reasoning.max_memory_mb = Some(8192); // 8 GB
         config.cache.max_cache_size_mb = 2048; // 2 GB
         config.performance.memory_pool_size_mb = 1024; // 1 GB
-        config.reasoning.timeout = Some(Duration::from_mins(30)); // 30 minutes
+        config.reasoning.timeout = Some(Duration::from_secs(30 * 60)); // 30 minutes
         config.reasoning.max_expansion_depth = 200; // Increase depth for large ontologies
         config.reasoning.enable(ReasoningFeature::Optimizations); // Enable optimisations
         config
@@ -760,8 +760,8 @@ impl ReasonerConfig {
     pub fn web_service_config() -> Self {
         let mut config = Self::default();
         config.server.max_connections = 500; // Increase for web service
-        config.server.request_timeout = Duration::from_mins(1); // 1 minute timeout
-        config.reasoning.timeout = Some(Duration::from_mins(2)); // 2 minutes
+        config.server.request_timeout = Duration::from_secs(1 * 60); // 1 minute timeout
+        config.reasoning.timeout = Some(Duration::from_secs(2 * 60)); // 2 minutes
         config.cache.persistence = true; // Enable cache persistence
         config
     }
