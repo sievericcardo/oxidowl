@@ -67,6 +67,7 @@ pub struct ExpansionManager {
     expansion_history: HashMap<String, ExpansionRecord>,
 
     /// Dependency tracker
+    #[allow(dead_code)]
     dependency_tracker: DependencyTracker,
 
     /// Configuration options
@@ -117,7 +118,7 @@ pub struct ExistentialCandidate {
     pub filler: ClassExpression,
 
     /// Dependencies for this candidate
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 
     /// Potential witness
     pub potential_witnesses: Vec<String>,
@@ -191,7 +192,7 @@ pub struct ExpansionResult {
     pub success: bool,
 
     /// Dependencies generated during expansion
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 /// Record of a completed expansion
@@ -272,9 +273,11 @@ pub struct ComplexityStrategy {
 #[derive(Debug)]
 pub struct RoleDepthStrategy {
     /// Role depth cache
+    #[allow(dead_code)]
     role_depths: HashMap<Role, u32>,
 
     /// Prefer shallow or deep roles
+    #[allow(dead_code)]
     prefer_shallow: bool,
 }
 
@@ -282,12 +285,15 @@ pub struct RoleDepthStrategy {
 #[derive(Debug)]
 pub struct HybridStrategy {
     /// Primary strategy
+    #[allow(dead_code)]
     primary: Box<dyn ExpansionStrategy>,
 
     /// Fallback strategy
+    #[allow(dead_code)]
     fallbacks: Vec<Box<dyn ExpansionStrategy>>,
 
     /// Strategy selection criteria
+    #[allow(dead_code)]
     selection_criteria: StrategySelectionCriteria,
 }
 
@@ -432,7 +438,7 @@ impl ExpansionManager {
     fn expand_with_witness(
         &self,
         candidate: &ExistentialCandidate,
-        context: &ExpansionContext,
+        _context: &ExpansionContext,
     ) -> Result<ExpansionResult> {
         let witness = candidate.potential_witnesses[0].clone(); // Use first witness
 
@@ -446,7 +452,7 @@ impl ExpansionManager {
             new_concepts: vec![(witness, candidate.filler.clone())],
             rule_applications: Vec::new(),
             success: true,
-            dependencies: candidate.dependencies.clone(),
+            dependencies: Arc::clone(&candidate.dependencies),
         };
 
         // Create rule application for adding filler concept
@@ -454,7 +460,7 @@ impl ExpansionManager {
             CompletionRule::Some,
             candidate.node.clone(),
             candidate.existential.clone(),
-            Arc::new(candidate.dependencies.clone()),
+            Arc::clone(&candidate.dependencies),
         );
         result.rule_applications.push(rule_app);
 
@@ -465,7 +471,7 @@ impl ExpansionManager {
     fn expand_with_new_individual(
         &self,
         candidate: &ExistentialCandidate,
-        context: &ExpansionContext,
+        _context: &ExpansionContext,
     ) -> Result<ExpansionResult> {
         let uuid_str = uuid::Uuid::new_v4().to_string();
         let new_individual = format!("_exist_{}_{}", candidate.node, &uuid_str[..8]);
@@ -480,7 +486,7 @@ impl ExpansionManager {
             new_concepts: vec![(new_individual, candidate.filler.clone())],
             rule_applications: Vec::new(),
             success: true,
-            dependencies: candidate.dependencies.clone(),
+            dependencies: Arc::clone(&candidate.dependencies),
         };
 
         // Create rule application
@@ -488,7 +494,7 @@ impl ExpansionManager {
             CompletionRule::Some,
             candidate.node.clone(),
             candidate.existential.clone(),
-            Arc::new(candidate.dependencies.clone()),
+            Arc::clone(&candidate.dependencies),
         );
         result.rule_applications.push(rule_app);
 
@@ -676,7 +682,7 @@ impl ExistentialCandidate {
     pub fn new(
         node: String,
         existential: ClassExpression,
-        dependencies: DependencySet,
+        dependencies: Arc<DependencySet>,
     ) -> Result<Self> {
         let (role, filler) = match &existential {
             ClassExpression::ObjectSomeValuesFrom {
@@ -904,10 +910,10 @@ impl ExpansionStrategy for DepthFirstExpansionStrategy {
         candidates: &[ExistentialCandidate],
     ) -> Option<ExistentialCandidate> {
         // Prefer candidates from current expansion path
-        if let Some(last_node) = self.expansion_path.last() {
-            if let Some(candidate) = candidates.iter().find(|c| &c.node == last_node) {
-                return Some(candidate.clone());
-            }
+        if let Some(last_node) = self.expansion_path.last()
+            && let Some(candidate) = candidates.iter().find(|c| &c.node == last_node)
+        {
+            return Some(candidate.clone());
         }
         candidates.first().cloned()
     }
@@ -1037,6 +1043,7 @@ pub struct HeuristicExpansionStrategy {
     /// Complexity weights
     complexity_weights: ComplexityWeights,
     /// Depth preference
+    #[allow(dead_code)]
     depth_preference: f64,
     /// Role preference mapping
     role_preferences: HashMap<String, f64>,
@@ -1159,15 +1166,20 @@ impl Default for HeuristicExpansionStrategy {
 
 /// Uuid generation for unique identifiers
 mod uuid {
+    use std::fmt;
+
     pub struct Uuid;
 
     impl Uuid {
         pub fn new_v4() -> Self {
             Self
         }
+    }
 
-        pub fn to_string(&self) -> String {
-            format!(
+    impl fmt::Display for Uuid {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                f,
                 "{:016x}",
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -1179,17 +1191,9 @@ mod uuid {
 }
 
 /// Default expansion strategy wrapper
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DefaultExpansionStrategy {
     inner: BreadthFirstExpansionStrategy,
-}
-
-impl Default for DefaultExpansionStrategy {
-    fn default() -> Self {
-        Self {
-            inner: BreadthFirstExpansionStrategy::new(),
-        }
-    }
 }
 
 impl ExpansionStrategy for DefaultExpansionStrategy {
@@ -1205,7 +1209,7 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
     }
 
     fn order_expansions(&mut self, existentials: &mut [ExistentialCandidate]) {
-        self.inner.order_expansions(existentials)
+        self.inner.order_expansions(existentials);
     }
 
     fn should_delay_expansion(
@@ -1221,10 +1225,10 @@ impl ExpansionStrategy for DefaultExpansionStrategy {
     }
 
     fn expansion_completed(&mut self, candidate: &ExistentialCandidate, result: &ExpansionResult) {
-        self.inner.expansion_completed(candidate, result)
+        self.inner.expansion_completed(candidate, result);
     }
 
     fn clear(&mut self) {
-        self.inner.clear()
+        self.inner.clear();
     }
 }

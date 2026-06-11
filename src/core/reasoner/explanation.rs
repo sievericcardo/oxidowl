@@ -34,28 +34,20 @@ impl ExplanationService {
                 // Check for direct axioms that support this inference
                 for ontology_axiom in ontology.axioms() {
                     match ontology_axiom {
-                        Axiom::SubClassOf(existing_axiom) => {
-                            // Direct match
-                            if existing_axiom.subclass == *subclass
-                                && existing_axiom.superclass == *superclass
-                            {
+                        Axiom::SubClassOf(existing_axiom)
+                            // Direct match or transitive support (simplified)
+                            if (existing_axiom.subclass == *subclass
+                                || existing_axiom.superclass == *superclass)
+                            => {
                                 explanation.push(ontology_axiom.clone());
                             }
-                            // Transitive support (simplified)
-                            else if existing_axiom.subclass == *subclass {
-                                explanation.push(ontology_axiom.clone());
-                            } else if existing_axiom.superclass == *superclass {
-                                explanation.push(ontology_axiom.clone());
-                            }
-                        }
-                        Axiom::EquivalentClasses(equiv_axiom) => {
+                        Axiom::EquivalentClasses(equiv_axiom)
                             // Check if either class is in the equivalence
-                            if equiv_axiom.classes.contains(subclass)
-                                || equiv_axiom.classes.contains(superclass)
-                            {
+                            if (equiv_axiom.classes.contains(subclass)
+                                || equiv_axiom.classes.contains(superclass))
+                            => {
                                 explanation.push(ontology_axiom.clone());
                             }
-                        }
                         _ => {}
                     }
                 }
@@ -64,17 +56,15 @@ impl ExplanationService {
                 // Find axioms that support the class membership
                 for ontology_axiom in ontology.axioms() {
                     match ontology_axiom {
-                        Axiom::ClassAssertion(existing_assertion) => {
-                            if existing_assertion.individual == class_assertion.individual {
+                        Axiom::ClassAssertion(existing_assertion)
+                            if existing_assertion.individual == class_assertion.individual => {
                                 explanation.push(ontology_axiom.clone());
                             }
-                        }
-                        Axiom::SubClassOf(subclass_axiom) => {
+                        Axiom::SubClassOf(subclass_axiom)
                             // Check if this subclass relationship contributes
-                            if subclass_axiom.superclass == class_assertion.class {
+                            if subclass_axiom.superclass == class_assertion.class => {
                                 explanation.push(ontology_axiom.clone());
                             }
-                        }
                         _ => {}
                     }
                 }
@@ -123,7 +113,7 @@ impl ExplanationService {
         }
 
         // Check for individuals asserted to be in disjoint classes
-        for (_individual, assertions) in &class_assertions {
+        for assertions in class_assertions.values() {
             for (i, (class1, axiom1)) in assertions.iter().enumerate() {
                 for (class2, axiom2) in assertions.iter().skip(i + 1) {
                     // Check if these classes are disjoint
@@ -149,16 +139,16 @@ impl ExplanationService {
                     functional_properties.insert(func_axiom.property.clone());
                     explanation.push(axiom.clone());
                 }
-                Axiom::ObjectPropertyAssertion(prop_assertion) => {
-                    if functional_properties.contains(&prop_assertion.property) {
-                        property_assertions
-                            .entry((
-                                prop_assertion.source.clone(),
-                                prop_assertion.property.clone(),
-                            ))
-                            .or_insert_with(Vec::new)
-                            .push((prop_assertion.target.clone(), axiom.clone()));
-                    }
+                Axiom::ObjectPropertyAssertion(prop_assertion)
+                    if functional_properties.contains(&prop_assertion.property) =>
+                {
+                    property_assertions
+                        .entry((
+                            prop_assertion.source.clone(),
+                            prop_assertion.property.clone(),
+                        ))
+                        .or_insert_with(Vec::new)
+                        .push((prop_assertion.target.clone(), axiom.clone()));
                 }
                 _ => {}
             }
@@ -188,33 +178,30 @@ impl ExplanationService {
         for axiom in ontology.axioms() {
             match axiom {
                 // Check if the class is declared equivalent to owl:Nothing
-                Axiom::EquivalentClasses(equiv_axiom) => {
-                    if equiv_axiom.classes.contains(class) {
-                        for equiv_class in &equiv_axiom.classes {
-                            if let ClassExpression::Class(cls) = equiv_class {
-                                if cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
-                                    explanation.push(axiom.clone());
-                                    break;
-                                }
-                            }
+                Axiom::EquivalentClasses(equiv_axiom) if equiv_axiom.classes.contains(class) => {
+                    for equiv_class in &equiv_axiom.classes {
+                        if let ClassExpression::Class(cls) = equiv_class
+                            && cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+                        {
+                            explanation.push(axiom.clone());
+                            break;
                         }
                     }
                 }
                 // Check if the class is declared as a subclass of owl:Nothing
                 Axiom::SubClassOf(subclass_axiom) => {
-                    if subclass_axiom.subclass == *class {
-                        if let ClassExpression::Class(super_cls) = &subclass_axiom.superclass {
-                            if super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
-                                explanation.push(axiom.clone());
-                            }
-                        }
+                    if subclass_axiom.subclass == *class
+                        && let ClassExpression::Class(super_cls) = &subclass_axiom.superclass
+                        && super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+                    {
+                        explanation.push(axiom.clone());
                     }
                 }
                 // Check for disjoint classes that cover all possibilities
-                Axiom::DisjointClasses(disjoint_axiom) => {
-                    if disjoint_axiom.classes.contains(class) {
-                        explanation.push(axiom.clone());
-                    }
+                Axiom::DisjointClasses(disjoint_axiom)
+                    if disjoint_axiom.classes.contains(class) =>
+                {
+                    explanation.push(axiom.clone());
                 }
                 // Check for contradictory restrictions
                 _ => {
@@ -238,19 +225,17 @@ impl ExplanationService {
         // Look for direct subsumption axioms
         for axiom in ontology.axioms() {
             match axiom {
-                Axiom::SubClassOf(subclass_axiom) => {
+                Axiom::SubClassOf(subclass_axiom)
                     if subclass_axiom.subclass == *subclass
-                        && subclass_axiom.superclass == *superclass
-                    {
-                        explanation.push(axiom.clone());
-                    }
+                        && subclass_axiom.superclass == *superclass =>
+                {
+                    explanation.push(axiom.clone());
                 }
-                Axiom::EquivalentClasses(equiv_axiom) => {
+                Axiom::EquivalentClasses(equiv_axiom)
                     if equiv_axiom.classes.contains(subclass)
-                        && equiv_axiom.classes.contains(superclass)
-                    {
-                        explanation.push(axiom.clone());
-                    }
+                        && equiv_axiom.classes.contains(superclass) =>
+                {
+                    explanation.push(axiom.clone());
                 }
                 _ => {}
             }
@@ -263,6 +248,7 @@ impl ExplanationService {
     }
 
     /// Find a chain of subsumption relationships
+    #[allow(dead_code)]
     fn find_subsumption_chain(
         &self,
         subclass: &ClassExpression,
@@ -272,10 +258,17 @@ impl ExplanationService {
     ) -> Result<bool> {
         // Use a simple depth-first search to find subsumption chains
         let mut visited = HashSet::new();
-        self.find_subsumption_path(subclass, superclass, ontology, explanation, &mut visited)
+        self.find_subsumption_path(subclass, superclass, ontology, explanation, &mut visited, 0)
     }
 
-    /// Recursively find a path from subclass to superclass
+    /// Maximum DFS depth for subsumption-path search, to prevent stack overflow
+    /// on pathologically deep or cyclic subsumption chains.
+    const MAX_SEARCH_DEPTH: usize = 2000;
+
+    /// Recursively find a path from subclass to superclass.
+    ///
+    /// The `depth` parameter guards against stack overflow on deep hierarchies.
+    #[allow(dead_code)]
     fn find_subsumption_path(
         &self,
         current: &ClassExpression,
@@ -283,7 +276,11 @@ impl ExplanationService {
         ontology: &Ontology,
         explanation: &mut Vec<Axiom>,
         visited: &mut HashSet<ClassExpression>,
+        depth: usize,
     ) -> Result<bool> {
+        if depth >= Self::MAX_SEARCH_DEPTH {
+            return Ok(false);
+        }
         if visited.contains(current) {
             return Ok(false);
         }
@@ -295,24 +292,25 @@ impl ExplanationService {
 
         // Look for direct subsumption relationships
         for axiom in ontology.axioms() {
-            if let Axiom::SubClassOf(subclass_axiom) = axiom {
-                if subclass_axiom.subclass == *current {
-                    // Found a step in the chain
-                    explanation.push(axiom.clone());
+            if let Axiom::SubClassOf(subclass_axiom) = axiom
+                && subclass_axiom.subclass == *current
+            {
+                // Found a step in the chain
+                explanation.push(axiom.clone());
 
-                    if self.find_subsumption_path(
-                        &subclass_axiom.superclass,
-                        target,
-                        ontology,
-                        explanation,
-                        visited,
-                    )? {
-                        return Ok(true);
-                    }
-
-                    // Backtrack
-                    explanation.pop();
+                if self.find_subsumption_path(
+                    &subclass_axiom.superclass,
+                    target,
+                    ontology,
+                    explanation,
+                    visited,
+                    depth + 1,
+                )? {
+                    return Ok(true);
                 }
+
+                // Backtrack
+                explanation.pop();
             }
         }
 
@@ -332,30 +330,30 @@ impl ExplanationService {
         // Look for direct class assertions
         for axiom in ontology.axioms() {
             match axiom {
-                Axiom::ClassAssertion(class_assertion) => {
-                    if class_assertion.individual == *individual {
-                        // Check if the asserted class is our target or a subclass
-                        if class_assertion.class == *class {
+                Axiom::ClassAssertion(class_assertion)
+                    if class_assertion.individual == *individual =>
+                {
+                    // Check if the asserted class is our target or a subclass
+                    if class_assertion.class == *class {
+                        explanation.push(axiom.clone());
+                    } else {
+                        // Look for subsumption relationship
+                        let subsumption_explanation =
+                            self.explain_subsumption(&class_assertion.class, class, ontology)?;
+                        if !subsumption_explanation.is_empty() {
                             explanation.push(axiom.clone());
-                        } else {
-                            // Look for subsumption relationship
-                            let subsumption_explanation =
-                                self.explain_subsumption(&class_assertion.class, class, ontology)?;
-                            if !subsumption_explanation.is_empty() {
-                                explanation.push(axiom.clone());
-                                explanation.extend(subsumption_explanation);
-                            }
+                            explanation.extend(subsumption_explanation);
                         }
                     }
                 }
                 // Look for property assertions that might infer class membership
-                Axiom::ObjectPropertyAssertion(prop_assertion) => {
-                    if prop_assertion.source == *individual || prop_assertion.target == *individual
-                    {
-                        // Check if this property assertion contributes to class membership
-                        // This would require more sophisticated reasoning about property restrictions
-                        explanation.push(axiom.clone());
-                    }
+                Axiom::ObjectPropertyAssertion(prop_assertion)
+                    if (prop_assertion.source == *individual
+                        || prop_assertion.target == *individual) =>
+                {
+                    // Check if this property assertion contributes to class membership
+                    // This would require more sophisticated reasoning about property restrictions
+                    explanation.push(axiom.clone());
                 }
                 _ => {}
             }
@@ -365,6 +363,7 @@ impl ExplanationService {
     }
 
     /// Generate a human-readable explanation
+    #[must_use]
     pub fn format_explanation(&self, explanation: &[Axiom]) -> String {
         let mut output = String::new();
         output.push_str("Explanation:\n");
@@ -393,7 +392,7 @@ impl ExplanationService {
                 let classes: Vec<String> = equiv_axiom
                     .classes
                     .iter()
-                    .map(|c| format!("{:?}", c))
+                    .map(|c| format!("{c:?}"))
                     .collect();
                 format!("EquivalentClasses({})", classes.join(", "))
             }
@@ -413,14 +412,14 @@ impl ExplanationService {
                 let classes: Vec<String> = disjoint_axiom
                     .classes
                     .iter()
-                    .map(|c| format!("{:?}", c))
+                    .map(|c| format!("{c:?}"))
                     .collect();
                 format!("DisjointClasses({})", classes.join(", "))
             }
             Axiom::FunctionalObjectProperty(func_axiom) => {
                 format!("FunctionalObjectProperty({:?})", func_axiom.property)
             }
-            _ => format!("{:?}", axiom),
+            _ => format!("{axiom:?}"),
         }
     }
 
@@ -440,8 +439,8 @@ impl ExplanationService {
         let mut parent_map: std::collections::HashMap<String, (String, Axiom)> =
             std::collections::HashMap::new();
 
-        let start_key = format!("{:?}", subclass);
-        let target_key = format!("{:?}", superclass);
+        let start_key = format!("{subclass:?}");
+        let target_key = format!("{superclass:?}");
 
         queue.push_back(start_key.clone());
         visited.insert(start_key.clone());
@@ -485,8 +484,8 @@ impl ExplanationService {
                     for (i, class1) in equiv_axiom.classes.iter().enumerate() {
                         for (j, class2) in equiv_axiom.classes.iter().enumerate() {
                             if i != j {
-                                let class1_key = format!("{:?}", class1);
-                                let class2_key = format!("{:?}", class2);
+                                let class1_key = format!("{class1:?}");
+                                let class2_key = format!("{class2:?}");
 
                                 if class1_key == current && !visited.contains(&class2_key) {
                                     visited.insert(class2_key.clone());
@@ -508,6 +507,7 @@ impl ExplanationService {
     }
 
     /// Find minimal explanations (remove redundant axioms)
+    #[must_use]
     pub fn minimize_explanation(&self, explanation: Vec<Axiom>) -> Vec<Axiom> {
         // Simple minimization: remove duplicate axioms
         let mut minimal = Vec::new();

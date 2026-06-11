@@ -1,5 +1,4 @@
 /// Tests for entailment functionality
-
 use super::*;
 use crate::semantics::{RdfGraph, RdfTerm, Triple};
 

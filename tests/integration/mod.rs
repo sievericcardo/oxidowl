@@ -5,5 +5,5 @@
 mod greenhouse_tests;
 mod swrl_builtins_test;
 mod swrl_integration_test;
-// Temporarily disabled due to compilation issues - will fix in next iteration
-// mod disjoint_classes_test;
+// Re-enabling disjoint classes test
+mod disjoint_classes_test;

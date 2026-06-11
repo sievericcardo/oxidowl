@@ -20,7 +20,7 @@ impl SWRLBuiltIn for BooleanNotBuiltIn {
 
         match (&args[0], &args[1]) {
             (SWRLValue::Boolean(result), SWRLValue::Boolean(input)) => {
-                if *result == !*input {
+                if *result != *input {
                     Ok(SWRLValue::Boolean(true))
                 } else {
                     Ok(SWRLValue::Boolean(false))

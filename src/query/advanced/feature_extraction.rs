@@ -52,6 +52,7 @@ impl Default for FeatureExtractionConfig {
 
 impl DLQueryFeatureExtractor {
     /// Create a new DL query feature extractor
+    #[must_use]
     pub fn new() -> Self {
         Self {
             feature_cache: HashMap::new(),
@@ -60,6 +61,7 @@ impl DLQueryFeatureExtractor {
     }
 
     /// Create with custom configuration
+    #[must_use]
     pub fn with_config(config: FeatureExtractionConfig) -> Self {
         Self {
             feature_cache: HashMap::new(),
@@ -180,7 +182,7 @@ impl DLQueryFeatureExtractor {
 
         // Query tree depth (for nested expressions)
         let max_depth = self.calculate_max_expression_depth(query);
-        features.push(max_depth as f64);
+        features.push(f64::from(max_depth));
 
         features
     }
@@ -214,7 +216,11 @@ impl DLQueryFeatureExtractor {
 
     /// Extract statistical features (would require ontology statistics)
     fn extract_statistical_features(&self, query: &ConjunctiveQuery) -> Vec<f64> {
-        let mut features = Vec::new();
+        let features = vec![
+            self.estimate_selectivity(query),
+            self.estimate_result_size(query),
+            self.estimate_join_cost(query),
+        ];
 
         // Placeholder for statistical features that would be computed from ontology
         // These would include:
@@ -222,11 +228,6 @@ impl DLQueryFeatureExtractor {
         // - Property selectivity estimates
         // - Hierarchy depth statistics
         // - Domain/range complexity
-
-        // For now, use heuristic estimates
-        features.push(self.estimate_selectivity(query));
-        features.push(self.estimate_result_size(query));
-        features.push(self.estimate_join_cost(query));
 
         features
     }
@@ -311,7 +312,7 @@ impl DLQueryFeatureExtractor {
             match atom {
                 QueryAtom::ClassAtom { .. } => class_atoms += 1,
                 QueryAtom::ObjectPropertyAtom { .. } | QueryAtom::DataPropertyAtom { .. } => {
-                    prop_atoms += 1
+                    prop_atoms += 1;
                 }
                 _ => other_atoms += 1,
             }
@@ -511,7 +512,7 @@ impl DLQueryFeatureExtractor {
         }
     }
 
-    fn count_cardinality_restrictions(&self, query: &ConjunctiveQuery) -> usize {
+    fn count_cardinality_restrictions(&self, _query: &ConjunctiveQuery) -> usize {
         // Placeholder - would count ObjectMinCardinality, ObjectMaxCardinality, etc.
         // These would be added to the ClassExpression enum if not already present
         0
@@ -572,7 +573,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
 
         // Cache the result if caching is enabled
         if self.config.enable_caching {
-            let query_hash = self.query_hash(query);
+            let _query_hash = self.query_hash(query);
             // Note: In a real implementation, we'd need mutable access to cache
             // This would require interior mutability (RefCell/Mutex)
         }
@@ -597,7 +598,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
                     "max_expression_depth",
                 ]
                 .iter()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             );
         }
 
@@ -614,7 +615,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
                     "cardinality_restrictions",
                 ]
                 .iter()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             );
         }
 
@@ -626,7 +627,7 @@ impl QueryFeatureExtractor for DLQueryFeatureExtractor {
                     "estimated_join_cost",
                 ]
                 .iter()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             );
         }
 

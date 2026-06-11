@@ -7,7 +7,7 @@ use crate::{
     Error, Result,
     cache::CacheManager,
     core::{
-        lock_helpers::{read_lock, write_lock},
+        lock_helpers::read_lock,
         reasoner::{
             statistics::ReasoningStatistics,
             tableau::{TableauAlgorithmInstance, TableauFactory},
@@ -16,25 +16,18 @@ use crate::{
     ontology::{ClassExpression, Individual, OntologyRef},
 };
 use log::{debug, info};
-use std::{
-    sync::{Arc, RwLock},
-    time::Instant,
-};
+use std::time::Instant;
 
 /// Service for basic reasoning operations (consistency, satisfiability, subsumption)
 #[derive(Debug)]
 pub struct ReasoningTaskService {
     pub tableau_factory: TableauFactory,
-    pub cache_manager: Arc<RwLock<CacheManager>>,
 }
 
 impl ReasoningTaskService {
     /// Create a new reasoning task service
-    pub fn new(tableau_factory: TableauFactory, cache_manager: Arc<RwLock<CacheManager>>) -> Self {
-        Self {
-            tableau_factory,
-            cache_manager,
-        }
+    pub fn new(tableau_factory: TableauFactory) -> Self {
+        Self { tableau_factory }
     }
 
     /// Check if the ontology is consistent
@@ -42,6 +35,7 @@ impl ReasoningTaskService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_consistency_checks();
@@ -49,10 +43,7 @@ impl ReasoningTaskService {
         info!("Checking ontology consistency");
 
         // Check cache first
-        if let Some(cached_result) =
-            read_lock(&self.cache_manager, "tasks: reading cache for consistency")?
-                .get_consistency_result(ontology)
-        {
+        if let Some(cached_result) = cache.get_consistency_result(ontology) {
             debug!("Consistency result found in cache");
             return Ok(cached_result);
         }
@@ -68,8 +59,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_consistency_check(tableau, statistics)?;
 
         // Cache the result
-        write_lock(&self.cache_manager, "tasks: storing consistency result")?
-            .cache_consistency_result(ontology, result);
+        cache.cache_consistency_result(ontology, result);
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -84,6 +74,7 @@ impl ReasoningTaskService {
         class_iri: &str,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_satisfiability_checks();
@@ -99,16 +90,11 @@ impl ReasoningTaskService {
         }
 
         // Check cache first
-        if let Some(class_expr) = self.parse_class_expression(class_iri) {
-            if let Some(cached_result) = read_lock(
-                &self.cache_manager,
-                "tasks: reading cache for satisfiability",
-            )?
-            .get_satisfiability_result(&class_expr)
-            {
-                debug!("Satisfiability result found in cache for: {class_iri}");
-                return Ok(cached_result);
-            }
+        if let Some(class_expr) = self.parse_class_expression(class_iri)
+            && let Some(cached_result) = cache.get_satisfiability_result(&class_expr)
+        {
+            debug!("Satisfiability result found in cache for: {class_iri}");
+            return Ok(cached_result);
         }
 
         let ontology_guard =
@@ -124,8 +110,7 @@ impl ReasoningTaskService {
 
         // Cache the result
         if let Some(class_expr) = self.parse_class_expression(class_iri) {
-            write_lock(&self.cache_manager, "tasks: storing satisfiability result")?
-                .cache_satisfiability_result(class_expr, result);
+            cache.cache_satisfiability_result(class_expr, result);
         }
 
         let reasoning_time = start_time.elapsed();
@@ -142,6 +127,7 @@ impl ReasoningTaskService {
         superclass: &str,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_subsumption_checks();
@@ -152,14 +138,10 @@ impl ReasoningTaskService {
         if let (Some(sub_expr), Some(sup_expr)) = (
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
-        ) {
-            if let Some(cached_result) =
-                read_lock(&self.cache_manager, "tasks: reading cache for subsumption")?
-                    .get_subsumption_result(&sub_expr, &sup_expr)
-            {
-                debug!("Subsumption result found in cache");
-                return Ok(cached_result);
-            }
+        ) && let Some(cached_result) = cache.get_subsumption_result(&sub_expr, &sup_expr)
+        {
+            debug!("Subsumption result found in cache");
+            return Ok(cached_result);
         }
 
         let ontology_guard = read_lock(ontology, "tasks: reading ontology for subsumption check")?;
@@ -179,8 +161,7 @@ impl ReasoningTaskService {
             self.parse_class_expression(subclass),
             self.parse_class_expression(superclass),
         ) {
-            write_lock(&self.cache_manager, "tasks: storing subsumption result")?
-                .cache_subsumption_result(sub_expr, sup_expr, result);
+            cache.cache_subsumption_result(sub_expr, sup_expr, result);
         }
 
         let reasoning_time = start_time.elapsed();
@@ -197,18 +178,14 @@ impl ReasoningTaskService {
         class_expr: &ClassExpression,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
 
         info!("Checking instance relationship");
 
         // Check cache first
-        if let Some(cached_result) = read_lock(
-            &self.cache_manager,
-            "tasks: reading cache for instance check",
-        )?
-        .get_instance_result(individual, class_expr)
-        {
+        if let Some(cached_result) = cache.get_instance_result(individual, class_expr) {
             debug!("Instance result found in cache");
             return Ok(cached_result);
         }
@@ -226,11 +203,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_instance_check(tableau, statistics)?;
 
         // Cache the result
-        write_lock(&self.cache_manager, "tasks: storing instance result")?.store_instance_result(
-            individual.clone(),
-            class_expr.clone(),
-            result,
-        );
+        cache.store_instance_result(individual.clone(), class_expr.clone(), result);
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -246,17 +219,13 @@ impl ReasoningTaskService {
         superclass: &ClassExpression,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
         statistics.increment_subsumption_checks();
 
         // Check cache first
-        if let Some(cached_result) = read_lock(
-            &self.cache_manager,
-            "tasks: reading cache for subsumption expressions",
-        )?
-        .get_subsumption_result(subclass, superclass)
-        {
+        if let Some(cached_result) = cache.get_subsumption_result(subclass, superclass) {
             return Ok(cached_result);
         }
 
@@ -278,11 +247,7 @@ impl ReasoningTaskService {
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
 
         // Store in cache
-        write_lock(
-            &self.cache_manager,
-            "tasks: storing subsumption expressions result",
-        )?
-        .cache_subsumption_result(subclass.clone(), superclass.clone(), result);
+        cache.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -296,6 +261,7 @@ impl ReasoningTaskService {
         axiom: &crate::ontology::Axiom,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<bool> {
         let start_time = Instant::now();
 
@@ -308,7 +274,7 @@ impl ReasoningTaskService {
                 // Check if subclass ⊑ superclass is entailed
                 let subclass_str = format!("{:?}", subclass_axiom.subclass);
                 let superclass_str = format!("{:?}", subclass_axiom.superclass);
-                self.check_subsumption(&subclass_str, &superclass_str, ontology, statistics)?
+                self.check_subsumption(&subclass_str, &superclass_str, ontology, statistics, cache)?
             }
             crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) => {
                 // Check if individual ∈ class is entailed
@@ -317,6 +283,7 @@ impl ReasoningTaskService {
                     &class_assertion.class,
                     ontology,
                     statistics,
+                    cache,
                 )?
             }
             _ => {
@@ -441,11 +408,233 @@ impl ReasoningTaskService {
     }
 
     /// Parse a class IRI string into a `ClassExpression`
+    ///
+    /// Supports simplified Manchester-style syntax:
+    /// - Named classes: `<http://example.org/Class>` or `prefix:ClassName`
+    /// - Intersections: `Class1 and Class2` or `Class1 ⊓ Class2`
+    /// - Unions: `Class1 or Class2` or `Class1 ⊔ Class2`
+    /// - Complements: `not Class` or `¬Class`
+    /// - Existential: `some property Class` or `∃property.Class`
+    /// - Universal: `only property Class` or `∀property.Class`
+    /// - Cardinality: `min 2 property Class`, `max 5 property Class`, `exactly 3 property Class`
+    /// - owl:Thing and owl:Nothing as special classes
     fn parse_class_expression(&self, class_iri: &str) -> Option<ClassExpression> {
-        // For now, assume it's a named class
-        // In a full implementation, this would parse complex class expressions
+        Self::parse_class_expr_str(class_iri)
+    }
+
+    /// Parse a class expression from a string (static helper)
+    fn parse_class_expr_str(class_iri: &str) -> Option<ClassExpression> {
+        let trimmed = class_iri.trim();
+
+        // Handle empty input
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        // Handle special OWL classes
+        if trimmed == "owl:Thing" || trimmed.ends_with("#Thing") || trimmed.ends_with("/Thing") {
+            return Some(ClassExpression::Class(crate::ontology::Class {
+                iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+            }));
+        }
+        if trimmed == "owl:Nothing"
+            || trimmed.ends_with("#Nothing")
+            || trimmed.ends_with("/Nothing")
+        {
+            return Some(ClassExpression::Class(crate::ontology::Class {
+                iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#Nothing"),
+            }));
+        }
+
+        // Parse complex expressions
+        // Priority order: and/or > not > restrictions > atomic
+
+        // Check for intersection (and, ⊓)
+        if let Some(parts) = Self::split_by_operator(trimmed, &["and", "⊓"])
+            && parts.len() >= 2
+        {
+            let expressions: Vec<ClassExpression> = parts
+                .iter()
+                .filter_map(|p| Self::parse_class_expr_str(p))
+                .collect();
+
+            if expressions.len() == parts.len() {
+                return Some(ClassExpression::ObjectIntersectionOf(expressions));
+            }
+        }
+
+        // Check for union (or, ⊔)
+        if let Some(parts) = Self::split_by_operator(trimmed, &["or", "⊔"])
+            && parts.len() >= 2
+        {
+            let expressions: Vec<ClassExpression> = parts
+                .iter()
+                .filter_map(|p| Self::parse_class_expr_str(p))
+                .collect();
+
+            if expressions.len() == parts.len() {
+                return Some(ClassExpression::ObjectUnionOf(expressions));
+            }
+        }
+
+        // Check for complement (not, ¬)
+        if trimmed.starts_with("not ")
+            && let Some(inner) = Self::parse_class_expr_str(&trimmed[4..])
+        {
+            return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
+        }
+        if trimmed.starts_with('¬')
+            && let Some(inner) = Self::parse_class_expr_str(&trimmed[3..])
+        {
+            // ¬ is 3 bytes in UTF-8
+            return Some(ClassExpression::ObjectComplementOf(Box::new(inner)));
+        }
+
+        // Check for existential restriction (some, ∃)
+        if trimmed.starts_with("some ") {
+            return Self::parse_restriction(trimmed, "some", true);
+        }
+        if trimmed.starts_with('∃') {
+            return Self::parse_restriction(trimmed, "∃", true);
+        }
+
+        // Check for universal restriction (only, ∀)
+        if trimmed.starts_with("only ") {
+            return Self::parse_restriction(trimmed, "only", false);
+        }
+        if trimmed.starts_with('∀') {
+            return Self::parse_restriction(trimmed, "∀", false);
+        }
+
+        // Check for cardinality restrictions
+        if trimmed.starts_with("min ")
+            || trimmed.starts_with("max ")
+            || trimmed.starts_with("exactly ")
+        {
+            return Self::parse_cardinality(trimmed);
+        }
+
+        // Default: treat as named class IRI
+        // Handle angle brackets: <http://example.org/Class>
+        let iri_str = if trimmed.starts_with('<') && trimmed.ends_with('>') {
+            &trimmed[1..trimmed.len() - 1]
+        } else {
+            trimmed
+        };
+
         Some(ClassExpression::Class(crate::ontology::Class {
-            iri: crate::ontology::IRI::from(class_iri.to_string()),
+            iri: crate::ontology::IRI::from(iri_str.to_string()),
         }))
+    }
+
+    /// Split a string by multiple operators, handling precedence
+    fn split_by_operator(s: &str, operators: &[&str]) -> Option<Vec<String>> {
+        for op in operators {
+            let parts: Vec<&str> = s.split(op).collect();
+            if parts.len() > 1 {
+                return Some(parts.iter().map(|p| p.trim().to_string()).collect());
+            }
+        }
+        None
+    }
+
+    /// Parse a property restriction (existential or universal)
+    fn parse_restriction(s: &str, keyword: &str, is_existential: bool) -> Option<ClassExpression> {
+        let after_keyword = if keyword == "∃" || keyword == "∀" {
+            s[keyword.len()..].trim()
+        } else {
+            s[keyword.len() + 1..].trim() // +1 for space
+        };
+
+        // Format: "property.Class" or "property Class"
+        let parts: Vec<&str> = if after_keyword.contains('.') {
+            after_keyword.splitn(2, '.').collect()
+        } else {
+            after_keyword.splitn(2, ' ').collect()
+        };
+
+        if parts.len() == 2 {
+            let property_iri = parts[0].trim();
+            let filler_str = parts[1].trim();
+
+            // Create property expression
+            let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                crate::ontology::ObjectProperty {
+                    iri: crate::ontology::IRI::from(property_iri.to_string()),
+                },
+            );
+
+            // Parse filler recursively
+            if let Some(filler) = Self::parse_class_expr_str(filler_str) {
+                return if is_existential {
+                    Some(ClassExpression::ObjectSomeValuesFrom {
+                        property,
+                        filler: Box::new(filler),
+                    })
+                } else {
+                    Some(ClassExpression::ObjectAllValuesFrom {
+                        property,
+                        filler: Box::new(filler),
+                    })
+                };
+            }
+        }
+
+        None
+    }
+
+    /// Parse cardinality restrictions
+    fn parse_cardinality(s: &str) -> Option<ClassExpression> {
+        let parts: Vec<&str> = s.split_whitespace().collect();
+
+        if parts.len() >= 3 {
+            let (kind, rest_idx) = if parts[0] == "min" {
+                ("min", 1)
+            } else if parts[0] == "max" {
+                ("max", 1)
+            } else if parts[0] == "exactly" {
+                ("exactly", 1)
+            } else {
+                return None;
+            };
+
+            // Parse cardinality number
+            if let Ok(cardinality) = parts[rest_idx].parse::<u32>()
+                && parts.len() > rest_idx + 1
+            {
+                let property_iri = parts[rest_idx + 1];
+                let filler_str = parts[rest_idx + 2..].join(" ");
+
+                let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                    crate::ontology::ObjectProperty {
+                        iri: crate::ontology::IRI::from(property_iri.to_string()),
+                    },
+                );
+
+                // Parse filler recursively
+                if let Some(filler) = Self::parse_class_expr_str(&filler_str) {
+                    return match kind {
+                        "min" => Some(ClassExpression::ObjectMinCardinality {
+                            cardinality,
+                            property,
+                            filler: Box::new(filler),
+                        }),
+                        "max" => Some(ClassExpression::ObjectMaxCardinality {
+                            cardinality,
+                            property,
+                            filler: Box::new(filler),
+                        }),
+                        "exactly" => Some(ClassExpression::ObjectExactCardinality {
+                            cardinality,
+                            property,
+                            filler: Box::new(filler),
+                        }),
+                        _ => None,
+                    };
+                }
+            }
+        }
+
+        None
     }
 }

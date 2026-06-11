@@ -24,13 +24,13 @@ use std::sync::{Arc, RwLock};
 /// Type alias for a thread-safe, shared ontology reference
 ///
 /// This type represents an ontology that can be safely shared across threads
-/// and allows for both read and write access through the RwLock.
+/// and allows for both read and write access through the `RwLock`.
 pub type OntologyRef = Arc<RwLock<Ontology>>;
 
 /// IRI (Internationalized Resource Identifier) wrapper
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct IRI {
-    value: String,
+    value: std::sync::Arc<str>,
 }
 
 impl IRI {
@@ -38,7 +38,7 @@ impl IRI {
     #[must_use]
     pub fn new(value: &str) -> Self {
         Self {
-            value: value.to_string(),
+            value: std::sync::Arc::from(value),
         }
     }
 
@@ -58,21 +58,23 @@ impl IRI {
     #[must_use]
     pub fn from_url(url: Url) -> Self {
         Self {
-            value: url.to_string(),
+            value: std::sync::Arc::from(url.to_string().as_str()),
         }
     }
 }
 
 impl From<String> for IRI {
     fn from(value: String) -> Self {
-        Self { value }
+        Self {
+            value: std::sync::Arc::from(value.as_str()),
+        }
     }
 }
 
 impl From<Url> for IRI {
     fn from(url: Url) -> Self {
         Self {
-            value: url.to_string(),
+            value: std::sync::Arc::from(url.to_string().as_str()),
         }
     }
 }
@@ -365,6 +367,9 @@ pub struct Ontology {
     pub imports: Vec<IRI>,
     /// Next axiom ID
     next_id: u64,
+    /// RDF graph for RDF-star and RDF 1.2 support
+    /// Contains triples that may include quoted triples (RDF-star) or RDF 1.2 features
+    pub rdf_graph: Option<crate::semantics::RdfGraph>,
 }
 
 impl Ontology {
@@ -378,11 +383,12 @@ impl Ontology {
             version_iri: None,
             imports: Vec::new(),
             next_id: 1,
+            rdf_graph: None,
         }
     }
 
     /// Generate next axiom ID
-    fn next_axiom_id(&mut self) -> u64 {
+    pub fn next_axiom_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         id
@@ -409,6 +415,52 @@ impl Ontology {
         self.iri.as_ref()
     }
 
+    /// Get the RDF graph (if present)
+    #[must_use]
+    pub fn get_rdf_graph(&self) -> Option<&crate::semantics::RdfGraph> {
+        self.rdf_graph.as_ref()
+    }
+
+    /// Get mutable reference to the RDF graph (if present)
+    #[must_use]
+    pub fn get_rdf_graph_mut(&mut self) -> Option<&mut crate::semantics::RdfGraph> {
+        self.rdf_graph.as_mut()
+    }
+
+    /// Set the RDF graph
+    pub fn set_rdf_graph(&mut self, graph: crate::semantics::RdfGraph) {
+        self.rdf_graph = Some(graph);
+    }
+
+    /// Get or create the RDF graph
+    pub fn get_or_create_rdf_graph(&mut self) -> &mut crate::semantics::RdfGraph {
+        self.rdf_graph
+            .get_or_insert_with(crate::semantics::RdfGraph::new)
+    }
+
+    /// Add an RDF triple to the ontology's RDF graph
+    pub fn add_rdf_triple(&mut self, triple: crate::semantics::Triple) {
+        self.get_or_create_rdf_graph().add_triple(triple);
+    }
+
+    /// Check if ontology contains RDF-star features (quoted triples)
+    #[must_use]
+    pub fn has_rdf_star_features(&self) -> bool {
+        if let Some(graph) = &self.rdf_graph {
+            graph.quoted_triple_count() > 0
+        } else {
+            false
+        }
+    }
+
+    /// Convert RDF graph to RDF 1.1 by reifying quoted triples
+    pub fn reify_rdf_star(&mut self) -> crate::Result<()> {
+        if let Some(graph) = &mut self.rdf_graph {
+            graph.reify_quoted_triples()?;
+        }
+        Ok(())
+    }
+
     /// Add an axiom to the ontology
     pub fn add_axiom(&mut self, axiom: axioms::Axiom) {
         self.axioms.push(axiom);
@@ -426,6 +478,7 @@ impl Ontology {
     }
 
     /// Count axioms by type
+    #[must_use]
     pub fn count_axioms_by_type(&self) -> std::collections::HashMap<axioms::AxiomType, usize> {
         let mut counts = std::collections::HashMap::new();
         for axiom in &self.axioms {
@@ -615,7 +668,8 @@ impl Ontology {
 
         // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
-        let mut ontology = adapter.convert_basic_ontology::<std::rc::Rc<str>>(&result.0)?;
+        let mut ontology =
+            adapter.convert_basic_ontology::<std::rc::Rc<str>, std::rc::Rc<str>, _>(&result.0)?;
 
         // Try to extract ontology IRI from the file by re-reading it
         // This is a workaround since horned-owl's API is complex
@@ -641,12 +695,12 @@ impl Ontology {
             let trimmed = line.trim();
             if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
                 // Extract IRI between < and >
-                if let Some(start) = trimmed.find('<') {
-                    if let Some(end) = trimmed[start..].find('>') {
-                        let iri_str = &trimmed[start + 1..start + end];
-                        if iri_str.starts_with("http") {
-                            return Some(IRI::new(iri_str));
-                        }
+                if let Some(start) = trimmed.find('<')
+                    && let Some(end) = trimmed[start..].find('>')
+                {
+                    let iri_str = &trimmed[start + 1..start + end];
+                    if iri_str.starts_with("http") {
+                        return Some(IRI::new(iri_str));
                     }
                 }
             }
@@ -663,7 +717,7 @@ impl Ontology {
         A: horned_owl::model::ForIRI + Clone + std::fmt::Display + std::hash::Hash + Eq,
     {
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
-        adapter.convert_ontology_with_swrl::<std::rc::Rc<str>>(&horned_ontology)
+        adapter.convert_ontology_with_swrl::<A, A, _>(&horned_ontology)
     }
 
     /// Load an ontology from a file
@@ -727,13 +781,13 @@ impl Ontology {
         // This creates a declaration axiom for the property
         let axiom = axioms::Axiom::Declaration(axioms::DeclarationAxiom {
             id: self.next_axiom_id(),
-            entity: axioms::Entity::ObjectProperty(property.iri.into()),
+            entity: axioms::Entity::ObjectProperty(property.iri),
         });
         self.add_axiom(axiom);
     }
 
     /// Add an individual and its declaration axiom
-    pub fn add_individual(&mut self, subject: IRI, individual: individuals::Individual) {
+    pub fn add_individual(&mut self, _subject: IRI, individual: individuals::Individual) {
         // Add a declaration axiom for the individual
         let declaration = axioms::DeclarationAxiom {
             id: self.next_axiom_id(),
@@ -760,11 +814,11 @@ impl Ontology {
         let mut classes = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
-            if let axioms::Axiom::Declaration(decl) = axiom {
-                if let axioms::Entity::Class(iri) = &decl.entity {
-                    let class = concepts::Class { iri: iri.clone() };
-                    classes.push((iri.clone(), class));
-                }
+            if let axioms::Axiom::Declaration(decl) = axiom
+                && let axioms::Entity::Class(iri) = &decl.entity
+            {
+                let class = concepts::Class { iri: iri.clone() };
+                classes.push((iri.clone(), class));
             }
         }
 
@@ -803,29 +857,21 @@ impl Ontology {
                 // Extract from object property assertion axioms
                 axioms::Axiom::ObjectPropertyAssertion(assertion) => {
                     // Extract source
-                    if let individuals::Individual::Named(named) = &assertion.source {
-                        if !individuals
+                    if let individuals::Individual::Named(named) = &assertion.source
+                        && !individuals
                             .iter()
                             .any(|(existing_iri, _)| existing_iri == &named.iri)
-                        {
-                            individuals.push((named.iri.clone(), assertion.source.clone()));
-                        }
+                    {
+                        individuals.push((named.iri.clone(), assertion.source.clone()));
                     }
 
                     // Extract target
-                    if let individuals::Individual::Named(named) = &assertion.target {
-                        if !individuals
+                    if let individuals::Individual::Named(named) = &assertion.target
+                        && !individuals
                             .iter()
                             .any(|(existing_iri, _)| existing_iri == &named.iri)
-                        {
-                            individuals.push((named.iri.clone(), assertion.target.clone()));
-                        }
-                    }
-                }
-                axioms::Axiom::ClassAssertion(class_assertion) => {
-                    // Extract individual from class assertion
-                    if let Individual::Named(named) = &class_assertion.individual {
-                        individuals.push((named.iri.clone(), class_assertion.individual.clone()));
+                    {
+                        individuals.push((named.iri.clone(), assertion.target.clone()));
                     }
                 }
                 axioms::Axiom::DataPropertyAssertion(data_assertion) => {
@@ -881,15 +927,125 @@ impl Ontology {
         let mut properties = Vec::with_capacity(self.axioms.len());
 
         for axiom in &self.axioms {
-            if let axioms::Axiom::Declaration(decl) = axiom {
-                if let axioms::Entity::ObjectProperty(iri) = &decl.entity {
-                    let property = ObjectProperty { iri: iri.clone() };
-                    properties.push(property);
-                }
+            if let axioms::Axiom::Declaration(decl) = axiom
+                && let axioms::Entity::ObjectProperty(iri) = &decl.entity
+            {
+                let property = ObjectProperty { iri: iri.clone() };
+                properties.push(property);
             }
         }
 
         properties
+    }
+
+    /// Query for property chain axioms and return super property if chain matches
+    ///
+    /// This method searches for `SubObjectPropertyOf` axioms with property chains
+    /// that match the given first and second roles. If found, it returns the
+    /// super property that can be inferred from the chain.
+    ///
+    /// Example: If we have R ∘ S ⊑ T and we query with (R, S), returns Some(T)
+    #[must_use]
+    pub fn get_property_chain_super(&self, first_role: &str, second_role: &str) -> Option<String> {
+        for axiom in &self.axioms {
+            if let axioms::Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom {
+                // Check if the sub_property is a property chain
+                if let ObjectPropertyExpression::PropertyChain(chain) = &sub_prop_axiom.sub_property
+                {
+                    // Check if this chain matches our (first_role, second_role) pattern
+                    if chain.len() == 2 {
+                        let first_matches = match &chain[0] {
+                            ObjectPropertyExpression::ObjectProperty(prop) => {
+                                prop.iri.as_str().ends_with(first_role)
+                                    || prop.iri.as_str() == first_role
+                            }
+                            _ => false,
+                        };
+
+                        let second_matches = match &chain[1] {
+                            ObjectPropertyExpression::ObjectProperty(prop) => {
+                                prop.iri.as_str().ends_with(second_role)
+                                    || prop.iri.as_str() == second_role
+                            }
+                            _ => false,
+                        };
+
+                        if first_matches && second_matches {
+                            // Extract the super property name
+                            if let ObjectPropertyExpression::ObjectProperty(super_prop) =
+                                &sub_prop_axiom.super_property
+                            {
+                                return Some(super_prop.iri.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Get concept definition from `EquivalentClasses` axioms
+    ///
+    /// This method searches for `EquivalentClasses` axioms containing the given
+    /// named class and returns an equivalent definition if found.
+    ///
+    /// Example: If Person ≡ Human ⊓ ∃hasParent.Person, returns Some(Human ⊓ ∃hasParent.Person)
+    #[must_use]
+    pub fn get_concept_definition(&self, named_class: &concepts::Class) -> Option<ClassExpression> {
+        for axiom in &self.axioms {
+            if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                // Check if this equivalence contains our target class
+                let contains_target = equiv_axiom
+                    .classes
+                    .iter()
+                    .any(|ce| matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri));
+
+                if contains_target {
+                    // Return the first non-trivial equivalent definition
+                    for ce in &equiv_axiom.classes {
+                        // Skip the trivial self-reference
+                        if matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri) {
+                            continue;
+                        }
+                        // Return the first complex definition found
+                        return Some(ce.clone());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Get all equivalent classes for a given class
+    ///
+    /// Returns all class expressions that are declared equivalent to the given class.
+    #[must_use]
+    pub fn get_equivalent_classes(&self, named_class: &concepts::Class) -> Vec<ClassExpression> {
+        let mut equivalents = Vec::new();
+
+        for axiom in &self.axioms {
+            if let axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                // Check if this equivalence contains our target class
+                let contains_target = equiv_axiom
+                    .classes
+                    .iter()
+                    .any(|ce| matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri));
+
+                if contains_target {
+                    // Collect all non-self equivalent expressions
+                    for ce in &equiv_axiom.classes {
+                        if !matches!(ce, ClassExpression::Class(c) if c.iri == named_class.iri) {
+                            equivalents.push(ce.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        equivalents
     }
 }
 

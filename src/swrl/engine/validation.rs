@@ -2,6 +2,8 @@
 //!
 //! This module implements validation logic for SWRL rules and goal satisfaction checking.
 
+#![allow(dead_code)]
+
 use crate::core::lock_helpers::read_lock;
 use crate::ontology::{Axiom, ClassExpression, ObjectPropertyExpression};
 use crate::swrl::{SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule};
@@ -20,6 +22,7 @@ pub struct RuleValidator {
 
 impl RuleValidator {
     /// Create a new rule validator
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
@@ -44,8 +47,7 @@ impl RuleValidator {
         for var in &head_variables {
             if !body_variables.contains(var) {
                 return Err(Error::reasoning(format!(
-                    "Variable {} in rule head does not appear in rule body (safety violation)",
-                    var
+                    "Variable {var} in rule head does not appear in rule body (safety violation)"
                 )));
             }
         }
@@ -54,7 +56,7 @@ impl RuleValidator {
         self.validate_atom_consistency(&rule.body)?;
         self.validate_atom_consistency(&rule.head)?;
 
-        debug!("Rule validation successful: {:?}", rule);
+        debug!("Rule validation successful: {rule:?}");
         Ok(())
     }
 
@@ -163,8 +165,7 @@ impl RuleValidator {
         for pair in &same_pairs {
             if different_pairs.contains(pair) {
                 return Err(Error::reasoning(format!(
-                    "Rule contains contradiction: individuals are both same and different: {:?}",
-                    pair
+                    "Rule contains contradiction: individuals are both same and different: {pair:?}"
                 )));
             }
         }
@@ -178,8 +179,8 @@ impl RuleValidator {
         arg1: &SWRLIArgument,
         arg2: &SWRLIArgument,
     ) -> (String, String) {
-        let str1 = format!("{:?}", arg1);
-        let str2 = format!("{:?}", arg2);
+        let str1 = format!("{arg1:?}");
+        let str2 = format!("{arg2:?}");
 
         if str1 <= str2 {
             (str1, str2)
@@ -204,6 +205,7 @@ pub struct GoalChecker {
 
 impl GoalChecker {
     /// Create a new goal checker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pattern_matcher: PatternMatcher::new(),
@@ -214,7 +216,7 @@ impl GoalChecker {
     /// Check if a goal is satisfied by current facts in the ontology
     pub fn is_goal_satisfied(&mut self, engine: &SWRLRuleEngine, goal: &SWRLAtom) -> Result<bool> {
         if let Some(ontology) = &engine.ontology {
-            let ontology_guard = read_lock(
+            let _ontology_guard = read_lock(
                 ontology,
                 "SWRL validation: reading ontology for goal satisfaction",
             )?;
@@ -321,10 +323,10 @@ impl GoalChecker {
 
             // Check for direct class assertions
             for axiom in ontology_guard.axioms() {
-                if let Axiom::ClassAssertion(assertion) = axiom {
-                    if self.matches_class_assertion_axiom(individual, class, assertion)? {
-                        return Ok(true);
-                    }
+                if let Axiom::ClassAssertion(assertion) = axiom
+                    && self.matches_class_assertion_axiom(individual, class, assertion)?
+                {
+                    return Ok(true);
                 }
             }
         }
@@ -347,12 +349,12 @@ impl GoalChecker {
             )?;
 
             for axiom in ontology_guard.axioms() {
-                if let Axiom::ObjectPropertyAssertion(assertion) = axiom {
-                    if self.matches_object_property_assertion_axiom(
+                if let Axiom::ObjectPropertyAssertion(assertion) = axiom
+                    && self.matches_object_property_assertion_axiom(
                         subject, property, object, assertion,
-                    )? {
-                        return Ok(true);
-                    }
+                    )?
+                {
+                    return Ok(true);
                 }
             }
         }
@@ -375,12 +377,12 @@ impl GoalChecker {
             )?;
 
             for axiom in ontology_guard.axioms() {
-                if let Axiom::DataPropertyAssertion(assertion) = axiom {
-                    if self.matches_data_property_assertion_axiom(
+                if let Axiom::DataPropertyAssertion(assertion) = axiom
+                    && self.matches_data_property_assertion_axiom(
                         subject, property, object, assertion,
-                    )? {
-                        return Ok(true);
-                    }
+                    )?
+                {
+                    return Ok(true);
                 }
             }
         }
@@ -440,8 +442,8 @@ impl GoalChecker {
     ) -> Result<bool> {
         // Implement matching logic
         match individual {
-            SWRLIArgument::Individual(ind) => Ok(ind.iri().map(|i| i.as_str())
-                == assertion.individual.iri().map(|i| i.as_str())
+            SWRLIArgument::Individual(ind) => Ok(ind.iri().map(crate::ontology::IRI::as_str)
+                == assertion.individual.iri().map(crate::ontology::IRI::as_str)
                 && class == &assertion.class),
             SWRLIArgument::Variable(_) => {
                 // Variables can match any individual
@@ -459,14 +461,16 @@ impl GoalChecker {
     ) -> Result<bool> {
         let subject_match = match subject {
             SWRLIArgument::Individual(ind) => {
-                ind.iri().map(|i| i.as_str()) == assertion.source.iri().map(|i| i.as_str())
+                ind.iri().map(crate::ontology::IRI::as_str)
+                    == assertion.source.iri().map(crate::ontology::IRI::as_str)
             }
             SWRLIArgument::Variable(_) => true, // Variables can match any individual
         };
 
         let object_match = match object {
             SWRLIArgument::Individual(ind) => {
-                ind.iri().map(|i| i.as_str()) == assertion.target.iri().map(|i| i.as_str())
+                ind.iri().map(crate::ontology::IRI::as_str)
+                    == assertion.target.iri().map(crate::ontology::IRI::as_str)
             }
             SWRLIArgument::Variable(_) => true, // Variables can match any individual
         };
@@ -532,7 +536,6 @@ impl GoalChecker {
                 crate::ontology::DataPropertyExpression::DataProperty(p1),
                 crate::ontology::DataPropertyExpression::DataProperty(p2),
             ) => p1.iri == p2.iri,
-            _ => false,
         }
     }
 }

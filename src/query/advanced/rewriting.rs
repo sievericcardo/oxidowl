@@ -4,6 +4,8 @@
 //! that transforms conjunctive queries into unions of conjunctive queries
 //! that can be answered using database-style query evaluation.
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use crate::ontology::{ClassExpression, ObjectPropertyExpression, Ontology, axioms::Axiom};
 use crate::profiles::ql::QLValidator;
@@ -20,7 +22,7 @@ pub struct QueryRewriter {
     max_rewriting_depth: usize,
 }
 
-/// Index of TBox axioms for efficient query rewriting
+/// Index of `TBox` axioms for efficient query rewriting
 #[derive(Debug, Clone)]
 struct TBoxIndex {
     /// Class inclusions: C ⊑ D
@@ -158,7 +160,7 @@ impl QueryRewriter {
         Ok(self.remove_redundant_queries(rewritten_queries))
     }
 
-    /// Expand a single query atom using TBox axioms
+    /// Expand a single query atom using `TBox` axioms
     fn expand_atom(
         &self,
         atom: &QueryAtom,
@@ -240,7 +242,7 @@ impl QueryRewriter {
         Ok(expansions)
     }
 
-    /// Generate new atoms that can be added to the query based on TBox axioms
+    /// Generate new atoms that can be added to the query based on `TBox` axioms
     fn generate_new_atoms(
         &self,
         query: &ConjunctiveQuery,
@@ -253,7 +255,7 @@ impl QueryRewriter {
             for var2 in &query_variables {
                 if var1 != var2 && var1.is_individual() && var2.is_individual() {
                     // Check if there are axioms that would justify adding a property between these variables
-                    for (property, _) in &self.tbox_index.property_inclusions {
+                    for property in self.tbox_index.property_inclusions.keys() {
                         new_atoms.push(QueryAtom::ObjectPropertyAtom {
                             subject: var1.clone(),
                             property: property.clone(),
@@ -320,7 +322,7 @@ impl QueryRewriter {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
         let count = COUNTER.fetch_add(1, Ordering::SeqCst);
-        QueryVariable::individual(format!("{}_{}", prefix, count))
+        QueryVariable::individual(format!("{prefix}_{count}"))
     }
 
     /// Compute a hash for a query to check for duplicates
@@ -346,7 +348,7 @@ impl QueryRewriter {
                 atom_hasher.finish()
             })
             .collect();
-        atom_hashes.sort();
+        atom_hashes.sort_unstable();
 
         for hash in atom_hashes {
             hash.hash(&mut hasher);
@@ -364,8 +366,7 @@ impl QueryRewriter {
                 } => {
                     if !self.is_ql_class_expression(class_expression) {
                         return Err(RewritingError::NotQLProfile(format!(
-                            "Complex class expression not allowed in QL: {}",
-                            class_expression
+                            "Complex class expression not allowed in QL: {class_expression}"
                         )));
                     }
                 }
@@ -393,7 +394,7 @@ impl QueryRewriter {
         }
     }
 
-    /// Build TBox index for efficient query rewriting
+    /// Build `TBox` index for efficient query rewriting
     fn build_tbox_index(ontology: &Ontology) -> Result<TBoxIndex, RewritingError> {
         let mut index = TBoxIndex {
             class_inclusions: HashMap::new(),
@@ -409,28 +410,28 @@ impl QueryRewriter {
                     index
                         .class_inclusions
                         .entry(axiom.superclass.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.subclass.clone());
                 }
                 Axiom::SubObjectPropertyOf(axiom) => {
                     index
                         .property_inclusions
                         .entry(axiom.super_property.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.sub_property.clone());
                 }
                 Axiom::ObjectPropertyDomain(axiom) => {
                     index
                         .property_domains
                         .entry(axiom.property.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.domain.clone());
                 }
                 Axiom::ObjectPropertyRange(axiom) => {
                     index
                         .property_ranges
                         .entry(axiom.property.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(axiom.range.clone());
                 }
                 _ => {

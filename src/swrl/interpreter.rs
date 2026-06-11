@@ -38,7 +38,7 @@ impl SWRLInterpreter {
         context: &mut SWRLExecutionContext,
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<SWRLExecutionResult> {
-        trace!("Interpreting SWRL rule: {:?}", rule);
+        trace!("Interpreting SWRL rule: {rule:?}");
 
         // Find all possible variable bindings that satisfy the rule body
         let bindings = self.find_satisfying_bindings(rule, context, ontology)?;
@@ -68,7 +68,7 @@ impl SWRLInterpreter {
     fn find_satisfying_bindings(
         &self,
         rule: &SWRLRule,
-        context: &mut SWRLExecutionContext,
+        _context: &mut SWRLExecutionContext,
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
         let mut satisfying_bindings = Vec::new();
@@ -106,7 +106,7 @@ impl SWRLInterpreter {
         current_binding: &HashMap<SWRLVariable, SWRLValue>,
         ontology: &Arc<RwLock<Ontology>>,
     ) -> Result<Vec<HashMap<SWRLVariable, SWRLValue>>> {
-        trace!("Finding bindings for atom: {:?}", atom);
+        trace!("Finding bindings for atom: {atom:?}");
 
         match atom {
             SWRLAtom::ClassAtom {
@@ -185,14 +185,14 @@ impl SWRLInterpreter {
             SWRLIArgument::Variable(variable) => {
                 // Check if variable is already bound
                 if let Some(value) = current_binding.get(variable) {
-                    if let Some(individual) = value.as_individual() {
-                        if self.is_individual_instance_of_class(
+                    if let Some(individual) = value.as_individual()
+                        && self.is_individual_instance_of_class(
                             individual,
                             predicate,
                             &ontology_guard,
-                        )? {
-                            bindings.push(current_binding.clone());
-                        }
+                        )?
+                    {
+                        bindings.push(current_binding.clone());
                     }
                 } else {
                     // Find all individuals that are instances of the class
@@ -238,10 +238,10 @@ impl SWRLInterpreter {
                 }
                 SWRLIArgument::Variable(variable) => {
                     if let Some(existing_value) = current_binding.get(variable) {
-                        if let Some(existing_individual) = existing_value.as_individual() {
-                            if *existing_individual != subject {
-                                valid = false;
-                            }
+                        if let Some(existing_individual) = existing_value.as_individual()
+                            && *existing_individual != subject
+                        {
+                            valid = false;
                         }
                     } else {
                         new_binding
@@ -260,10 +260,10 @@ impl SWRLInterpreter {
                     }
                     SWRLIArgument::Variable(variable) => {
                         if let Some(existing_value) = new_binding.get(variable) {
-                            if let Some(existing_individual) = existing_value.as_individual() {
-                                if *existing_individual != object {
-                                    valid = false;
-                                }
+                            if let Some(existing_individual) = existing_value.as_individual()
+                                && *existing_individual != object
+                            {
+                                valid = false;
                             }
                         } else {
                             new_binding.insert(variable.clone(), SWRLValue::Individual(object));
@@ -308,10 +308,10 @@ impl SWRLInterpreter {
                 }
                 SWRLIArgument::Variable(variable) => {
                     if let Some(existing_value) = current_binding.get(variable) {
-                        if let Some(existing_individual) = existing_value.as_individual() {
-                            if *existing_individual != subject {
-                                valid = false;
-                            }
+                        if let Some(existing_individual) = existing_value.as_individual()
+                            && *existing_individual != subject
+                        {
+                            valid = false;
                         }
                     } else {
                         new_binding
@@ -330,10 +330,10 @@ impl SWRLInterpreter {
                     }
                     SWRLDArgument::Variable(variable) => {
                         if let Some(existing_value) = new_binding.get(variable) {
-                            if let Some(existing_literal) = existing_value.as_literal() {
-                                if *existing_literal != literal {
-                                    valid = false;
-                                }
+                            if let Some(existing_literal) = existing_value.as_literal()
+                                && *existing_literal != literal
+                            {
+                                valid = false;
                             }
                         } else {
                             new_binding.insert(variable.clone(), SWRLValue::Literal(literal));
@@ -660,10 +660,11 @@ impl SWRLInterpreter {
         ontology: &Ontology,
     ) -> Result<bool> {
         for axiom in ontology.axioms() {
-            if let Axiom::ClassAssertion(assertion) = axiom {
-                if assertion.individual == *individual && assertion.class == *class_expr {
-                    return Ok(true);
-                }
+            if let Axiom::ClassAssertion(assertion) = axiom
+                && assertion.individual == *individual
+                && assertion.class == *class_expr
+            {
+                return Ok(true);
             }
         }
         Ok(false)
@@ -678,10 +679,10 @@ impl SWRLInterpreter {
         let mut instances = Vec::new();
 
         for axiom in ontology.axioms() {
-            if let Axiom::ClassAssertion(assertion) = axiom {
-                if assertion.class == *class_expr {
-                    instances.push(assertion.individual.clone());
-                }
+            if let Axiom::ClassAssertion(assertion) = axiom
+                && assertion.class == *class_expr
+            {
+                instances.push(assertion.individual.clone());
             }
         }
 
@@ -697,10 +698,10 @@ impl SWRLInterpreter {
         let mut assertions = Vec::new();
 
         for axiom in ontology.axioms() {
-            if let Axiom::ObjectPropertyAssertion(assertion) = axiom {
-                if assertion.property == *property {
-                    assertions.push((assertion.source.clone(), assertion.target.clone()));
-                }
+            if let Axiom::ObjectPropertyAssertion(assertion) = axiom
+                && assertion.property == *property
+            {
+                assertions.push((assertion.source.clone(), assertion.target.clone()));
             }
         }
 
@@ -716,10 +717,10 @@ impl SWRLInterpreter {
         let mut assertions = Vec::new();
 
         for axiom in ontology.axioms() {
-            if let Axiom::DataPropertyAssertion(assertion) = axiom {
-                if assertion.property == *property {
-                    assertions.push((assertion.individual.clone(), assertion.value.clone()));
-                }
+            if let Axiom::DataPropertyAssertion(assertion) = axiom
+                && assertion.property == *property
+            {
+                assertions.push((assertion.individual.clone(), assertion.value.clone()));
             }
         }
 
@@ -760,10 +761,11 @@ impl SWRLInterpreter {
     ) -> Result<bool> {
         // Check for explicit same individual assertions
         for axiom in ontology.axioms() {
-            if let Axiom::SameIndividual(assertion) = axiom {
-                if assertion.individuals.contains(first) && assertion.individuals.contains(second) {
-                    return Ok(true);
-                }
+            if let Axiom::SameIndividual(assertion) = axiom
+                && assertion.individuals.contains(first)
+                && assertion.individuals.contains(second)
+            {
+                return Ok(true);
             }
         }
 
@@ -780,10 +782,11 @@ impl SWRLInterpreter {
     ) -> Result<bool> {
         // Check for explicit different individuals assertions
         for axiom in ontology.axioms() {
-            if let Axiom::DifferentIndividuals(assertion) = axiom {
-                if assertion.individuals.contains(first) && assertion.individuals.contains(second) {
-                    return Ok(true);
-                }
+            if let Axiom::DifferentIndividuals(assertion) = axiom
+                && assertion.individuals.contains(first)
+                && assertion.individuals.contains(second)
+            {
+                return Ok(true);
             }
         }
 

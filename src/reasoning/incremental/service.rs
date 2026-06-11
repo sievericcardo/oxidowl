@@ -4,6 +4,8 @@
 //! integrating change tracking, delta computation, and cache management
 //! with the existing reasoning infrastructure.
 
+#![allow(dead_code)]
+
 use super::{
     IncrementalConfig, IncrementalStatistics,
     cache_management::{ConsistencyReport, IncrementalCacheManager},
@@ -42,13 +44,13 @@ pub struct IncrementalReasoningService {
     /// Incremental cache manager
     cache_manager: Arc<IncrementalCacheManager>,
     /// Query engine for advanced queries
-    query_engine: Option<Arc<Mutex<QueryEngine>>>,
+    query_engine: Option<Mutex<QueryEngine>>,
     /// Service configuration
     config: IncrementalConfig,
     /// Performance statistics
-    statistics: Arc<RwLock<IncrementalStatistics>>,
+    statistics: RwLock<IncrementalStatistics>,
     /// Last full reasoning timestamp
-    last_full_reasoning: Arc<RwLock<Option<Instant>>>,
+    last_full_reasoning: RwLock<Option<Instant>>,
 }
 
 impl IncrementalReasoningService {
@@ -96,14 +98,14 @@ impl IncrementalReasoningService {
             cache_manager,
             query_engine: None, // Will be set when needed
             config,
-            statistics: Arc::new(RwLock::new(IncrementalStatistics::default())),
-            last_full_reasoning: Arc::new(RwLock::new(None)),
+            statistics: RwLock::new(IncrementalStatistics::default()),
+            last_full_reasoning: RwLock::new(None),
         })
     }
 
     /// Set the advanced query engine for incremental query processing
-    pub fn set_query_engine(&mut self, query_engine: Arc<Mutex<QueryEngine>>) {
-        self.query_engine = Some(query_engine);
+    pub fn set_query_engine(&mut self, query_engine: QueryEngine) {
+        self.query_engine = Some(Mutex::new(query_engine));
     }
 
     // === Incremental Operations ===
@@ -224,7 +226,7 @@ impl IncrementalReasoningService {
 
         // Add assertion to ontology (this would need to be implemented in Ontology)
         {
-            let ontology = self.ontology.write().await;
+            let _ontology = self.ontology.write().await;
             // ontology.add_class_assertion(individual.clone(), class.clone());
             // For now, we'll just track the change
         }
@@ -289,8 +291,8 @@ impl IncrementalReasoningService {
             let results = {
                 let mut query_engine_guard = query_engine
                     .lock()
-                    .map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
-                query_engine_guard.execute_query(&query)?
+                    .map_err(|e| Error::internal(format!("Failed to lock query engine: {e}")))?;
+                query_engine_guard.execute_query(query)?
             };
             QueryResult {
                 bindings: results
@@ -478,8 +480,8 @@ impl IncrementalReasoningService {
         let result = {
             let mut query_engine_guard = query_engine
                 .lock()
-                .map_err(|e| Error::internal(format!("Failed to lock query engine: {}", e)))?;
-            query_engine_guard.execute_query(&query)?
+                .map_err(|e| Error::internal(format!("Failed to lock query engine: {e}")))?;
+            query_engine_guard.execute_query(query)?
         };
 
         Ok(result
@@ -525,10 +527,10 @@ impl IncrementalReasoningService {
     ) -> Result<()> {
         let elapsed = start_time.elapsed().as_millis() as u64;
 
-        if let Ok(mut stats) = self.statistics.write() {
-            if was_incremental {
-                stats.time_saved_ms += elapsed * 3; // Estimate time saved vs full query
-            }
+        if let Ok(mut stats) = self.statistics.write()
+            && was_incremental
+        {
+            stats.time_saved_ms += elapsed * 3; // Estimate time saved vs full query
         }
 
         Ok(())
@@ -563,6 +565,7 @@ pub struct PerformanceReport {
 
 impl PerformanceReport {
     /// Calculate overall efficiency score (0.0 to 1.0)
+    #[must_use]
     pub fn efficiency_score(&self) -> f64 {
         let cache_hit_ratio = self.cache_statistics.post_invalidation_hit_rate;
         let incremental_ratio = if self.incremental_statistics.incremental_updates > 0 {
@@ -572,15 +575,17 @@ impl PerformanceReport {
             0.0
         };
 
-        (cache_hit_ratio + incremental_ratio) / 2.0
+        f64::midpoint(cache_hit_ratio, incremental_ratio)
     }
 
     /// Get total time saved by incremental reasoning (milliseconds)
+    #[must_use]
     pub fn total_time_saved_ms(&self) -> u64 {
         self.incremental_statistics.time_saved_ms + self.cache_statistics.time_saved_ms
     }
 
     /// Get total memory saved by incremental approaches (bytes)
+    #[must_use]
     pub fn total_memory_saved_bytes(&self) -> usize {
         self.cache_statistics.memory_saved_bytes + self.incremental_statistics.memory_usage_bytes
     }

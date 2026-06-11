@@ -24,6 +24,7 @@ impl Default for ManchesterParserConfig {
 /// Implements parsing according to the Manchester OWL Syntax specification
 #[derive(Debug, Clone)]
 pub struct ManchesterParser {
+    #[allow(dead_code)]
     config: ManchesterParserConfig,
     prefixes: HashMap<String, String>,
     current_position: usize,
@@ -31,6 +32,7 @@ pub struct ManchesterParser {
 }
 
 impl ManchesterParser {
+    #[must_use]
     pub fn new(config: ManchesterParserConfig) -> Self {
         let mut prefixes = HashMap::new();
 
@@ -67,9 +69,9 @@ impl ManchesterParser {
     pub fn parse_string(&mut self, content: &str) -> Result<Ontology, OxidowlError> {
         // Use strict validation for Manchester syntax
         let validator = super::validation::SyntaxValidator::new();
-        validator.validate_manchester(content).map_err(|e| {
-            OxidowlError::ParseError(format!("Manchester validation failed: {}", e))
-        })?;
+        validator
+            .validate_manchester(content)
+            .map_err(|e| OxidowlError::ParseError(format!("Manchester validation failed: {e}")))?;
 
         self.input = content.to_string();
         self.current_position = 0;
@@ -101,11 +103,12 @@ impl ManchesterParser {
     }
 
     /// Parse a class name
+    #[allow(dead_code)]
     fn parse_class_name(&self, name: &str) -> Result<crate::ontology::IRI, OxidowlError> {
         self.resolve_iri(name.trim())
     }
 
-    /// Parse a Manchester syntax class expression into ClassExpression
+    /// Parse a Manchester syntax class expression into `ClassExpression`
     pub fn parse_class_expression(
         &self,
         expr: &str,
@@ -127,8 +130,8 @@ impl ManchesterParser {
         }
 
         // Handle "not" (ObjectComplementOf)
-        if expr.starts_with("not ") {
-            let inner = self.parse_class_expr_internal(&expr[4..])?;
+        if let Some(stripped) = expr.strip_prefix("not ") {
+            let inner = self.parse_class_expr_internal(stripped)?;
             return Ok(crate::ontology::ClassExpression::ObjectComplementOf(
                 Box::new(inner),
             ));
@@ -281,20 +284,20 @@ impl ManchesterParser {
         // "exactly 1", "min 2", "max 5", "some", "only"
         let expr = expr.trim();
 
-        if expr.starts_with("exactly ") {
-            let num_str = &expr[8..].trim();
+        if let Some(stripped) = expr.strip_prefix("exactly ") {
+            let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
-                return Ok(format!("exactly_{}", num));
+                return Ok(format!("exactly_{num}"));
             }
-        } else if expr.starts_with("min ") {
-            let num_str = &expr[4..].trim();
+        } else if let Some(stripped) = expr.strip_prefix("min ") {
+            let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
-                return Ok(format!("min_{}", num));
+                return Ok(format!("min_{num}"));
             }
-        } else if expr.starts_with("max ") {
-            let num_str = &expr[4..].trim();
+        } else if let Some(stripped) = expr.strip_prefix("max ") {
+            let num_str = stripped.trim();
             if let Ok(num) = num_str.parse::<u32>() {
-                return Ok(format!("max_{}", num));
+                return Ok(format!("max_{num}"));
             }
         } else if expr == "some" {
             return Ok("some_values_from".to_string());
@@ -322,8 +325,7 @@ impl ManchesterParser {
 
                 if let Some(namespace) = self.prefixes.get(prefix) {
                     return Ok(crate::ontology::IRI::new(&format!(
-                        "{}{}",
-                        namespace, local_name
+                        "{namespace}{local_name}"
                     )));
                 }
             }

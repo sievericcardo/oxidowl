@@ -22,6 +22,7 @@ pub struct OWL2ProfileValidator {
 
 impl OWL2ProfileValidator {
     /// Create a new OWL 2 profile validator
+    #[must_use]
     pub fn new() -> Self {
         Self {
             el_validator: ELValidator::new(),
@@ -114,6 +115,7 @@ impl OWL2ProfileValidator {
     }
 
     /// Get a validator for a specific profile
+    #[must_use]
     pub fn get_validator(&self, profile: OWL2Profile) -> Box<dyn ProfileValidator> {
         match profile {
             OWL2Profile::EL => Box::new(ELValidator::new()),
@@ -157,13 +159,13 @@ impl OWL2ProfileValidator {
             for violation in &report.violations {
                 match &violation.violation_type {
                     crate::profiles::ProfileViolationType::DisallowedClassExpression(expr) => {
-                        suggestions.push(format!("Remove or replace {}", expr));
+                        suggestions.push(format!("Remove or replace {expr}"));
                     }
                     crate::profiles::ProfileViolationType::DisallowedAxiom(axiom) => {
-                        suggestions.push(format!("Remove or rewrite {} axiom", axiom));
+                        suggestions.push(format!("Remove or rewrite {axiom} axiom"));
                     }
                     crate::profiles::ProfileViolationType::ComplexityViolation(msg) => {
-                        suggestions.push(format!("Simplify construct: {}", msg));
+                        suggestions.push(format!("Simplify construct: {msg}"));
                     }
                     _ => {
                         suggestions.push(format!("Address: {}", violation.violation_type));
@@ -271,7 +273,7 @@ impl ProfileValidator for GenericValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology::{ClassExpression, IRI, Ontology};
+    use crate::ontology::Ontology;
 
     #[test]
     fn test_profile_validator_creation() {

@@ -25,7 +25,7 @@ mod tests {
 
     #[test]
     fn test_datatype_manager() {
-        let manager = DatatypeManager::new();
+        let _manager = DatatypeManager::new();
 
         // Should be able to create manager
         println!("✓ Datatype Manager creation test passed");
@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn test_manchester_parser() {
         let config = oxidowl::parsers::manchester::ManchesterParserConfig::default();
-        let parser = ManchesterParser::new(config);
+        let _parser = ManchesterParser::new(config);
 
         // Should be able to create parser
         println!("✓ Manchester Parser creation test passed");

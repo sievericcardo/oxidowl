@@ -8,7 +8,8 @@ use std::hint::black_box;
 fn satisfiability_benchmark(c: &mut Criterion) {
     let config = ReasonerConfig::default();
     let ontology = Ontology::new();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create reasoning service");
 
     c.bench_function("simple_concept_satisfiability", |b| {
         b.iter(|| {
@@ -56,7 +57,8 @@ fn consistency_benchmark(c: &mut Criterion) {
             rt.block_on(async {
                 let config = ReasonerConfig::default();
                 let ontology = Ontology::new();
-                let reasoning_service = ReasoningService::new(ontology, config);
+                let reasoning_service = ReasoningService::new(ontology, config)
+                    .expect("Failed to create reasoning service");
                 let result = reasoning_service.is_consistent().await;
                 black_box(result)
             })
@@ -85,7 +87,8 @@ fn consistency_benchmark(c: &mut Criterion) {
                 };
                 ontology.add_axiom(Axiom::SubClassOf(subclass_axiom));
 
-                let reasoning_service = ReasoningService::new(ontology, config);
+                let reasoning_service = ReasoningService::new(ontology, config)
+                    .expect("Failed to create reasoning service");
                 let result = reasoning_service.is_consistent().await;
                 black_box(result)
             })

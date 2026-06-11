@@ -13,7 +13,7 @@ use crate::core::tableau::incremental_checker::{
 };
 use crate::core::tableau::node::{ConceptLabel, TableauNode};
 use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Configuration for clause checking optimizations
 #[derive(Debug, Clone)]
@@ -87,11 +87,13 @@ pub struct ClauseViolation {
 
 impl ClauseChecker {
     /// Create a new clause checker
+    #[must_use]
     pub fn new(clauses: DLClauseSet) -> Self {
         Self::with_config(clauses, ClauseCheckerConfig::default())
     }
 
     /// Create clause checker with custom configuration
+    #[must_use]
     pub fn with_config(clauses: DLClauseSet, config: ClauseCheckerConfig) -> Self {
         // Apply clause absorption if enabled
         let (working_clauses, absorber) = if config.enable_absorption {
@@ -148,6 +150,7 @@ impl ClauseChecker {
     }
 
     /// Create clause checker with equivalence and disjointness information
+    #[must_use]
     pub fn with_reasoning_support(
         clauses: DLClauseSet,
         equivalence_closure: EquivalenceClosure,
@@ -210,6 +213,7 @@ impl ClauseChecker {
     }
 
     /// Create clause checker with full configuration options
+    #[must_use]
     pub fn with_full_config(
         clauses: DLClauseSet,
         equivalence_closure: Option<EquivalenceClosure>,
@@ -312,6 +316,7 @@ impl ClauseChecker {
     /// Check node immutably (without cache updates)
     ///
     /// Use this when you need immutable access or don't want to update cache.
+    #[must_use]
     pub fn check_node_immutable(&self, node: &TableauNode) -> Option<ClauseViolation> {
         log::trace!(
             "Checking node {} for clause violations (immutable)",
@@ -358,10 +363,11 @@ impl ClauseChecker {
 
                 // IMPORTANT: Also include clauses with empty bodies (they always apply!)
                 for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty() && clause.head.is_empty() == false {
-                        if !candidates.iter().any(|c| c.id == clause.id) {
-                            candidates.push(clause);
-                        }
+                    if clause.body.is_empty()
+                        && !clause.head.is_empty()
+                        && !candidates.iter().any(|c| c.id == clause.id)
+                    {
+                        candidates.push(clause);
                     }
                 }
 
@@ -497,7 +503,7 @@ impl ClauseChecker {
 
     /// Check deterministic clauses with caching
     ///
-    /// This is the cached version of check_deterministic_clauses that uses
+    /// This is the cached version of `check_deterministic_clauses` that uses
     /// the incremental cache to avoid redundant checks.
     fn check_deterministic_clauses_cached(
         &mut self,
@@ -528,15 +534,16 @@ impl ClauseChecker {
                 let mut candidates = index
                     .get_candidate_clause_refs(&predicates)
                     .into_iter()
-                    .map(|c| c.clone())
+                    .cloned()
                     .collect::<Vec<_>>();
 
                 // Include clauses with empty bodies
                 for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty() && !clause.head.is_empty() {
-                        if !candidates.iter().any(|c| c.id == clause.id) {
-                            candidates.push(clause.clone());
-                        }
+                    if clause.body.is_empty()
+                        && !clause.head.is_empty()
+                        && !candidates.iter().any(|c| c.id == clause.id)
+                    {
+                        candidates.push(clause.clone());
                     }
                 }
 
@@ -546,7 +553,7 @@ impl ClauseChecker {
                     .deterministic_clauses()
                     .iter()
                     .filter(|c| c.body.is_empty())
-                    .map(|c| c.clone())
+                    .cloned()
                     .collect()
             }
         } else {
@@ -657,11 +664,10 @@ impl ClauseChecker {
                     explanation: description,
                     node_id: node.id,
                 });
-            } else {
-                // No violation - cache this
-                if let Some(cache) = &mut self.check_cache {
-                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
-                }
+            }
+            // No violation - cache this
+            if let Some(cache) = &mut self.check_cache {
+                cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
             }
         }
 
@@ -685,17 +691,13 @@ impl ClauseChecker {
 
         // Get negative clauses (clone to avoid borrow issues)
         let negative_clauses: Vec<DLClause> = if let Some(index) = &self.clause_index {
-            index
-                .get_negative_clauses()
-                .into_iter()
-                .map(|c| c.clone())
-                .collect()
+            index.get_negative_clauses().into_iter().cloned().collect()
         } else {
             self.clauses
                 .deterministic_clauses
                 .iter()
                 .filter(|c| c.head.is_empty())
-                .map(|c| c.clone())
+                .cloned()
                 .collect()
         };
 
@@ -864,7 +866,7 @@ impl ClauseChecker {
     fn matches_atom(&self, node: &TableauNode, atom: &DLAtom) -> bool {
         // For now, only handle unary predicates (concept assertions)
         if atom.arguments.len() != 1 {
-            log::trace!("Skipping non-unary atom: {:?}", atom);
+            log::trace!("Skipping non-unary atom: {atom:?}");
             return false;
         }
 
@@ -884,32 +886,38 @@ impl ClauseChecker {
     }
 
     /// Get statistics about the clause set
+    #[must_use]
     pub fn get_statistics(&self) -> &crate::dl_clauses::DLClauseStatistics {
         &self.clauses.statistics
     }
 
     /// Check if clause checker has any clauses
+    #[must_use]
     pub fn has_clauses(&self) -> bool {
         !self.clauses.deterministic_clauses.is_empty()
             || !self.clauses.disjunctive_clauses.is_empty()
     }
 
     /// Get the configuration
+    #[must_use]
     pub fn config(&self) -> &ClauseCheckerConfig {
         &self.config
     }
 
     /// Get the clause index (if enabled)
+    #[must_use]
     pub fn clause_index(&self) -> Option<&ClauseIndex> {
         self.clause_index.as_ref()
     }
 
     /// Check if indexing is enabled
+    #[must_use]
     pub fn is_indexing_enabled(&self) -> bool {
         self.clause_index.is_some()
     }
 
     /// Get the check result cache (if enabled)
+    #[must_use]
     pub fn check_cache(&self) -> Option<&CheckResultCache> {
         self.check_cache.as_ref()
     }
@@ -925,21 +933,25 @@ impl ClauseChecker {
     }
 
     /// Get the disjointness map (if available)
+    #[must_use]
     pub fn disjointness_map(&self) -> Option<&DisjointnessMap> {
         self.disjointness_map.as_ref()
     }
 
     /// Check if incremental checking is enabled
+    #[must_use]
     pub fn is_incremental_enabled(&self) -> bool {
         self.check_cache.is_some()
     }
 
     /// Get the clause absorber (if enabled)
+    #[must_use]
     pub fn absorber(&self) -> Option<&ClauseAbsorber> {
         self.absorber.as_ref()
     }
 
     /// Check if clause absorption is enabled
+    #[must_use]
     pub fn is_absorption_enabled(&self) -> bool {
         self.absorber.is_some()
     }
@@ -970,7 +982,8 @@ impl ClauseChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::tableau::node::{BlockingInfo, NodeStatus, NodeType};
+    use crate::core::tableau::node::NodeType;
+    use std::collections::HashMap;
 
     fn create_test_node(id: usize, concepts: Vec<&str>) -> TableauNode {
         let mut node = TableauNode::new(id, NodeType::Individual);

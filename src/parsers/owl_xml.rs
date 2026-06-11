@@ -303,7 +303,7 @@ fn parse_axiom_element(
                     println!("DEBUG: Added TransitiveObjectProperty axiom to ontology");
                 }
                 Err(e) => {
-                    println!("DEBUG: Failed to parse TransitiveObjectProperty: {:?}", e);
+                    println!("DEBUG: Failed to parse TransitiveObjectProperty: {e:?}");
                 }
             }
         }
@@ -771,7 +771,7 @@ fn parse_inverse_functional_object_property(element: &roxmltree::Node) -> Result
 }
 
 /// Parse a `HasKey` element
-fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Result<Axiom> {
+fn parse_has_key(element: &roxmltree::Node, base_iri: Option<&url::Url>) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
         .filter(roxmltree::Node::is_element)
@@ -782,7 +782,7 @@ fn parse_has_key(element: &roxmltree::Node, _base_iri: Option<&url::Url>) -> Res
     }
 
     // First child should be the class
-    let class = parse_class_expression(&children[0], _base_iri)?;
+    let class = parse_class_expression(&children[0], base_iri)?;
 
     let mut object_properties = Vec::new();
     let mut data_properties = Vec::new();
@@ -1180,6 +1180,7 @@ pub struct OwlXmlSerializer;
 
 impl OwlXmlSerializer {
     /// Create a new OWL XML serializer
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -1207,9 +1208,9 @@ impl OntologySerializer for OwlXmlSerializer {
 
         // Add ontology IRI and version IRI if present
         if let Some(onto_iri) = ontology.get_iri() {
-            output.push_str(&format!("         ontologyIRI=\"{}\"", onto_iri));
+            output.push_str(&format!("         ontologyIRI=\"{onto_iri}\""));
             if let Some(version_iri) = &ontology.version_iri {
-                output.push_str(&format!("\n         versionIRI=\"{}\"", version_iri));
+                output.push_str(&format!("\n         versionIRI=\"{version_iri}\""));
             }
             output.push_str(">\n");
         } else {
@@ -1218,7 +1219,7 @@ impl OntologySerializer for OwlXmlSerializer {
 
         // Write imports
         for import in &ontology.imports {
-            output.push_str(&format!("  <Import>{}</Import>\n", import));
+            output.push_str(&format!("  <Import>{import}</Import>\n"));
         }
 
         // Write ontology annotations
@@ -1331,9 +1332,7 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                     serialize_object_property_xml(prop)
                 )
             }
-            _ => format!(
-                "<FunctionalObjectProperty><!-- Complex property expression --></FunctionalObjectProperty>"
-            ),
+            _ => "<FunctionalObjectProperty><!-- Complex property expression --></FunctionalObjectProperty>".to_string(),
         },
         Axiom::InverseFunctionalObjectProperty(axiom) => match &axiom.property {
             crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
@@ -1342,9 +1341,7 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                     serialize_object_property_xml(prop)
                 )
             }
-            _ => format!(
-                "<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>"
-            ),
+            _ => "<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>".to_string(),
         },
         Axiom::DataPropertyAssertion(axiom) => {
             format!(
@@ -1352,7 +1349,6 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 match &axiom.property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 },
                 serialize_individual_xml(&axiom.individual),
                 serialize_literal_xml(&axiom.value)
@@ -1364,12 +1360,10 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 match &axiom.sub_property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 },
                 match &axiom.super_property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 }
             )
         }
@@ -1379,11 +1373,10 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
                 match &axiom.property {
                     crate::ontology::DataPropertyExpression::DataProperty(prop) =>
                         serialize_data_property_xml(prop),
-                    _ => "<!-- Complex property expression -->".to_string(),
                 }
             )
         }
-        _ => format!("<!-- Unsupported axiom type: {:?} -->", axiom),
+        _ => format!("<!-- Unsupported axiom type: {axiom:?} -->"),
     }
 }
 
@@ -1430,14 +1423,16 @@ fn serialize_class_expression_xml(ce: &crate::ontology::ClassExpression) -> Stri
                 serialize_class_expression_xml(class)
             )
         }
-        _ => format!("<!-- Unsupported class expression: {:?} -->", ce),
+        _ => format!("<!-- Unsupported class expression: {ce:?} -->"),
     }
 }
 
 fn serialize_individual_xml(ind: &crate::ontology::Individual) -> String {
     format!(
         "<NamedIndividual IRI=\"{}\"/>",
-        ind.iri().map(|iri| iri.as_str()).unwrap_or("_:anonymous")
+        ind.iri()
+            .map(super::super::ontology::IRI::as_str)
+            .unwrap_or("_:anonymous")
     )
 }
 
@@ -1490,7 +1485,7 @@ fn serialize_annotation_xml(annotation: &crate::ontology::Annotation, indent: us
     }
 }
 
-/// Parse FunctionalDataProperty axiom
+/// Parse `FunctionalDataProperty` axiom
 fn parse_functional_data_property(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1512,7 +1507,7 @@ fn parse_functional_data_property(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse ObjectPropertyDomain axiom
+/// Parse `ObjectPropertyDomain` axiom
 fn parse_object_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1537,7 +1532,7 @@ fn parse_object_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse ObjectPropertyRange axiom
+/// Parse `ObjectPropertyRange` axiom
 fn parse_object_property_range(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1562,7 +1557,7 @@ fn parse_object_property_range(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse DataPropertyDomain axiom
+/// Parse `DataPropertyDomain` axiom
 fn parse_data_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()
@@ -1587,7 +1582,7 @@ fn parse_data_property_domain(element: &roxmltree::Node) -> Result<Axiom> {
     ))
 }
 
-/// Parse DataPropertyRange axiom
+/// Parse `DataPropertyRange` axiom
 fn parse_data_property_range(element: &roxmltree::Node) -> Result<Axiom> {
     let children: Vec<_> = element
         .children()

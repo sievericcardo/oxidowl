@@ -1,7 +1,9 @@
 //! RDF Simple Entailment Implementation
 //!
 //! This module implements RDF simple entailment as defined in:
-//! https://www.w3.org/TR/rdf11-mt/#simple-entailment
+//! <https://www.w3.org/TR/rdf11-mt/#simple-entailment>
+
+#![allow(dead_code)]
 
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple};
 use crate::Result;
@@ -11,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Implements the formal semantics for RDF simple entailment
 /// according to the RDF 1.1 Model Theory specification.
+/// Extended to support RDF-star quoted triples when enabled.
 #[derive(Debug, Clone)]
 pub struct RdfSimpleInterpretation {
     /// Domain of interpretation - the set of all resources
@@ -21,22 +24,63 @@ pub struct RdfSimpleInterpretation {
     resource_interpretation: HashMap<String, String>,
     /// Literal interpretation mapping  
     literal_interpretation: HashMap<String, String>,
+    /// RDF 1.1 compatibility mode - disables RDF-star features
+    rdf11_mode: bool,
+    /// Quoted triple interpretation mapping (`I_QTP`: `QuotedTriple` -> Resource)
+    /// Maps quoted triples to resources in the domain
+    quoted_triple_interpretation: HashMap<String, String>,
 }
 
 impl RdfSimpleInterpretation {
-    /// Create a new RDF simple interpretation
+    /// Create a new RDF simple interpretation  
+    #[must_use]
     pub fn new() -> Self {
         Self {
             domain: HashSet::new(),
             property_interpretation: HashMap::new(),
             resource_interpretation: HashMap::new(),
             literal_interpretation: HashMap::new(),
+            rdf11_mode: false,
+            quoted_triple_interpretation: HashMap::new(),
         }
+    }
+
+    /// Create a new RDF simple interpretation with RDF 1.1 compatibility mode
+    #[must_use]
+    pub fn new_rdf11() -> Self {
+        Self {
+            domain: HashSet::new(),
+            property_interpretation: HashMap::new(),
+            resource_interpretation: HashMap::new(),
+            literal_interpretation: HashMap::new(),
+            rdf11_mode: true,
+            quoted_triple_interpretation: HashMap::new(),
+        }
+    }
+
+    /// Enable or disable RDF 1.1 compatibility mode
+    pub fn set_rdf11_mode(&mut self, enabled: bool) {
+        self.rdf11_mode = enabled;
+    }
+
+    /// Check if RDF 1.1 compatibility mode is enabled
+    #[must_use]
+    pub fn is_rdf11_mode(&self) -> bool {
+        self.rdf11_mode
     }
 
     /// Add a resource to the domain
     pub fn add_resource(&mut self, resource: String) {
         self.domain.insert(resource);
+    }
+
+    /// Set guided triple interpretation (`I_QTP`)
+    /// Maps a quoted triple to a resource in the interpretation domain
+    pub fn set_quoted_triple_interpretation(&mut self, triple_id: String, resource: String) {
+        if !self.rdf11_mode {
+            self.quoted_triple_interpretation
+                .insert(triple_id, resource);
+        }
     }
 
     /// Set property interpretation
@@ -71,12 +115,13 @@ impl RdfSimpleInterpretation {
                 value,
                 datatype,
                 language,
+                ..
             } => {
                 // Literals are interpreted according to their datatype
                 let literal_key = if let Some(dt) = datatype {
-                    format!("{}^^{}", value, dt)
+                    format!("{value}^^{dt}")
                 } else if let Some(lang) = language {
-                    format!("{}@{}", value, lang)
+                    format!("{value}@{lang}")
                 } else {
                     value.clone()
                 };
@@ -84,13 +129,112 @@ impl RdfSimpleInterpretation {
                 self.literal_interpretation
                     .get(&literal_key)
                     .cloned()
-                    .or_else(|| Some(literal_key)) // Default interpretation
+                    .or(Some(literal_key)) // Default interpretation
+            }
+            RdfTerm::QuotedTriple(triple) => {
+                if self.rdf11_mode {
+                    // In RDF 1.1 mode, quoted triples are not supported
+                    None
+                } else {
+                    // RDF-star: use the dedicated interpretation function
+                    self.interpret_quoted_triple(triple)
+                }
+            }
+            RdfTerm::TripleTerm(triple) => {
+                if self.rdf11_mode {
+                    // In RDF 1.1/1.2-basic mode, triple terms are not supported
+                    None
+                } else {
+                    // RDF 1.2: triple terms interpreted as resources
+                    self.interpret_quoted_triple(triple)
+                }
+            }
+        }
+    }
+
+    /// Interpret a quoted triple (`I_QTP`: `QuotedTriple` -> Resource)
+    ///
+    /// In RDF-star semantics, a quoted triple denotes a unique resource
+    /// that represents the triple. This enables referential transparency:
+    /// the same quoted triple always refers to the same resource.
+    #[must_use]
+    pub fn interpret_quoted_triple(&self, triple: &Triple) -> Option<String> {
+        if self.rdf11_mode {
+            return None;
+        }
+
+        // Create a canonical identifier for the quoted triple
+        // This ensures referential transparency: same triple = same resource
+        let triple_id = format!(
+            "<<{} {} {}>>",
+            self.term_to_canonical_form(&triple.subject),
+            self.term_to_canonical_form(&triple.predicate),
+            self.term_to_canonical_form(&triple.object)
+        );
+
+        // Check if we have an explicit interpretation for this quoted triple
+        self.quoted_triple_interpretation
+            .get(&triple_id)
+            .cloned()
+            .or({
+                // Default: the quoted triple denotes itself as a resource
+                Some(triple_id)
+            })
+    }
+
+    /// Convert an RDF term to its canonical form for quoted triple identification
+    fn term_to_canonical_form(&self, term: &RdfTerm) -> String {
+        match term {
+            RdfTerm::Iri(iri) => iri.to_string(),
+            RdfTerm::BlankNode(id) => format!("_:{id}"),
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+                ..
+            } => {
+                if let Some(dt) = datatype {
+                    format!("\"{value}\"^^<{dt}>")
+                } else if let Some(lang) = language {
+                    format!("\"{value}\"@{lang}")
+                } else {
+                    format!("\"{value}\"")
+                }
+            }
+            RdfTerm::QuotedTriple(triple) => {
+                // Recursive canonical form for nested quoted triples
+                format!(
+                    "<<{} {} {}>>",
+                    self.term_to_canonical_form(&triple.subject),
+                    self.term_to_canonical_form(&triple.predicate),
+                    self.term_to_canonical_form(&triple.object)
+                )
+            }
+            RdfTerm::TripleTerm(triple) => {
+                // RDF 1.2 triple term: same canonical form as quoted triple
+                format!(
+                    "<<{} {} {}>>",
+                    self.term_to_canonical_form(&triple.subject),
+                    self.term_to_canonical_form(&triple.predicate),
+                    self.term_to_canonical_form(&triple.object)
+                )
             }
         }
     }
 
     /// Check if a triple is satisfied by this interpretation
     fn satisfies_triple(&self, triple: &Triple) -> bool {
+        // Handle quoted triples in subject or object position (RDF-star)
+        if !self.rdf11_mode {
+            // In RDF-star mode, check if this triple contains quoted triples
+            // and handle them with proper referential transparency
+            if matches!(triple.subject, RdfTerm::QuotedTriple(_))
+                || matches!(triple.object, RdfTerm::QuotedTriple(_))
+            {
+                return self.satisfies_triple_with_quoted_terms(triple);
+            }
+        }
+
         let subject_interp = self.interpret_rdf_term(&triple.subject);
         let predicate_interp = self.interpret_rdf_term(&triple.predicate);
         let object_interp = self.interpret_rdf_term(&triple.object);
@@ -102,6 +246,29 @@ impl RdfSimpleInterpretation {
             } else {
                 // If property is not explicitly interpreted, assume it's satisfied
                 // This is a simplification - in practice we'd need more sophisticated handling
+                true
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Check satisfiability of triples containing quoted triples (RDF-star semantics)
+    ///
+    /// Implements referential transparency: a quoted triple <<s p o>> is treated as
+    /// a denoting term referring to a resource, not as an assertion of s p o.
+    fn satisfies_triple_with_quoted_terms(&self, triple: &Triple) -> bool {
+        // Interpret all terms including quoted triples as resources
+        let subject_interp = self.interpret_rdf_term(&triple.subject);
+        let predicate_interp = self.interpret_rdf_term(&triple.predicate);
+        let object_interp = self.interpret_rdf_term(&triple.object);
+
+        if let (Some(s), Some(p), Some(o)) = (subject_interp, predicate_interp, object_interp) {
+            // Check the property interpretation
+            if let Some(prop_pairs) = self.property_interpretation.get(&p) {
+                prop_pairs.contains(&(s, o))
+            } else {
+                // Default: assume satisfied if not explicitly contradicted
                 true
             }
         } else {
@@ -145,35 +312,112 @@ impl SemanticInterpretation for RdfSimpleInterpretation {
 /// RDF Simple Entailment Engine
 ///
 /// Implements RDF simple entailment reasoning according to the RDF 1.1 specification.
+/// Extended to support RDF-star entailment rules when enabled.
 #[derive(Debug)]
 pub struct RdfSimpleEntailment {
     /// Base graph
     base_graph: RdfGraph,
     /// Derived facts
     derived_graph: RdfGraph,
+    /// RDF 1.1 compatibility mode - disables RDF-star features
+    rdf11_mode: bool,
+    /// Enable quoted triple entailment: if << s p o >> is asserted, infer s p o
+    /// This is configurable because it may not be desired in all use cases
+    enable_quoted_triple_entailment: bool,
 }
 
 impl RdfSimpleEntailment {
     /// Create a new RDF simple entailment engine
+    #[must_use]
     pub fn new(base_graph: RdfGraph) -> Self {
         Self {
             base_graph,
             derived_graph: RdfGraph::new(),
+            rdf11_mode: false,
+            enable_quoted_triple_entailment: false,
         }
+    }
+
+    /// Create a new RDF simple entailment engine with RDF 1.1 compatibility
+    #[must_use]
+    pub fn new_rdf11(base_graph: RdfGraph) -> Self {
+        Self {
+            base_graph,
+            derived_graph: RdfGraph::new(),
+            rdf11_mode: true,
+            enable_quoted_triple_entailment: false,
+        }
+    }
+
+    /// Enable or disable RDF 1.1 compatibility mode
+    pub fn set_rdf11_mode(&mut self, enabled: bool) {
+        self.rdf11_mode = enabled;
+    }
+
+    /// Enable or disable quoted triple entailment
+    /// When enabled: << s p o >> entails s p o
+    pub fn set_quoted_triple_entailment(&mut self, enabled: bool) {
+        self.enable_quoted_triple_entailment = enabled && !self.rdf11_mode;
     }
 
     /// Perform simple entailment reasoning
     pub fn reason(&mut self) -> Result<()> {
-        // For RDF simple entailment, no additional inferences are made
-        // All entailments are already explicit in the graph
-
         // Copy base graph to derived graph
         self.derived_graph = self.base_graph.clone();
+
+        // If RDF-star mode and quoted triple entailment is enabled,
+        // add derived triples from quoted triples
+        if !self.rdf11_mode && self.enable_quoted_triple_entailment {
+            self.derive_from_quoted_triples()?;
+        }
 
         Ok(())
     }
 
+    /// Derive triples from quoted triples
+    /// Rule: if << s p o >> appears in the graph (as subject or object),
+    /// then s p o is entailed (subject to configuration)
+    fn derive_from_quoted_triples(&mut self) -> Result<()> {
+        let mut derived = Vec::new();
+
+        // Extract all quoted triples from the base graph
+        for triple in self.base_graph.triples() {
+            // Check subject position
+            if let RdfTerm::QuotedTriple(quoted) = &triple.subject {
+                derived.push((**quoted).clone());
+            }
+
+            // Check object position
+            if let RdfTerm::QuotedTriple(quoted) = &triple.object {
+                derived.push((**quoted).clone());
+            }
+
+            // Recursively extract from nested quoted triples
+            self.extract_nested_quoted_triples(&triple.subject, &mut derived);
+            self.extract_nested_quoted_triples(&triple.object, &mut derived);
+        }
+
+        // Add derived triples to the derived graph
+        for triple in derived {
+            self.derived_graph.add_triple(triple);
+        }
+
+        Ok(())
+    }
+
+    /// Recursively extract quoted triples from nested structures
+    fn extract_nested_quoted_triples(&self, term: &RdfTerm, result: &mut Vec<Triple>) {
+        if let RdfTerm::QuotedTriple(quoted) = term {
+            result.push((**quoted).clone());
+
+            // Recursively extract from the quoted triple's terms
+            self.extract_nested_quoted_triples(&quoted.subject, result);
+            self.extract_nested_quoted_triples(&quoted.object, result);
+        }
+    }
+
     /// Get the closure (base + derived facts)
+    #[must_use]
     pub fn closure(&self) -> RdfGraph {
         let mut closure = self.base_graph.clone();
         closure.merge(&self.derived_graph);
@@ -181,9 +425,100 @@ impl RdfSimpleEntailment {
     }
 
     /// Check if premises entail conclusion
+    #[must_use]
     pub fn entails(&self, premises: &RdfGraph, conclusion: &RdfGraph) -> bool {
-        // Check simple graph entailment
-        self.check_simple_entailment(premises, conclusion)
+        // In RDF-star mode with quoted triple entailment, check both regular
+        // and quoted triple entailment
+        if !self.rdf11_mode && self.enable_quoted_triple_entailment {
+            // Check if conclusion can be derived from premises considering quoted triples
+            self.check_entailment_with_quoted_triples(premises, conclusion)
+        } else {
+            // Standard RDF simple entailment
+            self.check_simple_entailment(premises, conclusion)
+        }
+    }
+
+    /// Check entailment specifically for quoted triples (RDF-star)
+    ///
+    /// Returns true if the premises entail the conclusion considering:
+    /// 1. Regular graph entailment
+    /// 2. Quoted triple entailment: if << s p o >> is in premises, then s p o is entailed
+    #[must_use]
+    pub fn entails_quoted(&self, premises: &RdfGraph, quoted_triple: &Triple) -> bool {
+        if self.rdf11_mode {
+            // In RDF 1.1 mode, no quoted triple entailment
+            return false;
+        }
+
+        // Check if the quoted triple itself appears in premises
+        if premises.contains_triple(quoted_triple) {
+            return true;
+        }
+
+        // Check if << s p o >> appears as a term in premises
+        let quoted_term = RdfTerm::QuotedTriple(Box::new(quoted_triple.clone()));
+
+        for triple in premises.triples() {
+            // Check if quoted triple appears in subject or object position
+            if triple.subject == quoted_term || triple.object == quoted_term {
+                // If the quoted triple is mentioned and entailment is enabled,
+                // then the triple itself is entailed
+                if self.enable_quoted_triple_entailment {
+                    return true;
+                }
+            }
+
+            // Check nested quoted triples
+            if (self.contains_quoted_triple_term(&triple.subject, quoted_triple)
+                || self.contains_quoted_triple_term(&triple.object, quoted_triple))
+                && self.enable_quoted_triple_entailment
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Check if a term contains a specific quoted triple (handles nesting)
+    fn contains_quoted_triple_term(&self, term: &RdfTerm, target: &Triple) -> bool {
+        match term {
+            RdfTerm::QuotedTriple(quoted) => {
+                if **quoted == *target {
+                    true
+                } else {
+                    // Recursively check nested quoted triples
+                    self.contains_quoted_triple_term(&quoted.subject, target)
+                        || self.contains_quoted_triple_term(&quoted.object, target)
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check entailment considering quoted triple semantics
+    fn check_entailment_with_quoted_triples(
+        &self,
+        premises: &RdfGraph,
+        conclusion: &RdfGraph,
+    ) -> bool {
+        // First, expand premises with derived facts from quoted triples
+        let mut expanded_premises = premises.clone();
+
+        if self.enable_quoted_triple_entailment {
+            // Extract and add all quoted triples
+            for triple in premises.triples() {
+                if let RdfTerm::QuotedTriple(quoted) = &triple.subject {
+                    expanded_premises.add_triple((**quoted).clone());
+                }
+                if let RdfTerm::QuotedTriple(quoted) = &triple.object {
+                    expanded_premises.add_triple((**quoted).clone());
+                }
+            }
+        }
+
+        // Now check regular entailment against expanded premises
+        self.check_simple_entailment(&expanded_premises, conclusion)
     }
 
     /// Check simple entailment (subset relationship with blank node handling)
@@ -358,6 +693,7 @@ pub struct BlankNodeMapping {
 
 impl BlankNodeMapping {
     /// Create a new blank node mapping
+    #[must_use]
     pub fn new() -> Self {
         Self {
             mapping: HashMap::new(),
@@ -370,11 +706,13 @@ impl BlankNodeMapping {
     }
 
     /// Get mapping for a blank node
+    #[must_use]
     pub fn get_mapping(&self, blank_node: &str) -> Option<&String> {
         self.mapping.get(blank_node)
     }
 
     /// Apply mapping to an RDF term
+    #[must_use]
     pub fn apply_to_term(&self, term: &RdfTerm) -> RdfTerm {
         match term {
             RdfTerm::BlankNode(id) => {
@@ -389,6 +727,7 @@ impl BlankNodeMapping {
     }
 
     /// Apply mapping to a triple
+    #[must_use]
     pub fn apply_to_triple(&self, triple: &Triple) -> Triple {
         Triple {
             subject: self.apply_to_term(&triple.subject),
@@ -491,5 +830,287 @@ mod tests {
         } else {
             panic!("Expected blank node");
         }
+    }
+
+    #[test]
+    fn test_quoted_triple_interpretation() {
+        let interp = RdfSimpleInterpretation::new();
+
+        // Create a quoted triple
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        let quoted_term = RdfTerm::QuotedTriple(Box::new(inner_triple));
+
+        // Interpret the quoted triple - should return a resource identifier
+        let interpretation = interp.interpret_rdf_term(&quoted_term);
+        assert!(interpretation.is_some());
+
+        // The same quoted triple should always have the same interpretation (referential transparency)
+        let interpretation2 = interp.interpret_rdf_term(&quoted_term);
+        assert_eq!(interpretation, interpretation2);
+    }
+
+    #[test]
+    fn test_quoted_triple_referential_transparency() {
+        let interp = RdfSimpleInterpretation::new();
+
+        // Create two identical quoted triples
+        let inner_triple1 = Box::new(Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        });
+
+        let inner_triple2 = Box::new(Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        });
+
+        // Both should have identical interpretations (referential transparency)
+        let interp1 = interp.interpret_quoted_triple(&inner_triple1);
+        let interp2 = interp.interpret_quoted_triple(&inner_triple2);
+
+        assert_eq!(interp1, interp2);
+    }
+
+    #[test]
+    fn test_rdf11_mode_disables_quoted_triples() {
+        let mut interp = RdfSimpleInterpretation::new_rdf11();
+
+        assert!(interp.is_rdf11_mode());
+
+        // Create a quoted triple
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        let quoted_term = RdfTerm::QuotedTriple(Box::new(inner_triple));
+
+        // In RDF 1.1 mode, quoted triples should not be interpretable
+        let interpretation = interp.interpret_rdf_term(&quoted_term);
+        assert!(interpretation.is_none());
+
+        // Setting quoted triple interpretation should have no effect in RDF 1.1 mode
+        interp.set_quoted_triple_interpretation("<<test>>".to_string(), "resource1".to_string());
+        assert!(interp.quoted_triple_interpretation.is_empty());
+    }
+
+    #[test]
+    fn test_nested_quoted_triples() {
+        let interp = RdfSimpleInterpretation::new();
+
+        // Create a nested quoted triple: << << :a :b :c >> :certainty "high" >>
+        let inner_inner = Box::new(Triple {
+            subject: RdfTerm::iri("http://example.org/a").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/b").unwrap(),
+            object: RdfTerm::iri("http://example.org/c").unwrap(),
+        });
+
+        let inner = Box::new(Triple {
+            subject: RdfTerm::QuotedTriple(inner_inner),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        });
+
+        // Should be able to interpret nested quoted triples
+        let interpretation = interp.interpret_quoted_triple(&inner);
+        assert!(interpretation.is_some());
+
+        // Check canonical form includes nesting
+        let canonical = interpretation.unwrap();
+        assert!(canonical.contains("<<"));
+        assert!(canonical.contains(">>"));
+    }
+
+    #[test]
+    fn test_satisfies_with_quoted_triple() {
+        let mut interp = RdfSimpleInterpretation::new();
+
+        // Create a triple with a quoted triple in subject position
+        let inner_triple = Box::new(Triple {
+            subject: RdfTerm::iri("http://example.org/doc1").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/author").unwrap(),
+            object: RdfTerm::literal("Smith"),
+        });
+
+        let triple = Triple {
+            subject: RdfTerm::QuotedTriple(inner_triple.clone()),
+            predicate: RdfTerm::iri("http://example.org/source").unwrap(),
+            object: RdfTerm::iri("http://example.org/archive23").unwrap(),
+        };
+
+        let mut graph = RdfGraph::new();
+        graph.add_triple(triple);
+
+        // Set up interpretation mappings
+        let quoted_resource = interp.interpret_quoted_triple(&inner_triple).unwrap();
+        let source_pred = "http://example.org/source";
+        let archive_resource = "http://example.org/archive23";
+
+        let mut prop_pairs = HashSet::new();
+        prop_pairs.insert((quoted_resource.clone(), archive_resource.to_string()));
+        interp.set_property_interpretation(source_pred.to_string(), prop_pairs);
+
+        // Graph should be satisfied by the interpretation
+        assert!(interp.satisfies(&graph));
+    }
+
+    #[test]
+    fn test_rdf11_mode_toggle() {
+        let mut interp = RdfSimpleInterpretation::new();
+
+        assert!(!interp.is_rdf11_mode());
+
+        // Enable RDF 1.1 mode
+        interp.set_rdf11_mode(true);
+        assert!(interp.is_rdf11_mode());
+
+        // Disable RDF 1.1 mode
+        interp.set_rdf11_mode(false);
+        assert!(!interp.is_rdf11_mode());
+    }
+
+    #[test]
+    fn test_quoted_triple_entailment_basic() {
+        let mut premises = RdfGraph::new();
+
+        // Create a triple with a quoted triple: << :alice :knows :bob >> :certainty "high"
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        let outer_triple = Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        };
+
+        premises.add_triple(outer_triple);
+
+        // Create entailment engine with quoted triple entailment enabled
+        let mut entailment = RdfSimpleEntailment::new(premises.clone());
+        entailment.set_quoted_triple_entailment(true);
+
+        // The quoted triple << :alice :knows :bob >> should entail :alice :knows :bob
+        assert!(entailment.entails_quoted(&premises, &inner_triple));
+    }
+
+    #[test]
+    fn test_quoted_triple_entailment_reasoning() {
+        let mut premises = RdfGraph::new();
+
+        // Add: << :doc1 :author "Smith" >> :source :archive23
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/doc1").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/author").unwrap(),
+            object: RdfTerm::literal("Smith"),
+        };
+
+        premises.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/source").unwrap(),
+            object: RdfTerm::iri("http://example.org/archive23").unwrap(),
+        });
+
+        // Create entailment engine and enable quoted triple entailment
+        let mut entailment = RdfSimpleEntailment::new(premises.clone());
+        entailment.set_quoted_triple_entailment(true);
+        entailment.reason().unwrap();
+
+        // The closure should contain both the original triple and the derived triple
+        let closure = entailment.closure();
+
+        // Check that the inner triple is derived
+        assert!(closure.contains_triple(&inner_triple));
+    }
+
+    #[test]
+    fn test_rdf11_mode_no_quoted_entailment() {
+        let mut premises = RdfGraph::new();
+
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        premises.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        });
+
+        // Create RDF 1.1 mode entailment engine
+        let entailment = RdfSimpleEntailment::new_rdf11(premises.clone());
+
+        // In RDF 1.1 mode, quoted triple entailment should not work
+        assert!(!entailment.entails_quoted(&premises, &inner_triple));
+    }
+
+    #[test]
+    fn test_nested_quoted_triple_entailment() {
+        let mut premises = RdfGraph::new();
+
+        // Create nested: << << :a :b :c >> :d :e >> :f :g
+        let inner_inner = Triple {
+            subject: RdfTerm::iri("http://example.org/a").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/b").unwrap(),
+            object: RdfTerm::iri("http://example.org/c").unwrap(),
+        };
+
+        let inner = Box::new(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_inner.clone())),
+            predicate: RdfTerm::iri("http://example.org/d").unwrap(),
+            object: RdfTerm::iri("http://example.org/e").unwrap(),
+        });
+
+        premises.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(inner),
+            predicate: RdfTerm::iri("http://example.org/f").unwrap(),
+            object: RdfTerm::iri("http://example.org/g").unwrap(),
+        });
+
+        // Create entailment engine with quoted triple entailment enabled
+        let mut entailment = RdfSimpleEntailment::new(premises.clone());
+        entailment.set_quoted_triple_entailment(true);
+        entailment.reason().unwrap();
+
+        // The innermost triple should be entailed
+        let closure = entailment.closure();
+        assert!(closure.contains_triple(&inner_inner));
+    }
+
+    #[test]
+    fn test_entailment_without_quoted_triple_flag() {
+        let mut premises = RdfGraph::new();
+
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        premises.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        });
+
+        // Create entailment engine WITHOUT enabling quoted triple entailment
+        let mut entailment = RdfSimpleEntailment::new(premises.clone());
+        entailment.reason().unwrap();
+
+        // The inner triple should NOT be derived
+        let closure = entailment.closure();
+        assert!(!closure.contains_triple(&inner_triple));
     }
 }

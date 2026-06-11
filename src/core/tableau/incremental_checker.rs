@@ -7,9 +7,9 @@
 //!
 //! During tableau expansion, many nodes are checked repeatedly against the same
 //! clauses without changes. This module provides:
-//! - **NodeFingerprint**: Fast hash-based representation of node state
-//! - **CheckResultCache**: LRU cache for clause check results
-//! - **ChangeTracker**: Track which nodes have changed during expansion
+//! - **`NodeFingerprint`**: Fast hash-based representation of node state
+//! - **`CheckResultCache`**: LRU cache for clause check results
+//! - **`ChangeTracker`**: Track which nodes have changed during expansion
 //!
 //! # Performance
 //!
@@ -70,6 +70,7 @@ impl NodeFingerprint {
     ///
     /// - Time: O(n log n) where n = concepts + role edges
     /// - Space: O(1) (result is single u64)
+    #[must_use]
     pub fn from_node(node: &TableauNode) -> Self {
         let mut hasher = DefaultHasher::new();
 
@@ -82,7 +83,7 @@ impl NodeFingerprint {
             .iter()
             .filter_map(|c| match c {
                 ConceptLabel::Atomic(name) => Some(name.clone()),
-                ConceptLabel::NegatedAtomic(name) => Some(format!("¬{}", name)),
+                ConceptLabel::NegatedAtomic(name) => Some(format!("¬{name}")),
                 _ => None, // Complex concepts handled separately
             })
             .collect();
@@ -97,7 +98,7 @@ impl NodeFingerprint {
             .iter()
             .map(|(role, successors)| {
                 let mut sorted_successors: Vec<NodeId> = successors.iter().copied().collect();
-                sorted_successors.sort();
+                sorted_successors.sort_unstable();
                 (role.clone(), sorted_successors)
             })
             .collect();
@@ -116,6 +117,7 @@ impl NodeFingerprint {
     }
 
     /// Get the raw hash value
+    #[must_use]
     pub fn as_u64(&self) -> u64 {
         self.0
     }
@@ -166,15 +168,15 @@ pub enum CachedCheckResult {
 
 /// LRU cache for clause checking results
 ///
-/// The cache maps (NodeFingerprint, ClauseID) -> CachedCheckResult.
+/// The cache maps (`NodeFingerprint`, `ClauseID`) -> `CachedCheckResult`.
 /// When the cache is full, the least recently used entry is evicted.
 ///
 /// # Memory Usage
 ///
 /// Each cache entry uses approximately:
-/// - 8 bytes: NodeFingerprint (u64)
-/// - 8 bytes: clause_id (usize)
-/// - 40 bytes: CachedCheckResult (enum with string)
+/// - 8 bytes: `NodeFingerprint` (u64)
+/// - 8 bytes: `clause_id` (usize)
+/// - 40 bytes: `CachedCheckResult` (enum with string)
 /// - 32 bytes: LRU metadata (prev/next pointers, etc.)
 /// - **Total: ~88 bytes per entry**
 ///
@@ -202,6 +204,7 @@ impl CheckResultCache {
     /// - 10,000 entries ≈ 880 KB
     /// - 50,000 entries ≈ 4.4 MB
     /// - 100,000 entries ≈ 8.8 MB
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let cache = LruCache::new(NonZeroUsize::new(capacity).expect("capacity must be > 0"));
         Self {
@@ -226,15 +229,12 @@ impl CheckResultCache {
         clause_id: usize,
     ) -> Option<&CachedCheckResult> {
         let key = CacheKey::new(fingerprint, clause_id);
-        match self.cache.get(&key) {
-            Some(result) => {
-                self.hits += 1;
-                Some(result)
-            }
-            None => {
-                self.misses += 1;
-                None
-            }
+        if let Some(result) = self.cache.get(&key) {
+            self.hits += 1;
+            Some(result)
+        } else {
+            self.misses += 1;
+            None
         }
     }
 
@@ -269,6 +269,7 @@ impl CheckResultCache {
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn statistics(&self) -> CacheStatistics {
         CacheStatistics {
             capacity: self.cache.cap().get(),
@@ -285,16 +286,19 @@ impl CheckResultCache {
     }
 
     /// Get cache capacity
+    #[must_use]
     pub fn capacity(&self) -> usize {
         self.cache.cap().get()
     }
 
     /// Get current cache size
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if cache is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
@@ -335,11 +339,13 @@ impl CacheStatistics {
     /// A cache is considered "good" if:
     /// - Hit rate > 50%
     /// - Few evictions relative to size (< 10% of capacity)
+    #[must_use]
     pub fn is_performing_well(&self) -> bool {
         self.hit_rate > 0.5 && (self.evictions as f64) < (self.capacity as f64 * 0.1)
     }
 
     /// Get cache utilization (0.0 to 1.0)
+    #[must_use]
     pub fn utilization(&self) -> f64 {
         self.size as f64 / self.capacity as f64
     }
@@ -375,6 +381,7 @@ pub struct ChangeTracker {
 
 impl ChangeTracker {
     /// Create a new change tracker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             changed_nodes: HashSet::new(),
@@ -404,7 +411,7 @@ impl ChangeTracker {
     /// Check if a node has changed since last check
     ///
     /// Returns true if:
-    /// - Node is in changed_nodes set
+    /// - Node is in `changed_nodes` set
     /// - Node's current fingerprint differs from previous
     pub fn has_changed(&mut self, node_id: NodeId, current_fingerprint: NodeFingerprint) -> bool {
         // Explicit marking takes precedence
@@ -428,11 +435,13 @@ impl ChangeTracker {
     }
 
     /// Get number of nodes being tracked
+    #[must_use]
     pub fn tracked_nodes(&self) -> usize {
         self.previous_fingerprints.len()
     }
 
     /// Get number of nodes marked as changed
+    #[must_use]
     pub fn changed_count(&self) -> usize {
         self.changed_nodes.len()
     }

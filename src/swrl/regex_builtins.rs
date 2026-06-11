@@ -20,6 +20,7 @@ pub struct RegexBuiltInRegistry {
 
 impl RegexBuiltInRegistry {
     /// Create a new registry with all regex built-ins
+    #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
             builtins: HashMap::new(),
@@ -77,16 +78,19 @@ impl RegexBuiltInRegistry {
     }
 
     /// Get a built-in predicate by IRI
+    #[must_use]
     pub fn get(&self, iri: &str) -> Option<&dyn SWRLBuiltIn> {
-        self.builtins.get(iri).map(|b| b.as_ref())
+        self.builtins.get(iri).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
+    #[must_use]
     pub fn get_all_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
     }
 
     /// Get count of registered built-ins
+    #[must_use]
     pub fn count(&self) -> usize {
         self.builtins.len()
     }
@@ -116,16 +120,16 @@ fn get_or_compile_regex(
     case_insensitive: bool,
 ) -> Result<Regex> {
     let cache_key = if case_insensitive {
-        format!("(?i){}", pattern)
+        format!("(?i){pattern}")
     } else {
         pattern.to_string()
     };
 
     // Try to get from cache first
-    if let Ok(cache_guard) = cache.lock() {
-        if let Some(regex) = cache_guard.get(&cache_key) {
-            return Ok(regex.clone());
-        }
+    if let Ok(cache_guard) = cache.lock()
+        && let Some(regex) = cache_guard.get(&cache_key)
+    {
+        return Ok(regex.clone());
     }
 
     // Compile new regex
@@ -133,10 +137,10 @@ fn get_or_compile_regex(
         RegexBuilder::new(pattern)
             .case_insensitive(true)
             .build()
-            .map_err(|e| Error::reasoning(format!("Invalid regex pattern '{}': {}", pattern, e)))?
+            .map_err(|e| Error::reasoning(format!("Invalid regex pattern '{pattern}': {e}")))?
     } else {
         Regex::new(pattern)
-            .map_err(|e| Error::reasoning(format!("Invalid regex pattern '{}': {}", pattern, e)))?
+            .map_err(|e| Error::reasoning(format!("Invalid regex pattern '{pattern}': {e}")))?
     };
 
     // Cache the compiled regex
@@ -147,7 +151,7 @@ fn get_or_compile_regex(
     Ok(regex)
 }
 
-/// Extract string from SWRLValue
+/// Extract string from `SWRLValue`
 fn extract_string(value: &SWRLValue) -> Result<&str> {
     match value {
         SWRLValue::String(s) => Ok(s),
@@ -155,7 +159,7 @@ fn extract_string(value: &SWRLValue) -> Result<&str> {
     }
 }
 
-/// Extract boolean flag from SWRLValue (optional parameter)
+/// Extract boolean flag from `SWRLValue` (optional parameter)
 fn extract_optional_bool(value: Option<&SWRLValue>) -> Result<bool> {
     match value {
         Some(SWRLValue::Boolean(b)) => Ok(*b),

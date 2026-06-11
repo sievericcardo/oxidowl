@@ -22,6 +22,7 @@ pub struct DLClauseGenerator {
 
 impl DLClauseGenerator {
     /// Create a new DL clause generator
+    #[must_use]
     pub fn new() -> Self {
         let mut prefixes = HashMap::new();
 
@@ -135,12 +136,12 @@ impl DLClauseGenerator {
         while i < clauses.len() {
             let mut j = i + 1;
             while j < clauses.len() {
-                if self.can_absorb(&clauses[i], &clauses[j]) {
-                    if let Some(absorbed) = self.absorb_clauses(&clauses[i], &clauses[j]) {
-                        clauses[i] = absorbed;
-                        clauses.remove(j);
-                        continue;
-                    }
+                if self.can_absorb(&clauses[i], &clauses[j])
+                    && let Some(absorbed) = self.absorb_clauses(&clauses[i], &clauses[j])
+                {
+                    clauses[i] = absorbed;
+                    clauses.remove(j);
+                    continue;
                 }
                 j += 1;
             }
@@ -249,9 +250,9 @@ impl DLClauseGenerator {
         if let Some(iri) = ontology.get_iri() {
             let iri_str = iri.as_str();
             if let Some(base) = iri_str.strip_suffix('#') {
-                self.prefixes.insert("".to_string(), format!("{base}#"));
+                self.prefixes.insert(String::new(), format!("{base}#"));
             } else if let Some(base) = iri_str.strip_suffix('/') {
-                self.prefixes.insert("".to_string(), format!("{base}/"));
+                self.prefixes.insert(String::new(), format!("{base}/"));
             }
         }
 
@@ -322,7 +323,7 @@ impl DLClauseGenerator {
     /// Add prefix from IRI
     fn add_prefix_from_iri(&mut self, iri: &str) {
         if let Some(hash_pos) = iri.rfind('#') {
-            let base = &iri[..hash_pos + 1];
+            let base = &iri[..=hash_pos];
             if !self.prefixes.values().any(|v| v == base) {
                 let prefix_name = format!("ns{}", self.prefixes.len());
                 self.prefixes.insert(prefix_name, base.to_string());
@@ -393,6 +394,7 @@ impl DLClauseGenerator {
     }
 
     /// Get prefixes
+    #[must_use]
     pub fn get_prefixes(&self) -> &HashMap<String, String> {
         &self.prefixes
     }

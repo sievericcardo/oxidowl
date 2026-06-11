@@ -15,7 +15,7 @@ use crate::{
 };
 use log::{debug, info, trace};
 
-/// Wrapper for hypertableau algorithm that implements TableauRunner
+/// Wrapper for hypertableau algorithm that implements `TableauRunner`
 pub struct HypertableauRunner {
     /// The hypertableau expansion engine
     expansion: HypertableauExpansion,
@@ -245,11 +245,13 @@ impl HypertableauRunner {
     }
 
     /// Get the expansion statistics
+    #[must_use]
     pub fn statistics(&self) -> &ExpansionStatistics {
         &self.stats
     }
 
     /// Get the current expansion state
+    #[must_use]
     pub fn expansion_state(&self) -> &ExpansionState {
         &self.state
     }

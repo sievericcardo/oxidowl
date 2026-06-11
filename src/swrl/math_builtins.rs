@@ -2,6 +2,8 @@
 //!
 //! This module implements additional mathematical built-in predicates for SWRL
 //! that extend the core mathematical operations.
+// SWRL built-in predicates perform exact equality checks by specification.
+#![allow(clippy::float_cmp)]
 
 use crate::swrl::builtins::{SWRLBuiltIn, SWRLValue};
 use crate::{Error, Result};
@@ -209,12 +211,10 @@ impl SWRLBuiltIn for RoundHalfToEvenBuiltIn {
                     let truncated = input.trunc();
                     if (truncated as i64) % 2 == 0 {
                         truncated
+                    } else if *input > 0.0 {
+                        truncated + 1.0
                     } else {
-                        if *input > 0.0 {
-                            truncated + 1.0
-                        } else {
-                            truncated - 1.0
-                        }
+                        truncated - 1.0
                     }
                 } else {
                     input.round()
@@ -226,12 +226,10 @@ impl SWRLBuiltIn for RoundHalfToEvenBuiltIn {
                     let truncated = input.trunc();
                     if (truncated as i64) % 2 == 0 {
                         truncated
+                    } else if *input > 0.0 {
+                        truncated + 1.0
                     } else {
-                        if *input > 0.0 {
-                            truncated + 1.0
-                        } else {
-                            truncated - 1.0
-                        }
+                        truncated - 1.0
                     }
                 } else {
                     input.round()

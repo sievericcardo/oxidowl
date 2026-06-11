@@ -62,6 +62,7 @@ impl<V> CacheEntry<V> {
         self.last_accessed = Instant::now();
     }
 
+    #[allow(dead_code)]
     fn age(&self) -> Duration {
         self.created_at.elapsed()
     }
@@ -69,9 +70,10 @@ impl<V> CacheEntry<V> {
 
 impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     /// Create a new LRU cache with the specified capacity
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: HashMap::with_capacity(capacity),
             access_order: VecDeque::new(),
             capacity,
             hits: 0,
@@ -122,6 +124,7 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             size: self.cache.len(),
@@ -130,7 +133,11 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
             misses: self.misses,
             evictions: self.evictions,
             hit_rate: if self.hits + self.misses > 0 {
-                self.hits as f64 / (self.hits + self.misses) as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = self.hits as f64 / (self.hits + self.misses) as f64;
+                rate
             } else {
                 0.0
             },
@@ -144,11 +151,13 @@ impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
     }
 
     /// Get current size
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
@@ -165,9 +174,10 @@ pub struct LFUCache<K: Hash + Eq + Clone, V: Clone> {
 
 impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     /// Create a new LFU cache with the specified capacity
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: HashMap::with_capacity(capacity),
             capacity,
             hits: 0,
             misses: 0,
@@ -213,6 +223,7 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             size: self.cache.len(),
@@ -221,7 +232,11 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
             misses: self.misses,
             evictions: self.evictions,
             hit_rate: if self.hits + self.misses > 0 {
-                self.hits as f64 / (self.hits + self.misses) as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = self.hits as f64 / (self.hits + self.misses) as f64;
+                rate
             } else {
                 0.0
             },
@@ -234,11 +249,13 @@ impl<K: Hash + Eq + Clone, V: Clone> LFUCache<K, V> {
     }
 
     /// Get current size
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
@@ -257,6 +274,7 @@ pub struct SizeBasedCache<K: Hash + Eq + Clone, V: Clone> {
 
 impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
     /// Create a new size-based cache
+    #[must_use]
     pub fn new(max_size_bytes: usize, eviction_strategy: EvictionStrategy) -> Self {
         Self {
             cache: HashMap::new(),
@@ -325,15 +343,16 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
             _ => self.cache.keys().next().cloned(),
         };
 
-        if let Some(key) = key_to_evict {
-            if let Some(entry) = self.cache.remove(&key) {
-                self.total_size_bytes -= entry.size_bytes;
-                self.evictions += 1;
-            }
+        if let Some(key) = key_to_evict
+            && let Some(entry) = self.cache.remove(&key)
+        {
+            self.total_size_bytes -= entry.size_bytes;
+            self.evictions += 1;
         }
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             size: self.cache.len(),
@@ -342,7 +361,11 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
             misses: self.misses,
             evictions: self.evictions,
             hit_rate: if self.hits + self.misses > 0 {
-                self.hits as f64 / (self.hits + self.misses) as f64
+                // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+                // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+                #[allow(clippy::cast_precision_loss)]
+                let rate = self.hits as f64 / (self.hits + self.misses) as f64;
+                rate
             } else {
                 0.0
             },
@@ -350,6 +373,7 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
     }
 
     /// Get total size in bytes
+    #[must_use]
     pub fn total_size_bytes(&self) -> usize {
         self.total_size_bytes
     }
@@ -361,11 +385,13 @@ impl<K: Hash + Eq + Clone, V: Clone> SizeBasedCache<K, V> {
     }
 
     /// Get current size
+    #[must_use]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
 
     /// Check if empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }

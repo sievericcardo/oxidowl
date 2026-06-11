@@ -19,23 +19,22 @@ pub struct DatatypeValidator {
 
 impl DatatypeValidator {
     /// Create a new datatype validator
+    #[must_use]
     pub fn new() -> Self {
         Self { strict: true }
     }
 
     /// Create a validator with custom strictness
+    #[must_use]
     pub fn with_strict(strict: bool) -> Self {
         Self { strict }
     }
 
     /// Validate that a literal conforms to its declared datatype
     pub fn validate_literal(&self, literal: &Literal) -> Result<bool> {
-        let datatype_url = match &literal.datatype {
-            Some(url) => url,
-            None => {
-                // No datatype means xsd:string
-                return Ok(true);
-            }
+        let Some(datatype_url) = &literal.datatype else {
+            // No datatype means xsd:string
+            return Ok(true);
         };
 
         let datatype_iri_str = datatype_url.as_str();
@@ -52,61 +51,60 @@ impl DatatypeValidator {
         match datatype_local {
             // String and related types
             "string" => Ok(true), // Any value is valid
-            "normalizedString" => self.validate_normalized_string(value),
-            "token" => self.validate_token(value),
-            "language" => self.validate_language(value),
-            "Name" => self.validate_name(value),
-            "NCName" => self.validate_ncname(value),
-            "NMTOKEN" => self.validate_nmtoken(value),
+            "normalizedString" => Self::validate_normalized_string(value),
+            "token" => Self::validate_token(value),
+            "language" => Self::validate_language(value),
+            "Name" => Self::validate_name(value),
+            "NCName" => Self::validate_ncname(value),
+            "NMTOKEN" => Self::validate_nmtoken(value),
 
             // Boolean
-            "boolean" => self.validate_boolean(value),
+            "boolean" => Self::validate_boolean(value),
 
             // Numeric types - Decimal
-            "decimal" => self.validate_decimal(value),
-            "integer" => self.validate_integer(value),
-            "long" => self.validate_long(value),
-            "int" => self.validate_int(value),
-            "short" => self.validate_short(value),
-            "byte" => self.validate_byte(value),
-            "nonNegativeInteger" => self.validate_non_negative_integer(value),
-            "positiveInteger" => self.validate_positive_integer(value),
-            "nonPositiveInteger" => self.validate_non_positive_integer(value),
-            "negativeInteger" => self.validate_negative_integer(value),
-            "unsignedLong" => self.validate_unsigned_long(value),
-            "unsignedInt" => self.validate_unsigned_int(value),
-            "unsignedShort" => self.validate_unsigned_short(value),
-            "unsignedByte" => self.validate_unsigned_byte(value),
+            "decimal" => Self::validate_decimal(value),
+            "integer" => Self::validate_integer(value),
+            "long" => Self::validate_long(value),
+            "int" => Self::validate_int(value),
+            "short" => Self::validate_short(value),
+            "byte" => Self::validate_byte(value),
+            "nonNegativeInteger" => Self::validate_non_negative_integer(value),
+            "positiveInteger" => Self::validate_positive_integer(value),
+            "nonPositiveInteger" => Self::validate_non_positive_integer(value),
+            "negativeInteger" => Self::validate_negative_integer(value),
+            "unsignedLong" => Self::validate_unsigned_long(value),
+            "unsignedInt" => Self::validate_unsigned_int(value),
+            "unsignedShort" => Self::validate_unsigned_short(value),
+            "unsignedByte" => Self::validate_unsigned_byte(value),
 
             // Numeric types - Floating point
-            "float" => self.validate_float(value),
-            "double" => self.validate_double(value),
+            "float" => Self::validate_float(value),
+            "double" => Self::validate_double(value),
 
             // Date and time types
-            "dateTime" => self.validate_datetime(value),
-            "dateTimeStamp" => self.validate_datetime_stamp(value),
-            "date" => self.validate_date(value),
-            "time" => self.validate_time(value),
-            "gYear" => self.validate_gyear(value),
-            "gYearMonth" => self.validate_gyear_month(value),
-            "gMonth" => self.validate_gmonth(value),
-            "gMonthDay" => self.validate_gmonth_day(value),
-            "gDay" => self.validate_gday(value),
-            "duration" => self.validate_duration(value),
+            "dateTime" => Self::validate_datetime(value),
+            "dateTimeStamp" => Self::validate_datetime_stamp(value),
+            "date" => Self::validate_date(value),
+            "time" => Self::validate_time(value),
+            "gYear" => Self::validate_gyear(value),
+            "gYearMonth" => Self::validate_gyear_month(value),
+            "gMonth" => Self::validate_gmonth(value),
+            "gMonthDay" => Self::validate_gmonth_day(value),
+            "gDay" => Self::validate_gday(value),
+            "duration" => Self::validate_duration(value),
 
             // Binary types
-            "hexBinary" => self.validate_hex_binary(value),
-            "base64Binary" => self.validate_base64_binary(value),
+            "hexBinary" => Self::validate_hex_binary(value),
+            "base64Binary" => Self::validate_base64_binary(value),
 
             // URI type
-            "anyURI" => self.validate_any_uri(value),
+            "anyURI" => Self::validate_any_uri(value),
 
             _ => {
                 // Unknown datatype
                 if self.strict {
                     Err(Error::invalid_input(format!(
-                        "Unknown XSD datatype: {}",
-                        datatype_local
+                        "Unknown XSD datatype: {datatype_local}"
                     )))
                 } else {
                     Ok(true)
@@ -116,17 +114,18 @@ impl DatatypeValidator {
     }
 
     /// Validate a datatype match between two IRIs
-    pub fn datatypes_compatible(&self, datatype1: &IRI, datatype2: &IRI) -> bool {
+    #[must_use]
+    pub fn datatypes_compatible(datatype1: &IRI, datatype2: &IRI) -> bool {
         if datatype1 == datatype2 {
             return true;
         }
 
         // Check for derived types
-        self.is_derived_type(datatype1, datatype2) || self.is_derived_type(datatype2, datatype1)
+        Self::is_derived_type(datatype1, datatype2) || Self::is_derived_type(datatype2, datatype1)
     }
 
     /// Check if type1 is derived from type2
-    fn is_derived_type(&self, type1: &IRI, type2: &IRI) -> bool {
+    fn is_derived_type(type1: &IRI, type2: &IRI) -> bool {
         let t1_str = type1.as_str();
         let t2_str = type2.as_str();
 
@@ -140,7 +139,7 @@ impl DatatypeValidator {
         // Check derivation hierarchy
         match (local1, local2) {
             // Integer hierarchy
-            (_, "decimal") if self.is_integer_type(local1) => true,
+            (_, "decimal") if Self::is_integer_type(local1) => true,
             (_, "integer")
                 if matches!(
                     local1,
@@ -182,7 +181,7 @@ impl DatatypeValidator {
         }
     }
 
-    fn is_integer_type(&self, local_name: &str) -> bool {
+    fn is_integer_type(local_name: &str) -> bool {
         matches!(
             local_name,
             "integer"
@@ -202,20 +201,20 @@ impl DatatypeValidator {
     }
 
     // String type validators
-    fn validate_normalized_string(&self, value: &str) -> Result<bool> {
+    fn validate_normalized_string(value: &str) -> Result<bool> {
         // No carriage returns, line feeds, or tabs
         Ok(!value.chars().any(|c| c == '\r' || c == '\n' || c == '\t'))
     }
 
-    fn validate_token(&self, value: &str) -> Result<bool> {
+    fn validate_token(value: &str) -> Result<bool> {
         // Normalized, no leading/trailing spaces, no consecutive spaces
-        if !self.validate_normalized_string(value)? {
+        if !Self::validate_normalized_string(value)? {
             return Ok(false);
         }
         Ok(!value.starts_with(' ') && !value.ends_with(' ') && !value.contains("  "))
     }
 
-    fn validate_language(&self, value: &str) -> Result<bool> {
+    fn validate_language(value: &str) -> Result<bool> {
         // RFC 3066 language tag pattern: [a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*
         let parts: Vec<&str> = value.split('-').collect();
         if parts.is_empty() {
@@ -241,7 +240,7 @@ impl DatatypeValidator {
         Ok(true)
     }
 
-    fn validate_name(&self, value: &str) -> Result<bool> {
+    fn validate_name(value: &str) -> Result<bool> {
         // XML Name: starts with letter/underscore/colon, then NameChar*
         if value.is_empty() {
             return Ok(false);
@@ -256,7 +255,7 @@ impl DatatypeValidator {
                 .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'))
     }
 
-    fn validate_ncname(&self, value: &str) -> Result<bool> {
+    fn validate_ncname(value: &str) -> Result<bool> {
         // Like Name but no colons
         if value.is_empty() {
             return Ok(false);
@@ -272,7 +271,7 @@ impl DatatypeValidator {
             && !value.contains(':'))
     }
 
-    fn validate_nmtoken(&self, value: &str) -> Result<bool> {
+    fn validate_nmtoken(value: &str) -> Result<bool> {
         // NameChar+
         Ok(!value.is_empty()
             && value
@@ -281,12 +280,12 @@ impl DatatypeValidator {
     }
 
     // Boolean validator
-    fn validate_boolean(&self, value: &str) -> Result<bool> {
+    fn validate_boolean(value: &str) -> Result<bool> {
         Ok(matches!(value, "true" | "false" | "1" | "0"))
     }
 
     // Numeric validators
-    fn validate_decimal(&self, value: &str) -> Result<bool> {
+    fn validate_decimal(value: &str) -> Result<bool> {
         // Optional sign, digits, optional decimal point and more digits
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -312,82 +311,82 @@ impl DatatypeValidator {
         Ok(without_sign.chars().all(|c| c.is_ascii_digit() || c == '.'))
     }
 
-    fn validate_integer(&self, value: &str) -> Result<bool> {
+    fn validate_integer(value: &str) -> Result<bool> {
         Ok(i128::from_str(value.trim()).is_ok())
     }
 
-    fn validate_long(&self, value: &str) -> Result<bool> {
+    fn validate_long(value: &str) -> Result<bool> {
         Ok(i64::from_str(value.trim()).is_ok())
     }
 
-    fn validate_int(&self, value: &str) -> Result<bool> {
+    fn validate_int(value: &str) -> Result<bool> {
         Ok(i32::from_str(value.trim()).is_ok())
     }
 
-    fn validate_short(&self, value: &str) -> Result<bool> {
+    fn validate_short(value: &str) -> Result<bool> {
         Ok(i16::from_str(value.trim()).is_ok())
     }
 
-    fn validate_byte(&self, value: &str) -> Result<bool> {
+    fn validate_byte(value: &str) -> Result<bool> {
         Ok(i8::from_str(value.trim()).is_ok())
     }
 
-    fn validate_non_negative_integer(&self, value: &str) -> Result<bool> {
+    fn validate_non_negative_integer(value: &str) -> Result<bool> {
         match i128::from_str(value.trim()) {
             Ok(n) => Ok(n >= 0),
             Err(_) => Ok(false),
         }
     }
 
-    fn validate_positive_integer(&self, value: &str) -> Result<bool> {
+    fn validate_positive_integer(value: &str) -> Result<bool> {
         match i128::from_str(value.trim()) {
             Ok(n) => Ok(n > 0),
             Err(_) => Ok(false),
         }
     }
 
-    fn validate_non_positive_integer(&self, value: &str) -> Result<bool> {
+    fn validate_non_positive_integer(value: &str) -> Result<bool> {
         match i128::from_str(value.trim()) {
             Ok(n) => Ok(n <= 0),
             Err(_) => Ok(false),
         }
     }
 
-    fn validate_negative_integer(&self, value: &str) -> Result<bool> {
+    fn validate_negative_integer(value: &str) -> Result<bool> {
         match i128::from_str(value.trim()) {
             Ok(n) => Ok(n < 0),
             Err(_) => Ok(false),
         }
     }
 
-    fn validate_unsigned_long(&self, value: &str) -> Result<bool> {
+    fn validate_unsigned_long(value: &str) -> Result<bool> {
         Ok(u64::from_str(value.trim()).is_ok())
     }
 
-    fn validate_unsigned_int(&self, value: &str) -> Result<bool> {
+    fn validate_unsigned_int(value: &str) -> Result<bool> {
         Ok(u32::from_str(value.trim()).is_ok())
     }
 
-    fn validate_unsigned_short(&self, value: &str) -> Result<bool> {
+    fn validate_unsigned_short(value: &str) -> Result<bool> {
         Ok(u16::from_str(value.trim()).is_ok())
     }
 
-    fn validate_unsigned_byte(&self, value: &str) -> Result<bool> {
+    fn validate_unsigned_byte(value: &str) -> Result<bool> {
         Ok(u8::from_str(value.trim()).is_ok())
     }
 
-    fn validate_float(&self, value: &str) -> Result<bool> {
+    fn validate_float(value: &str) -> Result<bool> {
         let trimmed = value.trim();
         Ok(f32::from_str(trimmed).is_ok() || matches!(trimmed, "INF" | "-INF" | "NaN"))
     }
 
-    fn validate_double(&self, value: &str) -> Result<bool> {
+    fn validate_double(value: &str) -> Result<bool> {
         let trimmed = value.trim();
         Ok(f64::from_str(trimmed).is_ok() || matches!(trimmed, "INF" | "-INF" | "NaN"))
     }
 
     // Date/Time validators (simplified - full ISO 8601 is complex)
-    fn validate_datetime(&self, value: &str) -> Result<bool> {
+    fn validate_datetime(value: &str) -> Result<bool> {
         // Basic format: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let datetime_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
@@ -396,7 +395,7 @@ impl DatatypeValidator {
         Ok(datetime_pattern.is_match(value))
     }
 
-    fn validate_datetime_stamp(&self, value: &str) -> Result<bool> {
+    fn validate_datetime_stamp(value: &str) -> Result<bool> {
         // Like dateTime but timezone is required
         let datetime_pattern = regex::Regex::new(
             r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$",
@@ -405,51 +404,51 @@ impl DatatypeValidator {
         Ok(datetime_pattern.is_match(value))
     }
 
-    fn validate_date(&self, value: &str) -> Result<bool> {
+    fn validate_date(value: &str) -> Result<bool> {
         // Format: YYYY-MM-DD(Z|[+-]HH:MM)?
         let date_pattern = regex::Regex::new(r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for date");
         Ok(date_pattern.is_match(value))
     }
 
-    fn validate_time(&self, value: &str) -> Result<bool> {
+    fn validate_time(value: &str) -> Result<bool> {
         // Format: HH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let time_pattern = regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for time");
         Ok(time_pattern.is_match(value))
     }
 
-    fn validate_gyear(&self, value: &str) -> Result<bool> {
+    fn validate_gyear(value: &str) -> Result<bool> {
         let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for gYear");
         Ok(pattern.is_match(value))
     }
 
-    fn validate_gyear_month(&self, value: &str) -> Result<bool> {
+    fn validate_gyear_month(value: &str) -> Result<bool> {
         let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for gYearMonth");
         Ok(pattern.is_match(value))
     }
 
-    fn validate_gmonth(&self, value: &str) -> Result<bool> {
+    fn validate_gmonth(value: &str) -> Result<bool> {
         let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for gMonth");
         Ok(pattern.is_match(value))
     }
 
-    fn validate_gmonth_day(&self, value: &str) -> Result<bool> {
+    fn validate_gmonth_day(value: &str) -> Result<bool> {
         let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for gMonthDay");
         Ok(pattern.is_match(value))
     }
 
-    fn validate_gday(&self, value: &str) -> Result<bool> {
+    fn validate_gday(value: &str) -> Result<bool> {
         let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$")
             .expect("Valid hardcoded regex pattern for gDay");
         Ok(pattern.is_match(value))
     }
 
-    fn validate_duration(&self, value: &str) -> Result<bool> {
+    fn validate_duration(value: &str) -> Result<bool> {
         // Format: P(nY)?(nM)?(nD)?(T(nH)?(nM)?(nS)?)?
         let pattern =
             regex::Regex::new(r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$")
@@ -458,11 +457,11 @@ impl DatatypeValidator {
     }
 
     // Binary validators
-    fn validate_hex_binary(&self, value: &str) -> Result<bool> {
-        Ok(value.chars().all(|c| c.is_ascii_hexdigit()) && value.len() % 2 == 0)
+    fn validate_hex_binary(value: &str) -> Result<bool> {
+        Ok(value.chars().all(|c| c.is_ascii_hexdigit()) && value.len().is_multiple_of(2))
     }
 
-    fn validate_base64_binary(&self, value: &str) -> Result<bool> {
+    fn validate_base64_binary(value: &str) -> Result<bool> {
         // Remove whitespace
         let clean: String = value.chars().filter(|c| !c.is_whitespace()).collect();
 
@@ -479,11 +478,11 @@ impl DatatypeValidator {
             _ => false,
         };
 
-        Ok(valid_chars && padding_ok && clean.len() % 4 == 0)
+        Ok(valid_chars && padding_ok && clean.len().is_multiple_of(4))
     }
 
     // URI validator
-    fn validate_any_uri(&self, value: &str) -> Result<bool> {
+    fn validate_any_uri(value: &str) -> Result<bool> {
         // Basic URI validation - should be more comprehensive
         Ok(!value.is_empty() && !value.contains(char::is_whitespace))
     }
@@ -495,104 +494,91 @@ mod tests {
 
     #[test]
     fn test_validate_boolean() {
-        let validator = DatatypeValidator::new();
         assert!(
-            validator
-                .validate_boolean("true")
+            DatatypeValidator::validate_boolean("true")
                 .expect("Failed to validate boolean datatype value")
         );
         assert!(
-            validator
-                .validate_boolean("false")
+            DatatypeValidator::validate_boolean("false")
                 .expect("Failed to validate boolean datatype value")
         );
         assert!(
-            validator
-                .validate_boolean("1")
+            DatatypeValidator::validate_boolean("1")
                 .expect("Failed to validate boolean datatype value")
         );
         assert!(
-            validator
-                .validate_boolean("0")
+            DatatypeValidator::validate_boolean("0")
                 .expect("Failed to validate boolean datatype value")
         );
         assert!(
-            !validator
-                .validate_boolean("yes")
+            !DatatypeValidator::validate_boolean("yes")
                 .expect("Failed to validate boolean datatype value")
         );
     }
 
     #[test]
     fn test_validate_integer() {
-        let validator = DatatypeValidator::new();
         assert!(
-            validator
-                .validate_integer("123")
+            DatatypeValidator::validate_integer("123")
                 .expect("Failed to validate integer datatype value")
         );
         assert!(
-            validator
-                .validate_integer("-456")
+            DatatypeValidator::validate_integer("-456")
                 .expect("Failed to validate integer datatype value")
         );
         assert!(
-            validator
-                .validate_integer("0")
+            DatatypeValidator::validate_integer("0")
                 .expect("Failed to validate integer datatype value")
         );
         assert!(
-            !validator
-                .validate_integer("12.34")
+            !DatatypeValidator::validate_integer("12.34")
                 .expect("Failed to validate integer datatype value")
         );
         assert!(
-            !validator
-                .validate_integer("abc")
+            !DatatypeValidator::validate_integer("abc")
                 .expect("Failed to validate integer datatype value")
         );
     }
 
     #[test]
     fn test_validate_decimal() {
-        let validator = DatatypeValidator::new();
         assert!(
-            validator
-                .validate_decimal("123.45")
+            DatatypeValidator::validate_decimal("123.45")
                 .expect("Failed to validate decimal datatype value")
         );
         assert!(
-            validator
-                .validate_decimal("-67.89")
+            DatatypeValidator::validate_decimal("-67.89")
                 .expect("Failed to validate decimal datatype value")
         );
         assert!(
-            validator
-                .validate_decimal("100")
+            DatatypeValidator::validate_decimal("100")
                 .expect("Failed to validate decimal datatype value")
         );
         assert!(
-            validator
-                .validate_decimal(".5")
+            DatatypeValidator::validate_decimal(".5")
                 .expect("Failed to validate decimal datatype value")
         );
         assert!(
-            !validator
-                .validate_decimal("12.34.56")
+            !DatatypeValidator::validate_decimal("12.34.56")
                 .expect("Failed to validate decimal datatype value")
         );
     }
 
     #[test]
     fn test_datatype_hierarchy() {
-        let validator = DatatypeValidator::new();
         let int_iri = IRI::new("http://www.w3.org/2001/XMLSchema#int");
         let long_iri = IRI::new("http://www.w3.org/2001/XMLSchema#long");
         let integer_iri = IRI::new("http://www.w3.org/2001/XMLSchema#integer");
         let decimal_iri = IRI::new("http://www.w3.org/2001/XMLSchema#decimal");
 
-        assert!(validator.datatypes_compatible(&int_iri, &long_iri));
-        assert!(validator.datatypes_compatible(&int_iri, &integer_iri));
-        assert!(validator.datatypes_compatible(&int_iri, &decimal_iri));
+        assert!(DatatypeValidator::datatypes_compatible(&int_iri, &long_iri));
+        assert!(DatatypeValidator::datatypes_compatible(
+            &int_iri,
+            &integer_iri
+        ));
+        assert!(DatatypeValidator::datatypes_compatible(
+            &int_iri,
+            &decimal_iri
+        ));
     }
 }

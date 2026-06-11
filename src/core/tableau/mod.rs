@@ -36,7 +36,7 @@ use crate::{
         blocking::BlockingStrategy,
         completion::{CompletionStrategy, RuleApplication},
         dependency::DependencySet,
-        expansion::{DefaultExpansionStrategy, ExpansionStrategy},
+        expansion::DefaultExpansionStrategy,
     },
     ontology::{ClassExpression, Ontology},
 };
@@ -80,6 +80,12 @@ pub struct Tableau {
     /// Clause checker for DL clause validation (optional)
     pub clause_checker: Option<ClauseChecker>,
 
+    /// Clause index for fast lookup (optional)
+    pub clause_index: Option<ClauseIndex>,
+
+    /// Reference to the ontology for querying axioms during reasoning
+    pub ontology: Arc<Ontology>,
+
     /// Concept cache for performance
     concept_cache: HashMap<String, ConceptLabel>,
 
@@ -91,6 +97,12 @@ pub struct Tableau {
 
     /// Backtrack stack for non-deterministic choices
     backtrack_stack: Vec<BacktrackPoint>,
+
+    /// Concept unfolding rules: maps a named-class IRI string to a list of complex class
+    /// expressions that the class is subsumed by (from SubClassOf and EquivalentClasses axioms).
+    /// Used to propagate existential restrictions to individual nodes when a ClassAssertion is
+    /// processed (the forward direction of `A ≡ ∃R.C` or `A ⊑ ∃R.C`).
+    pub concept_unfolding_rules: HashMap<String, Vec<ClassExpression>>,
 }
 
 /// A backtrack point for handling non-deterministic choices
@@ -109,7 +121,7 @@ pub struct BacktrackPoint {
     pub saved_state: SavedState,
 
     /// Dependencies at this point
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }
 
 /// Types of non-deterministic choices
@@ -154,8 +166,9 @@ pub struct SavedState {
 }
 
 impl Tableau {
-    /// Create a new tableau with the given configuration
-    pub fn new(config: ReasoningConfig) -> Self {
+    /// Create a new tableau with the given configuration and ontology
+    #[must_use]
+    pub fn new(config: ReasoningConfig, ontology: Arc<Ontology>) -> Self {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
@@ -167,23 +180,30 @@ impl Tableau {
                 timeout: config.timeout,
                 blocking_enabled: true,
                 optimization_enabled: true,
+                rdf11_mode: false,                // RDF-star enabled by default
+                quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
+                enable_clause_optimization: true, // Enable clause optimization by default
             },
             pending_queue: VecDeque::new(),
             completion_strategy: CompletionStrategy::default(),
             blocking_strategy: BlockingStrategy,
             expansion_strategy: DefaultExpansionStrategy::default(),
             clause_checker: None, // Will be populated when ontology is loaded
+            clause_index: None,   // Will be populated when ontology is loaded
+            ontology,
             concept_cache: HashMap::new(),
             role_cache: HashMap::new(),
             individual_map: HashMap::new(),
             backtrack_stack: Vec::new(),
+            concept_unfolding_rules: HashMap::new(),
         }
     }
 
     /// Initialize tableau from ontology
-    pub fn from_ontology(ontology: &Ontology, config: ReasoningConfig) -> Result<Self> {
-        let mut tableau = Self::new(config);
-        tableau.load_ontology(ontology)?;
+    pub fn from_ontology(ontology: Arc<Ontology>, config: ReasoningConfig) -> Result<Self> {
+        let mut tableau = Self::new(config, ontology.clone());
+        // Load the ontology to initialize clause_checker, equivalence closure, and disjointness map
+        tableau.load_ontology(&ontology)?;
         Ok(tableau)
     }
 
@@ -199,6 +219,50 @@ impl Tableau {
             "Loaded {} deterministic clauses and {} disjunctive clauses from ontology",
             clause_set.deterministic_clauses.len(),
             clause_set.disjunctive_clauses.len()
+        );
+
+        // Build concept-unfolding rules from SubClassOf and EquivalentClasses axioms.
+        // These rules propagate complex superclass expressions (e.g. existential restrictions)
+        // to individual nodes during ABox reasoning when a ClassAssertion is processed.
+        self.concept_unfolding_rules.clear();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(sub) => {
+                    // A ⊑ E (named or complex): store "when A(x), also add E(x)".
+                    // Named superclasses (e.g. A ⊑ B) are included so that the
+                    // complement clash A ⊑ B, A ⊑ ¬B is detected on Nominal nodes.
+                    if let ClassExpression::Class(named) = &sub.subclass {
+                        self.concept_unfolding_rules
+                            .entry(named.iri.to_string())
+                            .or_default()
+                            .push(sub.superclass.clone());
+                    }
+                }
+                crate::ontology::Axiom::EquivalentClasses(equiv) => {
+                    // For each pair (named, complex) in EquivalentClasses, both directions
+                    // need unfolding rules since the classes are mutually equivalent.
+                    for ci in &equiv.classes {
+                        if let ClassExpression::Class(named) = ci {
+                            for cj in &equiv.classes {
+                                if std::ptr::eq(ci, cj) {
+                                    continue;
+                                }
+                                if cj.is_complex_class_expression() {
+                                    self.concept_unfolding_rules
+                                        .entry(named.iri.to_string())
+                                        .or_default()
+                                        .push(cj.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        log::info!(
+            "Built concept unfolding rules for {} named classes",
+            self.concept_unfolding_rules.len()
         );
 
         // Only create EquivalenceClosure and DisjointnessMap if the ontology has relevant axioms
@@ -233,31 +297,21 @@ impl Tableau {
             self.add_node(NodeType::Root)?;
         }
 
-        // Process deterministic clauses to extract initial concepts and constraints
-        // For consistency checking, we add concepts to the root node that represent
-        // the ontology axioms. Key axioms to process:
-        // 1. EquivalentClasses - bidirectional implications
-        // 2. DisjointUnion - coverage and disjointness constraints
-        // 3. DisjointClasses - disjointness constraints
-        // 4. SubClassOf - subsumption constraints
-
-        // For now, we note that DL clauses have been generated
-        // The actual tableau expansion should use these clauses via the
-        // completion rules that process them
-
-        // Store reference to the ontology's clauses for use during expansion
-        // This is a simplified implementation - a full implementation would
-        // convert DL clauses into tableau concepts and rules
-
-        // Process axioms directly to ensure they are applied to the tableau
-        // For consistency checking, we only need to process ClassAssertion axioms
-        // Other axioms (EquivalentClasses, DisjointClasses, SubClassOf) are handled
-        // via the DL clause generation and don't need explicit processing here
+        // Process all axioms to ensure they are applied to the tableau
+        // The DL clauses generated above provide a normalized representation,
+        // but we also need to process axioms directly to initialize the tableau state
+        // with the appropriate concepts and constraints.
+        //
+        // Key axiom processing:
+        // 1. EquivalentClasses - bidirectional implications (C1 ≡ C2)
+        // 2. DisjointUnion - coverage and pairwise disjointness
+        // 3. DisjointClasses - pairwise disjointness constraints
+        // 4. SubClassOf - subsumption constraints (A ⊑ B)
+        // 5. ClassAssertion - individual concept membership (a : C)
+        //
+        // All axiom types are now processed to ensure complete tableau initialization
         for axiom in ontology.axioms() {
-            // Only process axioms that affect the tableau state
-            if matches!(axiom, crate::ontology::Axiom::ClassAssertion(_)) {
-                self.process_axiom(axiom)?;
-            }
+            self.process_axiom(axiom)?;
         }
 
         Ok(())
@@ -402,29 +456,28 @@ impl Tableau {
 
                 // Also add all equivalent classes (if any) - but only if we have equivalence closure
                 // This is an optimization to avoid expensive lookups when not needed
-                if let Some(checker) = &mut self.clause_checker {
-                    if let ClassExpression::Class(ref class) = assertion.class {
-                        if let Some(eq_closure) = checker.equivalence_closure() {
-                            let concept_id = equivalence::ConceptId(class.iri.to_string());
-                            let equiv_class = eq_closure.get_equivalence_class(&concept_id);
+                if let Some(checker) = &mut self.clause_checker
+                    && let ClassExpression::Class(ref class) = assertion.class
+                    && let Some(eq_closure) = checker.equivalence_closure()
+                {
+                    let concept_id = equivalence::ConceptId(class.iri.to_string());
+                    let equiv_class = eq_closure.get_equivalence_class(&concept_id);
 
-                            // Only add equivalent concepts if there are any (skip if just the original concept)
-                            if equiv_class.len() > 1 {
-                                for equiv_concept_id in equiv_class {
-                                    // Skip if it's the same as the original concept
-                                    if equiv_concept_id.0 == class.iri.to_string() {
-                                        continue;
-                                    }
+                    // Only add equivalent concepts if there are any (skip if just the original concept)
+                    if equiv_class.len() > 1 {
+                        for equiv_concept_id in equiv_class {
+                            // Skip if it's the same as the original concept
+                            if equiv_concept_id.0 == class.iri.to_string() {
+                                continue;
+                            }
 
-                                    // Add the equivalent concept to the node
-                                    let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
-                                    let equiv_class = crate::ontology::Class::new(equiv_iri);
-                                    let equiv_expr = ClassExpression::Class(equiv_class);
-                                    let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
-                                    if let Some(node) = self.nodes.get_mut(node_id) {
-                                        node.concepts.insert(equiv_concept);
-                                    }
-                                }
+                            // Add the equivalent concept to the node
+                            let equiv_iri = crate::ontology::IRI::new(&equiv_concept_id.0);
+                            let equiv_class = crate::ontology::Class::new(equiv_iri);
+                            let equiv_expr = ClassExpression::Class(equiv_class);
+                            let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
+                            if let Some(node) = self.nodes.get_mut(node_id) {
+                                node.concepts.insert(equiv_concept);
                             }
                         }
                     }
@@ -432,6 +485,32 @@ impl Tableau {
 
                 // Queue rule for expanding this concept
                 self.queue_rule_for_concept(node_id, &assertion.class)?;
+
+                // Apply concept unfolding rules: if A ≡ ∃R.C or A ⊑ ∃R.C is in the ontology,
+                // add the complex superclass expression to this individual's node and queue the
+                // appropriate tableau rule (e.g. SOME rule for existential restrictions).
+                if let ClassExpression::Class(named_class) = &assertion.class {
+                    // Collect unfolding targets to avoid borrow conflict during queue_rule_for_concept
+                    let unfolding_targets: Vec<ClassExpression> = self
+                        .concept_unfolding_rules
+                        .get(&named_class.iri.to_string())
+                        .cloned()
+                        .unwrap_or_default();
+
+                    for complex_expr in unfolding_targets {
+                        let complex_label = ConceptLabel::Complex(Box::new(complex_expr.clone()));
+                        if let Some(node) = self.nodes.get_mut(node_id) {
+                            node.concepts.insert(complex_label);
+                        }
+                        self.queue_rule_for_concept(node_id, &complex_expr)?;
+                        log::debug!(
+                            "Unfolded concept {:?} to {:?} at node {}",
+                            named_class.iri,
+                            complex_expr,
+                            node_id
+                        );
+                    }
+                }
             }
 
             // Other axioms can be added as needed
@@ -519,41 +598,49 @@ impl Tableau {
     }
 
     /// Check if the tableau is satisfiable
+    #[must_use]
     pub fn is_satisfiable(&self) -> bool {
         matches!(self.state, TableauState::Satisfiable)
     }
 
     /// Check if the tableau is unsatisfiable
+    #[must_use]
     pub fn is_unsatisfiable(&self) -> bool {
         matches!(self.state, TableauState::Unsatisfiable)
     }
 
     /// Get the current state
+    #[must_use]
     pub fn state(&self) -> TableauState {
         self.state
     }
 
     /// Get the current state (alias for backward compatibility)
+    #[must_use]
     pub fn get_state(&self) -> TableauState {
         self.state
     }
 
     /// Get tableau statistics
+    #[must_use]
     pub fn statistics(&self) -> &TableauStatistics {
         &self.statistics
     }
 
     /// Get the nodes in the tableau
+    #[must_use]
     pub fn nodes(&self) -> &[TableauNode] {
         &self.nodes
     }
 
     /// Get the edges in the tableau
+    #[must_use]
     pub fn edges(&self) -> &[TableauEdge] {
         &self.edges
     }
 
     /// Get a node by ID
+    #[must_use]
     pub fn node(&self, id: NodeId) -> Option<&TableauNode> {
         self.nodes.get(id)
     }
@@ -589,11 +676,13 @@ impl Tableau {
     // Legacy methods for compatibility with existing code
 
     /// Check if tableau is complete
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         self.pending_queue.is_empty() && self.nodes.iter().all(|node| node.status.fully_expanded)
     }
 
     /// Get clash detector
+    #[must_use]
     pub fn clash_detector(&self) -> &ClashDetector {
         &self.clash_detector
     }
@@ -604,6 +693,7 @@ impl Tableau {
     }
 
     /// Get pending queue
+    #[must_use]
     pub fn pending_queue(&self) -> &VecDeque<RuleApplication> {
         &self.pending_queue
     }
@@ -614,6 +704,7 @@ impl Tableau {
     }
 
     /// Get config
+    #[must_use]
     pub fn config(&self) -> &TableauConfig {
         &self.config
     }
@@ -621,16 +712,19 @@ impl Tableau {
     // Additional methods for compatibility
 
     /// Get node count
+    #[must_use]
     pub fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
 
     /// Get backtrack count
+    #[must_use]
     pub fn get_backtrack_count(&self) -> usize {
         self.backtrack_stack.len()
     }
 
     /// Get max depth  
+    #[must_use]
     pub fn get_max_depth(&self) -> usize {
         self.config.max_depth as usize
     }
@@ -680,7 +774,7 @@ impl Tableau {
     /// Add a concept to a node
     pub fn add_concept_to_node(&mut self, node_id: NodeId, concept: ConceptLabel) -> Result<()> {
         if node_id >= self.nodes.len() {
-            return Err(Error::reasoning(format!("Invalid node id: {}", node_id)));
+            return Err(Error::reasoning(format!("Invalid node id: {node_id}")));
         }
 
         if let Some(node) = self.nodes.get_mut(node_id) {

@@ -1,15 +1,25 @@
 //! High-level Reasoning Interface for Oxidowl
 //!
-//! This module provides high-level reasoning services and query interfaces
-//! that wrap the core tableau algorithm and provide convenient APIs for
-//! common reasoning tasks.
+//! `ReasoningService` is a lightweight, `Clone`-able handle that communicates
+//! with a background `ReasoningActor` via `tokio::sync::mpsc` channels.
+//! All mutable state (`Reasoner`, `CacheManager`, `SWRLRuleEngine`) is owned
+//! exclusively by the actor, eliminating `Arc<RwLock<>>` contention.
 
+#![allow(dead_code)]
+
+pub mod actor;
 // Incremental reasoning framework
 pub mod incremental;
+// Konclude-inspired preprocessing pipeline
+pub mod preprocessing;
+// Multi-level tableau caching
+pub mod cache;
+// Datatype value space handlers
+pub mod datatypes;
 
 // Re-export core reasoner types for public API
 pub use crate::core::reasoner::{
-    ClassificationResult, RealizationResult, ReasoningResult, ReasoningTask,
+    ClassificationResult, RealisationResult, ReasoningResult, ReasoningTask,
 };
 
 // Re-export incremental reasoning types for public API
@@ -18,136 +28,107 @@ pub use incremental::{
     IncrementalReasoningService, IncrementalStatistics,
 };
 
+use actor::{ReasoningRequest, spawn_actor};
+
 use crate::{
     Error, Result,
-    cache::CacheManager,
     config::ReasonerConfig,
-    core::{
-        lock_helpers::{read_lock, write_lock},
-        reasoner::Reasoner,
-    },
     ontology::{
         ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
     },
     query::{DLQuery, DLQueryEngine, QueryResult},
-    swrl::{SWRLConfig, SWRLExecutionResult, SWRLRuleEngine},
+    swrl::SWRLExecutionResult,
 };
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
-    time::{Duration, Instant},
+    sync::Arc,
+    time::Duration,
 };
+use tokio::sync::{mpsc, oneshot};
 
-/// Reasoning service that provides high-level reasoning capabilities
+// ── Shutdown guard ────────────────────────────────────────────────────────────
+
+/// Signals the actor to stop when the last `ReasoningService` clone is dropped.
+struct ShutdownGuard(Option<oneshot::Sender<()>>);
+
+impl std::fmt::Debug for ShutdownGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShutdownGuard").finish_non_exhaustive()
+    }
+}
+
+impl Drop for ShutdownGuard {
+    fn drop(&mut self) {
+        if let Some(tx) = self.0.take() {
+            let _ = tx.send(());
+        }
+    }
+}
+
+// ── Public handle ─────────────────────────────────────────────────────────────
+
+/// Lightweight, cheaply-cloneable handle to the `ReasoningActor`.
+///
+/// Creating a `ReasoningService` spawns a background actor task that owns all
+/// reasoning state exclusively (no `Arc<RwLock<>>`). Public methods send a
+/// typed message via `mpsc` and await a `oneshot` reply.
 #[derive(Debug, Clone)]
 pub struct ReasoningService {
-    reasoner: Arc<RwLock<Reasoner>>,
-    cache_manager: Arc<RwLock<CacheManager>>,
-    swrl_engine: Arc<RwLock<SWRLRuleEngine>>,
-    config: ReasonerConfig,
+    sender: mpsc::Sender<ReasoningRequest>,
+    pub(crate) config: ReasonerConfig,
+    /// Shared guard: actor is stopped when every clone of this service is dropped.
+    _shutdown: Arc<ShutdownGuard>,
 }
 
 impl ReasoningService {
-    /// Creates a new reasoning service with the given ontology and configuration
-    #[must_use]
-    pub fn new(ontology: Ontology, config: ReasonerConfig) -> Self {
-        let reasoner = Reasoner::new(config.clone()).expect("Failed to create reasoner");
-        let mut reasoner_with_ontology = reasoner;
-        reasoner_with_ontology
-            .load_ontology(ontology.clone())
-            .expect("Failed to load ontology");
-
-        // Initialize SWRL engine with the ontology
-        let swrl_config = SWRLConfig::default();
-        let mut swrl_engine = SWRLRuleEngine::new(swrl_config);
-        swrl_engine.set_ontology(Arc::new(RwLock::new(ontology)));
-
-        Self {
-            reasoner: Arc::new(RwLock::new(reasoner_with_ontology)),
-            cache_manager: Arc::new(RwLock::new(CacheManager::default())),
-            swrl_engine: Arc::new(RwLock::new(swrl_engine)),
+    /// Creates a new reasoning service, spawning its background actor.
+    pub fn new(ontology: Ontology, config: ReasonerConfig) -> Result<Self> {
+        let (sender, shutdown_tx) = spawn_actor(ontology, config.clone())?;
+        Ok(Self {
+            sender,
             config,
-        }
+            _shutdown: Arc::new(ShutdownGuard(Some(shutdown_tx))),
+        })
+    }
+
+    // ─── private channel helpers ──────────────────────────────────────────────
+
+    async fn send<F, T>(&self, build: F) -> Result<T>
+    where
+        F: FnOnce(oneshot::Sender<Result<T>>) -> ReasoningRequest,
+    {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(build(tx))
+            .await
+            .map_err(|_| Error::reasoning("Reasoning actor has shut down"))?;
+        rx.await
+            .map_err(|_| Error::reasoning("Reasoning actor dropped reply channel"))?
+    }
+
+    /// Block-in-place bridge for callers inside a tokio runtime that cannot `.await`.
+    fn send_sync<F, T>(&self, build: F) -> Result<T>
+    where
+        F: FnOnce(oneshot::Sender<Result<T>>) -> ReasoningRequest,
+        T: Send + 'static,
+    {
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.send(build)))
     }
 
     /// Check consistency of the ontology
     pub async fn is_consistent(&self) -> Result<bool> {
-        let start = Instant::now();
-
-        // Check cache
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-            if let Some(ontology) = reasoner.get_ontology() {
-                if let Some(result) = cache_manager.get_consistency_result(&ontology) {
-                    return Ok(result);
-                }
-            }
-        }
-
-        // Execute SWRL rules first to ensure all inferences are considered for consistency
-        log::info!("Executing SWRL rules before consistency check");
-        self.execute_swrl_rules().await?;
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let result = reasoner.is_consistent()?;
-
-        // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            if let Some(ontology) = reasoner.get_ontology() {
-                cache_manager.cache_consistency_result(&ontology, result);
-            }
-        }
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Consistency check timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the consistency check
-        log::info!("Consistency check completed in {:?}", start.elapsed());
-        Ok(result)
+        self.send(|r| ReasoningRequest::IsConsistent { reply: r })
+            .await
     }
 
     /// Check satisfiability of a class expression
     pub async fn is_satisfiable(&self, expression: &ClassExpression) -> Result<bool> {
-        let start = Instant::now();
-
-        // Check cache
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            if let Some(result) = cache_manager.get_satisfiability_result(expression) {
-                return Ok(result);
-            }
-        }
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-
-        let result = reasoner.is_class_satisfiable(expression)?;
-
-        // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            cache_manager.cache_satisfiability_result(expression.clone(), result);
-        }
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Satisfiability check timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the satisfiability check
-        log::info!("Satisfiability check completed in {:?}", start.elapsed());
-        Ok(result)
+        let expression = expression.clone();
+        self.send(|r| ReasoningRequest::IsSatisfiable {
+            expression,
+            reply: r,
+        })
+        .await
     }
 
     /// Check subsumption of two class expressions
@@ -156,40 +137,16 @@ impl ReasoningService {
         subclass: &ClassExpression,
         superclass: &ClassExpression,
     ) -> Result<bool> {
-        let start = Instant::now();
-
-        // Check cache
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            if let Some(result) = cache_manager.get_subsumption_result(subclass, superclass) {
-                return Ok(result);
-            }
-        }
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let result = reasoner.is_subsumed_by(subclass, superclass)?;
-
-        // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            cache_manager.cache_subsumption_result(subclass.clone(), superclass.clone(), result);
-        }
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Subsumption check timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the subsumption check
-        log::info!("Subsumption check completed in {:?}", start.elapsed());
-        Ok(result)
+        let (subclass, superclass) = (subclass.clone(), superclass.clone());
+        self.send(|r| ReasoningRequest::IsSubsumedBy {
+            subclass,
+            superclass,
+            reply: r,
+        })
+        .await
     }
 
-    // Check equivalence of two class expressions
+    /// Check equivalence of two class expressions
     pub async fn is_equivalent_to(
         &self,
         class1: &ClassExpression,
@@ -218,26 +175,13 @@ impl ReasoningService {
         class: &ClassExpression,
         direct: bool,
     ) -> Result<HashSet<ClassExpression>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let superclasses = reasoner.get_superclasses(class, direct)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Direct superclass retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the retrieval
-        log::info!(
-            "Direct superclass retrieval completed in {:?}",
-            start.elapsed()
-        );
-        Ok(superclasses.into_iter().collect())
+        let class = class.clone();
+        self.send(|r| ReasoningRequest::GetSuperclasses {
+            class,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Get all direct subclasses of a class expression
@@ -246,26 +190,13 @@ impl ReasoningService {
         class: &ClassExpression,
         direct: bool,
     ) -> Result<HashSet<ClassExpression>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let subclasses = reasoner.get_subclasses(class, direct)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Direct subclass retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the retrieval
-        log::info!(
-            "Direct subclass retrieval completed in {:?}",
-            start.elapsed()
-        );
-        Ok(subclasses.into_iter().collect())
+        let class = class.clone();
+        self.send(|r| ReasoningRequest::GetSubclasses {
+            class,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Get all equivalent classes of a class expression
@@ -273,26 +204,9 @@ impl ReasoningService {
         &self,
         class: &ClassExpression,
     ) -> Result<HashSet<ClassExpression>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let equivalent_classes = reasoner.get_equivalent_classes(class)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Equivalent class retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the retrieval
-        log::info!(
-            "Equivalent class retrieval completed in {:?}",
-            start.elapsed()
-        );
-        Ok(equivalent_classes.into_iter().collect())
+        let class = class.clone();
+        self.send(|r| ReasoningRequest::GetEquivalentClasses { class, reply: r })
+            .await
     }
 
     /// Get all instances of a class expression
@@ -301,23 +215,13 @@ impl ReasoningService {
         class: &ClassExpression,
         direct: bool,
     ) -> Result<HashSet<Individual>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let instances = reasoner.get_instances(class, direct)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Instance retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the retrieval
-        log::info!("Instance retrieval completed in {:?}", start.elapsed());
-        Ok(instances.into_iter().collect())
+        let class = class.clone();
+        self.send(|r| ReasoningRequest::GetInstances {
+            class,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
     /// Get all types of an individual
@@ -326,38 +230,37 @@ impl ReasoningService {
         individual: &Individual,
         direct: bool,
     ) -> Result<HashSet<ClassExpression>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let types = reasoner.get_types(individual, direct)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Type retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the retrieval
-        log::info!("Type retrieval completed in {:?}", start.elapsed());
-        Ok(types.into_iter().collect())
+        let individual = individual.clone();
+        self.send(|r| ReasoningRequest::GetTypes {
+            individual,
+            direct,
+            reply: r,
+        })
+        .await
     }
 
-    /// Check if an individual is an instance of a class expression
+    /// Check if an individual is an instance of a class expression.
     pub async fn is_instance_of(
         &self,
         individual: &Individual,
         class: &ClassExpression,
     ) -> Result<bool> {
-        let types = self.get_types(individual, false).await?;
-        for class_type in &types {
-            if self.is_subsumed_by(class_type, class).await? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        let (individual, class) = (individual.clone(), class.clone());
+        self.send(|r| ReasoningRequest::IsInstanceOf {
+            individual,
+            class,
+            reply: r,
+        })
+        .await
+    }
+
+    /// OWL DL membership query: is `individual` a member of `class_expr`?
+    pub async fn is_member_of(
+        &self,
+        individual: &Individual,
+        class_expr: &ClassExpression,
+    ) -> Result<bool> {
+        self.is_instance_of(individual, class_expr).await
     }
 
     /// Get object property values for an individual
@@ -366,26 +269,13 @@ impl ReasoningService {
         individual: &Individual,
         property: &ObjectPropertyExpression,
     ) -> Result<HashSet<Individual>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let values = reasoner.get_object_property_values(individual, property)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Object property value retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Log the time taken for the retrieval
-        log::info!(
-            "Object property value retrieval completed in {:?}",
-            start.elapsed()
-        );
-        Ok(values.into_iter().collect())
+        let (individual, property) = (individual.clone(), property.clone());
+        self.send(|r| ReasoningRequest::GetObjectPropertyValues {
+            individual,
+            property,
+            reply: r,
+        })
+        .await
     }
 
     /// Get data property values for an individual
@@ -394,135 +284,24 @@ impl ReasoningService {
         individual: &Individual,
         property: &DataPropertyExpression,
     ) -> Result<HashSet<crate::ontology::Literal>> {
-        let start = Instant::now();
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let result = reasoner.get_data_property_values(individual, property)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Data property value retrieval timed out".into(),
-                });
-            }
-        }
-
-        // Convert Vec<String> to HashSet<Literal>
-        let literals: HashSet<crate::ontology::Literal> = result
-            .into_iter()
-            .map(|s| crate::ontology::Literal {
-                value: s.to_string(),
-                datatype: Some(
-                    url::Url::parse("http://www.w3.org/2001/XMLSchema#string")
-                        .expect("Valid hardcoded XSD string URL"),
-                ),
-                language: None,
-            })
-            .collect();
-
-        // Log the time taken for the retrieval
-        log::info!(
-            "Data property value retrieval completed in {:?}",
-            start.elapsed()
-        );
-        Ok(literals)
+        let (individual, property) = (individual.clone(), property.clone());
+        self.send(|r| ReasoningRequest::GetDataPropertyValues {
+            individual,
+            property,
+            reply: r,
+        })
+        .await
     }
 
     /// Classify the ontology (compute class hierarchy)
     pub async fn classify(&self) -> Result<ClassificationResult> {
-        let start = Instant::now();
-
-        // Check cache
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
-            // Get ontology from reasoner
-            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-            if let Some(ontology) = reasoner.get_ontology() {
-                if let Some(cached) = cache_manager.get_classification_result(&ontology) {
-                    log::info!("Classification (cached) completed in {:?}", start.elapsed());
-                    return Ok(cached);
-                }
-            }
-        }
-
-        // Execute SWRL rules first to ensure all inferences are available for classification
-        log::info!("Executing SWRL rules before classification");
-        self.execute_swrl_rules().await?;
-
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let result = reasoner.classify()?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Classification timed out".into(),
-                });
-            }
-        }
-
-        // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
-            // Get ontology from reasoner
-            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-            if let Some(ontology) = reasoner.get_ontology() {
-                cache_manager.store_classification_result(&ontology, result.clone());
-            }
-        }
-
-        // Log the time taken for classification
-        log::info!("Classification completed in {:?}", start.elapsed());
-        Ok(result)
+        self.send(|r| ReasoningRequest::Classify { reply: r }).await
     }
 
     /// Execute SWRL rules and apply inferences to the ontology
     pub async fn execute_swrl_rules(&self) -> Result<SWRLExecutionResult> {
-        let start = Instant::now();
-        log::info!("Executing SWRL rules");
-
-        // Execute SWRL rules
-        let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
-        let result = swrl_engine
-            .execute_rules()
-            .map_err(|e| Error::reasoning(format!("SWRL rule execution failed: {}", e)))?;
-
-        // Apply the inferences to the ontology
-        if !result.inferences.is_empty() {
-            log::info!(
-                "Applying {} SWRL inferences to ontology",
-                result.inferences.len()
-            );
-
-            // Get the reasoner and update the ontology with inferences
-            let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-            if let Some(ontology_ref) = reasoner.get_ontology() {
-                let mut ontology = write_lock(&ontology_ref, "reasoning: writing ontology")?;
-
-                // Apply each inference to the ontology
-                for inference in &result.inferences {
-                    ontology.add_axiom(inference.clone());
-                }
-
-                // Clear caches since the ontology has been modified
-                write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
-                log::info!(
-                    "Added {} new axioms from SWRL inferences",
-                    result.inferences.len()
-                );
-            }
-        }
-
-        log::info!(
-            "SWRL rule execution completed in {:?}: {} applications, {} inferences",
-            start.elapsed(),
-            result.applications,
-            result.inferences.len()
-        );
-        Ok(result)
+        self.send(|r| ReasoningRequest::ExecuteSwrlRules { reply: r })
+            .await
     }
 
     /// Execute a DL query using Manchester Syntax
@@ -538,53 +317,8 @@ impl ReasoningService {
     }
 
     /// Realize the ontology (compute individuals' types)
-    pub async fn realize(&self) -> Result<RealizationResult> {
-        let start = Instant::now();
-
-        // Check cache
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = read_lock(&self.cache_manager, "reasoning: reading cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
-            // Get ontology from reasoner
-            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-            if let Some(ontology) = reasoner.get_ontology() {
-                if let Some(cached) = cache_manager.get_realization_result(&ontology) {
-                    log::info!("Realization (cached) completed in {:?}", start.elapsed());
-                    return Ok(cached);
-                }
-            }
-        }
-
-        // Execute SWRL rules first to ensure all inferences are available for realization
-        log::info!("Executing SWRL rules before realization");
-        self.execute_swrl_rules().await?;
-
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let result = reasoner.realize()?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Realization timed out".into(),
-                });
-            }
-        }
-
-        // Cache the result if caching is enabled
-        if self.config.cache.enable_satisfiability_cache {
-            let cache_manager = write_lock(&self.cache_manager, "reasoning: writing cache")?;
-            let ontology_hash = self.calculate_ontology_hash();
-            // Get ontology from reasoner
-            let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-            if let Some(ontology) = reasoner.get_ontology() {
-                cache_manager.store_realization_result(&ontology, result.clone());
-            }
-        }
-
-        // Log the time taken for realization
-        log::info!("Realization completed in {:?}", start.elapsed());
-        Ok(result)
+    pub async fn realize(&self) -> Result<RealisationResult> {
+        self.send(|r| ReasoningRequest::Realize { reply: r }).await
     }
 
     /// Get explanation for an entailment
@@ -592,291 +326,164 @@ impl ReasoningService {
         &self,
         axiom: &crate::ontology::Axiom,
     ) -> Result<Vec<ExplanationSet>> {
-        let start = Instant::now();
-
-        if !self.config.reasoning.enable_explanations {
-            return Err(Error::Reasoning {
-                message: "Explanation is disabled in the configuration".into(),
-            });
-        }
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let explanations = reasoner.explain_entailment(axiom)?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Explanation retrieval timed out".into(),
-                });
-            }
-        }
-
-        let explanation_sets: Vec<ExplanationSet> = explanations
-            .into_iter()
-            .map(|axiom| {
-                let mut axioms = HashSet::new();
-                axioms.insert(axiom);
-                ExplanationSet::new(axioms)
-            })
-            .collect();
-
-        // Log the time taken for explanation retrieval
-        log::info!("Explanation retrieval completed in {:?}", start.elapsed());
-        Ok(explanation_sets)
+        let axiom = axiom.clone();
+        self.send(|r| ReasoningRequest::ExplainEntailment { axiom, reply: r })
+            .await
     }
 
     /// Get explanation for inconsistent ontology
     pub async fn explain_inconsistency(&self) -> Result<Vec<ExplanationSet>> {
-        let start = Instant::now();
-
-        if !self.config.reasoning.enable_explanations {
-            return Err(Error::Reasoning {
-                message: "Explanation is disabled in the configuration".into(),
-            });
-        }
-
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        let explanations = reasoner.explain_inconsistency()?;
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Inconsistency explanation retrieval timed out".into(),
-                });
-            }
-        }
-
-        let explanation_sets: Vec<ExplanationSet> = explanations
-            .into_iter()
-            .map(|axiom| {
-                let mut axioms = HashSet::new();
-                axioms.insert(axiom);
-                ExplanationSet::new(axioms)
-            })
-            .collect();
-
-        // Log the time taken for explanation retrieval
-        log::info!(
-            "Inconsistency explanation retrieval completed in {:?}",
-            start.elapsed()
-        );
-        Ok(explanation_sets)
+        self.send(|r| ReasoningRequest::ExplainInconsistency { reply: r })
+            .await
     }
 
     /// Add axioms incrementally to the ontology
     pub async fn add_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
-        let start = Instant::now();
-
-        if !self.config.reasoning.incremental_reasoning {
-            return Err(Error::Reasoning {
-                message: "Incremental reasoning is disabled in the configuration".into(),
-            });
-        }
-
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        for axiom in axioms {
-            reasoner.add_axiom(axiom)?;
-        }
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Axiom addition timed out".into(),
-                });
-            }
-        }
-
-        // Clear relevant caches
-        if self.config.cache.enable_satisfiability_cache {
-            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
-        }
-
-        // Log the time taken for adding axioms
-        log::info!("Axioms added in {:?}", start.elapsed());
-        Ok(())
+        self.send(|r| ReasoningRequest::AddAxioms { axioms, reply: r })
+            .await
     }
 
     /// Remove axioms incrementally from the ontology
     pub async fn remove_axioms(&self, axioms: Vec<crate::ontology::Axiom>) -> Result<()> {
-        let start = Instant::now();
-
-        if !self.config.reasoning.incremental_reasoning {
-            return Err(Error::Reasoning {
-                message: "Incremental reasoning is disabled in the configuration".into(),
-            });
-        }
-
-        let mut reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        for axiom in axioms {
-            reasoner.remove_axiom(&axiom)?;
-        }
-
-        // Check timeout
-        if let Some(timeout) = self.config.reasoning.timeout {
-            if start.elapsed() > timeout {
-                return Err(Error::Timeout {
-                    message: "Axiom removal timed out".into(),
-                });
-            }
-        }
-
-        // Clear relevant caches
-        if self.config.cache.enable_satisfiability_cache {
-            write_lock(&self.cache_manager, "reasoning: writing cache")?.clear_all();
-        }
-
-        // Log the time taken for removing axioms
-        log::info!("Axioms removed in {:?}", start.elapsed());
-        Ok(())
+        self.send(|r| ReasoningRequest::RemoveAxioms { axioms, reply: r })
+            .await
     }
 
     /// Get reasoning statistics
-    #[must_use]
-    pub fn get_statistics(&self) -> ReasoningStatistics {
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")
-            .expect("Failed to lock reasoner");
-        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")
-            .expect("Failed to lock cache")
-            .get_stats();
-
-        // Get statistics from the reasoner
-        let reasoner_stats = reasoner.get_statistics();
-
-        ReasoningStatistics {
-            ontology_size: reasoner.get_ontology_size(),
-            reasoning_time: reasoner_stats.total_reasoning_time,
-            cache_stats,
-            memory_usage: self.estimate_memory_usage(),
-        }
-    }
-
-    /// Estimate current memory usage
-    fn estimate_memory_usage(&self) -> usize {
-        // Simple estimation based on cache size and other factors
-        let cache_stats = read_lock(&self.cache_manager, "reasoning: reading cache")
-            .expect("Failed to lock cache")
-            .get_stats();
-        cache_stats.concept_cache_size * 1024 + // Rough estimate per cache entry
-        (self.config.cache.max_cache_size_mb as usize) * 1024 * 1024 / 10 // Conservative fraction of max allowed
-    }
-
-    // Compute the hash of the ontology for caching
-    fn compute_ontology_hash(&self) -> Result<u64> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-        if let Some(ontology) = reasoner.get_ontology() {
-            let ontology_guard = read_lock(&ontology, "reasoning: reading ontology")?;
-
-            let mut hasher = DefaultHasher::new();
-
-            // Hash axiom count and basic signature information
-            if let Ok(signature) = ontology_guard.signature() {
-                signature.classes.len().hash(&mut hasher);
-                signature.object_properties.len().hash(&mut hasher);
-                signature.data_properties.len().hash(&mut hasher);
-                signature.individuals.len().hash(&mut hasher);
-
-                // Hash some class names for uniqueness
-                for class in signature.classes.iter().take(10) {
-                    class.iri.as_str().hash(&mut hasher);
-                }
-            }
-
-            // Hash TBox and ABox axiom counts
-            ontology_guard.axioms().len().hash(&mut hasher);
-
-            Ok(hasher.finish())
-        } else {
-            Ok(0)
-        }
+    pub async fn get_statistics(&self) -> Result<ReasoningStatistics> {
+        self.send(|r| ReasoningRequest::GetStatistics { reply: r })
+            .await
     }
 
     /// Query property chain reasoning
-    /// Implements role chain propagation: if R1 * R2 * ... * Rn c S,
-    /// and we have a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
     pub async fn query_property_chain(
         &self,
         individual: &Individual,
         property_chain: &[ObjectPropertyExpression],
     ) -> Result<HashSet<Individual>> {
-        let start = Instant::now();
-
         if property_chain.is_empty() {
             return Ok(HashSet::new());
         }
-
         if property_chain.len() == 1 {
-            // Single property - delegate to existing method
             return self
                 .get_object_property_values(individual, &property_chain[0])
                 .await;
         }
-
-        // Multi-step property chain reasoning
-        let mut current_individuals = HashSet::new();
-        current_individuals.insert(individual.clone());
-
-        // Step through each property in the chain
+        let mut current = HashSet::new();
+        current.insert(individual.clone());
         for property in property_chain {
-            let mut next_individuals = HashSet::new();
-
-            // For each current individual, follow the property
-            for curr_ind in &current_individuals {
+            let mut next = HashSet::new();
+            for curr_ind in &current {
                 let targets = self.get_object_property_values(curr_ind, property).await?;
-                next_individuals.extend(targets);
+                next.extend(targets);
             }
-
-            current_individuals = next_individuals;
-
-            // If no individuals remain, the chain is broken
-            if current_individuals.is_empty() {
+            current = next;
+            if current.is_empty() {
                 break;
             }
         }
-
-        // Log the time taken for the property chain query
-        log::info!("Property chain query completed in {:?}", start.elapsed());
-        Ok(current_individuals)
-    }
-
-    /// Get access to the SWRL rule engine
-    pub fn get_swrl_engine(&self) -> Arc<RwLock<SWRLRuleEngine>> {
-        Arc::clone(&self.swrl_engine)
+        Ok(current)
     }
 
     /// Get SWRL execution statistics
     pub async fn get_swrl_statistics(&self) -> Result<crate::swrl::SWRLStatistics> {
-        let swrl_engine = read_lock(&self.swrl_engine, "reasoning: reading SWRL engine")?;
-        Ok(swrl_engine.get_statistics().clone())
+        self.send(|r| ReasoningRequest::GetSwrlStatistics { reply: r })
+            .await
     }
 
     /// Set SWRL rule priority
     pub async fn set_swrl_rule_priority(&self, rule_id: u64, priority: u32) -> Result<()> {
-        let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
-        swrl_engine.set_rule_priority(rule_id, priority);
-        Ok(())
+        self.send(|r| ReasoningRequest::SetSwrlRulePriority {
+            rule_id,
+            priority,
+            reply: r,
+        })
+        .await
     }
 
     /// Get ordered SWRL rules by priority
     pub async fn get_swrl_rule_order(&self) -> Result<Vec<u64>> {
-        let swrl_engine = read_lock(&self.swrl_engine, "reasoning: reading SWRL engine")?;
-        Ok(swrl_engine.get_rule_ids())
+        self.send(|r| ReasoningRequest::GetSwrlRuleOrder { reply: r })
+            .await
     }
 
     /// Enable or disable a specific SWRL rule
     pub async fn set_swrl_rule_active(&self, rule_id: u64, active: bool) -> Result<()> {
-        let mut swrl_engine = write_lock(&self.swrl_engine, "reasoning: writing SWRL engine")?;
-        swrl_engine.set_rule_active(rule_id, active).map_err(|e| {
-            Error::reasoning(format!(
-                "Failed to set SWRL rule {} active state: {}",
-                rule_id, e
-            ))
+        self.send(|r| ReasoningRequest::SetSwrlRuleActive {
+            rule_id,
+            active,
+            reply: r,
         })
+        .await
+    }
+
+    /// Validate the loaded ontology against a SHACL shapes graph.
+    pub fn validate_shacl(
+        &self,
+        shapes_turtle: &str,
+        data_turtle: &str,
+    ) -> Result<crate::validation::shacl::ShaclValidationReport> {
+        let mut validator =
+            crate::validation::shacl::ShaclValidator::new(shapes_turtle, data_turtle)?;
+        validator.validate()
+    }
+
+    /// Invalidate all caches
+    pub async fn invalidate_all_caches(&self) -> Result<()> {
+        self.send(|r| ReasoningRequest::InvalidateAllCaches { reply: r })
+            .await
+    }
+
+    /// Get the IRI of the current ontology
+    pub async fn get_ontology_iri(&self) -> Result<Option<crate::ontology::IRI>> {
+        self.send(|r| ReasoningRequest::GetOntologyIri { reply: r })
+            .await
+    }
+
+    /// Serialize the current ontology as Turtle (RDF 1.2).
+    ///
+    /// The caller is responsible for setting the appropriate HTTP
+    /// `Content-Type: text/turtle; version=1.2` response header.
+    pub async fn get_serialized_turtle(&self) -> Result<String> {
+        self.send(|r| ReasoningRequest::GetSerializedTurtle { reply: r })
+            .await
+    }
+
+    /// Synchronous version of `get_instances` for use in advanced query processing
+    pub fn get_instances_sync(&self, class: &ClassExpression) -> Result<Vec<Individual>> {
+        let class = class.clone();
+        self.send_sync(|r| ReasoningRequest::GetInstancesSync { class, reply: r })
+    }
+
+    /// Synchronous version of `is_instance_of` for use in advanced query processing
+    pub fn is_instance_of_sync(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> Result<bool> {
+        let (individual, class) = (individual.clone(), class.clone());
+        self.send_sync(|r| ReasoningRequest::IsInstanceOfSync {
+            individual,
+            class,
+            reply: r,
+        })
+    }
+
+    /// Get object property assertions (for advanced query processing)
+    pub fn get_object_property_assertions_sync(
+        &self,
+        _property: &ObjectPropertyExpression,
+    ) -> Result<Vec<(Individual, Individual)>> {
+        Ok(Vec::new())
+    }
+
+    /// Create an incremental reasoning service wrapper
+    pub async fn into_incremental(
+        self: Arc<Self>,
+        ontology: Arc<tokio::sync::RwLock<Ontology>>,
+        config: Option<IncrementalConfig>,
+    ) -> Result<incremental::IncrementalReasoningService> {
+        incremental::IncrementalReasoningService::new(self, ontology, config).await
     }
 }
 
@@ -1012,88 +619,5 @@ impl QueryInterface {
         }
 
         Ok(results)
-    }
-}
-
-impl ReasoningService {
-    /// Get the IRI of the current ontology
-    pub fn get_ontology_iri(&self) -> Result<Option<crate::ontology::IRI>> {
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-        if let Some(ontology_ref) = reasoner.get_ontology() {
-            let ontology = read_lock(&ontology_ref, "reasoning: reading ontology")?;
-            Ok(ontology.get_iri().cloned())
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Calculate a hash for the current ontology
-    fn calculate_ontology_hash(&self) -> u64 {
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")
-            .expect("Failed to lock reasoner");
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-
-        // Hash based on reasoner state as a simple fingerprint
-        let axiom_count = if let Some(ontology) = reasoner.get_ontology() {
-            read_lock(&ontology, "reasoning: reading ontology")
-                .expect("Failed to lock ontology")
-                .axioms()
-                .len()
-        } else {
-            0
-        };
-        std::hash::Hash::hash(&axiom_count, &mut hasher);
-
-        std::hash::Hasher::finish(&hasher)
-    }
-
-    // Synchronous wrapper methods for advanced query processing
-    /// Synchronous version of get_instances for use in advanced query processing
-    pub fn get_instances_sync(&self, class: &ClassExpression) -> Result<Vec<Individual>> {
-        let reasoner = write_lock(&self.reasoner, "reasoning: writing reasoner")?;
-        reasoner.get_instances(class, false)
-    }
-
-    /// Synchronous version of is_instance_of for use in advanced query processing  
-    pub fn is_instance_of_sync(
-        &self,
-        individual: &Individual,
-        class: &ClassExpression,
-    ) -> Result<bool> {
-        let reasoner = read_lock(&self.reasoner, "reasoning: reading reasoner")?;
-        reasoner.is_instance_of(individual, class)
-    }
-
-    /// Get object property assertions (for advanced query processing)
-    pub fn get_object_property_assertions_sync(
-        &self,
-        property: &ObjectPropertyExpression,
-    ) -> Result<Vec<(Individual, Individual)>> {
-        // This is a simplified implementation - in practice would query the reasoner
-        // For now, return empty results to avoid compilation errors
-        Ok(Vec::new())
-    }
-
-    /// Get the cache manager for incremental reasoning integration
-    pub fn cache_manager(&self) -> Arc<RwLock<CacheManager>> {
-        self.cache_manager.clone()
-    }
-
-    /// Invalidate all caches (useful for incremental reasoning)
-    pub async fn invalidate_all_caches(&self) -> Result<()> {
-        if let Ok(cache) = self.cache_manager.write() {
-            // Invalidate caches - the actual implementation would depend on CacheManager
-            tracing::debug!("All caches invalidated");
-        }
-        Ok(())
-    }
-
-    /// Create an incremental reasoning service wrapper
-    pub async fn into_incremental(
-        self: Arc<Self>,
-        ontology: Arc<tokio::sync::RwLock<Ontology>>,
-        config: Option<IncrementalConfig>,
-    ) -> Result<incremental::IncrementalReasoningService> {
-        incremental::IncrementalReasoningService::new(self, ontology, config).await
     }
 }

@@ -4,6 +4,8 @@
 //! invalidation, selective updates, and consistency management for efficient
 //! reasoning with ontology changes.
 
+#![allow(dead_code)]
+
 use super::{
     change_tracking::InvalidationEvent,
     delta_computation::{QueryDelta, ReasoningDelta},
@@ -85,6 +87,7 @@ pub struct IncrementalCacheStatistics {
 
 impl IncrementalCacheManager {
     /// Create a new incremental cache manager
+    #[must_use]
     pub fn new(base_cache: Arc<CacheManager>, config: Option<IncrementalCacheConfig>) -> Self {
         let config = config.unwrap_or_default();
 
@@ -203,10 +206,10 @@ impl IncrementalCacheManager {
         report.check_duration = start_time.elapsed();
 
         // Update statistics
-        if self.config.enable_statistics {
-            if let Ok(mut stats) = self.statistics.write() {
-                stats.consistency_checks += 1;
-            }
+        if self.config.enable_statistics
+            && let Ok(mut stats) = self.statistics.write()
+        {
+            stats.consistency_checks += 1;
         }
 
         Ok(report)
@@ -302,7 +305,7 @@ impl IncrementalCacheManager {
             Individual::Named(named) => named.iri.to_string(),
             Individual::Anonymous(anon) => anon.id.clone(),
         };
-        let cache_key = format!("individual_{}", iri);
+        let cache_key = format!("individual_{iri}");
 
         if let Ok(mut tracker) = self.invalidation_tracker.write() {
             tracker.add_individual_invalidation(cache_key);
@@ -374,7 +377,7 @@ impl IncrementalCacheManager {
 
     /// Generate cache key for concept
     fn generate_concept_cache_key(&self, concept: &ClassExpression) -> String {
-        format!("concept_sat_{:?}", concept)
+        format!("concept_sat_{concept:?}")
     }
 
     /// Check concept cache consistency
@@ -445,6 +448,7 @@ pub struct InvalidationTracker {
 
 impl InvalidationTracker {
     /// Create a new invalidation tracker
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -492,6 +496,7 @@ impl InvalidationTracker {
     }
 
     /// Check if any invalidations are pending
+    #[must_use]
     pub fn has_pending_invalidations(&self) -> bool {
         !self.concept_invalidations.is_empty()
             || !self.hierarchy_invalidations.is_empty()
@@ -503,6 +508,7 @@ impl InvalidationTracker {
     }
 
     /// Get all pending invalidation keys
+    #[must_use]
     pub fn get_all_invalidation_keys(&self) -> HashSet<String> {
         let mut all_keys = HashSet::new();
         all_keys.extend(self.concept_invalidations.iter().cloned());
@@ -557,6 +563,7 @@ impl Default for SelectiveUpdateConfig {
 
 impl SelectiveUpdater {
     /// Create a new selective updater
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: SelectiveUpdateConfig::default(),
@@ -597,6 +604,7 @@ pub struct ConsistencyReport {
 
 impl ConsistencyReport {
     /// Create a new empty consistency report
+    #[must_use]
     pub fn new() -> Self {
         Self {
             concept_consistency_issues: Vec::new(),
@@ -608,6 +616,7 @@ impl ConsistencyReport {
     }
 
     /// Check if any issues were found
+    #[must_use]
     pub fn has_issues(&self) -> bool {
         !self.concept_consistency_issues.is_empty()
             || !self.hierarchy_consistency_issues.is_empty()
@@ -615,6 +624,7 @@ impl ConsistencyReport {
     }
 
     /// Get total number of issues
+    #[must_use]
     pub fn total_issues(&self) -> usize {
         self.concept_consistency_issues.len()
             + self.hierarchy_consistency_issues.len()

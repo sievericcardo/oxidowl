@@ -8,6 +8,8 @@
 //!
 //! The query language follows Manchester Syntax for class expressions.
 
+#![allow(dead_code)]
+
 use crate::{
     Error, Result,
     ontology::{Class, ClassExpression, IRI, Individual, ObjectProperty, ObjectPropertyExpression},
@@ -33,11 +35,27 @@ pub enum QueryError {
 
 /// Helper function to recursively extract all individual classes from a union expression
 fn extract_union_classes(expr: &ClassExpression, result: &mut HashSet<ClassExpression>) {
+    extract_union_classes_with_depth(expr, result, 0);
+}
+
+/// Maximum recursion depth to prevent stack overflow
+const MAX_UNION_EXTRACTION_DEPTH: usize = 500;
+
+fn extract_union_classes_with_depth(
+    expr: &ClassExpression,
+    result: &mut HashSet<ClassExpression>,
+    depth: usize,
+) {
+    // Prevent stack overflow on deeply nested unions
+    if depth > MAX_UNION_EXTRACTION_DEPTH {
+        return;
+    }
+
     match expr {
         ClassExpression::ObjectUnionOf(union_classes) => {
             // Recursively extract from nested unions
             for class_expr in union_classes {
-                extract_union_classes(class_expr, result);
+                extract_union_classes_with_depth(class_expr, result, depth + 1);
             }
         }
         _ => {
@@ -141,16 +159,14 @@ impl DLQueryEngine {
         // This implements proper namespace resolution according to OWL specifications
 
         // First, try to get the ontology IRI from the reasoning service
-        if let Ok(Some(ontology_iri)) = self.reasoning_service.get_ontology_iri() {
+        if let Ok(Some(ontology_iri)) = self.reasoning_service.get_ontology_iri().await {
             let iri_string = ontology_iri.as_str();
             if !iri_string.is_empty() {
                 // Use the ontology IRI as the base for the default namespace
-                let namespace = if iri_string.ends_with('#') {
-                    iri_string.to_string()
-                } else if iri_string.ends_with('/') {
+                let namespace = if iri_string.ends_with('#') || iri_string.ends_with('/') {
                     iri_string.to_string()
                 } else {
-                    format!("{}#", iri_string)
+                    format!("{iri_string}#")
                 };
                 return Ok(namespace);
             }
@@ -176,7 +192,7 @@ impl DLQueryEngine {
             let namespace = if xml_base.ends_with('#') || xml_base.ends_with('/') {
                 xml_base
             } else {
-                format!("{}#", xml_base)
+                format!("{xml_base}#")
             };
             return Ok(namespace);
         }
@@ -551,9 +567,10 @@ impl DLQueryParser {
         }
 
         // Handle parentheses
-        if tokens.get(start).map(|s| s.as_str()) == Some("(") {
+        if tokens.get(start).map(std::string::String::as_str) == Some("(") {
             let (expr, end) = self.parse_expression_tokens(tokens, start + 1)?;
-            if end >= tokens.len() || tokens.get(end).map(|s| s.as_str()) != Some(")") {
+            if end >= tokens.len() || tokens.get(end).map(std::string::String::as_str) != Some(")")
+            {
                 return Err(Error::reasoning("Missing closing parenthesis"));
             }
             return Ok((expr, end + 1));
@@ -575,7 +592,7 @@ impl DLQueryParser {
             return self.parse_binary_operators(class_expr, tokens, start + 1);
         }
 
-        Err(Error::reasoning(format!("Unexpected token: {}", token)))
+        Err(Error::reasoning(format!("Unexpected token: {token}")))
     }
 
     /// Parse binary operators (and, or, some, etc.)

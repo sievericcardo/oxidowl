@@ -9,35 +9,48 @@ use crate::distributed::{DistributedError, NodeId};
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, sleep, timeout};
 use uuid::Uuid;
 
-/// Main fault tolerance coordinator
+// ─── Actor message type ──────────────────────────────────────────────────────────
+
+enum FaultQueryMsg {
+    ShouldAttempt {
+        node_id: NodeId,
+        tx: oneshot::Sender<bool>,
+    },
+    RecordSuccess {
+        node_id: NodeId,
+    },
+    RecordFailure {
+        node_id: NodeId,
+    },
+    GetCircuitBreaker {
+        node_id: NodeId,
+        tx: oneshot::Sender<CircuitBreakerState>,
+    },
+    StartRecovery {
+        failure: ComponentFailure,
+        tx: oneshot::Sender<Result<Uuid>>,
+    },
+    CreateCheckpoint {
+        description: String,
+        tx: oneshot::Sender<Result<Uuid>>,
+    },
+    Shutdown,
+}
+
+/// Main fault tolerance coordinator — actor handle
+#[derive(Clone)]
 pub struct FaultTolerance {
-    /// Fault tolerance configuration
+    /// Configuration (kept in handle for execute_with_retry logic)
     config: crate::distributed::FaultToleranceConfig,
-
-    /// Failure detector for monitoring node health
-    failure_detector: Arc<RwLock<FailureDetector>>,
-
-    /// Recovery strategy manager
-    recovery_manager: Arc<RwLock<RecoveryManager>>,
-
-    /// Circuit breaker registry
-    circuit_breakers: Arc<RwLock<HashMap<NodeId, CircuitBreaker>>>,
-
-    /// Checkpoint manager for state preservation
-    checkpoint_manager: Arc<RwLock<CheckpointManager>>,
-
-    /// Active failure recovery sessions
-    recovery_sessions: Arc<RwLock<HashMap<Uuid, RecoverySession>>>,
-
-    /// Event channel for fault tolerance events
+    /// State queries channel
+    query_tx: mpsc::Sender<FaultQueryMsg>,
+    /// Event channel for fault tolerance events (fire-and-forget)
     event_sender: mpsc::UnboundedSender<FaultToleranceEvent>,
-    event_receiver: Arc<Mutex<mpsc::UnboundedReceiver<FaultToleranceEvent>>>,
 }
 
 /// Fault tolerance events
@@ -332,111 +345,201 @@ pub enum SystemState {
 }
 
 impl FaultTolerance {
-    /// Create a new fault tolerance manager
+    /// Create a new fault tolerance manager — spawns the actor task immediately
     pub async fn new(config: crate::distributed::FaultToleranceConfig) -> Result<Self> {
-        let (event_sender, event_receiver) = mpsc::unbounded_channel();
+        let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
+        let (query_tx, mut query_rx) = mpsc::channel::<FaultQueryMsg>(64);
+
+        let event_sender_clone = event_sender.clone();
+        let actor_config = config.clone();
+
+        tokio::spawn(async move {
+            let config = actor_config;
+            let mut failure_detector = match FailureDetector::new(config.clone()).await {
+                Ok(d) => d,
+                Err(e) => {
+                    error!("Failed to create failure detector: {e}");
+                    return;
+                }
+            };
+            let mut recovery_manager = match RecoveryManager::new(config.clone()).await {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Failed to create recovery manager: {e}");
+                    return;
+                }
+            };
+            let mut circuit_breakers: HashMap<NodeId, CircuitBreaker> = HashMap::new();
+            let mut checkpoint_manager = match CheckpointManager::new().await {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Failed to create checkpoint manager: {e}");
+                    return;
+                }
+            };
+            let mut recovery_sessions: HashMap<Uuid, RecoverySession> = HashMap::new();
+
+            // Start sub-components
+            if let Err(e) = failure_detector.start(event_sender_clone.clone()).await {
+                error!("Failure detector start failed: {e}");
+            }
+            if let Err(e) = recovery_manager.start(event_sender_clone.clone()).await {
+                error!("Recovery manager start failed: {e}");
+            }
+
+            loop {
+                tokio::select! {
+                    Some(msg) = query_rx.recv() => match msg {
+                        FaultQueryMsg::ShouldAttempt { node_id, tx } => {
+                            let should = circuit_breakers
+                                .get(&node_id)
+                                .map(CircuitBreaker::should_attempt)
+                                .unwrap_or(true);
+                            let _ = tx.send(should);
+                        }
+                        FaultQueryMsg::RecordSuccess { node_id } => {
+                            if let Some(b) = circuit_breakers.get_mut(&node_id) {
+                                b.record_success();
+                            }
+                        }
+                        FaultQueryMsg::RecordFailure { node_id } => {
+                            let breaker = circuit_breakers
+                                .entry(node_id)
+                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_secs(1 * 60)));
+                            breaker.record_failure();
+                        }
+                        FaultQueryMsg::GetCircuitBreaker { node_id, tx } => {
+                            let state = circuit_breakers
+                                .get(&node_id)
+                                .map(CircuitBreaker::get_state)
+                                .unwrap_or(CircuitBreakerState::Closed);
+                            let _ = tx.send(state);
+                        }
+                        FaultQueryMsg::StartRecovery { failure, tx } => {
+                            let session_id = Uuid::new_v4();
+                            let recovery_type = match failure.component_type {
+                                ComponentType::Node => RecoveryType::NodeRecovery,
+                                ComponentType::Query => RecoveryType::QueryRecovery,
+                                ComponentType::Network => RecoveryType::NetworkRecovery,
+                                ComponentType::Storage => RecoveryType::DataRecovery,
+                                _ => RecoveryType::SystemRecovery,
+                            };
+                            let strategy = match &config.recovery_strategy {
+                                crate::distributed::RecoveryStrategyConfig::Reexecution => RecoveryStrategy::Reexecution,
+                                crate::distributed::RecoveryStrategyConfig::Caching => RecoveryStrategy::Caching,
+                                crate::distributed::RecoveryStrategyConfig::DegradedMode => RecoveryStrategy::DegradedMode,
+                                crate::distributed::RecoveryStrategyConfig::Hybrid => match &recovery_type {
+                                    RecoveryType::QueryRecovery => RecoveryStrategy::Reexecution,
+                                    RecoveryType::NodeRecovery => RecoveryStrategy::Caching,
+                                    RecoveryType::NetworkRecovery => RecoveryStrategy::DegradedMode,
+                                    _ => RecoveryStrategy::Hybrid,
+                                },
+                            };
+                            let session = RecoverySession {
+                                session_id,
+                                recovery_type: recovery_type.clone(),
+                                failed_components: vec![failure],
+                                strategy,
+                                start_time: Instant::now(),
+                                current_phase: RecoveryPhase::Detection,
+                                progress: RecoveryProgress {
+                                    phase_progress: 0.0,
+                                    overall_progress: 0.0,
+                                    eta_ms: None,
+                                    steps_completed: 0,
+                                    total_steps: 6,
+                                    current_operation: "Starting recovery".to_string(),
+                                },
+                            };
+                            recovery_sessions.insert(session_id, session);
+                            let _ = event_sender_clone.send(
+                                FaultToleranceEvent::RecoveryStarted(session_id, recovery_type),
+                            );
+                            info!("Started recovery session: {session_id}");
+                            let _ = tx.send(Ok(session_id));
+                        }
+                        FaultQueryMsg::CreateCheckpoint { description, tx } => {
+                            let checkpoint_id = Uuid::new_v4();
+                            let result = checkpoint_manager
+                                .create_checkpoint(checkpoint_id, description.clone())
+                                .await
+                                .map(|()| {
+                                    let _ = event_sender_clone.send(
+                                        FaultToleranceEvent::CheckpointCreated(checkpoint_id, description),
+                                    );
+                                    checkpoint_id
+                                });
+                            let _ = tx.send(result);
+                        }
+                        FaultQueryMsg::Shutdown => break,
+                    },
+                    Some(event) = event_receiver.recv() => {
+                        if let Err(e) = Self::process_fault_tolerance_event(
+                            event,
+                            &mut recovery_sessions,
+                            &mut circuit_breakers,
+                        )
+                        .await
+                        {
+                            error!("Error processing fault tolerance event: {e}");
+                        }
+                    }
+                    else => break,
+                }
+            }
+
+            // Cleanup
+            if let Err(e) = failure_detector.stop().await {
+                error!("Failure detector stop: {e}");
+            }
+            if let Err(e) = recovery_manager.stop().await {
+                error!("Recovery manager stop: {e}");
+            }
+            if let Err(e) = checkpoint_manager.stop().await {
+                error!("Checkpoint manager stop: {e}");
+            }
+        });
 
         Ok(Self {
-            config: config.clone(),
-            failure_detector: Arc::new(RwLock::new(FailureDetector::new(config.clone()).await?)),
-            recovery_manager: Arc::new(RwLock::new(RecoveryManager::new(config.clone()).await?)),
-            circuit_breakers: Arc::new(RwLock::new(HashMap::new())),
-            checkpoint_manager: Arc::new(RwLock::new(CheckpointManager::new().await?)),
-            recovery_sessions: Arc::new(RwLock::new(HashMap::new())),
+            config,
+            query_tx,
             event_sender,
-            event_receiver: Arc::new(Mutex::new(event_receiver)),
         })
     }
 
-    /// Start fault tolerance monitoring
+    /// Start fault tolerance monitoring (no-op — actor starts in `new`)
     pub async fn start_monitoring(&self) -> Result<()> {
-        info!("Starting fault tolerance monitoring");
-
-        // Start failure detector
-        let failure_detector = self.failure_detector.clone();
-        let event_sender = self.event_sender.clone();
-        tokio::spawn(async move {
-            let mut detector = failure_detector.write().await;
-            if let Err(e) = detector.start(event_sender).await {
-                error!("Failure detector failed: {}", e);
-            }
-        });
-
-        // Start recovery manager
-        let recovery_manager = self.recovery_manager.clone();
-        let event_sender = self.event_sender.clone();
-        tokio::spawn(async move {
-            let mut manager = recovery_manager.write().await;
-            if let Err(e) = manager.start(event_sender).await {
-                error!("Recovery manager failed: {}", e);
-            }
-        });
-
-        // Start event processing
-        let event_receiver = self.event_receiver.clone();
-        let recovery_sessions = self.recovery_sessions.clone();
-        let circuit_breakers = self.circuit_breakers.clone();
-        tokio::spawn(async move {
-            let mut receiver = event_receiver.lock().await;
-            while let Some(event) = receiver.recv().await {
-                if let Err(e) = Self::process_fault_tolerance_event(
-                    event,
-                    &recovery_sessions,
-                    &circuit_breakers,
-                )
-                .await
-                {
-                    error!("Error processing fault tolerance event: {}", e);
-                }
-            }
-        });
-
+        info!("Fault tolerance monitoring started");
         Ok(())
     }
 
     /// Process fault tolerance events
     async fn process_fault_tolerance_event(
         event: FaultToleranceEvent,
-        recovery_sessions: &Arc<RwLock<HashMap<Uuid, RecoverySession>>>,
-        circuit_breakers: &Arc<RwLock<HashMap<NodeId, CircuitBreaker>>>,
+        recovery_sessions: &mut HashMap<Uuid, RecoverySession>,
+        circuit_breakers: &mut HashMap<NodeId, CircuitBreaker>,
     ) -> Result<()> {
         match event {
             FaultToleranceEvent::NodeFailure(node_id, failure_type) => {
-                warn!("Node failure detected: {} - {:?}", node_id, failure_type);
-
-                // Update circuit breaker
-                {
-                    let mut breakers = circuit_breakers.write().await;
-                    if let Some(breaker) = breakers.get_mut(&node_id) {
-                        breaker.record_failure();
-                    }
+                warn!("Node failure detected: {node_id} - {failure_type:?}");
+                if let Some(breaker) = circuit_breakers.get_mut(&node_id) {
+                    breaker.record_failure();
                 }
             }
 
             FaultToleranceEvent::NodeRecovery(node_id) => {
-                info!("Node recovery detected: {}", node_id);
-
-                // Reset circuit breaker
-                {
-                    let mut breakers = circuit_breakers.write().await;
-                    if let Some(breaker) = breakers.get_mut(&node_id) {
-                        breaker.reset();
-                    }
+                info!("Node recovery detected: {node_id}");
+                if let Some(breaker) = circuit_breakers.get_mut(&node_id) {
+                    breaker.reset();
                 }
             }
 
             FaultToleranceEvent::CircuitBreakerStateChanged(node_id, state) => {
-                info!(
-                    "Circuit breaker state changed for node {}: {:?}",
-                    node_id, state
-                );
+                info!("Circuit breaker state changed for node {node_id}: {state:?}");
             }
 
             FaultToleranceEvent::RecoveryStarted(session_id, recovery_type) => {
-                info!(
-                    "Recovery session started: {} - {:?}",
-                    session_id, recovery_type
-                );
+                info!("Recovery session started: {session_id} - {recovery_type:?}");
             }
 
             FaultToleranceEvent::RecoveryCompleted(session_id, result) => {
@@ -444,18 +547,15 @@ impl FaultTolerance {
                     "Recovery session completed: {} - success: {}",
                     session_id, result.success
                 );
-
-                // Clean up recovery session
-                let mut sessions = recovery_sessions.write().await;
-                sessions.remove(&session_id);
+                recovery_sessions.remove(&session_id);
             }
 
             FaultToleranceEvent::CheckpointCreated(checkpoint_id, description) => {
-                info!("Checkpoint created: {} - {}", checkpoint_id, description);
+                info!("Checkpoint created: {checkpoint_id} - {description}");
             }
 
             FaultToleranceEvent::GracefulDegradation(level) => {
-                warn!("Graceful degradation activated: {:?}", level);
+                warn!("Graceful degradation activated: {level:?}");
             }
         }
 
@@ -466,7 +566,7 @@ impl FaultTolerance {
     pub async fn execute_with_retry(
         &self,
         partition: &QueryPartition,
-        cluster_manager: &Arc<RwLock<ClusterManager>>,
+        cluster_manager: &ClusterManager,
     ) -> Result<crate::distributed::result_aggregation::PartialResult> {
         let mut attempts = 0;
         let max_attempts = self.config.max_retry_attempts;
@@ -474,11 +574,19 @@ impl FaultTolerance {
         loop {
             attempts += 1;
 
-            // Check circuit breaker
+            // Check circuit breaker via actor
             let should_attempt = {
-                let circuit_breakers = self.circuit_breakers.read().await;
-                if let Some(breaker) = circuit_breakers.get(&partition.assigned_node) {
-                    breaker.should_attempt()
+                let (resp_tx, resp_rx) = oneshot::channel();
+                if self
+                    .query_tx
+                    .send(FaultQueryMsg::ShouldAttempt {
+                        node_id: partition.assigned_node,
+                        tx: resp_tx,
+                    })
+                    .await
+                    .is_ok()
+                {
+                    resp_rx.await.unwrap_or(true)
                 } else {
                     true
                 }
@@ -495,26 +603,22 @@ impl FaultTolerance {
             // Attempt execution
             match self.execute_partition(partition, cluster_manager).await {
                 Ok(result) => {
-                    // Record success in circuit breaker
-                    {
-                        let mut circuit_breakers = self.circuit_breakers.write().await;
-                        if let Some(breaker) = circuit_breakers.get_mut(&partition.assigned_node) {
-                            breaker.record_success();
-                        }
-                    }
-
+                    let _ = self
+                        .query_tx
+                        .send(FaultQueryMsg::RecordSuccess {
+                            node_id: partition.assigned_node,
+                        })
+                        .await;
                     return Ok(result);
                 }
                 Err(e) => {
-                    error!("Partition execution failed (attempt {}): {}", attempts, e);
-
-                    // Record failure in circuit breaker
-                    {
-                        let mut circuit_breakers = self.circuit_breakers.write().await;
-                        if let Some(breaker) = circuit_breakers.get_mut(&partition.assigned_node) {
-                            breaker.record_failure();
-                        }
-                    }
+                    // Record failure via actor
+                    let _ = self
+                        .query_tx
+                        .send(FaultQueryMsg::RecordFailure {
+                            node_id: partition.assigned_node,
+                        })
+                        .await;
 
                     if attempts >= max_attempts {
                         return Err(e);
@@ -525,23 +629,22 @@ impl FaultTolerance {
                     sleep(Duration::from_millis(backoff_ms)).await;
 
                     // Try to reassign to different node if original failed
-                    if attempts > 1 {
-                        if let Ok(new_node) = self
+                    if attempts > 1
+                        && let Ok(new_node) = self
                             .find_alternative_node(&partition.assigned_node, cluster_manager)
                             .await
-                        {
-                            // Create new partition with different assignment
-                            let mut new_partition = partition.clone();
-                            new_partition.assigned_node = new_node;
+                    {
+                        // Create new partition with different assignment
+                        let mut new_partition = partition.clone();
+                        new_partition.assigned_node = new_node;
 
-                            match self
-                                .execute_partition(&new_partition, cluster_manager)
-                                .await
-                            {
-                                Ok(result) => return Ok(result),
-                                Err(e) => {
-                                    error!("Alternative node execution also failed: {}", e);
-                                }
+                        match self
+                            .execute_partition(&new_partition, cluster_manager)
+                            .await
+                        {
+                            Ok(result) => return Ok(result),
+                            Err(e) => {
+                                error!("Alternative node execution also failed: {e}");
                             }
                         }
                     }
@@ -554,28 +657,27 @@ impl FaultTolerance {
     async fn execute_partition(
         &self,
         partition: &QueryPartition,
-        _cluster_manager: &Arc<RwLock<ClusterManager>>,
+        _cluster_manager: &ClusterManager,
     ) -> Result<crate::distributed::result_aggregation::PartialResult> {
         // Create a timeout for the execution
         let execution_timeout = Duration::from_millis(self.config.failure_detection_timeout_ms);
 
         // Execute with timeout
-        match timeout(execution_timeout, self.do_execute_partition(partition)).await {
-            Ok(result) => result,
-            Err(_) => {
-                // Timeout occurred
-                let event = FaultToleranceEvent::NodeFailure(
-                    partition.assigned_node,
-                    FailureType::QueryTimeout,
-                );
-                let _ = self.event_sender.send(event);
+        if let Ok(result) = timeout(execution_timeout, self.do_execute_partition(partition)).await {
+            result
+        } else {
+            // Timeout occurred
+            let event = FaultToleranceEvent::NodeFailure(
+                partition.assigned_node,
+                FailureType::QueryTimeout,
+            );
+            let _ = self.event_sender.send(event);
 
-                Err(DistributedError::FaultTolerance(format!(
-                    "Query execution timeout on node {}",
-                    partition.assigned_node
-                ))
-                .into())
-            }
+            Err(DistributedError::FaultTolerance(format!(
+                "Query execution timeout on node {}",
+                partition.assigned_node
+            ))
+            .into())
         }
     }
 
@@ -634,9 +736,8 @@ impl FaultTolerance {
     async fn find_alternative_node(
         &self,
         failed_node: &NodeId,
-        cluster_manager: &Arc<RwLock<ClusterManager>>,
+        cluster_manager: &ClusterManager,
     ) -> Result<NodeId> {
-        let cluster_manager = cluster_manager.read().await;
         let active_nodes = cluster_manager.get_active_nodes().await?;
 
         // Find a different active node
@@ -651,46 +752,23 @@ impl FaultTolerance {
 
     /// Start a recovery session
     pub async fn start_recovery(&self, failure: ComponentFailure) -> Result<Uuid> {
-        let session_id = Uuid::new_v4();
-        let recovery_type = match failure.component_type {
-            ComponentType::Node => RecoveryType::NodeRecovery,
-            ComponentType::Query => RecoveryType::QueryRecovery,
-            ComponentType::Network => RecoveryType::NetworkRecovery,
-            ComponentType::Storage => RecoveryType::DataRecovery,
-            _ => RecoveryType::SystemRecovery,
-        };
-
-        let session = RecoverySession {
-            session_id,
-            recovery_type: recovery_type.clone(),
-            failed_components: vec![failure],
-            strategy: self.select_recovery_strategy(&recovery_type),
-            start_time: Instant::now(),
-            current_phase: RecoveryPhase::Detection,
-            progress: RecoveryProgress {
-                phase_progress: 0.0,
-                overall_progress: 0.0,
-                eta_ms: None,
-                steps_completed: 0,
-                total_steps: 6, // Number of recovery phases
-                current_operation: "Starting recovery".to_string(),
-            },
-        };
-
-        {
-            let mut recovery_sessions = self.recovery_sessions.write().await;
-            recovery_sessions.insert(session_id, session);
-        }
-
-        // Send recovery started event
-        let event = FaultToleranceEvent::RecoveryStarted(session_id, recovery_type);
-        let _ = self.event_sender.send(event);
-
-        info!("Started recovery session: {}", session_id);
-        Ok(session_id)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(FaultQueryMsg::StartRecovery {
+                failure,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "FaultTolerance actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "FaultTolerance did not respond".to_string(),
+        })?
     }
 
     /// Select recovery strategy based on recovery type
+    #[allow(dead_code)]
     fn select_recovery_strategy(&self, recovery_type: &RecoveryType) -> RecoveryStrategy {
         match &self.config.recovery_strategy {
             crate::distributed::RecoveryStrategyConfig::Reexecution => {
@@ -714,58 +792,46 @@ impl FaultTolerance {
 
     /// Get circuit breaker for a node
     pub async fn get_circuit_breaker(&self, node_id: NodeId) -> Result<CircuitBreakerState> {
-        let circuit_breakers = self.circuit_breakers.read().await;
-
-        if let Some(breaker) = circuit_breakers.get(&node_id) {
-            Ok(breaker.get_state())
-        } else {
-            // Create new circuit breaker for the node
-            Ok(CircuitBreakerState::Closed)
-        }
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(FaultQueryMsg::GetCircuitBreaker {
+                node_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "FaultTolerance actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "FaultTolerance did not respond".to_string(),
+        })
     }
 
     /// Create checkpoint of current system state
     pub async fn create_checkpoint(&self, description: String) -> Result<Uuid> {
-        let checkpoint_id = Uuid::new_v4();
-
-        {
-            let mut checkpoint_manager = self.checkpoint_manager.write().await;
-            checkpoint_manager
-                .create_checkpoint(checkpoint_id, description.clone())
-                .await?;
-        }
-
-        let event = FaultToleranceEvent::CheckpointCreated(checkpoint_id, description);
-        let _ = self.event_sender.send(event);
-
-        Ok(checkpoint_id)
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.query_tx
+            .send(FaultQueryMsg::CreateCheckpoint {
+                description,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "FaultTolerance actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "FaultTolerance did not respond".to_string(),
+        })?
     }
 
     /// Stop fault tolerance monitoring
     pub async fn stop(&self) -> Result<()> {
         info!("Stopping fault tolerance monitoring");
-
-        // Stop all components
-        {
-            let mut failure_detector = self.failure_detector.write().await;
-            failure_detector.stop().await?;
-        }
-
-        {
-            let mut recovery_manager = self.recovery_manager.write().await;
-            recovery_manager.stop().await?;
-        }
-
-        {
-            let mut checkpoint_manager = self.checkpoint_manager.write().await;
-            checkpoint_manager.stop().await?;
-        }
-
+        let _ = self.query_tx.send(FaultQueryMsg::Shutdown).await;
         Ok(())
     }
 }
 
-/// Recovery strategies
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RecoveryStrategy {
     /// Re-execute failed operations on different nodes
@@ -786,7 +852,9 @@ pub enum RecoveryStrategy {
 
 /// Failure detection service
 pub struct FailureDetector {
+    #[allow(dead_code)]
     config: crate::distributed::FaultToleranceConfig,
+    #[allow(dead_code)]
     monitored_nodes: HashMap<NodeId, NodeMonitor>,
     shutdown_tx: Option<mpsc::Sender<()>>,
 }
@@ -821,14 +889,14 @@ impl FailureDetector {
     /// Start failure detection
     pub async fn start(
         &mut self,
-        event_sender: mpsc::UnboundedSender<FaultToleranceEvent>,
+        _event_sender: mpsc::UnboundedSender<FaultToleranceEvent>,
     ) -> Result<()> {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         self.shutdown_tx = Some(shutdown_tx);
 
         // Start periodic health checks
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_millis(5000)); // 5-second checks
+            let mut interval = interval(Duration::from_secs(5)); // 5-second checks
 
             loop {
                 tokio::select! {
@@ -858,7 +926,9 @@ impl FailureDetector {
 
 /// Recovery management service
 pub struct RecoveryManager {
+    #[allow(dead_code)]
     config: crate::distributed::FaultToleranceConfig,
+    #[allow(dead_code)]
     active_recoveries: HashMap<Uuid, RecoverySession>,
     shutdown_tx: Option<mpsc::Sender<()>>,
 }
@@ -885,7 +955,7 @@ impl RecoveryManager {
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    _ = sleep(Duration::from_secs(10)) => {
+                    () = sleep(Duration::from_secs(10)) => {
                         debug!("Checking recovery progress");
                     }
                     _ = shutdown_rx.recv() => {
@@ -933,6 +1003,7 @@ pub enum CircuitBreakerState {
 
 impl CircuitBreaker {
     /// Create a new circuit breaker
+    #[must_use]
     pub fn new(failure_threshold: usize, timeout_duration: Duration) -> Self {
         Self {
             state: CircuitBreakerState::Closed,
@@ -944,6 +1015,7 @@ impl CircuitBreaker {
     }
 
     /// Check if should attempt operation
+    #[must_use]
     pub fn should_attempt(&self) -> bool {
         match self.state {
             CircuitBreakerState::Closed => true,
@@ -993,6 +1065,7 @@ impl CircuitBreaker {
     }
 
     /// Get current state
+    #[must_use]
     pub fn get_state(&self) -> CircuitBreakerState {
         self.state.clone()
     }
@@ -1033,7 +1106,7 @@ impl CheckpointManager {
         };
 
         self.checkpoints.insert(id, checkpoint);
-        info!("Created checkpoint: {}", id);
+        info!("Created checkpoint: {id}");
 
         Ok(())
     }

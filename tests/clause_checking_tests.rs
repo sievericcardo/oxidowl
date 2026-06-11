@@ -34,6 +34,7 @@ fn class(name: &str) -> ClassExpression {
 }
 
 /// Create an intersection (AND) class expression
+#[allow(dead_code)]
 fn intersection(classes: Vec<ClassExpression>) -> ClassExpression {
     ClassExpression::ObjectIntersectionOf(classes)
 }
@@ -49,6 +50,7 @@ fn disjoint_classes(classes: Vec<ClassExpression>) -> Axiom {
 }
 
 /// Create an EquivalentClasses axiom
+#[allow(dead_code)]
 fn equivalent_classes(classes: Vec<ClassExpression>) -> Axiom {
     use oxidowl::ontology::EquivalentClassesAxiom;
     Axiom::EquivalentClasses(EquivalentClassesAxiom {

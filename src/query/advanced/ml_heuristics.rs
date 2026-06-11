@@ -4,15 +4,15 @@
 //! selection and performance optimization, targeting 40-60% reduction in reasoning
 //! times through learned optimization patterns.
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom};
 use super::ml_models::{EnsembleModel, NeuralNetworkModel};
-use super::optimizer::{
-    PerformancePredictionModel, QueryFeatureExtractor, QueryPerformanceDataPoint,
-};
+use super::optimizer::{PerformancePredictionModel, QueryPerformanceDataPoint};
 use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, Ontology};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 /// Expansion order item for tableau reasoning
@@ -94,6 +94,7 @@ impl Default for MLHeuristicsConfig {
 }
 
 impl MLHeuristicsEngine {
+    #[must_use]
     pub fn new(config: MLHeuristicsConfig) -> Self {
         Self {
             strategy_selector: StrategySelectionModel::new(&config),
@@ -232,6 +233,7 @@ impl MLHeuristicsEngine {
     }
 
     /// Generate comprehensive heuristics report
+    #[must_use]
     pub fn generate_heuristics_report(&self) -> HeuristicsPerformanceReport {
         HeuristicsPerformanceReport {
             strategy_selection_accuracy: self.strategy_selector.get_accuracy(),
@@ -286,7 +288,7 @@ impl MLHeuristicsEngine {
     fn extract_node_features(
         &self,
         node: &TableauNode,
-        ontology: &Ontology,
+        _ontology: &Ontology,
     ) -> Result<Vec<f64>, MLError> {
         let mut features = Vec::new();
 
@@ -353,7 +355,7 @@ impl MLHeuristicsEngine {
         let strategy_confidence = self.strategy_selector.get_confidence();
         let expansion_confidence = self.expansion_predictor.get_confidence();
 
-        (strategy_confidence + expansion_confidence) / 2.0
+        f64::midpoint(strategy_confidence, expansion_confidence)
     }
 }
 
@@ -429,7 +431,10 @@ impl StrategySelectionModel {
         }
 
         // Retrain if enough sessions have passed
-        if self.session_count % self.config.retraining_frequency == 0 {
+        if self
+            .session_count
+            .is_multiple_of(self.config.retraining_frequency)
+        {
             self.retrain_model()?;
         }
 
@@ -484,7 +489,7 @@ impl StrategySelectionModel {
 
     fn calculate_prediction_confidence(
         &self,
-        features: &[f64],
+        _features: &[f64],
         strategy: &ReasoningStrategy,
     ) -> f64 {
         // Base confidence from model accuracy
@@ -498,7 +503,7 @@ impl StrategySelectionModel {
             .unwrap_or(0.5);
 
         // Combine confidences
-        (model_confidence + strategy_confidence) / 2.0
+        f64::midpoint(model_confidence, strategy_confidence)
     }
 
     fn calculate_performance_score(&self, session: &ReasoningSession) -> f64 {
@@ -511,9 +516,9 @@ impl StrategySelectionModel {
         let time_score = 1000.0 / (session.execution_time.as_millis() as f64 + 1.0);
 
         // Memory efficiency score
-        let memory_score = 1000000.0 / (session.memory_used as f64 + 1.0);
+        let memory_score = 1_000_000.0 / (session.memory_used as f64 + 1.0);
 
-        (time_score + memory_score) / 2.0
+        f64::midpoint(time_score, memory_score)
     }
 
     fn update_strategy_performance(&mut self, session: &ReasoningSession) {
@@ -615,7 +620,10 @@ impl ExpansionOrderPredictor {
         }
 
         // Retrain periodically
-        if self.session_count % self.config.retraining_frequency == 0 {
+        if self
+            .session_count
+            .is_multiple_of(self.config.retraining_frequency)
+        {
             self.retrain_model()?;
         }
 
@@ -634,7 +642,7 @@ impl ExpansionOrderPredictor {
                 query_features: point.features.clone(),
                 execution_time: point.time_penalty,
                 memory_usage: point.success_score,
-                result_size: if point.success_score > 0.5 { 1 } else { 0 },
+                result_size: usize::from(point.success_score > 0.5),
                 timestamp: point.timestamp,
             })
             .collect();
@@ -739,7 +747,7 @@ impl PerformancePatternLearner {
             ontology.classes().len() as f64,
             ontology.object_properties().len() as f64,
         ];
-        let ontology_patterns = self.ontology_patterns.detect_patterns(&ontology_features)?;
+        let _ontology_patterns = self.ontology_patterns.detect_patterns(&ontology_features)?;
 
         let mut recommendations = Vec::new();
 
@@ -1036,11 +1044,11 @@ impl std::fmt::Display for MLError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MLError::FeatureExtractionFailed(msg) => {
-                write!(f, "Feature extraction failed: {}", msg)
+                write!(f, "Feature extraction failed: {msg}")
             }
-            MLError::ModelPredictionFailed(msg) => write!(f, "Model prediction failed: {}", msg),
+            MLError::ModelPredictionFailed(msg) => write!(f, "Model prediction failed: {msg}"),
             MLError::TrainingDataInsufficient => write!(f, "Insufficient training data"),
-            MLError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
+            MLError::ConfigurationError(msg) => write!(f, "Configuration error: {msg}"),
         }
     }
 }

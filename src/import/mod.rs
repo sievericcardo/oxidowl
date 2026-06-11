@@ -9,7 +9,7 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::{Annotation, AnnotationValue, IRI, Ontology};
-use log::warn;
+use log::{info, warn};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -27,6 +27,7 @@ pub struct ImportDeclaration {
 
 impl ImportDeclaration {
     /// Create a new import declaration
+    #[must_use]
     pub fn new(imported_ontology_iri: IRI) -> Self {
         Self {
             imported_ontology_iri,
@@ -36,12 +37,14 @@ impl ImportDeclaration {
     }
 
     /// Set the version IRI
+    #[must_use]
     pub fn with_version_iri(mut self, version_iri: IRI) -> Self {
         self.version_iri = Some(version_iri);
         self
     }
 
     /// Add an annotation
+    #[must_use]
     pub fn with_annotation(mut self, annotation: Annotation) -> Self {
         self.annotations.push(annotation);
         self
@@ -74,6 +77,8 @@ pub struct ImportManagerConfig {
     pub validate_imports: bool,
     /// Whether to merge imported axioms
     pub merge_imports: bool,
+    /// HTTP timeout for remote ontology fetching
+    pub timeout: Option<std::time::Duration>,
 }
 
 impl Default for ImportManagerConfig {
@@ -85,6 +90,7 @@ impl Default for ImportManagerConfig {
             url_mappings: HashMap::new(),
             validate_imports: true,
             merge_imports: true,
+            timeout: Some(std::time::Duration::from_secs(30)),
         }
     }
 }
@@ -117,6 +123,7 @@ pub struct ImportDependencyGraph {
 
 impl ImportDependencyGraph {
     /// Create a new dependency graph
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -143,11 +150,13 @@ impl ImportDependencyGraph {
     }
 
     /// Get direct dependencies of an ontology
+    #[must_use]
     pub fn get_dependencies(&self, ontology_iri: &IRI) -> Option<&HashSet<IRI>> {
         self.dependencies.get(ontology_iri)
     }
 
     /// Get all transitive dependencies
+    #[must_use]
     pub fn get_transitive_dependencies(&self, ontology_iri: &IRI) -> HashSet<IRI> {
         let mut visited = HashSet::new();
         let mut to_visit = VecDeque::new();
@@ -173,6 +182,7 @@ impl ImportDependencyGraph {
     }
 
     /// Detect circular dependencies
+    #[must_use]
     pub fn detect_cycles(&self) -> Vec<Vec<IRI>> {
         let mut cycles = Vec::new();
         let mut visited = HashSet::new();
@@ -318,7 +328,7 @@ impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ImportError::ResolutionFailed { import_iri, reason } => {
-                write!(f, "Failed to resolve import {}: {}", import_iri, reason)
+                write!(f, "Failed to resolve import {import_iri}: {reason}")
             }
             ImportError::CircularDependency { cycle, context } => {
                 write!(
@@ -326,7 +336,7 @@ impl std::fmt::Display for ImportError {
                     "Circular dependency detected: {} ({})",
                     cycle
                         .iter()
-                        .map(|iri| iri.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" -> "),
                     context
@@ -336,17 +346,13 @@ impl std::fmt::Display for ImportError {
                 max_depth,
                 current_depth,
             } => {
-                write!(
-                    f,
-                    "Import depth exceeded: {} > {}",
-                    current_depth, max_depth
-                )
+                write!(f, "Import depth exceeded: {current_depth} > {max_depth}")
             }
             ImportError::ParseError { import_iri, error } => {
-                write!(f, "Parse error in import {}: {}", import_iri, error)
+                write!(f, "Parse error in import {import_iri}: {error}")
             }
             ImportError::ValidationError { import_iri, error } => {
-                write!(f, "Validation error in import {}: {}", import_iri, error)
+                write!(f, "Validation error in import {import_iri}: {error}")
             }
             ImportError::VersionMismatch {
                 import_iri,
@@ -355,12 +361,11 @@ impl std::fmt::Display for ImportError {
             } => {
                 write!(
                     f,
-                    "Version mismatch for {}: expected {:?}, got {:?}",
-                    import_iri, expected_version, actual_version
+                    "Version mismatch for {import_iri}: expected {expected_version:?}, got {actual_version:?}"
                 )
             }
             ImportError::IoError { import_iri, error } => {
-                write!(f, "I/O error loading {}: {}", import_iri, error)
+                write!(f, "I/O error loading {import_iri}: {error}")
             }
         }
     }
@@ -373,22 +378,24 @@ pub struct ImportManager {
     /// Configuration
     config: ImportManagerConfig,
     /// Cache of resolved ontologies
-    ontology_cache: Arc<RwLock<HashMap<IRI, Arc<Ontology>>>>,
+    ontology_cache: RwLock<HashMap<IRI, Arc<Ontology>>>,
     /// Dependency graph
-    dependency_graph: Arc<RwLock<ImportDependencyGraph>>,
+    dependency_graph: RwLock<ImportDependencyGraph>,
 }
 
 impl ImportManager {
     /// Create a new import manager
+    #[must_use]
     pub fn new(config: ImportManagerConfig) -> Self {
         Self {
             config,
-            ontology_cache: Arc::new(RwLock::new(HashMap::new())),
-            dependency_graph: Arc::new(RwLock::new(ImportDependencyGraph::new())),
+            ontology_cache: RwLock::new(HashMap::new()),
+            dependency_graph: RwLock::new(ImportDependencyGraph::new()),
         }
     }
 
     /// Create import manager with default configuration
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(ImportManagerConfig::default())
     }
@@ -398,7 +405,6 @@ impl ImportManager {
         &self,
         ontology: &mut Ontology,
     ) -> Result<Vec<ImportResolutionResult>, OxidowlError> {
-        let mut results = Vec::new();
         let ontology_iri = ontology
             .get_iri()
             .cloned()
@@ -406,6 +412,7 @@ impl ImportManager {
 
         // Get import declarations from ontology
         let import_declarations = self.extract_import_declarations(ontology);
+        let mut results = Vec::with_capacity(import_declarations.len());
 
         for import_decl in import_declarations {
             let result = self.resolve_single_import(&ontology_iri, &import_decl, 0)?;
@@ -437,13 +444,13 @@ impl ImportManager {
         // Look for import annotations
         for annotation in &ontology.annotations {
             let property_iri = &annotation.property.iri;
-            if property_iri.to_string() == "http://www.w3.org/2002/07/owl#imports" {
-                if let Some(value_iri) = match &annotation.value {
+            if property_iri.to_string() == "http://www.w3.org/2002/07/owl#imports"
+                && let Some(value_iri) = match &annotation.value {
                     AnnotationValue::IRI(iri) => Some(iri),
                     _ => None,
-                } {
-                    imports.push(ImportDeclaration::new(value_iri.clone()));
                 }
+            {
+                imports.push(ImportDeclaration::new(value_iri.clone()));
             }
         }
 
@@ -472,16 +479,16 @@ impl ImportManager {
         }
 
         // Check cache first
-        if let Ok(cache) = self.ontology_cache.read() {
-            if let Some(cached_ontology) = cache.get(&import_decl.imported_ontology_iri) {
-                return Ok(ImportResolutionResult {
-                    ontology: Some((**cached_ontology).clone()),
-                    import_iri: import_decl.imported_ontology_iri.clone(),
-                    resolved_source: Some("cache".to_string()),
-                    errors: Vec::new(),
-                    warnings: Vec::new(),
-                });
-            }
+        if let Ok(cache) = self.ontology_cache.read()
+            && let Some(cached_ontology) = cache.get(&import_decl.imported_ontology_iri)
+        {
+            return Ok(ImportResolutionResult {
+                ontology: Some((**cached_ontology).clone()),
+                import_iri: import_decl.imported_ontology_iri.clone(),
+                resolved_source: Some("cache".to_string()),
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            });
         }
 
         // Add to dependency graph
@@ -511,31 +518,30 @@ impl ImportManager {
         // Try to resolve as file path
         if let Some(ontology) = self.try_resolve_as_file(mapped_iri)? {
             result.ontology = Some(ontology);
-            result.resolved_source = Some(format!("file: {}", mapped_iri));
+            result.resolved_source = Some(format!("file: {mapped_iri}"));
         }
         // Try to resolve as URL
         else if let Some(ontology) = self.try_resolve_as_url(mapped_iri)? {
             result.ontology = Some(ontology);
-            result.resolved_source = Some(format!("url: {}", mapped_iri));
+            result.resolved_source = Some(format!("url: {mapped_iri}"));
         }
         // Resolution failed
         else {
             result.errors.push(ImportError::ResolutionFailed {
                 import_iri: import_decl.imported_ontology_iri.clone(),
-                reason: format!("Could not resolve {} as file or URL", mapped_iri),
+                reason: format!("Could not resolve {mapped_iri} as file or URL"),
             });
         }
 
         // Validate imported ontology if configured
-        if self.config.validate_imports {
-            if let Some(ref ontology) = result.ontology {
-                if let Err(validation_error) = self.validate_imported_ontology(ontology) {
-                    result.errors.push(ImportError::ValidationError {
-                        import_iri: import_decl.imported_ontology_iri.clone(),
-                        error: validation_error.to_string(),
-                    });
-                }
-            }
+        if self.config.validate_imports
+            && let Some(ref ontology) = result.ontology
+            && let Err(validation_error) = self.validate_imported_ontology(ontology)
+        {
+            result.errors.push(ImportError::ValidationError {
+                import_iri: import_decl.imported_ontology_iri.clone(),
+                error: validation_error.to_string(),
+            });
         }
 
         Ok(result)
@@ -567,31 +573,113 @@ impl ImportManager {
             return Ok(None);
         }
 
-        // For security and simplicity, we'll only support well-known ontology URLs
-        // In a full implementation, this would make HTTP requests
-        match url_str {
-            "http://www.w3.org/2002/07/owl#" => {
-                // Return a basic OWL ontology with core definitions
-                let mut ontology = Ontology::new();
-                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
-                Ok(Some(ontology))
+        #[cfg(feature = "http-imports")]
+        {
+            // Full HTTP import implementation with reqwest
+            use std::time::Duration;
+
+            info!("Fetching ontology from URL: {url_str}");
+
+            // Create HTTP client with timeout
+            let timeout = self.config.timeout.unwrap_or(Duration::from_secs(30));
+            let client = reqwest::blocking::Client::builder()
+                .timeout(timeout)
+                .user_agent("OxidOWL/0.10.0")
+                .redirect(reqwest::redirect::Policy::limited(5))
+                .build()
+                .map_err(|e| OxidowlError::ImportError {
+                    message: format!("Failed to create HTTP client: {e}"),
+                })?;
+
+            // Make request with content negotiation
+            let response = client
+                .get(url_str)
+                .header("Accept", "application/rdf+xml, text/turtle, application/owl+xml, application/x-turtle, */*")
+                .send()
+                .map_err(|e| OxidowlError::ImportError {
+                    message: format!("HTTP request failed: {e}")
+                })?;
+
+            // Check status
+            if !response.status().is_success() {
+                return Err(OxidowlError::ImportError {
+                    message: format!("HTTP request failed with status: {}", response.status()),
+                });
             }
-            "http://www.w3.org/2000/01/rdf-schema#" => {
-                // Return a basic RDFS ontology
-                let mut ontology = Ontology::new();
-                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
-                Ok(Some(ontology))
-            }
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => {
-                // Return a basic RDF ontology
-                let mut ontology = Ontology::new();
-                ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
-                Ok(Some(ontology))
-            }
-            _ => {
-                // For unknown URLs, log a warning and return None
-                warn!("Cannot load remote ontology from URL: {}", url_str);
-                Ok(None)
+
+            // Get content type to determine parser
+            let content_type = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .map(std::string::ToString::to_string)
+                .unwrap_or_else(|| "application/rdf+xml".to_string());
+
+            // Download content
+            let content = response.text().map_err(|e| OxidowlError::ImportError {
+                message: format!("Failed to read response: {e}"),
+            })?;
+
+            // Parse based on content type
+            let ontology = match content_type.as_str() {
+                ct if ct.contains("turtle") || ct.contains("ttl") => {
+                    crate::parsers::turtle::parse(&content)?
+                }
+                ct if ct.contains("rdf+xml") || ct.contains("owl+xml") => {
+                    crate::parsers::owl_xml::parse(&content)?
+                }
+                ct if ct.contains("functional") => crate::parsers::functional::parse(&content)?,
+                _ => {
+                    // Try to auto-detect format
+                    if content.trim().starts_with("<?xml") {
+                        crate::parsers::owl_xml::parse(&content)?
+                    } else if content.trim().starts_with("@prefix")
+                        || content.trim().starts_with("PREFIX")
+                    {
+                        crate::parsers::turtle::parse(&content)?
+                    } else {
+                        return Err(OxidowlError::ParseError(format!(
+                            "Unknown content type: {content_type}"
+                        )));
+                    }
+                }
+            };
+
+            info!("Successfully fetched and parsed ontology from {url_str}");
+            Ok(Some(ontology))
+        }
+
+        #[cfg(not(feature = "http-imports"))]
+        {
+            // Fallback to well-known ontology support when HTTP imports disabled
+            match url_str {
+                "http://www.w3.org/2002/07/owl#" => {
+                    // Return a basic OWL ontology with core definitions
+                    let mut ontology = Ontology::new();
+                    ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                    Ok(Some(ontology))
+                }
+                "http://www.w3.org/2000/01/rdf-schema#" => {
+                    // Return a basic RDFS ontology
+                    let mut ontology = Ontology::new();
+                    ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                    Ok(Some(ontology))
+                }
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => {
+                    // Return a basic RDF ontology
+                    let mut ontology = Ontology::new();
+                    ontology.set_ontology_iri(Some(crate::ontology::IRI::new(url_str)));
+                    Ok(Some(ontology))
+                }
+                _ => {
+                    // For unknown URLs, log a warning and return None
+                    warn!(
+                        "HTTP imports disabled - cannot load remote ontology from URL: {}",
+                        url_str
+                    );
+                    warn!("Enable the 'http-imports' feature to support HTTP import fetching");
+                    Ok(None)
+                }
             }
         }
     }
@@ -601,48 +689,48 @@ impl ImportManager {
         let extension = path
             .extension()
             .and_then(|ext| ext.to_str())
-            .map(|s| s.to_lowercase());
+            .map(str::to_lowercase);
 
         match extension.as_deref() {
-            Some("owl") | Some("owx") => {
+            Some("owl" | "owx") => {
                 // Try OWL/XML parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::owl_xml::parse(&content)
             }
             Some("ttl") => {
                 // Try Turtle parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::turtle::parse(&content)
             }
-            Some("rdf") | Some("xml") => {
+            Some("rdf" | "xml") => {
                 // Try RDF/XML parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::rdf_xml::parse(&content)
             }
             Some("ofn") => {
                 // Try Functional Syntax parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::functional::parse(&content)
             }
             Some("nt") => {
                 // Try N-Triples parser
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 crate::parsers::ntriples::parse(&content)
             }
             _ => {
                 // Unknown extension, try to detect format by content
                 let content = std::fs::read_to_string(path)
-                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {}", e)))?;
+                    .map_err(|e| OxidowlError::ParseError(format!("Failed to read file: {e}")))?;
 
                 // Simple heuristics to detect format
                 if content.trim_start().starts_with("<?xml") {
@@ -711,7 +799,7 @@ impl ImportManager {
 
         // Log the discovered namespaces for future prefix mapping
         if !used_namespaces.is_empty() {
-            log::debug!("Discovered namespaces during import: {:?}", used_namespaces);
+            log::debug!("Discovered namespaces during import: {used_namespaces:?}");
         }
 
         // If source has an ontology IRI and target doesn't, inherit it
@@ -813,23 +901,24 @@ fn collect_namespace_from_iri(
 
     // Extract namespace (everything before the last # or /)
     if let Some(pos) = iri_str.rfind('#') {
-        let namespace = &iri_str[..pos + 1];
+        let namespace = &iri_str[..=pos];
         namespaces.insert(namespace.to_string());
     } else if let Some(pos) = iri_str.rfind('/') {
-        let namespace = &iri_str[..pos + 1];
+        let namespace = &iri_str[..=pos];
         namespaces.insert(namespace.to_string());
     }
 }
 
+#[allow(dead_code)]
 fn collect_namespace_from_url(url: &url::Url, namespaces: &mut std::collections::HashSet<String>) {
     let url_str = url.as_str();
 
     // Extract namespace (everything before the last # or /)
     if let Some(pos) = url_str.rfind('#') {
-        let namespace = &url_str[..pos + 1];
+        let namespace = &url_str[..=pos];
         namespaces.insert(namespace.to_string());
     } else if let Some(pos) = url_str.rfind('/') {
-        let namespace = &url_str[..pos + 1];
+        let namespace = &url_str[..=pos];
         namespaces.insert(namespace.to_string());
     }
 }

@@ -16,6 +16,7 @@ use crate::{
             SubClassOfAxiom,
         },
     },
+    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
 
@@ -27,28 +28,51 @@ fn generate_axiom_id() -> u64 {
 }
 
 /// Parse an IRI from a string, handling both absolute and relative URIs
+///
+/// If a base URI is provided, relative IRIs will be resolved against it.
+/// Otherwise, relative IRIs without schemes will result in an error.
+#[allow(dead_code)]
 fn parse_iri_to_url(uri_str: &str) -> Result<url::Url> {
+    parse_iri_to_url_with_base(uri_str, None)
+}
+
+/// Parse an IRI with optional base URI for relative resolution
+#[allow(dead_code)]
+fn parse_iri_to_url_with_base(uri_str: &str, base: Option<&str>) -> Result<url::Url> {
     // Try to parse as absolute URL first
     if let Ok(url) = url::Url::parse(uri_str) {
-        Ok(url)
-    } else {
-        // If it's not a valid absolute URL, treat it as a simple IRI string
-        // This handles relative URIs and other IRI formats
-        if uri_str.is_empty() {
-            Err(Error::ontology_parsing("Empty IRI string"))
-        } else {
-            // Create a simple URL-like structure for the IRI
-            // Use a dummy base for relative URIs to make them parseable
-            let full_uri = if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
-                uri_str.to_string()
-            } else {
-                format!("http://example.org/{}", uri_str.trim_start_matches('#'))
-            };
-
-            url::Url::parse(&full_uri)
-                .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))
-        }
+        return Ok(url);
     }
+
+    // If it's not a valid absolute URL, handle as relative URI
+    if uri_str.is_empty() {
+        return Err(Error::ontology_parsing("Empty IRI string"));
+    }
+
+    // If we have a base URI, resolve relative URIs against it
+    if let Some(base_uri) = base
+        && let Ok(base_url) = url::Url::parse(base_uri)
+    {
+        // Resolve relative URI against base
+        return base_url.join(uri_str).map_err(|e| {
+            Error::ontology_parsing(format!(
+                "Failed to resolve relative IRI '{uri_str}' against base '{base_uri}': {e}"
+            ))
+        });
+    }
+
+    // No base URI provided - check if it looks like it has a scheme
+    if uri_str.starts_with("http://") || uri_str.starts_with("https://") {
+        // Has a scheme but failed to parse - this is an error
+        return url::Url::parse(uri_str)
+            .map_err(|e| Error::ontology_parsing(format!("Invalid absolute IRI: {e}")));
+    }
+
+    // Relative URI without base - require explicit base for proper resolution
+    // This is more correct than using a dummy base
+    Err(Error::ontology_parsing(format!(
+        "Relative IRI '{uri_str}' requires a base URI. Use @base directive or provide an absolute IRI."
+    )))
 }
 
 /// Enhanced configuration for the Turtle parser
@@ -77,6 +101,35 @@ pub struct TurtleParserConfig {
 
     /// Whether to handle multi-line statements (default: true)
     pub handle_multiline: bool,
+
+    /// RDF version to parse (default: Auto-detect)
+    pub rdf_version: RdfVersionMode,
+
+    /// Whether to parse RDF-star quoted triples (default: true)
+    pub parse_rdf_star: bool,
+
+    /// Strict RDF 1.1 mode - reject RDF-star/1.2 features (default: false)
+    pub strict_rdf11_mode: bool,
+
+    /// IRI validation mode (default: RFC3987 for RDF 1.2)
+    pub iri_validation_mode: IriValidationMode,
+
+    /// Validate blank node labels for RDF 1.2 well-formedness (default: false for compatibility)
+    /// When true, only allows [A-Za-z0-9] in blank node labels
+    pub validate_blank_nodes: bool,
+}
+
+/// RDF version mode for parsing
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RdfVersionMode {
+    /// RDF 1.1 only (no RDF-star features)
+    RDF11,
+    /// RDF 1.2 (includes directionality, rdf:reifies)
+    RDF12,
+    /// RDF-star (includes quoted triples)
+    RDFStar,
+    /// Auto-detect based on syntax (default)
+    Auto,
 }
 
 impl Default for TurtleParserConfig {
@@ -90,6 +143,11 @@ impl Default for TurtleParserConfig {
             strict_mode: false,
             parse_owl_constructs: true,
             handle_multiline: true,
+            rdf_version: RdfVersionMode::Auto,
+            parse_rdf_star: true,
+            strict_rdf11_mode: false,
+            iri_validation_mode: IriValidationMode::RFC3987, // RDF 1.2 default
+            validate_blank_nodes: false, // Default to lenient for backward compatibility
         }
     }
 }
@@ -103,7 +161,7 @@ pub struct TurtleParser {
 /// Token types for enhanced parsing
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
-    IRI(String),
+    Iri(String),
     PrefixedName(String, String), // prefix, local
     Literal(String),
     BlankNode(String),
@@ -115,10 +173,21 @@ enum Token {
     Semicolon,
     Period,
     Keyword(String),
+    /// RDF-star: << to start quoted triple
+    LeftAngleBrackets,
+    /// RDF-star: >> to end quoted triple
+    RightAngleBrackets,
+    /// RDF-star: quoted triple as a term
+    QuotedTriple(Box<RdfTriple>),
+    /// RDF 1.2: {| to start an annotation block
+    AnnotationOpen,
+    /// RDF 1.2: |} to close an annotation block
+    AnnotationClose,
 }
 
 /// Parser state for handling complex structures
 #[derive(Debug)]
+#[allow(dead_code)]
 struct ParseState {
     prefixes: HashMap<String, String>,
     base_uri: Option<String>,
@@ -209,10 +278,10 @@ impl TurtleParser {
         }
 
         // Extract ontology IRI if present
-        if ontology.get_iri().is_none() {
-            if let Some(iri) = Self::extract_ontology_iri_from_content(content) {
-                ontology.set_ontology_iri(Some(iri));
-            }
+        if ontology.get_iri().is_none()
+            && let Some(iri) = Self::extract_ontology_iri_from_content(content)
+        {
+            ontology.set_ontology_iri(Some(iri));
         }
 
         Ok(ontology)
@@ -225,12 +294,12 @@ impl TurtleParser {
             let trimmed = line.trim();
             if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
                 // Extract IRI between < and >
-                if let Some(start) = trimmed.find('<') {
-                    if let Some(end) = trimmed[start..].find('>') {
-                        let iri_str = &trimmed[start + 1..start + end];
-                        if iri_str.starts_with("http") {
-                            return Some(IRI::new(iri_str));
-                        }
+                if let Some(start) = trimmed.find('<')
+                    && let Some(end) = trimmed[start..].find('>')
+                {
+                    let iri_str = &trimmed[start + 1..start + end];
+                    if iri_str.starts_with("http") {
+                        return Some(IRI::new(iri_str));
                     }
                 }
             }
@@ -366,6 +435,13 @@ impl TurtleParser {
             return self.parse_base_declaration(trimmed, state);
         }
 
+        // Handle @version directive (RDF 1.2): e.g. `@version "1.2" .`
+        if trimmed.starts_with("@version") {
+            // Parse and silently accept the version string; version detection
+            // uses the graph-level detect_version() API.
+            return Ok(());
+        }
+
         // Parse as triple statement
         self.parse_triple_statement(trimmed, ontology, state)
     }
@@ -374,18 +450,18 @@ impl TurtleParser {
     fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
         // @prefix prefix: <uri> .
         // Find the IRI within angle brackets
-        if let Some(start) = statement.find('<') {
-            if let Some(end) = statement.find('>') {
-                let uri = &statement[start + 1..end];
+        if let Some(start) = statement.find('<')
+            && let Some(end) = statement.find('>')
+        {
+            let uri = &statement[start + 1..end];
 
-                // Extract prefix name (between @prefix and :)
-                let prefix_part = &statement[7..start].trim(); // Skip "@prefix"
-                if let Some(colon_pos) = prefix_part.find(':') {
-                    let prefix_name = prefix_part[..colon_pos].trim();
-                    state
-                        .prefixes
-                        .insert(prefix_name.to_string(), uri.to_string());
-                }
+            // Extract prefix name (between @prefix and :)
+            let prefix_part = &statement[7..start].trim(); // Skip "@prefix"
+            if let Some(colon_pos) = prefix_part.find(':') {
+                let prefix_name = prefix_part[..colon_pos].trim();
+                state
+                    .prefixes
+                    .insert(prefix_name.to_string(), uri.to_string());
             }
         }
         Ok(())
@@ -393,10 +469,10 @@ impl TurtleParser {
 
     /// Parse base declaration
     fn parse_base_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
-        if let Some(start) = statement.find('<') {
-            if let Some(end) = statement.find('>') {
-                state.base_uri = Some(statement[start + 1..end].to_string());
-            }
+        if let Some(start) = statement.find('<')
+            && let Some(end) = statement.find('>')
+        {
+            state.base_uri = Some(statement[start + 1..end].to_string());
         }
         Ok(())
     }
@@ -428,6 +504,7 @@ impl TurtleParser {
 
         // Parse standard triple
         let tokens = self.tokenize_statement(statement)?;
+        let tokens = self.process_quoted_triples(tokens, state)?;
 
         // Handle semicolon-separated predicates, blank nodes, or collections
         // Also route to parse_semicolon_statement if object is a collection or blank node
@@ -435,6 +512,7 @@ impl TurtleParser {
             || tokens.iter().any(|t| matches!(t, Token::LeftBracket))
             || tokens.iter().any(|t| matches!(t, Token::LeftParen))
             || tokens.iter().any(|t| matches!(t, Token::Comma))
+            || tokens.iter().any(|t| matches!(t, Token::AnnotationOpen))
         {
             return self.parse_semicolon_statement(&tokens, ontology, state);
         }
@@ -459,6 +537,14 @@ impl TurtleParser {
     ) -> Result<()> {
         if tokens.is_empty() {
             return Ok(());
+        }
+
+        // RDF 1.2: handle annotation blocks {| pred obj ; pred obj |}
+        if let Some(open_idx) = tokens
+            .iter()
+            .position(|t| matches!(t, Token::AnnotationOpen))
+        {
+            return self.process_annotation_block(tokens, open_idx, ontology, state);
         }
 
         // Check for special case: subject ( collection ) . (no explicit predicate)
@@ -506,7 +592,7 @@ impl TurtleParser {
         } else {
             // Regular subject
             self.resolve_token(&tokens[0], state).map_err(|e| {
-                Error::ontology_parsing(format!("Failed to resolve subject token: {}", e))
+                Error::ontology_parsing(format!("Failed to resolve subject token: {e}"))
             })?
         };
 
@@ -572,8 +658,7 @@ impl TurtleParser {
                     .resolve_token(&tokens[start_index], state)
                     .map_err(|e| {
                         Error::ontology_parsing(format!(
-                            "Failed to resolve predicate token at index {}: {}",
-                            start_index, e
+                            "Failed to resolve predicate token at index {start_index}: {e}"
                         ))
                     })?;
                 start_index += 1; // Move past the predicate
@@ -664,8 +749,8 @@ impl TurtleParser {
                         let literal_value = lit_value.clone();
                         start_index += 1; // Move past literal
 
-                        // Check if there's a type annotation (^^datatype)
-                        let datatype = if start_index < tokens.len() {
+                        // Check for type annotation (^^datatype) or language tag (@lang[--dir])
+                        let (language, datatype) = if start_index < tokens.len() {
                             let next_token = &tokens[start_index];
                             match next_token {
                                 Token::Keyword(kw) if kw.starts_with("^^") => {
@@ -680,7 +765,7 @@ impl TurtleParser {
                                                 let prefix = &dt_str[..colon_pos];
                                                 let local = &dt_str[colon_pos + 1..];
                                                 if let Some(base) = state.prefixes.get(prefix) {
-                                                    format!("{}{}", base, local)
+                                                    format!("{base}{local}")
                                                 } else {
                                                     dt_str
                                                 }
@@ -692,12 +777,27 @@ impl TurtleParser {
                                         };
 
                                     let dt_iri = IRI::new(&resolved_dt);
-                                    dt_iri.to_url().ok()
+                                    (None, dt_iri.to_url().ok())
                                 }
-                                _ => None,
+                                Token::Keyword(kw) if kw.starts_with('@') && kw.len() > 1 => {
+                                    // RDF 1.2: language tag, optionally with base direction
+                                    let tag = &kw[1..]; // strip leading @
+                                    start_index += 1;
+                                    if let Some(dash_pos) = tag.find("--") {
+                                        let lang = tag[..dash_pos].to_string();
+                                        let dt = url::Url::parse(
+                                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString",
+                                        )
+                                        .ok();
+                                        (Some(lang), dt)
+                                    } else {
+                                        (Some(tag.to_string()), None)
+                                    }
+                                }
+                                _ => (None, None),
                             }
                         } else {
-                            None
+                            (None, None)
                         };
 
                         // Create DataPropertyAssertion
@@ -708,8 +808,8 @@ impl TurtleParser {
                             iri: IRI::new(&predicate),
                         };
                         let literal = Literal {
-                            value: self.decode_escape_sequences(&literal_value.trim_matches('"')),
-                            language: None,
+                            value: self.decode_escape_sequences(literal_value.trim_matches('"')),
+                            language,
                             datatype,
                         };
 
@@ -734,8 +834,7 @@ impl TurtleParser {
                 Ok(obj) => obj,
                 Err(e) => {
                     eprintln!(
-                        "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
-                        start_index, e
+                        "Warning: Failed to resolve object token at index {start_index}: {e}. Skipping this predicate-object pair."
                     );
                     // Skip to next statement
                     while start_index < tokens.len()
@@ -988,240 +1087,6 @@ impl TurtleParser {
         Ok(first_node)
     }
 
-    /// Parse statements with semicolon-separated predicates (OLD VERSION - REPLACED ABOVE)
-    fn parse_semicolon_statement_old(
-        &self,
-        tokens: &[Token],
-        ontology: &mut Ontology,
-        state: &mut ParseState,
-    ) -> Result<()> {
-        if tokens.is_empty() {
-            return Ok(());
-        }
-
-        // Check if the statement starts with a blank node (anonymous subject)
-        // These are complex structures we don't fully parse yet, so skip them
-        if matches!(tokens[0], Token::LeftBracket) {
-            return Ok(());
-        }
-
-        // First token should be the subject
-        let subject = self.resolve_token(&tokens[0], state).map_err(|e| {
-            Error::ontology_parsing(format!("Failed to resolve subject token: {}", e))
-        })?;
-
-        // Process predicate-object pairs separated by semicolons
-        let mut i = 1;
-        let mut current_predicate: Option<String> = None;
-
-        while i < tokens.len() {
-            // Skip semicolons (mark end of predicate-object list, reset current predicate)
-            if matches!(tokens[i], Token::Semicolon) {
-                i += 1;
-                current_predicate = None;
-                continue;
-            }
-
-            // Skip periods (end of statement)
-            if matches!(tokens[i], Token::Period) {
-                break;
-            }
-
-            // We need at least predicate and object
-            if i + 1 >= tokens.len() {
-                break;
-            }
-
-            // If we don't have a current predicate, this token should be a predicate
-            // If we have a current predicate and see a comma, skip it and continue with same predicate
-            if matches!(tokens[i], Token::Comma) {
-                i += 1;
-                // Continue with the same predicate for the next object
-                continue;
-            }
-
-            let predicate = if let Some(ref pred) = current_predicate {
-                // Reuse the current predicate for comma-separated objects
-                pred.clone()
-            } else {
-                // Parse new predicate
-                let pred = self.resolve_token(&tokens[i], state).map_err(|e| {
-                    Error::ontology_parsing(format!(
-                        "Failed to resolve predicate token at index {}: {}",
-                        i, e
-                    ))
-                })?;
-                i += 1; // Move past the predicate
-                current_predicate = Some(pred.clone());
-                pred
-            };
-
-            // Check if the object is a complex structure (blank node, list, etc.) that we should skip
-            if i < tokens.len() {
-                match &tokens[i] {
-                    Token::LeftBracket | Token::LeftParen => {
-                        // Skip complex structures (blank nodes, lists)
-                        let mut depth = 1;
-                        let is_bracket = matches!(tokens[i], Token::LeftBracket);
-                        i += 1; // Move past opening bracket/paren
-
-                        while i < tokens.len() && depth > 0 {
-                            match tokens[i] {
-                                Token::LeftBracket if is_bracket => depth += 1,
-                                Token::RightBracket if is_bracket => depth -= 1,
-                                Token::LeftParen if !is_bracket => depth += 1,
-                                Token::RightParen if !is_bracket => depth -= 1,
-                                _ => {}
-                            }
-                            i += 1;
-                        }
-                        // After closing bracket/paren, continue to check for comma or semicolon
-                        continue;
-                    }
-                    Token::Literal(lit_value) => {
-                        // Handle literal values as data property assertions
-                        let literal_value = lit_value.clone();
-                        i += 1; // Move past literal
-
-                        // Check if there's a type annotation (^^datatype)
-                        let datatype = if i < tokens.len() {
-                            let next_token = &tokens[i];
-                            match next_token {
-                                Token::Keyword(kw) if kw.starts_with("^^") => {
-                                    // Extract datatype IRI
-                                    let dt_str = kw[2..].to_string();
-                                    i += 1; // Skip the type annotation
-
-                                    // Resolve prefix if needed
-                                    let resolved_dt =
-                                        if dt_str.contains(':') && !dt_str.starts_with("http") {
-                                            if let Some(colon_pos) = dt_str.find(':') {
-                                                let prefix = &dt_str[..colon_pos];
-                                                let local = &dt_str[colon_pos + 1..];
-                                                if let Some(base) = state.prefixes.get(prefix) {
-                                                    format!("{}{}", base, local)
-                                                } else {
-                                                    dt_str
-                                                }
-                                            } else {
-                                                dt_str
-                                            }
-                                        } else {
-                                            dt_str
-                                        };
-
-                                    let dt_iri = IRI::new(&resolved_dt);
-                                    dt_iri.to_url().ok()
-                                }
-                                _ => None,
-                            }
-                        } else {
-                            None
-                        };
-
-                        // Create DataPropertyAssertion
-                        let subject_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let data_property = DataProperty {
-                            iri: IRI::new(&predicate),
-                        };
-                        let literal = Literal {
-                            value: literal_value.trim_matches('"').to_string(),
-                            language: None,
-                            datatype,
-                        };
-
-                        let axiom = DataPropertyAssertionAxiom {
-                            id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(
-                                data_property,
-                            ),
-                            individual: subject_ind,
-                            value: literal,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
-                        continue;
-                    }
-                    _ => {} // Continue with normal processing
-                }
-            }
-
-            // Try to resolve the object token for simple objects
-            let object = match self.resolve_token(&tokens[i], state) {
-                Ok(obj) => obj,
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to resolve object token at index {}: {}. Skipping this predicate-object pair.",
-                        i, e
-                    );
-                    // Skip to next statement
-                    while i < tokens.len() && !matches!(tokens[i], Token::Period | Token::Semicolon)
-                    {
-                        i += 1;
-                    }
-                    current_predicate = None;
-                    continue;
-                }
-            };
-
-            // Process this triple
-            self.process_enhanced_triple(ontology, subject.clone(), predicate.clone(), object)?;
-
-            // Move to next object or predicate
-            i += 1;
-
-            // Handle comma-separated objects for the same predicate
-            // (Note: this is now mostly handled by the top-level comma check,
-            //  but we keep this for additional complex cases)
-            while i < tokens.len() && matches!(tokens[i], Token::Comma) {
-                i += 1; // Skip comma
-                if i < tokens.len() && !matches!(tokens[i], Token::Semicolon | Token::Period) {
-                    // Skip complex objects like blank nodes that start with [
-                    if matches!(tokens[i], Token::LeftBracket) {
-                        // Skip to the end of the blank node
-                        let mut bracket_depth = 1;
-                        i += 1;
-                        while i < tokens.len() && bracket_depth > 0 {
-                            match tokens[i] {
-                                Token::LeftBracket => bracket_depth += 1,
-                                Token::RightBracket => bracket_depth -= 1,
-                                _ => {}
-                            }
-                            i += 1;
-                        }
-                        continue;
-                    }
-
-                    // Only process simple objects
-                    match self.resolve_token(&tokens[i], state) {
-                        Ok(next_object) => {
-                            self.process_enhanced_triple(
-                                ontology,
-                                subject.clone(),
-                                predicate.clone(),
-                                next_object,
-                            )?;
-                            i += 1;
-                        }
-                        Err(_) => {
-                            // Skip problematic tokens instead of failing
-                            i += 1;
-                        }
-                    }
-                }
-            }
-
-            // Reset current predicate if we hit a semicolon or period
-            if i < tokens.len() && matches!(tokens[i], Token::Semicolon | Token::Period) {
-                current_predicate = None;
-            }
-        }
-
-        Ok(())
-    }
-
     /// Parse OWL disjoint union constructs
     fn parse_disjoint_union(
         &self,
@@ -1344,216 +1209,190 @@ impl TurtleParser {
 
             // Convert to token and resolve
             let subject_token = if subject_iri.starts_with('<') && subject_iri.ends_with('>') {
-                Token::IRI(subject_iri[1..subject_iri.len() - 1].to_string())
+                Token::Iri(subject_iri[1..subject_iri.len() - 1].to_string())
             } else if subject_iri.contains(':') {
                 let parts: Vec<&str> = subject_iri.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
-                    Token::PrefixedName("".to_string(), subject_iri.to_string())
+                    Token::PrefixedName(String::new(), subject_iri.to_string())
                 }
             } else {
-                Token::PrefixedName("".to_string(), subject_iri.to_string())
+                Token::PrefixedName(String::new(), subject_iri.to_string())
             };
 
             let subject_uri = self.resolve_token(&subject_token, state)?;
             let subject_class = Class::new(IRI::new(&subject_uri));
 
             // Look for intersection patterns like "[ owl:intersectionOf ( ast:Healthy ast:MoistPlant ) ]"
-            if statement.contains("owl:intersectionOf") {
-                if let Some(start) = statement.find("owl:intersectionOf") {
-                    if let Some(paren_start) = statement[start..].find('(') {
-                        // Find matching closing parenthesis, handling nesting
-                        let search_start = start + paren_start + 1;
-                        let mut paren_depth = 1;
-                        let mut paren_end_pos = None;
+            if statement.contains("owl:intersectionOf")
+                && let Some(start) = statement.find("owl:intersectionOf")
+                && let Some(paren_start) = statement[start..].find('(')
+            {
+                // Find matching closing parenthesis, handling nesting
+                let search_start = start + paren_start + 1;
+                let mut paren_depth = 1;
+                let mut paren_end_pos = None;
 
-                        for (i, ch) in statement[search_start..].chars().enumerate() {
-                            match ch {
-                                '(' => paren_depth += 1,
-                                ')' => {
-                                    paren_depth -= 1;
-                                    if paren_depth == 0 {
-                                        paren_end_pos = Some(i);
-                                        break;
-                                    }
-                                }
-                                _ => {}
+                for (i, ch) in statement[search_start..].chars().enumerate() {
+                    match ch {
+                        '(' => paren_depth += 1,
+                        ')' => {
+                            paren_depth -= 1;
+                            if paren_depth == 0 {
+                                paren_end_pos = Some(i);
+                                break;
                             }
                         }
+                        _ => {}
+                    }
+                }
 
-                        if let Some(paren_end) = paren_end_pos {
-                            let classes_str = &statement[search_start..search_start + paren_end];
+                if let Some(paren_end) = paren_end_pos {
+                    let classes_str = &statement[search_start..search_start + paren_end];
 
-                            // Parse individual classes in the intersection
-                            let mut intersection_classes = Vec::new();
-                            let mut current_token = String::new();
-                            let mut in_restriction = false;
-                            let mut bracket_depth = 0;
+                    // Parse individual classes in the intersection
+                    let mut intersection_classes = Vec::new();
+                    let mut current_token = String::new();
+                    let mut in_restriction = false;
+                    let mut bracket_depth = 0;
 
-                            for char in classes_str.chars() {
-                                match char {
-                                    '[' => {
-                                        bracket_depth += 1;
-                                        in_restriction = true;
-                                        current_token.push(char);
+                    for char in classes_str.chars() {
+                        match char {
+                            '[' => {
+                                bracket_depth += 1;
+                                in_restriction = true;
+                                current_token.push(char);
+                            }
+                            ']' => {
+                                bracket_depth -= 1;
+                                current_token.push(char);
+                                if bracket_depth == 0 {
+                                    in_restriction = false;
+                                    // Parse the restriction if we accumulated one
+                                    let restriction_content = current_token.trim();
+                                    if !restriction_content.is_empty()
+                                        && restriction_content.starts_with('[')
+                                    {
+                                        let class_expr =
+                                            self.parse_restriction(restriction_content, state)?;
+                                        intersection_classes.push(class_expr);
                                     }
-                                    ']' => {
-                                        bracket_depth -= 1;
-                                        current_token.push(char);
-                                        if bracket_depth == 0 {
-                                            in_restriction = false;
-                                            // Parse the restriction if we accumulated one
-                                            let restriction_content = current_token.trim();
-                                            if !restriction_content.is_empty()
-                                                && restriction_content.starts_with('[')
-                                            {
-                                                let class_expr = self.parse_restriction(
-                                                    restriction_content,
-                                                    state,
-                                                )?;
-                                                intersection_classes.push(class_expr);
-                                            }
-                                            current_token.clear();
-                                        }
-                                    }
-                                    ' ' | '\t' | '\n' => {
-                                        if in_restriction {
-                                            // Keep whitespace when inside a restriction
-                                            current_token.push(char);
-                                        } else if !current_token.trim().is_empty() {
-                                            let class_token_str = current_token.trim();
-                                            if self.is_valid_class_reference(class_token_str) {
-                                                // Convert to token and resolve
-                                                let class_token = if class_token_str
-                                                    .starts_with('<')
-                                                    && class_token_str.ends_with('>')
-                                                {
-                                                    Token::IRI(
-                                                        class_token_str
-                                                            [1..class_token_str.len() - 1]
-                                                            .to_string(),
-                                                    )
-                                                } else if class_token_str.contains(':') {
-                                                    let parts: Vec<&str> =
-                                                        class_token_str.splitn(2, ':').collect();
-                                                    if parts.len() == 2 {
-                                                        Token::PrefixedName(
-                                                            parts[0].to_string(),
-                                                            parts[1].to_string(),
-                                                        )
-                                                    } else {
-                                                        Token::PrefixedName(
-                                                            "".to_string(),
-                                                            class_token_str.to_string(),
-                                                        )
-                                                    }
-                                                } else {
-                                                    Token::PrefixedName(
-                                                        "".to_string(),
-                                                        class_token_str.to_string(),
-                                                    )
-                                                };
-
-                                                match self.resolve_token(&class_token, state) {
-                                                    Ok(class_uri) => {
-                                                        let class =
-                                                            Class::new(IRI::new(&class_uri));
-                                                        intersection_classes
-                                                            .push(ClassExpression::Class(class));
-                                                        eprintln!(
-                                                            "Added intersection class: {}",
-                                                            class_uri
-                                                        );
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!(
-                                                            "Warning: Could not resolve intersection class {}: {}",
-                                                            class_token_str, e
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                            current_token.clear();
-                                        } else {
-                                            current_token.push(char);
-                                        }
-                                    }
-                                    _ => {
-                                        current_token.push(char);
-                                    }
+                                    current_token.clear();
                                 }
                             }
-
-                            // Handle the last token
-                            if !in_restriction && !current_token.trim().is_empty() {
-                                let class_token_str = current_token.trim();
-                                if self.is_valid_class_reference(class_token_str) {
-                                    // Convert to token and resolve - same logic as above
-                                    let class_token = if class_token_str.starts_with('<')
-                                        && class_token_str.ends_with('>')
-                                    {
-                                        Token::IRI(
-                                            class_token_str[1..class_token_str.len() - 1]
-                                                .to_string(),
-                                        )
-                                    } else if class_token_str.contains(':') {
-                                        let parts: Vec<&str> =
-                                            class_token_str.splitn(2, ':').collect();
-                                        if parts.len() == 2 {
-                                            Token::PrefixedName(
-                                                parts[0].to_string(),
-                                                parts[1].to_string(),
+                            ' ' | '\t' | '\n' => {
+                                if in_restriction {
+                                    // Keep whitespace when inside a restriction
+                                    current_token.push(char);
+                                } else if !current_token.trim().is_empty() {
+                                    let class_token_str = current_token.trim();
+                                    if self.is_valid_class_reference(class_token_str) {
+                                        // Convert to token and resolve
+                                        let class_token = if class_token_str.starts_with('<')
+                                            && class_token_str.ends_with('>')
+                                        {
+                                            Token::Iri(
+                                                class_token_str[1..class_token_str.len() - 1]
+                                                    .to_string(),
                                             )
+                                        } else if class_token_str.contains(':') {
+                                            let parts: Vec<&str> =
+                                                class_token_str.splitn(2, ':').collect();
+                                            if parts.len() == 2 {
+                                                Token::PrefixedName(
+                                                    parts[0].to_string(),
+                                                    parts[1].to_string(),
+                                                )
+                                            } else {
+                                                Token::PrefixedName(
+                                                    String::new(),
+                                                    class_token_str.to_string(),
+                                                )
+                                            }
                                         } else {
                                             Token::PrefixedName(
-                                                "".to_string(),
+                                                String::new(),
                                                 class_token_str.to_string(),
                                             )
-                                        }
-                                    } else {
-                                        Token::PrefixedName(
-                                            "".to_string(),
-                                            class_token_str.to_string(),
-                                        )
-                                    };
+                                        };
 
-                                    match self.resolve_token(&class_token, state) {
-                                        Ok(class_uri) => {
-                                            let class = Class::new(IRI::new(&class_uri));
-                                            intersection_classes
-                                                .push(ClassExpression::Class(class));
-                                            eprintln!("Added intersection class: {}", class_uri);
-                                        }
-                                        Err(e) => {
-                                            eprintln!(
-                                                "Warning: Could not resolve intersection class {}: {}",
-                                                class_token_str, e
-                                            );
+                                        match self.resolve_token(&class_token, state) {
+                                            Ok(class_uri) => {
+                                                let class = Class::new(IRI::new(&class_uri));
+                                                intersection_classes
+                                                    .push(ClassExpression::Class(class));
+                                                eprintln!("Added intersection class: {class_uri}");
+                                            }
+                                            Err(e) => {
+                                                eprintln!(
+                                                    "Warning: Could not resolve intersection class {class_token_str}: {e}"
+                                                );
+                                            }
                                         }
                                     }
+                                    current_token.clear();
+                                } else {
+                                    current_token.push(char);
                                 }
                             }
-
-                            if !intersection_classes.is_empty() {
-                                // Create equivalent classes axiom with intersection
-                                let intersection_expr =
-                                    ClassExpression::ObjectIntersectionOf(intersection_classes);
-
-                                let equiv_axiom = EquivalentClassesAxiom {
-                                    id: generate_axiom_id(),
-                                    classes: vec![
-                                        ClassExpression::Class(subject_class),
-                                        intersection_expr,
-                                    ],
-                                    annotations: vec![],
-                                };
-
-                                eprintln!("Creating EquivalentClasses axiom for intersection");
-                                ontology.add_axiom(Axiom::EquivalentClasses(equiv_axiom));
-                                return Ok(());
+                            _ => {
+                                current_token.push(char);
                             }
                         }
+                    }
+
+                    // Handle the last token
+                    if !in_restriction && !current_token.trim().is_empty() {
+                        let class_token_str = current_token.trim();
+                        if self.is_valid_class_reference(class_token_str) {
+                            // Convert to token and resolve - same logic as above
+                            let class_token = if class_token_str.starts_with('<')
+                                && class_token_str.ends_with('>')
+                            {
+                                Token::Iri(
+                                    class_token_str[1..class_token_str.len() - 1].to_string(),
+                                )
+                            } else if class_token_str.contains(':') {
+                                let parts: Vec<&str> = class_token_str.splitn(2, ':').collect();
+                                if parts.len() == 2 {
+                                    Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
+                                } else {
+                                    Token::PrefixedName(String::new(), class_token_str.to_string())
+                                }
+                            } else {
+                                Token::PrefixedName(String::new(), class_token_str.to_string())
+                            };
+
+                            match self.resolve_token(&class_token, state) {
+                                Ok(class_uri) => {
+                                    let class = Class::new(IRI::new(&class_uri));
+                                    intersection_classes.push(ClassExpression::Class(class));
+                                    eprintln!("Added intersection class: {class_uri}");
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "Warning: Could not resolve intersection class {class_token_str}: {e}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if !intersection_classes.is_empty() {
+                        // Create equivalent classes axiom with intersection
+                        let intersection_expr =
+                            ClassExpression::ObjectIntersectionOf(intersection_classes);
+
+                        let equiv_axiom = EquivalentClassesAxiom {
+                            id: generate_axiom_id(),
+                            classes: vec![ClassExpression::Class(subject_class), intersection_expr],
+                            annotations: vec![],
+                        };
+
+                        eprintln!("Creating EquivalentClasses axiom for intersection");
+                        ontology.add_axiom(Axiom::EquivalentClasses(equiv_axiom));
+                        return Ok(());
                     }
                 }
             }
@@ -1613,14 +1452,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1646,14 +1483,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1718,14 +1553,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1769,7 +1602,7 @@ impl TurtleParser {
             };
 
             let cardinality: u32 = cardinality_str.parse().map_err(|_| {
-                Error::ontology_parsing(format!("Invalid cardinality value: {}", cardinality_str))
+                Error::ontology_parsing(format!("Invalid cardinality value: {cardinality_str}"))
             })?;
 
             // Extract the onClass (filler)
@@ -1794,11 +1627,10 @@ impl TurtleParser {
                     Token::PrefixedName("owl".to_string(), "Thing".to_string())
                 }
             } else if class_name.starts_with('<') && class_name.ends_with('>') {
-                Token::IRI(class_name[1..class_name.len() - 1].to_string())
+                Token::Iri(class_name[1..class_name.len() - 1].to_string())
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid class name: {}",
-                    class_name
+                    "Invalid class name: {class_name}"
                 )));
             };
 
@@ -1852,8 +1684,7 @@ impl TurtleParser {
                 // Validate it's "true" or "false"
                 if value_str != "true" && value_str != "false" {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid owl:hasSelf value: '{}'. Must be 'true' or 'false'",
-                        value_str
+                        "Invalid owl:hasSelf value: '{value_str}'. Must be 'true' or 'false'"
                     )));
                 }
 
@@ -1874,8 +1705,7 @@ impl TurtleParser {
                                 && !datatype_part.contains("XMLSchema#boolean")
                             {
                                 return Err(Error::ontology_parsing(format!(
-                                    "Invalid datatype for owl:hasSelf: '{}'. Must be xsd:boolean",
-                                    datatype_part
+                                    "Invalid datatype for owl:hasSelf: '{datatype_part}'. Must be xsd:boolean"
                                 )));
                             }
                         }
@@ -1890,14 +1720,12 @@ impl TurtleParser {
                     Token::PrefixedName(parts[0].to_string(), parts[1].to_string())
                 } else {
                     return Err(Error::ontology_parsing(format!(
-                        "Invalid property name: {}",
-                        property_name
+                        "Invalid property name: {property_name}"
                     )));
                 }
             } else {
                 return Err(Error::ontology_parsing(format!(
-                    "Invalid property name: {}",
-                    property_name
+                    "Invalid property name: {property_name}"
                 )));
             };
 
@@ -1950,37 +1778,36 @@ impl TurtleParser {
         // Parse facet restrictions
         let mut facets = Vec::new();
 
-        if let Some(restr_start) = restriction_str.find("owl:withRestrictions") {
-            if let Some(paren_start) = restriction_str[restr_start..].find('(') {
-                if let Some(paren_end) = restriction_str[restr_start + paren_start..].find(')') {
-                    let facets_str = &restriction_str
-                        [restr_start + paren_start + 1..restr_start + paren_start + paren_end];
-                    eprintln!("Parsing facets: {}", facets_str);
+        if let Some(restr_start) = restriction_str.find("owl:withRestrictions")
+            && let Some(paren_start) = restriction_str[restr_start..].find('(')
+            && let Some(paren_end) = restriction_str[restr_start + paren_start..].find(')')
+        {
+            let facets_str = &restriction_str
+                [restr_start + paren_start + 1..restr_start + paren_start + paren_end];
+            eprintln!("Parsing facets: {facets_str}");
 
-                    // Parse facets like "[ xsd:maxExclusive \"80.0\"^^xsd:double ]"
-                    let mut in_bracket = false;
-                    let mut current_facet = String::new();
+            // Parse facets like "[ xsd:maxExclusive \"80.0\"^^xsd:double ]"
+            let mut in_bracket = false;
+            let mut current_facet = String::new();
 
-                    for ch in facets_str.chars() {
-                        match ch {
-                            '[' => {
-                                in_bracket = true;
-                                current_facet.clear();
+            for ch in facets_str.chars() {
+                match ch {
+                    '[' => {
+                        in_bracket = true;
+                        current_facet.clear();
+                    }
+                    ']' => {
+                        if in_bracket {
+                            // Parse the facet
+                            if let Ok(facet) = self.parse_facet(&current_facet, state) {
+                                facets.push(facet);
                             }
-                            ']' => {
-                                if in_bracket {
-                                    // Parse the facet
-                                    if let Ok(facet) = self.parse_facet(&current_facet, state) {
-                                        facets.push(facet);
-                                    }
-                                    in_bracket = false;
-                                }
-                            }
-                            _ => {
-                                if in_bracket {
-                                    current_facet.push(ch);
-                                }
-                            }
+                            in_bracket = false;
+                        }
+                    }
+                    _ => {
+                        if in_bracket {
+                            current_facet.push(ch);
                         }
                     }
                 }
@@ -1995,7 +1822,7 @@ impl TurtleParser {
 
     /// Parse a facet restriction like "xsd:maxExclusive \"80.0\"^^xsd:double"
     fn parse_facet(&self, facet_str: &str, state: &mut ParseState) -> Result<FacetRestriction> {
-        let parts: Vec<&str> = facet_str.trim().split_whitespace().collect();
+        let parts: Vec<&str> = facet_str.split_whitespace().collect();
         if parts.len() < 2 {
             return Err(Error::ontology_parsing("Invalid facet format"));
         }
@@ -2120,10 +1947,147 @@ impl TurtleParser {
                 };
 
                 println!(
-                    "Creating enhanced SubClassOf axiom: {} rdfs:subClassOf {}",
-                    subject_uri, object_uri
+                    "Creating enhanced SubClassOf axiom: {subject_uri} rdfs:subClassOf {object_uri}"
                 );
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Desugar an RDF 1.2 annotation block `{| ap ao ; ap2 ao2 |}` into
+    /// `rdf:reifies` triples stored in `ontology.rdf_graph`.
+    ///
+    /// The token sequence is: `[ main tokens... ] {| [ annot tokens... ] |} [ . ]`
+    fn process_annotation_block(
+        &self,
+        tokens: &[Token],
+        open_idx: usize,
+        ontology: &mut Ontology,
+        state: &mut ParseState,
+    ) -> Result<()> {
+        // Locate the matching AnnotationClose
+        let close_idx = tokens[open_idx..]
+            .iter()
+            .position(|t| matches!(t, Token::AnnotationClose))
+            .map(|p| p + open_idx)
+            .ok_or_else(|| {
+                Error::ontology_parsing("Unmatched {| in annotation block — missing |}".to_string())
+            })?;
+
+        // Main tokens (strip trailing Period/Semicolon/AnnotationOpen)
+        let main_tokens: Vec<Token> = tokens[..open_idx]
+            .iter()
+            .filter(|t| !matches!(t, Token::Period | Token::Semicolon))
+            .cloned()
+            .collect();
+
+        if main_tokens.len() < 3 {
+            return Err(Error::ontology_parsing(
+                "Annotation block requires at least subject, predicate, object".to_string(),
+            ));
+        }
+
+        // Resolve s/p/o strings from main tokens
+        let subject_str = self.resolve_token(&main_tokens[0], state)?;
+        let predicate_str = self.resolve_token(&main_tokens[1], state)?;
+        let object_str = self.resolve_token(&main_tokens[2], state)?;
+
+        // Process the main triple through the OWL pipeline
+        self.process_enhanced_triple(
+            ontology,
+            subject_str.clone(),
+            predicate_str.clone(),
+            object_str.clone(),
+        )?;
+
+        // Ensure the RDF graph is initialised
+        if ontology.rdf_graph.is_none() {
+            ontology.rdf_graph = Some(crate::semantics::RdfGraph::new());
+        }
+        let rdf_graph = ontology.rdf_graph.as_mut().expect("just initialised");
+
+        // Helper: convert a resolved IRI/blank string to RdfTerm
+        let str_to_term = |s: &str| -> crate::semantics::RdfTerm {
+            if s.starts_with("_:") {
+                crate::semantics::RdfTerm::BlankNode(s.to_string())
+            } else {
+                crate::semantics::RdfTerm::iri(s)
+                    .unwrap_or_else(|_| crate::semantics::RdfTerm::BlankNode(s.to_string()))
+            }
+        };
+
+        let s_term = str_to_term(&subject_str);
+        let p_term = str_to_term(&predicate_str);
+        let o_term = self.token_to_rdf_term(&main_tokens[2], state)?;
+
+        // Generate a fresh blank node for the reifier
+        let reifier_id = format!("_:b_annot_{}", state.blank_node_counter);
+        state.blank_node_counter += 1;
+        let reifier_term = crate::semantics::RdfTerm::BlankNode(reifier_id);
+
+        // Add `reifier rdf:reifies <<s p o>>`
+        let inner_triple = crate::semantics::Triple::new(s_term, p_term, o_term);
+        rdf_graph.add_reifying_triple(reifier_term.clone(), inner_triple);
+
+        // Process annotation predicate-object pairs from annot_tokens
+        let annot_tokens = &tokens[open_idx + 1..close_idx];
+        let mut idx = 0;
+        while idx + 1 < annot_tokens.len() {
+            // Skip punctuation
+            if matches!(
+                annot_tokens[idx],
+                Token::Semicolon | Token::Period | Token::Comma
+            ) {
+                idx += 1;
+                continue;
+            }
+            // Read annotation predicate
+            let Ok(ap_str) = self.resolve_token(&annot_tokens[idx], state) else {
+                idx += 1;
+                continue;
+            };
+            idx += 1;
+            if idx >= annot_tokens.len() {
+                break;
+            }
+            // Read annotation object
+            let ao_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
+            idx += 1;
+            // Skip optional language tag or datatype keyword after a literal
+            if idx < annot_tokens.len()
+                && let Token::Keyword(kw) = &annot_tokens[idx]
+                && (kw.starts_with("^^") || (kw.starts_with('@') && kw.len() > 1))
+            {
+                idx += 1;
+            }
+            let ap_term = str_to_term(&ap_str);
+            rdf_graph.add_triple(crate::semantics::Triple::new(
+                reifier_term.clone(),
+                ap_term,
+                ao_term,
+            ));
+        }
+
+        // Process any remaining main tokens after `AnnotationClose` (e.g., further `;` pred obj)
+        let after_close = &tokens[close_idx + 1..];
+        if !after_close.is_empty()
+            && !after_close
+                .iter()
+                .all(|t| matches!(t, Token::Period | Token::Semicolon))
+        {
+            // Reconstruct a statement from remaining tokens — handle via semicolon logic
+            let remaining: Vec<Token> = std::iter::once(main_tokens[0].clone())
+                .chain(
+                    after_close
+                        .iter()
+                        .filter(|t| !matches!(t, Token::Period))
+                        .cloned(),
+                )
+                .collect();
+            if remaining.len() >= 3 {
+                self.parse_semicolon_statement(&remaining, ontology, state)?;
             }
         }
 
@@ -2144,20 +2108,52 @@ impl TurtleParser {
 
             match ch {
                 '<' if !in_literal => {
-                    if !current_token.is_empty() {
-                        self.add_token_from_string(&current_token, &mut tokens);
-                        current_token.clear();
+                    // Check for << (RDF-star quoted triple start)
+                    if self.config.parse_rdf_star
+                        && i + 1 < chars.len()
+                        && chars[i + 1] == '<'
+                        && !in_iri
+                    {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::LeftAngleBrackets);
+                        i += 1; // Skip the second <
+                    } else {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        in_iri = true;
+                        current_token.push(ch);
                     }
-                    in_iri = true;
-                    current_token.push(ch);
                 }
-                '>' if in_iri => {
-                    current_token.push(ch);
-                    tokens.push(Token::IRI(
-                        current_token[1..current_token.len() - 1].to_string(),
-                    ));
-                    current_token.clear();
-                    in_iri = false;
+                '>' if !in_literal => {
+                    if in_iri {
+                        current_token.push(ch);
+                        tokens.push(Token::Iri(
+                            current_token[1..current_token.len() - 1].to_string(),
+                        ));
+                        current_token.clear();
+                        in_iri = false;
+                    } else if self.config.parse_rdf_star
+                        && i + 1 < chars.len()
+                        && chars[i + 1] == '>'
+                    {
+                        // Check for >> (RDF-star quoted triple end)
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::RightAngleBrackets);
+                        i += 1; // Skip the second >
+                    } else {
+                        // Standalone >, treat as error or part of current token
+                        if !current_token.is_empty() {
+                            current_token.push(ch);
+                        }
+                    }
                 }
                 '"' => {
                     if in_literal {
@@ -2258,6 +2254,28 @@ impl TurtleParser {
                     }
                     tokens.push(Token::Semicolon);
                 }
+                '{' if !in_iri && !in_literal
+                    // RDF 1.2: {| starts an annotation block
+                    && i + 1 < chars.len() && chars[i + 1] == '|' =>
+                {
+                    if !current_token.is_empty() {
+                        self.add_token_from_string(&current_token, &mut tokens);
+                        current_token.clear();
+                    }
+                    tokens.push(Token::AnnotationOpen);
+                    i += 1; // skip the |
+                }
+                '|' if !in_iri && !in_literal
+                    // RDF 1.2: |} closes an annotation block
+                    && i + 1 < chars.len() && chars[i + 1] == '}' =>
+                {
+                    if !current_token.is_empty() {
+                        self.add_token_from_string(&current_token, &mut tokens);
+                        current_token.clear();
+                    }
+                    tokens.push(Token::AnnotationClose);
+                    i += 1; // skip the }
+                }
                 '.' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
                         self.add_token_from_string(&current_token, &mut tokens);
@@ -2285,6 +2303,61 @@ impl TurtleParser {
         Ok(tokens)
     }
 
+    /// Process tokens to convert << ... >> into `QuotedTriple` tokens
+    /// Supports recursive quoted triples
+    fn process_quoted_triples(&self, tokens: Vec<Token>, state: &ParseState) -> Result<Vec<Token>> {
+        if !self.config.parse_rdf_star {
+            return Ok(tokens);
+        }
+
+        let mut processed = Vec::new();
+        let mut i = 0;
+
+        while i < tokens.len() {
+            if matches!(tokens[i], Token::LeftAngleBrackets) {
+                // Find the matching RightAngleBrackets
+                let start = i + 1;
+                let mut depth = 1;
+                let mut end = start;
+
+                while end < tokens.len() && depth > 0 {
+                    match &tokens[end] {
+                        Token::LeftAngleBrackets => depth += 1,
+                        Token::RightAngleBrackets => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+
+                if depth != 0 {
+                    return Err(Error::ontology_parsing(
+                        "Unmatched quoted triple delimiters << >>".to_string(),
+                    ));
+                }
+
+                // Recursively process inner tokens first (for nested quoted triples)
+                let inner_tokens = tokens[start..end].to_vec();
+                let processed_inner = self.process_quoted_triples(inner_tokens, state)?;
+
+                // Parse the processed tokens into a quoted triple
+                let triple = self.parse_quoted_triple(&processed_inner, state)?;
+                processed.push(Token::QuotedTriple(Box::new(triple)));
+
+                i = end + 1; // Skip past the >>
+            } else {
+                processed.push(tokens[i].clone());
+                i += 1;
+            }
+        }
+
+        Ok(processed)
+    }
+
     /// Helper to add token from string
     fn add_token_from_string(&self, token_str: &str, tokens: &mut Vec<Token>) {
         // Check for blank node labels (e.g., _:b0)
@@ -2307,10 +2380,88 @@ impl TurtleParser {
         }
     }
 
+    /// Parse a quoted triple from tokens between << and >>
+    /// Supports recursive quoted triples
+    fn parse_quoted_triple(&self, tokens: &[Token], state: &ParseState) -> Result<RdfTriple> {
+        if tokens.len() < 3 {
+            return Err(Error::ontology_parsing(
+                "Quoted triple must have at least subject, predicate, and object".to_string(),
+            ));
+        }
+
+        // Recursively resolve tokens to RdfTerms
+        let subject_term = self.token_to_rdf_term(&tokens[0], state)?;
+        let predicate_term = self.token_to_rdf_term(&tokens[1], state)?;
+        let object_term = self.token_to_rdf_term(&tokens[2], state)?;
+
+        Ok(RdfTriple {
+            subject: subject_term,
+            predicate: predicate_term,
+            object: object_term,
+        })
+    }
+
+    /// Convert a token to an `RdfTerm`, handling recursive quoted triples
+    fn token_to_rdf_term(&self, token: &Token, state: &ParseState) -> Result<RdfTerm> {
+        match token {
+            Token::QuotedTriple(triple) => {
+                // Recursive case: quoted triple contains another quoted triple
+                Ok(RdfTerm::QuotedTriple(triple.clone()))
+            }
+            Token::Iri(iri) => {
+                let decoded = self.decode_escape_sequences(iri);
+                let url = url::Url::parse(&decoded)
+                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?;
+                Ok(RdfTerm::Iri(url))
+            }
+            Token::PrefixedName(prefix, local) => {
+                let expanded = self.expand_prefixed_name(&format!("{prefix}:{local}"), state)?;
+                let url = url::Url::parse(&expanded)
+                    .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?;
+                Ok(RdfTerm::Iri(url))
+            }
+            Token::BlankNode(id) => {
+                let node_id = if id.starts_with("_:") {
+                    id.clone()
+                } else {
+                    format!("_:{id}")
+                };
+                Ok(RdfTerm::BlankNode(node_id))
+            }
+            Token::Literal(lit) => {
+                // Parse literal with optional datatype or language tag
+                let decoded = self.decode_escape_sequences(lit);
+                Ok(RdfTerm::Literal {
+                    value: decoded,
+                    datatype: None,
+                    language: None,
+                    direction: None,
+                })
+            }
+            Token::Keyword(keyword) => {
+                // Try to expand as prefixed name if it contains ':'
+                if keyword.contains(':') {
+                    let expanded = self.expand_prefixed_name(keyword, state)?;
+                    let url = url::Url::parse(&expanded)
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?;
+                    Ok(RdfTerm::Iri(url))
+                } else {
+                    // Treat as IRI for simplicity
+                    let url = url::Url::parse(keyword)
+                        .map_err(|e| Error::ontology_parsing(format!("Invalid IRI: {e}")))?;
+                    Ok(RdfTerm::Iri(url))
+                }
+            }
+            _ => Err(Error::ontology_parsing(format!(
+                "Cannot convert token {token:?} to RdfTerm"
+            ))),
+        }
+    }
+
     /// Resolve token to URI string
     fn resolve_token(&self, token: &Token, state: &ParseState) -> Result<String> {
         match token {
-            Token::IRI(iri) => Ok(self.decode_escape_sequences(iri)),
+            Token::Iri(iri) => Ok(self.decode_escape_sequences(iri)),
             Token::PrefixedName(prefix, local) => {
                 self.expand_prefixed_name(&format!("{prefix}:{local}"), state)
             }
@@ -2338,10 +2489,9 @@ impl TurtleParser {
                 Ok(self.decode_escape_sequences(lit))
             }
             _ => {
-                let token_desc = format!("{:?}", token);
+                let token_desc = format!("{token:?}");
                 Err(Error::ontology_parsing(format!(
-                    "Cannot resolve token to URI: {:?}",
-                    token_desc
+                    "Cannot resolve token to URI: {token_desc:?}"
                 )))
             }
         }
@@ -2380,13 +2530,12 @@ impl TurtleParser {
                             // Unicode escape \uXXXX
                             chars.next(); // consume 'u'
                             let hex: String = chars.by_ref().take(4).collect();
-                            if hex.len() == 4 {
-                                if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                                    if let Some(unicode_char) = char::from_u32(code) {
-                                        result.push(unicode_char);
-                                        continue;
-                                    }
-                                }
+                            if hex.len() == 4
+                                && let Ok(code) = u32::from_str_radix(&hex, 16)
+                                && let Some(unicode_char) = char::from_u32(code)
+                            {
+                                result.push(unicode_char);
+                                continue;
                             }
                             // If parsing failed, keep the escape sequence
                             result.push('\\');
@@ -2397,13 +2546,12 @@ impl TurtleParser {
                             // Unicode escape \UXXXXXXXX
                             chars.next(); // consume 'U'
                             let hex: String = chars.by_ref().take(8).collect();
-                            if hex.len() == 8 {
-                                if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                                    if let Some(unicode_char) = char::from_u32(code) {
-                                        result.push(unicode_char);
-                                        continue;
-                                    }
-                                }
+                            if hex.len() == 8
+                                && let Ok(code) = u32::from_str_radix(&hex, 16)
+                                && let Some(unicode_char) = char::from_u32(code)
+                            {
+                                result.push(unicode_char);
+                                continue;
                             }
                             // If parsing failed, keep the escape sequence
                             result.push('\\');
@@ -2444,10 +2592,9 @@ impl TurtleParser {
                 Ok(result)
             } else {
                 // Handle unknown prefixes - this should be an error for proper Turtle parsing
-                return Err(Error::ontology_parsing(format!(
-                    "Undefined prefix: {}",
-                    prefix
-                )));
+                Err(Error::ontology_parsing(format!(
+                    "Undefined prefix: {prefix}"
+                )))
             }
         } else if let Some(base) = &state.base_uri {
             let result = format!("{base}{name}");
@@ -2455,8 +2602,7 @@ impl TurtleParser {
         } else {
             // Relative URI without base - this should be an error
             Err(Error::ontology_parsing(format!(
-                "Relative URI without base: {}",
-                name
+                "Relative URI without base: {name}"
             )))
         }
     }
@@ -2474,7 +2620,7 @@ impl TurtleParser {
                 match object.as_str() {
                     "http://www.w3.org/2002/07/owl#Class" => {
                         // Class declaration
-                        let class = Class::new(IRI::new(&subject));
+                        let _class = Class::new(IRI::new(&subject));
                         let decl_axiom = DeclarationAxiom {
                             id: generate_axiom_id(),
                             entity: Entity::Class(IRI::new(&subject)),
@@ -2483,7 +2629,7 @@ impl TurtleParser {
                     }
                     "http://www.w3.org/2002/07/owl#ObjectProperty" => {
                         // Object property declaration
-                        let property = ObjectProperty::new(IRI::new(&subject));
+                        let _property = ObjectProperty::new(IRI::new(&subject));
                         let decl_axiom = DeclarationAxiom {
                             id: generate_axiom_id(),
                             entity: Entity::ObjectProperty(IRI::new(&subject)),
@@ -2610,6 +2756,7 @@ impl TurtleParser {
 
 /// Represents a parsed RDF triple
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Triple {
     subject: String,
     predicate: String,
@@ -2618,6 +2765,7 @@ struct Triple {
 
 /// Object part of an RDF triple
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 enum TripleObject {
     Uri(String),
     Literal(String),
@@ -2653,7 +2801,7 @@ pub fn parse_file_with_config<P: AsRef<Path>>(
 pub struct TurtleSerializer;
 
 impl TurtleSerializer {
-    /// Create a new TurtleSerializer instance
+    /// Create a new `TurtleSerializer` instance
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -2702,27 +2850,25 @@ impl OntologySerializer for TurtleSerializer {
                     }
                 }
                 crate::ontology::Axiom::ClassAssertion(assertion) => {
-                    if let ClassExpression::Class(class) = &assertion.class {
-                        if let Some(individual_iri) = assertion.individual.iri() {
-                            content.push_str(&format!(
-                                "<{}> rdf:type <{}> .\n",
-                                individual_iri, class.iri
-                            ));
-                        }
+                    if let ClassExpression::Class(class) = &assertion.class
+                        && let Some(individual_iri) = assertion.individual.iri()
+                    {
+                        content.push_str(&format!(
+                            "<{}> rdf:type <{}> .\n",
+                            individual_iri, class.iri
+                        ));
                     }
                 }
                 crate::ontology::Axiom::ObjectPropertyAssertion(assertion) => {
                     if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
                         &assertion.property
-                    {
-                        if let (Some(source_iri), Some(target_iri)) =
+                        && let (Some(source_iri), Some(target_iri)) =
                             (assertion.source.iri(), assertion.target.iri())
-                        {
-                            content.push_str(&format!(
-                                "<{}> <{}> <{}> .\n",
-                                source_iri, prop.iri, target_iri
-                            ));
-                        }
+                    {
+                        content.push_str(&format!(
+                            "<{}> <{}> <{}> .\n",
+                            source_iri, prop.iri, target_iri
+                        ));
                     }
                 }
                 _ => {

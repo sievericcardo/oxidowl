@@ -14,9 +14,8 @@ pub use rest::RestApiServer;
 #[cfg(feature = "sparql")]
 pub use sparql::SparqlServer;
 
-use crate::{Error, Result, config::ServerConfig, reasoning::ReasoningService};
+use crate::{Result, config::ServerConfig, reasoning::ReasoningService};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Main server manager
 #[derive(Debug)]
@@ -47,7 +46,7 @@ impl ServerManager {
     /// Create a new server manager with custom port
     pub fn with_port(reasoning_service: Arc<ReasoningService>, port: u16) -> Self {
         let mut config = ServerConfig::default();
-        config.enable_server = true;
+        config.enable(crate::config::ServerFeature::Server);
         config.port = port;
         config.rest_api_port = port;
         Self::new(config, reasoning_service)
@@ -60,7 +59,7 @@ impl ServerManager {
         port: u16,
     ) -> Self {
         let mut config = ServerConfig::default();
-        config.enable_server = true;
+        config.enable(crate::config::ServerFeature::Server);
         config.bind_address = bind_address;
         config.port = port;
         config.rest_api_port = port;
@@ -69,19 +68,31 @@ impl ServerManager {
 
     /// Enable specific server types
     pub fn enable_owllink(&mut self, enabled: bool) -> &mut Self {
-        self.config.enable_owllink = enabled;
+        if enabled {
+            self.config.enable(crate::config::ServerFeature::OWLlink);
+        } else {
+            self.config.disable(crate::config::ServerFeature::OWLlink);
+        }
         self
     }
 
     /// Enable SPARQL server
     pub fn enable_sparql(&mut self, enabled: bool) -> &mut Self {
-        self.config.enable_sparql = enabled;
+        if enabled {
+            self.config.enable(crate::config::ServerFeature::SPARQL);
+        } else {
+            self.config.disable(crate::config::ServerFeature::SPARQL);
+        }
         self
     }
 
     /// Enable REST API
     pub fn enable_rest_api(&mut self, enabled: bool) -> &mut Self {
-        self.config.enable_rest_api = enabled;
+        if enabled {
+            self.config.enable(crate::config::ServerFeature::RestAPI);
+        } else {
+            self.config.disable(crate::config::ServerFeature::RestAPI);
+        }
         self
     }
 
@@ -105,7 +116,10 @@ impl ServerManager {
 
     /// Start all configured servers
     pub async fn start_all(&mut self) -> Result<()> {
-        if self.config.enable_owllink {
+        if self
+            .config
+            .is_enabled(crate::config::ServerFeature::OWLlink)
+        {
             let owllink_server = owllink::OWLlinkServer::new(
                 self.config.owllink_port,
                 self.config.bind_address.clone(),
@@ -116,7 +130,7 @@ impl ServerManager {
         }
 
         #[cfg(feature = "sparql")]
-        if self.config.enable_sparql {
+        if self.config.is_enabled(crate::config::ServerFeature::SPARQL) {
             let sparql_server = sparql::SparqlServer::new(
                 self.config.sparql_port,
                 self.config.bind_address.clone(),
@@ -126,7 +140,10 @@ impl ServerManager {
             self.servers.push(ServerHandle::Sparql(handle));
         }
 
-        if self.config.enable_rest_api {
+        if self
+            .config
+            .is_enabled(crate::config::ServerFeature::RestAPI)
+        {
             // Create a mock explanation service for now
             let explanation_service = Arc::new(crate::explanation::ExplanationService::new());
 
@@ -156,9 +173,13 @@ impl ServerManager {
     pub fn get_status(&self) -> ServerStatus {
         ServerStatus {
             running_servers: self.servers.len(),
-            owllink_enabled: self.config.enable_owllink,
-            sparql_enabled: self.config.enable_sparql,
-            rest_api_enabled: self.config.enable_rest_api,
+            owllink_enabled: self
+                .config
+                .is_enabled(crate::config::ServerFeature::OWLlink),
+            sparql_enabled: self.config.is_enabled(crate::config::ServerFeature::SPARQL),
+            rest_api_enabled: self
+                .config
+                .is_enabled(crate::config::ServerFeature::RestAPI),
         }
     }
 }

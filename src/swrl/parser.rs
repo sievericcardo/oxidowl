@@ -64,7 +64,7 @@ pub enum Token {
     Identifier(String),
     /// URI: <http://example.org/Person>
     URI(String),
-    /// QName: prefix:local
+    /// `QName`: prefix:local
     QName(String, String),
     /// String literal: "text"
     StringLiteral(String),
@@ -102,6 +102,7 @@ pub struct Lexer {
 
 impl SWRLParser {
     /// Create a new parser
+    #[must_use]
     pub fn new() -> Self {
         Self {
             namespace_manager: NamespaceManager::new(),
@@ -189,7 +190,7 @@ impl SWRLParser {
             return Err(self.error("Rule head cannot be empty"));
         }
 
-        Ok(SWRLRule { body, head })
+        Ok(SWRLRule { head, body })
     }
 
     /// Parse a list of atoms (connected by conjunction)
@@ -305,7 +306,7 @@ impl SWRLParser {
 
         match &tokens[0] {
             Token::Variable(name) => {
-                let var_iri = format!("urn:swrl:var#{}", name);
+                let var_iri = format!("urn:swrl:var#{name}");
                 Ok(SWRLArgument::Individual(SWRLIArgument::Variable(
                     SWRLVariable::new(IRI::new(&var_iri)),
                 )))
@@ -343,7 +344,7 @@ impl SWRLParser {
 
                 Ok(SWRLArgument::Data(SWRLDArgument::Literal(Literal {
                     value: value.clone(),
-                    datatype: IRI::new(&datatype).to_url().ok(),
+                    datatype: IRI::new(datatype).to_url().ok(),
                     language: None,
                 })))
             }
@@ -453,57 +454,54 @@ impl SWRLParser {
                 }
 
                 // Check if second argument is literal (data property) or individual (object property)
-                match &arguments[1] {
-                    SWRLArgument::Data(_) => {
-                        // Data property atom
-                        let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
-                        Ok(SWRLAtom::DataPropertyAtom {
-                            predicate: DataPropertyExpression::DataProperty(DataProperty {
-                                iri: IRI::new(&prop_iri),
-                            }),
-                            first_argument: match &arguments[0] {
-                                SWRLArgument::Individual(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "First argument must be individual in data property atom",
-                                    ));
-                                }
-                            },
-                            second_argument: match &arguments[1] {
-                                SWRLArgument::Data(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "Second argument must be data in data property atom",
-                                    ));
-                                }
-                            },
-                        })
-                    }
-                    _ => {
-                        // Object property atom
-                        let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
-                        Ok(SWRLAtom::ObjectPropertyAtom {
-                            predicate: ObjectPropertyExpression::ObjectProperty(
-                                ObjectProperty::new(IRI::new(&prop_iri))?,
-                            ),
-                            first_argument: match &arguments[0] {
-                                SWRLArgument::Individual(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "First argument must be individual in object property atom",
-                                    ));
-                                }
-                            },
-                            second_argument: match &arguments[1] {
-                                SWRLArgument::Individual(arg) => arg.clone(),
-                                _ => {
-                                    return Err(Error::ontology_parsing(
-                                        "Second argument must be individual in object property atom",
-                                    ));
-                                }
-                            },
-                        })
-                    }
+                if let SWRLArgument::Data(_) = &arguments[1] {
+                    // Data property atom
+                    let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
+                    Ok(SWRLAtom::DataPropertyAtom {
+                        predicate: DataPropertyExpression::DataProperty(DataProperty {
+                            iri: IRI::new(&prop_iri),
+                        }),
+                        first_argument: match &arguments[0] {
+                            SWRLArgument::Individual(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "First argument must be individual in data property atom",
+                                ));
+                            }
+                        },
+                        second_argument: match &arguments[1] {
+                            SWRLArgument::Data(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "Second argument must be data in data property atom",
+                                ));
+                            }
+                        },
+                    })
+                } else {
+                    // Object property atom
+                    let prop_iri = self.namespace_manager.resolve_identifier(predicate_name)?;
+                    Ok(SWRLAtom::ObjectPropertyAtom {
+                        predicate: ObjectPropertyExpression::ObjectProperty(ObjectProperty::new(
+                            IRI::new(&prop_iri),
+                        )?),
+                        first_argument: match &arguments[0] {
+                            SWRLArgument::Individual(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "First argument must be individual in object property atom",
+                                ));
+                            }
+                        },
+                        second_argument: match &arguments[1] {
+                            SWRLArgument::Individual(arg) => arg.clone(),
+                            _ => {
+                                return Err(Error::ontology_parsing(
+                                    "Second argument must be individual in object property atom",
+                                ));
+                            }
+                        },
+                    })
                 }
             }
             _ => {
@@ -545,7 +543,7 @@ impl SWRLParser {
 
     /// Create parse error
     fn error(&self, message: &str) -> Error {
-        Error::reasoning(format!("Parse error: {}", message))
+        Error::reasoning(format!("Parse error: {message}"))
     }
 }
 
@@ -555,6 +553,7 @@ impl SWRLParser {
 
 impl NamespaceManager {
     /// Create new namespace manager
+    #[must_use]
     pub fn new() -> Self {
         let mut manager = Self {
             prefixes: HashMap::new(),
@@ -583,14 +582,13 @@ impl NamespaceManager {
         self.default_namespace = Some(namespace.to_string());
     }
 
-    /// Resolve QName to full IRI
+    /// Resolve `QName` to full IRI
     pub fn resolve_qname(&self, prefix: &str, local: &str) -> Result<String> {
         if let Some(namespace) = self.prefixes.get(prefix) {
-            Ok(format!("{}{}", namespace, local))
+            Ok(format!("{namespace}{local}"))
         } else {
             Err(Error::reasoning(format!(
-                "Unknown namespace prefix: {}",
-                prefix
+                "Unknown namespace prefix: {prefix}"
             )))
         }
     }
@@ -600,9 +598,9 @@ impl NamespaceManager {
         if identifier.starts_with("http://") || identifier.starts_with("https://") {
             Ok(identifier.to_string())
         } else if let Some(default_ns) = &self.default_namespace {
-            Ok(format!("{}{}", default_ns, identifier))
+            Ok(format!("{default_ns}{identifier}"))
         } else {
-            Ok(format!("http://example.org/{}", identifier))
+            Ok(format!("http://example.org/{identifier}"))
         }
     }
 }
@@ -613,6 +611,7 @@ impl NamespaceManager {
 
 impl Lexer {
     /// Create new lexer
+    #[must_use]
     pub fn new(input: &str) -> Self {
         let mut lexer = Self {
             input: input.to_string(),
@@ -723,7 +722,7 @@ impl Lexer {
                 let number = self.read_number()?;
                 Ok(Some(Token::NumericLiteral(number)))
             }
-            _ => Err(Error::reasoning(format!("Unexpected character: {}", ch))),
+            _ => Err(Error::reasoning(format!("Unexpected character: {ch}"))),
         }
     }
 

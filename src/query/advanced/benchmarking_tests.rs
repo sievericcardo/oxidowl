@@ -12,6 +12,7 @@ mod tests {
     use super::super::optimizer::*;
     use crate::ontology::{Ontology, ClassExpression, IRI, concepts::Class};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::sync::Arc;
 
     /// Create a synthetic ontology for benchmarking tests
     fn create_synthetic_ontology(name: &str, concept_count: usize) -> SyntheticOntology {

@@ -103,6 +103,7 @@ struct ExpansionTask {
     /// Rule to apply
     rule: CompletionRule,
     /// Priority (higher = sooner)
+    #[allow(dead_code)]
     priority: u32,
 }
 
@@ -140,6 +141,7 @@ pub struct ExpansionStatistics {
 
 impl HypertableauExpansion {
     /// Create a new hypertableau expansion engine
+    #[must_use]
     pub fn new() -> Self {
         // Initialize standard contradictions
         let mut contradictions = HashSet::new();
@@ -214,11 +216,10 @@ impl HypertableauExpansion {
                     // No backtracking possible - unsatisfiable
                     self.state = ExpansionState::Unsatisfiable;
                     break;
-                } else {
-                    // Backtrack to last choice point
-                    self.backtrack()?;
-                    self.stats.backtracks += 1;
                 }
+                // Backtrack to last choice point
+                self.backtrack()?;
+                self.stats.backtracks += 1;
             }
 
             // Check for blocking opportunities
@@ -277,9 +278,7 @@ impl HypertableauExpansion {
             }
 
             // Queue expansions (separate loop to avoid borrow conflicts)
-            for (concept_name, concept_expr) in
-                concept_names.into_iter().zip(concept_exprs.into_iter())
-            {
+            for (concept_name, concept_expr) in concept_names.into_iter().zip(concept_exprs) {
                 self.queue_expansion(
                     task.node_id,
                     concept_name,
@@ -366,10 +365,7 @@ impl HypertableauExpansion {
 
             if let Some(&existing_id) = existing_nodes.first() {
                 // Reuse existing node - add non-generating edge
-                trace!(
-                    "Reusing existing node {} for ∃{}.{}",
-                    existing_id, role_name, target_concept
-                );
+                trace!("Reusing existing node {existing_id} for ∃{role_name}.{target_concept}");
 
                 let edge = HyperEdge::non_generating(role_name.clone(), task.node_id, existing_id);
                 let edge_idx = self.graph.add_edge(edge);
@@ -377,7 +373,7 @@ impl HypertableauExpansion {
                 self.stats.nodes_reused += 1;
             } else {
                 // Create new node - add generating edge
-                trace!("Creating new node for ∃{}.{}", role_name, target_concept);
+                trace!("Creating new node for ∃{role_name}.{target_concept}");
 
                 let new_node = HyperNode::new();
                 let new_node_id = self.graph.add_node(new_node);
@@ -507,7 +503,7 @@ impl HypertableauExpansion {
             for label in &node.labels {
                 for (c1, c2) in &self.contradictions {
                     if label == c1 && node.labels.contains(c2) {
-                        trace!("Clash detected: {} and {} in node {}", c1, c2, node_id);
+                        trace!("Clash detected: {c1} and {c2} in node {node_id}");
                         return true;
                     }
                 }
@@ -525,10 +521,10 @@ impl HypertableauExpansion {
 
         for &node_id in &active_nodes {
             // Skip if already blocked
-            if let Some(node) = self.graph.get_node(node_id) {
-                if node.is_blocked {
-                    continue;
-                }
+            if let Some(node) = self.graph.get_node(node_id)
+                && node.is_blocked
+            {
+                continue;
             }
 
             // Find potential blockers (subsumers)
@@ -538,7 +534,7 @@ impl HypertableauExpansion {
                 if blocker_id != node_id {
                     // Check if blocker is an ancestor (subset blocking)
                     if self.is_ancestor(blocker_id, node_id) {
-                        trace!("Blocking node {} by ancestor {}", node_id, blocker_id);
+                        trace!("Blocking node {node_id} by ancestor {blocker_id}");
                         if let Some(node) = self.graph.get_node_mut(node_id) {
                             node.block(blocker_id);
                             self.stats.blocks_performed += 1;
@@ -597,6 +593,7 @@ impl HypertableauExpansion {
     }
 
     /// Get the hypergraph
+    #[must_use]
     pub fn graph(&self) -> &Hypergraph {
         &self.graph
     }
@@ -607,11 +604,13 @@ impl HypertableauExpansion {
     }
 
     /// Get expansion statistics
+    #[must_use]
     pub fn statistics(&self) -> &ExpansionStatistics {
         &self.stats
     }
 
     /// Get current expansion state
+    #[must_use]
     pub fn state(&self) -> &ExpansionState {
         &self.state
     }
@@ -706,7 +705,7 @@ mod tests {
             },
         );
         let some_expr = ClassExpression::ObjectSomeValuesFrom {
-            property: property,
+            property,
             filler: Box::new(person),
         };
 
@@ -764,7 +763,7 @@ mod tests {
         let result1 = expansion
             .apply_some_rule(&task1)
             .expect("Failed to apply SOME expansion rule to task");
-        let first_node_id = result1.new_nodes[0];
+        let _first_node_id = result1.new_nodes[0];
 
         // Create second ∃hasChild.Person - should reuse
         let task2 = ExpansionTask {

@@ -6,7 +6,6 @@ use crate::{Error, Result};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::Arc,
 };
 use tokio::sync::RwLock;
 use url::Url;
@@ -15,9 +14,9 @@ use url::Url;
 #[derive(Debug)]
 pub struct ImportResolver {
     /// Mapping from IRIs to resolved locations
-    iri_mappings: Arc<RwLock<HashMap<String, String>>>,
+    iri_mappings: RwLock<HashMap<String, String>>,
     /// Cache of loaded ontologies
-    ontology_cache: Arc<RwLock<HashMap<String, CachedOntology>>>,
+    ontology_cache: RwLock<HashMap<String, CachedOntology>>,
     /// Base directories for relative imports
     base_directories: Vec<PathBuf>,
     /// Whether to allow remote imports
@@ -28,10 +27,11 @@ pub struct ImportResolver {
 
 impl ImportResolver {
     /// Create a new import resolver
+    #[must_use]
     pub fn new() -> Self {
         Self {
-            iri_mappings: Arc::new(RwLock::new(HashMap::new())),
-            ontology_cache: Arc::new(RwLock::new(HashMap::new())),
+            iri_mappings: RwLock::new(HashMap::new()),
+            ontology_cache: RwLock::new(HashMap::new()),
             base_directories: vec![std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))],
             allow_remote: true,
             max_depth: 10,
@@ -39,6 +39,7 @@ impl ImportResolver {
     }
 
     /// Configure the resolver
+    #[must_use]
     pub fn with_config(mut self, config: ImportResolverConfig) -> Self {
         self.base_directories = config.base_directories;
         self.allow_remote = config.allow_remote;
@@ -54,6 +55,7 @@ impl ImportResolver {
     }
 
     /// Resolve import IRI to actual location
+    #[must_use]
     pub fn resolve_import<'a>(
         &'a self,
         import_iri: &'a str,
@@ -77,16 +79,14 @@ impl ImportResolver {
                     "http" | "https" => {
                         if self.allow_remote {
                             return self.create_resolved_import(import_iri, import_iri).await;
-                        } else {
-                            return Err(Error::import_error(format!(
-                                "Remote imports disabled: {}",
-                                import_iri
-                            )));
                         }
+                        return Err(Error::import_error(format!(
+                            "Remote imports disabled: {import_iri}"
+                        )));
                     }
                     "file" => {
-                        let path = url.to_file_path().map_err(|_| {
-                            Error::import_error(format!("Invalid file URL: {}", import_iri))
+                        let path = url.to_file_path().map_err(|()| {
+                            Error::import_error(format!("Invalid file URL: {import_iri}"))
                         })?;
                         return self
                             .create_resolved_import(import_iri, &path.to_string_lossy())
@@ -102,12 +102,11 @@ impl ImportResolver {
             }
 
             // Try relative resolution
-            if let Some(base) = base_iri {
-                if let Ok(base_url) = Url::parse(base) {
-                    if let Ok(resolved_url) = base_url.join(import_iri) {
-                        return self.resolve_import(&resolved_url.to_string(), None).await;
-                    }
-                }
+            if let Some(base) = base_iri
+                && let Ok(base_url) = Url::parse(base)
+                && let Ok(resolved_url) = base_url.join(import_iri)
+            {
+                return self.resolve_import(resolved_url.as_ref(), None).await;
             }
 
             // Try file system resolution
@@ -131,8 +130,7 @@ impl ImportResolver {
             }
 
             Err(Error::import_error(format!(
-                "Cannot resolve import: {}",
-                import_iri
+                "Cannot resolve import: {import_iri}"
             )))
         })
     }
@@ -151,8 +149,7 @@ impl ImportResolver {
         while let Some((iri, depth)) = pending.pop() {
             if depth > max_depth {
                 return Err(Error::import_error(format!(
-                    "Import depth limit exceeded: {}",
-                    max_depth
+                    "Import depth limit exceeded: {max_depth}"
                 )));
             }
 
@@ -268,11 +265,11 @@ impl ImportResolver {
         for line in content.lines() {
             if line.contains("owl:imports") {
                 // Very basic extraction - would need proper parsing
-                if let Some(start) = line.find("\"") {
-                    if let Some(end) = line[start + 1..].find("\"") {
-                        let import_iri = &line[start + 1..start + 1 + end];
-                        imports.push(import_iri.to_string());
-                    }
+                if let Some(start) = line.find('"')
+                    && let Some(end) = line[start + 1..].find('"')
+                {
+                    let import_iri = &line[start + 1..start + 1 + end];
+                    imports.push(import_iri.to_string());
                 }
             }
         }

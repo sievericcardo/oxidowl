@@ -7,7 +7,7 @@
 pub use crate::{Error, Result};
 
 // Lock helper utilities
-pub use crate::core::{read_lock, write_lock};
+pub use crate::core::{mutex_lock, read_lock, write_lock};
 
 // Core ontology types - most commonly used
 pub use crate::ontology::{

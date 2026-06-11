@@ -2,6 +2,15 @@
 //!
 //! This module implements constructor built-ins for creating date, time, and duration values.
 
+// Datetime operations use intentional numeric casts (e.g., seconds/microseconds fields
+// are always within valid range; truncation and sign handling are deliberate).
+#![allow(
+    dead_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+
 use crate::error::{Error, Result};
 use crate::ontology::{IRI, Literal};
 use crate::swrl::{SWRLBuiltIn, SWRLValue};
@@ -15,6 +24,7 @@ pub struct DateTimeConstructorRegistry {
 
 impl DateTimeConstructorRegistry {
     /// Create a new registry with all constructor built-ins
+    #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
             builtins: HashMap::new(),
@@ -67,11 +77,13 @@ impl DateTimeConstructorRegistry {
     }
 
     /// Get a built-in predicate by IRI
+    #[must_use]
     pub fn get_builtin(&self, iri: &str) -> Option<&dyn SWRLBuiltIn> {
-        self.builtins.get(iri).map(|b| b.as_ref())
+        self.builtins.get(iri).map(std::convert::AsRef::as_ref)
     }
 
     /// Get all registered built-in IRIs
+    #[must_use]
     pub fn get_builtin_iris(&self) -> Vec<String> {
         self.builtins.keys().cloned().collect()
     }
@@ -87,7 +99,7 @@ impl Default for DateTimeConstructorRegistry {
 // HELPER FUNCTIONS
 // =============================================================================
 
-/// Extract integer from SWRLValue
+/// Extract integer from `SWRLValue`
 fn extract_integer(value: &SWRLValue) -> Result<i64> {
     match value {
         SWRLValue::Integer(i) => Ok(*i),
@@ -106,7 +118,7 @@ fn extract_integer(value: &SWRLValue) -> Result<i64> {
     }
 }
 
-/// Extract float from SWRLValue
+/// Extract float from `SWRLValue`
 fn extract_float(value: &SWRLValue) -> Result<f64> {
     match value {
         SWRLValue::Float(f) => Ok(*f),
@@ -177,7 +189,9 @@ impl SWRLBuiltIn for DateBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -193,7 +207,7 @@ impl SWRLBuiltIn for DateBuiltIn {
     }
 }
 
-/// DateTime constructor built-in: swrlb:dateTime(result, year, month, day, hour, minute, second)
+/// `DateTime` constructor built-in: swrlb:dateTime(result, year, month, day, hour, minute, second)
 pub struct DateTimeBuiltIn;
 
 impl SWRLBuiltIn for DateTimeBuiltIn {
@@ -224,7 +238,9 @@ impl SWRLBuiltIn for DateTimeBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -265,7 +281,9 @@ impl SWRLBuiltIn for TimeBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -296,7 +314,7 @@ impl SWRLBuiltIn for YearMonthDurationBuiltIn {
         let months = extract_integer(&args[2])?;
 
         // ISO 8601 duration format: P[n]Y[n]M
-        let duration_str = format!("P{}Y{}M", years, months);
+        let duration_str = format!("P{years}Y{months}M");
 
         let expected_result = create_duration_literal(
             duration_str,
@@ -308,7 +326,9 @@ impl SWRLBuiltIn for YearMonthDurationBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -344,7 +364,7 @@ impl SWRLBuiltIn for DayTimeDurationBuiltIn {
         let duration_str = if seconds.fract() == 0.0 {
             format!("P{}DT{}H{}M{}S", days, hours, minutes, seconds as i64)
         } else {
-            format!("P{}DT{}H{}M{}S", days, hours, minutes, seconds)
+            format!("P{days}DT{hours}H{minutes}M{seconds}S")
         };
 
         let expected_result = create_duration_literal(
@@ -357,7 +377,9 @@ impl SWRLBuiltIn for DayTimeDurationBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -373,7 +395,7 @@ impl SWRLBuiltIn for DayTimeDurationBuiltIn {
     }
 }
 
-/// DateTime stamp constructor: swrlb:dateTimeStamp(result, year, month, day, hour, minute, second, timezone)
+/// `DateTime` stamp constructor: swrlb:dateTimeStamp(result, year, month, day, hour, minute, second, timezone)
 pub struct DateTimeStampBuiltIn;
 
 impl SWRLBuiltIn for DateTimeStampBuiltIn {
@@ -417,7 +439,9 @@ impl SWRLBuiltIn for DateTimeStampBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -447,7 +471,7 @@ impl SWRLBuiltIn for GYearBuiltIn {
         let year = extract_integer(&args[1])?;
 
         let expected_result = SWRLValue::Literal(Literal::with_datatype(
-            format!("{:04}", year),
+            format!("{year:04}"),
             IRI::new("http://www.w3.org/2001/XMLSchema#gYear"),
         ));
 
@@ -456,7 +480,9 @@ impl SWRLBuiltIn for GYearBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),
@@ -486,12 +512,12 @@ impl SWRLBuiltIn for GYearMonthBuiltIn {
         let year = extract_integer(&args[1])?;
         let month = extract_integer(&args[2])?;
 
-        if month < 1 || month > 12 {
+        if !(1..=12).contains(&month) {
             return Err(Error::reasoning("Month must be between 1 and 12"));
         }
 
         let expected_result = SWRLValue::Literal(Literal::with_datatype(
-            format!("{:04}-{:02}", year, month),
+            format!("{year:04}-{month:02}"),
             IRI::new("http://www.w3.org/2001/XMLSchema#gYearMonth"),
         ));
 
@@ -500,7 +526,9 @@ impl SWRLBuiltIn for GYearMonthBuiltIn {
                 lit.value
                     == expected_result
                         .as_literal()
-                        .expect("Failed to convert SWRL result to literal value")
+                        .ok_or_else(|| {
+                            Error::reasoning("Expected literal result from SWRL date/time built-in")
+                        })?
                         .value,
             )),
             _ => Ok(expected_result),

@@ -1,7 +1,7 @@
 //! Result types for reasoning operations
 //!
 //! This module contains all the result structures returned by various reasoning operations,
-//! including classification results, realization results, and property classification results.
+//! including classification results, realisation results, and property classification results.
 
 use crate::{
     Result,
@@ -20,7 +20,7 @@ pub enum ReasoningResult {
     Classes(HashSet<ClassExpression>),
     Individuals(HashSet<Individual>),
     ClassificationResult(ClassificationResult),
-    RealizationResult(RealizationResult),
+    RealisationResult(RealisationResult),
 }
 
 /// Classification result containing class hierarchy
@@ -28,6 +28,10 @@ pub enum ReasoningResult {
 pub struct ClassificationResult {
     pub hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>,
     pub ontology_iri: Option<String>,
+    /// Object properties present in the ontology (local name, super-property name)
+    pub object_properties: Vec<String>,
+    /// Data properties present in the ontology (local name)
+    pub data_properties: Vec<String>,
 }
 
 impl ClassificationResult {
@@ -36,6 +40,8 @@ impl ClassificationResult {
         Self {
             hierarchy,
             ontology_iri: None,
+            object_properties: Vec::new(),
+            data_properties: Vec::new(),
         }
     }
 
@@ -47,6 +53,8 @@ impl ClassificationResult {
         Self {
             hierarchy,
             ontology_iri,
+            object_properties: Vec::new(),
+            data_properties: Vec::new(),
         }
     }
 
@@ -96,7 +104,13 @@ impl ClassificationResult {
             .ontology_iri
             .as_deref()
             .unwrap_or("http://example.org/ontology");
-        writeln!(writer, "Prefix(:=<{ontology_iri}#>)")?;
+        // Build the base IRI for the Prefix declaration (must end with # or /)
+        let prefix_base = if ontology_iri.ends_with('#') || ontology_iri.ends_with('/') {
+            ontology_iri.to_string()
+        } else {
+            format!("{ontology_iri}#")
+        };
+        writeln!(writer, "Prefix(:=<{prefix_base}>)")?;
         writeln!(writer)?;
         writeln!(writer, "Ontology(<{ontology_iri}>")?;
         writeln!(writer)?;
@@ -105,13 +119,13 @@ impl ClassificationResult {
         let class_hierarchy = self.build_class_tree()?;
 
         // Write the class hierarchy in HermiT format
-        self.write_class_hierarchy(writer, &class_hierarchy)?;
+        self.write_class_hierarchy(writer, &class_hierarchy, &prefix_base)?;
 
         // Write object properties if available
-        self.write_object_properties(writer)?;
+        self.write_object_properties(writer, &prefix_base)?;
 
         // Write data properties if available
-        self.write_data_properties(writer)?;
+        self.write_data_properties(writer, &prefix_base)?;
 
         writeln!(writer)?;
         writeln!(writer, ")")?;
@@ -127,7 +141,7 @@ impl ClassificationResult {
         let direct_hierarchy = self.compute_direct_hierarchy()?;
 
         // Create all nodes
-        for (class, _) in &direct_hierarchy {
+        for class in direct_hierarchy.keys() {
             let class_name = self.extract_class_name(class);
             let class_iri = self.extract_class_iri(class);
 
@@ -168,37 +182,36 @@ impl ClassificationResult {
         Ok(root_classes)
     }
 
-    /// Compute direct subsumption relationships (remove transitive relationships)
+    /// Compute direct subsumption relationships (remove transitive relationships).
+    ///
+    /// Given that `self.hierarchy` stores the full transitive closure, an edge A→C is
+    /// *direct* (belongs to the Hasse diagram) iff C does NOT appear in the ancestor
+    /// set of any other superclass B of A.  Collecting those indirect ancestors in one
+    /// pass makes this O(n × k) instead of the naïve O(n × k²) triple-loop.
     fn compute_direct_hierarchy(
         &self,
     ) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
         let mut direct_hierarchy = HashMap::new();
 
         for (subclass, all_superclasses) in &self.hierarchy {
-            let mut direct_superclasses = HashSet::new();
-
-            // For each superclass, check if it's a direct parent (not implied by transitivity)
-            for superclass in all_superclasses {
-                let mut is_direct = true;
-
-                // Check if there's an intermediate class that makes this relationship transitive
-                for intermediate in all_superclasses {
-                    if intermediate != superclass && intermediate != subclass {
-                        // If intermediate is a superclass of subclass AND superclass is a superclass of intermediate,
-                        // then subclass -> superclass is transitive (not direct)
-                        if let Some(intermediate_superclasses) = self.hierarchy.get(intermediate) {
-                            if intermediate_superclasses.contains(superclass) {
-                                is_direct = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if is_direct {
-                    direct_superclasses.insert(superclass.clone());
+            // Collect every ancestor reachable from `subclass` in ≥ 2 steps.
+            // If the stored hierarchy is the full transitive closure, C is non-direct
+            // for A whenever C ∈ ancestors(B) for some B ∈ superclasses(A), B ≠ A.
+            let mut indirect: HashSet<&ClassExpression> = HashSet::new();
+            for intermediate in all_superclasses {
+                if intermediate != subclass
+                    && let Some(intermediate_supers) = self.hierarchy.get(intermediate)
+                {
+                    indirect.extend(intermediate_supers.iter());
                 }
             }
+
+            // Direct superclasses = all_superclasses minus those reachable indirectly.
+            let direct_superclasses: HashSet<ClassExpression> = all_superclasses
+                .iter()
+                .filter(|sc| !indirect.contains(sc))
+                .cloned()
+                .collect();
 
             direct_hierarchy.insert(subclass.clone(), direct_superclasses);
         }
@@ -206,47 +219,99 @@ impl ClassificationResult {
         Ok(direct_hierarchy)
     }
 
-    /// Build children for a specific class IRI using direct hierarchy
+    /// Build children for a specific class IRI using direct hierarchy.
+    ///
+    /// Iterative post-order DFS replaces the former recursive implementation to
+    /// avoid stack overflows on deep class hierarchies (e.g. `ore_ont_9881.owl`).
     fn build_children_for_iri_direct(
         &self,
         parent_iri: &str,
         direct_hierarchy: &HashMap<ClassExpression, HashSet<ClassExpression>>,
     ) -> Result<Vec<ClassNode>> {
-        let mut children = Vec::new();
-
-        // Find all classes that are direct children of this parent
+        // Step 1: build a parent-IRI → [(child_iri, child_name)] index in one pass.
+        let mut children_index: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for (subclass, direct_superclasses) in direct_hierarchy {
             let subclass_iri = self.extract_class_iri(subclass);
-
-            // Check if this parent is a direct superclass
+            let child_name = self.extract_class_name(subclass);
             for superclass in direct_superclasses {
                 let super_iri = self.extract_class_iri(superclass);
-                if super_iri == parent_iri {
-                    let child_name = self.extract_class_name(subclass);
-                    let child_node = ClassNode {
-                        name: child_name,
-                        iri: subclass_iri.clone(),
-                        children: self
-                            .build_children_for_iri_direct(&subclass_iri, direct_hierarchy)?,
+                children_index
+                    .entry(super_iri)
+                    .or_default()
+                    .push((subclass_iri.clone(), child_name.clone()));
+            }
+        }
+        // Pre-sort each entry so that the output order matches the original
+        // (children sorted by name at each level).
+        for v in children_index.values_mut() {
+            v.sort_by(|a, b| a.1.cmp(&b.1));
+        }
+
+        // Step 2: iterative DFS rooted at parent_iri.
+        // Stack entry: (iri, name, next_child_index, built_children_so_far)
+        let root_children = match children_index.get(parent_iri) {
+            Some(v) if !v.is_empty() => v.clone(),
+            _ => return Ok(vec![]),
+        };
+
+        let mut output: Vec<ClassNode> = Vec::new();
+        for (start_iri, start_name) in root_children {
+            // Each iteration of this outer loop builds one complete subtree.
+            let mut stack: Vec<(String, String, usize, Vec<ClassNode>)> =
+                vec![(start_iri, start_name, 0, Vec::new())];
+
+            loop {
+                let top = stack.last_mut().unwrap();
+                let num_children = children_index.get(&top.0).map_or(0, std::vec::Vec::len);
+
+                if top.2 < num_children {
+                    // Push the next unvisited child onto the stack.
+                    let (child_iri, child_name) = children_index[&top.0][top.2].clone();
+                    top.2 += 1;
+                    stack.push((child_iri, child_name, 0, Vec::new()));
+                } else {
+                    // All children of this node have been processed: pop and assemble.
+                    let (iri, name, _, built) = stack.pop().unwrap();
+                    // Children are already in pre-sorted order from the index.
+                    let node = ClassNode {
+                        name,
+                        iri,
+                        children: built,
                     };
-                    children.push(child_node);
-                    break;
+                    if let Some(parent_frame) = stack.last_mut() {
+                        parent_frame.3.push(node);
+                    } else {
+                        output.push(node);
+                        break;
+                    }
                 }
             }
         }
 
-        children.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(children)
+        output.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(output)
     }
 
-    /// Write class hierarchy in HermiT format
+    /// Return the correct OWL functional-syntax reference for an IRI given the declared prefix base.
+    /// Uses `:localname` short form when the IRI starts with `prefix_base`, otherwise `<fullIRI>`.
+    fn iri_ref(iri: &str, prefix_base: &str) -> String {
+        if let Some(local) = iri.strip_prefix(prefix_base)
+            && !local.is_empty()
+        {
+            return format!(":{local}");
+        }
+        format!("<{iri}>")
+    }
+
+    /// Write class hierarchy in `HermiT` format
     fn write_class_hierarchy<W: Write>(
         &self,
         writer: &mut W,
         root_classes: &[ClassNode],
+        prefix_base: &str,
     ) -> Result<()> {
         for class in root_classes {
-            self.write_class_node(writer, class, "owl:Thing", 1)?;
+            self.write_class_node(writer, class, "owl:Thing", 1, prefix_base)?;
         }
         Ok(())
     }
@@ -256,64 +321,60 @@ impl ClassificationResult {
         &self,
         writer: &mut W,
         node: &ClassNode,
-        parent_name: &str,
+        parent_ref: &str,
         level: usize,
+        prefix_base: &str,
     ) -> Result<()> {
         let indent = "  ".repeat(level);
+        let class_ref = Self::iri_ref(&node.iri, prefix_base);
 
         // Write SubClassOf and Declaration for this class with correct parent
         writeln!(
             writer,
-            "{}SubClassOf( :{} {} ) Declaration( Class( :{} ) )",
-            indent, node.name, parent_name, node.name
+            "{indent}SubClassOf( {class_ref} {parent_ref} ) Declaration( Class( {class_ref} ) )"
         )?;
 
         // Write children with increased indentation, using this node as parent
         for child in &node.children {
-            self.write_class_node(writer, child, &format!(":{}", node.name), level + 1)?;
+            self.write_class_node(writer, child, &class_ref, level + 1, prefix_base)?;
         }
 
         Ok(())
     }
 
-    /// Write object properties in HermiT format
-    fn write_object_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
-        // This would be populated from actual object property classification
-        // For now, we'll write a basic structure
+    /// Write object properties in `HermiT` format
+    fn write_object_properties<W: Write>(&self, writer: &mut W, prefix_base: &str) -> Result<()> {
+        if self.object_properties.is_empty() {
+            return Ok(());
+        }
         writeln!(writer)?;
-        writeln!(
-            writer,
-            "  SubObjectPropertyOf( :containsPlant owl:topObjectProperty ) Declaration( ObjectProperty( :containsPlant ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubObjectPropertyOf( :containsPot owl:topObjectProperty ) Declaration( ObjectProperty( :containsPot ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubObjectPropertyOf( :hasLightSensor owl:topObjectProperty ) Declaration( ObjectProperty( :hasLightSensor ) )"
-        )?;
-        // Add more object properties as needed
+        let mut sorted = self.object_properties.clone();
+        sorted.sort();
+        for prop in &sorted {
+            let prop_ref = Self::iri_ref(prop, prefix_base);
+            writeln!(
+                writer,
+                "  SubObjectPropertyOf( {prop_ref} owl:topObjectProperty ) Declaration( ObjectProperty( {prop_ref} ) )"
+            )?;
+        }
         Ok(())
     }
 
-    /// Write data properties in HermiT format  
-    fn write_data_properties<W: Write>(&self, writer: &mut W) -> Result<()> {
-        // This would be populated from actual data property classification
+    /// Write data properties in `HermiT` format
+    fn write_data_properties<W: Write>(&self, writer: &mut W, prefix_base: &str) -> Result<()> {
+        if self.data_properties.is_empty() {
+            return Ok(());
+        }
         writeln!(writer)?;
-        writeln!(
-            writer,
-            "  SubDataPropertyOf( :actuatorId owl:topDataProperty ) Declaration( DataProperty( :actuatorId ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubDataPropertyOf( :plantId owl:topDataProperty ) Declaration( DataProperty( :plantId ) )"
-        )?;
-        writeln!(
-            writer,
-            "  SubDataPropertyOf( :sensorId owl:topDataProperty ) Declaration( DataProperty( :sensorId ) )"
-        )?;
-        // Add more data properties as needed
+        let mut sorted = self.data_properties.clone();
+        sorted.sort();
+        for prop in &sorted {
+            let prop_ref = Self::iri_ref(prop, prefix_base);
+            writeln!(
+                writer,
+                "  SubDataPropertyOf( {prop_ref} owl:topDataProperty ) Declaration( DataProperty( {prop_ref} ) )"
+            )?;
+        }
         Ok(())
     }
 
@@ -332,7 +393,7 @@ impl ClassificationResult {
                 let iri_str = c.iri.to_string();
                 if let Some(name) = iri_str.split('#').nth(1) {
                     name.to_string()
-                } else if let Some(name) = iri_str.split('/').last() {
+                } else if let Some(name) = iri_str.split('/').next_back() {
                     name.to_string()
                 } else {
                     iri_str
@@ -343,10 +404,12 @@ impl ClassificationResult {
     }
 }
 
-/// Helper structure for building class trees in HermiT format
+/// Helper structure for building class trees in `HermiT` format
 #[derive(Debug, Clone)]
 struct ClassNode {
     name: String,
+    #[allow(dead_code)]
+    #[allow(dead_code)]
     iri: String,
     children: Vec<ClassNode>,
 }
@@ -413,13 +476,13 @@ impl PropertyClassificationResult {
     }
 }
 
-/// Realization result containing individual types
+/// Realisation result containing individual types
 #[derive(Debug, Clone)]
-pub struct RealizationResult {
+pub struct RealisationResult {
     pub types: HashMap<Individual, HashSet<ClassExpression>>,
 }
 
-impl RealizationResult {
+impl RealisationResult {
     #[must_use]
     pub fn new(types: HashMap<Individual, HashSet<ClassExpression>>) -> Self {
         Self { types }

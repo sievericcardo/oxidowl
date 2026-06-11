@@ -138,6 +138,7 @@ impl Default for ClashDetector {
 
 impl ClashDetector {
     /// Create a new clash detector
+    #[must_use]
     pub fn new() -> Self {
         Self {
             clashes: Vec::new(),
@@ -150,11 +151,13 @@ impl ClashDetector {
     }
 
     /// Check if any clashes have been detected
+    #[must_use]
     pub fn has_clashes(&self) -> bool {
         !self.clashes.is_empty()
     }
 
     /// Get all detected clashes
+    #[must_use]
     pub fn clashes(&self) -> &[Clash] {
         &self.clashes
     }
@@ -165,11 +168,13 @@ impl ClashDetector {
     }
 
     /// Get the number of clashes
+    #[must_use]
     pub fn clash_count(&self) -> usize {
         self.clashes.len()
     }
 
     /// Find clashes involving a specific node
+    #[must_use]
     pub fn clashes_for_node(&self, node_id: NodeId) -> Vec<&Clash> {
         self.clashes
             .iter()
@@ -180,6 +185,7 @@ impl ClashDetector {
 
 impl TableauStatistics {
     /// Create new statistics with start time
+    #[must_use]
     pub fn new() -> Self {
         Self {
             start_time: Some(Instant::now()),
@@ -220,11 +226,13 @@ impl TableauStatistics {
     }
 
     /// Get construction time as milliseconds
+    #[must_use]
     pub fn construction_time_ms(&self) -> u128 {
         self.construction_time.as_millis()
     }
 
     /// Calculate nodes per second
+    #[must_use]
     pub fn nodes_per_second(&self) -> f64 {
         if self.construction_time.as_secs_f64() > 0.0 {
             self.total_nodes as f64 / self.construction_time.as_secs_f64()

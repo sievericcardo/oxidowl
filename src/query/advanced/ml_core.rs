@@ -8,6 +8,8 @@
 //! - Model persistence and loading
 //! - Online learning capabilities
 
+#![allow(dead_code)]
+
 use crate::error::Error;
 use crate::ontology::Ontology;
 use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
@@ -56,10 +58,10 @@ impl Default for MLHeuristicsConfig {
     fn default() -> Self {
         Self {
             enable_online_learning: true,
-            model_update_interval: Duration::from_secs(3600), // 1 hour
+            model_update_interval: Duration::from_secs(1 * 3600), // 1 hour
             training_batch_size: 32,
             learning_rate: 0.001,
-            checkpoint_interval: Duration::from_secs(7200), // 2 hours
+            checkpoint_interval: Duration::from_secs(2 * 3600), // 2 hours
             enable_ensembling: false,
             model_storage_dir: PathBuf::from("./ml_models"),
             min_training_samples: 100,
@@ -163,7 +165,7 @@ impl MLHeuristicsEngine {
         features: &QueryFeatures,
     ) -> Result<StrategyRecommendation, Error> {
         let selector = self.strategy_selector.read().map_err(|e| Error::Internal {
-            message: format!("Failed to acquire selector lock: {}", e),
+            message: format!("Failed to acquire selector lock: {e}"),
         })?;
         if let Some(model) = selector.as_ref() {
             model.select(features)
@@ -186,7 +188,7 @@ impl MLHeuristicsEngine {
     /// Add training data from query execution
     pub fn add_training_data(&self, execution: QueryExecution) -> Result<(), Error> {
         let mut data = self.training_data.write().map_err(|e| Error::Internal {
-            message: format!("Failed to acquire training data lock: {}", e),
+            message: format!("Failed to acquire training data lock: {e}"),
         })?;
 
         data.add(execution);
@@ -265,7 +267,7 @@ impl MLHeuristicsEngine {
                 .strategy_selector
                 .write()
                 .map_err(|e| Error::Internal {
-                    message: format!("Failed to acquire selector lock: {}", e),
+                    message: format!("Failed to acquire selector lock: {e}"),
                 })?;
             *selector = Some(model);
         }
@@ -287,7 +289,7 @@ impl MLHeuristicsEngine {
         }
 
         let selector = self.strategy_selector.read().map_err(|e| Error::Internal {
-            message: format!("Failed to acquire selector lock: {}", e),
+            message: format!("Failed to acquire selector lock: {e}"),
         })?;
 
         if let Some(model) = selector.as_ref() {
@@ -335,6 +337,7 @@ pub struct QueryFeatures {
 
 impl QueryFeatures {
     /// Convert to feature vector (21 dimensions)
+    #[must_use]
     pub fn to_vector(&self) -> Vec<f32> {
         vec![
             self.atom_count,
@@ -359,6 +362,7 @@ impl QueryFeatures {
     }
 
     /// Get feature dimensionality
+    #[must_use]
     pub const fn dimension() -> usize {
         18 // 21 logical dimensions, but 3 are derived/metadata
     }
@@ -370,7 +374,14 @@ pub struct QueryFeatureExtractor {
     query_history: RwLock<Vec<(u64, f32)>>, // (query_hash, execution_time)
 }
 
+impl Default for QueryFeatureExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryFeatureExtractor {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             query_history: RwLock::new(Vec::new()),
@@ -509,13 +520,12 @@ impl QueryFeatureExtractor {
             for j in (i + 1)..n {
                 if let Some(shared_vars) =
                     self.get_shared_variables(&query.body_atoms[i], &query.body_atoms[j])
+                    && !shared_vars.is_empty()
                 {
-                    if !shared_vars.is_empty() {
-                        join_graph[i].push(j);
-                        join_graph[j].push(i);
-                        join_variables[i].extend(shared_vars.clone());
-                        join_variables[j].extend(shared_vars);
-                    }
+                    join_graph[i].push(j);
+                    join_graph[j].push(i);
+                    join_variables[i].extend(shared_vars.clone());
+                    join_variables[j].extend(shared_vars);
                 }
             }
         }
@@ -541,7 +551,7 @@ impl QueryFeatureExtractor {
         start: usize,
     ) -> usize {
         let mut stack = vec![start];
-        let mut component_size = 0;
+        let mut _component_size = 0;
         let mut join_count = 0;
 
         while let Some(node) = stack.pop() {
@@ -550,7 +560,7 @@ impl QueryFeatureExtractor {
             }
 
             visited[node] = true;
-            component_size += 1;
+            _component_size += 1;
             join_count += graph[node].len();
 
             for &neighbor in &graph[node] {
@@ -627,7 +637,7 @@ impl QueryFeatureExtractor {
             match atom {
                 QueryAtom::ClassAtom { .. } => class_atoms += 1,
                 QueryAtom::ObjectPropertyAtom { .. } | QueryAtom::DataPropertyAtom { .. } => {
-                    property_atoms += 1
+                    property_atoms += 1;
                 }
                 _ => {}
             }
@@ -674,20 +684,17 @@ impl QueryFeatureExtractor {
 
             // Find SubClassOf axioms where current_iri is the subclass
             for axiom in ontology.axioms() {
-                if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom {
-                    if let crate::ontology::ClassExpression::Class(sub_class) =
+                if let crate::ontology::Axiom::SubClassOf(sub_class_axiom) = axiom
+                    && let crate::ontology::ClassExpression::Class(sub_class) =
                         &sub_class_axiom.subclass
+                    && sub_class.iri == current_iri
+                {
+                    // Found a superclass
+                    if let crate::ontology::ClassExpression::Class(sup_class) =
+                        &sub_class_axiom.superclass
+                        && visited.insert(sup_class.iri.clone())
                     {
-                        if sub_class.iri == current_iri {
-                            // Found a superclass
-                            if let crate::ontology::ClassExpression::Class(sup_class) =
-                                &sub_class_axiom.superclass
-                            {
-                                if visited.insert(sup_class.iri.clone()) {
-                                    queue.push_back((sup_class.iri.clone(), depth + 1));
-                                }
-                            }
-                        }
+                        queue.push_back((sup_class.iri.clone(), depth + 1));
                     }
                 }
             }
@@ -698,7 +705,7 @@ impl QueryFeatureExtractor {
 
     fn get_similar_query_time(&self, query_hash: u64) -> Result<f32, Error> {
         let history = self.query_history.read().map_err(|e| Error::Internal {
-            message: format!("Failed to read query history: {}", e),
+            message: format!("Failed to read query history: {e}"),
         })?;
 
         // Find structurally similar queries using fingerprinting
@@ -737,9 +744,8 @@ impl QueryFeatureExtractor {
 
         // Similarity decreases with number of different bits
         let max_bits = 64.0;
-        let similarity = 1.0 - (different_bits as f32 / max_bits);
 
-        similarity
+        1.0 - (different_bits as f32 / max_bits)
     }
 
     /// Calculate query fingerprint based on structure
@@ -780,7 +786,7 @@ impl QueryFeatureExtractor {
             {
                 graph
                     .entry(subject.name.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(object.name.clone());
             }
         }
@@ -853,9 +859,8 @@ impl QueryFeatureExtractor {
         // Estimate based on query hash and history
         let query_hash = self.calculate_query_hash(query);
 
-        let history = match self.query_history.read() {
-            Ok(h) => h,
-            Err(_) => return 0.5, // Default if lock fails
+        let Ok(history) = self.query_history.read() else {
+            return 0.5; // Default if lock fails
         };
 
         // Count how many times similar queries appeared
@@ -894,13 +899,12 @@ impl QueryFeatureExtractor {
         #[cfg(target_os = "macos")]
         {
             use std::process::Command;
-            if let Ok(output) = Command::new("sysctl").arg("-n").arg("hw.memsize").output() {
-                if let Ok(size_str) = String::from_utf8(output.stdout) {
-                    if let Ok(bytes) = size_str.trim().parse::<f64>() {
-                        // Get free memory percentage (rough estimate)
-                        return (bytes / 1024.0 / 1024.0 * 0.5) as f32; // Assume 50% available
-                    }
-                }
+            if let Ok(output) = Command::new("sysctl").arg("-n").arg("hw.memsize").output()
+                && let Ok(size_str) = String::from_utf8(output.stdout)
+                && let Ok(bytes) = size_str.trim().parse::<f64>()
+            {
+                // Get free memory percentage (rough estimate)
+                return (bytes / 1024.0 / 1024.0 * 0.5) as f32; // Assume 50% available
             }
         }
 
@@ -941,28 +945,25 @@ impl QueryFeatureExtractor {
         {
             use std::process::Command;
             // Get load average on macOS
-            if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output() {
-                if let Ok(load_str) = String::from_utf8(output.stdout) {
-                    // Parse "{  1.5 2.0 2.5 }" format
-                    let parts: Vec<&str> = load_str
-                        .trim_matches(|c| c == '{' || c == '}')
-                        .split_whitespace()
-                        .collect();
-                    if !parts.is_empty() {
-                        if let Ok(load) = parts[0].parse::<f32>() {
-                            // Normalize by CPU count
-                            if let Ok(cpu_output) =
-                                Command::new("sysctl").arg("-n").arg("hw.ncpu").output()
-                            {
-                                if let Ok(cpu_str) = String::from_utf8(cpu_output.stdout) {
-                                    if let Ok(cpu_count) = cpu_str.trim().parse::<f32>() {
-                                        return (load / cpu_count).min(1.0);
-                                    }
-                                }
-                            }
-                            return load.min(1.0);
-                        }
+            if let Ok(output) = Command::new("sysctl").arg("-n").arg("vm.loadavg").output()
+                && let Ok(load_str) = String::from_utf8(output.stdout)
+            {
+                // Parse "{  1.5 2.0 2.5 }" format
+                let parts: Vec<&str> = load_str
+                    .trim_matches(|c| c == '{' || c == '}')
+                    .split_whitespace()
+                    .collect();
+                if !parts.is_empty()
+                    && let Ok(load) = parts[0].parse::<f32>()
+                {
+                    // Normalize by CPU count
+                    if let Ok(cpu_output) = Command::new("sysctl").arg("-n").arg("hw.ncpu").output()
+                        && let Ok(cpu_str) = String::from_utf8(cpu_output.stdout)
+                        && let Ok(cpu_count) = cpu_str.trim().parse::<f32>()
+                    {
+                        return (load / cpu_count).min(1.0);
                     }
+                    return load.min(1.0);
                 }
             }
         }
@@ -1095,7 +1096,7 @@ impl QueryFeatureExtractor {
 
     pub fn record_execution(&self, query_hash: u64, execution_time: f32) -> Result<(), Error> {
         let mut history = self.query_history.write().map_err(|e| Error::Internal {
-            message: format!("Failed to write query history: {}", e),
+            message: format!("Failed to write query history: {e}"),
         })?;
 
         history.push((query_hash, execution_time));
@@ -1119,16 +1120,17 @@ pub struct CostPrediction {
 
 impl CostPrediction {
     /// Baseline prediction without ML model
+    #[must_use]
     pub fn baseline(features: &QueryFeatures) -> Self {
         // Simple heuristic-based prediction
-        let execution_time = (features.atom_count as f64 * features.ontology_size as f64)
+        let execution_time = (f64::from(features.atom_count) * f64::from(features.ontology_size))
             .ln()
             .max(0.1);
 
         Self {
             execution_time,
-            memory_usage: features.ontology_size as f64 * 0.001, // 1KB per axiom estimate
-            confidence: 0.5,                                     // Low confidence for baseline
+            memory_usage: f64::from(features.ontology_size) * 0.001, // 1KB per axiom estimate
+            confidence: 0.5,                                         // Low confidence for baseline
         }
     }
 }
@@ -1417,9 +1419,7 @@ impl CostPredictionModel {
 }
 
 /// Execution strategy types for query processing
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ExecutionStrategy {
     /// Use indexes for efficient lookups
     IndexedLookup,
@@ -1451,6 +1451,7 @@ pub enum ExecutionStrategy {
 
 impl ExecutionStrategy {
     /// Convert to string representation
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             ExecutionStrategy::IndexedLookup => "indexed_lookup",
@@ -1486,9 +1487,7 @@ pub enum QueryPattern {
 }
 
 /// Scalability characteristics
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScalabilityClass {
     Constant,     // O(1)
     Logarithmic,  // O(log n)
@@ -1585,8 +1584,15 @@ pub struct StrategySelectionModel {
     default_strategy: ExecutionStrategy,
 }
 
+impl Default for StrategySelectionModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StrategySelectionModel {
     /// Create a new strategy selection model
+    #[must_use]
     pub fn new() -> Self {
         let mut model = Self {
             strategy_registry: std::collections::HashMap::new(),
@@ -1688,7 +1694,7 @@ impl StrategySelectionModel {
                 },
                 conditions: ApplicabilityConditions {
                     min_selectivity: 0.0,
-                    max_result_size: 100000.0,
+                    max_result_size: 100_000.0,
                     max_join_count: None,
                 },
                 success_rate: 0.90,
@@ -1836,15 +1842,16 @@ impl StrategySelectionModel {
         }
 
         // Chain pattern: moderate join count, linear structure
+        #[allow(clippy::float_cmp)]
         if features.join_count >= 2.0
             && features.join_count <= 5.0
-            && features.variable_count as f32 == features.join_count + 1.0
+            && features.variable_count == features.join_count + 1.0
         {
             return QueryPattern::Chain;
         }
 
         // Cyclic pattern: join count >= variable count (indicates cycles)
-        if features.join_count >= features.variable_count as f32 {
+        if features.join_count >= features.variable_count {
             return QueryPattern::Cyclic;
         }
 
@@ -1859,8 +1866,8 @@ impl StrategySelectionModel {
 
     /// Estimate result size
     fn estimate_result_size(&self, features: &QueryFeatures) -> f64 {
-        let base_size = features.ontology_size as f64;
-        let selectivity = features.selectivity_estimate as f64;
+        let base_size = f64::from(features.ontology_size);
+        let selectivity = f64::from(features.selectivity_estimate);
         let join_factor = 0.1_f64.powi(features.join_count as i32);
 
         base_size * selectivity * join_factor
@@ -1870,7 +1877,7 @@ impl StrategySelectionModel {
     fn get_alternative_strategies(
         &self,
         primary: &ExecutionStrategy,
-        features: &QueryFeatures,
+        _features: &QueryFeatures,
     ) -> Vec<(ExecutionStrategy, f64)> {
         let mut alternatives = Vec::new();
 
@@ -1909,6 +1916,7 @@ pub struct TrainingDataCollector {
 }
 
 impl TrainingDataCollector {
+    #[must_use]
     pub fn new(max_size: usize) -> Self {
         Self {
             samples: Vec::new(),
@@ -1932,10 +1940,12 @@ impl TrainingDataCollector {
         }
     }
 
+    #[must_use]
     pub fn size(&self) -> usize {
         self.samples.len()
     }
 
+    #[must_use]
     pub fn get_samples(&self, count: usize) -> Vec<TrainingSample> {
         let start = self.samples.len().saturating_sub(count);
         self.samples[start..].to_vec()
@@ -1978,7 +1988,7 @@ pub struct ModelStorage {
 impl ModelStorage {
     pub fn new(storage_dir: PathBuf) -> Result<Self, Error> {
         std::fs::create_dir_all(&storage_dir).map_err(|e| Error::Internal {
-            message: format!("Failed to create storage directory: {}", e),
+            message: format!("Failed to create storage directory: {e}"),
         })?;
 
         Ok(Self { storage_dir })
@@ -2048,14 +2058,12 @@ impl ModelStorage {
 
     pub fn save_strategy_selector(&self, model: &StrategySelectionModel) -> Result<(), Error> {
         let path = self.storage_dir.join("strategy_selector.json");
-        let data = serde_json::to_vec_pretty(model).map_err(|e| {
-            Error::Internal {
-                message: format!("Failed to serialize model: {}", e),
-            }
+        let data = serde_json::to_vec_pretty(model).map_err(|e| Error::Internal {
+            message: format!("Failed to serialize model: {e}"),
         })?;
 
         std::fs::write(path, data).map_err(|e| Error::Internal {
-            message: format!("Failed to write model: {}", e),
+            message: format!("Failed to write model: {e}"),
         })?;
 
         Ok(())
@@ -2064,13 +2072,11 @@ impl ModelStorage {
     pub fn load_strategy_selector(&self) -> Result<StrategySelectionModel, Error> {
         let path = self.storage_dir.join("strategy_selector.json");
         let data = std::fs::read(path).map_err(|e| Error::Internal {
-            message: format!("Failed to read model: {}", e),
+            message: format!("Failed to read model: {e}"),
         })?;
 
-        let model = serde_json::from_slice(&data).map_err(|e| {
-            Error::Internal {
-                message: format!("Failed to deserialize model: {}", e),
-            }
+        let model = serde_json::from_slice(&data).map_err(|e| Error::Internal {
+            message: format!("Failed to deserialize model: {e}"),
         })?;
         Ok(model)
     }

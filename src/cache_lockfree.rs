@@ -1,19 +1,16 @@
-//! Lock-Free Cache System using DashMap
+//! Lock-Free Cache System using `DashMap`
 //!
 //! This module provides high-performance concurrent caching without traditional locks,
-//! using DashMap for lock-free concurrent access patterns inspired by Konclude's approach.
+//! using `DashMap` for lock-free concurrent access patterns inspired by Konclude's approach.
 
-use crate::{
-    ontology::{ClassExpression, Individual, OntologyRef},
-    performance::MemoryTracker,
-    reasoning::{ClassificationResult, RealizationResult},
-};
+use crate::{cache::CacheFeature, ontology::ClassExpression, reasoning::ClassificationResult};
 
 use dashmap::DashMap;
+use enumset::EnumSet;
 use std::{
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -37,6 +34,7 @@ impl<T: Clone> Clone for LockFreeCacheEntry<T> {
 }
 
 impl<T: Clone> LockFreeCacheEntry<T> {
+    #[must_use]
     pub fn new(value: T) -> Self {
         Self {
             value,
@@ -45,6 +43,7 @@ impl<T: Clone> LockFreeCacheEntry<T> {
         }
     }
 
+    #[must_use]
     pub fn is_expired(&self, ttl: Duration) -> bool {
         self.timestamp.elapsed() > ttl
     }
@@ -83,11 +82,15 @@ impl LockFreeCacheMetrics {
         let hits = self.hits.load(Ordering::Relaxed);
         let misses = self.misses.load(Ordering::Relaxed);
         let total = hits + misses;
-        
+
         if total == 0 {
             0.0
         } else {
-            hits as f64 / total as f64
+            // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+            // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+            #[allow(clippy::cast_precision_loss)]
+            let rate = hits as f64 / total as f64;
+            rate
         }
     }
 }
@@ -97,28 +100,42 @@ impl LockFreeCacheMetrics {
 pub struct LockFreeCacheConfig {
     pub max_size: usize,
     pub ttl: Duration,
-    pub enable_concept_cache: bool,
-    pub enable_subsumption_cache: bool,
-    pub enable_satisfiability_cache: bool,
-    pub enable_classification_cache: bool,
-    pub enable_realization_cache: bool,
+    pub features: EnumSet<CacheFeature>,
+}
+
+impl LockFreeCacheConfig {
+    /// Check if a specific cache feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: CacheFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a cache feature
+    pub fn enable(&mut self, feature: CacheFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a cache feature
+    pub fn disable(&mut self, feature: CacheFeature) {
+        self.features.remove(feature);
+    }
 }
 
 impl Default for LockFreeCacheConfig {
     fn default() -> Self {
         Self {
             max_size: 10000,
-            ttl: Duration::from_secs(3600),
-            enable_concept_cache: true,
-            enable_subsumption_cache: true,
-            enable_satisfiability_cache: true,
-            enable_classification_cache: true,
-            enable_realization_cache: true,
+            ttl: Duration::from_secs(1 * 3600),
+            features: CacheFeature::Concept
+                | CacheFeature::Subsumption
+                | CacheFeature::Satisfiability
+                | CacheFeature::Classification
+                | CacheFeature::Realisation,
         }
     }
 }
 
-/// Lock-free concept satisfiability cache using DashMap
+/// Lock-free concept satisfiability cache using `DashMap`
 #[derive(Debug)]
 pub struct LockFreeConceptCache {
     cache: DashMap<ClassExpression, LockFreeCacheEntry<bool>>,
@@ -128,6 +145,7 @@ pub struct LockFreeConceptCache {
 }
 
 impl LockFreeConceptCache {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             cache: DashMap::with_capacity(config.max_size),
@@ -137,8 +155,9 @@ impl LockFreeConceptCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
-        if !self.config.enable_satisfiability_cache {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
             return None;
         }
 
@@ -162,16 +181,23 @@ impl LockFreeConceptCache {
     }
 
     pub fn put(&self, expression: ClassExpression, result: bool) {
-        if !self.config.enable_satisfiability_cache {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
             return;
         }
 
-        // Check size and evict if necessary
-        while self.size.load(Ordering::Relaxed) >= self.config.max_size {
+        // If the cache is at or over capacity, evict one entry then insert.
+        // Use a single conditional eviction instead of a spin-loop so we never
+        // busy-loop when multiple threads race to insert simultaneously.
+        let current_size = self.size.load(Ordering::Relaxed);
+        if current_size >= self.config.max_size {
             self.evict_one();
         }
 
-        if self.cache.insert(expression, LockFreeCacheEntry::new(result)).is_none() {
+        if self
+            .cache
+            .insert(expression, LockFreeCacheEntry::new(result))
+            .is_none()
+        {
             self.size.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -192,14 +218,17 @@ impl LockFreeConceptCache {
         self.size.store(0, Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use]
     pub fn hit_rate(&self) -> f64 {
         self.metrics.get_hit_rate()
     }
@@ -215,6 +244,7 @@ pub struct LockFreeSubsumptionCache {
 }
 
 impl LockFreeSubsumptionCache {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             cache: DashMap::with_capacity(config.max_size),
@@ -224,8 +254,9 @@ impl LockFreeSubsumptionCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> Option<bool> {
-        if !self.config.enable_subsumption_cache {
+        if !self.config.is_enabled(CacheFeature::Subsumption) {
             return None;
         }
 
@@ -249,7 +280,7 @@ impl LockFreeSubsumptionCache {
     }
 
     pub fn put(&self, subclass: ClassExpression, superclass: ClassExpression, result: bool) {
-        if !self.config.enable_subsumption_cache {
+        if !self.config.is_enabled(CacheFeature::Subsumption) {
             return;
         }
 
@@ -258,7 +289,11 @@ impl LockFreeSubsumptionCache {
         }
 
         let key = (subclass, superclass);
-        if self.cache.insert(key, LockFreeCacheEntry::new(result)).is_none() {
+        if self
+            .cache
+            .insert(key, LockFreeCacheEntry::new(result))
+            .is_none()
+        {
             self.size.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -278,14 +313,17 @@ impl LockFreeSubsumptionCache {
         self.size.store(0, Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use]
     pub fn hit_rate(&self) -> f64 {
         self.metrics.get_hit_rate()
     }
@@ -301,6 +339,7 @@ pub struct LockFreeClassificationCache {
 }
 
 impl LockFreeClassificationCache {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             cache: DashMap::with_capacity(16), // Typically small number of ontologies
@@ -310,8 +349,9 @@ impl LockFreeClassificationCache {
         }
     }
 
+    #[must_use]
     pub fn get(&self, ontology_iri: &str) -> Option<ClassificationResult> {
-        if !self.config.enable_classification_cache {
+        if !self.config.is_enabled(CacheFeature::Classification) {
             return None;
         }
 
@@ -334,11 +374,15 @@ impl LockFreeClassificationCache {
     }
 
     pub fn put(&self, ontology_iri: String, result: ClassificationResult) {
-        if !self.config.enable_classification_cache {
+        if !self.config.is_enabled(CacheFeature::Classification) {
             return;
         }
 
-        if self.cache.insert(ontology_iri, LockFreeCacheEntry::new(result)).is_none() {
+        if self
+            .cache
+            .insert(ontology_iri, LockFreeCacheEntry::new(result))
+            .is_none()
+        {
             self.size.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -348,14 +392,17 @@ impl LockFreeClassificationCache {
         self.size.store(0, Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use]
     pub fn hit_rate(&self) -> f64 {
         self.metrics.get_hit_rate()
     }
@@ -370,6 +417,7 @@ pub struct LockFreeCacheManager {
 }
 
 impl LockFreeCacheManager {
+    #[must_use]
     pub fn new(config: LockFreeCacheConfig) -> Self {
         Self {
             concept_cache: LockFreeConceptCache::new(config.clone()),
@@ -384,18 +432,28 @@ impl LockFreeCacheManager {
         self.classification_cache.clear();
     }
 
+    #[must_use]
     pub fn total_size(&self) -> usize {
         self.concept_cache.len() + self.subsumption_cache.len() + self.classification_cache.len()
     }
 
     pub fn print_stats(&self) {
         println!("=== Lock-Free Cache Statistics ===");
-        println!("Concept Cache: {} entries, {:.1}% hit rate", 
-                 self.concept_cache.len(), self.concept_cache.hit_rate() * 100.0);
-        println!("Subsumption Cache: {} entries, {:.1}% hit rate", 
-                 self.subsumption_cache.len(), self.subsumption_cache.hit_rate() * 100.0);
-        println!("Classification Cache: {} entries, {:.1}% hit rate", 
-                 self.classification_cache.len(), self.classification_cache.hit_rate() * 100.0);
+        println!(
+            "Concept Cache: {} entries, {:.1}% hit rate",
+            self.concept_cache.len(),
+            self.concept_cache.hit_rate() * 100.0
+        );
+        println!(
+            "Subsumption Cache: {} entries, {:.1}% hit rate",
+            self.subsumption_cache.len(),
+            self.subsumption_cache.hit_rate() * 100.0
+        );
+        println!(
+            "Classification Cache: {} entries, {:.1}% hit rate",
+            self.classification_cache.len(),
+            self.classification_cache.hit_rate() * 100.0
+        );
         println!("Total Entries: {}", self.total_size());
     }
 }
@@ -410,7 +468,9 @@ mod tests {
         let config = LockFreeCacheConfig::default();
         let cache = LockFreeConceptCache::new(config);
 
-        let concept = ClassExpression::Class(Class { iri: IRI::new("test") });
+        let concept = ClassExpression::Class(Class {
+            iri: IRI::new("test"),
+        });
 
         assert_eq!(cache.get(&concept), None);
 
@@ -448,8 +508,8 @@ mod tests {
             .map(|i| {
                 let cache = cache.clone();
                 thread::spawn(move || {
-                    let concept = ClassExpression::Class(Class { 
-                        iri: format!("test{}", i).into() 
+                    let concept = ClassExpression::Class(Class {
+                        iri: format!("test{}", i).into(),
                     });
                     cache.put(concept.clone(), true);
                     cache.get(&concept)

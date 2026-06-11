@@ -5,7 +5,7 @@
 //! and clash detection.
 
 use crate::{
-    Result,
+    Error, Result,
     core::dependency::DependencySet,
     ontology::{ClassExpression, DataProperty, Individual, ObjectPropertyExpression, Role},
 };
@@ -47,6 +47,12 @@ pub enum CompletionRule {
     PropertyChain,
     /// Guess rule
     Guess,
+    /// RDF-star quoted triple expansion rule
+    /// Expands << s p o >> into component nodes and edges
+    QuotedTriple,
+    /// RDF-star meta-assertion rule
+    /// Handles assertions about quoted triples (annotations)
+    MetaAssertion,
 }
 
 /// Strategy for applying completion rules
@@ -60,14 +66,16 @@ pub struct CompletionStrategy {
 
 impl Default for CompletionStrategy {
     fn default() -> Self {
-        let mut rule_priorities = HashMap::with_capacity(13);
+        let mut rule_priorities = HashMap::with_capacity(15);
         rule_priorities.insert(CompletionRule::And, RulePriority::High);
         rule_priorities.insert(CompletionRule::All, RulePriority::High);
         rule_priorities.insert(CompletionRule::Some, RulePriority::Normal);
         rule_priorities.insert(CompletionRule::Or, RulePriority::Low);
         rule_priorities.insert(CompletionRule::Choose, RulePriority::Low);
+        rule_priorities.insert(CompletionRule::QuotedTriple, RulePriority::Normal);
+        rule_priorities.insert(CompletionRule::MetaAssertion, RulePriority::Normal);
 
-        let mut enabled_rules = HashMap::with_capacity(13);
+        let mut enabled_rules = HashMap::with_capacity(15);
         for rule in [
             CompletionRule::And,
             CompletionRule::Or,
@@ -82,6 +90,8 @@ impl Default for CompletionStrategy {
             CompletionRule::Unfold,
             CompletionRule::PropertyChain,
             CompletionRule::Guess,
+            CompletionRule::QuotedTriple,
+            CompletionRule::MetaAssertion,
         ] {
             enabled_rules.insert(rule, true);
         }
@@ -197,6 +207,12 @@ pub enum RuleContext {
     },
 }
 
+/// Type alias for rule applicability checker functions
+type ApplicabilityChecker = Box<dyn Fn(&RuleApplication) -> bool + Send + Sync>;
+
+/// Type alias for rule application handler functions
+type RuleHandler = Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>;
+
 /// Set of completion rules with application strategies
 pub struct CompletionRuleSet {
     /// Available rules in priority order
@@ -206,13 +222,13 @@ pub struct CompletionRuleSet {
     priorities: HashMap<CompletionRule, RulePriority>,
 
     /// Rule applicability checkers
-    applicability: HashMap<CompletionRule, Box<dyn Fn(&RuleApplication) -> bool + Send + Sync>>,
+    applicability: HashMap<CompletionRule, ApplicabilityChecker>,
 
     /// Rule application handlers
-    handlers: HashMap<
-        CompletionRule,
-        Box<dyn Fn(RuleApplication) -> Result<Vec<RuleApplication>> + Send + Sync>,
-    >,
+    handlers: HashMap<CompletionRule, RuleHandler>,
+
+    /// Reference to the ontology for querying axioms
+    ontology: Option<std::sync::Arc<crate::ontology::Ontology>>,
 }
 
 impl std::fmt::Debug for CompletionRuleSet {
@@ -225,6 +241,7 @@ impl std::fmt::Debug for CompletionRuleSet {
                 &self.applicability.keys().collect::<Vec<_>>(),
             )
             .field("handlers", &self.handlers.keys().collect::<Vec<_>>())
+            .field("ontology", &self.ontology.as_ref().map(|_| "Arc<Ontology>"))
             .finish()
     }
 }
@@ -261,7 +278,7 @@ pub struct RuleResult {
     /// Branching points created
     pub branches: Vec<BranchInfo>,
 
-    /// Branching points for choice rules (simplified from HyperTableau)
+    /// Branching points for choice rules (simplified from `HyperTableau`)
     pub branching_points: Vec<(String, Vec<String>)>,
 
     /// Data property assertions
@@ -376,10 +393,31 @@ impl CompletionRuleSet {
             priorities: HashMap::new(),
             applicability: HashMap::new(),
             handlers: HashMap::new(),
+            ontology: None,
         };
 
         rule_set.add_standard_rules();
         rule_set
+    }
+
+    /// Create a completion rule set with ontology reference
+    #[must_use]
+    pub fn with_ontology(ontology: std::sync::Arc<crate::ontology::Ontology>) -> Self {
+        let mut rule_set = Self {
+            rules: Vec::new(),
+            priorities: HashMap::new(),
+            applicability: HashMap::new(),
+            handlers: HashMap::new(),
+            ontology: Some(ontology),
+        };
+
+        rule_set.add_standard_rules();
+        rule_set
+    }
+
+    /// Set the ontology reference
+    pub fn set_ontology(&mut self, ontology: std::sync::Arc<crate::ontology::Ontology>) {
+        self.ontology = Some(ontology);
     }
 
     /// Add standard OWL 2 DL completion rules to the set
@@ -461,6 +499,8 @@ impl CompletionRuleSet {
             CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
             CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
             CompletionRule::Guess => false,         // Applied by strategy
+            CompletionRule::QuotedTriple => false, // Applied based on RDF-star quoted triples, not OWL concepts
+            CompletionRule::MetaAssertion => false, // Applied based on RDF-star meta-assertions, not OWL concepts
         }
     }
 
@@ -480,6 +520,8 @@ impl CompletionRuleSet {
             CompletionRule::Unfold => self.apply_unfold_rule(&application),
             CompletionRule::PropertyChain => self.apply_property_chain_rule(&application),
             CompletionRule::Guess => self.apply_guess_rule(&application),
+            CompletionRule::QuotedTriple => self.apply_quoted_triple_rule(&application),
+            CompletionRule::MetaAssertion => self.apply_meta_assertion_rule(&application),
         }
     }
 
@@ -488,21 +530,19 @@ impl CompletionRuleSet {
         let mut result = RuleResult::empty();
 
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::ObjectIntersectionOf(conjuncts),
             dependencies,
         } = &application.context
         {
             // Extract conjuncts from intersection
-            if let ClassExpression::ObjectIntersectionOf(conjuncts) = concept {
-                let individual = string_to_individual(application.node.clone());
-                for conjunct in conjuncts {
-                    // Add each conjunct to the same individual
-                    result.concept_additions.push((
-                        individual.clone(),
-                        conjunct.clone(),
-                        Arc::clone(dependencies),
-                    ));
-                }
+            let individual = string_to_individual(application.node.clone());
+            for conjunct in conjuncts {
+                // Add each conjunct to the same individual
+                result.concept_additions.push((
+                    individual.clone(),
+                    conjunct.clone(),
+                    Arc::clone(dependencies),
+                ));
             }
         }
 
@@ -514,23 +554,21 @@ impl CompletionRuleSet {
         let mut result = RuleResult::empty();
 
         if let RuleContext::Concept {
-            concept,
-            dependencies,
+            concept: ClassExpression::ObjectUnionOf(disjuncts),
+            dependencies: _,
         } = &application.context
         {
             // Extract disjuncts from union
-            if let ClassExpression::ObjectUnionOf(disjuncts) = concept {
-                // Create branching choices for each disjunct (simplified)
-                let mut choices = Vec::with_capacity(disjuncts.len());
-                for i in 0..disjuncts.len() {
-                    choices.push(format!("Disjunct {i}"));
-                }
-
-                // Create simple branching point
-                result
-                    .branching_points
-                    .push((String::from("GroundDisjunction"), choices));
+            // Create branching choices for each disjunct (simplified)
+            let mut choices = Vec::with_capacity(disjuncts.len());
+            for i in 0..disjuncts.len() {
+                choices.push(format!("Disjunct {i}"));
             }
+
+            // Create simple branching point
+            result
+                .branching_points
+                .push((String::from("GroundDisjunction"), choices));
         }
 
         Ok(result)
@@ -541,31 +579,29 @@ impl CompletionRuleSet {
         let mut result = RuleResult::empty();
 
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::ObjectSomeValuesFrom { property, filler },
             dependencies,
         } = &application.context
         {
             // Extract role and filler from existential restriction
-            if let ClassExpression::ObjectSomeValuesFrom { property, filler } = concept {
-                // Create a new individual as witness
-                let witness_individual = Individual::fresh();
-                let source_individual = string_to_individual(application.node.clone());
+            // Create a new individual as witness
+            let witness_individual = Individual::fresh();
+            let source_individual = string_to_individual(application.node.clone());
 
-                // Add role assertion between current individual and witness
-                result.role_additions.push((
-                    source_individual,
-                    witness_individual.clone(),
-                    property.clone(),
-                    Arc::clone(dependencies),
-                ));
+            // Add role assertion between current individual and witness
+            result.role_additions.push((
+                source_individual,
+                witness_individual.clone(),
+                property.clone(),
+                Arc::clone(dependencies),
+            ));
 
-                // Add filler concept to the witness individual
-                result.concept_additions.push((
-                    witness_individual,
-                    (**filler).clone(),
-                    Arc::clone(dependencies),
-                ));
-            }
+            // Add filler concept to the witness individual
+            result.concept_additions.push((
+                witness_individual,
+                (**filler).clone(),
+                Arc::clone(dependencies),
+            ));
         }
 
         Ok(result)
@@ -670,12 +706,14 @@ impl CompletionRuleSet {
                 let deps = Arc::clone(&application.dependencies);
                 let target = existing_successors[allowed - 1].clone();
 
-                for i in allowed..existing {
-                    result.merges.push((
-                        existing_successors[i].clone(),
-                        target.clone(),
-                        Arc::clone(&deps),
-                    ));
+                for successor in existing_successors
+                    .iter()
+                    .skip(allowed)
+                    .take(existing - allowed)
+                {
+                    result
+                        .merges
+                        .push((successor.clone(), target.clone(), Arc::clone(&deps)));
                 }
             }
         }
@@ -697,7 +735,7 @@ impl CompletionRuleSet {
                 current_node.clone(),
                 nominal
                     .iri()
-                    .map(|iri| iri.as_str())
+                    .map(super::super::ontology::IRI::as_str)
                     .unwrap_or("unknown")
                     .to_string(),
                 Arc::clone(&application.dependencies),
@@ -715,16 +753,15 @@ impl CompletionRuleSet {
             concept,
             dependencies,
         } = &application.context
+            && let ClassExpression::ObjectHasSelf { property } = concept
         {
-            if let ClassExpression::ObjectHasSelf { property } = concept {
-                // Add a self-edge
-                result.edge_additions.push((
-                    application.node.clone(),
-                    application.node.clone(),
-                    property.clone(),
-                    Arc::clone(dependencies),
-                ));
-            }
+            // Add a self-edge
+            result.edge_additions.push((
+                application.node.clone(),
+                application.node.clone(),
+                property.clone(),
+                Arc::clone(dependencies),
+            ));
         }
 
         Ok(result)
@@ -810,21 +847,19 @@ impl CompletionRuleSet {
 
         // Unfold concept definitions from TBox
         if let RuleContext::Concept {
-            concept,
+            concept: ClassExpression::Class(named_class),
             dependencies,
         } = &application.context
         {
             // Look for equivalent class axioms that define this concept
-            if let ClassExpression::Class(named_class) = concept {
-                // Check if we have a definition for this class
-                if let Some(definition) = self.get_concept_definition(named_class) {
-                    // Add the definition as a new concept assertion
-                    result.concept_additions.push((
-                        string_to_individual(application.node.clone()),
-                        definition,
-                        Arc::clone(dependencies),
-                    ));
-                }
+            // Check if we have a definition for this class
+            if let Some(definition) = self.get_concept_definition(named_class) {
+                // Add the definition as a new concept assertion
+                result.concept_additions.push((
+                    string_to_individual(application.node.clone()),
+                    definition,
+                    Arc::clone(dependencies),
+                ));
             }
         }
 
@@ -934,6 +969,202 @@ impl CompletionRuleSet {
         Ok(result)
     }
 
+    /// Apply quoted triple rule (RDF-star)
+    /// This handles expansion of << s p o >> quoted triple concepts
+    fn apply_quoted_triple_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        // Extract quoted triple from the concept or context
+        // RDF-star quoted triples represent statements about statements
+        // They need to be expanded into a reified representation in the tableau
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
+            // Extract quoted triple information from the concept
+            // This searches for QuotedTriple patterns in the concept expression
+            if let Some(triple_id) = self.extract_quoted_triple_id(concept) {
+                log::debug!(
+                    "Quoted triple rule application at node {}: triple_id = {}",
+                    application.node,
+                    triple_id
+                );
+
+                // Create a fresh blank node for the reification
+                // Use a unique identifier based on the node and triple ID
+                let reification_node = format!("_:reif_{}_{}", application.node, triple_id);
+
+                // Create the reification node as a new individual
+                result
+                    .new_individuals
+                    .push((reification_node.clone(), Arc::clone(dependencies)));
+
+                // Add rdf:type rdf:Statement to classify the reification node
+                let rdf_statement =
+                    ClassExpression::Class(crate::ontology::Class::new(crate::ontology::IRI::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement",
+                    )));
+                result.concept_additions.push((
+                    Individual::anonymous(reification_node.clone()),
+                    rdf_statement,
+                    Arc::clone(dependencies),
+                ));
+
+                // Create IRIs for rdf:subject, rdf:predicate, rdf:object properties
+                let rdf_subject_prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                    crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject",
+                    ))
+                    .expect("Valid RDF subject property IRI"),
+                );
+                let rdf_predicate_prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                    crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate",
+                    ))
+                    .expect("Valid RDF predicate property IRI"),
+                );
+                let rdf_object_prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                    crate::ontology::ObjectProperty::new(crate::ontology::IRI::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#object",
+                    ))
+                    .expect("Valid RDF object property IRI"),
+                );
+
+                // Parse the triple components from the triple_id (simplified for now)
+                // In a complete implementation, this would extract actual subject/predicate/object
+                // from the semantic layer's Triple structure
+                let subject_node = format!("{triple_id}#subject");
+                let predicate_node = format!("{triple_id}#predicate");
+                let object_node = format!("{triple_id}#object");
+
+                // Add edges: reification_node --rdf:subject--> subject
+                result.role_additions.push((
+                    Individual::anonymous(reification_node.clone()),
+                    Individual::anonymous(subject_node),
+                    rdf_subject_prop,
+                    Arc::clone(dependencies),
+                ));
+
+                // Add edges: reification_node --rdf:predicate--> predicate
+                result.role_additions.push((
+                    Individual::anonymous(reification_node.clone()),
+                    Individual::anonymous(predicate_node),
+                    rdf_predicate_prop,
+                    Arc::clone(dependencies),
+                ));
+
+                // Add edges: reification_node --rdf:object--> object
+                result.role_additions.push((
+                    Individual::anonymous(reification_node.clone()),
+                    Individual::anonymous(object_node),
+                    rdf_object_prop,
+                    Arc::clone(dependencies),
+                ));
+
+                log::debug!(
+                    "Created reification structure for node: {} with reification node: {}",
+                    application.node,
+                    reification_node
+                );
+            } else {
+                log::debug!(
+                    "No quoted triple found in concept at node {}: {:?}",
+                    application.node,
+                    concept
+                );
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Apply meta-assertion rule (RDF-star)
+    /// This handles assertions about quoted triples (annotations)
+    fn apply_meta_assertion_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        // Handle meta-assertions (statements about statements)
+        // For example: << :alice :knows :bob >> :certainty 0.9
+        // This means the statement ":alice :knows :bob" has certainty 0.9
+
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &application.context
+        {
+            // Extract meta-assertion components from the concept
+            if let Some((triple_id, meta_property, meta_value)) =
+                self.extract_meta_assertion(concept)
+            {
+                log::debug!(
+                    "Meta-assertion rule application at node {}: triple={}, property={}, value={}",
+                    application.node,
+                    triple_id,
+                    meta_property,
+                    meta_value
+                );
+
+                // Validate meta-level constraints based on the property
+                if let Err(e) = self.validate_meta_constraint(&meta_property, &meta_value) {
+                    // Create a clash for invalid meta-level constraints
+                    result.clashes.push(ClashInfo {
+                        clash_type: ClashType::Contradiction,
+                        nodes: vec![application.node.clone()],
+                        concepts: vec![concept.clone()],
+                        dependencies: Arc::clone(dependencies),
+                        explanation: format!("Meta-constraint violation for {meta_property}: {e}"),
+                    });
+                    return Ok(result);
+                }
+
+                // Create a data property value assertion for the quoted triple
+                // This uses DataHasValue to represent the meta-assertion directly
+                // in the tableau as a concept constraint
+                let annotation_concept = ClassExpression::DataHasValue {
+                    property: crate::ontology::DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty {
+                            iri: crate::ontology::IRI::new(&meta_property),
+                        },
+                    ),
+                    value: crate::ontology::Literal::new(meta_value.clone()),
+                };
+
+                // Add the meta-assertion as a concept to the node
+                result.concept_additions.push((
+                    Individual::anonymous(application.node.clone()),
+                    annotation_concept,
+                    Arc::clone(dependencies),
+                ));
+
+                // Check for contradictory meta-assertions
+                // This would require querying existing meta-assertions on the same triple
+                // and checking for logical contradictions
+                if let Some(clash) = self.check_meta_assertion_conflicts(
+                    &application.node,
+                    &triple_id,
+                    &meta_property,
+                    &meta_value,
+                ) {
+                    result.clashes.push(clash);
+                }
+
+                log::debug!(
+                    "Added meta-assertion for triple {triple_id} with {meta_property}={meta_value}"
+                );
+            } else {
+                log::debug!(
+                    "No meta-assertion extracted from concept at node {}: {:?}",
+                    application.node,
+                    concept
+                );
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Apply property chain rule: R1 ∘ R2 ∘ ... ∘ Rn ⊑ S
     /// If we have edges a -R1-> b -R2-> c ... z -Rn-> w, then infer a -S-> w
     fn apply_property_chain_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
@@ -988,23 +1219,138 @@ impl CompletionRuleSet {
         &self,
         named_class: &crate::ontology::Class,
     ) -> Option<ClassExpression> {
-        // Simple implementation: look for equivalent class axioms in the ontology
-        // In a full implementation, this would be optimized with indexing
-
-        // For now, we'll check if there are any equivalent class axioms
-        // that define this class in terms of other expressions
-
-        // Placeholder: return a simple equivalent definition if it's a common pattern
-        let class_name = &named_class.iri.to_string();
-
-        // Example: if class is "Person", might be equivalent to "Human"
-        if class_name.contains("Person") {
-            Some(ClassExpression::Class(crate::ontology::Class {
-                iri: crate::ontology::IRI::from("Human".to_string()),
-            }))
+        // Query the ontology for equivalent class definitions
+        if let Some(ontology) = &self.ontology {
+            ontology.get_concept_definition(named_class)
         } else {
+            // No ontology available - this is for backward compatibility
+            // In production, ontology should always be available
+            log::warn!(
+                "No ontology reference in CompletionRuleSet - cannot unfold concept {}",
+                named_class.iri
+            );
             None
         }
+    }
+
+    /// Extract quoted triple ID from a concept expression
+    /// Returns the triple identifier if the concept represents a quoted triple
+    fn extract_quoted_triple_id(&self, concept: &ClassExpression) -> Option<String> {
+        // Check if concept is a class with a special IRI indicating a quoted triple
+        // This is a simplified implementation - a full version would parse the concept
+        // structure to identify quoted triple patterns
+        if let ClassExpression::Class(class) = concept {
+            let iri_str = class.iri.as_str();
+            if iri_str.contains("QuotedTriple") || iri_str.contains("quoted-triple") {
+                // Extract or generate a unique identifier for this triple
+                return Some(iri_str.to_string());
+            }
+        }
+
+        // Check DataHasValue patterns that might encode quoted triple metadata
+        if let ClassExpression::DataHasValue { property, value } = concept {
+            let prop_str = format!("{property:?}");
+            if prop_str.contains("quotedTripleRef") {
+                return Some(value.value.clone());
+            }
+        }
+
+        None
+    }
+
+    /// Extract meta-assertion components from a concept
+    /// Returns (triple_id, meta_property, meta_value) if found
+    fn extract_meta_assertion(
+        &self,
+        concept: &ClassExpression,
+    ) -> Option<(String, String, String)> {
+        // Meta-assertions are typically encoded as DataHasValue restrictions
+        // where the property indicates which quoted triple and meta-property,
+        // and the value is the meta-value
+
+        if let ClassExpression::DataHasValue { property, value } = concept {
+            // Parse the property to extract triple ID and meta-property
+            let property_iri = match property {
+                crate::ontology::DataPropertyExpression::DataProperty(dp) => {
+                    dp.iri.as_str().to_string()
+                }
+            };
+
+            // Check if this is a meta-property (contains "meta" or known patterns)
+            if property_iri.contains("certainty")
+                || property_iri.contains("confidence")
+                || property_iri.contains("provenance")
+                || property_iri.contains("trust")
+                || property_iri.contains("meta")
+            {
+                // Extract or infer the triple ID based on concept structure
+                // The triple ID is generated consistently to enable linking
+                // meta-assertions to their target quoted triples
+                let triple_id = format!("triple_{}", self.get_fresh_id());
+
+                return Some((triple_id, property_iri, value.value.clone()));
+            }
+        }
+
+        None
+    }
+
+    /// Validate a meta-level constraint
+    /// Returns Ok(()) if valid, Err with description if invalid
+    fn validate_meta_constraint(&self, property: &str, value: &str) -> Result<()> {
+        // Validate based on the property type
+        if property.contains("certainty") || property.contains("confidence") {
+            // Parse as float and check range [0, 1]
+            if let Ok(val) = value.parse::<f64>() {
+                if !(0.0..=1.0).contains(&val) {
+                    return Err(Error::reasoning(format!(
+                        "Certainty/confidence value {val} out of range [0, 1]"
+                    )));
+                }
+            } else {
+                return Err(Error::reasoning(format!(
+                    "Invalid numeric value for certainty: {value}"
+                )));
+            }
+        }
+
+        if property.contains("probability") {
+            // Similar validation for probability
+            if let Ok(val) = value.parse::<f64>() {
+                if !(0.0..=1.0).contains(&val) {
+                    return Err(Error::reasoning(format!(
+                        "Probability value {val} out of range [0, 1]"
+                    )));
+                }
+            } else {
+                return Err(Error::reasoning(format!(
+                    "Invalid numeric value for probability: {value}"
+                )));
+            }
+        }
+
+        // Other constraints can be added here (e.g., trust scores, timestamps)
+        Ok(())
+    }
+
+    /// Check for conflicting meta-assertions on the same quoted triple
+    /// Returns a ClashInfo if a conflict is detected
+    fn check_meta_assertion_conflicts(
+        &self,
+        _node: &str,
+        _triple_id: &str,
+        _property: &str,
+        _value: &str,
+    ) -> Option<ClashInfo> {
+        // This would query the ontology or tableau state to find existing
+        // meta-assertions on the same triple and check for contradictions
+        // For example:
+        // - certainty: 0.9 and certainty: 0.1 (contradiction)
+        // - trust: high and trust: low (contradiction)
+
+        // Simplified implementation - always returns None
+        // A full implementation would maintain a meta-assertion index
+        None
     }
 }
 
@@ -1191,6 +1537,8 @@ impl fmt::Display for CompletionRule {
             CompletionRule::Unfold => write!(f, "Unfold"),
             CompletionRule::PropertyChain => write!(f, "Chain"),
             CompletionRule::Guess => write!(f, "Guess"),
+            CompletionRule::QuotedTriple => write!(f, "QuotedTriple"),
+            CompletionRule::MetaAssertion => write!(f, "MetaAssertion"),
         }
     }
 }

@@ -16,11 +16,13 @@ use std::time::Duration;
 mod extended_integration_tests {
     use super::*;
 
-    #[test]
-    fn test_advanced_execution_engine_creation() {
+    #[tokio::test]
+    async fn test_advanced_execution_engine_creation() {
         let ontology = Arc::new(Ontology::new());
-        let reasoning_service =
-            Arc::new(ReasoningService::new(Ontology::new(), Default::default()));
+        let reasoning_service = Arc::new(
+            ReasoningService::new(Ontology::new(), Default::default())
+                .expect("Failed to create ReasoningService"),
+        );
 
         let config = AdvancedExecutionConfig {
             enable_caching: true,
@@ -41,11 +43,13 @@ mod extended_integration_tests {
         assert!(engine.is_ok());
     }
 
-    #[test]
-    fn test_cost_based_optimizer_creation() {
+    #[tokio::test]
+    async fn test_cost_based_optimizer_creation() {
         let ontology = Arc::new(Ontology::new());
-        let reasoning_service =
-            Arc::new(ReasoningService::new(Ontology::new(), Default::default()));
+        let reasoning_service = Arc::new(
+            ReasoningService::new(Ontology::new(), Default::default())
+                .expect("Failed to create ReasoningService"),
+        );
 
         let _optimizer = CostBasedOptimizer::new(ontology, reasoning_service, Default::default());
 
@@ -156,11 +160,13 @@ mod extended_integration_tests {
         assert_eq!(query.body_atoms.len(), 1);
     }
 
-    #[test]
-    fn test_full_pipeline_creation() {
+    #[tokio::test]
+    async fn test_full_pipeline_creation() {
         let ontology = Arc::new(Ontology::new());
-        let reasoning_service =
-            Arc::new(ReasoningService::new(Ontology::new(), Default::default()));
+        let reasoning_service = Arc::new(
+            ReasoningService::new(Ontology::new(), Default::default())
+                .expect("Failed to create ReasoningService"),
+        );
 
         let _optimizer = CostBasedOptimizer::new(
             ontology.clone(),

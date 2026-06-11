@@ -9,8 +9,7 @@ use crate::prelude::*;
 use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 /// Represents a distributed query that has been partitioned for parallel execution
@@ -216,39 +215,138 @@ pub struct ResourceConstraints {
     pub required_capabilities: Vec<String>,
 }
 
-/// Query distributor implementation
+// ─── Actor message type ──────────────────────────────────────────────────────────
+
+enum QueryDistributorMsg {
+    DistributeQuery {
+        query: ConjunctiveQuery,
+        cluster_manager: ClusterManager,
+        tx: oneshot::Sender<Result<DistributedQuery>>,
+    },
+    GetQueryStatus {
+        query_id: Uuid,
+        tx: oneshot::Sender<Option<DistributedQuery>>,
+    },
+    CancelQuery {
+        query_id: Uuid,
+    },
+    #[allow(dead_code)]
+    Shutdown,
+}
+
+/// Query distributor — actor handle
+#[derive(Clone)]
 pub struct QueryDistributor {
-    /// Distribution configuration
+    tx: mpsc::Sender<QueryDistributorMsg>,
+}
+
+/// Actor inner state
+struct QDState {
     config: crate::distributed::QueryDistributionConfig,
-
-    /// Query analysis engine
-    analyzer: Arc<RwLock<QueryAnalyzer>>,
-
-    /// Partition scheduler
-    scheduler: Arc<RwLock<PartitionScheduler>>,
-
-    /// Cost estimator
-    cost_estimator: Arc<RwLock<CostEstimator>>,
-
-    /// Active distributed queries
-    active_queries: Arc<RwLock<HashMap<Uuid, DistributedQuery>>>,
+    analyzer: QueryAnalyzer,
+    #[allow(dead_code)]
+    scheduler: PartitionScheduler,
+    cost_estimator: CostEstimator,
+    active_queries: HashMap<Uuid, DistributedQuery>,
 }
 
 impl QueryDistributor {
-    /// Create a new query distributor
+    /// Create a new query distributor — spawns actor immediately
     pub async fn new(config: crate::distributed::QueryDistributionConfig) -> Result<Self> {
-        Ok(Self {
-            config: config.clone(),
-            analyzer: Arc::new(RwLock::new(QueryAnalyzer::new().await?)),
-            scheduler: Arc::new(RwLock::new(PartitionScheduler::new().await?)),
-            cost_estimator: Arc::new(RwLock::new(CostEstimator::new().await?)),
-            active_queries: Arc::new(RwLock::new(HashMap::new())),
-        })
+        let (tx, mut rx) = mpsc::channel::<QueryDistributorMsg>(64);
+
+        let mut state = QDState {
+            config,
+            analyzer: QueryAnalyzer::new().await?,
+            scheduler: PartitionScheduler::new().await?,
+            cost_estimator: CostEstimator::new().await?,
+            active_queries: HashMap::new(),
+        };
+
+        tokio::spawn(async move {
+            while let Some(msg) = rx.recv().await {
+                match msg {
+                    QueryDistributorMsg::DistributeQuery {
+                        query,
+                        cluster_manager,
+                        tx,
+                    } => {
+                        let result = state.distribute_query(&query, &cluster_manager).await;
+                        let _ = tx.send(result);
+                    }
+                    QueryDistributorMsg::GetQueryStatus { query_id, tx } => {
+                        let _ = tx.send(state.active_queries.get(&query_id).cloned());
+                    }
+                    QueryDistributorMsg::CancelQuery { query_id } => {
+                        if let Some(mut dq) = state.active_queries.remove(&query_id) {
+                            for partition in &mut dq.partitions {
+                                partition.status = PartitionStatus::Cancelled;
+                            }
+                            info!("Query {query_id} cancelled");
+                        }
+                    }
+                    QueryDistributorMsg::Shutdown => break,
+                }
+            }
+        });
+
+        Ok(Self { tx })
     }
 
     /// Distribute a query across available cluster nodes
     pub async fn distribute_query(
         &self,
+        query: &ConjunctiveQuery,
+        cluster_manager: &ClusterManager,
+    ) -> Result<DistributedQuery> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(QueryDistributorMsg::DistributeQuery {
+                query: query.clone(),
+                cluster_manager: cluster_manager.clone(),
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "QueryDistributor actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "QueryDistributor did not respond".to_string(),
+        })?
+    }
+
+    /// Get status of a distributed query
+    pub async fn get_query_status(&self, query_id: Uuid) -> Result<Option<DistributedQuery>> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(QueryDistributorMsg::GetQueryStatus {
+                query_id,
+                tx: resp_tx,
+            })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "QueryDistributor actor is down".to_string(),
+            })?;
+        resp_rx.await.map_err(|_| Error::Internal {
+            message: "QueryDistributor did not respond".to_string(),
+        })
+    }
+
+    /// Cancel a distributed query
+    pub async fn cancel_query(&self, query_id: Uuid) -> Result<()> {
+        self.tx
+            .send(QueryDistributorMsg::CancelQuery { query_id })
+            .await
+            .map_err(|_| Error::Internal {
+                message: "QueryDistributor actor is down".to_string(),
+            })
+    }
+}
+
+impl QDState {
+    /// Distribute a query across available cluster nodes
+    async fn distribute_query(
+        &mut self,
         query: &ConjunctiveQuery,
         cluster_manager: &ClusterManager,
     ) -> Result<DistributedQuery> {
@@ -260,13 +358,7 @@ impl QueryDistributor {
             query.body_atoms.len()
         );
 
-        // Analyze query characteristics
-        let metadata = {
-            let analyzer = self.analyzer.read().await;
-            analyzer.analyze_query(query).await?
-        };
-
-        // Get available nodes
+        let metadata = self.analyzer.analyze_query(query).await?;
         let available_nodes = cluster_manager.get_active_nodes().await?;
 
         if available_nodes.is_empty() {
@@ -275,7 +367,6 @@ impl QueryDistributor {
             );
         }
 
-        // Create query partitions based on strategy
         let partitions = self
             .create_partitions(query, &metadata, &available_nodes)
             .await?;
@@ -289,11 +380,8 @@ impl QueryDistributor {
             created_at: std::time::Instant::now(),
         };
 
-        // Store the distributed query
-        {
-            let mut active_queries = self.active_queries.write().await;
-            active_queries.insert(query_id, distributed_query.clone());
-        }
+        self.active_queries
+            .insert(query_id, distributed_query.clone());
 
         info!(
             "Query {} distributed into {} partitions",
@@ -305,12 +393,12 @@ impl QueryDistributor {
 
     /// Create query partitions based on the distribution strategy
     async fn create_partitions(
-        &self,
+        &mut self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
     ) -> Result<Vec<QueryPartition>> {
-        match &self.config.strategy {
+        match &self.config.strategy.clone() {
             crate::distributed::DistributionStrategy::ConceptBased => {
                 self.partition_by_concepts(query, metadata, available_nodes)
                     .await
@@ -328,7 +416,8 @@ impl QueryDistributor {
                     .await
             }
             crate::distributed::DistributionStrategy::Hybrid { strategies } => {
-                self.partition_hybrid(query, metadata, available_nodes, strategies)
+                let strategies = strategies.clone();
+                self.partition_hybrid(query, metadata, available_nodes, &strategies)
                     .await
             }
         }
@@ -336,7 +425,7 @@ impl QueryDistributor {
 
     /// Partition query by ontology concepts
     async fn partition_by_concepts(
-        &self,
+        &mut self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
@@ -344,21 +433,16 @@ impl QueryDistributor {
         let mut partitions = Vec::new();
         let query_id = Uuid::new_v4();
 
-        // Group atoms by concept
         let mut concept_groups: HashMap<String, Vec<&QueryAtom>> = HashMap::new();
 
         for atom in &query.body_atoms {
             if let Some(concept) = self.extract_concept_from_atom(atom) {
-                concept_groups
-                    .entry(concept)
-                    .or_insert_with(Vec::new)
-                    .push(atom);
+                concept_groups.entry(concept).or_default().push(atom);
             }
         }
 
-        // Create partitions for each concept group
         let mut node_index = 0;
-        for (concept, atoms) in concept_groups {
+        for (_concept, atoms) in concept_groups {
             if atoms.is_empty() {
                 continue;
             }
@@ -366,7 +450,6 @@ impl QueryDistributor {
             let assigned_node = available_nodes[node_index % available_nodes.len()].id;
             node_index += 1;
 
-            // Create partition query with atoms for this concept
             let partition_query = ConjunctiveQuery {
                 answer_variables: query.answer_variables.clone(),
                 body_atoms: atoms.into_iter().cloned().collect(),
@@ -374,19 +457,17 @@ impl QueryDistributor {
                 metadata: query.metadata.clone(),
             };
 
-            let estimated_cost = {
-                let cost_estimator = self.cost_estimator.read().await;
-                cost_estimator
-                    .estimate_cost(&partition_query, metadata)
-                    .await?
-            };
+            let estimated_cost = self
+                .cost_estimator
+                .estimate_cost(&partition_query, metadata)
+                .await?;
 
             let partition = QueryPartition {
                 partition_id: Uuid::new_v4(),
                 query_id,
                 assigned_node,
                 partition_query,
-                dependencies: Vec::new(), // Will be computed later
+                dependencies: Vec::new(),
                 estimated_cost,
                 priority: self.calculate_partition_priority(&metadata.requirements),
                 status: PartitionStatus::Ready,
@@ -395,7 +476,6 @@ impl QueryDistributor {
             partitions.push(partition);
         }
 
-        // Compute dependencies between partitions
         self.compute_partition_dependencies(&mut partitions).await?;
 
         Ok(partitions)
@@ -403,7 +483,7 @@ impl QueryDistributor {
 
     /// Partition query by complexity
     async fn partition_by_complexity(
-        &self,
+        &mut self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
@@ -411,7 +491,6 @@ impl QueryDistributor {
         let mut partitions = Vec::new();
         let query_id = Uuid::new_v4();
 
-        // Sort atoms by complexity (simplified metric)
         let mut atoms_with_complexity: Vec<(&QueryAtom, f32)> = query
             .body_atoms
             .iter()
@@ -423,9 +502,7 @@ impl QueryDistributor {
                 .expect("Failed to compare atom complexity scores")
         });
 
-        // Distribute atoms to balance complexity across nodes
-        let chunk_size =
-            (query.body_atoms.len() + available_nodes.len() - 1) / available_nodes.len();
+        let chunk_size = query.body_atoms.len().div_ceil(available_nodes.len());
 
         for (i, chunk) in atoms_with_complexity.chunks(chunk_size).enumerate() {
             if chunk.is_empty() {
@@ -441,12 +518,10 @@ impl QueryDistributor {
                 metadata: query.metadata.clone(),
             };
 
-            let estimated_cost = {
-                let cost_estimator = self.cost_estimator.read().await;
-                cost_estimator
-                    .estimate_cost(&partition_query, metadata)
-                    .await?
-            };
+            let estimated_cost = self
+                .cost_estimator
+                .estimate_cost(&partition_query, metadata)
+                .await?;
 
             let partition = QueryPartition {
                 partition_id: Uuid::new_v4(),
@@ -467,7 +542,7 @@ impl QueryDistributor {
 
     /// Partition query using round-robin distribution
     async fn partition_round_robin(
-        &self,
+        &mut self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
@@ -475,7 +550,6 @@ impl QueryDistributor {
         let mut partitions = Vec::new();
         let query_id = Uuid::new_v4();
 
-        // Simple round-robin distribution of atoms
         let chunk_size = std::cmp::max(1, query.body_atoms.len() / available_nodes.len());
 
         for (i, chunk) in query.body_atoms.chunks(chunk_size).enumerate() {
@@ -492,12 +566,10 @@ impl QueryDistributor {
                 metadata: query.metadata.clone(),
             };
 
-            let estimated_cost = {
-                let cost_estimator = self.cost_estimator.read().await;
-                cost_estimator
-                    .estimate_cost(&partition_query, metadata)
-                    .await?
-            };
+            let estimated_cost = self
+                .cost_estimator
+                .estimate_cost(&partition_query, metadata)
+                .await?;
 
             let partition = QueryPartition {
                 partition_id: Uuid::new_v4(),
@@ -518,47 +590,62 @@ impl QueryDistributor {
 
     /// Partition query with load awareness
     async fn partition_load_aware(
-        &self,
+        &mut self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
     ) -> Result<Vec<QueryPartition>> {
-        // For now, implement as complexity-based with node capacity consideration
-        // In a full implementation, this would consider current node loads
-        self.partition_by_complexity(query, metadata, available_nodes)
-            .await
+        let mut partitions = self
+            .partition_by_complexity(query, metadata, available_nodes)
+            .await?;
+
+        let node_loads: std::collections::HashMap<Uuid, f32> = available_nodes
+            .iter()
+            .map(|node| {
+                let load_factor = 1.0 / ((node.capabilities.memory_mb as f32).max(1.0));
+                (node.id, load_factor)
+            })
+            .collect();
+
+        for partition in &mut partitions {
+            if let Some((&best_node_id, _)) = node_loads
+                .iter()
+                .filter(|(id, _)| available_nodes.iter().any(|n| &n.id == *id))
+                .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                partition.assigned_node = best_node_id;
+            }
+        }
+
+        Ok(partitions)
     }
 
     /// Partition query using hybrid strategy
     async fn partition_hybrid(
-        &self,
+        &mut self,
         query: &ConjunctiveQuery,
         metadata: &QueryMetadata,
         available_nodes: &[NodeInfo],
         _strategies: &[crate::distributed::DistributionStrategy],
     ) -> Result<Vec<QueryPartition>> {
-        // For now, use concept-based as the primary strategy
-        // A full implementation would combine multiple strategies intelligently
         self.partition_by_concepts(query, metadata, available_nodes)
             .await
     }
 
     /// Extract concept from an atom (simplified)
     fn extract_concept_from_atom(&self, atom: &QueryAtom) -> Option<String> {
-        // Simple heuristic: extract the main concept from the atom type
         match atom {
             QueryAtom::ClassAtom {
                 class_expression, ..
-            } => Some(format!("{:?}", class_expression)),
-            QueryAtom::ObjectPropertyAtom { property, .. } => Some(format!("{:?}", property)),
-            QueryAtom::DataPropertyAtom { property, .. } => Some(format!("{:?}", property)),
+            } => Some(format!("{class_expression:?}")),
+            QueryAtom::ObjectPropertyAtom { property, .. } => Some(format!("{property:?}")),
+            QueryAtom::DataPropertyAtom { property, .. } => Some(format!("{property:?}")),
             _ => Some("unknown".to_string()),
         }
     }
 
     /// Calculate atom complexity (simplified metric)
     fn calculate_atom_complexity(&self, atom: &QueryAtom) -> f32 {
-        // Simple complexity metric based on atom type
         match atom {
             QueryAtom::ClassAtom { .. } => 1.0,
             QueryAtom::ObjectPropertyAtom { .. } => 2.0,
@@ -586,13 +673,21 @@ impl QueryDistributor {
         &self,
         partitions: &mut [QueryPartition],
     ) -> Result<()> {
-        // Simplified dependency computation
-        // In a full implementation, this would analyze variable dependencies
+        let partition_vars: Vec<std::collections::HashSet<String>> = partitions
+            .iter()
+            .map(|p| self.extract_variables(&p.partition_query))
+            .collect();
 
         for i in 0..partitions.len() {
             for j in 0..partitions.len() {
-                if i != j && self.has_dependency(&partitions[i], &partitions[j]) {
-                    partitions[i].dependencies.push(partitions[j].partition_id);
+                if i != j {
+                    let uses_vars_from_j = partition_vars[i]
+                        .iter()
+                        .any(|var| partition_vars[j].contains(var));
+
+                    if uses_vars_from_j && self.has_dependency(&partitions[i], &partitions[j]) {
+                        partitions[i].dependencies.push(partitions[j].partition_id);
+                    }
                 }
             }
         }
@@ -600,9 +695,47 @@ impl QueryDistributor {
         Ok(())
     }
 
+    /// Extract variables from a query
+    fn extract_variables(&self, query: &ConjunctiveQuery) -> std::collections::HashSet<String> {
+        let mut variables = std::collections::HashSet::new();
+        for atom in &query.body_atoms {
+            match atom {
+                QueryAtom::ClassAtom { variable, .. } => {
+                    variables.insert(variable.name.clone());
+                }
+                QueryAtom::ObjectPropertyAtom {
+                    subject, object, ..
+                } => {
+                    variables.insert(subject.name.clone());
+                    variables.insert(object.name.clone());
+                }
+                QueryAtom::DataPropertyAtom {
+                    subject, literal, ..
+                } => {
+                    variables.insert(subject.name.clone());
+                    variables.insert(literal.name.clone());
+                }
+                QueryAtom::SameIndividualAtom { left, right, .. } => {
+                    variables.insert(left.name.clone());
+                    variables.insert(right.name.clone());
+                }
+                QueryAtom::DifferentIndividualsAtom { left, right, .. } => {
+                    variables.insert(left.name.clone());
+                    variables.insert(right.name.clone());
+                }
+                QueryAtom::ConcreteIndividualAtom { variable, .. } => {
+                    variables.insert(variable.name.clone());
+                }
+                QueryAtom::ConcreteLiteralAtom { variable, .. } => {
+                    variables.insert(variable.name.clone());
+                }
+            }
+        }
+        variables
+    }
+
     /// Check if one partition depends on another
     fn has_dependency(&self, partition1: &QueryPartition, partition2: &QueryPartition) -> bool {
-        // Simplified dependency check based on shared variables
         let vars1: HashSet<_> = partition1
             .partition_query
             .body_atoms
@@ -647,28 +780,6 @@ impl QueryDistributor {
                 vec![variable.clone()]
             }
         }
-    }
-
-    /// Get status of a distributed query
-    pub async fn get_query_status(&self, query_id: Uuid) -> Result<Option<DistributedQuery>> {
-        let active_queries = self.active_queries.read().await;
-        Ok(active_queries.get(&query_id).cloned())
-    }
-
-    /// Cancel a distributed query
-    pub async fn cancel_query(&self, query_id: Uuid) -> Result<()> {
-        let mut active_queries = self.active_queries.write().await;
-
-        if let Some(mut distributed_query) = active_queries.remove(&query_id) {
-            // Mark all partitions as cancelled
-            for partition in &mut distributed_query.partitions {
-                partition.status = PartitionStatus::Cancelled;
-            }
-
-            info!("Query {} cancelled", query_id);
-        }
-
-        Ok(())
     }
 }
 
@@ -741,16 +852,16 @@ impl QueryAnalyzer {
                 QueryAtom::ClassAtom {
                     class_expression, ..
                 } => {
-                    concepts.insert(format!("{:?}", class_expression));
+                    concepts.insert(format!("{class_expression:?}"));
                 }
                 QueryAtom::ObjectPropertyAtom { property, .. } => {
-                    properties.insert(format!("{:?}", property));
+                    properties.insert(format!("{property:?}"));
                 }
                 QueryAtom::DataPropertyAtom { property, .. } => {
-                    properties.insert(format!("{:?}", property));
+                    properties.insert(format!("{property:?}"));
                 }
                 QueryAtom::ConcreteIndividualAtom { individual, .. } => {
-                    individuals.insert(format!("{:?}", individual));
+                    individuals.insert(format!("{individual:?}"));
                 }
                 _ => {}
             }

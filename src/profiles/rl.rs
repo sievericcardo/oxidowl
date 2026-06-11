@@ -24,6 +24,7 @@ pub struct RLValidator;
 
 impl RLValidator {
     /// Create a new RL profile validator
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -120,6 +121,7 @@ impl RLValidator {
     }
 
     /// Check if a data property expression is allowed in RL
+    #[allow(dead_code)]
     fn is_data_property_expression_allowed(&self, expr: &DataPropertyExpression) -> bool {
         match expr {
             DataPropertyExpression::DataProperty(_) => true,
@@ -131,15 +133,12 @@ impl RLValidator {
         let prohibited_constructs = self.get_prohibited_constructs();
 
         // Check axiom type against prohibited list
-        let axiom_debug_str = format!("{:?}", axiom);
+        let axiom_debug_str = format!("{axiom:?}");
         let axiom_type = axiom_debug_str.split('(').next().unwrap_or("Unknown");
         if prohibited_constructs.contains(axiom_type) {
             report.add_violation(ProfileViolation::new(
-                ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                format!(
-                    "Axiom type '{}' is prohibited in OWL 2 RL profile",
-                    axiom_type
-                ),
+                ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                format!("Axiom type '{axiom_type}' is prohibited in OWL 2 RL profile"),
             ));
         }
     }
@@ -202,16 +201,16 @@ impl RLValidator {
                     ));
                 }
             }
-            Axiom::ClassAssertion(class_axiom) => {
-                if !matches!(&class_axiom.class, ClassExpression::Class(_)) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedClassExpression(format!(
-                            "{:?}",
-                            class_axiom.class
-                        )),
-                        "Only atomic classes allowed in assertions in OWL 2 RL profile",
-                    ));
-                }
+            Axiom::ClassAssertion(class_axiom)
+                if !matches!(&class_axiom.class, ClassExpression::Class(_)) =>
+            {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedClassExpression(format!(
+                        "{:?}",
+                        class_axiom.class
+                    )),
+                    "Only atomic classes allowed in assertions in OWL 2 RL profile",
+                ));
             }
             _ => {} // Other axioms checked elsewhere
         }
@@ -223,38 +222,29 @@ impl RLValidator {
         axiom: &Axiom,
         report: &mut ProfileValidationReport,
     ) {
-        match axiom {
-            Axiom::ObjectPropertyAssertion(prop_axiom) => {
-                if !self.is_property_expression_allowed(&prop_axiom.property) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedPropertyExpression(format!(
-                            "{:?}",
-                            prop_axiom.property
-                        )),
-                        "Property expression not allowed in OWL 2 RL profile",
-                    ));
-                }
-            }
-            _ => {} // Other axioms checked elsewhere
-        }
+        if let Axiom::ObjectPropertyAssertion(prop_axiom) = axiom
+            && !self.is_property_expression_allowed(&prop_axiom.property)
+        {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedPropertyExpression(format!(
+                    "{:?}",
+                    prop_axiom.property
+                )),
+                "Property expression not allowed in OWL 2 RL profile",
+            ));
+        } // Other axioms checked elsewhere
     }
 
     /// Check data ranges within an axiom
     fn check_data_ranges_in_axiom(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
-        match axiom {
-            Axiom::DataPropertyRange(range_axiom) => {
-                if !self.is_data_range_allowed(&range_axiom.range) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedDataRange(format!(
-                            "{:?}",
-                            range_axiom.range
-                        )),
-                        "Data range not allowed in OWL 2 RL profile",
-                    ));
-                }
-            }
-            _ => {} // Other axioms checked elsewhere
-        }
+        if let Axiom::DataPropertyRange(range_axiom) = axiom
+            && !self.is_data_range_allowed(&range_axiom.range)
+        {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedDataRange(format!("{:?}", range_axiom.range)),
+                "Data range not allowed in OWL 2 RL profile",
+            ));
+        } // Other axioms checked elsewhere
     }
 }
 
@@ -275,8 +265,8 @@ impl ProfileValidator for RLValidator {
 
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                    &format!("Axiom type not supported in OWL 2 RL profile: {:?}", axiom),
+                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                    format!("Axiom type not supported in OWL 2 RL profile: {axiom:?}"),
                 ));
             }
         }
@@ -485,16 +475,13 @@ impl RLValidator {
     ) {
         // Look for patterns that combine multiple complex constructs in ways that exceed RL
         for axiom in ontology.axioms() {
-            match axiom {
-                Axiom::SubClassOf(subclass_axiom) => {
-                    // Check for complex sub-class + complex super-class combinations
-                    self.check_complex_subclass_combinations(
-                        &subclass_axiom.subclass,
-                        &subclass_axiom.superclass,
-                        report,
-                    );
-                }
-                _ => {}
+            if let Axiom::SubClassOf(subclass_axiom) = axiom {
+                // Check for complex sub-class + complex super-class combinations
+                self.check_complex_subclass_combinations(
+                    &subclass_axiom.subclass,
+                    &subclass_axiom.superclass,
+                    report,
+                );
             }
         }
     }
@@ -507,16 +494,16 @@ impl RLValidator {
         report: &mut ProfileValidationReport,
     ) {
         // Check for union in subclass position with complex superclass
-        if matches!(subclass, ClassExpression::ObjectUnionOf(_)) {
-            if !matches!(
+        if matches!(subclass, ClassExpression::ObjectUnionOf(_))
+            && !matches!(
                 superclass,
                 ClassExpression::Class(_) | ClassExpression::ObjectIntersectionOf(_)
-            ) {
-                report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedClassExpression(format!("Union subclass with complex superclass: {:?} ⊑ {:?}", subclass, superclass)),
+            )
+        {
+            report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedClassExpression(format!("Union subclass with complex superclass: {subclass:?} ⊑ {superclass:?}")),
                     "Complex combinations of union subclass with non-atomic superclass may not be expressible in Horn clauses",
                 ));
-            }
         }
     }
 
@@ -530,23 +517,19 @@ impl RLValidator {
         // Check for constructs that would violate this property
         for axiom in ontology.axioms() {
             match axiom {
-                Axiom::DisjointClasses(disjoint_axiom) => {
-                    if disjoint_axiom.classes.len() > 2 {
-                        // Pairwise disjointness is preferred for Horn clause translation
-                        report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                            "Multi-way disjoint classes may not translate efficiently to Horn clauses",
-                        ));
-                    }
+                Axiom::DisjointClasses(disjoint_axiom) if disjoint_axiom.classes.len() > 2 => {
+                    // Pairwise disjointness is preferred for Horn clause translation
+                    report.add_violation(ProfileViolation::new(
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                        "Multi-way disjoint classes may not translate efficiently to Horn clauses",
+                    ));
                 }
-                Axiom::EquivalentClasses(equiv_axiom) => {
-                    if equiv_axiom.classes.len() > 2 {
-                        // Pairwise equivalences are preferred
-                        report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                Axiom::EquivalentClasses(equiv_axiom) if equiv_axiom.classes.len() > 2 => {
+                    // Pairwise equivalences are preferred
+                    report.add_violation(ProfileViolation::new(
+                            ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                             "Multi-way equivalent classes should be expressed as pairwise equivalences for Horn clause translation",
                         ));
-                    }
                 }
                 _ => {}
             }

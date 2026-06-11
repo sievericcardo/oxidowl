@@ -82,7 +82,8 @@ fn create_test_ontology() -> Ontology {
 async fn test_basic_greenhouse_reasoning() {
     let ontology = create_test_ontology();
     let config = ReasonerConfig::test_config();
-    let _reasoning_service = ReasoningService::new(ontology, config);
+    let _reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     println!("Basic greenhouse reasoning test passed");
 }
@@ -92,7 +93,8 @@ async fn test_basic_greenhouse_reasoning() {
 async fn test_pump1_classification_concept() {
     let ontology = create_test_ontology();
     let config = ReasonerConfig::test_config();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let _reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     // Create class expressions for pump and operational concepts
     let _pump_iri = IRI::new("http://www.smolang.org/greenhouseDT#pump1");
@@ -109,7 +111,8 @@ async fn test_pump1_classification_concept() {
 async fn test_dl_query_disjoint_union() {
     let ontology = create_test_ontology();
     let config = ReasonerConfig::test_config();
-    let reasoning_service = ReasoningService::new(ontology, config);
+    let reasoning_service =
+        ReasoningService::new(ontology, config).expect("Failed to create ReasoningService");
 
     let _query_engine = DLQueryEngine::new(Arc::new(reasoning_service));
 

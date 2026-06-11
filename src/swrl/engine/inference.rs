@@ -26,6 +26,7 @@ pub struct ForwardChaining {
 
 impl ForwardChaining {
     /// Create a new forward chaining engine
+    #[must_use]
     pub fn new() -> Self {
         Self {
             max_iterations: 1000,
@@ -53,7 +54,7 @@ impl ForwardChaining {
             let mut iteration_inferences = Vec::new();
             let mut iteration_fired = false;
 
-            debug!("Forward chaining iteration {}", iteration);
+            debug!("Forward chaining iteration {iteration}");
 
             for rule in rules {
                 // Try to apply the rule with current facts
@@ -179,7 +180,7 @@ impl ForwardChaining {
 
             // Check if this is a new fact (not already known)
             if !known_facts.contains(&bound_atom) {
-                debug!("Generated new fact from rule: {:?}", bound_atom);
+                debug!("Generated new fact from rule: {bound_atom:?}");
                 new_facts.push(bound_atom);
             }
         }
@@ -205,6 +206,7 @@ pub struct BackwardChaining {
 
 impl BackwardChaining {
     /// Create a new backward chaining engine
+    #[must_use]
     pub fn new() -> Self {
         Self {
             max_goal_depth: 100,
@@ -216,18 +218,41 @@ impl BackwardChaining {
     pub fn execute(
         &mut self,
         rules: &[SWRLRule],
-        known_facts: &mut Vec<SWRLAtom>,
+        known_facts: &mut [SWRLAtom],
         ontology: &Arc<Ontology>,
         context: &mut SWRLExecutionContext,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
 
-        // For general execution, we don't have specific goals
-        // This is a placeholder implementation
+        // For general execution without specific goals,
+        // collect all head atoms as potential goals and try to prove them
+        let mut potential_goals: Vec<SWRLAtom> =
+            rules.iter().flat_map(|rule| rule.head.clone()).collect();
+
+        // Deduplicate goals
+        potential_goals.sort_by_key(|atom| format!("{atom:?}"));
+        potential_goals.dedup();
+
+        let mut total_inferences = Vec::new();
+        let mut total_applications = 0;
+
+        // Try to prove each potential goal
+        for goal in potential_goals.iter().take(10) {
+            // Limit to prevent excessive work
+            let result = self.execute_with_goal(rules, known_facts, ontology, context, goal)?;
+
+            total_inferences.extend(result.inferences);
+            total_applications += result.applications;
+
+            if result.fired {
+                info!("Backward chaining proved goal: {goal:?}");
+            }
+        }
+
         Ok(SWRLExecutionResult {
-            fired: false,
-            inferences: Vec::new(),
-            applications: 0,
+            fired: !total_inferences.is_empty(),
+            inferences: total_inferences,
+            applications: total_applications,
             execution_time_us: start_time.elapsed().as_micros() as u64,
         })
     }
@@ -236,9 +261,9 @@ impl BackwardChaining {
     pub fn execute_with_goal(
         &mut self,
         rules: &[SWRLRule],
-        known_facts: &mut Vec<SWRLAtom>,
-        ontology: &Arc<Ontology>,
-        context: &mut SWRLExecutionContext,
+        known_facts: &mut [SWRLAtom],
+        _ontology: &Arc<Ontology>,
+        _context: &mut SWRLExecutionContext,
         goal: &SWRLAtom,
     ) -> Result<SWRLExecutionResult> {
         let start_time = Instant::now();
@@ -250,7 +275,7 @@ impl BackwardChaining {
 
         while let Some(current_goal) = goal_stack.pop() {
             // Prevent infinite recursion
-            let goal_key = format!("{:?}", current_goal);
+            let goal_key = format!("{current_goal:?}");
             if visited_goals.contains(&goal_key) {
                 continue;
             }
@@ -327,6 +352,7 @@ pub struct HybridReasoning {
 
 impl HybridReasoning {
     /// Create a new hybrid reasoning engine
+    #[must_use]
     pub fn new() -> Self {
         Self {
             forward_engine: ForwardChaining::new(),

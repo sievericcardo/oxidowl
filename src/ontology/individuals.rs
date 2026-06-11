@@ -87,15 +87,6 @@ impl Individual {
         }
     }
 
-    /// Get a string representation of the individual.
-    #[must_use]
-    pub fn to_string(&self) -> String {
-        match self {
-            Individual::Named(named) => named.iri.to_string(),
-            Individual::Anonymous(anon) => format!("_:{}", anon.id),
-        }
-    }
-
     /// Get the IRI if this is a named individual
     #[must_use]
     pub fn iri(&self) -> Option<&crate::ontology::IRI> {
@@ -333,12 +324,9 @@ impl IndividualStore {
         &mut self,
         iri: crate::ontology::IRI,
     ) -> &NamedIndividual {
-        if !self.named_individuals.contains_key(&iri) {
-            self.add_named_individual(NamedIndividual { iri: iri.clone() });
-        }
         self.named_individuals
-            .get(&iri)
-            .expect("Named individual should exist")
+            .entry(iri.clone())
+            .or_insert_with(|| NamedIndividual { iri })
     }
 
     /// Add an anonymous individual to the store.
@@ -367,34 +355,30 @@ impl IndividualStore {
     pub fn add_assertion(&mut self, assertion: IndividualAssertion) -> Result<(), Error> {
         // Validate the assertion before adding it
         match &assertion {
-            IndividualAssertion::ClassAssertion { individual, class } => {
-                if !self.is_valid_class_assertion(individual, class) {
-                    return Err(Error::InvalidAssertion {
-                        message: "Invalid class assertion".to_string(),
-                    });
-                }
+            IndividualAssertion::ClassAssertion { individual, class }
+                if !self.is_valid_class_assertion(individual, class) =>
+            {
+                return Err(Error::InvalidAssertion {
+                    message: "Invalid class assertion".to_string(),
+                });
             }
             IndividualAssertion::ObjectPropertyAssertion {
                 subject,
                 object,
                 property,
-            } => {
-                if !self.is_valid_object_property_assertion(subject, object, property) {
-                    return Err(Error::InvalidAssertion {
-                        message: "Invalid object property assertion".to_string(),
-                    });
-                }
+            } if !self.is_valid_object_property_assertion(subject, object, property) => {
+                return Err(Error::InvalidAssertion {
+                    message: "Invalid object property assertion".to_string(),
+                });
             }
             IndividualAssertion::DataPropertyAssertion {
                 subject,
                 value,
                 property,
-            } => {
-                if !self.is_valid_data_property_assertion(subject, value, property) {
-                    return Err(Error::InvalidAssertion {
-                        message: "Invalid data property assertion".to_string(),
-                    });
-                }
+            } if !self.is_valid_data_property_assertion(subject, value, property) => {
+                return Err(Error::InvalidAssertion {
+                    message: "Invalid data property assertion".to_string(),
+                });
             }
             _ => {}
         }
@@ -404,10 +388,8 @@ impl IndividualStore {
                 if let Some(id) = individual.anonymous_id() {
                     self.add_anonymous_individual(id.clone());
                 }
-            } else {
-                if let Some(iri) = individual.named_iri() {
-                    self.add_named_individual(iri.clone());
-                }
+            } else if let Some(iri) = individual.named_iri() {
+                self.add_named_individual(iri.clone());
             }
         }
 
@@ -418,8 +400,8 @@ impl IndividualStore {
     /// Validate class assertion
     fn is_valid_class_assertion(
         &self,
-        individual: &Individual,
-        class: &crate::ontology::ClassExpression,
+        _individual: &Individual,
+        _class: &crate::ontology::ClassExpression,
     ) -> bool {
         // Basic validation - can be extended with more sophisticated checks
         true
@@ -428,9 +410,9 @@ impl IndividualStore {
     /// Validate object property assertion
     fn is_valid_object_property_assertion(
         &self,
-        subject: &Individual,
-        object: &Individual,
-        property: &crate::ontology::ObjectPropertyExpression,
+        _subject: &Individual,
+        _object: &Individual,
+        _property: &crate::ontology::ObjectPropertyExpression,
     ) -> bool {
         // Basic validation - can be extended with more sophisticated checks
         true
@@ -439,9 +421,9 @@ impl IndividualStore {
     /// Validate data property assertion
     fn is_valid_data_property_assertion(
         &self,
-        subject: &Individual,
-        value: &crate::ontology::Literal,
-        property: &crate::ontology::DataPropertyExpression,
+        _subject: &Individual,
+        _value: &crate::ontology::Literal,
+        _property: &crate::ontology::DataPropertyExpression,
     ) -> bool {
         // Basic validation - can be extended with more sophisticated checks
         true
@@ -470,20 +452,14 @@ impl IndividualStore {
     ) -> Vec<&IndividualAssertion> {
         self.assertions
             .iter()
-            .filter_map(|assertion| {
-                if let IndividualAssertion::ClassAssertion {
-                    individual: ind,
-                    class: _,
-                } = assertion
-                {
-                    if ind == individual {
-                        Some(assertion)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            .filter(|assertion| {
+                matches!(
+                    assertion,
+                    IndividualAssertion::ClassAssertion {
+                        individual: ind,
+                        class: _,
+                    } if ind == individual
+                )
             })
             .collect()
     }

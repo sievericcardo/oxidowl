@@ -91,7 +91,7 @@ impl SWRLExecutionContext {
     /// Pop bindings from stack
     pub fn pop_bindings(&mut self) -> Option<HashMap<SWRLVariable, SWRLValue>> {
         if let Some(bindings) = self.binding_stack.pop() {
-            self.bindings = bindings.clone();
+            self.bindings.clone_from(&bindings);
             Some(bindings)
         } else {
             None
@@ -100,13 +100,13 @@ impl SWRLExecutionContext {
 
     /// Bind a variable to a value
     pub fn bind(&mut self, variable: SWRLVariable, value: SWRLValue) -> Result<()> {
-        if let Some(existing) = self.bindings.get(&variable) {
-            if existing != &value {
-                return Err(Error::reasoning(format!(
-                    "Variable {} already bound to different value",
-                    variable.iri
-                )));
-            }
+        if let Some(existing) = self.bindings.get(&variable)
+            && existing != &value
+        {
+            return Err(Error::reasoning(format!(
+                "Variable {} already bound to different value",
+                variable.iri
+            )));
         }
         self.bindings.insert(variable, value);
         Ok(())

@@ -8,7 +8,7 @@
 
 use crate::Result;
 use crate::core::lock_helpers::{read_lock, write_lock};
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 /// Memory usage snapshot
@@ -47,9 +47,9 @@ impl MemorySnapshot {
 }
 
 /// Memory tracker with platform-specific implementations
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MemoryTracker {
-    snapshots: Arc<RwLock<Vec<MemorySnapshot>>>,
+    snapshots: RwLock<Vec<MemorySnapshot>>,
     max_snapshots: usize,
 }
 
@@ -58,7 +58,7 @@ impl MemoryTracker {
     #[must_use]
     pub fn new(max_snapshots: usize) -> Self {
         Self {
-            snapshots: Arc::new(RwLock::new(Vec::new())),
+            snapshots: RwLock::new(Vec::new()),
             max_snapshots,
         }
     }
@@ -117,12 +117,10 @@ impl MemoryTracker {
             .args(["-o", "rss=", "-p"])
             .arg(std::process::id().to_string())
             .output()
+            && let Ok(output_str) = String::from_utf8(output.stdout)
+            && let Ok(kb) = output_str.trim().parse::<usize>()
         {
-            if let Ok(output_str) = String::from_utf8(output.stdout) {
-                if let Ok(kb) = output_str.trim().parse::<usize>() {
-                    return kb * 1024; // Convert KB to bytes
-                }
-            }
+            return kb * 1024; // Convert KB to bytes
         }
         0
     }
@@ -182,30 +180,29 @@ impl MemoryTracker {
         use std::process::Command;
 
         // Use vm_stat to get memory statistics
-        if let Ok(output) = Command::new("vm_stat").output() {
-            if let Ok(output_str) = String::from_utf8(output.stdout) {
-                let mut free_pages = 0usize;
-                let mut inactive_pages = 0usize;
+        if let Ok(output) = Command::new("vm_stat").output()
+            && let Ok(output_str) = String::from_utf8(output.stdout)
+        {
+            let mut free_pages = 0usize;
+            let mut inactive_pages = 0usize;
 
-                for line in output_str.lines() {
-                    if line.contains("Pages free:") {
-                        if let Some(value) = line.split(':').nth(1) {
-                            if let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
-                                free_pages = pages;
-                            }
-                        }
-                    } else if line.contains("Pages inactive:") {
-                        if let Some(value) = line.split(':').nth(1) {
-                            if let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>() {
-                                inactive_pages = pages;
-                            }
-                        }
+            for line in output_str.lines() {
+                if line.contains("Pages free:") {
+                    if let Some(value) = line.split(':').nth(1)
+                        && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>()
+                    {
+                        free_pages = pages;
                     }
+                } else if line.contains("Pages inactive:")
+                    && let Some(value) = line.split(':').nth(1)
+                    && let Ok(pages) = value.trim().trim_end_matches('.').parse::<usize>()
+                {
+                    inactive_pages = pages;
                 }
-
-                // Page size is typically 4096 bytes on macOS
-                return (free_pages + inactive_pages) * 4096;
             }
+
+            // Page size is typically 4096 bytes on macOS
+            return (free_pages + inactive_pages) * 4096;
         }
         0
     }
@@ -244,12 +241,15 @@ impl MemoryTracker {
             return Ok(MemoryStats::default());
         }
 
-        let total_used: Vec<usize> = snapshots.iter().map(|s| s.total_used()).collect();
+        let total_used: Vec<usize> = snapshots.iter().map(MemorySnapshot::total_used).collect();
         let heap_allocated: Vec<usize> = snapshots.iter().map(|s| s.heap_allocated).collect();
         let cache_sizes: Vec<usize> = snapshots.iter().map(|s| s.cache_size).collect();
 
         Ok(MemoryStats {
-            current_total_mb: snapshots.last().map(|s| s.total_used_mb()).unwrap_or(0.0),
+            current_total_mb: snapshots
+                .last()
+                .map(MemorySnapshot::total_used_mb)
+                .unwrap_or(0.0),
             peak_total_mb: total_used.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
             avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64)
                 / (1024.0 * 1024.0),
@@ -267,7 +267,7 @@ impl MemoryTracker {
                 / (1024.0 * 1024.0),
             system_available_mb: snapshots
                 .last()
-                .map(|s| s.system_available_mb())
+                .map(MemorySnapshot::system_available_mb)
                 .unwrap_or(0.0),
         })
     }
@@ -368,9 +368,9 @@ impl QueryTiming {
 }
 
 /// Query profiler that tracks execution timing
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct QueryProfiler {
-    timings: Arc<RwLock<Vec<QueryTiming>>>,
+    timings: RwLock<Vec<QueryTiming>>,
     max_timings: usize,
 }
 
@@ -379,7 +379,7 @@ impl QueryProfiler {
     #[must_use]
     pub fn new(max_timings: usize) -> Self {
         Self {
-            timings: Arc::new(RwLock::new(Vec::new())),
+            timings: RwLock::new(Vec::new()),
             max_timings,
         }
     }
@@ -438,7 +438,7 @@ impl QueryProfiler {
         if durations.is_empty() {
             return 0.0;
         }
-        let total_ms: u128 = durations.iter().map(|d| d.as_millis()).sum();
+        let total_ms: u128 = durations.iter().map(std::time::Duration::as_millis).sum();
         total_ms as f64 / durations.len() as f64
     }
 
@@ -469,7 +469,7 @@ pub struct QueryProfilingStats {
 }
 
 /// Performance monitor that coordinates all monitoring components
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PerformanceMonitor {
     memory_tracker: MemoryTracker,
     query_profiler: QueryProfiler,

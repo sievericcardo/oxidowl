@@ -461,7 +461,7 @@ pub struct SWRLRuleAxiom {
     pub annotations: Vec<crate::ontology::Annotation>,
 }
 
-/// OWL 2 HasKey Axiom
+/// OWL 2 `HasKey` Axiom
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HasKeyAxiom {
     pub id: AxiomId,
@@ -634,6 +634,7 @@ impl AxiomTrait for Axiom {
 pub struct AxiomStore {
     axioms: HashMap<AxiomId, Axiom>,
     axioms_by_type: HashMap<AxiomType, HashSet<AxiomId>>,
+    #[allow(dead_code)]
     next_id: AxiomId,
 }
 
@@ -769,7 +770,6 @@ impl Default for AxiomStore {
 ///
 /// These structures implement SWRL rules as specified in the W3C User Submission
 /// <https://www.w3.org/Submission/SWRL>/
-
 /// SWRL Variable
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SWRLVariable {

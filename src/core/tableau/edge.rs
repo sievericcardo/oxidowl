@@ -25,6 +25,7 @@ pub struct TableauEdge {
 
 impl TableauEdge {
     /// Create a new tableau edge
+    #[must_use]
     pub fn new(
         from: NodeId,
         to: NodeId,
@@ -40,16 +41,19 @@ impl TableauEdge {
     }
 
     /// Get the role name
+    #[must_use]
     pub fn role_name(&self) -> &str {
         self.role.name()
     }
 
     /// Check if this edge represents an inverse role
+    #[must_use]
     pub fn is_inverse(&self) -> bool {
         matches!(self.role, RoleLabel::Inverse(_))
     }
 
     /// Create the inverse of this edge
+    #[must_use]
     pub fn inverse(&self) -> Self {
         let inverse_role = match &self.role {
             RoleLabel::Atomic(name) => RoleLabel::Inverse(name.clone()),
@@ -62,7 +66,7 @@ impl TableauEdge {
             from: self.to,
             to: self.from,
             role: inverse_role,
-            dependencies: self.dependencies.clone(),
+            dependencies: Arc::clone(&self.dependencies),
         }
     }
 }
@@ -77,5 +81,5 @@ pub struct PropertyInclusion {
     pub super_property: RoleLabel,
 
     /// Dependencies for this inclusion
-    pub dependencies: DependencySet,
+    pub dependencies: Arc<DependencySet>,
 }

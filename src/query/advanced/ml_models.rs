@@ -98,6 +98,7 @@ struct LayerGradients {
 
 impl LinearRegressionModel {
     /// Create a new linear regression model
+    #[must_use]
     pub fn new(feature_count: usize) -> Self {
         Self {
             execution_time_coefficients: vec![0.1; feature_count], // Initialize with small random values
@@ -196,7 +197,7 @@ impl LinearRegressionModel {
         let correlation = self.calculate_correlation(&exec_actuals, data);
 
         self.accuracy_metrics = AccuracyMetrics {
-            mean_absolute_error: (exec_mae + memory_mae) / 2.0,
+            mean_absolute_error: f64::midpoint(exec_mae, memory_mae),
             root_mean_square_error: exec_rmse,
             correlation_coefficient: correlation,
             prediction_count: data.len(),
@@ -285,6 +286,7 @@ impl PerformancePredictionModel for LinearRegressionModel {
 
 impl NeuralNetworkModel {
     /// Create a new neural network model
+    #[must_use]
     pub fn new(feature_count: usize, hidden_sizes: Vec<usize>) -> Self {
         let mut layers = Vec::new();
         let mut input_size = feature_count;
@@ -356,7 +358,7 @@ impl NeuralNetworkModel {
                         log::warn!("No activation layers in neural network");
                         continue;
                     };
-                    let target = vec![point.execution_time, point.memory_usage];
+                    let target = [point.execution_time, point.memory_usage];
                     let mut delta: Vec<f64> = output
                         .iter()
                         .zip(target.iter())
@@ -373,25 +375,24 @@ impl NeuralNetworkModel {
                         };
 
                         // Compute gradients for this layer
-                        for j in 0..layer.output_size {
-                            for k in 0..layer.input_size {
+                        for (j, &d) in delta.iter().enumerate().take(layer.output_size) {
+                            for (k, &inp) in input.iter().enumerate().take(layer.input_size) {
                                 let weight_idx = j * layer.input_size + k;
-                                layer_gradients[i].weight_gradients[weight_idx] +=
-                                    delta[j] * input[k];
+                                layer_gradients[i].weight_gradients[weight_idx] += d * inp;
                             }
-                            layer_gradients[i].bias_gradients[j] += delta[j];
+                            layer_gradients[i].bias_gradients[j] += d;
                         }
 
                         // Propagate error to previous layer
                         if i > 0 {
                             let mut new_delta = vec![0.0; layer.input_size];
-                            for j in 0..layer.input_size {
-                                for k in 0..layer.output_size {
+                            for (j, nd) in new_delta.iter_mut().enumerate() {
+                                for (k, &d) in delta.iter().enumerate().take(layer.output_size) {
                                     let weight_idx = k * layer.input_size + j;
-                                    new_delta[j] += delta[k] * layer.weights[weight_idx];
+                                    *nd += d * layer.weights[weight_idx];
                                 }
                                 // Apply activation derivative
-                                new_delta[j] *= self.activation_derivative(
+                                *nd *= self.activation_derivative(
                                     activations[i - 1][j],
                                     &self.layers[i - 1].activation,
                                 );
@@ -467,16 +468,45 @@ impl NeuralNetworkModel {
             let prediction = self.forward(&point.query_features);
             let exec_error = (prediction[0] - point.execution_time).abs();
             let memory_error = (prediction[1] - point.memory_usage).abs();
-            errors.push((exec_error + memory_error) / 2.0);
+            errors.push(f64::midpoint(exec_error, memory_error));
         }
 
         let mae = errors.iter().sum::<f64>() / errors.len() as f64;
         let mse = errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64;
 
+        // Calculate correlation coefficient between predictions and actual values
+        let mean_actual = data.iter().map(|p| p.execution_time).sum::<f64>() / data.len() as f64;
+        let mean_pred = data
+            .iter()
+            .map(|p| {
+                let features = &p.query_features;
+                self.predict_execution_time(features)
+            })
+            .sum::<f64>()
+            / data.len() as f64;
+
+        let mut covariance = 0.0;
+        let mut var_actual = 0.0;
+        let mut var_pred = 0.0;
+
+        for point in data {
+            let features = &point.query_features;
+            let pred = self.predict_execution_time(features);
+            covariance += (point.execution_time - mean_actual) * (pred - mean_pred);
+            var_actual += (point.execution_time - mean_actual).powi(2);
+            var_pred += (pred - mean_pred).powi(2);
+        }
+
+        let correlation = if var_actual > 0.0 && var_pred > 0.0 {
+            covariance / (var_actual.sqrt() * var_pred.sqrt())
+        } else {
+            0.0
+        };
+
         self.accuracy_metrics = AccuracyMetrics {
             mean_absolute_error: mae,
             root_mean_square_error: mse.sqrt(),
-            correlation_coefficient: 0.7, // Placeholder
+            correlation_coefficient: correlation.abs(),
             prediction_count: data.len(),
         };
     }
@@ -533,11 +563,11 @@ impl Layer {
         let mut output = vec![0.0; self.output_size];
 
         // Matrix multiplication: output = weights * input + bias
-        for i in 0..self.output_size {
-            for j in 0..self.input_size {
-                output[i] += self.weights[i * self.input_size + j] * input[j];
+        for (i, out) in output.iter_mut().enumerate() {
+            for (j, &inp) in input.iter().enumerate() {
+                *out += self.weights[i * self.input_size + j] * inp;
             }
-            output[i] += self.biases[i];
+            *out += self.biases[i];
         }
 
         // Apply activation function
@@ -563,6 +593,7 @@ impl ActivationFunction {
 
 impl EnsembleModel {
     /// Create a new ensemble model
+    #[must_use]
     pub fn new(models: Vec<Box<dyn PerformancePredictionModel>>) -> Self {
         let model_count = models.len();
         let equal_weights = vec![1.0 / model_count as f64; model_count];
@@ -633,16 +664,43 @@ impl PerformancePredictionModel for EnsembleModel {
                 let memory_pred = self.predict_memory_usage(&point.query_features);
                 let exec_error = (exec_pred - point.execution_time).abs();
                 let memory_error = (memory_pred - point.memory_usage).abs();
-                errors.push((exec_error + memory_error) / 2.0);
+                errors.push(f64::midpoint(exec_error, memory_error));
             }
 
             let mae = errors.iter().sum::<f64>() / errors.len() as f64;
             let mse = errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64;
 
+            // Calculate correlation coefficient between predictions and actual execution times
+            let mean_actual_exec = training_data.iter().map(|p| p.execution_time).sum::<f64>()
+                / training_data.len() as f64;
+            let mean_pred_exec = training_data
+                .iter()
+                .map(|p| self.predict_execution_time(&p.query_features))
+                .sum::<f64>()
+                / training_data.len() as f64;
+
+            let mut covariance = 0.0;
+            let mut var_actual = 0.0;
+            let mut var_pred = 0.0;
+
+            for point in training_data {
+                let pred_exec = self.predict_execution_time(&point.query_features);
+                covariance +=
+                    (point.execution_time - mean_actual_exec) * (pred_exec - mean_pred_exec);
+                var_actual += (point.execution_time - mean_actual_exec).powi(2);
+                var_pred += (pred_exec - mean_pred_exec).powi(2);
+            }
+
+            let correlation = if var_actual > 0.0 && var_pred > 0.0 {
+                covariance / (var_actual.sqrt() * var_pred.sqrt())
+            } else {
+                0.0
+            };
+
             self.accuracy_metrics = AccuracyMetrics {
                 mean_absolute_error: mae,
                 root_mean_square_error: mse.sqrt(),
-                correlation_coefficient: 0.8, // Placeholder
+                correlation_coefficient: correlation.abs().min(1.0),
                 prediction_count: training_data.len(),
             };
         }

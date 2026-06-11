@@ -1,7 +1,7 @@
 //! Distributed Query Processing Module
 //!
 //! Phase 2.2 implementation providing distributed reasoning capabilities across multiple nodes.
-//! This module enables horizontal scaling of OxidOWL for large-scale ontology processing.
+//! This module enables horizontal scaling of `OxidOWL` for large-scale ontology processing.
 //!
 //! # Architecture Overview
 //!
@@ -37,6 +37,7 @@ pub use result_aggregation::{AggregatedResult, PartialResult, ResultAggregator};
 
 use crate::prelude::*;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -189,7 +190,7 @@ pub enum CommunicationProtocol {
     /// gRPC communication
     Grpc,
 
-    /// HTTP-based RESTful API
+    /// HTTP-based `RESTful` API
     Http,
 
     /// WebSocket communication
@@ -519,57 +520,37 @@ impl Default for LoadBalancingConfig {
 /// Main distributed query processing service
 pub struct DistributedQueryProcessor {
     /// Configuration for the distributed system
+    #[allow(dead_code)]
     config: DistributedConfig,
 
-    /// Cluster management component
-    cluster_manager: Arc<RwLock<ClusterManager>>,
+    /// Cluster management component (actor handle)
+    cluster_manager: ClusterManager,
 
-    /// Query distribution component
-    query_distributor: Arc<RwLock<QueryDistributor>>,
+    /// Query distribution component (actor handle)
+    query_distributor: QueryDistributor,
 
-    /// Result aggregation component
+    /// Result aggregation component (kept as-is)
     result_aggregator: Arc<RwLock<ResultAggregator>>,
 
-    /// Fault tolerance component
-    fault_tolerance: Arc<RwLock<FaultTolerance>>,
+    /// Fault tolerance component (actor handle)
+    fault_tolerance: FaultTolerance,
 
-    /// Load balancing component
-    load_balancer: Arc<RwLock<LoadBalancer>>,
+    /// Load balancing component (actor handle)
+    load_balancer: LoadBalancer,
 
-    /// Cluster coordination component
-    coordinator: Arc<RwLock<ClusterCoordinator>>,
+    /// Cluster coordination component (actor handle)
+    coordinator: ClusterCoordinator,
 }
 
 impl DistributedQueryProcessor {
     /// Create a new distributed query processor
     pub async fn new(config: DistributedConfig) -> Result<Self> {
-        // Initialize cluster manager
-        let cluster_manager = Arc::new(RwLock::new(
-            ClusterManager::new(config.cluster_config.clone()).await?,
-        ));
-
-        // Initialize query distributor
-        let query_distributor = Arc::new(RwLock::new(
-            QueryDistributor::new(config.query_config.clone()).await?,
-        ));
-
-        // Initialize result aggregator
+        let cluster_manager = ClusterManager::new(config.cluster_config.clone()).await?;
+        let query_distributor = QueryDistributor::new(config.query_config.clone()).await?;
         let result_aggregator = Arc::new(RwLock::new(ResultAggregator::new().await?));
-
-        // Initialize fault tolerance
-        let fault_tolerance = Arc::new(RwLock::new(
-            FaultTolerance::new(config.fault_tolerance_config.clone()).await?,
-        ));
-
-        // Initialize load balancer
-        let load_balancer = Arc::new(RwLock::new(
-            LoadBalancer::new(config.load_balancing_config.clone()).await?,
-        ));
-
-        // Initialize cluster coordinator
-        let coordinator = Arc::new(RwLock::new(
-            ClusterCoordinator::new(config.cluster_config.clone()).await?,
-        ));
+        let fault_tolerance = FaultTolerance::new(config.fault_tolerance_config.clone()).await?;
+        let load_balancer = LoadBalancer::new(config.load_balancing_config.clone()).await?;
+        let coordinator = ClusterCoordinator::new(config.cluster_config.clone()).await?;
 
         Ok(Self {
             config,
@@ -585,39 +566,10 @@ impl DistributedQueryProcessor {
     /// Start the distributed query processor
     pub async fn start(&self) -> Result<()> {
         info!("Starting distributed query processor...");
-
-        // Start cluster manager
-        let cluster_manager = self.cluster_manager.clone();
-        tokio::spawn(async move {
-            if let Err(e) = cluster_manager.write().await.start().await {
-                error!("Cluster manager failed: {}", e);
-            }
-        });
-
-        // Start coordinator
-        let coordinator = self.coordinator.clone();
-        tokio::spawn(async move {
-            if let Err(e) = coordinator.write().await.start().await {
-                error!("Cluster coordinator failed: {}", e);
-            }
-        });
-
-        // Start fault tolerance monitoring
-        let fault_tolerance = self.fault_tolerance.clone();
-        tokio::spawn(async move {
-            if let Err(e) = fault_tolerance.write().await.start_monitoring().await {
-                error!("Fault tolerance monitoring failed: {}", e);
-            }
-        });
-
-        // Start load balancer
-        let load_balancer = self.load_balancer.clone();
-        tokio::spawn(async move {
-            if let Err(e) = load_balancer.write().await.start().await {
-                error!("Load balancer failed: {}", e);
-            }
-        });
-
+        self.cluster_manager.start().await?;
+        self.coordinator.start().await?;
+        self.fault_tolerance.start_monitoring().await?;
+        self.load_balancer.start().await?;
         info!("Distributed query processor started successfully");
         Ok(())
     }
@@ -632,19 +584,15 @@ impl DistributedQueryProcessor {
             query.body_atoms.len()
         );
 
-        // Distribute the query across available nodes
-        let distributed_query = {
-            let distributor = self.query_distributor.read().await;
-            let cluster = self.cluster_manager.read().await;
-            distributor.distribute_query(&query, &cluster).await?
-        };
+        let distributed_query = self
+            .query_distributor
+            .distribute_query(&query, &self.cluster_manager)
+            .await?;
 
-        // Execute query partitions in parallel
         let partial_results = self
             .execute_query_partitions(distributed_query.partitions)
             .await?;
 
-        // Aggregate results
         let aggregated_result = {
             let aggregator = self.result_aggregator.read().await;
             aggregator.aggregate_results(partial_results).await?
@@ -666,15 +614,14 @@ impl DistributedQueryProcessor {
             let fault_tolerance = self.fault_tolerance.clone();
 
             let task = tokio::spawn(async move {
-                // Execute partition with fault tolerance
-                let ft = fault_tolerance.read().await;
-                ft.execute_with_retry(&partition, &cluster_manager).await
+                fault_tolerance
+                    .execute_with_retry(&partition, &cluster_manager)
+                    .await
             });
 
             tasks.push(task);
         }
 
-        // Wait for all tasks to complete
         let mut results = Vec::new();
         for task in tasks {
             match task.await {
@@ -682,7 +629,7 @@ impl DistributedQueryProcessor {
                 Ok(Err(e)) => return Err(e),
                 Err(e) => {
                     return Err(Error::Internal {
-                        message: format!("Task execution failed: {}", e),
+                        message: format!("Task execution failed: {e}"),
                     });
                 }
             }
@@ -693,47 +640,26 @@ impl DistributedQueryProcessor {
 
     /// Get cluster status information
     pub async fn get_cluster_status(&self) -> Result<ClusterState> {
-        let cluster_manager = self.cluster_manager.read().await;
-        cluster_manager.get_cluster_state().await
+        self.cluster_manager.get_cluster_state().await
     }
 
     /// Add a new node to the cluster
     pub async fn add_node(&self, node_info: NodeInfo) -> Result<()> {
-        let mut cluster_manager = self.cluster_manager.write().await;
-        cluster_manager.add_node(node_info).await
+        self.cluster_manager.add_node(node_info).await
     }
 
     /// Remove a node from the cluster
     pub async fn remove_node(&self, node_id: NodeId) -> Result<()> {
-        let mut cluster_manager = self.cluster_manager.write().await;
-        cluster_manager.remove_node(node_id).await
+        self.cluster_manager.remove_node(node_id).await
     }
 
     /// Stop the distributed query processor
     pub async fn stop(&self) -> Result<()> {
         info!("Stopping distributed query processor...");
-
-        // Stop all components
-        {
-            let mut cluster_manager = self.cluster_manager.write().await;
-            cluster_manager.stop().await?;
-        }
-
-        {
-            let mut coordinator = self.coordinator.write().await;
-            coordinator.stop().await?;
-        }
-
-        {
-            let fault_tolerance = self.fault_tolerance.write().await;
-            fault_tolerance.stop().await?;
-        }
-
-        {
-            let mut load_balancer = self.load_balancer.write().await;
-            load_balancer.stop().await?;
-        }
-
+        self.cluster_manager.stop().await?;
+        self.coordinator.stop().await?;
+        self.fault_tolerance.stop().await?;
+        self.load_balancer.stop().await?;
         info!("Distributed query processor stopped successfully");
         Ok(())
     }

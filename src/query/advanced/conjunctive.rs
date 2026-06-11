@@ -62,12 +62,12 @@ pub enum QueryAtom {
         left: QueryVariable,
         right: QueryVariable,
     },
-    /// Concrete individual atom: x = individual_iri
+    /// Concrete individual atom: x = `individual_iri`
     ConcreteIndividualAtom {
         variable: QueryVariable,
         individual: Individual,
     },
-    /// Concrete literal atom: v = literal_value
+    /// Concrete literal atom: v = `literal_value`
     ConcreteLiteralAtom {
         variable: QueryVariable,
         literal: Literal,
@@ -202,16 +202,19 @@ impl QueryVariable {
     }
 
     /// Check if this variable can be bound to individuals
+    #[must_use]
     pub fn is_individual(&self) -> bool {
         matches!(self.var_type, VariableType::Individual)
     }
 
     /// Check if this variable can be bound to classes
+    #[must_use]
     pub fn is_class(&self) -> bool {
         matches!(self.var_type, VariableType::Class)
     }
 
     /// Check if this variable can be bound to literals
+    #[must_use]
     pub fn is_literal(&self) -> bool {
         matches!(self.var_type, VariableType::Literal)
     }
@@ -219,6 +222,7 @@ impl QueryVariable {
 
 impl ConjunctiveQuery {
     /// Create a new empty conjunctive query
+    #[must_use]
     pub fn new() -> Self {
         Self {
             answer_variables: Vec::new(),
@@ -241,6 +245,7 @@ impl ConjunctiveQuery {
     }
 
     /// Get all variables appearing in the query
+    #[must_use]
     pub fn get_all_variables(&self) -> HashSet<QueryVariable> {
         let mut variables = HashSet::new();
 
@@ -281,6 +286,7 @@ impl ConjunctiveQuery {
     }
 
     /// Check if the query is well-formed
+    #[must_use]
     pub fn is_well_formed(&self) -> bool {
         // Check that all answer variables appear in the body
         let body_variables = self.get_body_variables();
@@ -290,6 +296,7 @@ impl ConjunctiveQuery {
     }
 
     /// Get variables that appear only in the query body
+    #[must_use]
     pub fn get_body_variables(&self) -> HashSet<QueryVariable> {
         let mut variables = HashSet::new();
 
@@ -326,6 +333,7 @@ impl ConjunctiveQuery {
     }
 
     /// Get the complexity score of this query (higher = more complex)
+    #[must_use]
     pub fn complexity_score(&self) -> u32 {
         let mut score = 0;
 
@@ -404,36 +412,36 @@ impl fmt::Display for QueryAtom {
                 variable,
                 class_expression,
             } => {
-                write!(f, "{}({})", class_expression, variable)
+                write!(f, "{class_expression}({variable})")
             }
             QueryAtom::ObjectPropertyAtom {
                 subject,
                 property,
                 object,
             } => {
-                write!(f, "{}({}, {})", property, subject, object)
+                write!(f, "{property}({subject}, {object})")
             }
             QueryAtom::DataPropertyAtom {
                 subject,
                 property,
                 literal,
             } => {
-                write!(f, "{}({}, {})", property, subject, literal)
+                write!(f, "{property}({subject}, {literal})")
             }
             QueryAtom::SameIndividualAtom { left, right } => {
-                write!(f, "{} = {}", left, right)
+                write!(f, "{left} = {right}")
             }
             QueryAtom::DifferentIndividualsAtom { left, right } => {
-                write!(f, "{} ≠ {}", left, right)
+                write!(f, "{left} ≠ {right}")
             }
             QueryAtom::ConcreteIndividualAtom {
                 variable,
                 individual,
             } => {
-                write!(f, "{} = {}", variable, individual)
+                write!(f, "{variable} = {individual}")
             }
             QueryAtom::ConcreteLiteralAtom { variable, literal } => {
-                write!(f, "{} = {}", variable, literal)
+                write!(f, "{variable} = {literal}")
             }
         }
     }
@@ -450,7 +458,7 @@ impl fmt::Display for ConjunctiveQuery {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}", var)?;
+                write!(f, "{var}")?;
             }
         }
 
@@ -460,7 +468,7 @@ impl fmt::Display for ConjunctiveQuery {
             if i > 0 {
                 write!(f, " . ")?;
             }
-            write!(f, "{}", atom)?;
+            write!(f, "{atom}")?;
         }
 
         write!(f, " }}")

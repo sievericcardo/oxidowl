@@ -46,7 +46,7 @@ pub struct DLClauseSet {
     pub deterministic_clauses: Vec<DLClause>,
     /// Disjunctive DL clauses (multiple heads)
     pub disjunctive_clauses: Vec<DLClause>,
-    /// ABox facts (ground assertions)
+    /// `ABox` facts (ground assertions)
     pub abox_facts: Vec<DLAtom>,
     /// Prefixes used in the ontology
     pub prefixes: HashMap<String, String>,
@@ -66,6 +66,7 @@ pub struct DLClauseStatistics {
 
 impl DLAtom {
     /// Create a new positive atomic formula
+    #[must_use]
     pub fn new(predicate: String, arguments: Vec<String>) -> Self {
         Self {
             predicate,
@@ -76,6 +77,7 @@ impl DLAtom {
     }
 
     /// Create a new negative atomic formula
+    #[must_use]
     pub fn new_negative(predicate: String, arguments: Vec<String>) -> Self {
         Self {
             predicate,
@@ -86,23 +88,27 @@ impl DLAtom {
     }
 
     /// Create an atom with specified negation
+    #[must_use]
     pub fn with_negation(mut self, negate: bool) -> Self {
         self.is_positive = !negate;
         self
     }
 
     /// Add a constraint to this atom
+    #[must_use]
     pub fn with_constraint(mut self, constraint: String) -> Self {
         self.constraints.push(constraint);
         self
     }
 
     /// Create a concept assertion C(x)
+    #[must_use]
     pub fn concept_assertion(concept: &str, individual: &str) -> Self {
         Self::new(concept.to_string(), vec![individual.to_string()])
     }
 
     /// Create a role assertion R(x, y)
+    #[must_use]
     pub fn role_assertion(role: &str, subject: &str, object: &str) -> Self {
         Self::new(
             role.to_string(),
@@ -111,6 +117,7 @@ impl DLAtom {
     }
 
     /// Create a datatype property assertion P(x, v)
+    #[must_use]
     pub fn datatype_assertion(property: &str, subject: &str, value: &str) -> Self {
         Self::new(
             property.to_string(),
@@ -118,7 +125,8 @@ impl DLAtom {
         )
     }
 
-    /// Create an atLeast cardinality atom - HermiT style
+    /// Create an atLeast cardinality atom - `HermiT` style
+    #[must_use]
     pub fn at_least_cardinality(
         cardinality: u32,
         property: &str,
@@ -126,12 +134,13 @@ impl DLAtom {
         subject: &str,
     ) -> Self {
         Self::new(
-            format!("atLeast({},{},{})", cardinality, property, range),
+            format!("atLeast({cardinality},{property},{range})"),
             vec![subject.to_string()],
         )
     }
 
-    /// Create an atMost cardinality atom - HermiT style
+    /// Create an atMost cardinality atom - `HermiT` style
+    #[must_use]
     pub fn at_most_cardinality(
         cardinality: u32,
         property: &str,
@@ -139,17 +148,19 @@ impl DLAtom {
         subject: &str,
     ) -> Self {
         Self::new(
-            format!("atMost({},{},{})", cardinality, property, range),
+            format!("atMost({cardinality},{property},{range})"),
             vec![subject.to_string()],
         )
     }
 
-    /// Create an equality constraint atom - HermiT style
+    /// Create an equality constraint atom - `HermiT` style
+    #[must_use]
     pub fn equality_constraint(var1: &str, var2: &str) -> Self {
-        Self::new(format!("[{} == {}]", var1, var2), vec![])
+        Self::new(format!("[{var1} == {var2}]"), vec![])
     }
 
-    /// Create a datatype restriction atom - HermiT style
+    /// Create a datatype restriction atom - `HermiT` style
+    #[must_use]
     pub fn datatype_restriction(datatype: &str, restrictions: &[String], variable: &str) -> Self {
         let restriction_str = if restrictions.is_empty() {
             datatype.to_string()
@@ -159,9 +170,10 @@ impl DLAtom {
         Self::new(restriction_str, vec![variable.to_string()])
     }
 
-    /// Create a nominal atom - HermiT style
+    /// Create a nominal atom - `HermiT` style
+    #[must_use]
     pub fn nominal(value: &str, variable: &str) -> Self {
-        Self::new(format!("{{{}}}", value), vec![variable.to_string()])
+        Self::new(format!("{{{value}}}"), vec![variable.to_string()])
     }
 }
 
@@ -198,20 +210,21 @@ impl fmt::Display for DLAtom {
 
 impl DLClause {
     /// Create a new DL clause
+    #[must_use]
     pub fn new(head: Vec<DLAtom>, body: Vec<DLAtom>, id: String) -> Self {
         let mut variables = HashSet::new();
 
         // Collect variables from head and body
         for atom in &head {
             for arg in &atom.arguments {
-                if arg.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if arg.chars().next().is_some_and(char::is_uppercase) {
                     variables.insert(arg.clone());
                 }
             }
         }
         for atom in &body {
             for arg in &atom.arguments {
-                if arg.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if arg.chars().next().is_some_and(char::is_uppercase) {
                     variables.insert(arg.clone());
                 }
             }
@@ -226,21 +239,25 @@ impl DLClause {
     }
 
     /// Check if this is a deterministic clause (at most one head atom)
+    #[must_use]
     pub fn is_deterministic(&self) -> bool {
         self.head.len() <= 1
     }
 
     /// Check if this is a disjunctive clause (multiple head atoms)
+    #[must_use]
     pub fn is_disjunctive(&self) -> bool {
         self.head.len() > 1
     }
 
     /// Check if this is a fact (no body atoms)
+    #[must_use]
     pub fn is_fact(&self) -> bool {
         self.body.is_empty()
     }
 
     /// Check if this is a constraint (no head atoms)
+    #[must_use]
     pub fn is_constraint(&self) -> bool {
         self.head.is_empty()
     }
@@ -255,7 +272,7 @@ impl fmt::Display for DLClause {
                 ": - {}",
                 self.body
                     .iter()
-                    .map(|a| a.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -272,7 +289,7 @@ impl fmt::Display for DLClause {
                     self.head[0],
                     self.body
                         .iter()
-                        .map(|a| a.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -286,7 +303,7 @@ impl fmt::Display for DLClause {
                     "{}",
                     self.head
                         .iter()
-                        .map(|a| a.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" v ")
                 )
@@ -297,12 +314,12 @@ impl fmt::Display for DLClause {
                     "{} :- {}",
                     self.head
                         .iter()
-                        .map(|a| a.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" v "),
                     self.body
                         .iter()
-                        .map(|a| a.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -313,6 +330,7 @@ impl fmt::Display for DLClause {
 
 impl DLClauseSet {
     /// Create a new empty clause set
+    #[must_use]
     pub fn new() -> Self {
         Self {
             deterministic_clauses: Vec::new(),
@@ -340,7 +358,7 @@ impl DLClauseSet {
         }
     }
 
-    /// Add an ABox fact
+    /// Add an `ABox` fact
     pub fn add_fact(&mut self, fact: DLAtom) {
         self.abox_facts.push(fact);
         self.update_statistics();
@@ -367,6 +385,7 @@ impl DLClauseSet {
     }
 
     /// Get total number of clauses
+    #[must_use]
     pub fn total_clauses(&self) -> usize {
         self.deterministic_clauses.len() + self.disjunctive_clauses.len()
     }
@@ -394,15 +413,15 @@ impl std::fmt::Display for DLClauseSet {
         writeln!(f, "  ABox facts: {}", self.abox_facts.len())?;
 
         for (i, clause) in self.deterministic_clauses.iter().enumerate() {
-            writeln!(f, "DeterministicClause[{}]: {}", i, clause)?;
+            writeln!(f, "DeterministicClause[{i}]: {clause}")?;
         }
 
         for (i, clause) in self.disjunctive_clauses.iter().enumerate() {
-            writeln!(f, "DisjunctiveClause[{}]: {}", i, clause)?;
+            writeln!(f, "DisjunctiveClause[{i}]: {clause}")?;
         }
 
         for (i, fact) in self.abox_facts.iter().enumerate() {
-            writeln!(f, "Fact[{}]: {}", i, fact)?;
+            writeln!(f, "Fact[{i}]: {fact}")?;
         }
 
         Ok(())

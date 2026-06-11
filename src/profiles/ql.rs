@@ -23,11 +23,13 @@ use std::collections::HashSet;
 /// OWL 2 QL restricts the language to ensure polynomial-time query answering.
 pub struct QLValidator {
     /// Prohibited constructs in QL
+    #[allow(dead_code)]
     prohibited_constructs: HashSet<String>,
 }
 
 impl QLValidator {
     /// Create a new QL profile validator
+    #[must_use]
     pub fn new() -> Self {
         let mut prohibited_constructs = HashSet::new();
 
@@ -94,10 +96,9 @@ impl QLValidator {
                         if !self.is_ql_basic_class_expression(class_expr) {
                             report.add_violation(ProfileViolation::new(
                                 ProfileViolationType::DisallowedClassExpression(format!(
-                                    "{:?}",
-                                    class_expr
+                                    "{class_expr:?}"
                                 )),
-                                format!("Non-basic class in equivalence: {:?}", class_expr),
+                                format!("Non-basic class in equivalence: {class_expr:?}"),
                             ));
                         }
                     }
@@ -108,17 +109,16 @@ impl QLValidator {
                         if !self.is_ql_basic_class_expression(class_expr) {
                             report.add_violation(ProfileViolation::new(
                                 ProfileViolationType::DisallowedClassExpression(format!(
-                                    "{:?}",
-                                    class_expr
+                                    "{class_expr:?}"
                                 )),
-                                format!("Non-basic class in disjointness: {:?}", class_expr),
+                                format!("Non-basic class in disjointness: {class_expr:?}"),
                             ));
                         }
                     }
                 }
-                Axiom::ClassAssertion(class_assertion) => {
+                Axiom::ClassAssertion(class_assertion)
                     // Class must be basic
-                    if !self.is_ql_basic_class_expression(&class_assertion.class) {
+                    if !self.is_ql_basic_class_expression(&class_assertion.class) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -127,7 +127,6 @@ impl QLValidator {
                             format!("Non-basic class in assertion: {:?}", class_assertion.class),
                         ));
                     }
-                }
                 _ => {}
             }
         }
@@ -170,9 +169,9 @@ impl QLValidator {
                         ));
                     }
                 }
-                Axiom::ObjectPropertyDomain(domain_axiom) => {
+                Axiom::ObjectPropertyDomain(domain_axiom)
                     // Domain must be basic class expression
-                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) {
+                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -181,10 +180,9 @@ impl QLValidator {
                             format!("Non-basic domain in QL: {:?}", domain_axiom.domain),
                         ));
                     }
-                }
-                Axiom::ObjectPropertyRange(range_axiom) => {
+                Axiom::ObjectPropertyRange(range_axiom)
                     // Range must be basic class expression
-                    if !self.is_ql_basic_class_expression(&range_axiom.range) {
+                    if !self.is_ql_basic_class_expression(&range_axiom.range) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -193,10 +191,9 @@ impl QLValidator {
                             format!("Non-basic range in QL: {:?}", range_axiom.range),
                         ));
                     }
-                }
-                Axiom::DataPropertyDomain(domain_axiom) => {
+                Axiom::DataPropertyDomain(domain_axiom)
                     // Domain must be basic class expression
-                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) {
+                    if !self.is_ql_basic_class_expression(&domain_axiom.domain) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -205,10 +202,9 @@ impl QLValidator {
                             format!("Non-basic domain in QL: {:?}", domain_axiom.domain),
                         ));
                     }
-                }
-                Axiom::ClassAssertion(class_axiom) => {
+                Axiom::ClassAssertion(class_axiom)
                     // Class must be basic
-                    if !self.is_ql_basic_class_expression(&class_axiom.class) {
+                    if !self.is_ql_basic_class_expression(&class_axiom.class) => {
                         report.add_violation(ProfileViolation::new(
                             ProfileViolationType::DisallowedClassExpression(format!(
                                 "{:?}",
@@ -217,7 +213,6 @@ impl QLValidator {
                             format!("Non-basic class in assertion: {:?}", class_axiom.class),
                         ));
                     }
-                }
                 _ => {}
             }
         }
@@ -231,26 +226,24 @@ impl QLValidator {
         report: &mut ProfileValidationReport,
     ) -> Result<(), OxidowlError> {
         for axiom in ontology.axioms() {
-            match axiom {
-                Axiom::DataPropertyRange(range_axiom) => {
-                    // Data range must be basic datatype
-                    if !self.is_ql_basic_datatype(&range_axiom.range) {
-                        report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedDataRange(format!(
-                                "{:?}",
-                                range_axiom.range
-                            )),
-                            format!("Non-basic datatype in QL range: {:?}", range_axiom.range),
-                        ));
-                    }
+            if let Axiom::DataPropertyRange(range_axiom) = axiom {
+                // Data range must be basic datatype
+                if !self.is_ql_basic_datatype(&range_axiom.range) {
+                    report.add_violation(ProfileViolation::new(
+                        ProfileViolationType::DisallowedDataRange(format!(
+                            "{:?}",
+                            range_axiom.range
+                        )),
+                        format!("Non-basic datatype in QL range: {:?}", range_axiom.range),
+                    ));
                 }
-                _ => {}
             }
         }
         Ok(())
     }
 
     /// Check for prohibited axiom types in QL
+    #[allow(dead_code)]
     fn validate_axiom_types(
         &self,
         ontology: &Ontology,
@@ -262,7 +255,7 @@ impl QLValidator {
                 Axiom::SubObjectPropertyOf(sub_prop) => {
                     if let ObjectPropertyExpression::PropertyChain(_) = &sub_prop.sub_property {
                         report.add_violation(ProfileViolation::new(
-                            ProfileViolationType::DisallowedAxiom(format!("{:?}", sub_prop)),
+                            ProfileViolationType::DisallowedAxiom(format!("{sub_prop:?}")),
                             "Property chains are not allowed in OWL 2 QL".to_string(),
                         ));
                     }
@@ -271,7 +264,7 @@ impl QLValidator {
                 // Asymmetric property axioms are not allowed
                 Axiom::AsymmetricObjectProperty(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "Asymmetric property axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -279,7 +272,7 @@ impl QLValidator {
                 // Irreflexive property axioms are not allowed
                 Axiom::IrreflexiveObjectProperty(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "Irreflexive property axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -287,7 +280,7 @@ impl QLValidator {
                 // Transitive property axioms are not allowed
                 Axiom::TransitiveObjectProperty(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "Transitive property axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -295,7 +288,7 @@ impl QLValidator {
                 // Has key axioms are not allowed
                 Axiom::HasKey(_) => {
                     report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
+                        ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
                         "HasKey axioms are not allowed in OWL 2 QL".to_string(),
                     ));
                 }
@@ -349,7 +342,7 @@ impl QLValidator {
     fn is_ql_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
         match expr {
             ObjectPropertyExpression::ObjectProperty(_) => true,
-            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+            ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                 // Inverse of basic property is allowed
                 true // prop is already an ObjectProperty, so it's basic
             }
@@ -361,7 +354,7 @@ impl QLValidator {
     fn is_ql_basic_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
         match expr {
             ObjectPropertyExpression::ObjectProperty(_) => true,
-            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+            ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                 true // prop is already an ObjectProperty, so it's basic
             }
             _ => false,
@@ -415,6 +408,7 @@ impl QLValidator {
     }
 
     /// Check class expressions within an axiom
+    #[allow(dead_code)]
     fn check_class_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -441,59 +435,52 @@ impl QLValidator {
                     ));
                 }
             }
-            Axiom::ClassAssertion(class_axiom) => {
-                if !self.is_ql_basic_class_expression(&class_axiom.class) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedClassExpression(format!(
-                            "{:?}",
-                            class_axiom.class
-                        )),
-                        "Class expression in assertion not allowed in OWL 2 QL profile".to_string(),
-                    ));
-                }
+            Axiom::ClassAssertion(class_axiom)
+                if !self.is_ql_basic_class_expression(&class_axiom.class) =>
+            {
+                report.add_violation(ProfileViolation::new(
+                    ProfileViolationType::DisallowedClassExpression(format!(
+                        "{:?}",
+                        class_axiom.class
+                    )),
+                    "Class expression in assertion not allowed in OWL 2 QL profile".to_string(),
+                ));
             }
             _ => {} // Other axioms checked elsewhere
         }
     }
 
     /// Check property expressions within an axiom
+    #[allow(dead_code)]
     fn check_property_expressions_in_axiom(
         &self,
         axiom: &Axiom,
         report: &mut ProfileValidationReport,
     ) {
-        match axiom {
-            Axiom::ObjectPropertyAssertion(prop_axiom) => {
-                if !self.is_property_expression_allowed(&prop_axiom.property) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedPropertyExpression(format!(
-                            "{:?}",
-                            prop_axiom.property
-                        )),
-                        "Property expression not allowed in OWL 2 QL profile".to_string(),
-                    ));
-                }
-            }
-            _ => {} // Other axioms checked elsewhere
-        }
+        if let Axiom::ObjectPropertyAssertion(prop_axiom) = axiom
+            && !self.is_property_expression_allowed(&prop_axiom.property)
+        {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedPropertyExpression(format!(
+                    "{:?}",
+                    prop_axiom.property
+                )),
+                "Property expression not allowed in OWL 2 QL profile".to_string(),
+            ));
+        } // Other axioms checked elsewhere
     }
 
     /// Check data ranges within an axiom
+    #[allow(dead_code)]
     fn check_data_ranges_in_axiom(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
-        match axiom {
-            Axiom::DataPropertyRange(range_axiom) => {
-                if !self.is_data_range_allowed(&range_axiom.range) {
-                    report.add_violation(ProfileViolation::new(
-                        ProfileViolationType::DisallowedDataRange(format!(
-                            "{:?}",
-                            range_axiom.range
-                        )),
-                        "Data range not allowed in OWL 2 QL profile".to_string(),
-                    ));
-                }
-            }
-            _ => {} // Other axioms checked elsewhere
-        }
+        if let Axiom::DataPropertyRange(range_axiom) = axiom
+            && !self.is_data_range_allowed(&range_axiom.range)
+        {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedDataRange(format!("{:?}", range_axiom.range)),
+                "Data range not allowed in OWL 2 QL profile".to_string(),
+            ));
+        } // Other axioms checked elsewhere
     }
 }
 
@@ -511,8 +498,8 @@ impl ProfileValidator for QLValidator {
         for axiom in ontology.axioms() {
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom)),
-                    format!("Axiom type not supported in OWL 2 QL profile: {:?}", axiom),
+                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
+                    format!("Axiom type not supported in OWL 2 QL profile: {axiom:?}"),
                 ));
             }
         }

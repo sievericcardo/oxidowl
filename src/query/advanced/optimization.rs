@@ -6,6 +6,8 @@
 //! - Index-based optimization
 //! - Cost-based query planning
 
+#![allow(dead_code)]
+
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 use crate::ontology::{ClassExpression, ObjectPropertyExpression, Ontology};
 use crate::reasoning::ReasoningService;
@@ -111,6 +113,7 @@ pub struct PlanMetadata {
 
 impl QueryOptimizer {
     /// Create a new query optimizer
+    #[must_use]
     pub fn new(ontology: Arc<Ontology>, reasoning_service: Arc<ReasoningService>) -> Self {
         Self {
             ontology,
@@ -121,6 +124,7 @@ impl QueryOptimizer {
     }
 
     /// Create optimizer with custom configuration
+    #[must_use]
     pub fn with_config(
         ontology: Arc<Ontology>,
         reasoning_service: Arc<ReasoningService>,
@@ -185,7 +189,7 @@ impl QueryOptimizer {
                 optimization_time,
                 plans_considered,
                 techniques_applied,
-                cost_confidence: self.estimate_cost_confidence(&query),
+                cost_confidence: self.estimate_cost_confidence(query),
             },
         })
     }

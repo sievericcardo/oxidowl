@@ -497,7 +497,7 @@ fn test_complete_owl2_feature_coverage() {
 
     // 3. Test validation support
     let ontology = Ontology::new();
-    let validator = OWL2DLValidator::new(ontology);
+    let _validator = OWL2DLValidator::new(ontology);
     // Just verify the validator can be created and has the expected interface
     assert!(true); // Placeholder for more comprehensive validation tests
 

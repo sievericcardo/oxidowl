@@ -17,9 +17,9 @@ fn test_empty_collection_access_returns_error() {
     // Test that accessing empty collections returns proper errors instead of panicking
 
     // Create an empty tableau
-    let ontology = Arc::new(RwLock::new(Ontology::new()));
+    let ontology = Arc::new(Ontology::new());
     let config = ReasoningConfig::default();
-    let mut tableau = Tableau::new(config);
+    let mut tableau = Tableau::new(config, ontology);
 
     // In the old implementation, popping from empty queue would panic with unwrap()
     // Now it should return None, which we can handle
@@ -57,8 +57,9 @@ fn test_data_structure_edge_cases() {
 fn test_option_unwrap_replacements() {
     // Test that operations using Option::unwrap() now handle None gracefully
 
+    let ontology = Arc::new(Ontology::new());
     let config = ReasoningConfig::default();
-    let tableau = Tableau::new(config);
+    let _tableau = Tableau::new(config, ontology);
 
     // Stack operations that might be empty
     // Old code: self.branching_stack.last().expect("Test operation failed")

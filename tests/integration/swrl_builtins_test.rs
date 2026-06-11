@@ -4,7 +4,7 @@ use oxidowl::swrl::*;
 #[test]
 fn test_new_built_ins_integration() {
     // Create a simple ontology
-    let ontology = Ontology::new();
+    let _ontology = Ontology::new();
 
     // Create SWRL variables (using IRI)
     let x = SWRLVariable::new(IRI::new("http://example.org/x"));
@@ -62,7 +62,7 @@ fn test_new_built_ins_integration() {
     );
 
     // Test the built-in registry
-    let registry = BuiltInRegistry::new();
+    let _registry = BuiltInRegistry::new();
 
     // Verify some of our new built-ins are recognized
     // Note: The actual implementation might use different namespaces

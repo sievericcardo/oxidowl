@@ -16,6 +16,7 @@ pub struct TableauAlgorithmInstance {
 
 impl TableauAlgorithmInstance {
     /// Create a new instance with a tableau
+    #[must_use]
     pub fn new(tableau: Tableau) -> Self {
         Self { tableau }
     }
@@ -91,7 +92,7 @@ impl TableauFactory {
                     super::hypertableau_adapter::HypertableauRunner::for_consistency(ontology)?;
                 Ok(Box::new(runner))
             }
-            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimised => {
                 log::info!("Creating traditional tableau runner for consistency checking");
                 let tableau = self.tableau_builder.build_for_consistency(ontology)?;
                 Ok(Box::new(TraditionalTableauRunner::new(tableau)))
@@ -114,7 +115,7 @@ impl TableauFactory {
                 )?;
                 Ok(Box::new(runner))
             }
-            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimised => {
                 log::info!("Creating traditional tableau runner for subsumption checking");
                 // Convert ClassExpression to string for the current tableau builder interface
                 let subclass_str = &format!("{subclass}");
@@ -143,7 +144,7 @@ impl TableauFactory {
                 )?;
                 Ok(Box::new(runner))
             }
-            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimized => {
+            TableauAlgorithm::Traditional | TableauAlgorithm::ProfileOptimised => {
                 log::info!("Creating traditional tableau runner for satisfiability checking");
                 // Convert ClassExpression to string for the current tableau builder interface
                 let class_str = &format!("{class_expr}");
@@ -221,6 +222,7 @@ impl TableauFactory {
     }
 
     /// Get access to the underlying tableau builder
+    #[must_use]
     pub fn tableau_builder(&self) -> &TableauBuilder {
         &self.tableau_builder
     }
@@ -279,7 +281,7 @@ pub enum ReasoningTask {
         superclass: ClassExpression,
     },
     Classification,
-    Realization,
+    Realisation,
     InstanceCheck {
         individual: Individual,
         class: ClassExpression,

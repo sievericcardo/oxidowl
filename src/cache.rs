@@ -2,20 +2,40 @@
 //!
 //! This module implements efficient caching strategies for ontology reasoning,
 //! including concept and role satisfiability caches, subsumption caches,
-//! and inference caches.
+//! inference caches, and RDF-star quoted triple optimizations.
 
 use crate::{
-    core::lock_helpers::{read_lock, write_lock},
     ontology::{ClassExpression, Individual, OntologyRef},
     performance::MemoryTracker,
-    reasoning::{ClassificationResult, RealizationResult},
+    reasoning::{ClassificationResult, RealisationResult},
+    semantics::quoted_triple_optimizer::{QuotedTripleOptimizer, QuotedTripleOptimizerConfig},
 };
 
+use enumset::{EnumSet, EnumSetType};
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::{Duration, Instant},
 };
+
+/// Cache feature flags for selective cache enabling
+#[derive(Debug, EnumSetType)]
+pub enum CacheFeature {
+    /// Cache for concept expressions
+    Concept,
+    /// Cache for subsumption relationships
+    Subsumption,
+    /// Cache for satisfiability checks
+    Satisfiability,
+    /// Cache for classification results
+    Classification,
+    /// Cache for realisation results
+    Realisation,
+    /// Cache for completion graphs
+    CompletionGraph,
+    /// Cache for RDF-star quoted triples
+    QuotedTriple,
+}
 
 /// Cache entry with Timetolive (TTL) support
 #[derive(Debug, Clone)]
@@ -27,13 +47,14 @@ pub struct CacheEntry<T> {
 
 /// Internal cache statistics tracking
 #[derive(Debug, Clone, Default)]
-struct CacheMetrics {
+pub struct CacheMetrics {
     hits: u64,
     misses: u64,
     evictions: u64,
 }
 
 impl<T> CacheEntry<T> {
+    #[must_use]
     pub fn new(value: T) -> Self {
         Self {
             value,
@@ -56,27 +77,41 @@ impl<T> CacheEntry<T> {
 pub struct CacheConfig {
     pub max_size: usize, // Maximum number of entries in the cache
     pub ttl: Duration,   // Time to live for cache entries
-    pub enable_concept_cache: bool,
-    pub enable_subsumption_cache: bool,
-    pub enable_satisfiability_cache: bool,
-    pub enable_classification_cache: bool,
-    pub enable_realization_cache: bool,
-    pub enable_completion_graph_cache: bool,
+    pub features: EnumSet<CacheFeature>,
     pub completion_graph_max_memory_mb: usize,
+}
+
+impl CacheConfig {
+    /// Check if a specific cache feature is enabled
+    #[must_use]
+    pub fn is_enabled(&self, feature: CacheFeature) -> bool {
+        self.features.contains(feature)
+    }
+
+    /// Enable a cache feature
+    pub fn enable(&mut self, feature: CacheFeature) {
+        self.features.insert(feature);
+    }
+
+    /// Disable a cache feature
+    pub fn disable(&mut self, feature: CacheFeature) {
+        self.features.remove(feature);
+    }
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            max_size: 10000,                // Default maximum size
-            ttl: Duration::from_secs(3600), // Default TTL of 1 hour
-            enable_concept_cache: true,
-            enable_subsumption_cache: true,
-            enable_satisfiability_cache: true,
-            enable_completion_graph_cache: true,
+            max_size: 10000,              // Default maximum size
+            ttl: Duration::from_secs(1 * 3600), // Default TTL of 1 hour
+            features: CacheFeature::Concept
+                | CacheFeature::Subsumption
+                | CacheFeature::Satisfiability
+                | CacheFeature::Classification
+                | CacheFeature::Realisation
+                | CacheFeature::CompletionGraph
+                | CacheFeature::QuotedTriple,
             completion_graph_max_memory_mb: 512,
-            enable_classification_cache: true,
-            enable_realization_cache: true,
         }
     }
 }
@@ -84,111 +119,84 @@ impl Default for CacheConfig {
 /// Cache for concept satisfiability
 #[derive(Debug, Clone)]
 pub struct ConceptSatisfiabilityCache {
-    cache: Arc<RwLock<HashMap<ClassExpression, CacheEntry<bool>>>>,
+    cache: HashMap<ClassExpression, CacheEntry<bool>>,
     config: CacheConfig,
-    metrics: Arc<RwLock<CacheMetrics>>,
+    metrics: CacheMetrics,
 }
 
 impl ConceptSatisfiabilityCache {
     #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: HashMap::new(),
             config,
-            metrics: Arc::new(RwLock::new(CacheMetrics::default())),
+            metrics: CacheMetrics::default(),
         }
     }
 
     #[must_use]
-    pub fn get(&self, expression: &ClassExpression) -> Option<bool> {
-        if !self.config.enable_satisfiability_cache {
-            return None; // Cache is disabled
+    pub fn get(&mut self, expression: &ClassExpression) -> Option<bool> {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
+            return None;
         }
-
-        let mut cache = write_lock(&self.cache, "cache get").ok()?;
-        if let Some(entry) = cache.get_mut(expression) {
+        if let Some(entry) = self.cache.get_mut(expression) {
             if entry.is_expired(self.config.ttl) {
-                cache.remove(expression); // Remove expired entry
-                if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
-                    metrics.misses += 1;
-                }
+                self.cache.remove(expression);
+                self.metrics.misses += 1;
                 None
             } else {
-                entry.hit(); // Increment hit count
-                if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
-                    metrics.hits += 1;
-                }
+                entry.hit();
+                self.metrics.hits += 1;
                 Some(entry.value)
             }
         } else {
-            // If not found, we can return None
-            if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
-                metrics.misses += 1;
-            }
+            self.metrics.misses += 1;
             None
         }
     }
 
-    pub fn put(&self, expression: ClassExpression, result: bool) {
-        if !self.config.enable_satisfiability_cache {
-            return; // Cache is disabled
+    pub fn put(&mut self, expression: ClassExpression, result: bool) {
+        if !self.config.is_enabled(CacheFeature::Satisfiability) {
+            return;
         }
-
-        if let Ok(mut cache) = write_lock(&self.cache, "cache put") {
-            if cache.len() >= self.config.max_size {
-                // Evict the oldest entry if max size exceeded
-                self.evict_lru(&mut cache);
-            }
-            cache.insert(expression, CacheEntry::new(result));
+        if self.cache.len() >= self.config.max_size {
+            self.evict_lru();
         }
+        self.cache.insert(expression, CacheEntry::new(result));
     }
 
-    fn evict_lru(&self, cache: &mut HashMap<ClassExpression, CacheEntry<bool>>) {
-        if let Some((key, _)) = cache.iter().min_by_key(|(_, entry)| entry.timestamp) {
+    fn evict_lru(&mut self) {
+        if let Some((key, _)) = self.cache.iter().min_by_key(|(_, entry)| entry.timestamp) {
             let key_to_remove = key.clone();
-            cache.remove(&key_to_remove);
-            if let Ok(mut metrics) = write_lock(&self.metrics, "metrics update") {
-                metrics.evictions += 1;
-            }
+            self.cache.remove(&key_to_remove);
+            self.metrics.evictions += 1;
         }
     }
 
-    pub fn clear(&self) {
-        if let Ok(mut cache) = write_lock(&self.cache, "cache clear") {
-            cache.clear();
-        }
-        if let Ok(mut metrics) = write_lock(&self.metrics, "metrics reset") {
-            *metrics = CacheMetrics::default();
-        }
+    pub fn clear(&mut self) {
+        self.cache.clear();
+        self.metrics = CacheMetrics::default();
     }
 
     #[must_use]
     pub fn get_metrics(&self) -> CacheMetrics {
-        read_lock(&self.metrics, "get metrics")
-            .map(|m| m.clone())
-            .unwrap_or_default()
+        self.metrics.clone()
     }
 
     #[must_use]
     pub fn size(&self) -> usize {
-        read_lock(&self.cache, "cache size")
-            .map(|c| c.len())
-            .unwrap_or(0)
+        self.cache.len()
     }
 
     #[must_use]
     pub fn hit_rate(&self) -> f64 {
-        if let Ok(cache) = read_lock(&self.cache, "cache hit rate") {
-            let total_hits: u64 = cache.values().map(|entry| entry.hit_count).sum();
-            let entries = cache.len() as u64;
-
-            if entries == 0 {
-                0.0 // Avoid division by zero
-            } else {
-                total_hits as f64 / cache.len() as f64
-            }
-        } else {
+        let total_hits: u64 = self.cache.values().map(|entry| entry.hit_count).sum();
+        if self.cache.is_empty() {
             0.0
+        } else {
+            #[allow(clippy::cast_precision_loss)]
+            let rate = total_hits as f64 / self.cache.len() as f64;
+            rate
         }
     }
 }
@@ -241,9 +249,9 @@ pub struct GraphMetadata {
 /// Tier for cache eviction
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CacheTier {
-    Hot,   // Frequently accessed
-    Warm,  // Moderately accessed
-    Cold,  // Rarely accessed
+    Hot,  // Frequently accessed
+    Warm, // Moderately accessed
+    Cold, // Rarely accessed
 }
 
 /// Entry in the completion graph cache
@@ -259,94 +267,81 @@ struct CompletionGraphEntry {
 #[derive(Debug, Clone)]
 pub struct CompletionGraphCache {
     /// Cache storage
-    cache: Arc<RwLock<HashMap<u64, CompletionGraphEntry>>>,
+    cache: HashMap<u64, CompletionGraphEntry>,
 
     /// Hot tier (most frequently accessed)
-    hot_tier: Arc<RwLock<VecDeque<u64>>>,
+    hot_tier: VecDeque<u64>,
 
     /// Warm tier
-    warm_tier: Arc<RwLock<VecDeque<u64>>>,
+    warm_tier: VecDeque<u64>,
 
     /// Cold tier
-    cold_tier: Arc<RwLock<VecDeque<u64>>>,
+    cold_tier: VecDeque<u64>,
 
     /// Configuration
     config: CacheConfig,
 
     /// Current memory usage in bytes
-    memory_usage: Arc<RwLock<usize>>,
+    memory_usage: usize,
 
     /// Memory pressure threshold (bytes)
     memory_threshold: usize,
 
     /// Statistics
-    metrics: Arc<RwLock<CacheMetrics>>,
+    metrics: CacheMetrics,
 }
 
 impl CompletionGraphCache {
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         let memory_threshold = config.completion_graph_max_memory_mb * 1024 * 1024;
 
         Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
-            hot_tier: Arc::new(RwLock::new(VecDeque::new())),
-            warm_tier: Arc::new(RwLock::new(VecDeque::new())),
-            cold_tier: Arc::new(RwLock::new(VecDeque::new())),
+            cache: HashMap::new(),
+            hot_tier: VecDeque::new(),
+            warm_tier: VecDeque::new(),
+            cold_tier: VecDeque::new(),
             config,
-            memory_usage: Arc::new(RwLock::new(0)),
+            memory_usage: 0,
             memory_threshold,
-            metrics: Arc::new(RwLock::new(CacheMetrics::default())),
+            metrics: CacheMetrics::default(),
         }
     }
 
     /// Get a completion graph from cache
-    pub fn get(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
-        if !self.config.enable_completion_graph_cache {
+    #[must_use]
+    pub fn get(&mut self, signature: u64) -> Option<Arc<CompletedGraph>> {
+        if !self.config.is_enabled(CacheFeature::CompletionGraph) {
             return None;
         }
 
-        if let Ok(mut cache) = self.cache.write() {
-            if let Some(entry) = cache.get_mut(&signature) {
-                entry.access_count += 1;
-                entry.last_access = Instant::now();
-
-                // Update metrics
-                if let Ok(mut metrics) = self.metrics.write() {
-                    metrics.hits += 1;
-                }
-
-                // Promote to higher tier if needed
-                self.promote_tier(signature, entry.access_count);
-
-                return Some(Arc::clone(&entry.graph));
-            }
+        if let Some(entry) = self.cache.get_mut(&signature) {
+            entry.access_count += 1;
+            entry.last_access = Instant::now();
+            self.metrics.hits += 1;
+            let access_count = entry.access_count;
+            let graph = Arc::clone(&entry.graph);
+            self.promote_tier(signature, access_count);
+            return Some(graph);
         }
 
-        // Update miss metrics
-        if let Ok(mut metrics) = self.metrics.write() {
-            metrics.misses += 1;
-        }
-
+        self.metrics.misses += 1;
         None
     }
 
     /// Store a completion graph in cache
-    pub fn put(&self, graph: Arc<CompletedGraph>) {
-        if !self.config.enable_completion_graph_cache {
+    pub fn put(&mut self, graph: Arc<CompletedGraph>) {
+        if !self.config.is_enabled(CacheFeature::CompletionGraph) {
             return;
         }
 
         let signature = graph.signature;
         let memory_size = graph.memory_size;
 
-        // Check memory pressure and evict if necessary
-        if let Ok(current_usage) = self.memory_usage.read() {
-            if *current_usage + memory_size > self.memory_threshold {
-                self.evict_to_fit(memory_size);
-            }
+        if self.memory_usage + memory_size > self.memory_threshold {
+            self.evict_to_fit(memory_size);
         }
 
-        // Create entry in cold tier initially
         let entry = CompletionGraphEntry {
             graph,
             tier: CacheTier::Cold,
@@ -354,126 +349,63 @@ impl CompletionGraphCache {
             last_access: Instant::now(),
         };
 
-        if let Ok(mut cache) = self.cache.write() {
-            cache.insert(signature, entry);
-        }
-
-        if let Ok(mut cold_tier) = self.cold_tier.write() {
-            cold_tier.push_back(signature);
-        }
-
-        // Update memory usage
-        if let Ok(mut usage) = self.memory_usage.write() {
-            *usage += memory_size;
-        }
+        self.cache.insert(signature, entry);
+        self.cold_tier.push_back(signature);
+        self.memory_usage += memory_size;
     }
 
     /// Promote an entry to a higher tier based on access count
-    fn promote_tier(&self, signature: u64, access_count: u64) {
-        // Hot tier: >10 accesses
-        // Warm tier: 3-10 accesses
-        // Cold tier: <3 accesses
-
-        if let Ok(mut cache) = self.cache.write() {
-            if let Some(entry) = cache.get_mut(&signature) {
-                let old_tier = entry.tier;
-                let new_tier = if access_count > 10 {
-                    CacheTier::Hot
-                } else if access_count > 3 {
-                    CacheTier::Warm
-                } else {
-                    CacheTier::Cold
-                };
-
-                if old_tier != new_tier {
-                    entry.tier = new_tier;
-
-                    // Move between tier queues
-                    self.move_between_tiers(signature, old_tier, new_tier);
-                }
+    fn promote_tier(&mut self, signature: u64, access_count: u64) {
+        if let Some(entry) = self.cache.get_mut(&signature) {
+            let old_tier = entry.tier;
+            let new_tier = if access_count > 10 {
+                CacheTier::Hot
+            } else if access_count > 3 {
+                CacheTier::Warm
+            } else {
+                CacheTier::Cold
+            };
+            if old_tier != new_tier {
+                entry.tier = new_tier;
+                self.move_between_tiers(signature, old_tier, new_tier);
             }
         }
     }
 
     /// Move an entry between tier queues
-    fn move_between_tiers(&self, signature: u64, old_tier: CacheTier, new_tier: CacheTier) {
-        // Remove from old tier
+    fn move_between_tiers(&mut self, signature: u64, old_tier: CacheTier, new_tier: CacheTier) {
         match old_tier {
-            CacheTier::Hot => {
-                if let Ok(mut hot) = self.hot_tier.write() {
-                    hot.retain(|&s| s != signature);
-                }
-            }
-            CacheTier::Warm => {
-                if let Ok(mut warm) = self.warm_tier.write() {
-                    warm.retain(|&s| s != signature);
-                }
-            }
-            CacheTier::Cold => {
-                if let Ok(mut cold) = self.cold_tier.write() {
-                    cold.retain(|&s| s != signature);
-                }
-            }
+            CacheTier::Hot => self.hot_tier.retain(|&s| s != signature),
+            CacheTier::Warm => self.warm_tier.retain(|&s| s != signature),
+            CacheTier::Cold => self.cold_tier.retain(|&s| s != signature),
         }
-
-        // Add to new tier
         match new_tier {
-            CacheTier::Hot => {
-                if let Ok(mut hot) = self.hot_tier.write() {
-                    hot.push_back(signature);
-                }
-            }
-            CacheTier::Warm => {
-                if let Ok(mut warm) = self.warm_tier.write() {
-                    warm.push_back(signature);
-                }
-            }
-            CacheTier::Cold => {
-                if let Ok(mut cold) = self.cold_tier.write() {
-                    cold.push_back(signature);
-                }
-            }
+            CacheTier::Hot => self.hot_tier.push_back(signature),
+            CacheTier::Warm => self.warm_tier.push_back(signature),
+            CacheTier::Cold => self.cold_tier.push_back(signature),
         }
     }
 
     /// Evict entries to make room for new entry
-    fn evict_to_fit(&self, required_space: usize) {
+    fn evict_to_fit(&mut self, required_space: usize) {
         let mut freed_space = 0;
-
-        // Evict from cold tier first
         while freed_space < required_space {
-            if let Ok(mut cold) = self.cold_tier.write() {
-                if let Some(signature) = cold.pop_front() {
-                    freed_space += self.evict_entry(signature);
-                } else {
-                    break;
-                }
+            if let Some(signature) = self.cold_tier.pop_front() {
+                freed_space += self.evict_entry(signature);
             } else {
                 break;
             }
         }
-
-        // Evict from warm tier if needed
         while freed_space < required_space {
-            if let Ok(mut warm) = self.warm_tier.write() {
-                if let Some(signature) = warm.pop_front() {
-                    freed_space += self.evict_entry(signature);
-                } else {
-                    break;
-                }
+            if let Some(signature) = self.warm_tier.pop_front() {
+                freed_space += self.evict_entry(signature);
             } else {
                 break;
             }
         }
-
-        // Evict from hot tier as last resort
         while freed_space < required_space {
-            if let Ok(mut hot) = self.hot_tier.write() {
-                if let Some(signature) = hot.pop_front() {
-                    freed_space += self.evict_entry(signature);
-                } else {
-                    break;
-                }
+            if let Some(signature) = self.hot_tier.pop_front() {
+                freed_space += self.evict_entry(signature);
             } else {
                 break;
             }
@@ -481,54 +413,35 @@ impl CompletionGraphCache {
     }
 
     /// Evict a single entry and return freed memory
-    fn evict_entry(&self, signature: u64) -> usize {
-        if let Ok(mut cache) = self.cache.write() {
-            if let Some(entry) = cache.remove(&signature) {
-                let freed = entry.graph.memory_size;
-
-                // Update memory usage
-                if let Ok(mut usage) = self.memory_usage.write() {
-                    *usage = usage.saturating_sub(freed);
-                }
-
-                // Update metrics
-                if let Ok(mut metrics) = self.metrics.write() {
-                    metrics.evictions += 1;
-                }
-
-                return freed;
-            }
+    fn evict_entry(&mut self, signature: u64) -> usize {
+        if let Some(entry) = self.cache.remove(&signature) {
+            let freed = entry.graph.memory_size;
+            self.memory_usage = self.memory_usage.saturating_sub(freed);
+            self.metrics.evictions += 1;
+            return freed;
         }
         0
     }
 
     /// Get current memory usage
+    #[must_use]
     pub fn memory_usage(&self) -> usize {
-        self.memory_usage.read().map(|u| *u).unwrap_or(0)
+        self.memory_usage
     }
 
     /// Get cache statistics
+    #[must_use]
     pub fn get_metrics(&self) -> CacheMetrics {
-        self.metrics.read().map(|m| m.clone()).unwrap_or_default()
+        self.metrics.clone()
     }
 
     /// Clear the cache
-    pub fn clear(&self) {
-        if let Ok(mut cache) = self.cache.write() {
-            cache.clear();
-        }
-        if let Ok(mut hot) = self.hot_tier.write() {
-            hot.clear();
-        }
-        if let Ok(mut warm) = self.warm_tier.write() {
-            warm.clear();
-        }
-        if let Ok(mut cold) = self.cold_tier.write() {
-            cold.clear();
-        }
-        if let Ok(mut usage) = self.memory_usage.write() {
-            *usage = 0;
-        }
+    pub fn clear(&mut self) {
+        self.cache.clear();
+        self.hot_tier.clear();
+        self.warm_tier.clear();
+        self.cold_tier.clear();
+        self.memory_usage = 0;
     }
 }
 
@@ -537,16 +450,27 @@ impl CompletionGraphCache {
 pub struct CacheManager {
     concept_cache: ConceptSatisfiabilityCache,
     completion_graph_cache: CompletionGraphCache,
+    quoted_triple_optimizer: QuotedTripleOptimizer,
+    #[allow(dead_code)]
     config: CacheConfig,
+    #[allow(dead_code)]
     memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
 impl CacheManager {
     #[must_use]
     pub fn new(config: CacheConfig) -> Self {
+        // Create optimizer config based on cache config
+        let optimizer_config = if config.is_enabled(CacheFeature::QuotedTriple) {
+            QuotedTripleOptimizerConfig::default()
+        } else {
+            QuotedTripleOptimizerConfig::rdf11_mode()
+        };
+
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             completion_graph_cache: CompletionGraphCache::new(config.clone()),
+            quoted_triple_optimizer: QuotedTripleOptimizer::new(optimizer_config),
             config,
             memory_tracker: None,
         }
@@ -555,9 +479,17 @@ impl CacheManager {
     /// Create a new cache manager with memory tracking
     #[must_use]
     pub fn with_memory_tracking(config: CacheConfig, memory_tracker: Arc<MemoryTracker>) -> Self {
+        // Create optimizer config based on cache config
+        let optimizer_config = if config.is_enabled(CacheFeature::QuotedTriple) {
+            QuotedTripleOptimizerConfig::default()
+        } else {
+            QuotedTripleOptimizerConfig::rdf11_mode()
+        };
+
         Self {
             concept_cache: ConceptSatisfiabilityCache::new(config.clone()),
             completion_graph_cache: CompletionGraphCache::new(config.clone()),
+            quoted_triple_optimizer: QuotedTripleOptimizer::new(optimizer_config),
             config,
             memory_tracker: Some(memory_tracker),
         }
@@ -572,29 +504,31 @@ impl CacheManager {
     }
 
     /// Clear all caches
-    pub fn clear_all(&self) {
+    pub fn clear_all(&mut self) -> crate::Result<()> {
         self.concept_cache.clear();
+        self.completion_graph_cache.clear();
+        self.quoted_triple_optimizer.clear()
     }
 
     /// Get consistency result from cache
-    pub fn get_consistency_result(&self, ontology: &OntologyRef) -> Option<bool> {
+    pub fn get_consistency_result(&self, _ontology: &OntologyRef) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
     /// Store consistency result in cache
-    pub fn cache_consistency_result(&self, ontology: &OntologyRef, result: bool) {
+    pub fn cache_consistency_result(&self, _ontology: &OntologyRef, _result: bool) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
     /// Get satisfiability result from cache
     #[must_use]
-    pub fn get_satisfiability_result(&self, expression: &ClassExpression) -> Option<bool> {
+    pub fn get_satisfiability_result(&mut self, expression: &ClassExpression) -> Option<bool> {
         self.concept_cache.get(expression)
     }
 
     /// Store satisfiability result in cache
-    pub fn cache_satisfiability_result(&self, expression: ClassExpression, result: bool) {
+    pub fn cache_satisfiability_result(&mut self, expression: ClassExpression, result: bool) {
         self.concept_cache.put(expression, result);
     }
 
@@ -602,8 +536,8 @@ impl CacheManager {
     #[must_use]
     pub fn get_subsumption_result(
         &self,
-        sub: &ClassExpression,
-        sup: &ClassExpression,
+        _sub: &ClassExpression,
+        _sup: &ClassExpression,
     ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
@@ -612,9 +546,9 @@ impl CacheManager {
     /// Store subsumption result in cache
     pub fn cache_subsumption_result(
         &self,
-        sub: ClassExpression,
-        sup: ClassExpression,
-        result: bool,
+        _sub: ClassExpression,
+        _sup: ClassExpression,
+        _result: bool,
     ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
@@ -622,7 +556,7 @@ impl CacheManager {
     /// Get classification result from cache
     pub fn get_classification_result(
         &self,
-        ontology: &OntologyRef,
+        _ontology: &OntologyRef,
     ) -> Option<ClassificationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
@@ -631,20 +565,20 @@ impl CacheManager {
     /// Store classification result in cache
     pub fn store_classification_result(
         &self,
-        ontology: &OntologyRef,
-        result: ClassificationResult,
+        _ontology: &OntologyRef,
+        _result: ClassificationResult,
     ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
-    /// Get realization result from cache
-    pub fn get_realization_result(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
+    /// Get realisation result from cache
+    pub fn get_realisation_result(&self, _ontology: &OntologyRef) -> Option<RealisationResult> {
         // Simple implementation - would need more sophisticated caching in practice
         None
     }
 
-    /// Store realization result in cache
-    pub fn store_realization_result(&self, ontology: &OntologyRef, result: RealizationResult) {
+    /// Store realisation result in cache
+    pub fn store_realisation_result(&self, _ontology: &OntologyRef, _result: RealisationResult) {
         // Simple implementation - would need more sophisticated caching in practice
     }
 
@@ -652,8 +586,8 @@ impl CacheManager {
     #[must_use]
     pub fn get_instance_result(
         &self,
-        individual: &Individual,
-        class: &ClassExpression,
+        _individual: &Individual,
+        _class: &ClassExpression,
     ) -> Option<bool> {
         // Simple implementation - would need more sophisticated caching in practice
         None
@@ -662,9 +596,9 @@ impl CacheManager {
     /// Store instance result in cache
     pub fn store_instance_result(
         &self,
-        individual: Individual,
-        class: ClassExpression,
-        result: bool,
+        _individual: Individual,
+        _class: ClassExpression,
+        _result: bool,
     ) {
         // Simple implementation - would need more sophisticated caching in practice
     }
@@ -690,21 +624,23 @@ impl CacheManager {
         self.store_classification_result(ontology, result);
     }
 
-    /// Get realization cache
-    pub fn realization(&self, ontology: &OntologyRef) -> Option<RealizationResult> {
-        self.get_realization_result(ontology)
+    /// Get realisation cache
+    pub fn realisation(&self, ontology: &OntologyRef) -> Option<RealisationResult> {
+        self.get_realisation_result(ontology)
     }
 
-    /// Store realization cache
-    pub fn store_realization(&self, ontology: &OntologyRef, result: RealizationResult) {
-        self.store_realization_result(ontology, result);
+    /// Store realisation cache
+    pub fn store_realisation(&self, ontology: &OntologyRef, result: RealisationResult) {
+        self.store_realisation_result(ontology, result);
     }
 
     /// Get cache statistics
-    #[must_use]
-    pub fn get_stats(&self) -> CacheStats {
+    pub fn get_stats(&self) -> crate::Result<CacheStats> {
         let metrics = self.concept_cache.get_metrics();
         let total_accesses = metrics.hits + metrics.misses;
+        // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
+        // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
+        #[allow(clippy::cast_precision_loss)]
         let hit_rate = if total_accesses > 0 {
             metrics.hits as f64 / total_accesses as f64
         } else {
@@ -713,22 +649,29 @@ impl CacheManager {
 
         let graph_metrics = self.completion_graph_cache.get_metrics();
         let graph_total_accesses = graph_metrics.hits + graph_metrics.misses;
+        #[allow(clippy::cast_precision_loss)]
         let graph_hit_rate = if graph_total_accesses > 0 {
             graph_metrics.hits as f64 / graph_total_accesses as f64
         } else {
             0.0
         };
 
-        CacheStats {
+        // Get quoted triple optimizer stats
+        let qt_stats = self.quoted_triple_optimizer.stats()?;
+
+        Ok(CacheStats {
             concept_cache_size: self.concept_cache.size(),
             concept_cache_hit_rate: hit_rate,
             completion_graph_cache_memory: self.completion_graph_cache.memory_usage(),
             completion_graph_cache_hit_rate: graph_hit_rate,
+            quoted_triple_cache_hit_rate: qt_stats.hit_rate(),
+            quoted_triple_intern_pool_size: qt_stats.intern_pool.pool_size,
+            quoted_triple_memory_saved_bytes: qt_stats.intern_pool.memory_saved_bytes,
             total_memory_bytes: self.estimated_memory_usage(),
             hit_count: metrics.hits,
             miss_count: metrics.misses,
             eviction_count: metrics.evictions,
-        }
+        })
     }
 
     /// Get the concept satisfiability cache
@@ -743,17 +686,25 @@ impl CacheManager {
         &self.completion_graph_cache
     }
 
+    /// Get the quoted triple optimizer (RDF-star)
+    #[must_use]
+    pub fn quoted_triple_optimizer(&self) -> &QuotedTripleOptimizer {
+        &self.quoted_triple_optimizer
+    }
+
     /// Get a completion graph from cache
-    pub fn get_completion_graph(&self, signature: u64) -> Option<Arc<CompletedGraph>> {
+    #[must_use]
+    pub fn get_completion_graph(&mut self, signature: u64) -> Option<Arc<CompletedGraph>> {
         self.completion_graph_cache.get(signature)
     }
 
     /// Store a completion graph in cache
-    pub fn store_completion_graph(&self, graph: Arc<CompletedGraph>) {
+    pub fn store_completion_graph(&mut self, graph: Arc<CompletedGraph>) {
         self.completion_graph_cache.put(graph);
     }
 
     /// Get completion graph cache memory usage
+    #[must_use]
     pub fn completion_graph_memory_usage(&self) -> usize {
         self.completion_graph_cache.memory_usage()
     }
@@ -772,6 +723,9 @@ pub struct CacheStats {
     pub concept_cache_hit_rate: f64,
     pub completion_graph_cache_memory: usize,
     pub completion_graph_cache_hit_rate: f64,
+    pub quoted_triple_cache_hit_rate: f64,
+    pub quoted_triple_intern_pool_size: usize,
+    pub quoted_triple_memory_saved_bytes: u64,
     pub total_memory_bytes: usize,
     pub hit_count: u64,
     pub miss_count: u64,

@@ -1,8 +1,12 @@
 //! OWL 2 DL Semantics Implementation
 //!
 //! This module implements OWL 2 DL semantics according to:
-//! https://www.w3.org/TR/owl2-direct-semantics/
-//! https://www.w3.org/TR/owl2-primer/
+//! <https://www.w3.org/TR/owl2-direct-semantics>/
+//! <https://www.w3.org/TR/owl2-primer>/
+//!
+//! Extended to support RDF-star semantics with configurable quoted triple reasoning.
+
+#![allow(dead_code)]
 
 use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
 use crate::{
@@ -13,6 +17,53 @@ use crate::{
     },
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+
+/// Configuration for OWL 2 DL interpretation with RDF-star support
+#[derive(Debug, Clone)]
+pub struct Owl2Config {
+    /// RDF 1.1 compatibility mode - disables RDF-star features
+    pub rdf11_mode: bool,
+    /// Maximum depth for reasoning over nested quoted triples
+    /// 0 = no quoted triple reasoning
+    /// 1 = reason over quoted triples at top level only
+    /// n = reason over quoted triples nested up to n levels
+    pub quoted_triple_reasoning_depth: usize,
+    /// Map quoted triples to annotation axioms
+    /// When true, << s p o >> :q :r is treated as an annotation on the axiom "s p o"
+    pub quoted_triples_as_annotations: bool,
+}
+
+impl Default for Owl2Config {
+    fn default() -> Self {
+        Self {
+            rdf11_mode: false,
+            quoted_triple_reasoning_depth: 2,
+            quoted_triples_as_annotations: true,
+        }
+    }
+}
+
+impl Owl2Config {
+    /// Create configuration for RDF 1.1 compatibility
+    #[must_use]
+    pub fn rdf11() -> Self {
+        Self {
+            rdf11_mode: true,
+            quoted_triple_reasoning_depth: 0,
+            quoted_triples_as_annotations: false,
+        }
+    }
+
+    /// Create configuration for RDF-star with specified reasoning depth
+    #[must_use]
+    pub fn rdfstar(depth: usize) -> Self {
+        Self {
+            rdf11_mode: false,
+            quoted_triple_reasoning_depth: depth,
+            quoted_triples_as_annotations: true,
+        }
+    }
+}
 
 /// Local tableau node structure for proper reasoning
 #[derive(Debug, Clone)]
@@ -25,6 +76,7 @@ struct LocalTableauNode {
 /// OWL 2 DL Interpretation
 ///
 /// Implements the formal semantics for OWL 2 DL according to the direct semantics specification.
+/// Extended to support RDF-star quoted triples when enabled.
 #[derive(Debug, Clone)]
 pub struct Owl2Interpretation {
     /// Domain of interpretation - set of individuals
@@ -39,6 +91,11 @@ pub struct Owl2Interpretation {
     individual_interpretation: HashMap<String, String>,
     /// Datatype interpretation
     datatype_interpretation: HashMap<String, HashSet<String>>,
+    /// Configuration for RDF-star support
+    config: Owl2Config,
+    /// Quoted triple to annotation mapping
+    /// Maps quoted triples to their associated annotation axioms
+    quoted_triple_annotations: HashMap<String, Vec<(String, String)>>,
 }
 
 /// Type of cardinality restriction
@@ -50,8 +107,21 @@ enum CardinalityType {
 }
 
 impl Owl2Interpretation {
-    /// Create a new OWL 2 DL interpretation
+    /// Create a new OWL 2 DL interpretation with default configuration
+    #[must_use]
     pub fn new() -> Self {
+        Self::with_config(Owl2Config::default())
+    }
+
+    /// Create a new OWL 2 DL interpretation with RDF 1.1 compatibility
+    #[must_use]
+    pub fn new_rdf11() -> Self {
+        Self::with_config(Owl2Config::rdf11())
+    }
+
+    /// Create a new OWL 2 DL interpretation with specified configuration
+    #[must_use]
+    pub fn with_config(config: Owl2Config) -> Self {
         let mut interpretation = Self {
             domain: HashSet::new(),
             class_interpretation: HashMap::new(),
@@ -59,11 +129,24 @@ impl Owl2Interpretation {
             data_property_interpretation: HashMap::new(),
             individual_interpretation: HashMap::new(),
             datatype_interpretation: HashMap::new(),
+            config,
+            quoted_triple_annotations: HashMap::new(),
         };
 
         // Initialize OWL built-in vocabulary
         interpretation.initialize_owl_vocabulary();
         interpretation
+    }
+
+    /// Get the configuration
+    #[must_use]
+    pub fn config(&self) -> &Owl2Config {
+        &self.config
+    }
+
+    /// Set the configuration
+    pub fn set_config(&mut self, config: Owl2Config) {
+        self.config = config;
     }
 
     /// Initialize OWL built-in vocabulary
@@ -79,7 +162,7 @@ impl Owl2Interpretation {
 
     /// Set the domain of interpretation
     pub fn set_domain(&mut self, domain: HashSet<String>) {
-        self.domain = domain.clone();
+        self.domain.clone_from(&domain);
 
         // Update owl:Thing to contain all domain elements
         self.class_interpretation
@@ -113,6 +196,115 @@ impl Owl2Interpretation {
     pub fn set_individual_interpretation(&mut self, individual: String, domain_element: String) {
         self.individual_interpretation
             .insert(individual, domain_element);
+    }
+
+    /// Add annotation for a quoted triple
+    /// Maps << s p o >> to its annotations (`annotation_property`, `annotation_value`)
+    pub fn add_quoted_triple_annotation(
+        &mut self,
+        quoted_triple_id: String,
+        annotation_property: String,
+        annotation_value: String,
+    ) {
+        self.quoted_triple_annotations
+            .entry(quoted_triple_id)
+            .or_default()
+            .push((annotation_property, annotation_value));
+    }
+
+    /// Get annotations for a quoted triple
+    #[must_use]
+    pub fn get_quoted_triple_annotations(
+        &self,
+        quoted_triple_id: &str,
+    ) -> Option<&Vec<(String, String)>> {
+        self.quoted_triple_annotations.get(quoted_triple_id)
+    }
+
+    /// Process RDF graph to extract quoted triple axioms
+    ///
+    /// Converts RDF-star triples like << :s :p :o >> :q :r into OWL annotation axioms
+    /// Only processes if RDF-star mode is enabled and reasoning depth allows it
+    pub fn process_rdf_graph_for_quoted_triples(&mut self, graph: &RdfGraph) -> Result<()> {
+        if self.config.rdf11_mode || self.config.quoted_triple_reasoning_depth == 0 {
+            // Skip processing in RDF 1.1 mode or when quoted triple reasoning is disabled
+            return Ok(());
+        }
+
+        // Extract quoted triples and their annotations
+        for triple in graph.triples() {
+            self.process_triple_for_quoted_semantics(triple, 1)?;
+        }
+
+        Ok(())
+    }
+
+    /// Recursively process a triple for quoted triple semantics
+    fn process_triple_for_quoted_semantics(&mut self, triple: &Triple, depth: usize) -> Result<()> {
+        if depth > self.config.quoted_triple_reasoning_depth {
+            return Ok(());
+        }
+
+        // Check if subject is a quoted triple
+        if let RdfTerm::QuotedTriple(quoted) = &triple.subject {
+            if self.config.quoted_triples_as_annotations {
+                // Map << s p o >> :q :r to: the axiom "s p o" has annotation :q :r
+                let quoted_id = self.quoted_triple_to_id(quoted);
+
+                if let RdfTerm::Iri(pred_iri) = &triple.predicate {
+                    let annotation_value = self.rdf_term_to_string(&triple.object);
+                    self.add_quoted_triple_annotation(
+                        quoted_id,
+                        pred_iri.to_string(),
+                        annotation_value,
+                    );
+                }
+            }
+
+            // Recursively process the quoted triple
+            self.process_triple_for_quoted_semantics(quoted, depth + 1)?;
+        }
+
+        // Check if object is a quoted triple
+        if let RdfTerm::QuotedTriple(quoted) = &triple.object {
+            self.process_triple_for_quoted_semantics(quoted, depth + 1)?;
+        }
+
+        Ok(())
+    }
+
+    /// Convert a quoted triple to a canonical identifier
+    fn quoted_triple_to_id(&self, triple: &Triple) -> String {
+        format!(
+            "<<{} {} {}>>",
+            self.rdf_term_to_string(&triple.subject),
+            self.rdf_term_to_string(&triple.predicate),
+            self.rdf_term_to_string(&triple.object)
+        )
+    }
+
+    /// Convert an RDF term to string representation
+    fn rdf_term_to_string(&self, term: &RdfTerm) -> String {
+        match term {
+            RdfTerm::Iri(iri) => iri.to_string(),
+            RdfTerm::BlankNode(id) => format!("_:{id}"),
+            RdfTerm::Literal {
+                value,
+                datatype,
+                language,
+                ..
+            } => {
+                if let Some(dt) = datatype {
+                    format!("\"{value}\"^^<{dt}>")
+                } else if let Some(lang) = language {
+                    format!("\"{value}\"@{lang}")
+                } else {
+                    format!("\"{value}\"")
+                }
+            }
+            RdfTerm::QuotedTriple(quoted) => self.quoted_triple_to_id(quoted),
+            RdfTerm::TripleTerm(triple) => self.quoted_triple_to_id(triple),
+        }
     }
 
     /// Interpret a class expression in this interpretation
@@ -150,12 +342,11 @@ impl Owl2Interpretation {
             ClassExpression::ObjectOneOf(individuals) => {
                 let mut result = HashSet::new();
                 for individual in individuals {
-                    if let Individual::Named(named) = individual {
-                        if let Some(domain_element) =
+                    if let Individual::Named(named) = individual
+                        && let Some(domain_element) =
                             self.individual_interpretation.get(&named.iri.to_string())
-                        {
-                            result.insert(domain_element.clone());
-                        }
+                    {
+                        result.insert(domain_element.clone());
                     }
                 }
                 Ok(result)
@@ -531,9 +722,9 @@ impl Owl2Interpretation {
         } else {
             // If property has no interpretation, only ≥0 and =0 restrictions can be satisfied
             match restriction_type {
-                CardinalityType::Min if cardinality == 0 => result = self.domain.clone(),
-                CardinalityType::Max => result = self.domain.clone(),
-                CardinalityType::Exact if cardinality == 0 => result = self.domain.clone(),
+                CardinalityType::Min if cardinality == 0 => result.clone_from(&self.domain),
+                CardinalityType::Max => result.clone_from(&self.domain),
+                CardinalityType::Exact if cardinality == 0 => result.clone_from(&self.domain),
                 _ => {} // Empty result for other cases
             }
         }
@@ -710,16 +901,12 @@ impl Owl2Interpretation {
                     .cloned()
                     .collect())
             }
-            DataRange::DataOneOf(literals) => Ok(literals
-                .iter()
-                .map(|lit| self.literal_to_string(lit))
-                .collect()),
             DataRange::DatatypeRestriction {
                 datatype,
                 restrictions,
             } => {
                 // Start with all values of the base datatype
-                let values = self.get_datatype_values(&datatype.to_string());
+                let _values = self.get_datatype_values(&datatype.to_string());
 
                 // Proper facet restriction application - check restriction type compatibility
                 let base_values = self.get_datatype_values(datatype.as_str());
@@ -732,15 +919,11 @@ impl Owl2Interpretation {
                             literal: restriction.value.value.clone(),
                             lang: language.clone(),
                         }
-                    } else if let Some(datatype) = &restriction.value.datatype {
-                        // For now, use Simple literal since IRI constructor is private
-                        // TODO: Find proper way to create horned_owl IRI from datatype URL
+                    } else if let Some(_datatype) = &restriction.value.datatype {
+                        // For now, just use Simple literal as placeholder
+                        // Proper datatype handling would require horned_owl Datatype construction
                         horned_owl::model::Literal::Simple {
-                            literal: format!(
-                                "{}^^{}",
-                                restriction.value.value,
-                                datatype.to_string()
-                            ),
+                            literal: restriction.value.value.clone(),
                         }
                     } else {
                         horned_owl::model::Literal::Simple {
@@ -772,17 +955,17 @@ impl Owl2Interpretation {
         }
     }
 
-    /// Convert a horned_owl literal to string representation
+    /// Convert a `horned_owl` literal to string representation
     fn horned_owl_literal_to_string(&self, literal: &horned_owl::model::Literal<String>) -> String {
         match literal {
             horned_owl::model::Literal::Simple { literal } => literal.clone(),
             horned_owl::model::Literal::Language { literal, lang } => {
-                format!("{}@{}", literal, lang)
+                format!("{literal}@{lang}")
             }
             horned_owl::model::Literal::Datatype {
                 literal,
                 datatype_iri,
-            } => format!("{}^^{}", literal, datatype_iri),
+            } => format!("{literal}^^{datatype_iri}"),
         }
     }
 
@@ -880,8 +1063,8 @@ impl Owl2Interpretation {
         self.get_all_data_values()
             .into_iter()
             .filter(|v| {
-                !v.parse::<i64>().is_ok()
-                    && !v.parse::<f64>().is_ok()
+                v.parse::<i64>().is_err()
+                    && v.parse::<f64>().is_err()
                     && v != "true"
                     && v != "false"
             })
@@ -983,7 +1166,7 @@ impl Owl2Interpretation {
                                 .abs()
                                 .to_string()
                                 .chars()
-                                .filter(|c| c.is_ascii_digit())
+                                .filter(char::is_ascii_digit)
                                 .count();
                             if let Ok(target_digits) = restricting_str.parse::<usize>() {
                                 digit_count <= target_digits
@@ -1032,30 +1215,27 @@ impl Owl2Interpretation {
                     // Class assertion: a rdf:type C
                     if let (RdfTerm::Iri(individual), RdfTerm::Iri(class)) =
                         (&triple.subject, &triple.object)
+                        && let Some(class_ext) = self.class_interpretation.get(&class.to_string())
                     {
-                        if let Some(class_ext) = self.class_interpretation.get(&class.to_string()) {
-                            return class_ext.contains(&individual.to_string());
-                        }
+                        return class_ext.contains(&individual.to_string());
                     }
                     false
                 }
                 predicate_iri => {
                     // Property assertion
-                    if let Some(prop_ext) = self.object_property_interpretation.get(predicate_iri) {
-                        if let (RdfTerm::Iri(subj), RdfTerm::Iri(obj)) =
+                    if let Some(prop_ext) = self.object_property_interpretation.get(predicate_iri)
+                        && let (RdfTerm::Iri(subj), RdfTerm::Iri(obj)) =
                             (&triple.subject, &triple.object)
-                        {
-                            return prop_ext.contains(&(subj.to_string(), obj.to_string()));
-                        }
+                    {
+                        return prop_ext.contains(&(subj.to_string(), obj.to_string()));
                     }
 
                     // Data property assertion
-                    if let Some(prop_ext) = self.data_property_interpretation.get(predicate_iri) {
-                        if let (RdfTerm::Iri(subj), RdfTerm::Literal { value, .. }) =
+                    if let Some(prop_ext) = self.data_property_interpretation.get(predicate_iri)
+                        && let (RdfTerm::Iri(subj), RdfTerm::Literal { value, .. }) =
                             (&triple.subject, &triple.object)
-                        {
-                            return prop_ext.contains(&(subj.to_string(), value.clone()));
-                        }
+                    {
+                        return prop_ext.contains(&(subj.to_string(), value.clone()));
                     }
 
                     false
@@ -1097,6 +1277,16 @@ impl SemanticInterpretation for Owl2Interpretation {
                 .cloned(),
             RdfTerm::BlankNode(id) => self.individual_interpretation.get(id).cloned(),
             RdfTerm::Literal { value, .. } => Some(value.clone()),
+            RdfTerm::QuotedTriple(triple) => {
+                // RDF-star: quoted triples as individuals
+                let triple_id = format!("<<{triple}>>");
+                Some(triple_id)
+            }
+            RdfTerm::TripleTerm(triple) => {
+                // RDF 1.2: triple terms as individuals
+                let triple_id = format!("<<{triple}>>");
+                Some(triple_id)
+            }
         }
     }
 
@@ -1129,6 +1319,7 @@ pub struct Owl2ReasoningEngine {
 
 impl Owl2ReasoningEngine {
     /// Create a new OWL 2 DL reasoning engine
+    #[must_use]
     pub fn new(axioms: Vec<Axiom>) -> Self {
         Self {
             axioms,
@@ -1138,7 +1329,7 @@ impl Owl2ReasoningEngine {
 
     /// Check satisfiability of a class expression
     pub fn is_satisfiable(&mut self, class_expr: &ClassExpression) -> Result<bool> {
-        let key = format!("{:?}", class_expr);
+        let key = format!("{class_expr:?}");
 
         if let Some(&result) = self.cache.get(&key) {
             return Ok(result);
@@ -1192,7 +1383,7 @@ impl Owl2ReasoningEngine {
         const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
 
         // Create initial node with the class expression to check
-        let initial_individual = format!("_:x{}", next_individual_id);
+        let initial_individual = format!("_:x{next_individual_id}");
         next_individual_id += 1;
 
         let mut initial_concepts = HashSet::new();
@@ -1219,8 +1410,7 @@ impl Owl2ReasoningEngine {
                 .get(&current_individual)
                 .ok_or_else(|| {
                     Error::reasoning(format!(
-                        "Individual {} not found in tableau nodes",
-                        current_individual
+                        "Individual {current_individual} not found in tableau nodes"
                     ))
                 })?
                 .clone();
@@ -1250,25 +1440,25 @@ impl Owl2ReasoningEngine {
     fn has_contradiction(&self, concepts: &HashSet<ClassExpression>) -> Result<bool> {
         // Check for owl:Nothing
         for concept in concepts {
-            if let ClassExpression::Class(class) = concept {
-                if class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing" {
-                    return Ok(true);
-                }
+            if let ClassExpression::Class(class) = concept
+                && class.iri.as_str() == "http://www.w3.org/2002/07/owl#Nothing"
+            {
+                return Ok(true);
             }
         }
 
         // Check for complementary concepts (C and ¬C)
         for concept1 in concepts {
             for concept2 in concepts {
-                if let (ClassExpression::ObjectComplementOf(c1), c2) = (concept1, concept2) {
-                    if c1.as_ref() == c2 {
-                        return Ok(true);
-                    }
+                if let (ClassExpression::ObjectComplementOf(c1), c2) = (concept1, concept2)
+                    && c1.as_ref() == c2
+                {
+                    return Ok(true);
                 }
-                if let (c1, ClassExpression::ObjectComplementOf(c2)) = (concept1, concept2) {
-                    if c1 == c2.as_ref() {
-                        return Ok(true);
-                    }
+                if let (c1, ClassExpression::ObjectComplementOf(c2)) = (concept1, concept2)
+                    && c1 == c2.as_ref()
+                {
+                    return Ok(true);
                 }
             }
         }
@@ -1290,22 +1480,21 @@ impl Owl2ReasoningEngine {
             .get(individual)
             .ok_or_else(|| {
                 Error::reasoning(format!(
-                    "Individual {} not found in tableau nodes",
-                    individual
+                    "Individual {individual} not found in tableau nodes"
                 ))
             })?
             .clone();
 
-        for concept in current_node.concepts.iter() {
+        for concept in &current_node.concepts {
             match concept {
                 ClassExpression::ObjectIntersectionOf(concepts) => {
                     // Intersection rule: C ⊓ D means both C and D must hold
                     for sub_concept in concepts {
-                        if !current_node.concepts.contains(sub_concept) {
-                            if let Some(node) = nodes.get_mut(individual) {
-                                node.concepts.insert(sub_concept.clone());
-                                made_changes = true;
-                            }
+                        if !current_node.concepts.contains(sub_concept)
+                            && let Some(node) = nodes.get_mut(individual)
+                        {
+                            node.concepts.insert(sub_concept.clone());
+                            made_changes = true;
                         }
                     }
                 }
@@ -1314,13 +1503,12 @@ impl Owl2ReasoningEngine {
                     // Union rule: C ⊔ D means we need to try both branches
                     // For simplicity, we'll just pick the first alternative
                     // A complete implementation would use backtracking
-                    if let Some(first_concept) = concepts.first() {
-                        if !current_node.concepts.contains(first_concept) {
-                            if let Some(node) = nodes.get_mut(individual) {
-                                node.concepts.insert(first_concept.clone());
-                                made_changes = true;
-                            }
-                        }
+                    if let Some(first_concept) = concepts.first()
+                        && !current_node.concepts.contains(first_concept)
+                        && let Some(node) = nodes.get_mut(individual)
+                    {
+                        node.concepts.insert(first_concept.clone());
+                        made_changes = true;
                     }
                 }
 
@@ -1345,7 +1533,7 @@ impl Owl2ReasoningEngine {
 
                     if !has_successor {
                         // Create new successor
-                        let new_individual = format!("_:x{}", next_individual_id);
+                        let new_individual = format!("_:x{next_individual_id}");
                         *next_individual_id += 1;
 
                         let mut new_concepts = HashSet::new();
@@ -1386,7 +1574,7 @@ impl Owl2ReasoningEngine {
         match property {
             ObjectPropertyExpression::ObjectProperty(prop) => prop.iri.to_string(),
             ObjectPropertyExpression::InverseObjectProperty(prop) => {
-                format!("inverse({})", prop.iri.to_string())
+                format!("inverse({})", prop.iri)
             }
             ObjectPropertyExpression::PropertyChain(chain) => {
                 let chain_names: Vec<String> = chain
@@ -1495,5 +1683,142 @@ mod tests {
             .is_satisfiable(&person_class)
             .expect("Failed to check if class expression is satisfiable");
         assert!(satisfiable);
+    }
+
+    #[test]
+    fn test_owl2_config_rdf11() {
+        let config = Owl2Config::rdf11();
+        assert!(config.rdf11_mode);
+        assert_eq!(config.quoted_triple_reasoning_depth, 0);
+        assert!(!config.quoted_triples_as_annotations);
+    }
+
+    #[test]
+    fn test_owl2_config_rdfstar() {
+        let config = Owl2Config::rdfstar(3);
+        assert!(!config.rdf11_mode);
+        assert_eq!(config.quoted_triple_reasoning_depth, 3);
+        assert!(config.quoted_triples_as_annotations);
+    }
+
+    #[test]
+    fn test_owl2_interpretation_with_config() {
+        let config = Owl2Config::rdfstar(2);
+        let interp = Owl2Interpretation::with_config(config.clone());
+
+        assert_eq!(interp.config().quoted_triple_reasoning_depth, 2);
+        assert!(!interp.config().rdf11_mode);
+    }
+
+    #[test]
+    fn test_process_rdf_graph_with_quoted_triples() {
+        let mut interp = Owl2Interpretation::new();
+
+        // Create an RDF graph with a quoted triple
+        let mut graph = RdfGraph::new();
+
+        // << :alice :knows :bob >> :certainty "high"
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        let outer_triple = Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        };
+
+        graph.add_triple(outer_triple);
+
+        // Process the graph
+        interp.process_rdf_graph_for_quoted_triples(&graph).unwrap();
+
+        // Check that annotations were extracted
+        let quoted_id = interp.quoted_triple_to_id(&inner_triple);
+        let annotations = interp.get_quoted_triple_annotations(&quoted_id);
+
+        assert!(annotations.is_some());
+        let annots = annotations.unwrap();
+        assert_eq!(annots.len(), 1);
+        assert_eq!(annots[0].0, "http://example.org/certainty");
+        assert_eq!(annots[0].1, "\"high\"");
+    }
+
+    #[test]
+    fn test_rdf11_mode_skips_quoted_triple_processing() {
+        let mut interp = Owl2Interpretation::new_rdf11();
+
+        let mut graph = RdfGraph::new();
+
+        let inner_triple = Triple {
+            subject: RdfTerm::iri("http://example.org/alice").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/knows").unwrap(),
+            object: RdfTerm::iri("http://example.org/bob").unwrap(),
+        };
+
+        graph.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_triple.clone())),
+            predicate: RdfTerm::iri("http://example.org/certainty").unwrap(),
+            object: RdfTerm::literal("high"),
+        });
+
+        // Process should succeed but not extract annotations in RDF 1.1 mode
+        interp.process_rdf_graph_for_quoted_triples(&graph).unwrap();
+
+        let quoted_id = interp.quoted_triple_to_id(&inner_triple);
+        assert!(interp.get_quoted_triple_annotations(&quoted_id).is_none());
+    }
+
+    #[test]
+    fn test_nested_quoted_triple_depth_limit() {
+        let config = Owl2Config::rdfstar(1); // Only depth 1
+        let mut interp = Owl2Interpretation::with_config(config);
+
+        let mut graph = RdfGraph::new();
+
+        // Nested: << << :a :b :c >> :d :e >> :f :g
+        let inner_inner = Triple {
+            subject: RdfTerm::iri("http://example.org/a").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/b").unwrap(),
+            object: RdfTerm::iri("http://example.org/c").unwrap(),
+        };
+
+        let inner = Box::new(Triple {
+            subject: RdfTerm::QuotedTriple(Box::new(inner_inner)),
+            predicate: RdfTerm::iri("http://example.org/d").unwrap(),
+            object: RdfTerm::iri("http://example.org/e").unwrap(),
+        });
+
+        graph.add_triple(Triple {
+            subject: RdfTerm::QuotedTriple(inner.clone()),
+            predicate: RdfTerm::iri("http://example.org/f").unwrap(),
+            object: RdfTerm::literal("g"),
+        });
+
+        // Process with depth limit of 1
+        interp.process_rdf_graph_for_quoted_triples(&graph).unwrap();
+
+        // The outer level should be processed
+        let outer_id = interp.quoted_triple_to_id(&inner);
+        assert!(interp.get_quoted_triple_annotations(&outer_id).is_some());
+    }
+
+    #[test]
+    fn test_quoted_triple_to_id_canonical_form() {
+        let interp = Owl2Interpretation::new();
+
+        let triple = Triple {
+            subject: RdfTerm::iri("http://example.org/s").unwrap(),
+            predicate: RdfTerm::iri("http://example.org/p").unwrap(),
+            object: RdfTerm::literal("o"),
+        };
+
+        let id = interp.quoted_triple_to_id(&triple);
+        assert!(id.starts_with("<<"));
+        assert!(id.ends_with(">>"));
+        assert!(id.contains("http://example.org/s"));
+        assert!(id.contains("http://example.org/p"));
     }
 }

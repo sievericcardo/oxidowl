@@ -5,6 +5,7 @@
 //! fully saturated deterministically and marks those requiring tableau expansion.
 
 pub mod config;
+pub mod cycle_detection;
 pub mod engine;
 pub mod node;
 pub mod rules;

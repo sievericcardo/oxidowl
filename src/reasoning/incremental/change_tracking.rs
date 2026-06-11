@@ -18,7 +18,7 @@ use std::{
     time::Instant,
 };
 
-/// Represents a change to the TBox (terminological knowledge)
+/// Represents a change to the `TBox` (terminological knowledge)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TBoxChange {
     /// A new axiom was added to the ontology
@@ -53,6 +53,7 @@ pub enum TBoxChange {
 
 impl TBoxChange {
     /// Get the timestamp when this change occurred
+    #[must_use]
     pub fn timestamp(&self) -> Instant {
         match self {
             TBoxChange::AxiomAdded { timestamp, .. } => *timestamp,
@@ -67,10 +68,11 @@ impl TBoxChange {
     }
 
     /// Get a human-readable description of the change
+    #[must_use]
     pub fn description(&self) -> String {
         match self {
-            TBoxChange::AxiomAdded { axiom, .. } => format!("Added axiom: {:?}", axiom),
-            TBoxChange::AxiomRemoved { axiom, .. } => format!("Removed axiom: {:?}", axiom),
+            TBoxChange::AxiomAdded { axiom, .. } => format!("Added axiom: {axiom:?}"),
+            TBoxChange::AxiomRemoved { axiom, .. } => format!("Removed axiom: {axiom:?}"),
             TBoxChange::ClassAdded { class, .. } => format!("Added class: {}", class.iri),
             TBoxChange::ClassRemoved { class, .. } => format!("Removed class: {}", class.iri),
             TBoxChange::ObjectPropertyAdded { property, .. } => {
@@ -89,6 +91,7 @@ impl TBoxChange {
     }
 
     /// Extract the classes that are directly affected by this change
+    #[must_use]
     pub fn affected_classes(&self) -> HashSet<Class> {
         let mut classes = HashSet::new();
 
@@ -106,7 +109,7 @@ impl TBoxChange {
     }
 }
 
-/// Represents a change to the ABox (assertional knowledge)
+/// Represents a change to the `ABox` (assertional knowledge)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ABoxChange {
     /// A new individual was introduced
@@ -163,6 +166,7 @@ pub enum ABoxChange {
 
 impl ABoxChange {
     /// Get the timestamp when this change occurred
+    #[must_use]
     pub fn timestamp(&self) -> Instant {
         match self {
             ABoxChange::IndividualAdded { timestamp, .. } => *timestamp,
@@ -177,6 +181,7 @@ impl ABoxChange {
     }
 
     /// Get a human-readable description of the change
+    #[must_use]
     pub fn description(&self) -> String {
         match self {
             ABoxChange::IndividualAdded { individual, .. } => {
@@ -184,14 +189,14 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Added individual: {}", iri)
+                format!("Added individual: {iri}")
             }
             ABoxChange::IndividualRemoved { individual, .. } => {
                 let iri = match individual {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Removed individual: {}", iri)
+                format!("Removed individual: {iri}")
             }
             ABoxChange::ClassAssertionAdded {
                 individual, class, ..
@@ -200,7 +205,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Added assertion: {} is instance of {:?}", iri, class)
+                format!("Added assertion: {iri} is instance of {class:?}")
             }
             ABoxChange::ClassAssertionRemoved {
                 individual, class, ..
@@ -209,7 +214,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!("Removed assertion: {} is instance of {:?}", iri, class)
+                format!("Removed assertion: {iri} is instance of {class:?}")
             }
             ABoxChange::ObjectPropertyAssertionAdded {
                 subject,
@@ -225,10 +230,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Added property assertion: {} {:?} {}",
-                    subject_iri, property, object_iri
-                )
+                format!("Added property assertion: {subject_iri} {property:?} {object_iri}")
             }
             ABoxChange::ObjectPropertyAssertionRemoved {
                 subject,
@@ -244,10 +246,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Removed property assertion: {} {:?} {}",
-                    subject_iri, property, object_iri
-                )
+                format!("Removed property assertion: {subject_iri} {property:?} {object_iri}")
             }
             ABoxChange::DataPropertyAssertionAdded {
                 subject,
@@ -259,10 +258,7 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Added data assertion: {} {:?} {}",
-                    subject_iri, property, value
-                )
+                format!("Added data assertion: {subject_iri} {property:?} {value}")
             }
             ABoxChange::DataPropertyAssertionRemoved {
                 subject,
@@ -274,15 +270,13 @@ impl ABoxChange {
                     Individual::Named(named) => named.iri.to_string(),
                     Individual::Anonymous(anon) => anon.id.clone(),
                 };
-                format!(
-                    "Removed data assertion: {} {:?} {}",
-                    subject_iri, property, value
-                )
+                format!("Removed data assertion: {subject_iri} {property:?} {value}")
             }
         }
     }
 
     /// Get the individuals directly affected by this change
+    #[must_use]
     pub fn affected_individuals(&self) -> HashSet<Individual> {
         let mut individuals = HashSet::new();
 
@@ -331,6 +325,7 @@ pub struct DependencyGraph {
 
 impl DependencyGraph {
     /// Create a new empty dependency graph
+    #[must_use]
     pub fn new() -> Self {
         Self {
             class_dependencies: HashMap::new(),
@@ -352,11 +347,11 @@ impl DependencyGraph {
         Ok(graph)
     }
 
-    /// Add a class dependency (e.g., SubClass relationship)
+    /// Add a class dependency (e.g., `SubClass` relationship)
     pub fn add_class_dependency(&mut self, dependent: Class, depends_on: Class) {
         self.class_dependencies
             .entry(dependent)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(depends_on);
         self.invalidate_transitive_cache();
     }
@@ -433,15 +428,27 @@ impl DependencyGraph {
 
     /// Recursively collect all classes that depend on the given class
     fn collect_class_dependents(&self, class: &Class, visited: &mut HashSet<Class>) {
-        if visited.contains(class) {
-            return; // Avoid cycles
+        self.collect_class_dependents_with_depth(class, visited, 0);
+    }
+
+    /// Maximum recursion depth to prevent stack overflow
+    const MAX_DEPENDENT_DEPTH: usize = 500;
+
+    fn collect_class_dependents_with_depth(
+        &self,
+        class: &Class,
+        visited: &mut HashSet<Class>,
+        depth: usize,
+    ) {
+        if visited.contains(class) || depth > Self::MAX_DEPENDENT_DEPTH {
+            return; // Avoid cycles and stack overflow
         }
         visited.insert(class.clone());
 
         // Find all classes that directly depend on this class
         for (dependent, dependencies) in &self.class_dependencies {
             if dependencies.contains(class) && !visited.contains(dependent) {
-                self.collect_class_dependents(dependent, visited);
+                self.collect_class_dependents_with_depth(dependent, visited, depth + 1);
             }
         }
     }
@@ -474,9 +481,9 @@ impl Clone for DependencyGraph {
 /// Change tracking system that monitors ontology modifications
 #[derive(Debug)]
 pub struct ChangeTracker {
-    /// History of TBox changes
+    /// History of `TBox` changes
     tbox_history: RwLock<VecDeque<TBoxChange>>,
-    /// History of ABox changes
+    /// History of `ABox` changes
     abox_history: RwLock<VecDeque<ABoxChange>>,
     /// Dependency graph for impact analysis
     dependency_graph: RwLock<DependencyGraph>,
@@ -503,6 +510,7 @@ pub enum InvalidationEvent {
 
 impl ChangeTracker {
     /// Create a new change tracker
+    #[must_use]
     pub fn new(config: super::IncrementalConfig) -> Self {
         Self {
             tbox_history: RwLock::new(VecDeque::new()),
@@ -522,7 +530,7 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Track a TBox change
+    /// Track a `TBox` change
     pub fn track_tbox_change(&self, change: TBoxChange) -> Result<()> {
         // Add to history
         if let Ok(mut history) = self.tbox_history.write() {
@@ -543,7 +551,7 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Track an ABox change
+    /// Track an `ABox` change
     pub fn track_abox_change(&self, change: ABoxChange) -> Result<()> {
         // Add to history
         if let Ok(mut history) = self.abox_history.write() {
@@ -570,7 +578,7 @@ impl ChangeTracker {
         }
     }
 
-    /// Get recent TBox changes since a given timestamp
+    /// Get recent `TBox` changes since a given timestamp
     pub fn get_tbox_changes_since(&self, since: Instant) -> Vec<TBoxChange> {
         if let Ok(history) = self.tbox_history.read() {
             history
@@ -583,7 +591,7 @@ impl ChangeTracker {
         }
     }
 
-    /// Get recent ABox changes since a given timestamp
+    /// Get recent `ABox` changes since a given timestamp
     pub fn get_abox_changes_since(&self, since: Instant) -> Vec<ABoxChange> {
         if let Ok(history) = self.abox_history.read() {
             history
@@ -596,7 +604,7 @@ impl ChangeTracker {
         }
     }
 
-    /// Generate invalidation events for a TBox change
+    /// Generate invalidation events for a `TBox` change
     fn generate_invalidation_events_for_tbox_change(&self, change: &TBoxChange) -> Result<()> {
         let affected_classes = change.affected_classes();
 
@@ -621,20 +629,20 @@ impl ChangeTracker {
         Ok(())
     }
 
-    /// Generate invalidation events for an ABox change
+    /// Generate invalidation events for an `ABox` change
     fn generate_invalidation_events_for_abox_change(&self, change: &ABoxChange) -> Result<()> {
         let affected_individuals = change.affected_individuals();
 
-        if !affected_individuals.is_empty() {
-            if let Ok(mut queue) = self.invalidation_queue.write() {
-                queue.push_back(InvalidationEvent::InstanceRelations(affected_individuals));
-            }
+        if !affected_individuals.is_empty()
+            && let Ok(mut queue) = self.invalidation_queue.write()
+        {
+            queue.push_back(InvalidationEvent::InstanceRelations(affected_individuals));
         }
 
         Ok(())
     }
 
-    /// Update dependency graph based on TBox change
+    /// Update dependency graph based on `TBox` change
     fn update_dependency_graph_for_tbox_change(&self, change: &TBoxChange) -> Result<()> {
         if let Ok(mut graph) = self.dependency_graph.write() {
             match change {
@@ -659,8 +667,25 @@ impl ChangeTracker {
 }
 
 /// Extract all atomic classes from a class expression
+#[must_use]
 pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<Class> {
     let mut classes = HashSet::new();
+    extract_classes_from_class_expression_with_depth(expr, &mut classes, 0);
+    classes
+}
+
+/// Maximum recursion depth for extraction to prevent stack overflow
+const MAX_CLASS_EXTRACTION_DEPTH: usize = 500;
+
+fn extract_classes_from_class_expression_with_depth(
+    expr: &ClassExpression,
+    classes: &mut HashSet<Class>,
+    depth: usize,
+) {
+    // Prevent stack overflow on deeply nested expressions
+    if depth > MAX_CLASS_EXTRACTION_DEPTH {
+        return;
+    }
 
     match expr {
         ClassExpression::Class(class) => {
@@ -669,15 +694,15 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
         ClassExpression::ObjectIntersectionOf(expressions)
         | ClassExpression::ObjectUnionOf(expressions) => {
             for sub_expr in expressions {
-                classes.extend(extract_classes_from_class_expression(sub_expr));
+                extract_classes_from_class_expression_with_depth(sub_expr, classes, depth + 1);
             }
         }
         ClassExpression::ObjectComplementOf(inner) => {
-            classes.extend(extract_classes_from_class_expression(inner));
+            extract_classes_from_class_expression_with_depth(inner, classes, depth + 1);
         }
         ClassExpression::ObjectSomeValuesFrom { filler, .. }
         | ClassExpression::ObjectAllValuesFrom { filler, .. } => {
-            classes.extend(extract_classes_from_class_expression(filler));
+            extract_classes_from_class_expression_with_depth(filler, classes, depth + 1);
         }
         ClassExpression::ObjectHasValue { .. } => {
             // No classes in HasValue restrictions
@@ -685,7 +710,7 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
         ClassExpression::ObjectMinCardinality { filler, .. }
         | ClassExpression::ObjectMaxCardinality { filler, .. }
         | ClassExpression::ObjectExactCardinality { filler, .. } => {
-            classes.extend(extract_classes_from_class_expression(filler));
+            extract_classes_from_class_expression_with_depth(filler, classes, depth + 1);
         }
         ClassExpression::ObjectHasSelf { .. } => {
             // No classes in HasSelf restrictions
@@ -702,8 +727,6 @@ pub fn extract_classes_from_class_expression(expr: &ClassExpression) -> HashSet<
             // Data property restrictions don't directly involve classes
         }
     }
-
-    classes
 }
 
 /// Extract all classes mentioned in an axiom

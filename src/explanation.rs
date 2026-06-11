@@ -3,31 +3,30 @@
 //! This module provides comprehensive explanation services for reasoning results,
 //! including proof tracking, justification computation, and explanation formatting.
 
+#![allow(dead_code)]
+
 use crate::{
     Result,
     core::tableau::NodeId,
     ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fmt,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, fmt};
 
 /// Main explanation service
 #[derive(Debug)]
 pub struct ExplanationService {
-    proof_tracker: Arc<Mutex<ProofTracker>>,
+    proof_tracker: ProofTracker,
     justification_computer: JustificationComputer,
     explanation_formatter: ExplanationFormatter,
 }
 
 impl ExplanationService {
     /// Create a new explanation service
+    #[must_use]
     pub fn new() -> Self {
         Self {
-            proof_tracker: Arc::new(Mutex::new(ProofTracker::new())),
+            proof_tracker: ProofTracker::new(),
             justification_computer: JustificationComputer::new(),
             explanation_formatter: ExplanationFormatter::new(),
         }
@@ -106,10 +105,8 @@ impl ExplanationService {
     }
 
     /// Track reasoning step for proof generation
-    pub fn track_reasoning_step(&self, step: ReasoningStep) -> Result<()> {
-        if let Ok(mut tracker) = self.proof_tracker.lock() {
-            tracker.add_step(step);
-        }
+    pub fn track_reasoning_step(&mut self, step: ReasoningStep) -> Result<()> {
+        self.proof_tracker.add_step(step);
         Ok(())
     }
 
@@ -128,7 +125,7 @@ impl ExplanationService {
                 subclass: subclass.clone(),
                 superclass: superclass.clone(),
             },
-            premises: justification.iter().map(|ax| ax.clone()).collect(),
+            premises: justification.to_vec(),
             children: vec![],
             rule_applied: InferenceRule::Subsumption,
         };
@@ -143,7 +140,7 @@ impl ExplanationService {
         let root = ProofNode {
             id: 0,
             inference: Inference::Inconsistency,
-            premises: justification.iter().map(|ax| ax.clone()).collect(),
+            premises: justification.to_vec(),
             children: vec![],
             rule_applied: InferenceRule::Contradiction,
         };
@@ -164,7 +161,7 @@ impl ExplanationService {
             inference: Inference::Unsatisfiability {
                 class: class.clone(),
             },
-            premises: justification.iter().map(|ax| ax.clone()).collect(),
+            premises: justification.to_vec(),
             children: vec![],
             rule_applied: InferenceRule::Unsatisfiability,
         };
@@ -291,14 +288,15 @@ pub enum InferenceRule {
 /// Justification computer for finding minimal axiom sets
 #[derive(Debug)]
 pub struct JustificationComputer {
-    cache: std::cell::RefCell<HashMap<String, Vec<Axiom>>>,
+    cache: std::sync::Mutex<HashMap<String, Vec<Axiom>>>,
 }
 
 impl JustificationComputer {
     /// Create a new justification computer
+    #[must_use]
     pub fn new() -> Self {
         Self {
-            cache: std::cell::RefCell::new(HashMap::new()),
+            cache: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -360,23 +358,22 @@ impl JustificationComputer {
                 // Check transitivity: if subclass -> intermediate and intermediate -> superclass
                 if &axiom_data.subclass == subclass {
                     for other_axiom in axioms {
-                        if let Axiom::SubClassOf(other_data) = other_axiom {
-                            if &other_data.subclass == &axiom_data.superclass
-                                && &other_data.superclass == superclass
-                            {
-                                return true;
-                            }
+                        if let Axiom::SubClassOf(other_data) = other_axiom
+                            && other_data.subclass == axiom_data.superclass
+                            && &other_data.superclass == superclass
+                        {
+                            return true;
                         }
                     }
                 }
             }
 
             // Check EquivalentClasses
-            if let Axiom::EquivalentClasses(axiom_data) = axiom {
-                if axiom_data.classes.contains(subclass) && axiom_data.classes.contains(superclass)
-                {
-                    return true;
-                }
+            if let Axiom::EquivalentClasses(axiom_data) = axiom
+                && axiom_data.classes.contains(subclass)
+                && axiom_data.classes.contains(superclass)
+            {
+                return true;
             }
         }
 
@@ -416,11 +413,11 @@ impl JustificationComputer {
         Ok(minimal_set)
     }
 
-    /// Simplified check for inconsistency (placeholder for proper reasoner check)
+    /// Check for inconsistency using structural analysis
     fn is_inconsistent(&self, axioms: &[Axiom]) -> bool {
         // Check for obvious contradictions
 
-        // Check for disjoint classes being asserted equivalent
+        // 1. Check for disjoint classes being asserted equivalent
         for axiom in axioms {
             if let Axiom::EquivalentClasses(equiv_data) = axiom {
                 for other_axiom in axioms {
@@ -441,13 +438,72 @@ impl JustificationComputer {
             }
         }
 
-        // Check for class being subclass of its complement
+        // 2. Check for class being subclass of its complement
         for axiom in axioms {
-            if let Axiom::SubClassOf(axiom_data) = axiom {
-                if let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass {
-                    if &axiom_data.subclass == inner.as_ref() {
-                        return true;
+            if let Axiom::SubClassOf(axiom_data) = axiom
+                && let ClassExpression::ObjectComplementOf(inner) = &axiom_data.superclass
+                && &axiom_data.subclass == inner.as_ref()
+            {
+                return true;
+            }
+        }
+
+        // 3. Check for empty intersections (A ⊓ ¬A ⊑ ⊥)
+        for axiom in axioms {
+            if let Axiom::SubClassOf(axiom_data) = axiom
+                && let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass
+            {
+                // Check if intersection contains both a class and its complement
+                for (i, c1) in classes.iter().enumerate() {
+                    for c2 in classes.iter().skip(i + 1) {
+                        if let ClassExpression::ObjectComplementOf(inner) = c2
+                            && c1 == inner.as_ref()
+                        {
+                            return true;
+                        }
+                        if let ClassExpression::ObjectComplementOf(inner) = c1
+                            && c2 == inner.as_ref()
+                        {
+                            return true;
+                        }
                     }
+                }
+            }
+        }
+
+        // 4. Check for cardinality contradictions (≥n and ≤m where n > m)
+        for axiom in axioms {
+            if let Axiom::SubClassOf(axiom_data) = axiom
+                && let ClassExpression::ObjectIntersectionOf(classes) = &axiom_data.subclass
+            {
+                let mut min_card = None;
+                let mut max_card = None;
+
+                for cls in classes {
+                    if let ClassExpression::ObjectMinCardinality {
+                        cardinality: n,
+                        property: prop,
+                        ..
+                    } = cls
+                    {
+                        min_card = Some((*n, prop));
+                    }
+                    if let ClassExpression::ObjectMaxCardinality {
+                        cardinality: m,
+                        property: prop2,
+                        ..
+                    } = cls
+                    {
+                        max_card = Some((*m, prop2));
+                    }
+                }
+
+                // Check if min > max for same property
+                if let (Some((min, prop1)), Some((max, prop2))) = (min_card, max_card)
+                    && prop1 == prop2
+                    && min > max
+                {
+                    return true;
                 }
             }
         }
@@ -581,6 +637,7 @@ pub struct ProofTracker {
 
 impl ProofTracker {
     /// Create a new proof tracker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             steps: Vec::new(),
@@ -591,15 +648,13 @@ impl ProofTracker {
     /// Add a reasoning step
     pub fn add_step(&mut self, step: ReasoningStep) {
         if let Some(node_id) = step.node_id {
-            self.node_map
-                .entry(node_id)
-                .or_insert_with(Vec::new)
-                .push(step.clone());
+            self.node_map.entry(node_id).or_default().push(step.clone());
         }
         self.steps.push(step);
     }
 
     /// Get all steps for a node
+    #[must_use]
     pub fn get_steps_for_node(&self, node_id: NodeId) -> Vec<&ReasoningStep> {
         self.node_map
             .get(&node_id)
@@ -658,11 +713,13 @@ pub struct ExplanationFormatter;
 
 impl ExplanationFormatter {
     /// Create a new explanation formatter
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
 
     /// Format explanation in the specified format
+    #[must_use]
     pub fn format(&self, explanation: &Explanation, format: ExplanationFormat) -> String {
         match format {
             ExplanationFormat::PlainText => self.format_plain_text(explanation),
@@ -681,8 +738,7 @@ impl ExplanationFormatter {
                 superclass,
             } => {
                 result.push_str(&format!(
-                    "Explanation for: {:?} ⊑ {:?}\n\n",
-                    subclass, superclass
+                    "Explanation for: {subclass:?} ⊑ {superclass:?}\n\n"
                 ));
             }
             ExplanationConclusion::Inconsistency => {
@@ -690,15 +746,11 @@ impl ExplanationFormatter {
             }
             ExplanationConclusion::Unsatisfiability { class } => {
                 result.push_str(&format!(
-                    "Explanation for unsatisfiability of: {:?}\n\n",
-                    class
+                    "Explanation for unsatisfiability of: {class:?}\n\n"
                 ));
             }
             ExplanationConclusion::InstanceOf { individual, class } => {
-                result.push_str(&format!(
-                    "Explanation for: {:?} : {:?}\n\n",
-                    individual, class
-                ));
+                result.push_str(&format!("Explanation for: {individual:?} : {class:?}\n\n"));
             }
         }
 
@@ -725,7 +777,7 @@ impl ExplanationFormatter {
         let justification_str = explanation
             .justification
             .iter()
-            .map(|axiom| format!("{:?}", axiom))
+            .map(|axiom| format!("{axiom:?}"))
             .collect::<Vec<_>>()
             .join(", ");
 

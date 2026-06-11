@@ -8,7 +8,18 @@ use crate::{
     config::{BlockingStrategy as ConfigBlockingStrategy, ReasoningConfig},
     core::tableau::{ConceptLabel, NodeId, TableauNode},
 };
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+
+/// Compute a deterministic sort key for a [`ConceptLabel`] using its `Hash` impl.
+/// Zero-allocation alternative to `format!("{c:?}")`.
+#[inline]
+fn concept_sort_key(c: &ConceptLabel) -> u64 {
+    let mut h = DefaultHasher::new();
+    c.hash(&mut h);
+    h.finish()
+}
 
 /// Trait for blocking checkers
 pub trait BlockingChecker: Send + Sync + std::fmt::Debug {
@@ -100,7 +111,8 @@ impl BlockingChecker for AnywhereBlocking {
         }
 
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        // Sort by pre-computed hash key — zero allocation vs format!("{:?}") string sort.
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -169,7 +181,7 @@ impl BlockingChecker for AncestorBlocking {
 
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -227,7 +239,7 @@ impl BlockingChecker for PairwiseBlocking {
 
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -245,6 +257,7 @@ pub struct DynamicBlocking {
 #[derive(Debug, Default)]
 struct BlockingStatistics {
     blocked_nodes: usize,
+    #[allow(dead_code)]
     total_comparisons: usize,
     false_positives: usize,
 }
@@ -319,6 +332,7 @@ fn signatures_equal(sig1: &[ConceptLabel], sig2: &[ConceptLabel]) -> bool {
 }
 
 /// Compute signature similarity (for dynamic blocking)
+#[allow(dead_code)]
 fn signature_similarity(sig1: &[ConceptLabel], sig2: &[ConceptLabel]) -> f64 {
     if sig1.is_empty() && sig2.is_empty() {
         return 1.0;
@@ -393,7 +407,7 @@ impl BlockingChecker for SingleBlocking {
         }
 
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
-        signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        signature.sort_unstable_by_key(concept_sort_key);
         signature
     }
 }
@@ -420,7 +434,7 @@ impl CoreBlocking {
     }
 
     /// Extract core concepts from a node (only atomic concepts and negations)
-    fn get_core_concepts(&self, node: &TableauNode) -> Vec<ConceptLabel> {
+    fn get_core_concepts(node: &TableauNode) -> Vec<ConceptLabel> {
         node.concepts
             .iter()
             .filter(|concept| match concept {
@@ -435,12 +449,12 @@ impl CoreBlocking {
 
 impl BlockingChecker for CoreBlocking {
     fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
-        let node_core = self.get_core_concepts(node);
+        let node_core = Self::get_core_concepts(node);
 
         // Core blocking: check only core concepts
         for other_node in nodes {
             if other_node.id != node.id && other_node.id < node.id {
-                let other_core = self.get_core_concepts(other_node);
+                let other_core = Self::get_core_concepts(other_node);
                 if signatures_subsume(&other_core, &node_core) {
                     return Some(other_node.id);
                 }
@@ -465,7 +479,7 @@ impl BlockingChecker for CoreBlocking {
     }
 
     fn get_signature(&self, node: &TableauNode) -> Vec<ConceptLabel> {
-        self.get_core_concepts(node)
+        Self::get_core_concepts(node)
     }
 }
 
@@ -482,6 +496,7 @@ pub struct OptimalBlocking {
 struct OptimalBlockingStats {
     nodes_blocked: usize,
     blocking_checks: usize,
+    #[allow(dead_code)]
     cache_hits: usize,
 }
 
@@ -633,16 +648,17 @@ mod tests {
 pub struct BlockerCandidateIndex {
     /// Maps signature hashes to node IDs
     signature_index: HashMap<u64, Vec<NodeId>>,
-    
+
     /// Maps node IDs to their signature hashes
     node_signatures: HashMap<NodeId, u64>,
-    
+
     /// Cached signatures for quick retrieval
     signature_cache: HashMap<NodeId, Vec<ConceptLabel>>,
 }
 
 impl BlockerCandidateIndex {
     /// Create a new blocker candidate index
+    #[must_use]
     pub fn new() -> Self {
         Self {
             signature_index: HashMap::new(),
@@ -653,77 +669,71 @@ impl BlockerCandidateIndex {
 
     /// Compute a hash for a signature
     fn compute_signature_hash(signature: &[ConceptLabel]) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        
         let mut hasher = DefaultHasher::new();
-        
-        // Sort signature for deterministic hashing
+
+        // Sort signature for deterministic hashing — use hash keys to avoid allocations.
         let mut sorted_sig: Vec<_> = signature.iter().collect();
-        sorted_sig.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
-        
+        sorted_sig.sort_unstable_by_key(|c| concept_sort_key(c));
+
         for concept in sorted_sig {
-            format!("{:?}", concept).hash(&mut hasher);
+            concept.hash(&mut hasher);
         }
-        
+
         hasher.finish()
     }
 
     /// Index a node's signature
     pub fn index_node(&mut self, node_id: NodeId, signature: Vec<ConceptLabel>) {
         let hash = Self::compute_signature_hash(&signature);
-        
+
         // Add to signature index
-        self.signature_index
-            .entry(hash)
-            .or_insert_with(Vec::new)
-            .push(node_id);
-        
+        self.signature_index.entry(hash).or_default().push(node_id);
+
         // Store node's signature hash
         self.node_signatures.insert(node_id, hash);
-        
+
         // Cache the signature
         self.signature_cache.insert(node_id, signature);
     }
 
     /// Find potential blocker candidates for a node signature
+    #[must_use]
     pub fn find_blocker_candidates(&self, signature: &[ConceptLabel]) -> Vec<NodeId> {
         let hash = Self::compute_signature_hash(signature);
-        
+
         // Exact match candidates
-        let mut candidates = self.signature_index
-            .get(&hash)
-            .cloned()
-            .unwrap_or_default();
-        
+        let mut candidates = self.signature_index.get(&hash).cloned().unwrap_or_default();
+
         // For robustness, also check signatures with small variations
         // (in case of hash collisions or near-matches)
         for (&other_hash, node_ids) in &self.signature_index {
             if other_hash != hash {
                 // Simple similarity check: XOR the hashes and check if they're close
                 let diff = (hash ^ other_hash).count_ones();
-                if diff <= 8 { // Allow up to 8 bit differences
+                if diff <= 8 {
+                    // Allow up to 8 bit differences
                     candidates.extend(node_ids.iter().copied());
                 }
             }
         }
-        
+
         candidates
     }
 
     /// Get the cached signature for a node
+    #[must_use]
     pub fn get_signature(&self, node_id: NodeId) -> Option<&Vec<ConceptLabel>> {
         self.signature_cache.get(&node_id)
     }
 
     /// Remove a node from the index
     pub fn remove_node(&mut self, node_id: NodeId) {
-        if let Some(hash) = self.node_signatures.remove(&node_id) {
-            if let Some(node_ids) = self.signature_index.get_mut(&hash) {
-                node_ids.retain(|&id| id != node_id);
-                if node_ids.is_empty() {
-                    self.signature_index.remove(&hash);
-                }
+        if let Some(hash) = self.node_signatures.remove(&node_id)
+            && let Some(node_ids) = self.signature_index.get_mut(&hash)
+        {
+            node_ids.retain(|&id| id != node_id);
+            if node_ids.is_empty() {
+                self.signature_index.remove(&hash);
             }
         }
         self.signature_cache.remove(&node_id);
@@ -737,11 +747,13 @@ impl BlockerCandidateIndex {
     }
 
     /// Get the number of indexed nodes
+    #[must_use]
     pub fn size(&self) -> usize {
         self.node_signatures.len()
     }
 
     /// Check if a node is indexed
+    #[must_use]
     pub fn contains(&self, node_id: NodeId) -> bool {
         self.node_signatures.contains_key(&node_id)
     }
@@ -761,6 +773,7 @@ pub struct IndexedAnywhereBlocking {
 }
 
 impl IndexedAnywhereBlocking {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             index: BlockerCandidateIndex::new(),
@@ -777,41 +790,41 @@ impl Default for IndexedAnywhereBlocking {
 impl BlockingChecker for IndexedAnywhereBlocking {
     fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
         let node_signature = self.get_signature(node);
-        
+
         // Use index to find blocker candidates
         let candidates = self.index.find_blocker_candidates(&node_signature);
-        
+
         // Check candidates for actual subsumption
         for candidate_id in candidates {
-            if candidate_id < node.id {
-                if let Some(candidate_node) = nodes.iter().find(|n| n.id == candidate_id) {
-                    let candidate_signature = self.get_signature(candidate_node);
-                    if signatures_subsume(&candidate_signature, &node_signature) {
-                        return Some(candidate_id);
-                    }
+            if candidate_id < node.id
+                && let Some(candidate_node) = nodes.iter().find(|n| n.id == candidate_id)
+            {
+                let candidate_signature = self.get_signature(candidate_node);
+                if signatures_subsume(&candidate_signature, &node_signature) {
+                    return Some(candidate_id);
                 }
             }
         }
-        
+
         None
     }
 
     fn update_blocking(&mut self, nodes: &mut [TableauNode]) -> Result<()> {
         // Rebuild index
         self.index.clear();
-        
+
         for node in nodes.iter() {
             let signature = self.get_signature(node);
             self.index.index_node(node.id, signature);
         }
-        
+
         // Update blocking information
         for i in 0..nodes.len() {
             let blocker = self.is_blocked(&nodes[i], nodes);
             nodes[i].blocking_info.is_blocked = blocker.is_some();
             nodes[i].blocking_info.blocker = blocker;
         }
-        
+
         Ok(())
     }
 
@@ -820,7 +833,7 @@ impl BlockingChecker for IndexedAnywhereBlocking {
         if let Some(cached) = self.index.get_signature(node.id) {
             return cached.clone();
         }
-        
+
         // Compute signature
         let mut signature: Vec<_> = node.concepts.iter().cloned().collect();
         signature.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
@@ -835,17 +848,17 @@ mod blocker_index_tests {
     #[test]
     fn test_blocker_index_basic() {
         let mut index = BlockerCandidateIndex::new();
-        
+
         let sig1 = vec![
             ConceptLabel::Atomic("A".to_string()),
             ConceptLabel::Atomic("B".to_string()),
         ];
-        
+
         index.index_node(1, sig1.clone());
-        
+
         assert_eq!(index.size(), 1);
         assert!(index.contains(1));
-        
+
         let candidates = index.find_blocker_candidates(&sig1);
         assert!(candidates.contains(&1));
     }
@@ -853,14 +866,14 @@ mod blocker_index_tests {
     #[test]
     fn test_blocker_index_removal() {
         let mut index = BlockerCandidateIndex::new();
-        
+
         let sig1 = vec![ConceptLabel::Atomic("A".to_string())];
         index.index_node(1, sig1);
-        
+
         assert_eq!(index.size(), 1);
-        
+
         index.remove_node(1);
-        
+
         assert_eq!(index.size(), 0);
         assert!(!index.contains(1));
     }
@@ -868,7 +881,7 @@ mod blocker_index_tests {
     #[test]
     fn test_indexed_anywhere_blocking() {
         let mut blocking = IndexedAnywhereBlocking::new();
-        
+
         // Test with empty nodes
         let nodes = vec![];
         assert!(blocking.update_blocking(&mut nodes.clone()).is_ok());

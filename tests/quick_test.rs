@@ -9,7 +9,7 @@ async fn test_basic_compilation() -> Result<()> {
     let ontology = Ontology::new();
 
     // Create reasoning service
-    let service = ReasoningService::new(ontology, config);
+    let _service = ReasoningService::new(ontology, config);
 
     println!("Basic compilation test passed!");
     Ok(())
@@ -29,7 +29,7 @@ async fn test_greenhouse_loading() -> Result<()> {
 
                     // Basic reasoning service creation
                     let config = ReasonerConfig::default();
-                    let service = ReasoningService::new(ontology, config);
+                    let _service = ReasoningService::new(ontology, config);
 
                     println!("Created reasoning service for greenhouse ontology");
                 }

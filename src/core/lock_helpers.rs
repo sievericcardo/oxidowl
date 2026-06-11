@@ -1,7 +1,7 @@
-//! Lock helper utilities for safe RwLock access
+//! Lock helper utilities for safe `RwLock` and `Mutex` access
 //!
-//! This module provides helper functions that convert `PoisonError` from RwLock
-//! operations into proper `Error` types with context and backtraces (in debug builds).
+//! This module provides helper functions that convert `PoisonError` from `RwLock`
+//! and `Mutex` operations into proper `Error` types with context and backtraces (in debug builds).
 //!
 //! # Usage
 //!
@@ -22,17 +22,17 @@
 //! ```
 
 use crate::error::{Error, Result};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-/// Acquire a read lock on an RwLock with proper error handling
+/// Acquire a read lock on an `RwLock` with proper error handling
 ///
-/// This function attempts to acquire a read lock on the provided RwLock.
+/// This function attempts to acquire a read lock on the provided `RwLock`.
 /// If the lock is poisoned, it returns a `LockPoisoned` error with context
 /// and a backtrace (in debug builds).
 ///
 /// # Arguments
 ///
-/// * `lock` - The RwLock to acquire a read lock on
+/// * `lock` - The `RwLock` to acquire a read lock on
 /// * `context` - Contextual information about what is being locked (used in error messages)
 ///
 /// # Returns
@@ -52,18 +52,18 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// ```
 pub fn read_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockReadGuard<'a, T>> {
     lock.read()
-        .map_err(|e| Error::lock_poisoned(format!("Read lock poisoned: {} - {}", context, e)))
+        .map_err(|e| Error::lock_poisoned(format!("Read lock poisoned: {context} - {e}")))
 }
 
-/// Acquire a write lock on an RwLock with proper error handling
+/// Acquire a write lock on an `RwLock` with proper error handling
 ///
-/// This function attempts to acquire a write lock on the provided RwLock.
+/// This function attempts to acquire a write lock on the provided `RwLock`.
 /// If the lock is poisoned, it returns a `LockPoisoned` error with context
 /// and a backtrace (in debug builds).
 ///
 /// # Arguments
 ///
-/// * `lock` - The RwLock to acquire a write lock on
+/// * `lock` - The `RwLock` to acquire a write lock on
 /// * `context` - Contextual information about what is being locked (used in error messages)
 ///
 /// # Returns
@@ -83,7 +83,37 @@ pub fn read_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockRead
 /// ```
 pub fn write_lock<'a, T>(lock: &'a RwLock<T>, context: &str) -> Result<RwLockWriteGuard<'a, T>> {
     lock.write()
-        .map_err(|e| Error::lock_poisoned(format!("Write lock poisoned: {} - {}", context, e)))
+        .map_err(|e| Error::lock_poisoned(format!("Write lock poisoned: {context} - {e}")))
+}
+
+/// Acquire a lock on a `Mutex` with proper error handling
+///
+/// This function attempts to acquire the mutex lock.  If the lock is poisoned,
+/// it returns a `LockPoisoned` error with context and a backtrace (in debug builds).
+///
+/// # Arguments
+///
+/// * `lock` - The `Mutex` to acquire a lock on
+/// * `context` - Contextual information about what is being locked (used in error messages)
+///
+/// # Returns
+///
+/// Returns a `MutexGuard` on success, or an `Error::LockPoisoned` if the lock is poisoned.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use oxidowl::core::lock_helpers::mutex_lock;
+/// use std::sync::Mutex;
+///
+/// let data = Mutex::new(42);
+/// let mut guard = mutex_lock(&data, "updating counter")?;
+/// *guard += 1;
+/// # Ok::<(), oxidowl::error::Error>(())
+/// ```
+pub fn mutex_lock<'a, T>(lock: &'a Mutex<T>, context: &str) -> Result<MutexGuard<'a, T>> {
+    lock.lock()
+        .map_err(|e| Error::lock_poisoned(format!("Mutex lock poisoned: {context} - {e}")))
 }
 
 #[cfg(test)]
@@ -161,6 +191,43 @@ mod tests {
         if let Err(Error::LockPoisoned { message, .. }) = result {
             assert!(message.contains("Write lock poisoned"));
             assert!(message.contains("writing to poisoned lock"));
+        } else {
+            panic!("Expected LockPoisoned error");
+        }
+    }
+
+    #[test]
+    fn test_mutex_lock_success() {
+        use std::sync::Mutex;
+        let data = Mutex::new(42);
+        let mut guard =
+            mutex_lock(&data, "test mutex").expect("Failed to acquire mutex lock in test");
+        *guard = 100;
+        drop(guard);
+        let guard2 =
+            mutex_lock(&data, "test mutex read").expect("Failed to re-acquire mutex in test");
+        assert_eq!(*guard2, 100);
+    }
+
+    #[test]
+    fn test_mutex_lock_poisoned() {
+        use std::sync::Mutex;
+        let data = Arc::new(Mutex::new(42));
+        let data_clone = Arc::clone(&data);
+
+        let handle = thread::spawn(move || {
+            let _guard = data_clone
+                .lock()
+                .expect("Failed to acquire mutex for poisoning test");
+            panic!("Intentional panic to poison mutex");
+        });
+        let _ = handle.join();
+
+        let result = mutex_lock(&data, "reading poisoned mutex");
+        assert!(result.is_err());
+        if let Err(Error::LockPoisoned { message, .. }) = result {
+            assert!(message.contains("Mutex lock poisoned"));
+            assert!(message.contains("reading poisoned mutex"));
         } else {
             panic!("Expected LockPoisoned error");
         }

@@ -214,11 +214,11 @@ fn simple_pattern_match(text: &str, pattern: &str) -> bool {
             (Some(_), None) => false,
             (None, Some('*')) => match_recursive(text, &pattern[1..]),
             (None, Some(_)) => false,
-            (Some(tc), Some('*')) => {
+            (Some(_tc), Some('*')) => {
                 // Try matching with consuming character or without
                 match_recursive(text, &pattern[1..]) || match_recursive(&text[1..], pattern)
             }
-            (Some(tc), Some('?')) => match_recursive(&text[1..], &pattern[1..]),
+            (Some(_tc), Some('?')) => match_recursive(&text[1..], &pattern[1..]),
             (Some(tc), Some(pc)) => {
                 if tc == pc {
                     match_recursive(&text[1..], &pattern[1..])

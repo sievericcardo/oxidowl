@@ -1,4 +1,4 @@
-//! Classification and realization operations
+//! Classification and realisation operations
 //!
 //! This module implements complex reasoning operations like building class hierarchies,
 //! property classification, and individual type inference.
@@ -8,11 +8,11 @@ use crate::{
     cache::CacheManager,
     config::PerformanceConfig,
     core::{
-        lock_helpers::{read_lock, write_lock},
+        lock_helpers::read_lock,
         reasoner::{
             datatype_validation::DatatypeValidator,
             parallel_classification::ParallelClassificationScheduler,
-            results::{ClassificationResult, PropertyClassificationResult, RealizationResult},
+            results::{ClassificationResult, PropertyClassificationResult, RealisationResult},
             statistics::ReasoningStatistics,
             tasks::ReasoningTaskService,
         },
@@ -25,29 +25,23 @@ use crate::{
 };
 use log::{debug, info};
 use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
+    collections::{HashMap, HashSet, VecDeque},
     time::Instant,
 };
 
-/// Service for complex reasoning operations like classification and realization
+/// Service for complex reasoning operations like classification and realisation
 #[derive(Debug)]
 pub struct ClassificationService {
     task_service: ReasoningTaskService,
-    cache_manager: Arc<RwLock<CacheManager>>,
     datatype_validator: DatatypeValidator,
     saturation_engine: SaturationEngine,
 }
 
 impl ClassificationService {
     /// Create a new classification service
-    pub fn new(
-        task_service: ReasoningTaskService,
-        cache_manager: Arc<RwLock<CacheManager>>,
-    ) -> Self {
+    pub fn new(task_service: ReasoningTaskService) -> Self {
         Self {
             task_service,
-            cache_manager,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(SaturationConfig::default()),
         }
@@ -56,12 +50,10 @@ impl ClassificationService {
     /// Create a new classification service with custom saturation config
     pub fn with_saturation_config(
         task_service: ReasoningTaskService,
-        cache_manager: Arc<RwLock<CacheManager>>,
         saturation_config: SaturationConfig,
     ) -> Self {
         Self {
             task_service,
-            cache_manager,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(saturation_config),
         }
@@ -72,16 +64,14 @@ impl ClassificationService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<ClassificationResult> {
         let start_time = Instant::now();
 
         info!("Starting classification with saturation-based optimization");
 
         // Check if we have a cached classification result
-        if let Some(cached_result) =
-            read_lock(&self.cache_manager, "classification: reading cache")?
-                .get_classification_result(ontology)
-        {
+        if let Some(cached_result) = cache.get_classification_result(ontology) {
             debug!("Classification result found in cache");
             return Ok(cached_result);
         }
@@ -125,10 +115,14 @@ impl ClassificationService {
             saturation_result.statistics.concepts_requiring_tableau
         );
 
-        // Add subsumers discovered through saturation
+        // Add subsumers discovered through saturation.
+        // Use `entry(concept.clone())` + `extend(iter().cloned())` to avoid
+        // cloning the full subsumers HashSet into a temporary before extending.
         for (concept, subsumers) in &saturation_result.subsumptions {
-            let entry = hierarchy.entry(concept.clone()).or_insert_with(HashSet::new);
-            entry.extend(subsumers.clone());
+            hierarchy
+                .entry(concept.clone())
+                .or_insert_with(HashSet::new)
+                .extend(subsumers.iter().cloned());
         }
 
         // === PHASE 3: Tableau expansion for complex cases ===
@@ -138,68 +132,81 @@ impl ClassificationService {
 
         // Identify pairs that need tableau expansion
         for subclass in &classes {
-            if let Some(node) = saturation_result.get_node(subclass) {
-                if node.status == SaturationStatus::RequiresFullTableau || node.status == SaturationStatus::NonDeterministic {
-                    for superclass in &classes {
-                        if subclass != superclass {
-                            // Check if not already determined by saturation
-                            if !saturation_result.subsumes(superclass, subclass) {
-                                tableau_pairs.push((subclass.clone(), superclass.clone()));
-                            }
+            if let Some(node) = saturation_result.get_node(subclass)
+                && (node.status == SaturationStatus::RequiresFullTableau
+                    || node.status == SaturationStatus::NonDeterministic)
+            {
+                for superclass in &classes {
+                    if subclass != superclass {
+                        // Check if not already determined by saturation
+                        if !saturation_result.subsumes(superclass, subclass) {
+                            tableau_pairs.push((subclass.clone(), superclass.clone()));
                         }
                     }
                 }
             }
         }
 
-        info!("Phase 3: {} pairs require tableau expansion", tableau_pairs.len());
+        info!(
+            "Phase 3: {} pairs require tableau expansion",
+            tableau_pairs.len()
+        );
 
         // Store length before consuming tableau_pairs
         let total_tableau_pairs = tableau_pairs.len();
 
         // Get performance configuration for parallel execution
         let perf_config = PerformanceConfig::from_env();
-        let use_parallel = perf_config.enable_lock_free && total_tableau_pairs > 100;
-        
+        // Lower threshold from 100 to 16: parallelism pays off earlier since rayon's
+        // work-stealing scheduler has very low per-task overhead relative to a full
+        // tableau expansion.
+        let use_parallel = perf_config.is_enabled(crate::config::PerformanceFeature::LockFree)
+            && total_tableau_pairs > 16;
+
         if use_parallel {
-            info!("Using parallel classification for {} subsumption checks", total_tableau_pairs);
-            
+            info!("Using parallel classification for {total_tableau_pairs} subsumption checks");
+
             // Create parallel scheduler
             let scheduler = ParallelClassificationScheduler::new(perf_config);
-            
+
             // Build told subsumers map for dependency tracking
             let mut told_subsumers = std::collections::HashMap::new();
             for (subclass, superclasses) in &hierarchy {
                 told_subsumers.insert(subclass.clone(), superclasses.clone());
             }
-            
+
             // Schedule all tasks with priority ordering
             let tasks = scheduler.schedule_classification_tasks(&classes, &told_subsumers);
-            
+
             // Filter to only the pairs that need tableau expansion
-            let filtered_tasks: Vec<_> = tasks.into_iter()
+            let filtered_tasks: Vec<_> = tasks
+                .into_iter()
                 .filter(|task| {
-                    tableau_pairs.iter().any(|(s, p)| s == &task.subclass && p == &task.superclass)
+                    tableau_pairs
+                        .iter()
+                        .any(|(s, p)| s == &task.subclass && p == &task.superclass)
                 })
                 .collect();
-            
+
             // Execute parallel subsumption checks
             let results = scheduler.execute_parallel(filtered_tasks, |sub, sup| {
-                self.check_subsumption_from_axioms(&sub, &sup, &ontology_guard)
+                self.check_subsumption_from_axioms(sub, sup, &ontology_guard)
             })?;
-            
+
             // Collect results into hierarchy
             for result in results {
                 if result.holds {
-                    let entry = hierarchy.entry(result.subclass).or_insert_with(HashSet::new);
+                    let entry = hierarchy
+                        .entry(result.subclass)
+                        .or_insert_with(HashSet::new);
                     entry.insert(result.superclass);
                 }
             }
-            
+
             tableau_checks = total_tableau_pairs;
         } else {
-            info!("Using sequential classification for {} subsumption checks", total_tableau_pairs);
-            
+            info!("Using sequential classification for {total_tableau_pairs} subsumption checks");
+
             // Perform tableau expansion for remaining pairs (sequential fallback)
             for (subclass, superclass) in tableau_pairs {
                 if self.check_subsumption_from_axioms(&subclass, &superclass, &ontology_guard)? {
@@ -209,28 +216,55 @@ impl ClassificationService {
                 tableau_checks += 1;
 
                 if tableau_checks % 100 == 0 {
-                    debug!("Tableau checks progress: {}/{}", tableau_checks, total_tableau_pairs);
+                    debug!("Tableau checks progress: {tableau_checks}/{total_tableau_pairs}");
                 }
             }
         }
 
-        info!("Phase 3 (tableau expansion) completed in {:?} with {} checks", 
-              phase3_start.elapsed(), tableau_checks);
+        info!(
+            "Phase 3 (tableau expansion) completed in {:?} with {} checks",
+            phase3_start.elapsed(),
+            tableau_checks
+        );
 
         // Extract ontology IRI before dropping the read lock
-        let ontology_iri = ontology_guard.iri.as_ref().map(|iri| iri.to_string());
+        let ontology_iri = ontology_guard
+            .iri
+            .as_ref()
+            .map(std::string::ToString::to_string);
+
+        // Collect object and data property full IRIs from the ontology signature
+        let signature = ontology_guard.signature()?;
+        let object_properties: Vec<String> = {
+            let mut props: Vec<String> = signature
+                .object_properties
+                .iter()
+                .map(|p| p.iri.to_string())
+                .collect();
+            props.sort();
+            props.dedup();
+            props
+        };
+        let data_properties: Vec<String> = {
+            let mut props: Vec<String> = signature
+                .data_properties
+                .iter()
+                .map(|p| p.iri.to_string())
+                .collect();
+            props.sort();
+            props.dedup();
+            props
+        };
 
         // Drop the read lock before creating result
         drop(ontology_guard);
 
-        let result = ClassificationResult::new_with_iri(hierarchy, ontology_iri);
+        let mut result = ClassificationResult::new_with_iri(hierarchy, ontology_iri);
+        result.object_properties = object_properties;
+        result.data_properties = data_properties;
 
         // Cache the result
-        write_lock(
-            &self.cache_manager,
-            "classification: storing classification result",
-        )?
-        .store_classification_result(ontology, result.clone());
+        cache.store_classification_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
@@ -238,7 +272,7 @@ impl ClassificationService {
         info!(
             "Classification completed in {:?} ({}x speedup expected from saturation)",
             reasoning_time,
-            if tableau_checks > 0 { classes.len() * classes.len() / tableau_checks } else { 1 }
+            (classes.len() * classes.len()).checked_div(tableau_checks).unwrap_or(1)
         );
         Ok(result)
     }
@@ -253,20 +287,20 @@ impl ClassificationService {
 
         for axiom in ontology.axioms() {
             match axiom {
-                crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
+                crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom)
                     // Direct told subsumption
-                    if classes.contains(&subclass_axiom.subclass) {
+                    if classes.contains(&subclass_axiom.subclass) => {
                         let entry = hierarchy
                             .entry(subclass_axiom.subclass.clone())
                             .or_insert_with(HashSet::new);
                         entry.insert(subclass_axiom.superclass.clone());
                     }
-                }
                 crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) => {
                     // Equivalent classes are mutual subsumers
                     for class1 in &equiv_axiom.classes {
                         if classes.contains(class1) {
-                            let entry = hierarchy.entry(class1.clone()).or_insert_with(HashSet::new);
+                            let entry =
+                                hierarchy.entry(class1.clone()).or_insert_with(HashSet::new);
                             for class2 in &equiv_axiom.classes {
                                 if class1 != class2 {
                                     entry.insert(class2.clone());
@@ -402,29 +436,25 @@ impl ClassificationService {
         Ok(result)
     }
 
-    /// Perform realization (find most specific classes for individuals)
+    /// Perform realisation (find most specific classes for individuals)
     pub fn realize(
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
-    ) -> Result<RealizationResult> {
+        cache: &mut CacheManager,
+    ) -> Result<RealisationResult> {
         let start_time = Instant::now();
 
-        info!("Starting realization");
+        info!("Starting realisation");
 
-        // Check if we have a cached realization result
-        if let Some(cached_result) = read_lock(
-            &self.cache_manager,
-            "classification: reading cache for realization",
-        )?
-        .get_realization_result(ontology)
-        {
-            debug!("Realization result found in cache");
+        // Check if we have a cached realisation result
+        if let Some(cached_result) = cache.get_realisation_result(ontology) {
+            debug!("Realisation result found in cache");
             return Ok(cached_result);
         }
 
         let ontology_guard =
-            read_lock(ontology, "classification: reading ontology for realization")?;
+            read_lock(ontology, "classification: reading ontology for realisation")?;
 
         // Get all named individuals and classes
         let individuals: Vec<Individual> = ontology_guard
@@ -441,7 +471,7 @@ impl ClassificationService {
             .map(|c| ClassExpression::Class(c.clone()))
             .collect();
 
-        let mut realization = HashMap::new();
+        let mut realisation = HashMap::new();
 
         info!(
             "Realizing {} individuals against {} classes",
@@ -449,47 +479,158 @@ impl ClassificationService {
             classes.len()
         );
 
-        for individual in &individuals {
-            let mut instance_classes = HashSet::new();
-
-            for class in &classes {
-                let mut is_instance = false;
-
-                // Try direct datatype reasoning first
-                if let Ok(true) =
-                    self.check_instance_with_datatype_reasoning(individual, class, &ontology_guard)
+        // ── Build asserted named-class hierarchy indices ──────────────────────────
+        // superclass_map: class IRI → Vec<direct named superclass IRIs>
+        // Derived from SubClassOf(named, named) AND EquivalentClasses(named, named) axioms.
+        let mut superclass_map: HashMap<IRI, Vec<IRI>> = HashMap::new();
+        for axiom in ontology_guard.axioms() {
+            match axiom {
+                crate::ontology::axioms::Axiom::SubClassOf(ax)
+                    if matches!(&ax.subclass, ClassExpression::Class(_))
+                        && matches!(&ax.superclass, ClassExpression::Class(_)) =>
                 {
-                    is_instance = true;
+                    if let (ClassExpression::Class(sub), ClassExpression::Class(sup)) =
+                        (&ax.subclass, &ax.superclass)
+                    {
+                        superclass_map
+                            .entry(sub.iri.clone())
+                            .or_default()
+                            .push(sup.iri.clone());
+                    }
                 }
-
-                // If not determined by datatype reasoning, use tableau
-                if !is_instance {
-                    is_instance = self
-                        .task_service
-                        .check_instance(individual, class, ontology, statistics)?;
+                crate::ontology::axioms::Axiom::EquivalentClasses(ax) => {
+                    // Collect all named classes in this equivalence group
+                    let named: Vec<IRI> = ax
+                        .classes
+                        .iter()
+                        .filter_map(|c| {
+                            if let ClassExpression::Class(cls) = c {
+                                Some(cls.iri.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    // Add bidirectional edges so BFS treats them as mutually reachable
+                    for i in 0..named.len() {
+                        for j in 0..named.len() {
+                            if i != j {
+                                superclass_map
+                                    .entry(named[i].clone())
+                                    .or_default()
+                                    .push(named[j].clone());
+                            }
+                        }
+                    }
                 }
+                _ => {}
+            }
+        }
 
-                if is_instance {
-                    instance_classes.insert(class.clone());
+        // Build a fast lookup: IRI → ClassExpression::Class for named classes
+        let class_by_iri: HashMap<IRI, ClassExpression> = classes
+            .iter()
+            .filter_map(|ce| {
+                if let ClassExpression::Class(c) = ce {
+                    Some((c.iri.clone(), ce.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Classes with complex (non-named) expressions — always need structural or tableau check
+        let complex_classes: Vec<&ClassExpression> = classes
+            .iter()
+            .filter(|ce| !matches!(ce, ClassExpression::Class(_)))
+            .collect();
+
+        for individual in &individuals {
+            let mut instance_classes: HashSet<ClassExpression> = HashSet::new();
+
+            // ── Step 1: collect explicitly asserted named types ──────────────────
+            let individual_iri = individual
+                .iri()
+                .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+
+            let mut bfs: VecDeque<IRI> = VecDeque::new();
+            let mut visited_iri: HashSet<IRI> = HashSet::new();
+
+            for axiom in ontology_guard.axioms() {
+                if let crate::ontology::axioms::Axiom::ClassAssertion(ca) = axiom
+                    && let crate::ontology::Individual::Named(ni) = &ca.individual
+                    && ni.iri.as_str() == individual_iri
+                {
+                    match &ca.class {
+                        ClassExpression::Class(cls) => {
+                            if visited_iri.insert(cls.iri.clone()) {
+                                bfs.push_back(cls.iri.clone());
+                                instance_classes.insert(ClassExpression::Class(cls.clone()));
+                            }
+                        }
+                        other => {
+                            // Complex asserted type — add directly
+                            instance_classes.insert(other.clone());
+                        }
+                    }
                 }
             }
 
-            realization.insert(individual.clone(), instance_classes);
+            // ── Step 2: close upward through asserted SubClassOf hierarchy ───────
+            // Key property: if a ∈ D and D ⊑ C then a ∈ C (no tableau needed).
+            while let Some(iri) = bfs.pop_front() {
+                if let Some(supers) = superclass_map.get(&iri) {
+                    for sup_iri in supers {
+                        if visited_iri.insert(sup_iri.clone()) {
+                            bfs.push_back(sup_iri.clone());
+                            if let Some(ce) = class_by_iri.get(sup_iri) {
+                                instance_classes.insert(ce.clone());
+                            } else {
+                                // Class is in the hierarchy but not in the signature (e.g. owl:Thing)
+                                instance_classes.insert(ClassExpression::Class(
+                                    crate::ontology::Class {
+                                        iri: sup_iri.clone(),
+                                    },
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Step 3: complex class expressions — try structural check, then tableau
+            for class in &complex_classes {
+                if instance_classes.contains(*class) {
+                    continue;
+                }
+                if let Ok(true) =
+                    self.check_instance_with_datatype_reasoning(individual, class, &ontology_guard)
+                {
+                    instance_classes.insert((*class).clone());
+                } else if self
+                    .task_service
+                    .check_instance(individual, class, ontology, statistics, cache)?
+                {
+                    instance_classes.insert((*class).clone());
+                }
+            }
+
+            // Named class membership not reachable via the hierarchy (SubClassOf /
+            // EquivalentClasses BFS above) would require a precomputed TBox
+            // classification pass.  We omit it here to keep realisation tractable.
+
+            realisation.insert(individual.clone(), instance_classes);
         }
 
-        let result = RealizationResult::new(realization);
+        let result = RealisationResult::new(realisation);
 
         // Cache the result
-        write_lock(
-            &self.cache_manager,
-            "classification: storing realization result",
-        )?
-        .store_realization_result(ontology, result.clone());
+        cache.store_realisation_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
 
-        info!("Realization completed in {reasoning_time:?}");
+        info!("Realisation completed in {reasoning_time:?}");
         Ok(result)
     }
 
@@ -498,6 +639,7 @@ impl ClassificationService {
         &self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
         let start_time = Instant::now();
 
@@ -519,14 +661,15 @@ impl ClassificationService {
         let mut unsatisfiable_classes = Vec::new();
 
         for class in &classes {
-            if let ClassExpression::Class(cls) = class {
-                if !self.task_service.check_satisfiability(
+            if let ClassExpression::Class(cls) = class
+                && !self.task_service.check_satisfiability(
                     &cls.iri.to_string(),
                     ontology,
                     statistics,
-                )? {
-                    unsatisfiable_classes.push(class.clone());
-                }
+                    cache,
+                )?
+            {
+                unsatisfiable_classes.push(class.clone());
             }
         }
 
@@ -547,6 +690,7 @@ impl ClassificationService {
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
         _direct: bool,
+        cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
         let ontology_guard = read_lock(
             ontology,
@@ -566,6 +710,7 @@ impl ClassificationService {
                 &class_expr,
                 ontology,
                 statistics,
+                cache,
             )? && concept != &class_expr
             {
                 superclasses.push(class_expr);
@@ -595,10 +740,10 @@ impl ClassificationService {
             for axiom in ontology_guard.axioms() {
                 if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
                     // Check if the superclass matches our target
-                    if let ClassExpression::Class(super_class) = &subclass_axiom.superclass {
-                        if target_class.iri.as_str() == super_class.iri.as_str() {
-                            subclasses.push(subclass_axiom.subclass.clone());
-                        }
+                    if let ClassExpression::Class(super_class) = &subclass_axiom.superclass
+                        && target_class.iri.as_str() == super_class.iri.as_str()
+                    {
+                        subclasses.push(subclass_axiom.subclass.clone());
                     }
                 }
             }
@@ -613,6 +758,7 @@ impl ClassificationService {
         concept: &ClassExpression,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
+        cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
         let ontology_guard = read_lock(
             ontology,
@@ -653,12 +799,14 @@ impl ClassificationService {
                     &class_expr,
                     ontology,
                     statistics,
+                    cache,
                 )?;
                 let subsumes_2_1 = self.task_service.check_subsumption_expressions(
                     &class_expr,
                     concept,
                     ontology,
                     statistics,
+                    cache,
                 )?;
                 if subsumes_1_2 && subsumes_2_1 {
                     equivalent_classes.push(class_expr);
@@ -676,6 +824,7 @@ impl ClassificationService {
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
         _direct: bool,
+        cache: &mut CacheManager,
     ) -> Result<Vec<Individual>> {
         let individuals = {
             let ontology_guard = read_lock(
@@ -715,7 +864,7 @@ impl ClassificationService {
             if !is_instance {
                 is_instance = self
                     .task_service
-                    .check_instance(individual, concept, ontology, statistics)?;
+                    .check_instance(individual, concept, ontology, statistics, cache)?;
             }
 
             if is_instance {
@@ -770,11 +919,11 @@ impl ClassificationService {
 
         // First check for direct SubClassOf axioms
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                if subclass_axiom.subclass == *subclass && subclass_axiom.superclass == *superclass
-                {
-                    return Ok(true);
-                }
+            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                && subclass_axiom.subclass == *subclass
+                && subclass_axiom.superclass == *superclass
+            {
+                return Ok(true);
             }
         }
 
@@ -789,15 +938,15 @@ impl ClassificationService {
                 // If subclass is equivalent to something that is a subclass of superclass
                 if classes.contains(subclass) {
                     for equiv_class in classes {
-                        if equiv_class != subclass {
-                            if self.check_subsumption_from_axioms_with_visited(
+                        if equiv_class != subclass
+                            && self.check_subsumption_from_axioms_with_visited(
                                 equiv_class,
                                 superclass,
                                 ontology,
                                 visited,
-                            )? {
-                                return Ok(true);
-                            }
+                            )?
+                        {
+                            return Ok(true);
                         }
                     }
                 }
@@ -824,12 +973,11 @@ impl ClassificationService {
                 }
 
                 // If subclass is the union class and superclass is owl:Thing or a superclass of the union
-                if disjoint_union.class == *subclass {
-                    if let ClassExpression::Class(super_cls) = superclass {
-                        if super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
-                            return Ok(true);
-                        }
-                    }
+                if disjoint_union.class == *subclass
+                    && let ClassExpression::Class(super_cls) = superclass
+                    && super_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing"
+                {
+                    return Ok(true);
                 }
             }
         }
@@ -865,29 +1013,29 @@ impl ClassificationService {
 
             // Check direct subsumption
             for axiom in ontology.axioms() {
-                if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                    if subclass_axiom.subclass == current {
-                        if subclass_axiom.superclass == *superclass {
-                            return Ok(true);
-                        }
-                        // Add to stack for further exploration
-                        if !local_visited.contains(&subclass_axiom.superclass) {
-                            stack.push(subclass_axiom.superclass.clone());
-                        }
+                if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                    && subclass_axiom.subclass == current
+                {
+                    if subclass_axiom.superclass == *superclass {
+                        return Ok(true);
+                    }
+                    // Add to stack for further exploration
+                    if !local_visited.contains(&subclass_axiom.superclass) {
+                        stack.push(subclass_axiom.superclass.clone());
                     }
                 }
             }
         }
 
         // Check if subclass is ultimately a subclass of owl:Thing
-        if let ClassExpression::Class(super_class) = superclass {
-            if super_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing" {
-                // Everything is a subclass of owl:Thing except owl:Nothing
-                if let ClassExpression::Class(sub_class) = subclass {
-                    return Ok(sub_class.iri.as_str() != "http://www.w3.org/2002/07/owl#Nothing");
-                }
-                return Ok(true);
+        if let ClassExpression::Class(super_class) = superclass
+            && super_class.iri.as_str() == "http://www.w3.org/2002/07/owl#Thing"
+        {
+            // Everything is a subclass of owl:Thing except owl:Nothing
+            if let ClassExpression::Class(sub_class) = subclass {
+                return Ok(sub_class.iri.as_str() != "http://www.w3.org/2002/07/owl#Nothing");
             }
+            return Ok(true);
         }
 
         Ok(false)
@@ -922,13 +1070,30 @@ impl ClassificationService {
 
     /// Recursively extract all class IRIs from a union expression (handling nested unions)
     fn extract_all_union_classes(&self, expr: &ClassExpression, result: &mut HashSet<String>) {
+        self.extract_all_union_classes_with_depth(expr, result, 0);
+    }
+
+    /// Maximum recursion depth for union extraction to prevent stack overflow
+    const MAX_UNION_EXTRACTION_DEPTH: usize = 500;
+
+    fn extract_all_union_classes_with_depth(
+        &self,
+        expr: &ClassExpression,
+        result: &mut HashSet<String>,
+        depth: usize,
+    ) {
+        // Prevent stack overflow on deeply nested unions
+        if depth > Self::MAX_UNION_EXTRACTION_DEPTH {
+            return;
+        }
+
         match expr {
             ClassExpression::Class(class) => {
                 result.insert(class.iri.to_string());
             }
             ClassExpression::ObjectUnionOf(union_classes) => {
                 for nested_expr in union_classes {
-                    self.extract_all_union_classes(nested_expr, result);
+                    self.extract_all_union_classes_with_depth(nested_expr, result, depth + 1);
                 }
             }
             _ => {
@@ -946,12 +1111,11 @@ impl ClassificationService {
     ) -> Result<bool> {
         // Check for direct SubObjectPropertyOf axioms
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
-                if &sub_axiom.sub_property == subproperty
-                    && &sub_axiom.super_property == superproperty
-                {
-                    return Ok(true);
-                }
+            if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom
+                && &sub_axiom.sub_property == subproperty
+                && &sub_axiom.super_property == superproperty
+            {
+                return Ok(true);
             }
         }
 
@@ -970,13 +1134,12 @@ impl ClassificationService {
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::SubObjectPropertyOf(sub_axiom) = axiom {
                 // Check if the superproperty is involved in property chains
-                if &sub_axiom.super_property == superproperty {
-                    if let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property
-                    {
-                        // Check if subproperty is part of this chain or can be derived from it
-                        if self.property_in_chain_or_derivable(subproperty, chain, ontology)? {
-                            return Ok(true);
-                        }
+                if &sub_axiom.super_property == superproperty
+                    && let ObjectPropertyExpression::PropertyChain(chain) = &sub_axiom.sub_property
+                {
+                    // Check if subproperty is part of this chain or can be derived from it
+                    if self.property_in_chain_or_derivable(subproperty, chain, ontology)? {
+                        return Ok(true);
                     }
                 }
             }
@@ -1021,12 +1184,11 @@ impl ClassificationService {
     ) -> Result<bool> {
         // Check for direct SubDataPropertyOf axioms
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubDataPropertyOf(sub_axiom) = axiom {
-                if &sub_axiom.sub_property == subproperty
-                    && &sub_axiom.super_property == superproperty
-                {
-                    return Ok(true);
-                }
+            if let crate::ontology::axioms::Axiom::SubDataPropertyOf(sub_axiom) = axiom
+                && &sub_axiom.sub_property == subproperty
+                && &sub_axiom.super_property == superproperty
+            {
+                return Ok(true);
             }
         }
 
@@ -1039,7 +1201,7 @@ impl ClassificationService {
         individual: &str,
         direct: bool,
         ontology: &OntologyRef,
-        _statistics: &mut ReasoningStatistics,
+        statistics: &mut ReasoningStatistics,
     ) -> Result<Vec<String>> {
         info!("Getting types for individual: {individual}");
 
@@ -1048,14 +1210,12 @@ impl ClassificationService {
 
         // Find all class assertions for this individual
         for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(ind) = &assertion.individual {
-                    if ind.iri.as_str() == individual {
-                        if let ClassExpression::Class(class) = &assertion.class {
-                            types.push(class.iri.to_string());
-                        }
-                    }
-                }
+            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(ind) = &assertion.individual
+                && ind.iri.as_str() == individual
+                && let ClassExpression::Class(class) = &assertion.class
+            {
+                types.push(class.iri.to_string());
             }
         }
 
@@ -1073,9 +1233,16 @@ impl ClassificationService {
                         .expect("Failed to convert IRI to URL")
                         .into(),
                 });
-                if let Ok(supertypes) =
-                    self.get_superclasses(&class_expr, ontology, _statistics, false)
-                {
+                if let Ok(supertypes) = {
+                    let mut local_cache = CacheManager::default();
+                    self.get_superclasses(
+                        &class_expr,
+                        ontology,
+                        statistics,
+                        false,
+                        &mut local_cache,
+                    )
+                } {
                     for supertype in supertypes {
                         if let ClassExpression::Class(class) = supertype {
                             all_types.insert(class.iri.to_string());
@@ -1108,21 +1275,16 @@ impl ClassificationService {
 
         // Find all object property assertions for this individual and property
         for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom {
-                if let (
+            if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) = axiom
+                && let (
                     crate::ontology::Individual::Named(subj),
                     crate::ontology::Individual::Named(obj),
                 ) = (&assertion.source, &assertion.target)
-                {
-                    if subj.iri.as_str() == individual {
-                        if let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property
-                        {
-                            if prop.iri.as_str() == property {
-                                values.push(obj.iri.to_string());
-                            }
-                        }
-                    }
-                }
+                && subj.iri.as_str() == individual
+                && let ObjectPropertyExpression::ObjectProperty(prop) = &assertion.property
+                && prop.iri.as_str() == property
+            {
+                values.push(obj.iri.to_string());
             }
         }
 
@@ -1148,15 +1310,13 @@ impl ClassificationService {
 
         // Find all data property assertions for this individual and property
         for axiom in ontology_guard.axioms() {
-            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                    if subj.iri.as_str() == individual {
-                        if let DataPropertyExpression::DataProperty(prop) = &assertion.property {
-                            if prop.iri.as_str() == property {
-                                values.push(assertion.value.to_string());
-                            }
-                        }
-                    }
+            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                && subj.iri.as_str() == individual
+            {
+                let DataPropertyExpression::DataProperty(prop) = &assertion.property;
+                if prop.iri.as_str() == property {
+                    values.push(assertion.value.to_string());
                 }
             }
         }
@@ -1177,28 +1337,43 @@ impl ClassificationService {
         // Get all data property values for this individual and property
         let individual_iri = individual
             .iri()
-            .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
         let mut has_matching_value = false;
 
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                    if subj.iri.as_str() == individual_iri {
-                        // Check if this is the right property
-                        if self.data_properties_match(property, &assertion.property) {
-                            // Check if the value satisfies the data range
-                            if self.literal_satisfies_data_range(&assertion.value, data_range)? {
-                                has_matching_value = true;
-                                break;
-                            }
-                        }
+            if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                && subj.iri.as_str() == individual_iri
+            {
+                // Check if this is the right property
+                if self.data_properties_match(property, &assertion.property) {
+                    // Check if the value satisfies the data range
+                    if self.literal_satisfies_data_range(&assertion.value, data_range)? {
+                        has_matching_value = true;
+                        break;
                     }
                 }
             }
         }
 
         Ok(has_matching_value)
+    }
+
+    /// Check if two object properties match (simple IRI equality; inverse and chains are not unfolded)
+    fn object_properties_match(
+        &self,
+        prop1: &ObjectPropertyExpression,
+        prop2: &ObjectPropertyExpression,
+    ) -> bool {
+        use crate::ontology::ObjectPropertyExpression;
+        match (prop1, prop2) {
+            (
+                ObjectPropertyExpression::ObjectProperty(p1),
+                ObjectPropertyExpression::ObjectProperty(p2),
+            ) => p1.iri == p2.iri,
+            _ => false,
+        }
     }
 
     /// Check if two data properties match
@@ -1234,15 +1409,17 @@ impl ClassificationService {
                 // Second check: verify datatype compatibility if literal has a datatype
                 if let Some(lit_dt_url) = literal_datatype_url {
                     let lit_dt_iri = IRI::from(lit_dt_url.clone());
-                    Ok(self
-                        .datatype_validator
-                        .datatypes_compatible(&lit_dt_iri, datatype_iri))
+                    Ok(DatatypeValidator::datatypes_compatible(
+                        &lit_dt_iri,
+                        datatype_iri,
+                    ))
                 } else {
                     // No datatype means xsd:string, check if compatible with string
                     let xsd_string = IRI::new("http://www.w3.org/2001/XMLSchema#string");
-                    Ok(self
-                        .datatype_validator
-                        .datatypes_compatible(&xsd_string, datatype_iri))
+                    Ok(DatatypeValidator::datatypes_compatible(
+                        &xsd_string,
+                        datatype_iri,
+                    ))
                 }
             }
             crate::ontology::DataRange::DatatypeRestriction {
@@ -1353,18 +1530,16 @@ impl ClassificationService {
                 // Get all asserted types of the individual
                 let individual_iri = individual
                     .iri()
-                    .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
                 let mut asserted_classes = Vec::new();
 
                 for axiom in ontology.axioms() {
-                    if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
-                        if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                            if subj.iri.as_str() == individual_iri {
-                                if let ClassExpression::Class(asserted_cls) = &assertion.class {
-                                    asserted_classes.push(asserted_cls.iri.clone());
-                                }
-                            }
-                        }
+                    if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                        && subj.iri.as_str() == individual_iri
+                        && let ClassExpression::Class(asserted_cls) = &assertion.class
+                    {
+                        asserted_classes.push(asserted_cls.iri.clone());
                     }
                 }
 
@@ -1403,19 +1578,22 @@ impl ClassificationService {
                                     }
                                 }
 
-                                // Try to match against this equivalent expression
-                                // Only handle complex expressions, not other named classes
+                                // Try to match against this equivalent expression.
+                                // Covers all complex constructors that check_complex_expression handles.
                                 match equiv_class {
                                     ClassExpression::ObjectIntersectionOf(_)
+                                    | ClassExpression::ObjectUnionOf(_)
+                                    | ClassExpression::ObjectSomeValuesFrom { .. }
+                                    | ClassExpression::ObjectHasValue { .. }
                                     | ClassExpression::DataSomeValuesFrom { .. }
-                                    | ClassExpression::DataHasValue { .. } => {
+                                    | ClassExpression::DataHasValue { .. }
                                         if self.check_complex_expression(
                                             individual,
                                             equiv_class,
                                             ontology,
-                                        )? {
-                                            return Ok(true);
-                                        }
+                                        )? =>
+                                    {
+                                        return Ok(true);
                                     }
                                     _ => {}
                                 }
@@ -1424,25 +1602,53 @@ impl ClassificationService {
                     }
                 }
 
-                // Strategy 4: Check if the individual satisfies a class that is a subclass of target
-                // For example, if individual is ThirstyBasil and we're checking ThirstyPlant,
-                // and ThirstyBasil subClassOf ThirstyPlant, then it should return true
-                // We need to check all classes that are subclasses of the target
-                for axiom in ontology.axioms() {
-                    if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                        if let ClassExpression::Class(superclass) = &subclass_axiom.superclass {
-                            if superclass.iri == cls.iri {
-                                // Found a subclass of our target class
-                                // Check if individual is an instance of this subclass
-                                if self.check_instance_with_datatype_reasoning(
-                                    individual,
-                                    &subclass_axiom.subclass,
-                                    ontology,
-                                )? {
-                                    return Ok(true);
+                // Strategy 4: iterative BFS through the named subclass hierarchy.
+                // Only check direct ClassAssertion axioms for each subclass to avoid
+                // re-entering check_instance_with_datatype_reasoning and causing a
+                // stack overflow on large ontologies (e.g. 2995 classes deep).
+                {
+                    // Pre-build a superclass-IRI → [subclass Class] index in one pass so
+                    // that the BFS inner loop is an O(1) lookup instead of a full axiom
+                    // scan on every frontier step (O(n×m) → O(n+m)).
+                    let mut subclass_index: std::collections::HashMap<
+                        crate::ontology::IRI,
+                        Vec<crate::ontology::concepts::Class>,
+                    > = std::collections::HashMap::new();
+                    for axiom in ontology.axioms() {
+                        if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                            && let ClassExpression::Class(superclass) = &subclass_axiom.superclass
+                            && let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass
+                        {
+                            subclass_index
+                                .entry(superclass.iri.clone())
+                                .or_default()
+                                .push(sub_cls.clone());
+                        }
+                    }
+
+                    let mut worklist: std::collections::VecDeque<crate::ontology::IRI> =
+                        std::collections::VecDeque::new();
+                    let mut visited_s4: std::collections::HashSet<crate::ontology::IRI> =
+                        std::collections::HashSet::new();
+                    worklist.push_back(cls.iri.clone());
+                    visited_s4.insert(cls.iri.clone());
+
+                    while let Some(current_iri) = worklist.pop_front() {
+                        if let Some(sub_classes) = subclass_index.get(&current_iri) {
+                            for sub_cls in sub_classes {
+                                if !visited_s4.contains(&sub_cls.iri) {
+                                    visited_s4.insert(sub_cls.iri.clone());
+                                    // Check only direct assertion — no recursive call.
+                                    if self.check_explicit_class_assertion(
+                                        individual, sub_cls, ontology,
+                                    )? {
+                                        return Ok(true);
+                                    }
+                                    worklist.push_back(sub_cls.iri.clone());
                                 }
                             }
                         }
+                        // Complex subclass expressions are handled by the tableau.
                     }
                 }
 
@@ -1463,23 +1669,73 @@ impl ClassificationService {
     ) -> Result<bool> {
         match class_expr {
             ClassExpression::ObjectIntersectionOf(operands) => {
-                // Check all operands - must all be true
+                // Every operand must be satisfied (conjunction)
                 for operand in operands {
-                    let result = match operand {
-                        // Handle named classes in intersections
-                        ClassExpression::Class(cls) => {
-                            // Check if individual is explicitly asserted to be in this class
-                            self.check_explicit_class_assertion(individual, cls, ontology)?
-                        }
-                        // Recursively check complex expressions
-                        _ => self.check_complex_expression(individual, operand, ontology)?,
-                    };
-
-                    if !result {
+                    if !self
+                        .check_instance_with_datatype_reasoning(individual, operand, ontology)?
+                    {
                         return Ok(false);
                     }
                 }
                 Ok(true)
+            }
+            ClassExpression::ObjectUnionOf(operands) => {
+                // At least one operand must be satisfied (disjunction)
+                for operand in operands {
+                    if self.check_instance_with_datatype_reasoning(individual, operand, ontology)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                // ∃ r.C : individual must have at least one r-successor that satisfies C
+                let individual_iri = individual
+                    .iri()
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) =
+                        axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.source
+                        && subj.iri.as_str() == individual_iri
+                        && self.object_properties_match(property, &assertion.property)
+                        && self.check_instance_with_datatype_reasoning(
+                            &assertion.target,
+                            filler,
+                            ontology,
+                        )?
+                    {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            ClassExpression::ObjectHasValue {
+                property,
+                value: filler_ind,
+            } => {
+                // ∃ r.{o} : individual must have exactly the specified individual as an r-value
+                let individual_iri = individual
+                    .iri()
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+                let filler_iri = filler_ind
+                    .iri()
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+
+                for axiom in ontology.axioms() {
+                    if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) =
+                        axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.source
+                        && subj.iri.as_str() == individual_iri
+                        && self.object_properties_match(property, &assertion.property)
+                        && let crate::ontology::Individual::Named(obj) = &assertion.target
+                        && obj.iri.as_str() == filler_iri
+                    {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 // Check if individual has a data property value that satisfies the restriction
@@ -1489,27 +1745,28 @@ impl ClassificationService {
                 // Check if individual has this specific data property value
                 let individual_iri = individual
                     .iri()
-                    .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
+                        && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                        && subj.iri.as_str() == individual_iri
+                        && self.data_properties_match(property, &assertion.property)
+                        && assertion.value.value == value.value
                     {
-                        if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                            if subj.iri.as_str() == individual_iri {
-                                if self.data_properties_match(property, &assertion.property) {
-                                    if assertion.value.value == value.value {
-                                        return Ok(true);
-                                    }
-                                }
-                            }
-                        }
+                        return Ok(true);
                     }
                 }
                 Ok(false)
             }
+            // Named classes are handled by check_instance_with_datatype_reasoning;
+            // reaching this point means the caller passed a Class directly — delegate back.
+            ClassExpression::Class(_) => {
+                self.check_instance_with_datatype_reasoning(individual, class_expr, ontology)
+            }
             _ => {
-                // For other class expressions (including named classes reached here),
-                // we can't do direct checking
+                // For unsupported constructors (AllValuesFrom, cardinality, …)
+                // conservatively return false so tableau picks it up instead.
                 Ok(false)
             }
         }
@@ -1524,19 +1781,16 @@ impl ClassificationService {
     ) -> Result<bool> {
         let individual_iri = individual
             .iri()
-            .map_or_else(|| "anonymous".to_string(), |iri| iri.to_string());
+            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
 
         for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
-                if let crate::ontology::Individual::Named(subj) = &assertion.individual {
-                    if subj.iri.as_str() == individual_iri {
-                        if let ClassExpression::Class(asserted_class) = &assertion.class {
-                            if asserted_class.iri == class.iri {
-                                return Ok(true);
-                            }
-                        }
-                    }
-                }
+            if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
+                && let crate::ontology::Individual::Named(subj) = &assertion.individual
+                && subj.iri.as_str() == individual_iri
+                && let ClassExpression::Class(asserted_class) = &assertion.class
+                && asserted_class.iri == class.iri
+            {
+                return Ok(true);
             }
         }
         Ok(false)
@@ -1555,22 +1809,26 @@ impl ClassificationService {
             return Ok(true);
         }
 
-        // Check for direct SubClassOf axiom
-        for axiom in ontology.axioms() {
-            if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
-                if let ClassExpression::Class(sub) = &subclass_axiom.subclass {
-                    if let ClassExpression::Class(sup) = &subclass_axiom.superclass {
-                        if sub.iri == *subclass_iri && sup.iri == *superclass_iri {
-                            return Ok(true);
-                        }
+        // Iterative BFS through the superclass hierarchy to avoid stack overflow
+        // on deep or cyclic class graphs.
+        let mut worklist: std::collections::VecDeque<IRI> = std::collections::VecDeque::new();
+        let mut visited: std::collections::HashSet<IRI> = std::collections::HashSet::new();
+        worklist.push_back(subclass_iri.clone());
+        visited.insert(subclass_iri.clone());
 
-                        // Transitive check: if subclass_iri -> intermediate -> superclass_iri
-                        if sub.iri == *subclass_iri {
-                            // Check if this intermediate class is a subclass of the target
-                            if self.is_subclass_of_iri(&sup.iri, superclass_iri, ontology)? {
-                                return Ok(true);
-                            }
-                        }
+        while let Some(current) = worklist.pop_front() {
+            for axiom in ontology.axioms() {
+                if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
+                    && let ClassExpression::Class(sub) = &subclass_axiom.subclass
+                    && let ClassExpression::Class(sup) = &subclass_axiom.superclass
+                    && sub.iri == current
+                {
+                    if sup.iri == *superclass_iri {
+                        return Ok(true);
+                    }
+                    if !visited.contains(&sup.iri) {
+                        visited.insert(sup.iri.clone());
+                        worklist.push_back(sup.iri.clone());
                     }
                 }
             }
