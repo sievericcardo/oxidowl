@@ -1,7 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use oxidowl::factory::providers::AxiomCreationProvider;
 use oxidowl::manager::changes::OntologyChange;
 use oxidowl::manager::*;
 use oxidowl::ontology::axioms::*;

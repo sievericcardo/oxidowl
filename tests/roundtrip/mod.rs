@@ -658,7 +658,6 @@ fn rdfxml_roundtrip(axioms: Vec<Axiom>) {
 // ── RDF/XML tests marked ignore: parser needs OWL-to-RDF mapping ────────
 
 #[test]
-#[ignore = "RDF/XML parser needs OWL-to-RDF triple mapping"]
 fn rt_rdfxml_subclass_of() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
@@ -672,7 +671,6 @@ fn rt_rdfxml_subclass_of() {
 
 #[test]
 #[test]
-#[ignore = "RDF/XML parser needs OWL-to-RDF triple mapping"]
 fn rt_rdfxml_equivalent_classes() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
@@ -682,7 +680,6 @@ fn rt_rdfxml_equivalent_classes() {
 
 #[test]
 #[test]
-#[ignore = "RDF/XML parser needs OWL-to-RDF triple mapping"]
 fn rt_rdfxml_class_assertion() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
@@ -692,7 +689,6 @@ fn rt_rdfxml_class_assertion() {
 
 #[test]
 #[test]
-#[ignore = "RDF/XML parser needs OWL-to-RDF triple mapping"]
 fn rt_rdfxml_object_property_assertion() {
     let df = DF::new();
     let p = df.obj_prop("http://ex.org/P");
@@ -706,7 +702,6 @@ fn rt_rdfxml_object_property_assertion() {
 
 #[test]
 #[test]
-#[ignore = "RDF/XML parser needs OWL-to-RDF triple mapping"]
 fn rt_rdfxml_disjoint_classes() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
@@ -833,7 +828,6 @@ fn rt_ntriples_object_property_assertion() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[ignore = "RDF/XML serializer needs full rewrite for proper roundtrip"]
 fn cross_format_rdfxml_to_functional() {
     let df = DF::new();
     let onto = df.simple_chain_ontology();
@@ -843,7 +837,6 @@ fn cross_format_rdfxml_to_functional() {
 }
 
 #[test]
-#[ignore = "RDF/XML serializer needs full rewrite for proper roundtrip"]
 fn cross_format_rdfxml_to_functional_with_input_check() {
     let df = DF::new();
     let onto = df.simple_chain_ontology();

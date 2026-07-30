@@ -166,17 +166,15 @@ pub use crate::adapter::{HornedOwlAdapter, RdfStarCapable};
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
 pub use crate::factory::DataFactory;
-pub use crate::functional_syntax_factory::FunctionalSyntaxFactory;
+pub use crate::factory::functional_syntax::FunctionalSyntaxFactory;
 pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
 pub use crate::manager::OntologyManager;
-pub use crate::manager::changes::{ChangeData, OntologyChange, OntologyDocumentTarget};
+pub use crate::manager::changes::{ChangeAuditLog, ChangeData, ChangeRecord, OntologyChange, OntologyDocumentTarget};
 pub use crate::manager::history::ChangeHistory;
 pub use crate::manager::iri_mapper::{
     AutoIRIMapper, CompositeIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper,
-    SimpleIRIMapper,
+    SimpleIRIMapper, ZipIRIMapper,
 };
-#[cfg(feature = "zip-imports")]
-pub use crate::manager::iri_mapper::ZipIRIMapper;
 pub use crate::manager::listeners::{
     ImportProgressListener, LoggingChangeListener, MissingImportListener, NoOpChangeListener,
     OntologyChangeListener, ReasonerChangeAwareListener,
@@ -187,8 +185,12 @@ pub use crate::manager::sources::{
     FileDocumentSource, GzipDocumentSource, GzipStringDocumentSource, OntologyDocumentSource,
     StringDocumentSource, UrlDocumentSource,
 };
+pub use crate::manager::composite::{
+    amalgamate_sub_class_axioms, convert_equivalent_to_sub_classes,
+    convert_property_assertions_to_annotations, split_sub_class_axioms,
+};
 pub use crate::manager::{ChangeApplied, ChangeBroadcastStrategy, ManagerConfig, OntologyManagerRef, Snapshot};
-pub use crate::owl_manager::OWLManager;
+pub use crate::manager::convenience::OWLManager;
 pub use crate::parsers::{
     DLSyntaxParser, DLSyntaxRenderer, ErrorVerbosity, FunctionalParser,
     FunctionalSyntaxSerializer, KRSSParser, KRSSRenderer, KRSSVariant, LatexRenderer,
@@ -262,20 +264,27 @@ pub use crate::explanation::renderer::{
 pub use crate::explanation::hst::{HSTConfig, HSTExplanationGenerator};
 pub use crate::inference::InferredAxiomGenerator;
 pub use crate::inference::metrics::{
-    AverageClassDepth, AverageNamedSuperclassCount, DLExpressivityMetric,
-    MaxNamedSuperclassCount, MaximumClassDepth, NumberOfAnnotationAxioms,
-    NumberOfAnnotationProperties, NumberOfAsymmetricPropertyAxioms, NumberOfAxioms,
-    NumberOfClasses, NumberOfDataProperties, NumberOfDatatypes,
-    NumberOfDisjointClassesAxioms, NumberOfEquivalentClassAxioms,
-    NumberOfFunctionalPropertyAxioms, NumberOfGCI, NumberOfHasKeyAxioms,
-    NumberOfImports, NumberOfIndividuals, NumberOfInverseFunctionalPropertyAxioms,
+    AverageClassDepth, AverageNamedSuperclassCount, AverageNumberOfNamedSuperclasses,
+    DLExpressivityMetric, MaxNamedSuperclassCount, MaxNumberOfNamedSuperclasses,
+    MaximumClassDepth, Metric, NumberOfAnnotationAxioms, NumberOfAnnotationProperties,
+    NumberOfAsymmetricPropertyAxioms, NumberOfAxioms, NumberOfAxiomsByType, NumberOfClasses,
+    NumberOfDataProperties, NumberOfDatatypes, NumberOfDisjointClassesAxioms,
+    NumberOfEquivalentClassAxioms, NumberOfFunctionalPropertyAxioms, NumberOfGCI,
+    NumberOfGCIAxioms, NumberOfHasKeyAxioms, NumberOfHiddenGCI, NumberOfImports,
+    NumberOfIndividuals, NumberOfInverseFunctionalPropertyAxioms,
     NumberOfIrreflexivePropertyAxioms, NumberOfLogicalAxioms, NumberOfObjectProperties,
-    NumberOfSubClassAxioms, NumberOfSWRLRules, NumberOfSymmetricPropertyAxioms,
-    NumberOfTransitivePropertyAxioms, OntologyMetrics, OwlMetric,
+    NumberOfSubClassAxioms, NumberOfSWRLRuleAxioms, NumberOfSWRLRules,
+    NumberOfSymmetricPropertyAxioms, NumberOfTransitivePropertyAxioms, OntologyMetrics,
+    OwlMetric, PerPropertyAxiomTypeCounts,
 };
 pub use crate::inference::{
-    InferredClassAssertionAxiomGenerator, InferredDisjointClassesAxiomGenerator,
-    InferredEquivalentClassAxiomGenerator, InferredSubClassOfAxiomGenerator,
+    InferredClassAssertionAxiomGenerator, InferredDataPropertyAssertionGenerator,
+    InferredDisjointClassesAxiomGenerator,
+    InferredEquivalentClassAxiomGenerator, InferredEquivalentDataPropertyAxiomGenerator,
+    InferredEquivalentObjectPropertyAxiomGenerator,
+    InferredInverseObjectPropertiesAxiomGenerator,
+    InferredObjectPropertyAssertionGenerator, InferredPropertyCharacteristicAxiomGenerator,
+    InferredSubClassOfAxiomGenerator,
     InferredSubDataPropertyAxiomGenerator, InferredSubObjectPropertyAxiomGenerator,
 };
 pub use crate::modularity::decomposer::{AtomicDecomposer, DecomposerConfig};
@@ -328,9 +337,11 @@ pub use crate::render::{ConciseObjectRenderer, OWLObjectRenderer};
 pub use crate::searcher::{EntityIndex, EntitySearcher};
 pub use crate::transform::expressivity::{DLExpressivity, DLExpressivityChecker};
 pub use crate::transform::nnf::NNFConverter;
+pub use crate::transform::cnf::ClausalNormalFormConverter;
 pub use crate::transform::{OWLEntityRemover, OWLEntityRenamer, OWLObjectTransformer};
 pub use crate::walk::merge::OWLOntologyMerger;
 pub use crate::walk::{OWLObjectVisitor, OntologyWalker, StructureWalker};
+pub use crate::visitor::{OntologyChangeVisitor, dispatch_change};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = "Oxidowl";

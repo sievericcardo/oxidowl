@@ -9,8 +9,8 @@ pub mod nnf;
 
 use crate::ontology::axioms::*;
 use crate::ontology::{
-    Annotation, AnnotationValue, ClassExpression, DataPropertyExpression, DataRange, IRI,
-    Individual, ObjectPropertyExpression, OntologyRef,
+    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, ClassExpression,
+    DataPropertyExpression, DataRange, IRI, Individual, ObjectPropertyExpression, OntologyRef,
 };
 
 use crate::Result;
@@ -475,7 +475,29 @@ impl OWLObjectTransformer {
                 id: a.id,
             }),
             Axiom::DatatypeDefinition(a) => Axiom::DatatypeDefinition(a.clone()),
-            Axiom::Rule(a) => Axiom::Rule(a.clone()),
+            Axiom::Rule(a) => {
+                let head: Vec<crate::ontology::axioms::SWRLAtom> = a
+                    .rule
+                    .head
+                    .iter()
+                    .filter_map(|atom| self.transform_swrl_atom(atom))
+                    .collect();
+                let body: Vec<crate::ontology::axioms::SWRLAtom> = a
+                    .rule
+                    .body
+                    .iter()
+                    .filter_map(|atom| self.transform_swrl_atom(atom))
+                    .collect();
+                Axiom::Rule(crate::ontology::axioms::SWRLRuleAxiom {
+                    id: a.id,
+                    rule: crate::ontology::axioms::SWRLRule { head, body },
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                })
+            }
         })
     }
 
@@ -496,6 +518,95 @@ impl OWLObjectTransformer {
             },
             annotations: nested,
         })
+    }
+
+    fn transform_swrl_atom(
+        &self,
+        atom: &crate::ontology::axioms::SWRLAtom,
+    ) -> Option<crate::ontology::axioms::SWRLAtom> {
+        use crate::ontology::axioms::SWRLAtom;
+        Some(match atom {
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => SWRLAtom::ClassAtom {
+                predicate: (self.ce_fn)(predicate)?,
+                argument: self
+                    .transform_swrl_iarg(argument)
+                    .unwrap_or_else(|| argument.clone()),
+            },
+            SWRLAtom::ObjectPropertyAtom {
+                predicate,
+                first_argument,
+                second_argument,
+            } => SWRLAtom::ObjectPropertyAtom {
+                predicate: (self.ope_fn)(predicate)?,
+                first_argument: self
+                    .transform_swrl_iarg(first_argument)
+                    .unwrap_or_else(|| first_argument.clone()),
+                second_argument: self
+                    .transform_swrl_iarg(second_argument)
+                    .unwrap_or_else(|| second_argument.clone()),
+            },
+            SWRLAtom::DataPropertyAtom {
+                predicate,
+                first_argument,
+                second_argument,
+            } => SWRLAtom::DataPropertyAtom {
+                predicate: (self.dpe_fn)(predicate)?,
+                first_argument: self
+                    .transform_swrl_iarg(first_argument)
+                    .unwrap_or_else(|| first_argument.clone()),
+                second_argument: second_argument.clone(),
+            },
+            SWRLAtom::DataRangeAtom {
+                predicate,
+                argument,
+            } => SWRLAtom::DataRangeAtom {
+                predicate: predicate.clone(),
+                argument: argument.clone(),
+            },
+            SWRLAtom::SameIndividualAtom {
+                first_argument,
+                second_argument,
+            } => SWRLAtom::SameIndividualAtom {
+                first_argument: self
+                    .transform_swrl_iarg(first_argument)
+                    .unwrap_or_else(|| first_argument.clone()),
+                second_argument: self
+                    .transform_swrl_iarg(second_argument)
+                    .unwrap_or_else(|| second_argument.clone()),
+            },
+            SWRLAtom::DifferentIndividualsAtom {
+                first_argument,
+                second_argument,
+            } => SWRLAtom::DifferentIndividualsAtom {
+                first_argument: self
+                    .transform_swrl_iarg(first_argument)
+                    .unwrap_or_else(|| first_argument.clone()),
+                second_argument: self
+                    .transform_swrl_iarg(second_argument)
+                    .unwrap_or_else(|| second_argument.clone()),
+            },
+            SWRLAtom::BuiltInAtom {
+                predicate,
+                arguments,
+            } => SWRLAtom::BuiltInAtom {
+                predicate: predicate.clone(),
+                arguments: arguments.clone(),
+            },
+        })
+    }
+
+    fn transform_swrl_iarg(
+        &self,
+        arg: &crate::ontology::axioms::SWRLIArgument,
+    ) -> Option<crate::ontology::axioms::SWRLIArgument> {
+        use crate::ontology::axioms::SWRLIArgument;
+        match arg {
+            SWRLIArgument::Individual(ind) => (self.ind_fn)(ind).map(SWRLIArgument::Individual),
+            SWRLIArgument::Variable(_) => None,
+        }
     }
 }
 
@@ -1128,6 +1239,1249 @@ impl OWLEntityRenamer {
             Axiom::Rule(a) => Axiom::Rule(a.clone()),
             other => other.clone(),
         }
+    }
+
+    // ── Single-IRI rename helpers ─────────────────────────────────────
+
+    fn rename_ce(ce: &ClassExpression, from: &IRI, to: &IRI) -> Option<ClassExpression> {
+        match ce {
+            ClassExpression::Class(c) => {
+                if c.iri == *from {
+                    Some(ClassExpression::Class(crate::ontology::Class { iri: to.clone() }))
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectIntersectionOf(v) => {
+                let mut changed = false;
+                let r: Vec<_> = v
+                    .iter()
+                    .map(|x| {
+                        if let Some(n) = Self::rename_ce(x, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            x.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(ClassExpression::ObjectIntersectionOf(r))
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectUnionOf(v) => {
+                let mut changed = false;
+                let r: Vec<_> = v
+                    .iter()
+                    .map(|x| {
+                        if let Some(n) = Self::rename_ce(x, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            x.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(ClassExpression::ObjectUnionOf(r))
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectComplementOf(b) => {
+                Self::rename_ce(b, from, to)
+                    .map(|n| ClassExpression::ObjectComplementOf(Box::new(n)))
+            }
+            ClassExpression::ObjectOneOf(v) => {
+                let mut changed = false;
+                let r: Vec<_> = v
+                    .iter()
+                    .map(|x| {
+                        if let Some(n) = Self::rename_individual(x, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            x.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(ClassExpression::ObjectOneOf(r))
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                let p = Self::rename_ope(property, from, to);
+                let f = Self::rename_ce(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::ObjectSomeValuesFrom {
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: Box::new(f.unwrap_or_else(|| *filler.clone())),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                let p = Self::rename_ope(property, from, to);
+                let f = Self::rename_ce(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::ObjectAllValuesFrom {
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: Box::new(f.unwrap_or_else(|| *filler.clone())),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectHasValue { property, value } => {
+                let p = Self::rename_ope(property, from, to);
+                let v = Self::rename_individual(value, from, to);
+                if p.is_some() || v.is_some() {
+                    Some(ClassExpression::ObjectHasValue {
+                        property: p.unwrap_or_else(|| property.clone()),
+                        value: v.unwrap_or_else(|| value.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectHasSelf { property } => {
+                Self::rename_ope(property, from, to)
+                    .map(|p| ClassExpression::ObjectHasSelf { property: p })
+            }
+            ClassExpression::ObjectMinCardinality {
+                cardinality,
+                property,
+                filler,
+            } => {
+                let p = Self::rename_ope(property, from, to);
+                let f = Self::rename_ce(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::ObjectMinCardinality {
+                        cardinality: *cardinality,
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: Box::new(f.unwrap_or_else(|| *filler.clone())),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectMaxCardinality {
+                cardinality,
+                property,
+                filler,
+            } => {
+                let p = Self::rename_ope(property, from, to);
+                let f = Self::rename_ce(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::ObjectMaxCardinality {
+                        cardinality: *cardinality,
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: Box::new(f.unwrap_or_else(|| *filler.clone())),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::ObjectExactCardinality {
+                cardinality,
+                property,
+                filler,
+            } => {
+                let p = Self::rename_ope(property, from, to);
+                let f = Self::rename_ce(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::ObjectExactCardinality {
+                        cardinality: *cardinality,
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: Box::new(f.unwrap_or_else(|| *filler.clone())),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                let p = Self::rename_dpe(property, from, to);
+                let f = Self::rename_dr(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::DataSomeValuesFrom {
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: f.unwrap_or_else(|| filler.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::DataAllValuesFrom { property, filler } => {
+                let p = Self::rename_dpe(property, from, to);
+                let f = Self::rename_dr(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::DataAllValuesFrom {
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: f.unwrap_or_else(|| filler.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::DataHasValue { property, value } => {
+                Self::rename_dpe(property, from, to)
+                    .map(|p| ClassExpression::DataHasValue {
+                        property: p,
+                        value: value.clone(),
+                    })
+            }
+            ClassExpression::DataMinCardinality {
+                cardinality,
+                property,
+                filler,
+            } => {
+                let p = Self::rename_dpe(property, from, to);
+                let f = Self::rename_dr(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::DataMinCardinality {
+                        cardinality: *cardinality,
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: f.unwrap_or_else(|| filler.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::DataMaxCardinality {
+                cardinality,
+                property,
+                filler,
+            } => {
+                let p = Self::rename_dpe(property, from, to);
+                let f = Self::rename_dr(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::DataMaxCardinality {
+                        cardinality: *cardinality,
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: f.unwrap_or_else(|| filler.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            ClassExpression::DataExactCardinality {
+                cardinality,
+                property,
+                filler,
+            } => {
+                let p = Self::rename_dpe(property, from, to);
+                let f = Self::rename_dr(filler, from, to);
+                if p.is_some() || f.is_some() {
+                    Some(ClassExpression::DataExactCardinality {
+                        cardinality: *cardinality,
+                        property: p.unwrap_or_else(|| property.clone()),
+                        filler: f.unwrap_or_else(|| filler.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn rename_ope(
+        ope: &ObjectPropertyExpression,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<ObjectPropertyExpression> {
+        match ope {
+            ObjectPropertyExpression::ObjectProperty(p) => {
+                if p.iri == *from {
+                    Some(ObjectPropertyExpression::ObjectProperty(
+                        crate::ontology::ObjectProperty {
+                            iri: to.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            ObjectPropertyExpression::InverseObjectProperty(p) => {
+                if p.iri == *from {
+                    Some(ObjectPropertyExpression::InverseObjectProperty(
+                        crate::ontology::ObjectProperty {
+                            iri: to.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            ObjectPropertyExpression::PropertyChain(chain) => {
+                let mut changed = false;
+                let r: Vec<_> = chain
+                    .iter()
+                    .map(|x| {
+                        if let Some(n) = Self::rename_ope(x, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            x.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(ObjectPropertyExpression::PropertyChain(r))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn rename_dpe(
+        dpe: &DataPropertyExpression,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<DataPropertyExpression> {
+        match dpe {
+            DataPropertyExpression::DataProperty(p) => {
+                if p.iri == *from {
+                    Some(DataPropertyExpression::DataProperty(
+                        crate::ontology::DataProperty {
+                            iri: to.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn rename_individual(ind: &Individual, from: &IRI, to: &IRI) -> Option<Individual> {
+        match ind {
+            Individual::Named(ni) => {
+                if ni.iri == *from {
+                    Some(Individual::Named(crate::ontology::NamedIndividual {
+                        iri: to.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Individual::Anonymous(_) => None,
+        }
+    }
+
+    fn rename_dr(dr: &DataRange, from: &IRI, to: &IRI) -> Option<DataRange> {
+        match dr {
+            DataRange::Datatype(dt) => {
+                if dt == from {
+                    Some(DataRange::Datatype(to.clone()))
+                } else {
+                    None
+                }
+            }
+            DataRange::DatatypeRestriction {
+                datatype,
+                restrictions,
+            } => {
+                if datatype == from {
+                    Some(DataRange::DatatypeRestriction {
+                        datatype: to.clone(),
+                        restrictions: restrictions.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            DataRange::DataIntersectionOf(ranges) => {
+                let mut changed = false;
+                let r: Vec<_> = ranges
+                    .iter()
+                    .map(|x| {
+                        if let Some(n) = Self::rename_dr(x, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            x.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(DataRange::DataIntersectionOf(r))
+                } else {
+                    None
+                }
+            }
+            DataRange::DataUnionOf(ranges) => {
+                let mut changed = false;
+                let r: Vec<_> = ranges
+                    .iter()
+                    .map(|x| {
+                        if let Some(n) = Self::rename_dr(x, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            x.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(DataRange::DataUnionOf(r))
+                } else {
+                    None
+                }
+            }
+            DataRange::DataComplementOf(b) => {
+                Self::rename_dr(b, from, to)
+                    .map(|n| DataRange::DataComplementOf(Box::new(n)))
+            }
+            DataRange::DataOneOf(_) => None,
+        }
+    }
+
+    fn rename_annotation_value(
+        val: &AnnotationValue,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<AnnotationValue> {
+        match val {
+            AnnotationValue::IRI(iri) if iri == from => {
+                Some(AnnotationValue::IRI(to.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    fn rename_annotation_subject(
+        subj: &AnnotationSubject,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<AnnotationSubject> {
+        match subj {
+            AnnotationSubject::IRI(iri) if iri == from => {
+                Some(AnnotationSubject::IRI(to.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    fn rename_annotation_property(
+        ap: &AnnotationProperty,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<AnnotationProperty> {
+        if ap.iri == *from {
+            Some(crate::ontology::AnnotationProperty {
+                iri: to.clone(),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn rename_swrl_atom(
+        atom: &crate::ontology::axioms::SWRLAtom,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<crate::ontology::axioms::SWRLAtom> {
+        use crate::ontology::axioms::SWRLAtom;
+        match atom {
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => {
+                let p = Self::rename_ce(predicate, from, to);
+                let a = Self::rename_swrl_iarg(argument, from, to);
+                if p.is_some() || a.is_some() {
+                    Some(SWRLAtom::ClassAtom {
+                        predicate: p.unwrap_or_else(|| predicate.clone()),
+                        argument: a.unwrap_or_else(|| argument.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            SWRLAtom::ObjectPropertyAtom {
+                predicate,
+                first_argument,
+                second_argument,
+            } => {
+                let p = Self::rename_ope(predicate, from, to);
+                let a1 = Self::rename_swrl_iarg(first_argument, from, to);
+                let a2 = Self::rename_swrl_iarg(second_argument, from, to);
+                if p.is_some() || a1.is_some() || a2.is_some() {
+                    Some(SWRLAtom::ObjectPropertyAtom {
+                        predicate: p.unwrap_or_else(|| predicate.clone()),
+                        first_argument: a1.unwrap_or_else(|| first_argument.clone()),
+                        second_argument: a2.unwrap_or_else(|| second_argument.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            SWRLAtom::DataPropertyAtom {
+                predicate,
+                first_argument,
+                second_argument,
+            } => {
+                let p = Self::rename_dpe(predicate, from, to);
+                let a1 = Self::rename_swrl_iarg(first_argument, from, to);
+                if p.is_some() || a1.is_some() {
+                    Some(SWRLAtom::DataPropertyAtom {
+                        predicate: p.unwrap_or_else(|| predicate.clone()),
+                        first_argument: a1.unwrap_or_else(|| first_argument.clone()),
+                        second_argument: second_argument.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            SWRLAtom::DataRangeAtom {
+                predicate,
+                argument,
+            } => {
+                let p = Self::rename_dr(predicate, from, to);
+                if p.is_some() {
+                    Some(SWRLAtom::DataRangeAtom {
+                        predicate: p.unwrap(),
+                        argument: argument.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            SWRLAtom::SameIndividualAtom {
+                first_argument,
+                second_argument,
+            } => {
+                let a1 = Self::rename_swrl_iarg(first_argument, from, to);
+                let a2 = Self::rename_swrl_iarg(second_argument, from, to);
+                if a1.is_some() || a2.is_some() {
+                    Some(SWRLAtom::SameIndividualAtom {
+                        first_argument: a1.unwrap_or_else(|| first_argument.clone()),
+                        second_argument: a2.unwrap_or_else(|| second_argument.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            SWRLAtom::DifferentIndividualsAtom {
+                first_argument,
+                second_argument,
+            } => {
+                let a1 = Self::rename_swrl_iarg(first_argument, from, to);
+                let a2 = Self::rename_swrl_iarg(second_argument, from, to);
+                if a1.is_some() || a2.is_some() {
+                    Some(SWRLAtom::DifferentIndividualsAtom {
+                        first_argument: a1.unwrap_or_else(|| first_argument.clone()),
+                        second_argument: a2.unwrap_or_else(|| second_argument.clone()),
+                    })
+                } else {
+                    None
+                }
+            }
+            SWRLAtom::BuiltInAtom {
+                predicate,
+                arguments,
+            } => {
+                if *predicate == *from {
+                    Some(SWRLAtom::BuiltInAtom {
+                        predicate: to.clone(),
+                        arguments: arguments.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn rename_swrl_atoms(
+        atoms: &[crate::ontology::axioms::SWRLAtom],
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<Vec<crate::ontology::axioms::SWRLAtom>> {
+        let mut changed = false;
+        let r: Vec<_> = atoms
+            .iter()
+            .map(|a| {
+                if let Some(n) = Self::rename_swrl_atom(a, from, to) {
+                    changed = true;
+                    n
+                } else {
+                    a.clone()
+                }
+            })
+            .collect();
+        if changed {
+            Some(r)
+        } else {
+            None
+        }
+    }
+
+    fn rename_swrl_iarg(
+        arg: &crate::ontology::axioms::SWRLIArgument,
+        from: &IRI,
+        to: &IRI,
+    ) -> Option<crate::ontology::axioms::SWRLIArgument> {
+        use crate::ontology::axioms::SWRLIArgument;
+        match arg {
+            SWRLIArgument::Individual(ind) => Self::rename_individual(ind, from, to)
+                .map(SWRLIArgument::Individual),
+            SWRLIArgument::Variable(_) => None,
+        }
+    }
+
+    fn rename_axiom_one(axiom: &Axiom, from: &IRI, to: &IRI) -> Option<Axiom> {
+        match axiom {
+            Axiom::Declaration(d) => {
+                let entity = match &d.entity {
+                    Entity::Class(iri) if iri == from => Entity::Class(to.clone()),
+                    Entity::ObjectProperty(iri) if iri == from => Entity::ObjectProperty(to.clone()),
+                    Entity::DataProperty(iri) if iri == from => Entity::DataProperty(to.clone()),
+                    Entity::AnnotationProperty(iri) if iri == from => {
+                        Entity::AnnotationProperty(to.clone())
+                    }
+                    Entity::NamedIndividual(iri) if iri == from => {
+                        Entity::NamedIndividual(to.clone())
+                    }
+                    Entity::Datatype(iri) if iri == from => Entity::Datatype(to.clone()),
+                    _ => return None,
+                };
+                Some(Axiom::Declaration(DeclarationAxiom {
+                    id: d.id,
+                    entity,
+                }))
+            }
+            Axiom::SubClassOf(a) => {
+                let s = Self::rename_ce(&a.subclass, from, to);
+                let u = Self::rename_ce(&a.superclass, from, to);
+                if s.is_some() || u.is_some() {
+                    Some(Axiom::SubClassOf(SubClassOfAxiom {
+                        id: a.id,
+                        subclass: s.unwrap_or_else(|| a.subclass.clone()),
+                        superclass: u.unwrap_or_else(|| a.superclass.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::EquivalentClasses(a) => {
+                let mut changed = false;
+                let classes: Vec<_> = a
+                    .classes
+                    .iter()
+                    .map(|c| {
+                        if let Some(n) = Self::rename_ce(c, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            c.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::EquivalentClasses(EquivalentClassesAxiom {
+                        id: a.id,
+                        classes,
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::DisjointClasses(a) => {
+                let mut changed = false;
+                let classes: Vec<_> = a
+                    .classes
+                    .iter()
+                    .map(|c| {
+                        if let Some(n) = Self::rename_ce(c, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            c.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::DisjointClasses(DisjointClassesAxiom {
+                        id: a.id,
+                        classes,
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::DisjointUnion(a) => {
+                let c = Self::rename_ce(&a.class, from, to);
+                let mut changed = c.is_some();
+                let disjoints: Vec<_> = a
+                    .disjoint_classes
+                    .iter()
+                    .map(|d| {
+                        if let Some(n) = Self::rename_ce(d, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            d.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::DisjointUnion(DisjointUnionAxiom {
+                        id: a.id,
+                        class: c.unwrap_or_else(|| a.class.clone()),
+                        disjoint_classes: disjoints,
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::ClassAssertion(a) => {
+                let c = Self::rename_ce(&a.class, from, to);
+                let i = Self::rename_individual(&a.individual, from, to);
+                if c.is_some() || i.is_some() {
+                    Some(Axiom::ClassAssertion(ClassAssertionAxiom {
+                        id: a.id,
+                        class: c.unwrap_or_else(|| a.class.clone()),
+                        individual: i.unwrap_or_else(|| a.individual.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::SubObjectPropertyOf(a) => {
+                let s = Self::rename_ope(&a.sub_property, from, to);
+                let u = Self::rename_ope(&a.super_property, from, to);
+                if s.is_some() || u.is_some() {
+                    Some(Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
+                        id: a.id,
+                        sub_property: s.unwrap_or_else(|| a.sub_property.clone()),
+                        super_property: u.unwrap_or_else(|| a.super_property.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::EquivalentObjectProperties(a) => {
+                let mut changed = false;
+                let props: Vec<_> = a
+                    .properties
+                    .iter()
+                    .map(|p| {
+                        if let Some(n) = Self::rename_ope(p, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            p.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::EquivalentObjectProperties(
+                        EquivalentObjectPropertiesAxiom {
+                            id: a.id,
+                            properties: props,
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::DisjointObjectProperties(a) => {
+                let mut changed = false;
+                let props: Vec<_> = a
+                    .properties
+                    .iter()
+                    .map(|p| {
+                        if let Some(n) = Self::rename_ope(p, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            p.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::DisjointObjectProperties(
+                        DisjointObjectPropertiesAxiom {
+                            id: a.id,
+                            properties: props,
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::InverseObjectProperties(a) => {
+                let p1 = Self::rename_ope(&a.property1, from, to);
+                let p2 = Self::rename_ope(&a.property2, from, to);
+                if p1.is_some() || p2.is_some() {
+                    Some(Axiom::InverseObjectProperties(
+                        InverseObjectPropertiesAxiom {
+                            id: a.id,
+                            property1: p1.unwrap_or_else(|| a.property1.clone()),
+                            property2: p2.unwrap_or_else(|| a.property2.clone()),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::ObjectPropertyDomain(a) => {
+                let p = Self::rename_ope(&a.property, from, to);
+                let d = Self::rename_ce(&a.domain, from, to);
+                if p.is_some() || d.is_some() {
+                    Some(Axiom::ObjectPropertyDomain(ObjectPropertyDomainAxiom {
+                        id: a.id,
+                        property: p.unwrap_or_else(|| a.property.clone()),
+                        domain: d.unwrap_or_else(|| a.domain.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::ObjectPropertyRange(a) => {
+                let p = Self::rename_ope(&a.property, from, to);
+                let r = Self::rename_ce(&a.range, from, to);
+                if p.is_some() || r.is_some() {
+                    Some(Axiom::ObjectPropertyRange(ObjectPropertyRangeAxiom {
+                        id: a.id,
+                        property: p.unwrap_or_else(|| a.property.clone()),
+                        range: r.unwrap_or_else(|| a.range.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::FunctionalObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::InverseFunctionalObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::InverseFunctionalObjectProperty(
+                        InverseFunctionalObjectPropertyAxiom {
+                            id: a.id,
+                            property: p,
+                            annotations: a.annotations.clone(),
+                        },
+                    )
+                })
+            }
+            Axiom::ReflexiveObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::IrreflexiveObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::SymmetricObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::AsymmetricObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::AsymmetricObjectProperty(AsymmetricObjectPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::TransitiveObjectProperty(a) => {
+                Self::rename_ope(&a.property, from, to).map(|p| {
+                    Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::SubDataPropertyOf(a) => {
+                let s = Self::rename_dpe(&a.sub_property, from, to);
+                let u = Self::rename_dpe(&a.super_property, from, to);
+                if s.is_some() || u.is_some() {
+                    Some(Axiom::SubDataPropertyOf(SubDataPropertyOfAxiom {
+                        id: a.id,
+                        sub_property: s.unwrap_or_else(|| a.sub_property.clone()),
+                        super_property: u.unwrap_or_else(|| a.super_property.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::EquivalentDataProperties(a) => {
+                let mut changed = false;
+                let props: Vec<_> = a
+                    .properties
+                    .iter()
+                    .map(|p| {
+                        if let Some(n) = Self::rename_dpe(p, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            p.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::EquivalentDataProperties(
+                        EquivalentDataPropertiesAxiom {
+                            id: a.id,
+                            properties: props,
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::DisjointDataProperties(a) => {
+                let mut changed = false;
+                let props: Vec<_> = a
+                    .properties
+                    .iter()
+                    .map(|p| {
+                        if let Some(n) = Self::rename_dpe(p, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            p.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::DisjointDataProperties(
+                        DisjointDataPropertiesAxiom {
+                            id: a.id,
+                            properties: props,
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::DataPropertyDomain(a) => {
+                let p = Self::rename_dpe(&a.property, from, to);
+                let d = Self::rename_ce(&a.domain, from, to);
+                if p.is_some() || d.is_some() {
+                    Some(Axiom::DataPropertyDomain(DataPropertyDomainAxiom {
+                        id: a.id,
+                        property: p.unwrap_or_else(|| a.property.clone()),
+                        domain: d.unwrap_or_else(|| a.domain.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::DataPropertyRange(a) => {
+                let p = Self::rename_dpe(&a.property, from, to);
+                let r = Self::rename_dr(&a.range, from, to);
+                if p.is_some() || r.is_some() {
+                    Some(Axiom::DataPropertyRange(DataPropertyRangeAxiom {
+                        id: a.id,
+                        property: p.unwrap_or_else(|| a.property.clone()),
+                        range: r.unwrap_or_else(|| a.range.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::FunctionalDataProperty(a) => {
+                Self::rename_dpe(&a.property, from, to).map(|p| {
+                    Axiom::FunctionalDataProperty(FunctionalDataPropertyAxiom {
+                        id: a.id,
+                        property: p,
+                        annotations: a.annotations.clone(),
+                    })
+                })
+            }
+            Axiom::ObjectPropertyAssertion(a) => {
+                let p = Self::rename_ope(&a.property, from, to);
+                let s = Self::rename_individual(&a.source, from, to);
+                let t = Self::rename_individual(&a.target, from, to);
+                if p.is_some() || s.is_some() || t.is_some() {
+                    Some(Axiom::ObjectPropertyAssertion(
+                        ObjectPropertyAssertionAxiom {
+                            id: a.id,
+                            property: p.unwrap_or_else(|| a.property.clone()),
+                            source: s.unwrap_or_else(|| a.source.clone()),
+                            target: t.unwrap_or_else(|| a.target.clone()),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::DataPropertyAssertion(a) => {
+                let p = Self::rename_dpe(&a.property, from, to);
+                let i = Self::rename_individual(&a.individual, from, to);
+                if p.is_some() || i.is_some() {
+                    Some(Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+                        id: a.id,
+                        property: p.unwrap_or_else(|| a.property.clone()),
+                        individual: i.unwrap_or_else(|| a.individual.clone()),
+                        value: a.value.clone(),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::NegativeObjectPropertyAssertion(a) => {
+                let p = Self::rename_ope(&a.property, from, to);
+                let s = Self::rename_individual(&a.source, from, to);
+                let t = Self::rename_individual(&a.target, from, to);
+                if p.is_some() || s.is_some() || t.is_some() {
+                    Some(Axiom::NegativeObjectPropertyAssertion(
+                        NegativeObjectPropertyAssertionAxiom {
+                            id: a.id,
+                            property: p.unwrap_or_else(|| a.property.clone()),
+                            source: s.unwrap_or_else(|| a.source.clone()),
+                            target: t.unwrap_or_else(|| a.target.clone()),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::NegativeDataPropertyAssertion(a) => {
+                let p = Self::rename_dpe(&a.property, from, to);
+                let i = Self::rename_individual(&a.individual, from, to);
+                if p.is_some() || i.is_some() {
+                    Some(Axiom::NegativeDataPropertyAssertion(
+                        NegativeDataPropertyAssertionAxiom {
+                            id: a.id,
+                            property: p.unwrap_or_else(|| a.property.clone()),
+                            individual: i.unwrap_or_else(|| a.individual.clone()),
+                            value: a.value.clone(),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::SameIndividual(a) => {
+                let mut changed = false;
+                let inds: Vec<_> = a
+                    .individuals
+                    .iter()
+                    .map(|i| {
+                        if let Some(n) = Self::rename_individual(i, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            i.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::SameIndividual(SameIndividualAxiom {
+                        id: a.id,
+                        individuals: inds,
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::DifferentIndividuals(a) => {
+                let mut changed = false;
+                let inds: Vec<_> = a
+                    .individuals
+                    .iter()
+                    .map(|i| {
+                        if let Some(n) = Self::rename_individual(i, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            i.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::DifferentIndividuals(DifferentIndividualsAxiom {
+                        id: a.id,
+                        individuals: inds,
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::AnnotationAssertion(a) => {
+                let s = Self::rename_annotation_subject(&a.subject, from, to);
+                let p = Self::rename_annotation_property(&a.property, from, to);
+                let v = Self::rename_annotation_value(&a.value, from, to);
+                if s.is_some() || p.is_some() || v.is_some() {
+                    Some(Axiom::AnnotationAssertion(AnnotationAssertionAxiom {
+                        id: a.id,
+                        subject: s.unwrap_or_else(|| a.subject.clone()),
+                        property: p.unwrap_or_else(|| a.property.clone()),
+                        value: v.unwrap_or_else(|| a.value.clone()),
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::SubAnnotationPropertyOf(a) => {
+                let s = Self::rename_annotation_property(&a.sub_property, from, to);
+                let u = Self::rename_annotation_property(&a.super_property, from, to);
+                if s.is_some() || u.is_some() {
+                    Some(Axiom::SubAnnotationPropertyOf(
+                        SubAnnotationPropertyOfAxiom {
+                            id: a.id,
+                            sub_property: s.unwrap_or_else(|| a.sub_property.clone()),
+                            super_property: u.unwrap_or_else(|| a.super_property.clone()),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::AnnotationPropertyDomain(a) => {
+                let p = Self::rename_annotation_property(&a.property, from, to);
+                let d = Self::rename_ce(&a.domain, from, to);
+                if p.is_some() || d.is_some() {
+                    Some(Axiom::AnnotationPropertyDomain(
+                        AnnotationPropertyDomainAxiom {
+                            id: a.id,
+                            property: p.unwrap_or_else(|| a.property.clone()),
+                            domain: d.unwrap_or_else(|| a.domain.clone()),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::AnnotationPropertyRange(a) => {
+                let p = Self::rename_annotation_property(&a.property, from, to);
+                let r = Self::rename_dr(&a.range, from, to);
+                if p.is_some() || r.is_some() {
+                    Some(Axiom::AnnotationPropertyRange(
+                        AnnotationPropertyRangeAxiom {
+                            id: a.id,
+                            property: p.unwrap_or_else(|| a.property.clone()),
+                            range: r.unwrap_or_else(|| a.range.clone()),
+                            annotations: a.annotations.clone(),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            Axiom::HasKey(a) => {
+                let c = Self::rename_ce(&a.class, from, to);
+                let mut changed = c.is_some();
+                let obj_props: Vec<_> = a
+                    .object_properties
+                    .iter()
+                    .map(|p| {
+                        if let Some(n) = Self::rename_ope(p, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            p.clone()
+                        }
+                    })
+                    .collect();
+                let data_props: Vec<_> = a
+                    .data_properties
+                    .iter()
+                    .map(|p| {
+                        if let Some(n) = Self::rename_dpe(p, from, to) {
+                            changed = true;
+                            n
+                        } else {
+                            p.clone()
+                        }
+                    })
+                    .collect();
+                if changed {
+                    Some(Axiom::HasKey(HasKeyAxiom {
+                        id: a.id,
+                        class: c.unwrap_or_else(|| a.class.clone()),
+                        object_properties: obj_props,
+                        data_properties: data_props,
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            Axiom::DatatypeDefinition(_a) => {
+                None
+            }
+            Axiom::Rule(a) => {
+                let head = Self::rename_swrl_atoms(&a.rule.head, from, to);
+                let body = Self::rename_swrl_atoms(&a.rule.body, from, to);
+                if head.is_some() || body.is_some() {
+                    Some(Axiom::Rule(crate::ontology::axioms::SWRLRuleAxiom {
+                        id: a.id,
+                        rule: crate::ontology::axioms::SWRLRule {
+                            head: head.unwrap_or_else(|| a.rule.head.clone()),
+                            body: body.unwrap_or_else(|| a.rule.body.clone()),
+                        },
+                        annotations: a.annotations.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Rename a single IRI in an axiom. Returns None if no replacement was needed.
+    #[must_use]
+    pub fn rename_iri_in_axiom(axiom: &Axiom, from: &IRI, to: &IRI) -> Option<Axiom> {
+        Self::rename_axiom_one(axiom, from, to)
     }
 
     /// Generate change operations that rename all matching entities.

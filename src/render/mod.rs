@@ -3,6 +3,8 @@
 //!
 //! Equivalent to OWL API v5's `OWLObjectRenderer` interface.
 
+pub mod unified_renderer;
+
 use crate::ontology::axioms::Axiom;
 use crate::ontology::concepts::ClassExpression;
 use crate::ontology::shortform::{ShortFormProvider, SimpleShortFormProvider};

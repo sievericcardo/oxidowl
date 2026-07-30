@@ -1141,12 +1141,44 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
         }
         let conclusion_file = &cli.input[0];
 
-        // For now, we'll report that entailment checking is not yet implemented with this signature
-        println!(
-            "Entailment checking between {} and {} is not yet implemented in this version",
-            premise_file.display(),
-            conclusion_file.display()
-        );
+        // Load conclusion ontology and check entailment
+        println!("Checking entailment of {} against {}...", conclusion_file.display(), premise_file.display());
+        let conclusion = match oxidowl::ontology::Ontology::from_file(conclusion_file, None) {
+            Ok(o) => o,
+            Err(e) => {
+                println!("Error loading conclusion ontology: {e}");
+                return Err(e);
+            }
+        };
+        let onto_ref = match reasoner.get_ontology().cloned() {
+            Some(r) => r,
+            None => {
+                println!("No ontology loaded in reasoner for entailment checking");
+                return Ok(());
+            }
+        };
+        let mut stats = oxidowl::core::reasoner::statistics::ReasoningStatistics::new();
+        let mut all_entailed = true;
+        for axiom in conclusion.axioms() {
+            match reasoner.check_entailment(axiom, &onto_ref, &mut stats) {
+                Ok(true) => {},
+                Ok(false) => {
+                    println!("  Not entailed: {axiom:?}");
+                    all_entailed = false;
+                }
+                Err(e) => {
+                    println!("  Error checking entailment: {e}");
+                    all_entailed = false;
+                }
+            }
+        }
+        if all_entailed {
+            println!("Entailment holds: all axioms in {} are entailed by {}",
+                conclusion_file.display(), premise_file.display());
+        } else {
+            println!("Entailment does NOT hold between {} and {}",
+                premise_file.display(), conclusion_file.display());
+        }
     }
 
     if cli.print_prefixes {

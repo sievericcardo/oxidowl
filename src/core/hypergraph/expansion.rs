@@ -506,34 +506,55 @@ impl HypertableauExpansion {
     /// Check if a node has a clash (contradictory concepts)
     fn has_clash(&self, node_id: NodeId) -> bool {
         if let Some(node) = self.graph.get_node(node_id) {
-            // Check for direct contradictions
-            for label in &node.labels {
-                for (c1, c2) in &self.contradictions {
-                    if label == c1 && node.labels.contains(c2) {
-                        trace!("Clash detected: {c1} and {c2} in node {node_id}");
+            // Check for direct contradiction pairs (string-based)
+            for (c1, c2) in &self.contradictions {
+                let has_c1 = self.node_has_label(node, c1);
+                let has_c2 = self.node_has_label(node, c2);
+                if has_c1 && has_c2 {
+                    trace!("Clash detected: {c1} and {c2} in node {node_id}");
+                    return true;
+                }
+            }
+
+            // Check for C and ObjectComplementOf(C) via structural comparison
+            // of complex class expressions
+            for i in 0..node.complex_labels.len() {
+                for j in (i + 1)..node.complex_labels.len() {
+                    if Self::are_complements(
+                        &node.complex_labels[i],
+                        &node.complex_labels[j],
+                    ) {
+                        trace!(
+                            "Clash detected via complement: {:?} vs {:?} in node {node_id}",
+                            node.complex_labels[i],
+                            node.complex_labels[j]
+                        );
                         return true;
                     }
                 }
             }
+        }
+        false
+    }
 
-            // Check for C and ¬C pattern via complement class expressions
-            for label in &node.labels {
-                let negated = format!("¬{label}");
-                if node.labels.contains(&negated) {
-                    trace!("Clash detected via negation: {label} and ¬{label} in node {node_id}");
-                    return true;
-                }
-                if node
-                    .labels
-                    .iter()
-                    .any(|l| l.contains("Complement") && l.contains(label))
-                {
-                    trace!("Clash detected via complement: {label} in node {node_id}");
-                    return true;
-                }
+    /// Check if two class expressions are complements of each other
+    fn are_complements(a: &ClassExpression, b: &ClassExpression) -> bool {
+        if let ClassExpression::ObjectComplementOf(inner) = a {
+            if inner.as_ref() == b {
+                return true;
+            }
+        }
+        if let ClassExpression::ObjectComplementOf(inner) = b {
+            if inner.as_ref() == a {
+                return true;
             }
         }
         false
+    }
+
+    /// Check if a hypernode has a given label
+    fn node_has_label(&self, node: &HyperNode, label: &str) -> bool {
+        node.labels.contains(label)
     }
 
     /// Check for blocking opportunities

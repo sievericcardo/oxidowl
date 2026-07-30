@@ -6,6 +6,8 @@
 //! the `DataFactory`.
 
 pub mod changes;
+pub mod composite;
+pub mod convenience;
 pub mod history;
 pub mod iri_mapper;
 pub mod listeners;

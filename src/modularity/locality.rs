@@ -33,7 +33,6 @@ pub trait LocalityEvaluator: Send + Sync {
 
 /// Fast syntactic locality check based on axiom shape analysis.
 pub struct SyntacticLocalityEvaluator {
-    #[allow(dead_code)]
     locality_class: LocalityClass,
 }
 
@@ -46,7 +45,11 @@ impl SyntacticLocalityEvaluator {
 
 impl LocalityEvaluator for SyntacticLocalityEvaluator {
     fn is_local(&self, axiom: &Axiom, signature: &HashSet<IRI>) -> bool {
-        let use_top = !matches!(self.locality_class, LocalityClass::Bottom);
+        let use_top = match self.locality_class {
+            LocalityClass::Top | LocalityClass::Star => true,
+            LocalityClass::Bottom => false,
+            LocalityClass::Rho => return self.is_rho_local(axiom, signature),
+        };
         match axiom {
             // ── Class Axioms ──────────────────────────────────────────────
             Axiom::SubClassOf(a) => {
@@ -265,6 +268,173 @@ impl SyntacticLocalityEvaluator {
     fn dpe_is_bottom_local(&self, dpe: &DataPropertyExpression, sig: &HashSet<IRI>) -> bool {
         match dpe {
             DataPropertyExpression::DataProperty(p) => !sig.contains(&p.iri),
+        }
+    }
+
+    fn ce_uses_signature(ce: &ClassExpression, sig: &HashSet<IRI>) -> bool {
+        match ce {
+            ClassExpression::Class(cls) => sig.contains(&cls.iri),
+            ClassExpression::ObjectIntersectionOf(ops)
+            | ClassExpression::ObjectUnionOf(ops) => {
+                ops.iter().any(|op| Self::ce_uses_signature(op, sig))
+            }
+            ClassExpression::ObjectComplementOf(inner) => {
+                Self::ce_uses_signature(inner, sig)
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler }
+            | ClassExpression::ObjectAllValuesFrom { property, filler }
+            | ClassExpression::ObjectMinCardinality { property, filler, .. }
+            | ClassExpression::ObjectMaxCardinality { property, filler, .. }
+            | ClassExpression::ObjectExactCardinality { property, filler, .. } => {
+                Self::ope_uses_signature(property, sig)
+                    || Self::ce_uses_signature(filler, sig)
+            }
+            ClassExpression::ObjectHasValue { property, .. }
+            | ClassExpression::ObjectHasSelf { property } => {
+                Self::ope_uses_signature(property, sig)
+            }
+            ClassExpression::DataSomeValuesFrom { property, .. }
+            | ClassExpression::DataAllValuesFrom { property, .. }
+            | ClassExpression::DataHasValue { property, .. }
+            | ClassExpression::DataMinCardinality { property, .. }
+            | ClassExpression::DataMaxCardinality { property, .. }
+            | ClassExpression::DataExactCardinality { property, .. } => {
+                Self::dpe_uses_signature(property, sig)
+            }
+            ClassExpression::ObjectOneOf(_) => false,
+        }
+    }
+
+    fn ope_uses_signature(ope: &ObjectPropertyExpression, sig: &HashSet<IRI>) -> bool {
+        match ope {
+            ObjectPropertyExpression::ObjectProperty(p)
+            | ObjectPropertyExpression::InverseObjectProperty(p) => sig.contains(&p.iri),
+            ObjectPropertyExpression::PropertyChain(chain) => {
+                chain.iter().any(|p| Self::ope_uses_signature(p, sig))
+            }
+        }
+    }
+
+    fn dpe_uses_signature(dpe: &DataPropertyExpression, sig: &HashSet<IRI>) -> bool {
+        match dpe {
+            DataPropertyExpression::DataProperty(p) => sig.contains(&p.iri),
+        }
+    }
+
+    fn is_rho_local(&self, axiom: &Axiom, sig: &HashSet<IRI>) -> bool {
+        match axiom {
+            Axiom::SubClassOf(a) => {
+                !Self::ce_uses_signature(&a.subclass, sig)
+                    || !Self::ce_uses_signature(&a.superclass, sig)
+            }
+            Axiom::EquivalentClasses(a) => {
+                let count = a
+                    .classes
+                    .iter()
+                    .filter(|c| Self::ce_uses_signature(c, sig))
+                    .count();
+                count <= 1
+            }
+            Axiom::DisjointClasses(a) => {
+                let count = a
+                    .classes
+                    .iter()
+                    .filter(|c| Self::ce_uses_signature(c, sig))
+                    .count();
+                count <= 1
+            }
+            Axiom::ClassAssertion(a) => !Self::ce_uses_signature(&a.class, sig),
+
+            Axiom::SubObjectPropertyOf(a) => {
+                !Self::ope_uses_signature(&a.sub_property, sig)
+                    || !Self::ope_uses_signature(&a.super_property, sig)
+            }
+            Axiom::EquivalentObjectProperties(a) => {
+                let count = a
+                    .properties
+                    .iter()
+                    .filter(|p| Self::ope_uses_signature(p, sig))
+                    .count();
+                count <= 1
+            }
+            Axiom::DisjointObjectProperties(a) => a
+                .properties
+                .iter()
+                .all(|p| !Self::ope_uses_signature(p, sig)),
+            Axiom::InverseObjectProperties(a) => {
+                !Self::ope_uses_signature(&a.property1, sig)
+                    && !Self::ope_uses_signature(&a.property2, sig)
+            }
+            Axiom::ObjectPropertyDomain(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::ObjectPropertyRange(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::FunctionalObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::InverseFunctionalObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::ReflexiveObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::IrreflexiveObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::SymmetricObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::AsymmetricObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::TransitiveObjectProperty(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::ObjectPropertyAssertion(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+            Axiom::NegativeObjectPropertyAssertion(a) => {
+                !Self::ope_uses_signature(&a.property, sig)
+            }
+
+            Axiom::SubDataPropertyOf(a) => {
+                !Self::dpe_uses_signature(&a.sub_property, sig)
+                    || !Self::dpe_uses_signature(&a.super_property, sig)
+            }
+            Axiom::EquivalentDataProperties(a) => {
+                let count = a
+                    .properties
+                    .iter()
+                    .filter(|p| Self::dpe_uses_signature(p, sig))
+                    .count();
+                count <= 1
+            }
+            Axiom::DisjointDataProperties(a) => a
+                .properties
+                .iter()
+                .all(|p| !Self::dpe_uses_signature(p, sig)),
+            Axiom::DataPropertyDomain(a) => {
+                !Self::dpe_uses_signature(&a.property, sig)
+            }
+            Axiom::DataPropertyRange(a) => {
+                !Self::dpe_uses_signature(&a.property, sig)
+            }
+            Axiom::FunctionalDataProperty(a) => {
+                !Self::dpe_uses_signature(&a.property, sig)
+            }
+            Axiom::DataPropertyAssertion(a) => {
+                !Self::dpe_uses_signature(&a.property, sig)
+            }
+            Axiom::NegativeDataPropertyAssertion(a) => {
+                !Self::dpe_uses_signature(&a.property, sig)
+            }
+
+            _ => {
+                let eval = SyntacticLocalityEvaluator::new(LocalityClass::Top);
+                eval.is_local(axiom, sig)
+            }
         }
     }
 }

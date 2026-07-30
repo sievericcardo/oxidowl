@@ -447,3 +447,88 @@ impl InferredAxiomGenerator<InverseObjectPropertiesAxiom>
         "Inferred InverseObjectProperties Axioms"
     }
 }
+
+pub struct InferredPropertyCharacteristicAxiomGenerator;
+impl InferredAxiomGenerator<Axiom> for InferredPropertyCharacteristicAxiomGenerator {
+    fn create_axioms(
+        &self,
+        ontology: &Ontology,
+        reasoner: &dyn OWLReasoner,
+    ) -> Vec<Axiom> {
+        let mut result = Vec::new();
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(d) = axiom {
+                match &d.entity {
+                    Entity::ObjectProperty(iri) => {
+                        let ope =
+                            ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                                iri: iri.clone(),
+                            });
+                        let checks: Vec<Axiom> = vec![
+                            Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                            Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                            Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                            Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                            Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                            Axiom::AsymmetricObjectProperty(AsymmetricObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                            Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom {
+                                id: 0,
+                                property: ope.clone(),
+                                annotations: vec![],
+                            }),
+                        ];
+                        for check in checks {
+                            if reasoner.is_entailed(&check).unwrap_or(false) {
+                                result.push(check);
+                            }
+                        }
+                    }
+                    Entity::DataProperty(iri) => {
+                        let dpe = DataPropertyExpression::DataProperty(
+                            crate::ontology::DataProperty { iri: iri.clone() },
+                        );
+                        let func_dp = Axiom::FunctionalDataProperty(
+                            crate::ontology::axioms::FunctionalDataPropertyAxiom {
+                                id: 0,
+                                property: dpe.clone(),
+                                annotations: vec![],
+                            },
+                        );
+                        if reasoner.is_entailed(&func_dp).unwrap_or(false) {
+                            result.push(func_dp);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        result
+    }
+    fn get_label(&self) -> &'static str {
+        "Inferred PropertyCharacteristic Axioms"
+    }
+}

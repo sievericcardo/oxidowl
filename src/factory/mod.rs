@@ -3,6 +3,7 @@
 //! Provides entity interning (deduplication by IRI), consistent ID
 //! generation for axioms, and builder methods for all OWL 2 constructs.
 
+pub mod functional_syntax;
 pub mod providers;
 
 use self::providers::AxiomCreationProvider;

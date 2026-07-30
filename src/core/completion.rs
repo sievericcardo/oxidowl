@@ -7,8 +7,13 @@
 use crate::{
     Error, Result,
     core::dependency::DependencySet,
-    ontology::{ClassExpression, DataProperty, Individual, ObjectPropertyExpression, Role},
+    ontology::{
+        ClassExpression, DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI,
+        Individual, Literal, ObjectPropertyExpression, Role,
+        datatypes::OWL2Datatype,
+    },
 };
+use regex::Regex;
 use std::{collections::HashMap, fmt, sync::Arc};
 
 /// Helper function to convert string to Individual
@@ -495,6 +500,10 @@ impl CompletionRuleSet {
                 concept,
                 ClassExpression::DataSomeValuesFrom { .. }
                     | ClassExpression::DataAllValuesFrom { .. }
+                    | ClassExpression::DataHasValue { .. }
+                    | ClassExpression::DataMinCardinality { .. }
+                    | ClassExpression::DataMaxCardinality { .. }
+                    | ClassExpression::DataExactCardinality { .. }
             ),
             CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
             CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
@@ -810,17 +819,155 @@ impl CompletionRuleSet {
                 }
                 ClassExpression::DataAllValuesFrom { property, filler } => {
                     // For all data property values, ensure they satisfy the constraint
-                    // This would typically be handled by checking existing data assertions
-                    // and validating them against the datatype constraint
-
-                    // For now, just record the constraint for later validation
+                    // Record the constraint for later validation
+                    let prop_iri = match property {
+                        DataPropertyExpression::DataProperty(dp) => dp.iri.as_str().to_string(),
+                    };
                     result.universal_constraints.push((
-                        individual,
+                        individual.clone(),
                         property.clone(),
                         ClassExpression::DataAllValuesFrom {
                             property: property.clone(),
                             filler: filler.clone(),
                         },
+                        Arc::clone(dependencies),
+                    ));
+
+                    // Validate existing data assertions against this universal constraint
+                    let assertions_in_result: Vec<_> = result.data_assertions.clone();
+                    for (_ind, val, data_prop, _deps) in &assertions_in_result {
+                        let DataPropertyExpression::DataProperty(dp) = data_prop;
+                        if dp.iri.as_str() == prop_iri {
+                            let literal = Literal::new(val.clone());
+                            if !self.validate_literal_against_range(&literal, filler) {
+                                let clash = ClashInfo {
+                                    clash_type: ClashType::Datatype,
+                                    nodes: vec![application.node.clone()],
+                                    concepts: vec![concept.clone()],
+                                    dependencies: Arc::clone(dependencies),
+                                    explanation: format!(
+                                        "Data assertion value '{}' violates universal constraint on property '{}'",
+                                        val, prop_iri
+                                    ),
+                                };
+                                result.clashes.push(clash);
+                                return Ok(result);
+                            }
+                        }
+                    }
+                }
+                ClassExpression::DataMinCardinality {
+                    property,
+                    cardinality,
+                    filler: _,
+                } => {
+                    // Record minimum cardinality constraint for data properties
+                    let constraint_id = format!("_data_min_card_{}", self.get_fresh_id());
+                    result.data_assertions.push((
+                        individual.clone(),
+                        constraint_id.clone(),
+                        property.clone(),
+                        Arc::clone(dependencies),
+                    ));
+                    result.datatype_constraints.push((
+                        constraint_id,
+                        DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#nonNegativeInteger")),
+                        Arc::clone(dependencies),
+                    ));
+                    result.cardinality_constraints.push((
+                        individual,
+                        ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty {
+                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                            },
+                        ),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        true, // true = min cardinality (at least)
+                        Arc::clone(dependencies),
+                    ));
+                }
+                ClassExpression::DataMaxCardinality {
+                    property,
+                    cardinality,
+                    filler: _,
+                } => {
+                    // Record maximum cardinality constraint for data properties
+                    let constraint_id = format!("_data_max_card_{}", self.get_fresh_id());
+                    result.data_assertions.push((
+                        individual.clone(),
+                        constraint_id.clone(),
+                        property.clone(),
+                        Arc::clone(dependencies),
+                    ));
+                    result.datatype_constraints.push((
+                        constraint_id,
+                        DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#nonNegativeInteger")),
+                        Arc::clone(dependencies),
+                    ));
+                    result.cardinality_constraints.push((
+                        individual,
+                        ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty {
+                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                            },
+                        ),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        false, // false = max cardinality (at most)
+                        Arc::clone(dependencies),
+                    ));
+                }
+                ClassExpression::DataExactCardinality {
+                    property,
+                    cardinality,
+                    filler: _,
+                } => {
+                    // Exact cardinality = min + max
+                    let constraint_id = format!("_data_exact_card_{}", self.get_fresh_id());
+                    result.data_assertions.push((
+                        individual.clone(),
+                        constraint_id.clone(),
+                        property.clone(),
+                        Arc::clone(dependencies),
+                    ));
+                    result.datatype_constraints.push((
+                        constraint_id,
+                        DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#nonNegativeInteger")),
+                        Arc::clone(dependencies),
+                    ));
+                    // Min constraint
+                    result.cardinality_constraints.push((
+                        individual.clone(),
+                        ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty {
+                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                            },
+                        ),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        true,
+                        Arc::clone(dependencies),
+                    ));
+                    // Max constraint
+                    result.cardinality_constraints.push((
+                        individual.clone(),
+                        ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty {
+                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                            },
+                        ),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        false,
                         Arc::clone(dependencies),
                     ));
                 }
@@ -842,7 +989,149 @@ impl CompletionRuleSet {
         Ok(result)
     }
 
+    /// Validate a literal against a data range constraint
+    fn validate_literal_against_range(&self, literal: &Literal, range: &DataRange) -> bool {
+        match range {
+            DataRange::Datatype(iri) => {
+                let dt = OWL2Datatype::from_iri(iri);
+                match dt {
+                    Some(datatype) => datatype.validate_lexical_form(&literal.value).is_ok(),
+                    None => {
+                        if let Some(lit_dt) = &literal.datatype {
+                            lit_dt.as_str() == iri.as_str()
+                        } else {
+                            iri.as_str() == "http://www.w3.org/2001/XMLSchema#string"
+                                || iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#Literal"
+                        }
+                    }
+                }
+            }
+            DataRange::DataComplementOf(inner) => {
+                !self.validate_literal_against_range(literal, inner.as_ref())
+            }
+            DataRange::DataIntersectionOf(ranges) => {
+                ranges
+                    .iter()
+                    .all(|r| self.validate_literal_against_range(literal, r))
+            }
+            DataRange::DataUnionOf(ranges) => {
+                ranges
+                    .iter()
+                    .any(|r| self.validate_literal_against_range(literal, r))
+            }
+            DataRange::DataOneOf(values) => values.contains(literal),
+            DataRange::DatatypeRestriction {
+                datatype: _,
+                restrictions,
+            } => restrictions
+                .iter()
+                .all(|fr| self.check_facet_restriction(literal, fr)),
+        }
+    }
+
+    /// Check a single facet restriction against a literal value
+    fn check_facet_restriction(&self, literal: &Literal, restriction: &FacetRestriction) -> bool {
+        let facet_iri = restriction.facet.as_str();
+        match facet_iri {
+            "http://www.w3.org/2001/XMLSchema#length" => {
+                if let Ok(len) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() == len
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#minLength" => {
+                if let Ok(min) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() >= min
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxLength" => {
+                if let Ok(max) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() <= max
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#pattern" => {
+                Regex::new(&restriction.value.value)
+                    .map(|re| re.is_match(&literal.value))
+                    .unwrap_or(false)
+            }
+            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val >= rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val <= rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val > rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val < rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#totalDigits" => {
+                if let Ok(digits) = restriction.value.value.parse::<usize>() {
+                    let num_digits = literal
+                        .value
+                        .chars()
+                        .filter(|c| c.is_ascii_digit())
+                        .count();
+                    num_digits <= digits
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#fractionDigits" => {
+                if let Ok(digits) = restriction.value.value.parse::<usize>() {
+                    if let Some(dot_pos) = literal.value.find('.') {
+                        literal.value[dot_pos + 1..]
+                            .chars()
+                            .filter(|c| c.is_ascii_digit())
+                            .count()
+                            <= digits
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                }
+            }
+            _ => true,
+        }
+    }
+
     /// Apply concept unfolding
+    #[allow(clippy::only_used_in_recursion)]
     fn apply_unfold_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
 

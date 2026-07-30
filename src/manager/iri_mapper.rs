@@ -232,98 +232,85 @@ impl OntologyIRIMapper for CompositeIRIMapper {
 
 // ── ZipIRIMapper ─────────────────────────────────────────────────────────────
 
-/// Maps ontology IRIs to entries inside a zip archive.
-///
-/// When an ontology IRI matches a registered pattern, the corresponding entry
-/// is extracted from the zip to a temporary file and returned as a `file://` IRI.
-#[cfg(feature = "zip-imports")]
+/// Maps ontology IRIs to document IRIs inside a ZIP archive.
+/// Scans the entries of a ZIP file to build a mapping.
 pub struct ZipIRIMapper {
-    mappings: HashMap<String, (std::path::PathBuf, String)>,
+    /// Maps ontology IRI -> ZIP entry path
+    mappings: HashMap<IRI, String>,
+    /// The path to the ZIP file for extraction
+    zip_path: PathBuf,
 }
 
-#[cfg(feature = "zip-imports")]
 impl ZipIRIMapper {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            mappings: HashMap::new(),
-        }
-    }
+    /// Create a new ZipIRIMapper by scanning a ZIP file.
+    /// Each entry whose name ends with `.owl`, `.rdf`, `.ttl`, `.ofn`, `.owx`,
+    /// or `.omn` is considered a potential ontology file.
+    pub fn new(zip_path: PathBuf) -> Self {
+        let mut mappings = HashMap::new();
 
-    pub fn add_mapping(&mut self, iri_pattern: &str, zip_path: std::path::PathBuf, entry_name: &str) {
-        self.mappings
-            .insert(iri_pattern.to_string(), (zip_path, entry_name.to_string()));
-    }
+        if let Ok(file) = std::fs::File::open(&zip_path) {
+            #[cfg(feature = "zip-imports")]
+            {
+                if let Ok(mut archive) = zip::ZipArchive::new(file) {
+                    let ontology_extensions = [".owl", ".rdf", ".ttl", ".ofn", ".owx", ".omn"];
 
-    pub fn auto_discover(&mut self, zip_path: &std::path::Path) -> crate::Result<()> {
-        let file = std::fs::File::open(zip_path)
-            .map_err(|e| crate::Error::io(format!("Failed to open zip: {e}")))?;
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| crate::Error::io(format!("Failed to read zip: {e}")))?;
-
-        for i in 0..archive.len() {
-            let entry = archive.by_index(i)
-                .map_err(|e| crate::Error::io(format!("Failed to read zip entry: {e}")))?;
-            let name = entry.name().to_string();
-            let lower = name.to_lowercase();
-            if lower.ends_with(".owl") || lower.ends_with(".ttl") || lower.ends_with(".rdf") || lower.ends_with(".omn") {
-                let iri = Self::derive_iri_from_filename(&name);
-                self.add_mapping(&iri, zip_path.to_path_buf(), &name);
-            }
-        }
-        Ok(())
-    }
-
-    fn derive_iri_from_filename(filename: &str) -> String {
-        let name = std::path::Path::new(filename)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(filename);
-        format!("http://example.org/ont/{name}")
-    }
-
-    fn extract_entry(&self, zip_path: &std::path::Path, entry_name: &str) -> crate::Result<std::path::PathBuf> {
-        let file = std::fs::File::open(zip_path)
-            .map_err(|e| crate::Error::io(format!("Failed to open zip: {e}")))?;
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| crate::Error::io(format!("Failed to read zip: {e}")))?;
-
-        let target_dir = std::env::temp_dir().join(format!("oxidowl_zip_{}", std::process::id()));
-        std::fs::create_dir_all(&target_dir)
-            .map_err(|e| crate::Error::io(format!("Failed to create temp dir: {e}")))?;
-
-        for i in 0..archive.len() {
-            let mut entry = archive.by_index(i)
-                .map_err(|e| crate::Error::io(format!("Failed to read zip entry: {e}")))?;
-            if entry.name() == entry_name {
-                let out_path = target_dir.join(entry_name);
-                let mut out = std::fs::File::create(&out_path)
-                    .map_err(|e| crate::Error::io(format!("Failed to create temp file: {e}")))?;
-                std::io::copy(&mut entry, &mut out)
-                    .map_err(|e| crate::Error::io(format!("Failed to extract entry: {e}")))?;
-                return Ok(out_path);
-            }
-        }
-        Err(crate::Error::io(format!("Entry '{entry_name}' not found in zip")))
-    }
-}
-
-#[cfg(feature = "zip-imports")]
-impl OntologyIRIMapper for ZipIRIMapper {
-    fn get_document_iri(&self, ontology_iri: &IRI) -> Option<IRI> {
-        let iri_str = ontology_iri.as_str();
-        for (pattern, (zip_path, entry_name)) in &self.mappings {
-            if iri_str.contains(pattern.as_str()) {
-                if let Ok(temp_path) = self.extract_entry(zip_path, entry_name) {
-                    let file_url = format!("file://{}", temp_path.display());
-                    return Some(IRI::new(&file_url));
+                    for i in 0..archive.len() {
+                        if let Ok(entry) = archive.by_index(i) {
+                            let name = entry.name().to_string();
+                            if ontology_extensions.iter().any(|ext| name.ends_with(ext)) {
+                                let local_name = std::path::Path::new(&name)
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or(&name);
+                                let iri = IRI::new(&format!("http://example.org/{local_name}"));
+                                mappings.insert(iri, name);
+                            }
+                        }
+                    }
                 }
             }
+
+            #[cfg(not(feature = "zip-imports"))]
+            {
+                log::warn!(
+                    "ZipIRIMapper: zip-imports feature not enabled. ZIP scanning is unavailable."
+                );
+                let _ = file;
+            }
+        } else {
+            log::warn!("ZipIRIMapper: ZIP file not found at {}", zip_path.display());
         }
-        None
+
+        ZipIRIMapper { mappings, zip_path }
     }
 
-    fn name(&self) -> &str {
-        "ZipIRIMapper"
+    /// Resolve an ontology IRI to its entry within the ZIP archive.
+    /// Returns the entry name if found.
+    #[must_use]
+    pub fn resolve(&self, ontology_iri: &IRI) -> Option<&str> {
+        self.mappings.get(ontology_iri).map(|s| s.as_str())
+    }
+
+    /// Get the underlying ZIP file path.
+    #[must_use]
+    pub fn zip_path(&self) -> &PathBuf {
+        &self.zip_path
+    }
+
+    /// List all known ontology IRI -> entry mappings.
+    #[must_use]
+    pub fn mappings(&self) -> &HashMap<IRI, String> {
+        &self.mappings
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_zip_iri_mapper_creation() {
+        let mapper = ZipIRIMapper::new(PathBuf::from("nonexistent.zip"));
+        assert!(mapper.mappings().is_empty());
     }
 }

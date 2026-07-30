@@ -111,7 +111,42 @@ impl TableauExecutor {
             // introduced by expansion (e.g. AND-rule adding A and ¬A) are caught.
             Self::detect_clashes(tableau)?;
             if tableau.clash_detector.has_clashes() {
-                debug!("Clash detected, tableau is unsatisfiable");
+                // Try backtracking first before declaring unsatisfiable
+                if let Some(backtrack_point) = tableau.backtrack_stack.pop() {
+                    debug!(
+                        "Clash detected, backtracking to choice point #{} at node {}",
+                        backtrack_point.id, backtrack_point.node_id
+                    );
+
+                    // Restore saved state: truncate nodes and edges
+                    tableau
+                        .nodes
+                        .truncate(backtrack_point.saved_state.node_count);
+                    tableau
+                        .edges
+                        .truncate(backtrack_point.saved_state.edge_count);
+                    tableau.pending_queue = backtrack_point.saved_state.pending_queue;
+
+                    // Apply the alternative choice
+                    if let super::Choice::Disjunction { concepts, .. } = &backtrack_point.choice {
+                        if let Some(label) = concepts.first() {
+                            tableau.add_concept_to_node(
+                                backtrack_point.node_id,
+                                label.clone(),
+                            )?;
+                            debug!(
+                                "Backtracked: applying alternative concept at node {}",
+                                backtrack_point.node_id
+                            );
+                        }
+                    }
+
+                    // Clear clashes since we rewound state
+                    tableau.clash_detector = crate::core::tableau::ClashDetector::new();
+                    continue;
+                }
+
+                debug!("Clash detected, no backtrack points available - unsatisfiable");
                 tableau.state = TableauState::Unsatisfiable;
                 break;
             }
@@ -230,12 +265,16 @@ impl TableauExecutor {
             .parse()
             .map_err(|_| Error::reasoning(format!("Invalid node ID: {}", rule_app.node)))?;
 
-        if let RuleContext::Concept { concept, .. } = &rule_app.context {
+        if let RuleContext::Concept { concept, dependencies } = &rule_app.context {
             match concept {
                 ClassExpression::ObjectUnionOf(disjuncts) => {
+                    if disjuncts.is_empty() {
+                        return Ok(());
+                    }
+
                     // Check if any disjunct is already present
                     if let Some(node) = tableau.nodes.get(node_id) {
-                        for disjunct in disjuncts {
+                        for disjunct in disjuncts.iter() {
                             let label = ConceptLabel::Complex(Box::new(disjunct.clone()));
                             if node.concepts.contains(&label) {
                                 debug!("OR rule: disjunct already present at node {node_id}");
@@ -244,16 +283,41 @@ impl TableauExecutor {
                         }
                     }
 
-                    // Apply the OR-rule: non-deterministically branch on each disjunct.
-                    // The first disjunct is applied immediately; remaining disjuncts are
-                    // queued as alternative branches for backtracking exploration.
-                    if let Some(first_disjunct) = disjuncts.first() {
-                        let concept_label = ConceptLabel::Complex(Box::new(first_disjunct.clone()));
-                        tableau.add_concept_to_node(node_id, concept_label)?;
-                        debug!(
-                            "Applied OR rule at node {node_id}: selected first of {} disjunct(s)",
-                            disjuncts.len()
-                        );
+                    // Apply the first disjunct immediately
+                    let first_disjunct = &disjuncts[0];
+                    let concept_label = ConceptLabel::Complex(Box::new(first_disjunct.clone()));
+                    tableau.add_concept_to_node(node_id, concept_label)?;
+                    debug!(
+                        "Applied OR rule at node {node_id}: selected first of {} disjunct(s)",
+                        disjuncts.len()
+                    );
+
+                    // For each remaining disjunct, create a backtrack point
+                    if disjuncts.len() > 1 {
+                        let saved_state = super::SavedState {
+                            node_count: tableau.nodes.len(),
+                            edge_count: tableau.edges.len(),
+                            pending_queue: tableau.pending_queue.clone(),
+                        };
+
+                        for (idx, disjunct) in disjuncts.iter().enumerate().skip(1) {
+                            let label = ConceptLabel::Complex(Box::new(disjunct.clone()));
+                            let backtrack_point = super::BacktrackPoint {
+                                id: tableau.backtrack_stack.len() + idx,
+                                node_id,
+                                choice: super::Choice::Disjunction {
+                                    concepts: vec![label],
+                                    chosen_index: idx,
+                                },
+                                saved_state: saved_state.clone(),
+                                dependencies: Arc::clone(dependencies),
+                            };
+                            tableau.backtrack_stack.push(backtrack_point);
+                            debug!(
+                                "OR rule at node {node_id}: pushed alternative disjunct {} as backtrack point",
+                                idx
+                            );
+                        }
                     }
                 }
                 _ => {
@@ -760,9 +824,115 @@ impl TableauExecutor {
             } else {
                 false
             }
+        } else if let Some((prop_expr, target_concept)) = Self::extract_role_atom_info(atom) {
+            let successors = Self::get_successors(tableau, node_id, &prop_expr);
+            for succ_id in &successors {
+                if Self::node_has_concept(tableau, *succ_id, &target_concept) {
+                    return true;
+                }
+            }
+            false
         } else {
-            // Role atoms (2 arguments): verify existence of role edges and target concept
-            // at the current node, matching the property + filler pattern
+            false
+        }
+    }
+
+    /// Extract role property expression and target concept from a binary role atom.
+    /// For a role atom R(x, y), the predicate encodes the role and arguments[1] encodes
+    /// the target variable/individual name that we match against the target node's concepts.
+    fn extract_role_atom_info(
+        atom: &crate::dl_clauses::DLAtom,
+    ) -> Option<(crate::ontology::ObjectPropertyExpression, ClassExpression)> {
+        if atom.arguments.len() < 2 {
+            return None;
+        }
+        let role_iri = crate::ontology::IRI::new(&atom.predicate);
+        let prop = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+            crate::ontology::ObjectProperty { iri: role_iri },
+        );
+        let target_concept_iri = crate::ontology::IRI::new(&atom.arguments[1]);
+        let target_concept = ClassExpression::Class(crate::ontology::Class {
+            iri: target_concept_iri,
+        });
+        Some((prop, target_concept))
+    }
+
+    /// Get all successor node IDs reachable from `node_id` via forward and inverse edges
+    /// whose role label matches the given property expression.
+    fn get_successors(
+        tableau: &super::Tableau,
+        node_id: NodeId,
+        prop_expr: &crate::ontology::ObjectPropertyExpression,
+    ) -> Vec<NodeId> {
+        let role_name = match prop_expr {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                prop.iri.as_str().to_string()
+            }
+            crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                prop.iri.as_str().to_string()
+            }
+            crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
+                return Vec::new();
+            }
+        };
+
+        let mut successors = Vec::new();
+
+        // Forward edges: node_id --role--> target
+        if let Some(node) = tableau.nodes.get(node_id) {
+            if let Some(forward) = node.role_successors.get(&role_name) {
+                successors.extend(forward.iter().copied());
+            }
+        }
+
+        // Inverse edges: check all nodes for edges going TO node_id
+        let inv_role_name = format!("inv({role_name})");
+        for edge in &tableau.edges {
+            if edge.to == node_id {
+                let edge_role = edge.role.to_string();
+                if edge_role == role_name || edge_role == inv_role_name {
+                    if !successors.contains(&edge.from) {
+                        successors.push(edge.from);
+                    }
+                }
+                if let super::node::RoleLabel::Inverse(name) = &edge.role {
+                    if name == &role_name {
+                        if !successors.contains(&edge.from) {
+                            successors.push(edge.from);
+                        }
+                    }
+                }
+            }
+        }
+
+        successors
+    }
+
+    /// Check if a node has a given concept in its label set.
+    fn node_has_concept(
+        tableau: &super::Tableau,
+        node_id: NodeId,
+        concept: &ClassExpression,
+    ) -> bool {
+        if let Some(node) = tableau.nodes.get(node_id) {
+            node.concepts.iter().any(|c| match c {
+                ConceptLabel::Complex(expr) => expr.as_ref() == concept,
+                ConceptLabel::Atomic(_) | ConceptLabel::NegatedAtomic(_) => {
+                    if let ClassExpression::Class(target_class) = concept {
+                        match c {
+                            ConceptLabel::Atomic(name) => name == target_class.iri.as_str(),
+                            ConceptLabel::NegatedAtomic(name) => {
+                                name == target_class.iri.as_str()
+                            }
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            })
+        } else {
             false
         }
     }

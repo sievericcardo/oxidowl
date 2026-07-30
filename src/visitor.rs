@@ -833,3 +833,65 @@ impl OntologyVisitor<std::collections::HashSet<crate::ontology::Class>> for Clas
         self.classes.clone()
     }
 }
+
+/// Visitor interface for OntologyChange variants.
+pub trait OntologyChangeVisitor {
+    fn visit_add_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
+    fn visit_remove_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
+    fn visit_add_import(&mut self, _ontology_iri: &crate::ontology::IRI, _import: &crate::import::ImportDeclaration) {}
+    fn visit_remove_import(&mut self, _ontology_iri: &crate::ontology::IRI, _import: &crate::import::ImportDeclaration) {}
+    fn visit_add_ontology_annotation(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _annotation: &Annotation,
+    ) {
+    }
+    fn visit_remove_ontology_annotation(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _annotation: &Annotation,
+    ) {
+    }
+    fn visit_set_ontology_id(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _new_iri: &crate::ontology::IRI,
+        _new_version_iri: &Option<crate::ontology::IRI>,
+    ) {
+    }
+}
+
+/// Dispatch an OntologyChange to the appropriate visitor method.
+pub fn dispatch_change(change: &crate::manager::changes::OntologyChange, visitor: &mut dyn OntologyChangeVisitor) {
+    match change {
+        crate::manager::changes::OntologyChange::AddAxiom {
+            ontology_iri,
+            axiom,
+        } => visitor.visit_add_axiom(ontology_iri, axiom),
+        crate::manager::changes::OntologyChange::RemoveAxiom {
+            ontology_iri,
+            axiom,
+        } => visitor.visit_remove_axiom(ontology_iri, axiom),
+        crate::manager::changes::OntologyChange::AddImport {
+            ontology_iri,
+            import,
+        } => visitor.visit_add_import(ontology_iri, import),
+        crate::manager::changes::OntologyChange::RemoveImport {
+            ontology_iri,
+            import,
+        } => visitor.visit_remove_import(ontology_iri, import),
+        crate::manager::changes::OntologyChange::AddOntologyAnnotation {
+            ontology_iri,
+            annotation,
+        } => visitor.visit_add_ontology_annotation(ontology_iri, annotation),
+        crate::manager::changes::OntologyChange::RemoveOntologyAnnotation {
+            ontology_iri,
+            annotation,
+        } => visitor.visit_remove_ontology_annotation(ontology_iri, annotation),
+        crate::manager::changes::OntologyChange::SetOntologyId {
+            ontology_iri,
+            new_iri,
+            new_version_iri,
+        } => visitor.visit_set_ontology_id(ontology_iri, new_iri, new_version_iri),
+    }
+}

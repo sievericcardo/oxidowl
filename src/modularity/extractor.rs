@@ -36,7 +36,6 @@ impl Default for ModuleExtractorConfig {
 /// Extracts a module of an ontology for a given signature — a subset of
 /// axioms that preserves all entailments over the signature.
 pub struct ModuleExtractor {
-    #[allow(dead_code)]
     locality_evaluator: Box<dyn LocalityEvaluator>,
     config: ModuleExtractorConfig,
 }
@@ -75,13 +74,8 @@ impl ModuleExtractor {
         signature: &HashSet<crate::ontology::IRI>,
     ) -> Ontology {
         match self.config.module_type {
-            ModuleType::UpperBound => {
-                let evaluator = SyntacticLocalityEvaluator::new(LocalityClass::Bottom);
-                self.extract_with_evaluator(ontology, signature, &evaluator)
-            }
-            ModuleType::LowerBound => {
-                let evaluator = SyntacticLocalityEvaluator::new(LocalityClass::Top);
-                self.extract_with_evaluator(ontology, signature, &evaluator)
+            ModuleType::UpperBound | ModuleType::LowerBound => {
+                self.extract_with_evaluator(ontology, signature, self.locality_evaluator.as_ref())
             }
             ModuleType::Star => self.extract_star(ontology, signature),
         }

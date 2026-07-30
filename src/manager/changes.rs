@@ -3,6 +3,7 @@
 use crate::ontology::axioms::AxiomId;
 use crate::ontology::axioms::{Axiom, AxiomTrait};
 use crate::ontology::{Annotation, IRI};
+use serde::{Deserialize, Serialize};
 
 /// A document IRI or target for saving.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -213,5 +214,158 @@ impl OntologyChange {
                 new_version_iri,
             },
         }
+    }
+}
+
+// ── ChangeRecord (serializable change history) ───────────────────────────────
+
+/// Serializable record of a single ontology change, preserving all information
+/// needed to replay or audit the change. Models OWL API v5's OWLOntologyChangeRecord.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangeRecord {
+    /// The type of change (e.g. "AddAxiom", "RemoveAxiom")
+    pub change_type: String,
+    /// The IRI of the ontology that was changed
+    pub ontology_iri: String,
+    /// The IRI of the axiom that was added or removed (if applicable)
+    pub axiom_iri: Option<String>,
+    /// The axiom in debug-format string (for auditing)
+    pub axiom_debug: Option<String>,
+    /// Timestamp of the change (milliseconds since epoch)
+    pub timestamp_ms: u64,
+    /// Sequence number within the history
+    pub sequence_number: u64,
+}
+
+impl ChangeRecord {
+    /// Create a ChangeRecord from an OntologyChange.
+    #[must_use]
+    pub fn from_change(change: &OntologyChange, sequence_number: u64) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        match change {
+            OntologyChange::AddAxiom {
+                ontology_iri,
+                axiom,
+            } => ChangeRecord {
+                change_type: "AddAxiom".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: Some(axiom.axiom_id().to_string()),
+                axiom_debug: Some(format!("{axiom:?}")),
+                timestamp_ms: now,
+                sequence_number,
+            },
+            OntologyChange::RemoveAxiom {
+                ontology_iri,
+                axiom,
+            } => ChangeRecord {
+                change_type: "RemoveAxiom".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: Some(axiom.axiom_id().to_string()),
+                axiom_debug: Some(format!("{axiom:?}")),
+                timestamp_ms: now,
+                sequence_number,
+            },
+            OntologyChange::AddImport {
+                ontology_iri,
+                import,
+            } => ChangeRecord {
+                change_type: "AddImport".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: None,
+                axiom_debug: Some(format!("{import:?}")),
+                timestamp_ms: now,
+                sequence_number,
+            },
+            OntologyChange::RemoveImport {
+                ontology_iri,
+                import,
+            } => ChangeRecord {
+                change_type: "RemoveImport".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: None,
+                axiom_debug: Some(format!("{import:?}")),
+                timestamp_ms: now,
+                sequence_number,
+            },
+            OntologyChange::AddOntologyAnnotation {
+                ontology_iri,
+                annotation,
+            } => ChangeRecord {
+                change_type: "AddOntologyAnnotation".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: None,
+                axiom_debug: Some(format!("{annotation:?}")),
+                timestamp_ms: now,
+                sequence_number,
+            },
+            OntologyChange::RemoveOntologyAnnotation {
+                ontology_iri,
+                annotation,
+            } => ChangeRecord {
+                change_type: "RemoveOntologyAnnotation".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: None,
+                axiom_debug: Some(format!("{annotation:?}")),
+                timestamp_ms: now,
+                sequence_number,
+            },
+            OntologyChange::SetOntologyId {
+                ontology_iri,
+                new_iri,
+                new_version_iri,
+            } => ChangeRecord {
+                change_type: "SetOntologyId".to_string(),
+                ontology_iri: ontology_iri.to_string(),
+                axiom_iri: None,
+                axiom_debug: Some(format!(
+                    "new_iri={new_iri}, version={new_version_iri:?}"
+                )),
+                timestamp_ms: now,
+                sequence_number,
+            },
+        }
+    }
+}
+
+/// Serializable audit log of all changes applied to a manager.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ChangeAuditLog {
+    pub records: Vec<ChangeRecord>,
+    pub next_sequence: u64,
+}
+
+impl ChangeAuditLog {
+    #[must_use]
+    pub fn new() -> Self {
+        ChangeAuditLog {
+            records: vec![],
+            next_sequence: 0,
+        }
+    }
+
+    pub fn record(&mut self, changes: &[OntologyChange]) {
+        for change in changes {
+            self.records
+                .push(ChangeRecord::from_change(change, self.next_sequence));
+            self.next_sequence += 1;
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.records.clear();
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
     }
 }
