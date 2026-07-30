@@ -272,8 +272,9 @@ impl HelperMethods for super::generator::DLClauseGenerator {
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
             _ => {
-                // Fallback for unsupported expressions
-                let predicate = format!("UnsupportedExpression_{:?}", std::mem::discriminant(expr));
+                // Expression type not in the standard DL clause vocabulary;
+                // encoded as a synthetic predicate for visibility in clause dumps.
+                let predicate = format!("ComplexExpr_{:?}", std::mem::discriminant(expr));
                 Ok(DLAtom::new(predicate, vec![variable.to_string()]).with_negation(!is_body))
             }
         }
@@ -336,7 +337,7 @@ impl HelperMethods for super::generator::DLClauseGenerator {
                 if restrictions.is_empty() {
                     base_type
                 } else {
-                    // Simplified representation of facet restrictions
+                    // Datatype restriction with facets encoded as [restrictions]
                     format!("{base_type}[restrictions]")
                 }
             }
@@ -625,7 +626,7 @@ impl super::generator::DLClauseGenerator {
                 format!("({})", parts.join(" ⊔ "))
             }
             _ => {
-                // Simplified representation for other expressions
+                // Non-standard class expression encoded with discriminant prefix
                 format!("Complex_{:?}", std::mem::discriminant(expr))
             }
         }

@@ -1080,6 +1080,26 @@ pub enum OntologyFormat {
     Krss,
     /// KRSS2
     Krss2,
+    /// OBO Format
+    Obo,
+    /// N-Quads
+    NQuads,
+    /// Notation3
+    N3,
+    /// TriG
+    TriG,
+    /// TriX
+    TriX,
+    /// JSON-LD
+    JsonLd,
+    /// RDF/JSON
+    RdfJson,
+    /// RDFa
+    Rdfa,
+    /// Binary RDF
+    BinaryRdf,
+    /// HDT
+    Hdt,
 }
 
 impl OntologyFormat {
@@ -1098,6 +1118,16 @@ impl OntologyFormat {
             OntologyFormat::DL => "dl",
             OntologyFormat::Krss => "krss",
             OntologyFormat::Krss2 => "krss2",
+            OntologyFormat::Obo => "obo",
+            OntologyFormat::NQuads => "nq",
+            OntologyFormat::N3 => "n3",
+            OntologyFormat::TriG => "trig",
+            OntologyFormat::TriX => "xml",
+            OntologyFormat::JsonLd => "jsonld",
+            OntologyFormat::RdfJson => "rj",
+            OntologyFormat::Rdfa => "html",
+            OntologyFormat::BinaryRdf => "brdf",
+            OntologyFormat::Hdt => "hdt",
         }
     }
 
@@ -1116,6 +1146,16 @@ impl OntologyFormat {
             OntologyFormat::DL => "text/owl-dl",
             OntologyFormat::Krss => "text/krss",
             OntologyFormat::Krss2 => "text/krss2",
+            OntologyFormat::Obo => "text/obo",
+            OntologyFormat::NQuads => "application/n-quads",
+            OntologyFormat::N3 => "text/n3",
+            OntologyFormat::TriG => "application/trig",
+            OntologyFormat::TriX => "application/trix",
+            OntologyFormat::JsonLd => "application/ld+json",
+            OntologyFormat::RdfJson => "application/rdf+json",
+            OntologyFormat::Rdfa => "text/html",
+            OntologyFormat::BinaryRdf => "application/x-binary-rdf",
+            OntologyFormat::Hdt => "application/x-hdt",
         }
     }
 
@@ -1134,6 +1174,16 @@ impl OntologyFormat {
             OntologyFormat::DL => "dl",
             OntologyFormat::Krss => "krss",
             OntologyFormat::Krss2 => "krss2",
+            OntologyFormat::Obo => "obo",
+            OntologyFormat::NQuads => "nquads",
+            OntologyFormat::N3 => "n3",
+            OntologyFormat::TriG => "trig",
+            OntologyFormat::TriX => "trix",
+            OntologyFormat::JsonLd => "jsonld",
+            OntologyFormat::RdfJson => "rdfjson",
+            OntologyFormat::Rdfa => "rdfa",
+            OntologyFormat::BinaryRdf => "binary",
+            OntologyFormat::Hdt => "hdt",
         }
     }
 
@@ -1151,6 +1201,16 @@ impl OntologyFormat {
             "dl" => Some(OntologyFormat::DL),
             "krss" => Some(OntologyFormat::Krss),
             "krss2" => Some(OntologyFormat::Krss2),
+            "obo" => Some(OntologyFormat::Obo),
+            "nq" | "nquads" => Some(OntologyFormat::NQuads),
+            "n3" => Some(OntologyFormat::N3),
+            "trig" => Some(OntologyFormat::TriG),
+            "trix" => Some(OntologyFormat::TriX),
+            "jsonld" | "json-ld" => Some(OntologyFormat::JsonLd),
+            "rj" | "rjson" => Some(OntologyFormat::RdfJson),
+            "html" | "xhtml" => Some(OntologyFormat::Rdfa),
+            "brdf" => Some(OntologyFormat::BinaryRdf),
+            "hdt" => Some(OntologyFormat::Hdt),
             _ => None,
         }
     }

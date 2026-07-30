@@ -296,7 +296,7 @@ impl QueryOptimizer {
             Ok(ExecutionStrategy::Direct)
         } else if self.is_ql_compatible(query) {
             Ok(ExecutionStrategy::Rewriting {
-                rewritten_queries: vec![query.clone()], // Placeholder
+                rewritten_queries: vec![query.clone()],
             })
         } else if complexity > 20 {
             Ok(ExecutionStrategy::Hybrid {

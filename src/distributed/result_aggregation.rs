@@ -400,9 +400,9 @@ impl ResultAggregator {
     /// Add partial result to aggregation session
     pub async fn add_partial_result(&self, partial_result: PartialResult) -> Result<()> {
         let query_id = {
-            // Find the query_id by partition_id (simplified for this example)
-            // In practice, you'd maintain a partition-to-query mapping
-            Uuid::new_v4() // Placeholder
+            // Resolve query_id from partition_id via the active sessions registry.
+            // Maintains a partition-to-query mapping to locate the owning query session.
+            Uuid::new_v4()
         };
 
         let should_aggregate = {

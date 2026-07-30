@@ -5,6 +5,11 @@
 
 #![allow(dead_code)]
 
+pub mod blackbox;
+pub mod converter;
+pub mod generator;
+pub mod hst;
+
 use crate::{
     Result,
     core::tableau::NodeId,

@@ -258,7 +258,9 @@ impl ImportResolver {
     }
 
     fn extract_imports(&self, content: &str) -> Result<Vec<String>> {
-        // Simplified import extraction - would use proper parser
+        // Extract owl:imports declarations via pattern matching on RDF/Turtle syntax.
+        // For full precision, a proper RDF parser (e.g., horned-owl) should be used
+        // to extract import triples rather than line-based pattern matching.
         let mut imports = Vec::new();
 
         // Look for owl:imports patterns

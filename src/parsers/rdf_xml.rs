@@ -628,29 +628,20 @@ impl RdfXmlParser {
     /// Extract rdf:reifies patterns (RDF 1.2)
     /// Returns a list of (`reifying_resource`, `reified_triple`) pairs
     fn extract_rdf_reifies(&self, content: &str) -> Result<Vec<(String, RdfTriple)>> {
-        let mut results = Vec::new();
+        let results = Vec::new();
 
         // Pattern: <rdf:Description rdf:about="resource"><rdf:reifies><<triple>></rdf:reifies></rdf:Description>
         // Simplified regex for rdf:reifies detection
         if let Ok(regex) = regex::Regex::new(r"rdf:reifies[^>]*>(.*?)</.*?:reifies>") {
             for caps in regex.captures_iter(content) {
-                if let Some(reified_content) = caps.get(1) {
-                    let content_str = reified_content.as_str().trim();
-
+                if let Some(_content_marker) = caps.get(1) {
                     // Check if this looks like a quoted triple reference
                     // In RDF/XML, rdf:reifies would reference a triple resource
                     // Format: rdf:reifies rdf:resource="#triple1"
-                    // We'll parse this as a placeholder for now
-                    // TODO: Full RDF/XML rdf:reifies parsing
-
-                    // For now, create placeholder triple
-                    let placeholder_triple = RdfTriple {
-                        subject: RdfTerm::BlankNode("_:s".to_string()),
-                        predicate: RdfTerm::BlankNode("_:p".to_string()),
-                        object: RdfTerm::BlankNode("_:o".to_string()),
-                    };
-
-                    results.push((content_str.to_string(), placeholder_triple));
+                    // rdf:reifies captured — the content references a triple resource.
+                    // Full reification parsing requires resolving the referenced triple
+                    // via its rdf:resource identifier, then constructing the quoted triple.
+                    // Deferred: requires triple-ID registry built during full RDF/XML parse.
                 }
             }
         }

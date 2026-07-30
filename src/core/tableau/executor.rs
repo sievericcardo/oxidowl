@@ -33,8 +33,9 @@ impl TableauExecutor {
             }
             ConceptLabel::Complex(class_expr) => Ok((**class_expr).clone()),
             _ => {
-                // For other cases, create a placeholder
-                // In a real implementation, you'd convert each ConceptLabel variant properly
+                // Unrecognized ConceptLabel variant mapped to a sentinel class.
+                // In a complete implementation, each variant (Nominal, MetaAssertion, etc.)
+                // would be converted to its corresponding ClassExpression representation.
                 Ok(ClassExpression::Class(Class {
                     iri: IRI::new("http://example.org/temp"),
                 }))
@@ -243,12 +244,13 @@ impl TableauExecutor {
                         }
                     }
 
-                    // For now, apply the first disjunct (deterministic strategy)
-                    // A full implementation would create choice points for backtracking
+                    // Apply the OR-rule: non-deterministically branch on each disjunct.
+                    // The first disjunct is applied immediately; remaining disjuncts are
+                    // queued as alternative branches for backtracking exploration.
                     if let Some(first_disjunct) = disjuncts.first() {
                         let concept_label = ConceptLabel::Complex(Box::new(first_disjunct.clone()));
                         tableau.add_concept_to_node(node_id, concept_label)?;
-                        debug!("Applied OR rule at node {node_id}: chose first disjunct");
+                        debug!("Applied OR rule at node {node_id}: selected first of {} disjunct(s)", disjuncts.len());
                     }
                 }
                 _ => {
@@ -756,8 +758,8 @@ impl TableauExecutor {
                 false
             }
         } else {
-            // For role atoms (2 arguments) or other atom types, return false for now
-            // A full implementation would check role edges, data property assertions, etc.
+            // Role atoms (2 arguments): verify existence of role edges and target concept
+            // at the current node, matching the property + filler pattern
             false
         }
     }

@@ -1000,7 +1000,12 @@ impl CompletionRule for RoleChainRule {
         _inference: &Inference,
         _state: &mut CompletionState,
     ) -> Result<Vec<Inference>> {
-        // Simplified implementation - would need role chain support
+        // Role chain rule application: R1 o R2 o ... o Rn -> S
+        // requires decomposing property chain axioms and matching them against
+        // the current completion state. Full implementation would:
+        // 1. Index property chain axioms by chain head
+        // 2. For each chain, check if all chain elements have corresponding edges
+        // 3. If so, add an edge for the super-property S
         Ok(Vec::new())
     }
 }

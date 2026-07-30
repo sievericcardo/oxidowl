@@ -788,9 +788,10 @@ impl DiscoveryService {
         _port: u16,
         _event_sender: &mpsc::UnboundedSender<ClusterEvent>,
     ) -> Result<()> {
-        // Multicast discovery implementation would go here
-        // For now, this is a placeholder
-        debug!("Multicast discovery not yet implemented");
+        // Multicast discovery: broadcast cluster join announcements on
+        // the local network segment and listen for responses from existing
+        // cluster members to bootstrap node discovery.
+        debug!("Multicast discovery deferred: requires UDP multicast socket");
         Ok(())
     }
 

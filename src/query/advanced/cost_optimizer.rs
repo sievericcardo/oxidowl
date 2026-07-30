@@ -2295,18 +2295,55 @@ impl AdvancedQueryRewriter {
     }
 
     fn eliminate_redundant_joins(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
-        // Simplified implementation - would do actual join analysis
-        query.clone()
+        let mut atoms = query.body_atoms.clone();
+        // Remove duplicate atoms by structural comparison
+        let mut seen = std::collections::HashSet::new();
+        atoms.retain(|atom| {
+            let key = format!("{atom:?}");
+            seen.insert(key)
+        });
+        ConjunctiveQuery { body_atoms: atoms, ..query.clone() }
     }
 
     fn push_filters_down(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
-        // Simplified implementation - would reorder atoms
-        query.clone()
+        let mut atoms = query.body_atoms.clone();
+        // Sort: class atoms first (selective), role atoms last (expensive joins)
+        atoms.sort_by_key(|atom| match atom {
+            QueryAtom::ClassAtom { .. } => 0u8,
+            QueryAtom::SameIndividualAtom { .. } => 0,
+            QueryAtom::DataPropertyAtom { .. } => 1,
+            QueryAtom::ObjectPropertyAtom { .. } => 2,
+            _ => 3,
+        });
+        ConjunctiveQuery { body_atoms: atoms, ..query.clone() }
     }
 
     fn simplify_complex_expressions(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
-        // Simplified implementation - would simplify class expressions
-        query.clone()
+        let atoms = query.body_atoms.clone();
+        let simplified: Vec<_> = atoms.into_iter().map(|atom| {
+            match atom {
+                QueryAtom::ClassAtom { variable, class_expression } => {
+                    let simplified_ce = Self::simplify_ce(&class_expression);
+                    QueryAtom::ClassAtom { variable, class_expression: simplified_ce }
+                }
+                other => other,
+            }
+        }).collect();
+        ConjunctiveQuery { body_atoms: simplified, ..query.clone() }
+    }
+
+    fn simplify_ce(ce: &crate::ontology::ClassExpression) -> crate::ontology::ClassExpression {
+        match ce {
+            crate::ontology::ClassExpression::ObjectComplementOf(inner) => {
+                match inner.as_ref() {
+                    crate::ontology::ClassExpression::ObjectComplementOf(inner2) => {
+                        (**inner2).clone()
+                    }
+                    _ => ce.clone(),
+                }
+            }
+            _ => ce.clone(),
+        }
     }
 
     fn estimate_query_improvement(

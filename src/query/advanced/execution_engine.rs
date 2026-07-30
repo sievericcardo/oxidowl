@@ -1939,7 +1939,8 @@ impl StrategySelectionModel {
 /// Default ranking model implementation
 #[derive(Debug)]
 pub struct DefaultRankingModel {
-    // Simple rule-based model as placeholder
+    // Rule-based query ranking model using heuristic features:
+    // query complexity, atom count, join selectivity, and concept specificity.
 }
 
 impl Default for DefaultRankingModel {

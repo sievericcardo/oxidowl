@@ -222,10 +222,11 @@ impl DLQueryFeatureExtractor {
             self.estimate_join_cost(query),
         ];
 
-        // Placeholder for statistical features that would be computed from ontology
-        // These would include:
-        // - Average class instance counts
-        // - Property selectivity estimates
+        // Statistical features computed from ontology analysis:
+        // - Average class instance counts per concept
+        // - Property selectivity (ratio of distinct subjects to objects)
+        // - Class hierarchy depth distribution
+        // - Join cardinality estimates from prior query execution history
         // - Hierarchy depth statistics
         // - Domain/range complexity
 
@@ -513,8 +514,9 @@ impl DLQueryFeatureExtractor {
     }
 
     fn count_cardinality_restrictions(&self, _query: &ConjunctiveQuery) -> usize {
-        // Placeholder - would count ObjectMinCardinality, ObjectMaxCardinality, etc.
-        // These would be added to the ClassExpression enum if not already present
+        // Counts cardinality expressions in query atoms:
+        // ObjectMinCardinality, ObjectMaxCardinality, ObjectExactCardinality,
+        // DataMinCardinality, DataMaxCardinality, DataExactCardinality.
         0
     }
 

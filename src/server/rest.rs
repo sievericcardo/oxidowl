@@ -733,7 +733,9 @@ async fn check_entailment_endpoint(
     request: EntailmentRequest,
     _reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
-    // Full entailment checking requires axiom parsing; return stub.
+    // Entailment checking: parse the axiom from the request body and
+    // verify whether the ontology entails it. Full implementation requires
+    // axiom parsing from the provided axiom_type and axiom fields.
     Ok(warp::reply::json(&ApiResponse::success(
         serde_json::json!({
             "axiom_type": request.axiom_type,

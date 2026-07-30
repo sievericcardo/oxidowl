@@ -1,13 +1,12 @@
 #[cfg(test)]
 mod phase2_tests {
     use crate::ontology::{
-        Class, ClassExpression, DataProperty, DataPropertyExpression, DataRange, Individual,
-        Literal, ObjectProperty, ObjectPropertyExpression, Ontology, OntologyFormat, OntologyRef, IRI,
+        Class, ClassExpression, Individual, ObjectProperty, ObjectPropertyExpression, Ontology, OntologyFormat, IRI,
     };
     use crate::ontology::axioms::{
-        Axiom, ClassAssertionAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
-        EquivalentClassesAxiom, ObjectPropertyAssertionAxiom, SameIndividualAxiom,
-        SubClassOfAxiom, SubObjectPropertyOfAxiom, TransitiveObjectPropertyAxiom,
+        Axiom, ClassAssertionAxiom,
+        EquivalentClassesAxiom,
+        SubClassOfAxiom,
     };
     use crate::ontology::individuals::NamedIndividual;
     use crate::parsers::{

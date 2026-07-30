@@ -114,26 +114,32 @@ pub mod cache_lockfree;
 pub mod cache_strategies;
 pub mod config;
 pub mod core;
+pub mod debug;
 pub mod dl_clauses;
 pub mod error;
 pub mod factory;
 pub mod import;
 pub mod manager;
+pub mod modularity;
 pub mod performance;
 pub mod prelude;
 pub mod profiling;
 pub mod adapter;
 pub mod distributed;
+pub mod inference;
 pub mod ontology;
 pub mod parsers;
 pub mod profiles;
 pub mod query;
 pub mod reasoning;
 pub mod reasoner_api;
+pub mod searcher;
 pub mod semantics;
 pub mod swrl;
+pub mod transform;
 pub mod validation;
 pub mod visitor;
+pub mod walk;
 
 // Server interfaces (REST API, OWLlink, SPARQL)
 #[cfg(feature = "server")]
@@ -223,6 +229,44 @@ pub use crate::reasoner_api::{
     ReasonerProgressMonitor,
 };
 pub use crate::reasoner_api::structural::{StructuralReasoner, StructuralReasonerFactory};
+pub use crate::searcher::{EntityIndex, EntitySearcher};
+pub use crate::transform::{OWLObjectTransformer, OWLEntityRenamer, OWLEntityRemover};
+pub use crate::transform::nnf::NNFConverter;
+pub use crate::transform::expressivity::{DLExpressivity, DLExpressivityChecker};
+pub use crate::walk::{OWLObjectVisitor, OntologyWalker, StructureWalker};
+pub use crate::walk::merge::OWLOntologyMerger;
+pub use crate::inference::metrics::{OntologyMetrics, OwlMetric};
+pub use crate::inference::InferredAxiomGenerator;
+pub use crate::inference::{
+    InferredSubClassOfAxiomGenerator, InferredEquivalentClassAxiomGenerator,
+    InferredDisjointClassesAxiomGenerator, InferredClassAssertionAxiomGenerator,
+    InferredSubObjectPropertyAxiomGenerator, InferredSubDataPropertyAxiomGenerator,
+};
+pub use crate::explanation::generator::{Explanation as Justification, ExplanationGenerator};
+pub use crate::explanation::blackbox::{BlackBoxExplanation, BlackBoxConfig};
+pub use crate::explanation::hst::{HSTExplanationGenerator, HSTConfig};
+pub use crate::explanation::converter::SatisfiabilityConverter;
+pub use crate::debug::{OWLDebugger, BlackBoxOWLDebugger, DebuggerConfig};
+pub use crate::debug::definitions::DefinitionTracker;
+pub use crate::modularity::decomposition::{Atom, AtomicDecomposition};
+pub use crate::modularity::decomposer::{AtomicDecomposer, DecomposerConfig};
+pub use crate::modularity::locality::{LocalityEvaluator, SyntacticLocalityEvaluator, LocalityClass};
+pub use crate::modularity::extractor::{ModuleExtractor, ModuleExtractorConfig, ModuleType};
+pub use crate::modularity::segmenter::OntologySegmenter;
+pub use crate::parsers::obo::{OBOParser, OBOParserConfig, OBOWriter, OBOOutputConfig, Obo2Owl, Owl2Obo};
+pub use crate::parsers::rio::{
+    nquads::{NQuadsParser, NQuadsRenderer},
+    n3::{N3Parser, N3Renderer},
+    trig::{TriGParser, TriGRenderer},
+    trix::{TriXParser, TriXRenderer},
+    jsonld::{JsonLdParser, JsonLdRenderer},
+    rdf_json::{RdfJsonParser, RdfJsonRenderer},
+    rdfa::RDFaParser,
+    binary_rdf::{BinaryRdfParser, BinaryRdfRenderer},
+    hdt::{HDTParser, HDTRenderer},
+};
+pub use crate::ontology::datatypes::{DatatypeCategory, OWLFacet};
+pub use crate::ontology::vocabulary::{Namespaces, PrefixManager};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = "Oxidowl";

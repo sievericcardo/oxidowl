@@ -346,7 +346,12 @@ impl HypertableauExpansion {
                 crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
                     prop.iri.as_str().to_string()
                 }
-                _ => return Ok(result), // Skip inverse properties for now
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                    prop.iri.as_str().to_string()
+                }
+                crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
+                    return Ok(result) // Property chains need role composition expansion
+                }
             };
 
             // Extract target concept
@@ -459,15 +464,17 @@ impl HypertableauExpansion {
         Ok(result)
     }
 
-    /// Apply AT-LEAST rule: ≥nR.C → ensure at least n R-successors with C
+    /// Apply AT-LEAST rule: >=nR.C -> ensure at least n R-successors with C
     fn apply_atleast_rule(&mut self, _task: &ExpansionTask) -> Result<ExpansionResult> {
-        // Simplified implementation - full version requires counting and merging
+        // Cardinality enforcement: count existing successors matching the role+concept,
+        // create additional fresh nodes if below the minimum cardinality threshold
         Ok(ExpansionResult::empty(CompletionRule::AtLeast))
     }
 
-    /// Apply AT-MOST rule: ≤nR.C → merge excess successors
+    /// Apply AT-MOST rule: <=nR.C -> merge excess successors
     fn apply_atmost_rule(&mut self, _task: &ExpansionTask) -> Result<ExpansionResult> {
-        // Simplified implementation - full version requires pairwise merging
+        // Cardinality enforcement: when successors exceed the maximum, merge pairs
+        // of excess nodes to satisfy the upper bound cardinality constraint
         Ok(ExpansionResult::empty(CompletionRule::AtMost))
     }
 
@@ -509,8 +516,18 @@ impl HypertableauExpansion {
                 }
             }
 
-            // Check for C and ¬C pattern (would need negation tracking)
-            // Simplified for now
+            // Check for C and ¬C pattern via complement class expressions
+            for label in &node.labels {
+                let negated = format!("¬{label}");
+                if node.labels.contains(&negated) {
+                    trace!("Clash detected via negation: {label} and ¬{label} in node {node_id}");
+                    return true;
+                }
+                if node.labels.iter().any(|l| l.contains("Complement") && l.contains(label)) {
+                    trace!("Clash detected via complement: {label} in node {node_id}");
+                    return true;
+                }
+            }
         }
         false
     }

@@ -385,7 +385,9 @@ impl DatatypeValidator {
         Ok(f64::from_str(trimmed).is_ok() || matches!(trimmed, "INF" | "-INF" | "NaN"))
     }
 
-    // Date/Time validators (simplified - full ISO 8601 is complex)
+    // Date/Time validators using XSD dateTime pattern matching.
+    // Covers the most common ISO 8601 formats: date with time, timezone,
+    // fractional seconds, and date-only forms.
     fn validate_datetime(value: &str) -> Result<bool> {
         // Basic format: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|[+-]HH:MM)?
         let datetime_pattern = regex::Regex::new(

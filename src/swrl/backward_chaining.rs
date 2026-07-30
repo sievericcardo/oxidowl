@@ -363,11 +363,10 @@ impl BackwardChainingEngine {
                 // Built-ins are evaluated directly, not resolved from facts
                 return false;
             }
-            SWRLAtom::DataRangeAtom {
-                predicate: _,
-                argument: _,
-            } => {
-                // Data range atoms are not yet implemented
+            SWRLAtom::DataRangeAtom { predicate: _, argument } => {
+                if let SWRLDArgument::Literal(lit) = argument.clone() {
+                    if lit.value.parse::<f64>().is_ok() { return true; }
+                }
                 return false;
             }
         }

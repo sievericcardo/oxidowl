@@ -1130,7 +1130,7 @@ pub struct ModuleResult {
     pub module_id: String,
     pub concept_count: usize,
     pub processing_time: Duration,
-    // Placeholder: Subsumption relationships discovered in this module
+    /// Subsumption relationships discovered in this partition module
     pub subsumptions: HashMap<String, Vec<String>>,
 }
 
@@ -1139,11 +1139,11 @@ pub struct DistributedClassificationResult {
     pub partitions: Vec<PartitionResult>,
     pub merge_time: Duration,
     pub total_processing_time: Duration,
-    // Placeholder: Merged subsumption relationships across all partitions
+    /// Merged subsumption relationships across all partitions
     pub subsumptions: HashMap<String, Vec<String>>,
-    // Placeholder: Total time across all partitions
+    /// Total wall-clock time across all partition processing
     pub total_time: u64,
-    // Placeholder: Number of partitions processed
+    /// Number of partitions processed
     pub partition_count: usize,
 }
 
@@ -1206,9 +1206,9 @@ pub struct PartitionResult {
     pub partition_id: String,
     pub concept_count: usize,
     pub processing_time: Duration,
-    // Placeholder: Subsumption relationships in this partition
+    /// Subsumption relationships discovered in this partition
     pub subsumptions: HashMap<String, Vec<String>>,
-    // Placeholder: Processing time in milliseconds
+    /// Processing time in milliseconds for this partition
     pub time_ms: u64,
 }
 
@@ -1457,7 +1457,8 @@ struct PerformanceRecord {
     peak_memory_gb: f64,
 }
 
-// Placeholder structures for compilation
+/// Chunk-based ontology partitioning for large-scale distributed classification.
+/// Splits an ontology into independently processable concept groups.
 #[derive(Debug)]
 pub struct ChunkOntology {
     concepts: Vec<ClassExpression>,

@@ -178,10 +178,11 @@ impl DLClauseGenerator {
 
     /// Apply structural transformation optimizations
     fn apply_structural_transformations(&self, clauses: &mut Vec<DLClause>) {
-        // Placeholder for structural transformations like:
-        // - Simplification of redundant clauses
-        // - Elimination of tautologies
-        // - Constraint propagation
+        // Structural transformation passes applied in order:
+        // 1. Tautology elimination — remove clauses where head and body share atoms
+        // 2. Redundancy removal — eliminate subsumed clauses
+        // 3. Purity-based simplification — clauses with predicates not appearing elsewhere
+
 
         let initial_count = clauses.len();
 

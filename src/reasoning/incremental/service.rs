@@ -459,8 +459,9 @@ impl IncrementalReasoningService {
         query: &ConjunctiveQuery,
         delta: &QueryDelta,
     ) -> Result<Vec<HashMap<String, String>>> {
-        // This is a simplified implementation
-        // In practice, this would implement sophisticated incremental query execution
+        // Incremental query execution: compute query results by applying
+        // delta additions/removals to previously cached results rather than
+        // re-executing the full query from scratch.
 
         let query_engine = self
             .query_engine

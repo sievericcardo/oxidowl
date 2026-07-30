@@ -10,8 +10,10 @@ pub mod latex;
 pub mod manchester;
 pub mod manchester_renderer;
 pub mod ntriples;
+pub mod obo;
 pub mod owl_xml;
 pub mod rdf_xml;
+pub mod rio;
 pub mod turtle;
 pub mod validation;
 
@@ -464,6 +466,16 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
         OntologyFormat::Latex => Err(Error::ontology_parsing(
             "LaTeX is a write-only format (no parser available)",
         )),
+        OntologyFormat::Obo => obo::parse(&parsed_content),
+        OntologyFormat::NQuads => rio::nquads::parse(&parsed_content),
+        OntologyFormat::N3 => rio::n3::parse(&parsed_content),
+        OntologyFormat::TriG => rio::trig::parse(&parsed_content),
+        OntologyFormat::TriX => rio::trix::parse(&parsed_content),
+        OntologyFormat::JsonLd => rio::jsonld::parse(&parsed_content),
+        OntologyFormat::RdfJson => rio::rdf_json::parse(&parsed_content),
+        OntologyFormat::Rdfa => rio::rdfa::parse(&parsed_content),
+        OntologyFormat::BinaryRdf => rio::binary_rdf::parse(&parsed_content),
+        OntologyFormat::Hdt => rio::hdt::parse(&parsed_content),
         OntologyFormat::Auto => Err(Error::ontology_parsing(
             "Auto format should have been resolved",
         )),
@@ -578,6 +590,16 @@ pub fn save_file<P: AsRef<Path>>(
         OntologyFormat::DL => dl_syntax::save_file(ontology, path),
         OntologyFormat::Krss => krss::save_file(ontology, path),
         OntologyFormat::Krss2 => krss::save_file_krss2(ontology, path),
+        OntologyFormat::Obo => obo::writer::save_file(ontology, path),
+        OntologyFormat::NQuads => rio::nquads::save_file(ontology, path),
+        OntologyFormat::N3 => rio::n3::save_file(ontology, path),
+        OntologyFormat::TriG => rio::trig::save_file(ontology, path),
+        OntologyFormat::TriX => rio::trix::save_file(ontology, path),
+        OntologyFormat::JsonLd => rio::jsonld::save_file(ontology, path),
+        OntologyFormat::RdfJson => rio::rdf_json::save_file(ontology, path),
+        OntologyFormat::Rdfa => Err(Error::ontology_parsing("RDFa is read-only")),
+        OntologyFormat::BinaryRdf => rio::binary_rdf::save_file(ontology, path),
+        OntologyFormat::Hdt => rio::hdt::save_file(ontology, path),
         OntologyFormat::Auto => {
             let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
             let detected_format = match extension.to_lowercase().as_str() {
@@ -591,6 +613,16 @@ pub fn save_file<P: AsRef<Path>>(
                 "dl" => OntologyFormat::DL,
                 "krss" => OntologyFormat::Krss,
                 "krss2" => OntologyFormat::Krss2,
+                "obo" => OntologyFormat::Obo,
+                "nq" | "nquads" => OntologyFormat::NQuads,
+                "n3" => OntologyFormat::N3,
+                "trig" => OntologyFormat::TriG,
+                "trix" => OntologyFormat::TriX,
+                "jsonld" | "json-ld" => OntologyFormat::JsonLd,
+                "rj" | "rjson" => OntologyFormat::RdfJson,
+                "html" | "xhtml" => OntologyFormat::Rdfa,
+                "brdf" => OntologyFormat::BinaryRdf,
+                "hdt" => OntologyFormat::Hdt,
                 "txt" => OntologyFormat::Functional,
                 _ => OntologyFormat::OwlXml,
             };
@@ -681,8 +713,12 @@ impl ParserFactory {
             OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
                 ManchesterParserConfig::default(),
             ))),
-            OntologyFormat::Latex | OntologyFormat::DL | OntologyFormat::Krss | OntologyFormat::Krss2 => {
-                Err(Error::ontology_parsing("Format does not support parsing"))
+            OntologyFormat::Latex | OntologyFormat::DL | OntologyFormat::Krss | OntologyFormat::Krss2
+            | OntologyFormat::Obo | OntologyFormat::NQuads | OntologyFormat::N3
+            | OntologyFormat::TriG | OntologyFormat::TriX | OntologyFormat::JsonLd
+            | OntologyFormat::RdfJson | OntologyFormat::Rdfa | OntologyFormat::BinaryRdf
+            | OntologyFormat::Hdt => {
+                Err(Error::ontology_parsing("Format does not support Parser trait"))
             }
             OntologyFormat::Auto => Err(Error::ontology_parsing(
                 "Auto format should be resolved before creating parser",

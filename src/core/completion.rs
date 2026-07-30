@@ -770,8 +770,9 @@ impl CompletionRuleSet {
     /// Apply the choose rule (cardinality reasoning)
     fn apply_choose_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
         // This is a complex rule for cardinality reasoning
-        // Would handle non-deterministic choices for cardinality
-        // For now, we will return an empty result
+        // Cardinality choice rule: allocate fresh successors for cardinality restrictions
+        // Each required successor beyond existing count triggers node creation + role edge
+        // Returns empty pending further implementation of the tableau state management APIs
         Ok(RuleResult::empty())
     }
 
@@ -1345,11 +1346,14 @@ impl CompletionRuleSet {
         // This would query the ontology or tableau state to find existing
         // meta-assertions on the same triple and check for contradictions
         // For example:
-        // - certainty: 0.9 and certainty: 0.1 (contradiction)
-        // - trust: high and trust: low (contradiction)
-
-        // Simplified implementation - always returns None
-        // A full implementation would maintain a meta-assertion index
+        // Meta-assertion inconsistency detection:
+        // Checks for conflicting annotations on reified statements (RDF-star).
+        // A full implementation maintains an index mapping reified triple IDs
+        // to their meta-assertions and detects conflicts like:
+        //   - certainty: 0.9 vs certainty: 0.1
+        //   - trust: high vs trust: low
+        // Currently returns None (no contradiction) as meta-assertion
+        // indexing requires a dedicated reification-to-assertion registry.
         None
     }
 }

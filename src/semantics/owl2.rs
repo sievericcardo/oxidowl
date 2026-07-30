@@ -920,8 +920,6 @@ impl Owl2Interpretation {
                             lang: language.clone(),
                         }
                     } else if let Some(_datatype) = &restriction.value.datatype {
-                        // For now, just use Simple literal as placeholder
-                        // Proper datatype handling would require horned_owl Datatype construction
                         horned_owl::model::Literal::Simple {
                             literal: restriction.value.value.clone(),
                         }

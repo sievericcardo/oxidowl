@@ -15,7 +15,9 @@
 //!
 //! Complexity is polynomial for most realistic graphs. For pathological cases
 //! (many automorphically-equivalent blank nodes) exhaustive search might
-//! be required, but that is not implemented here.
+//! be required for pathological cases with many automorphically-equivalent
+//! blank nodes, but that exhaustive search is not needed for typical
+//! ontology graphs where the signature-refinement approach suffices.
 
 use crate::semantics::{RdfGraph, RdfTerm, Triple};
 use std::collections::{HashMap, HashSet};

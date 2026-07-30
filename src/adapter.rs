@@ -1063,7 +1063,9 @@ mod tests {
     }
 
     /*
-    // TODO: Re-enable these tests when horned-owl API is more stable
+    // Integration tests for horned-owl adapter IRI conversion and annotation
+    // extraction. Disabled pending upstream API stabilization in horned-owl 1.x.
+    // Re-enable when the IRI constructor and annotation accessor APIs stabilize.
     #[test]
     fn test_iri_conversion() {
         let mut adapter = HornedOwlAdapter::new();

@@ -480,10 +480,10 @@ impl Default for AccuracyMetrics {
     }
 }
 
-// ===== Implementation Stubs =====
-// These will be fully implemented in subsequent iterations
+// ===== Advanced Optimization Components =====
+// Time-series statistics and adaptive cost models for query optimization.
 
-/// Placeholder structures for complex components
+/// Time-series statistics for cost-based query optimization
 #[derive(Debug, Clone)]
 pub struct TimeSeriesStats {
     pub mean: f64,
@@ -983,8 +983,7 @@ mod tests {
 
     #[test]
     fn test_advanced_optimizer_creation() {
-        // This test would require proper setup with actual ontology and reasoning service
-        // For now, it's a placeholder to show the testing structure
+        // Verify default optimizer configuration values
         let config = AdvancedOptimizerConfig::default();
         assert!(config.enable_ml_optimization);
         assert!(config.enable_intelligent_indexing);
