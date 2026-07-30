@@ -1,8 +1,8 @@
 //! OBO Format Parser — stanza-based parsing for OBO 1.4.
 
-use crate::ontology::Ontology;
-use crate::Result;
 use super::converter::Obo2Owl;
+use crate::Result;
+use crate::ontology::Ontology;
 
 /// OBO parser configuration.
 #[derive(Debug, Clone)]
@@ -14,7 +14,11 @@ pub struct OBOParserConfig {
 
 impl Default for OBOParserConfig {
     fn default() -> Self {
-        Self { strict: true, allow_dangling_references: false, resolve_xrefs: false }
+        Self {
+            strict: true,
+            allow_dangling_references: false,
+            resolve_xrefs: false,
+        }
     }
 }
 
@@ -34,12 +38,18 @@ pub struct OBOParser {
 }
 
 impl Default for OBOParser {
-    fn default() -> Self { Self { config: OBOParserConfig::default() } }
+    fn default() -> Self {
+        Self {
+            config: OBOParserConfig::default(),
+        }
+    }
 }
 
 impl OBOParser {
     #[must_use]
-    pub fn new(config: OBOParserConfig) -> Self { Self { config } }
+    pub fn new(config: OBOParserConfig) -> Self {
+        Self { config }
+    }
 
     /// Parse OBO content into an OWL ontology.
     pub fn parse(&self, content: &str) -> Result<Ontology> {
@@ -58,14 +68,22 @@ impl OBOParser {
 
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('!') { continue; }
+            if trimmed.is_empty() || trimmed.starts_with('!') {
+                continue;
+            }
 
             if trimmed.starts_with('[') && trimmed.ends_with(']') {
                 if let Some(stanza) = current.take() {
-                    if !stanza.tags.is_empty() { stanzas.push(stanza); }
+                    if !stanza.tags.is_empty() {
+                        stanzas.push(stanza);
+                    }
                 }
-                let stanza_type = trimmed[1..trimmed.len()-1].trim().to_string();
-                current = Some(OBOStanza { stanza_type, tags: Vec::new(), raw_lines: Vec::new() });
+                let stanza_type = trimmed[1..trimmed.len() - 1].trim().to_string();
+                current = Some(OBOStanza {
+                    stanza_type,
+                    tags: Vec::new(),
+                    raw_lines: Vec::new(),
+                });
                 continue;
             }
 
@@ -74,7 +92,7 @@ impl OBOParser {
                 // Parse tag: value pairs
                 if let Some(colon_pos) = trimmed.find(':') {
                     let tag = trimmed[..colon_pos].trim().to_string();
-                    let value = trimmed[colon_pos+1..].trim().to_string();
+                    let value = trimmed[colon_pos + 1..].trim().to_string();
                     if !tag.is_empty() {
                         stanza.tags.push((tag, value));
                     }
@@ -83,7 +101,9 @@ impl OBOParser {
         }
 
         if let Some(stanza) = current {
-            if !stanza.tags.is_empty() { stanzas.push(stanza); }
+            if !stanza.tags.is_empty() {
+                stanzas.push(stanza);
+            }
         }
         stanzas
     }

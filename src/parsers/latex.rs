@@ -2,12 +2,12 @@
 //!
 //! Renders OWL ontologies in LaTeX format for documentation and papers.
 
+use crate::Result;
+use crate::ontology::axioms::Axiom;
 use crate::ontology::{
     ClassExpression, DataPropertyExpression, DataRange, Individual, Literal,
     ObjectPropertyExpression, Ontology,
 };
-use crate::ontology::axioms::Axiom;
-use crate::Result;
 use std::fmt::Write;
 
 /// Configuration for the LaTeX renderer.
@@ -41,30 +41,36 @@ impl LatexRenderer {
         let mut buf = String::with_capacity(4096);
 
         // Preamble
-        buf.push_str(r"\documentclass{article}
+        buf.push_str(
+            r"\documentclass{article}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{hyperref}
-");
+",
+        );
         if let Some(ref custom) = config.custom_preamble {
             buf.push_str(custom);
             buf.push('\n');
         }
-        buf.push_str(r"\begin{document}
-");
+        buf.push_str(
+            r"\begin{document}
+",
+        );
 
         // Title
         if let Some(iri) = ontology.get_iri() {
             let _ = writeln!(buf, "\\title{{{iri}}}");
         }
-        buf.push_str(r"\maketitle
-");
+        buf.push_str(
+            r"\maketitle
+",
+        );
 
         // Ontology IRI
         if let Some(iri) = ontology.get_iri() {
             let _ = writeln!(buf, "\\textbf{{Ontology IRI:}} \\url{{{iri}}}\\\\");
         }
-        if let Some(viri) = &ontology.version_iri {
+        if let Some(viri) = &ontology.id.version_iri {
             let _ = writeln!(buf, "\\textbf{{Version IRI:}} \\url{{{viri}}}\\\\");
         }
 
@@ -72,17 +78,49 @@ impl LatexRenderer {
         if !ontology.imports.is_empty() {
             buf.push_str("\\textbf{Imports:}\n\\begin{itemize}\n");
             for imp in &ontology.imports {
-                let _ = writeln!(buf, "\\item \\url{{{imp}}}");
+                let _ = writeln!(buf, "\\item \\url{{{}}}", imp.imported_ontology_iri);
             }
             buf.push_str("\\end{itemize}\n");
         }
 
         // Group axioms for readable sections
         let axioms = ontology.axioms();
-        let has_classes = axioms.iter().any(|a| matches!(a, Axiom::SubClassOf(_) | Axiom::EquivalentClasses(_) | Axiom::DisjointClasses(_) | Axiom::DisjointUnion(_)));
-        let has_objprops = axioms.iter().any(|a| matches!(a, Axiom::SubObjectPropertyOf(_) | Axiom::EquivalentObjectProperties(_) | Axiom::ObjectPropertyDomain(_) | Axiom::ObjectPropertyRange(_)));
-        let has_dataprops = axioms.iter().any(|a| matches!(a, Axiom::SubDataPropertyOf(_) | Axiom::DataPropertyDomain(_) | Axiom::DataPropertyRange(_)));
-        let has_inds = axioms.iter().any(|a| matches!(a, Axiom::ClassAssertion(_) | Axiom::ObjectPropertyAssertion(_) | Axiom::DataPropertyAssertion(_) | Axiom::SameIndividual(_) | Axiom::DifferentIndividuals(_)));
+        let has_classes = axioms.iter().any(|a| {
+            matches!(
+                a,
+                Axiom::SubClassOf(_)
+                    | Axiom::EquivalentClasses(_)
+                    | Axiom::DisjointClasses(_)
+                    | Axiom::DisjointUnion(_)
+            )
+        });
+        let has_objprops = axioms.iter().any(|a| {
+            matches!(
+                a,
+                Axiom::SubObjectPropertyOf(_)
+                    | Axiom::EquivalentObjectProperties(_)
+                    | Axiom::ObjectPropertyDomain(_)
+                    | Axiom::ObjectPropertyRange(_)
+            )
+        });
+        let has_dataprops = axioms.iter().any(|a| {
+            matches!(
+                a,
+                Axiom::SubDataPropertyOf(_)
+                    | Axiom::DataPropertyDomain(_)
+                    | Axiom::DataPropertyRange(_)
+            )
+        });
+        let has_inds = axioms.iter().any(|a| {
+            matches!(
+                a,
+                Axiom::ClassAssertion(_)
+                    | Axiom::ObjectPropertyAssertion(_)
+                    | Axiom::DataPropertyAssertion(_)
+                    | Axiom::SameIndividual(_)
+                    | Axiom::DifferentIndividuals(_)
+            )
+        });
 
         if has_classes {
             buf.push_str("\n\\section{Class Axioms}\n");
@@ -126,24 +164,39 @@ impl LatexRenderer {
                 }
                 Axiom::EquivalentClasses(a) => {
                     let parts: Vec<String> = a.classes.iter().map(|c| self.render_ce(c)).collect();
-                    let _ = writeln!(buf, "{}", self.format_formula(numbered, &parts.join(" \\equiv ")));
+                    let _ = writeln!(
+                        buf,
+                        "{}",
+                        self.format_formula(numbered, &parts.join(" \\equiv "))
+                    );
                 }
                 Axiom::DisjointClasses(a) => {
                     let parts: Vec<String> = a.classes.iter().map(|c| self.render_ce(c)).collect();
                     let _ = writeln!(
                         buf,
                         "{}",
-                        self.format_formula(numbered, &format!("{} \\sqcap {} \\sqsubseteq \\bot", parts[0], parts[1]))
+                        self.format_formula(
+                            numbered,
+                            &format!("{} \\sqcap {} \\sqsubseteq \\bot", parts[0], parts[1])
+                        )
                     );
                 }
                 Axiom::DisjointUnion(a) => {
-                    let parts: Vec<String> = a.disjoint_classes.iter().map(|c| self.render_ce(c)).collect();
+                    let parts: Vec<String> = a
+                        .disjoint_classes
+                        .iter()
+                        .map(|c| self.render_ce(c))
+                        .collect();
                     let _ = writeln!(
                         buf,
                         "{}",
                         self.format_formula(
                             numbered,
-                            &format!("{} \\equiv {}", self.render_ce(&a.class), parts.join(" \\mathbin{\\dot\\sqcup} "))
+                            &format!(
+                                "{} \\equiv {}",
+                                self.render_ce(&a.class),
+                                parts.join(" \\mathbin{\\dot\\sqcup} ")
+                            )
                         )
                     );
                 }
@@ -178,19 +231,17 @@ impl LatexRenderer {
                     "\\textit{{Trans}}({})",
                     self.render_ope(&a.property)
                 )),
-                Axiom::SymmetricObjectProperty(a) => Some(format!(
-                    "\\textit{{Sym}}({})",
-                    self.render_ope(&a.property)
-                )),
+                Axiom::SymmetricObjectProperty(a) => {
+                    Some(format!("\\textit{{Sym}}({})", self.render_ope(&a.property)))
+                }
                 Axiom::InverseObjectProperties(a) => Some(format!(
                     "{} \\equiv {}",
                     self.render_ope(&a.property1),
                     format!("{}^-", self.render_ope(&a.property2))
                 )),
-                Axiom::ReflexiveObjectProperty(a) => Some(format!(
-                    "\\textit{{Ref}}({})",
-                    self.render_ope(&a.property)
-                )),
+                Axiom::ReflexiveObjectProperty(a) => {
+                    Some(format!("\\textit{{Ref}}({})", self.render_ope(&a.property)))
+                }
                 Axiom::IrreflexiveObjectProperty(a) => Some(format!(
                     "\\textit{{Irref}}({})",
                     self.render_ope(&a.property)
@@ -258,11 +309,19 @@ impl LatexRenderer {
                     self.render_dpe(&a.property)
                 )),
                 Axiom::SameIndividual(a) => {
-                    let parts: Vec<String> = a.individuals.iter().map(|i| self.render_individual(i)).collect();
+                    let parts: Vec<String> = a
+                        .individuals
+                        .iter()
+                        .map(|i| self.render_individual(i))
+                        .collect();
                     Some(parts.join(" \\equiv "))
                 }
                 Axiom::DifferentIndividuals(a) => {
-                    let parts: Vec<String> = a.individuals.iter().map(|i| self.render_individual(i)).collect();
+                    let parts: Vec<String> = a
+                        .individuals
+                        .iter()
+                        .map(|i| self.render_individual(i))
+                        .collect();
                     Some(parts.join(" \\neq "))
                 }
                 Axiom::NegativeObjectPropertyAssertion(a) => Some(format!(
@@ -308,18 +367,34 @@ impl LatexRenderer {
                 format!("\\neg {}", self.render_ce(inner))
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
-                format!("\\exists {}.{}", self.render_ope(property), self.render_ce(filler))
+                format!(
+                    "\\exists {}.{}",
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
-                format!("\\forall {}.{}", self.render_ope(property), self.render_ce(filler))
+                format!(
+                    "\\forall {}.{}",
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
             ClassExpression::ObjectHasValue { property, value } => {
-                format!("\\exists {}.\\{{{}}}", self.render_ope(property), self.render_individual(value))
+                format!(
+                    "\\exists {}.\\{{{}}}",
+                    self.render_ope(property),
+                    self.render_individual(value)
+                )
             }
             ClassExpression::ObjectHasSelf { property } => {
                 format!("\\exists {}.\\textit{{Self}}", self.render_ope(property))
             }
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "\\mathop{{\\geq}} {} {}.{}",
                     cardinality,
@@ -327,7 +402,11 @@ impl LatexRenderer {
                     self.render_ce(filler)
                 )
             }
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "\\mathop{{\\leq}} {} {}.{}",
                     cardinality,
@@ -335,7 +414,11 @@ impl LatexRenderer {
                     self.render_ce(filler)
                 )
             }
-            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "= {} {}.{}",
                     cardinality,
@@ -348,15 +431,31 @@ impl LatexRenderer {
                 format!("\\{{{}}}", parts.join(", "))
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
-                format!("\\exists {}.{}", self.render_dpe(property), self.render_datarange(filler))
+                format!(
+                    "\\exists {}.{}",
+                    self.render_dpe(property),
+                    self.render_datarange(filler)
+                )
             }
             ClassExpression::DataAllValuesFrom { property, filler } => {
-                format!("\\forall {}.{}", self.render_dpe(property), self.render_datarange(filler))
+                format!(
+                    "\\forall {}.{}",
+                    self.render_dpe(property),
+                    self.render_datarange(filler)
+                )
             }
             ClassExpression::DataHasValue { property, value } => {
-                format!("\\exists {}.\\{{{}}}", self.render_dpe(property), self.render_literal(value))
+                format!(
+                    "\\exists {}.\\{{{}}}",
+                    self.render_dpe(property),
+                    self.render_literal(value)
+                )
             }
-            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
+            ClassExpression::DataMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "\\mathop{{\\geq}} {} {}.{}",
                     cardinality,
@@ -364,7 +463,11 @@ impl LatexRenderer {
                     self.render_datarange(filler)
                 )
             }
-            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
+            ClassExpression::DataMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "\\mathop{{\\leq}} {} {}.{}",
                     cardinality,
@@ -372,7 +475,11 @@ impl LatexRenderer {
                     self.render_datarange(filler)
                 )
             }
-            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
+            ClassExpression::DataExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "= {} {}.{}",
                     cardinality,
@@ -386,7 +493,9 @@ impl LatexRenderer {
     fn render_ope(&self, expr: &ObjectPropertyExpression) -> String {
         match expr {
             ObjectPropertyExpression::ObjectProperty(p) => self.escape_iri(&p.iri.to_string()),
-            ObjectPropertyExpression::InverseObjectProperty(p) => format!("{}^-", self.escape_iri(&p.iri.to_string())),
+            ObjectPropertyExpression::InverseObjectProperty(p) => {
+                format!("{}^-", self.escape_iri(&p.iri.to_string()))
+            }
             ObjectPropertyExpression::PropertyChain(chain) => {
                 let parts: Vec<String> = chain.iter().map(|p| self.render_ope(p)).collect();
                 parts.join(" \\circ ")
@@ -408,7 +517,11 @@ impl LatexRenderer {
     }
 
     fn render_literal(&self, lit: &Literal) -> String {
-        if lit.value.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') {
+        if lit
+            .value
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+        {
             lit.value.clone()
         } else if let Some(lang) = &lit.language {
             format!("\\text{{\"{}\"@\\textit{{{lang}}}}}", lit.value)
@@ -450,7 +563,11 @@ impl LatexRenderer {
 }
 
 fn id_short(id: &str) -> String {
-    if id.len() <= 8 { id.to_string() } else { id[..8].to_string() }
+    if id.len() <= 8 {
+        id.to_string()
+    } else {
+        id[..8].to_string()
+    }
 }
 
 // ── Public entry points ──────────────────────────────────────────────────────
@@ -464,5 +581,6 @@ pub fn serialize(ontology: &Ontology) -> Result<String> {
 /// Save ontology to a .tex file.
 pub fn save_file<P: AsRef<std::path::Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let content = serialize(ontology)?;
-    std::fs::write(path, content).map_err(|e| crate::Error::io(format!("Failed to write LaTeX: {e}")))
+    std::fs::write(path, content)
+        .map_err(|e| crate::Error::io(format!("Failed to write LaTeX: {e}")))
 }

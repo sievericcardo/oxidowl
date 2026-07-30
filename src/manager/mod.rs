@@ -10,19 +10,73 @@ pub mod history;
 pub mod iri_mapper;
 pub mod listeners;
 pub mod loader;
+pub mod loader_config;
 pub mod sources;
 
 #[cfg(test)]
 mod tests;
 
-use crate::factory::DataFactory;
-use crate::ontology::{Ontology, OntologyRef, IRI};
 use crate::Result;
+use crate::factory::DataFactory;
+use crate::ontology::{IRI, Ontology, OntologyFormat, OntologyRef};
+use crate::parsers;
 use changes::OntologyChange;
 use history::ChangeHistory;
 use listeners::OntologyChangeListener;
+use loader_config::LoaderConfig;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
+
+// ── Change Broadcast Strategy ────────────────────────────────────────────────
+
+/// Controls when registered change listeners are notified of mutations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeBroadcastStrategy {
+    /// Notify listeners immediately after every change batch.
+    Immediate,
+    /// Accumulate changes and notify only when the buffer is flushed,
+    /// or when the number of accumulated changes reaches the given threshold.
+    Buffered(usize),
+    /// Suppress all listener notifications completely.
+    Suppressed,
+}
+
+// ── Change Applied ───────────────────────────────────────────────────────────
+
+/// Outcome of applying a batch of changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeApplied {
+    /// All changes in the batch were applied successfully.
+    Successfully,
+    /// One or more changes in the batch could not be applied.
+    UnSuccessfully,
+    /// The batch was empty — nothing was done.
+    NoOperation,
+}
+
+// ── Snapshot ─────────────────────────────────────────────────────────────────
+
+/// A point-in-time snapshot of an ontology's state, used for rollback.
+#[derive(Debug, Clone)]
+pub struct Snapshot {
+    /// All axioms at the time of the snapshot.
+    pub axioms: Vec<crate::ontology::axioms::Axiom>,
+    /// Ontology-level annotations.
+    pub annotations: Vec<crate::ontology::Annotation>,
+    /// Import declarations.
+    pub imports: Vec<crate::ontology::ImportsDeclaration>,
+    /// Ontology IRI.
+    pub iri: Option<IRI>,
+    /// Version IRI.
+    pub version_iri: Option<IRI>,
+}
+
+/// Thread-safe shared reference to an [`OntologyManager`].
+///
+/// This is the recommended type for storing and passing a manager
+/// across thread boundaries.  Internally it is `Arc<RwLock<>>`,
+/// so readers do not block each other and writers get exclusive access.
+pub type OntologyManagerRef = Arc<RwLock<OntologyManager>>;
 
 // ── ManagerConfig ────────────────────────────────────────────────────────────
 
@@ -78,14 +132,26 @@ pub struct OntologyManager {
     /// Configuration.
     config: ManagerConfig,
 
+    /// Loader configuration (timeouts, retries, etc.).
+    loader_config: LoaderConfig,
+
     /// Registered change listeners.
     change_listeners: Vec<Box<dyn OntologyChangeListener>>,
+
+    /// Per-ontology change listeners.
+    ontology_listeners: HashMap<IRI, Vec<Box<dyn OntologyChangeListener>>>,
 
     /// IRI-to-document mappers for resolving ontology IRIs.
     iri_mappers: Vec<Box<dyn iri_mapper::OntologyIRIMapper>>,
 
     /// Optional change history for undo/redo.
     change_history: Option<ChangeHistory>,
+
+    /// Controls when change listeners are notified.
+    broadcast_strategy: ChangeBroadcastStrategy,
+
+    /// Accumulated changes for the `Buffered` broadcast strategy.
+    pending_changes: Vec<OntologyChange>,
 }
 
 impl std::fmt::Debug for OntologyManager {
@@ -93,8 +159,11 @@ impl std::fmt::Debug for OntologyManager {
         f.debug_struct("OntologyManager")
             .field("ontologies", &self.ontologies.len())
             .field("config", &self.config)
+            .field("loader_config", &self.loader_config)
             .field("listeners", &self.change_listeners.len())
+            .field("ontology_listeners", &self.ontology_listeners.len())
             .field("mappers", &self.iri_mappers.len())
+            .field("broadcast_strategy", &self.broadcast_strategy)
             .finish_non_exhaustive()
     }
 }
@@ -114,8 +183,12 @@ impl OntologyManager {
                 None
             },
             config,
+            loader_config: LoaderConfig::default(),
             change_listeners: Vec::new(),
+            ontology_listeners: HashMap::new(),
             iri_mappers: Vec::new(),
+            broadcast_strategy: ChangeBroadcastStrategy::Immediate,
+            pending_changes: Vec::new(),
         }
     }
 
@@ -133,9 +206,30 @@ impl OntologyManager {
             data_factory: DataFactory::new(),
             change_history,
             config,
+            loader_config: LoaderConfig::default(),
             change_listeners: Vec::new(),
+            ontology_listeners: HashMap::new(),
             iri_mappers: Vec::new(),
+            broadcast_strategy: ChangeBroadcastStrategy::Immediate,
+            pending_changes: Vec::new(),
         }
+    }
+
+    /// Create a new manager pre-wrapped for concurrent use.
+    ///
+    /// Returns `Arc<RwLock<OntologyManager>>` so the manager can be shared
+    /// across threads immediately.  Readers do not block each other;
+    /// writers get exclusive access through the `RwLock`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let manager = OntologyManager::new_concurrent();
+    /// let cloned = manager.clone(); // cheap Arc clone
+    /// ```
+    #[must_use]
+    pub fn new_concurrent() -> OntologyManagerRef {
+        Arc::new(RwLock::new(Self::new()))
     }
 
     // ── IRI Mappers ──────────────────────────────────────────────────────
@@ -329,8 +423,8 @@ impl OntologyManager {
             let guard = ont_ref.read().unwrap_or_else(|e| e.into_inner());
             let entry = self.imports_graph.entry(iri.clone()).or_default();
             entry.clear();
-            for import_iri in &guard.imports {
-                entry.insert(import_iri.clone());
+            for import in &guard.imports {
+                entry.insert(import.imported_ontology_iri.clone());
             }
         }
     }
@@ -399,19 +493,114 @@ impl OntologyManager {
         &mut self.config
     }
 
+    /// Get the loader configuration.
+    #[must_use]
+    pub fn loader_config(&self) -> &LoaderConfig {
+        &self.loader_config
+    }
+
+    /// Get a mutable reference to the loader configuration.
+    pub fn loader_config_mut(&mut self) -> &mut LoaderConfig {
+        &mut self.loader_config
+    }
+
+    /// Register a change listener for a specific ontology.
+    pub fn add_listener_for_ontology(
+        &mut self,
+        ont_iri: &IRI,
+        listener: Box<dyn OntologyChangeListener>,
+    ) {
+        self.ontology_listeners
+            .entry(ont_iri.clone())
+            .or_default()
+            .push(listener);
+    }
+
+    /// Remove all per-ontology listeners for the given ontology.
+    pub fn clear_ontology_listeners(&mut self, ont_iri: &IRI) {
+        self.ontology_listeners.remove(ont_iri);
+    }
+
+    // ── Change Broadcast Strategy ────────────────────────────────────────
+
+    /// Set the broadcast strategy for change listener notifications.
+    ///
+    /// - `Immediate`: listeners fire after every change batch.
+    /// - `Buffered(n)`: changes accumulate; listeners fire only on [`flush_changes`]
+    ///   or when the buffer reaches `n` entries.
+    /// - `Suppressed`: all listener notifications are silenced.
+    pub fn set_broadcast_strategy(&mut self, strategy: ChangeBroadcastStrategy) {
+        self.broadcast_strategy = strategy;
+    }
+
+    /// Flush accumulated changes when using the `Buffered` broadcast strategy.
+    ///
+    /// All pending changes are delivered to registered listeners and then
+    /// cleared.  Has no effect under `Immediate` or `Suppressed`.
+    pub fn flush_changes(&mut self) {
+        if self.pending_changes.is_empty() {
+            return;
+        }
+        let pending: Vec<_> = self.pending_changes.drain(..).collect();
+        self.notify_change_listeners(&pending);
+    }
+
+    // ── Snapshot / Rollback ───────────────────────────────────────────────
+
+    /// Take a snapshot of the ontology identified by `iri`.
+    ///
+    /// Returns `None` when the ontology is not registered in this manager.
+    #[must_use]
+    pub fn snapshot_ontology(&self, iri: &IRI) -> Option<Snapshot> {
+        let ont_ref = self.ontologies.get(iri)?;
+        let guard = ont_ref.read().unwrap_or_else(|e| e.into_inner());
+        Some(Snapshot {
+            axioms: guard.axioms.clone(),
+            annotations: guard.annotations.clone(),
+            imports: guard.imports.clone(),
+            iri: guard.get_iri().cloned(),
+            version_iri: guard.id.version_iri.clone(),
+        })
+    }
+
+    /// Restore an ontology from a previously taken [`Snapshot`].
+    ///
+    /// The ontology identified by the snapshot's IRI will be completely
+    /// replaced with the snapshot contents.
+    pub fn restore_snapshot(&mut self, snapshot: Snapshot) {
+        if let Some(iri) = &snapshot.iri {
+            if let Some(ont_ref) = self.ontologies.get(iri) {
+                let mut guard = ont_ref.write().unwrap_or_else(|e| e.into_inner());
+                guard.axioms = snapshot.axioms;
+                guard.annotations = snapshot.annotations;
+                guard.imports = snapshot.imports;
+                guard.id.version_iri = snapshot.version_iri;
+            }
+        }
+    }
+
     // ── Change Application ───────────────────────────────────────────────
-    // Delegated to changes module; core wiring is here.
 
     /// Apply a single change to the managed ontologies.
-    pub fn apply_change(&mut self, change: OntologyChange) -> Result<()> {
+    pub fn apply_change(&mut self, change: OntologyChange) -> ChangeApplied {
         self.apply_changes(&[change])
     }
 
-    /// Apply a batch of changes atomically.
-    pub fn apply_changes(&mut self, changes: &[OntologyChange]) -> Result<()> {
+    /// Apply a batch of changes and respect the current broadcast strategy.
+    ///
+    /// Returns [`ChangeApplied::NoOperation`] when the batch is empty,
+    /// [`ChangeApplied::UnSuccessfully`] if any change fails, and
+    /// [`ChangeApplied::Successfully`] when every change was applied.
+    pub fn apply_changes(&mut self, changes: &[OntologyChange]) -> ChangeApplied {
+        if changes.is_empty() {
+            return ChangeApplied::NoOperation;
+        }
+
         // Phase 1: apply all changes to the data model
         for change in changes {
-            self.apply_single_change(change)?;
+            if self.apply_single_change(change).is_err() {
+                return ChangeApplied::UnSuccessfully;
+            }
         }
 
         // Phase 2: update imports graph
@@ -422,42 +611,60 @@ impl OntologyManager {
             history.record(changes.to_vec());
         }
 
-        // Phase 4: notify listeners
-        for listener in &self.change_listeners {
-            listener.on_changes(changes);
-        }
-        for listener in &self.change_listeners {
-            listener.on_change_applied();
+        // Phase 4: broadcast according to strategy
+        match self.broadcast_strategy {
+            ChangeBroadcastStrategy::Immediate => {
+                self.notify_change_listeners(changes);
+            }
+            ChangeBroadcastStrategy::Buffered(threshold) => {
+                self.pending_changes.extend_from_slice(changes);
+                if self.pending_changes.len() >= threshold {
+                    self.flush_changes();
+                }
+            }
+            ChangeBroadcastStrategy::Suppressed => {}
         }
 
-        Ok(())
+        ChangeApplied::Successfully
     }
 
-    /// Try to apply a batch of changes — rolls back on failure.
-    pub fn try_apply_changes(&mut self, changes: &[OntologyChange]) -> Result<()> {
-        match self.apply_changes(changes) {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                for listener in &self.change_listeners {
-                    listener.on_change_failed(&e);
+    /// Try to apply a batch of changes — snapshots state first and rolls
+    /// back all affected ontologies on failure.
+    pub fn try_apply_changes(&mut self, changes: &[OntologyChange]) -> ChangeApplied {
+        // Collect unique ontology IRIs and take snapshots
+        let mut snapshots = Vec::new();
+        let mut seen = HashSet::new();
+        for change in changes {
+            if seen.insert(change.ontology_iri().clone()) {
+                if let Some(snapshot) = self.snapshot_ontology(change.ontology_iri()) {
+                    snapshots.push(snapshot);
                 }
-                Err(e)
             }
+        }
+
+        match self.apply_changes(changes) {
+            ChangeApplied::Successfully => ChangeApplied::Successfully,
+            ChangeApplied::UnSuccessfully => {
+                for snapshot in snapshots {
+                    self.restore_snapshot(snapshot);
+                }
+                let err = crate::Error::internal("Change application failed — rolled back");
+                for listener in &self.change_listeners {
+                    listener.on_change_failed(&err);
+                }
+                ChangeApplied::UnSuccessfully
+            }
+            ChangeApplied::NoOperation => ChangeApplied::NoOperation,
         }
     }
 
     /// Apply a single change to the data model.
     fn apply_single_change(&mut self, change: &OntologyChange) -> Result<()> {
-        let ont_ref = self
-            .get_ontology(change.ontology_iri())
-            .ok_or_else(|| {
-                crate::Error::InvalidInput {
-                    message: format!(
-                        "Ontology not found: {}",
-                        change.ontology_iri()
-                    ),
-                }
-            })?;
+        let ont_ref =
+            self.get_ontology(change.ontology_iri())
+                .ok_or_else(|| crate::Error::InvalidInput {
+                    message: format!("Ontology not found: {}", change.ontology_iri()),
+                })?;
 
         let mut guard = ont_ref.write().unwrap_or_else(|e| e.into_inner());
         match change {
@@ -468,12 +675,14 @@ impl OntologyManager {
                 guard.remove_axiom(axiom);
             }
             OntologyChange::AddImport { import, .. } => {
-                guard.imports.push(import.imported_ontology_iri.clone());
+                guard.imports.push(crate::ontology::ImportsDeclaration {
+                    imported_ontology_iri: import.imported_ontology_iri.clone(),
+                });
             }
             OntologyChange::RemoveImport { import, .. } => {
                 guard
                     .imports
-                    .retain(|iri| iri != &import.imported_ontology_iri);
+                    .retain(|imp| imp.imported_ontology_iri != import.imported_ontology_iri);
             }
             OntologyChange::AddOntologyAnnotation { annotation, .. } => {
                 guard.annotations.push(annotation.clone());
@@ -499,6 +708,132 @@ impl OntologyManager {
         drop(guard);
 
         Ok(())
+    }
+
+    /// Notify all registered listeners about a set of changes.
+    fn notify_change_listeners(&self, changes: &[OntologyChange]) {
+        for listener in &self.change_listeners {
+            listener.on_changes(changes);
+        }
+        for listener in &self.change_listeners {
+            listener.on_change_applied();
+        }
+
+        for change in changes {
+            let ont_iri = change.ontology_iri();
+            if let Some(listeners) = self.ontology_listeners.get(ont_iri) {
+                for listener in listeners {
+                    listener.on_changes(&[change.clone()]);
+                }
+                for listener in listeners {
+                    listener.on_change_applied();
+                }
+            }
+        }
+    }
+
+    // ── Save / Serialize ─────────────────────────────────────────────────
+
+    /// Save the ontology identified by `ontology_iri` to a file.
+    ///
+    /// When `format` is [`OntologyFormat::Auto`] the format is detected from
+    /// the file extension of `path`.
+    ///
+    /// Compression is detected from double extensions:
+    /// - `.owl.gz`, `.ttl.gz`, `.ofn.gz`, etc. → gzip compressed
+    /// - `.owl.xz`, `.ttl.xz`, `.ofn.xz`, etc. → xz compressed
+    pub fn save_ontology(
+        &self,
+        ontology_iri: &IRI,
+        path: &std::path::Path,
+        format: OntologyFormat,
+    ) -> Result<()> {
+        let ont_ref =
+            self.get_ontology(ontology_iri)
+                .ok_or_else(|| crate::Error::InvalidInput {
+                    message: format!("Ontology not found: {ontology_iri}"),
+                })?;
+        let guard = ont_ref.read().unwrap_or_else(|e| e.into_inner());
+
+        let path_str = path.to_string_lossy();
+        if path_str.ends_with(".gz") {
+            return parsers::save_file_gzip(&guard, path, format);
+        }
+        if path_str.ends_with(".xz") {
+            return parsers::save_file_xz(&guard, path, format);
+        }
+        parsers::save_file(&guard, path, format)
+    }
+
+    /// Serialize the ontology identified by `ontology_iri` to a string.
+    pub fn save_ontology_to_string(
+        &self,
+        ontology_iri: &IRI,
+        format: OntologyFormat,
+    ) -> Result<String> {
+        let ont_ref =
+            self.get_ontology(ontology_iri)
+                .ok_or_else(|| crate::Error::InvalidInput {
+                    message: format!("Ontology not found: {ontology_iri}"),
+                })?;
+        let guard = ont_ref.read().unwrap_or_else(|e| e.into_inner());
+        parsers::save_to_string(&guard, format)
+    }
+
+    // ── Copy / Move Between Managers ─────────────────────────────────────
+
+    /// Copy an ontology from `source_manager` into this manager.
+    ///
+    /// All axioms, annotations, imports and IRI/version metadata are cloned.
+    /// If `target_iri` is given the copy is registered under that IRI;
+    /// otherwise the original IRI is reused.
+    ///
+    /// Returns the new [`OntologyRef`] registered in this manager.
+    pub fn copy_ontology(
+        &mut self,
+        source_manager: &OntologyManager,
+        ontology_iri: &IRI,
+        target_iri: Option<IRI>,
+    ) -> Result<OntologyRef> {
+        let source = source_manager.get_ontology(ontology_iri).ok_or_else(|| {
+            crate::Error::InvalidInput {
+                message: format!("Source ontology not found: {ontology_iri}"),
+            }
+        })?;
+        let source_guard = source.read().unwrap_or_else(|e| e.into_inner());
+
+        let effective_iri = target_iri.unwrap_or_else(|| ontology_iri.clone());
+        let mut new_ont = Ontology::new();
+        new_ont.set_iri(effective_iri.clone());
+        new_ont.set_version_iri(source_guard.id.version_iri.clone());
+        new_ont.axioms = source_guard.axioms.clone();
+        new_ont.annotations = source_guard.annotations.clone();
+        new_ont.imports = source_guard.imports.clone();
+
+        let ont_ref = OntologyRef::new(RwLock::new(new_ont));
+        self.imports_graph.entry(effective_iri.clone()).or_default();
+        self.ontologies.insert(effective_iri, ont_ref.clone());
+        Ok(ont_ref)
+    }
+
+    /// Move an ontology from `source_manager` into this manager.
+    ///
+    /// Equivalent to [`copy_ontology`] followed by removing the source
+    /// ontology from `source_manager`.
+    pub fn move_ontology(
+        &mut self,
+        source_manager: &mut OntologyManager,
+        ontology_iri: &IRI,
+        target_iri: Option<IRI>,
+    ) -> Result<OntologyRef> {
+        let copied = self.copy_ontology(source_manager, ontology_iri, target_iri)?;
+        let source_ref = source_manager.get_ontology(ontology_iri).ok_or_else(|| {
+            crate::Error::InvalidInput {
+                message: "Source ontology disappeared during move".to_string(),
+            }
+        })?;
+        source_manager.remove_ontology(&source_ref)?;
+        Ok(copied)
     }
 
     // ── Undo / Redo ──────────────────────────────────────────────────────
@@ -528,7 +863,10 @@ impl OntologyManager {
     // ── Reasoner Integration ─────────────────────────────────────────────
 
     /// Create a tableau-based reasoner for the given ontology.
-    pub fn create_reasoner(&self, ontology: &OntologyRef) -> Result<Box<dyn crate::reasoner_api::OWLReasoner>> {
+    pub fn create_reasoner(
+        &self,
+        ontology: &OntologyRef,
+    ) -> Result<Box<dyn crate::reasoner_api::OWLReasoner>> {
         use crate::reasoner_api::ReasonerFactory;
         let factory = crate::reasoner_api::TableauReasonerFactory;
         let config = crate::reasoner_api::OWLReasonerConfiguration::default();

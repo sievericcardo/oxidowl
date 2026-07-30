@@ -3,7 +3,7 @@
 //! This module implements comprehensive parsing of OWL 2 ontologies from Turtle format.
 //! It handles complex turtle syntax including disjoint unions, lists, blank nodes, and multi-line statements.
 
-use super::common::OntologySerializer;
+use super::common::{OntologySerializer, SerializerConfig};
 use crate::{
     Error, Result,
     ontology::{
@@ -427,7 +427,7 @@ impl TurtleParser {
 
         // Handle prefix declarations
         if trimmed.starts_with("@prefix") {
-            return self.parse_prefix_declaration(trimmed, state);
+            return self.parse_prefix_declaration(trimmed, state, ontology);
         }
 
         // Handle base declarations
@@ -447,7 +447,7 @@ impl TurtleParser {
     }
 
     /// Enhanced prefix declaration parsing
-    fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
+    fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState, ontology: &mut Ontology) -> Result<()> {
         // @prefix prefix: <uri> .
         // Find the IRI within angle brackets
         if let Some(start) = statement.find('<')
@@ -462,6 +462,7 @@ impl TurtleParser {
                 state
                     .prefixes
                     .insert(prefix_name.to_string(), uri.to_string());
+                ontology.add_prefix(prefix_name.to_string(), IRI::new(uri));
             }
         }
         Ok(())
@@ -2794,42 +2795,81 @@ pub fn parse_file_with_config<P: AsRef<Path>>(
 }
 
 /// Turtle format serializer implementing the common serialization interface
-#[derive(Debug, Clone, Default)]
-pub struct TurtleSerializer;
+#[derive(Debug, Clone)]
+pub struct TurtleSerializer {
+    config: SerializerConfig,
+}
 
 impl TurtleSerializer {
-    /// Create a new `TurtleSerializer` instance
+    /// Create a new `TurtleSerializer` instance with default configuration
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self {
+            config: SerializerConfig::default(),
+        }
+    }
+
+    /// Create a new serializer with explicit configuration
+    #[must_use]
+    pub fn with_config(config: SerializerConfig) -> Self {
+        Self { config }
+    }
+}
+
+impl Default for TurtleSerializer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl OntologySerializer for TurtleSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        self.serialize_with_config(ontology, &self.config)
+    }
+}
+
+impl TurtleSerializer {
+    /// Serialize with explicit configuration
+    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> std::result::Result<String, Error> {
         let mut content = String::new();
 
-        // Add standard prefixes
-        content.push_str("@prefix : <http://example.org/> .\n");
-        content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
-        content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
-        content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
-        content.push('\n');
+        if config.add_banner {
+            content.push_str(&super::common::generate_banner());
+            content.push('\n');
+        }
+
+        // Emit stored prefixes from ontology
+        if !ontology.prefixes.is_empty() {
+            for (pfx, iri) in &ontology.prefixes {
+                content.push_str(&format!("@prefix {pfx}: <{iri}> .\n"));
+            }
+            content.push('\n');
+        } else {
+            // Default prefixes
+            content.push_str("@prefix : <http://example.org/> .\n");
+            content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
+            content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+            content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
+            content.push('\n');
+        }
 
         // Write ontology declaration
         if let Some(iri) = ontology.get_iri() {
             content.push_str(&format!("<{iri}> rdf:type owl:Ontology .\n\n"));
         }
 
+        // Use config indent
+        let indent = " ".repeat(config.indent_size);
+
         // Write class declarations
         for (iri, _class) in ontology.classes() {
-            content.push_str(&format!("<{iri}> rdf:type owl:Class .\n"));
+            content.push_str(&format!("{indent}<{iri}> rdf:type owl:Class .\n"));
         }
         content.push('\n');
 
         // Write object property declarations
         for prop in ontology.object_properties() {
-            content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
+            content.push_str(&format!("{indent}<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
         }
         content.push('\n');
 
@@ -2841,7 +2881,7 @@ impl OntologySerializer for TurtleSerializer {
                         (&sub.subclass, &sub.superclass)
                     {
                         content.push_str(&format!(
-                            "<{}> rdfs:subClassOf <{}> .\n",
+                            "{indent}<{}> rdfs:subClassOf <{}> .\n",
                             subclass.iri, superclass.iri
                         ));
                     }
@@ -2851,7 +2891,7 @@ impl OntologySerializer for TurtleSerializer {
                         && let Some(individual_iri) = assertion.individual.iri()
                     {
                         content.push_str(&format!(
-                            "<{}> rdf:type <{}> .\n",
+                            "{indent}<{}> rdf:type <{}> .\n",
                             individual_iri, class.iri
                         ));
                     }
@@ -2863,7 +2903,7 @@ impl OntologySerializer for TurtleSerializer {
                             (assertion.source.iri(), assertion.target.iri())
                     {
                         content.push_str(&format!(
-                            "<{}> <{}> <{}> .\n",
+                            "{indent}<{}> <{}> <{}> .\n",
                             source_iri, prop.iri, target_iri
                         ));
                     }

@@ -5,5 +5,7 @@
 mod integration;
 mod swrl;
 mod unit;
+mod roundtrip;
 
-// Re-export commonly used test utilities
+#[path = "helpers/mod.rs"]
+pub mod helpers;

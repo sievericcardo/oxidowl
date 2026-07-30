@@ -99,39 +99,37 @@ Individual: ex:john
         .parse_string(manchester_content)
         .expect("Test operation failed");
 
-    // Check that basic ontology was created (simplified implementation)
-    // Note: The current implementation is simplified and doesn't fully parse all Manchester syntax
+    // Manchester parser now fully parses all frame types
     let axioms = ontology.axioms();
-    assert_eq!(axioms.len(), 0); // Simplified implementation returns empty ontology
+    assert!(axioms.len() >= 10, "Expected at least 10 axioms, got {}", axioms.len());
 
-    // Should have declarations for Person, Student, Parent, Animal, Course, hasChild, hasParent, enrolledIn, john
-    // Note: Simplified implementation doesn't actually parse these
+    // Should have declarations
     let declarations: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::Declaration(_)))
         .collect();
-    assert_eq!(declarations.len(), 0); // Simplified implementation
+    assert!(declarations.len() >= 3, "Expected at least 3 declarations");
 
     // Should have SubClassOf axioms
     let subclass_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::SubClassOf(_)))
         .collect();
-    assert_eq!(subclass_axioms.len(), 0); // Simplified implementation
+    assert!(subclass_axioms.len() >= 1, "Expected at least 1 SubClassOf");
 
     // Should have EquivalentClasses axiom
     let equiv_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::EquivalentClasses(_)))
         .collect();
-    assert_eq!(equiv_axioms.len(), 0); // Simplified implementation
+    assert!(equiv_axioms.len() >= 1, "Expected at least 1 EquivalentClasses");
 
     // Should have property characteristic axioms
     let functional_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::FunctionalObjectProperty(_)))
         .collect();
-    assert_eq!(functional_axioms.len(), 0); // Simplified implementation
+    assert!(functional_axioms.len() >= 1, "Expected at least 1 FunctionalObjectProperty");
 
     let inv_functional_axioms: Vec<_> = axioms
         .iter()
@@ -142,14 +140,14 @@ Individual: ex:john
             )
         })
         .collect();
-    assert_eq!(inv_functional_axioms.len(), 0); // Simplified implementation
+    assert!(inv_functional_axioms.len() >= 1, "Expected at least 1 InverseFunctionalObjectProperty");
 
     // Should have ClassAssertion axiom for john
     let class_assertions: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::ClassAssertion(_)))
         .collect();
-    assert_eq!(class_assertions.len(), 0); // Simplified implementation
+    assert!(class_assertions.len() >= 1, "Expected at least 1 ClassAssertion");
 }
 
 #[test]

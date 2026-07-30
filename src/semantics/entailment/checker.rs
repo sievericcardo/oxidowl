@@ -112,7 +112,9 @@ impl EntailmentChecker {
                                 if let RdfTerm::Iri(ref subj) = st.subject {
                                     if subj == class_iri {
                                         if let RdfTerm::Iri(ref sc_pred) = st.predicate {
-                                            if sc_pred.as_str() == "http://www.w3.org/2000/01/rdf-schema#subClassOf" {
+                                            if sc_pred.as_str()
+                                                == "http://www.w3.org/2000/01/rdf-schema#subClassOf"
+                                            {
                                                 if let RdfTerm::Iri(_) = st.object {
                                                     closure.add_triple(Triple::new(
                                                         t.subject.clone(),
@@ -129,9 +131,14 @@ impl EntailmentChecker {
                     }
                 }
             }
-            if closure.triples().len() == prev { break; }
+            if closure.triples().len() == prev {
+                break;
+            }
         }
-        Ok(conclusion.triples().iter().all(|t| closure.contains_triple(t)))
+        Ok(conclusion
+            .triples()
+            .iter()
+            .all(|t| closure.contains_triple(t)))
     }
 
     /// Check OWL RDF-based entailment via OWL 2 RL rules
@@ -140,7 +147,11 @@ impl EntailmentChecker {
     }
 
     /// Check OWL Direct semantics entailment via reasoner if available
-    fn check_owl_direct_entailment(&self, premises: &RdfGraph, conclusion: &RdfGraph) -> Result<bool> {
+    fn check_owl_direct_entailment(
+        &self,
+        premises: &RdfGraph,
+        conclusion: &RdfGraph,
+    ) -> Result<bool> {
         // Use RL reasoning as approximation for Direct Semantics
         self.check_owl_rl_entailment(premises, conclusion)
     }

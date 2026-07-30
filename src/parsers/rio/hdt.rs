@@ -1,9 +1,9 @@
 //! HDT (Header-Dictionary-Triples) Parser and Renderer.
 //! Compressed RDF format designed for large datasets (billions of triples).
 
-use crate::ontology::{Ontology, IRI};
-use crate::ontology::axioms::*;
 use crate::Result;
+use crate::ontology::axioms::*;
+use crate::ontology::{IRI, Ontology};
 use std::collections::HashMap;
 
 /// HDT Header section containing metadata key-value pairs.
@@ -43,8 +43,13 @@ impl HDTDictionary {
         let mut in_section = false;
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed == marker { in_section = true; continue; }
-            if trimmed.starts_with("triples:") { break; }
+            if trimmed == marker {
+                in_section = true;
+                continue;
+            }
+            if trimmed.starts_with("triples:") {
+                break;
+            }
             if in_section && !trimmed.is_empty() {
                 entries.push(trimmed.to_string());
             }
@@ -57,7 +62,10 @@ impl HDTDictionary {
 pub struct HDTParser;
 
 impl HDTParser {
-    #[must_use] pub fn new() -> Self { Self }
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
 
     pub fn parse(&self, content: &str) -> Result<Ontology> {
         let mut o = Ontology::new();
@@ -122,10 +130,18 @@ impl HDTParser {
         let mut in_section = false;
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed == marker { in_section = true; continue; }
-            if trimmed.is_empty() || trimmed.starts_with("subjects:")
-                || trimmed.starts_with("predicates:") || trimmed.starts_with("objects:") {
-                if !trimmed.is_empty() && !trimmed.starts_with(&marker) { break; }
+            if trimmed == marker {
+                in_section = true;
+                continue;
+            }
+            if trimmed.is_empty()
+                || trimmed.starts_with("subjects:")
+                || trimmed.starts_with("predicates:")
+                || trimmed.starts_with("objects:")
+            {
+                if !trimmed.is_empty() && !trimmed.starts_with(&marker) {
+                    break;
+                }
                 continue;
             }
             if in_section {
@@ -154,12 +170,23 @@ impl HDTParser {
 #[derive(Debug, Clone, Default)]
 pub struct HDTRenderer;
 impl HDTRenderer {
-    #[must_use] pub fn new() -> Self { Self }
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
     pub fn serialize(&self, ontology: &Ontology) -> Result<String> {
         let mut buf = String::from("$HDT\n");
-        let axioms: Vec<_> = ontology.axioms().iter().filter_map(|a| {
-            if let Axiom::Declaration(d) = a { Some(d.entity.iri().to_string()) } else { None }
-        }).collect();
+        let axioms: Vec<_> = ontology
+            .axioms()
+            .iter()
+            .filter_map(|a| {
+                if let Axiom::Declaration(d) = a {
+                    Some(d.entity.iri().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         // Header
         buf.push_str(&format!("triples={}\n", axioms.len()));
@@ -171,7 +198,9 @@ impl HDTRenderer {
         dict.dedup();
         buf.push_str("dictionary:\n");
         buf.push_str("subjects:\n");
-        for entry in &dict { buf.push_str(&format!("  {entry}\n")); }
+        for entry in &dict {
+            buf.push_str(&format!("  {entry}\n"));
+        }
         buf.push_str("predicates:\n  rdf:type\n");
         buf.push_str("objects:\n  owl:Class\n");
         buf.push('\n');
@@ -187,7 +216,9 @@ impl HDTRenderer {
     }
 }
 
-pub fn parse(content: &str) -> Result<Ontology> { HDTParser::new().parse(content) }
+pub fn parse(content: &str) -> Result<Ontology> {
+    HDTParser::new().parse(content)
+}
 pub fn save_file<P: AsRef<std::path::Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let content = HDTRenderer::new().serialize(ontology)?;
     std::fs::write(path, content).map_err(|e| crate::Error::io(format!("HDT: {e}")))

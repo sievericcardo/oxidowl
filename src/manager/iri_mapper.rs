@@ -229,3 +229,101 @@ impl OntologyIRIMapper for CompositeIRIMapper {
         "CompositeIRIMapper"
     }
 }
+
+// ── ZipIRIMapper ─────────────────────────────────────────────────────────────
+
+/// Maps ontology IRIs to entries inside a zip archive.
+///
+/// When an ontology IRI matches a registered pattern, the corresponding entry
+/// is extracted from the zip to a temporary file and returned as a `file://` IRI.
+#[cfg(feature = "zip-imports")]
+pub struct ZipIRIMapper {
+    mappings: HashMap<String, (std::path::PathBuf, String)>,
+}
+
+#[cfg(feature = "zip-imports")]
+impl ZipIRIMapper {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            mappings: HashMap::new(),
+        }
+    }
+
+    pub fn add_mapping(&mut self, iri_pattern: &str, zip_path: std::path::PathBuf, entry_name: &str) {
+        self.mappings
+            .insert(iri_pattern.to_string(), (zip_path, entry_name.to_string()));
+    }
+
+    pub fn auto_discover(&mut self, zip_path: &std::path::Path) -> crate::Result<()> {
+        let file = std::fs::File::open(zip_path)
+            .map_err(|e| crate::Error::io(format!("Failed to open zip: {e}")))?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| crate::Error::io(format!("Failed to read zip: {e}")))?;
+
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i)
+                .map_err(|e| crate::Error::io(format!("Failed to read zip entry: {e}")))?;
+            let name = entry.name().to_string();
+            let lower = name.to_lowercase();
+            if lower.ends_with(".owl") || lower.ends_with(".ttl") || lower.ends_with(".rdf") || lower.ends_with(".omn") {
+                let iri = Self::derive_iri_from_filename(&name);
+                self.add_mapping(&iri, zip_path.to_path_buf(), &name);
+            }
+        }
+        Ok(())
+    }
+
+    fn derive_iri_from_filename(filename: &str) -> String {
+        let name = std::path::Path::new(filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(filename);
+        format!("http://example.org/ont/{name}")
+    }
+
+    fn extract_entry(&self, zip_path: &std::path::Path, entry_name: &str) -> crate::Result<std::path::PathBuf> {
+        let file = std::fs::File::open(zip_path)
+            .map_err(|e| crate::Error::io(format!("Failed to open zip: {e}")))?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| crate::Error::io(format!("Failed to read zip: {e}")))?;
+
+        let target_dir = std::env::temp_dir().join(format!("oxidowl_zip_{}", std::process::id()));
+        std::fs::create_dir_all(&target_dir)
+            .map_err(|e| crate::Error::io(format!("Failed to create temp dir: {e}")))?;
+
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i)
+                .map_err(|e| crate::Error::io(format!("Failed to read zip entry: {e}")))?;
+            if entry.name() == entry_name {
+                let out_path = target_dir.join(entry_name);
+                let mut out = std::fs::File::create(&out_path)
+                    .map_err(|e| crate::Error::io(format!("Failed to create temp file: {e}")))?;
+                std::io::copy(&mut entry, &mut out)
+                    .map_err(|e| crate::Error::io(format!("Failed to extract entry: {e}")))?;
+                return Ok(out_path);
+            }
+        }
+        Err(crate::Error::io(format!("Entry '{entry_name}' not found in zip")))
+    }
+}
+
+#[cfg(feature = "zip-imports")]
+impl OntologyIRIMapper for ZipIRIMapper {
+    fn get_document_iri(&self, ontology_iri: &IRI) -> Option<IRI> {
+        let iri_str = ontology_iri.as_str();
+        for (pattern, (zip_path, entry_name)) in &self.mappings {
+            if iri_str.contains(pattern.as_str()) {
+                if let Ok(temp_path) = self.extract_entry(zip_path, entry_name) {
+                    let file_url = format!("file://{}", temp_path.display());
+                    return Some(IRI::new(&file_url));
+                }
+            }
+        }
+        None
+    }
+
+    fn name(&self) -> &str {
+        "ZipIRIMapper"
+    }
+}

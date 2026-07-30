@@ -1,7 +1,7 @@
 //! Explanation Generator trait and implementations.
 
-use crate::ontology::axioms::Axiom;
 use crate::Result;
+use crate::ontology::axioms::Axiom;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -35,7 +35,11 @@ pub struct SingleExplanationGenerator {
 impl SingleExplanationGenerator {
     #[must_use]
     pub fn new(inner: Box<dyn ExplanationGenerator>, entailment: Axiom) -> Self {
-        Self { inner, cached: RwLock::new(None), entailment }
+        Self {
+            inner,
+            cached: RwLock::new(None),
+            entailment,
+        }
     }
 
     /// Get the explanation, computing only once (lazy).

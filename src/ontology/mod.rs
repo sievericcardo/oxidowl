@@ -9,7 +9,9 @@ pub mod axioms;
 pub mod concepts;
 pub mod datatypes;
 pub mod individuals;
+pub mod owl_xml_vocabulary;
 pub mod properties;
+pub mod shortform;
 pub mod vocabulary;
 
 // Re-export main types
@@ -138,6 +140,12 @@ pub enum ObjectPropertyExpression {
 /// Data Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct DataProperty {
+    pub iri: IRI,
+}
+
+/// Named Datatype
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Datatype {
     pub iri: IRI,
 }
 
@@ -329,6 +337,23 @@ pub enum AnnotationValue {
 pub struct Annotation {
     pub property: AnnotationProperty,
     pub value: AnnotationValue,
+    pub annotations: Vec<Annotation>,
+}
+
+impl Annotation {
+    /// Create a new annotation with annotations.
+    #[must_use]
+    pub fn new(
+        property: AnnotationProperty,
+        value: AnnotationValue,
+        annotations: Vec<Annotation>,
+    ) -> Self {
+        Self {
+            property,
+            value,
+            annotations,
+        }
+    }
 }
 
 /// Ontology signature containing all entities
@@ -352,6 +377,96 @@ impl Signature {
     }
 }
 
+/// OWL Imports Declaration
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ImportsDeclaration {
+    pub imported_ontology_iri: IRI,
+}
+
+/// Ontology identity (OWL 2 OWLOntologyID)
+#[derive(Debug, Clone)]
+pub struct OntologyID {
+    pub ontology_iri: Option<IRI>,
+    pub version_iri: Option<IRI>,
+    /// Unique identifier for distinguishing anonymous ontologies.
+    /// Set to 0 for ontologies with an explicit IRI.
+    internal_id: u64,
+}
+
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static ANON_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+impl OntologyID {
+    /// Create a new anonymous OntologyID with a unique internal identifier.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            ontology_iri: None,
+            version_iri: None,
+            internal_id: ANON_COUNTER.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// Create an OntologyID with explicit IRIs.
+    #[must_use]
+    pub fn new_with_iris(ontology_iri: IRI, version_iri: Option<IRI>) -> Self {
+        Self {
+            ontology_iri: Some(ontology_iri),
+            version_iri,
+            internal_id: 0,
+        }
+    }
+
+    /// Get the ontology IRI.
+    #[must_use]
+    pub fn get_ontology_iri(&self) -> Option<&IRI> {
+        self.ontology_iri.as_ref()
+    }
+
+    /// Get the version IRI.
+    #[must_use]
+    pub fn get_version_iri(&self) -> Option<&IRI> {
+        self.version_iri.as_ref()
+    }
+
+    /// Check if this is an anonymous ontology (no ontology IRI).
+    #[must_use]
+    pub fn is_anonymous(&self) -> bool {
+        self.ontology_iri.is_none()
+    }
+}
+
+impl PartialEq for OntologyID {
+    fn eq(&self, other: &Self) -> bool {
+        self.ontology_iri == other.ontology_iri
+            && self.version_iri == other.version_iri
+            && match (&self.ontology_iri, &other.ontology_iri) {
+                (None, None) => self.internal_id == other.internal_id,
+                (Some(_), Some(_)) => true,
+                _ => false,
+            }
+    }
+}
+
+impl Eq for OntologyID {}
+
+impl std::hash::Hash for OntologyID {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ontology_iri.hash(state);
+        self.version_iri.hash(state);
+        if self.ontology_iri.is_none() {
+            self.internal_id.hash(state);
+        }
+    }
+}
+
+impl Default for OntologyID {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Main ontology structure containing all axioms and metadata
 #[derive(Debug, Clone)]
 pub struct Ontology {
@@ -359,12 +474,12 @@ pub struct Ontology {
     pub axioms: Vec<axioms::Axiom>,
     /// Ontology annotations
     pub annotations: Vec<Annotation>,
-    /// Ontology IRI
-    pub iri: Option<IRI>,
-    /// Version IRI
-    pub version_iri: Option<IRI>,
+    /// Ontology identity
+    pub id: OntologyID,
     /// Imports
-    pub imports: Vec<IRI>,
+    pub imports: Vec<ImportsDeclaration>,
+    /// Prefix mappings (prefix name -> namespace IRI)
+    pub prefixes: std::collections::HashMap<String, IRI>,
     /// Next axiom ID
     next_id: u64,
     /// RDF graph for RDF-star and RDF 1.2 support
@@ -379,10 +494,10 @@ impl Ontology {
         Self {
             axioms: Vec::new(),
             annotations: Vec::new(),
-            iri: None,
-            version_iri: None,
+            id: OntologyID::new(),
             imports: Vec::new(),
             next_id: 1,
+            prefixes: std::collections::HashMap::new(),
             rdf_graph: None,
         }
     }
@@ -396,23 +511,45 @@ impl Ontology {
 
     /// Set the ontology IRI
     pub fn set_iri(&mut self, iri: IRI) {
-        self.iri = Some(iri);
+        self.id.ontology_iri = Some(iri);
     }
 
     /// Set the ontology IRI (alternative method name used by adapter)
     pub fn set_ontology_iri(&mut self, iri: Option<IRI>) {
-        self.iri = iri;
+        self.id.ontology_iri = iri;
     }
 
     /// Set the version IRI  
     pub fn set_version_iri(&mut self, iri: Option<IRI>) {
-        self.version_iri = iri;
+        self.id.version_iri = iri;
     }
 
     /// Get the ontology IRI
     #[must_use]
     pub fn get_iri(&self) -> Option<&IRI> {
-        self.iri.as_ref()
+        self.id.ontology_iri.as_ref()
+    }
+
+    /// Set all prefix mappings at once
+    pub fn set_prefixes(&mut self, prefixes: std::collections::HashMap<String, IRI>) {
+        self.prefixes = prefixes;
+    }
+
+    /// Get all prefix mappings
+    #[must_use]
+    pub fn get_prefixes(&self) -> &std::collections::HashMap<String, IRI> {
+        &self.prefixes
+    }
+
+    /// Add a single prefix mapping
+    pub fn add_prefix(&mut self, prefix: String, iri: IRI) {
+        self.prefixes.insert(prefix, iri);
+    }
+
+    /// Get a single prefix mapping
+    #[must_use]
+    pub fn get_prefix(&self, prefix: &str) -> Option<&IRI> {
+        self.prefixes.get(prefix)
     }
 
     /// Get the RDF graph (if present)
@@ -475,6 +612,198 @@ impl Ontology {
     #[must_use]
     pub fn axioms(&self) -> &[axioms::Axiom] {
         &self.axioms
+    }
+
+    /// Check if the ontology is empty (no axioms and no annotations)
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.axioms.is_empty() && self.annotations.is_empty()
+    }
+
+    /// Check if an entity has a declaration axiom in this ontology
+    #[must_use]
+    pub fn is_declared(&self, entity: &axioms::Entity) -> bool {
+        self.axioms.iter().any(|a| {
+            matches!(a, axioms::Axiom::Declaration(d) if &d.entity == entity)
+        })
+    }
+
+    /// Get all axioms of a specific type
+    #[must_use]
+    pub fn get_axioms_by_type(&self, axiom_type: &axioms::AxiomType) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| &a.axiom_type() == axiom_type)
+            .collect()
+    }
+
+    /// Get the count of a specific axiom type
+    #[must_use]
+    pub fn get_axiom_count_by_type(&self, axiom_type: &axioms::AxiomType) -> usize {
+        self.axioms
+            .iter()
+            .filter(|a| &a.axiom_type() == axiom_type)
+            .count()
+    }
+
+    /// Get all TBox (class-level) axioms
+    #[must_use]
+    pub fn get_tbox_axioms(&self) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.axiom_type(),
+                    axioms::AxiomType::SubClassOf
+                        | axioms::AxiomType::EquivalentClasses
+                        | axioms::AxiomType::DisjointClasses
+                        | axioms::AxiomType::DisjointUnion
+                )
+            })
+            .collect()
+    }
+
+    /// Get all RBox (property-level) axioms
+    #[must_use]
+    pub fn get_rbox_axioms(&self) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| {
+                let t = a.axiom_type();
+                matches!(
+                    t,
+                    axioms::AxiomType::SubObjectPropertyOf
+                        | axioms::AxiomType::EquivalentObjectProperties
+                        | axioms::AxiomType::DisjointObjectProperties
+                        | axioms::AxiomType::InverseObjectProperties
+                        | axioms::AxiomType::ObjectPropertyDomain
+                        | axioms::AxiomType::ObjectPropertyRange
+                        | axioms::AxiomType::FunctionalObjectProperty
+                        | axioms::AxiomType::InverseFunctionalObjectProperty
+                        | axioms::AxiomType::ReflexiveObjectProperty
+                        | axioms::AxiomType::IrreflexiveObjectProperty
+                        | axioms::AxiomType::SymmetricObjectProperty
+                        | axioms::AxiomType::AsymmetricObjectProperty
+                        | axioms::AxiomType::TransitiveObjectProperty
+                        | axioms::AxiomType::SubDataPropertyOf
+                        | axioms::AxiomType::EquivalentDataProperties
+                        | axioms::AxiomType::DisjointDataProperties
+                        | axioms::AxiomType::DataPropertyDomain
+                        | axioms::AxiomType::DataPropertyRange
+                        | axioms::AxiomType::FunctionalDataProperty
+                )
+            })
+            .collect()
+    }
+
+    /// Get all ABox (individual-level) axioms
+    #[must_use]
+    pub fn get_abox_axioms(&self) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.axiom_type(),
+                    axioms::AxiomType::ClassAssertion
+                        | axioms::AxiomType::SameIndividual
+                        | axioms::AxiomType::DifferentIndividuals
+                        | axioms::AxiomType::ObjectPropertyAssertion
+                        | axioms::AxiomType::DataPropertyAssertion
+                        | axioms::AxiomType::NegativeObjectPropertyAssertion
+                        | axioms::AxiomType::NegativeDataPropertyAssertion
+                )
+            })
+            .collect()
+    }
+
+    /// Count logical (non-annotation) axioms
+    #[must_use]
+    pub fn get_logical_axiom_count(&self) -> usize {
+        self.axioms.iter().filter(|a| a.is_logical()).count()
+    }
+
+    /// Get all classes from the signature (Declaration axioms)
+    #[must_use]
+    pub fn get_classes_in_signature(&self) -> Vec<concepts::Class> {
+        let mut classes = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a {
+                if let axioms::Entity::Class(iri) = &d.entity {
+                    classes.push(concepts::Class { iri: iri.clone() });
+                }
+            }
+        }
+        classes
+    }
+
+    /// Get all object properties from the signature
+    #[must_use]
+    pub fn get_object_properties_in_signature(&self) -> Vec<ObjectProperty> {
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a {
+                if let axioms::Entity::ObjectProperty(iri) = &d.entity {
+                    props.push(ObjectProperty { iri: iri.clone() });
+                }
+            }
+        }
+        props
+    }
+
+    /// Get all data properties from the signature
+    #[must_use]
+    pub fn get_data_properties_in_signature(&self) -> Vec<DataProperty> {
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a {
+                if let axioms::Entity::DataProperty(iri) = &d.entity {
+                    props.push(DataProperty { iri: iri.clone() });
+                }
+            }
+        }
+        props
+    }
+
+    /// Get all named individuals from the signature
+    #[must_use]
+    pub fn get_individuals_in_signature(&self) -> Vec<individuals::NamedIndividual> {
+        let mut inds = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a {
+                if let axioms::Entity::NamedIndividual(iri) = &d.entity {
+                    inds.push(individuals::NamedIndividual { iri: iri.clone() });
+                }
+            }
+        }
+        inds
+    }
+
+    /// Get all datatypes from the signature
+    #[must_use]
+    pub fn get_datatypes_in_signature(&self) -> Vec<Datatype> {
+        let mut dts = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a {
+                if let axioms::Entity::Datatype(iri) = &d.entity {
+                    dts.push(Datatype { iri: iri.clone() });
+                }
+            }
+        }
+        dts
+    }
+
+    /// Get all annotation properties from the signature
+    #[must_use]
+    pub fn get_annotation_properties_in_signature(&self) -> Vec<AnnotationProperty> {
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a {
+                if let axioms::Entity::AnnotationProperty(iri) = &d.entity {
+                    props.push(AnnotationProperty { iri: iri.clone() });
+                }
+            }
+        }
+        props
     }
 
     /// Count axioms by type

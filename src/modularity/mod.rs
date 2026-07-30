@@ -1,13 +1,13 @@
 //! Ontology Modularity — decomposition, locality, and module extraction.
 
-pub mod locality;
-pub mod extractor;
-pub mod segmenter;
-pub mod decomposition;
 pub mod decomposer;
+pub mod decomposition;
+pub mod extractor;
+pub mod locality;
+pub mod segmenter;
 
-use crate::ontology::axioms::Axiom;
 use crate::ontology::IRI;
+use crate::ontology::axioms::Axiom;
 use std::collections::{HashMap, HashSet};
 
 /// Internal wrapper tracking axiom position and its signature.
@@ -25,13 +25,18 @@ pub struct SigIndex {
 
 impl SigIndex {
     #[must_use]
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Build the index from a list of axiom wrappers.
     pub fn build(&mut self, axioms: &[AxiomWrapper]) {
         for ax in axioms {
             for iri in &ax.signature {
-                self.index.entry(iri.clone()).or_default().insert(ax.position);
+                self.index
+                    .entry(iri.clone())
+                    .or_default()
+                    .insert(ax.position);
             }
         }
     }

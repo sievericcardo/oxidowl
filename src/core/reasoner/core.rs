@@ -971,9 +971,7 @@ impl Reasoner {
             crate::ontology::OntologyFormat::DL => {
                 crate::parsers::dl_syntax::parse(&parsed_content)?
             }
-            crate::ontology::OntologyFormat::Krss => {
-                crate::parsers::krss::parse(&parsed_content)?
-            }
+            crate::ontology::OntologyFormat::Krss => crate::parsers::krss::parse(&parsed_content)?,
             crate::ontology::OntologyFormat::Krss2 => {
                 crate::parsers::krss::parse_krss2(&parsed_content)?
             }
@@ -983,15 +981,31 @@ impl Reasoner {
                 });
             }
             crate::ontology::OntologyFormat::Obo => crate::parsers::obo::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::NQuads => crate::parsers::rio::nquads::parse(&parsed_content)?,
+            crate::ontology::OntologyFormat::NQuads => {
+                crate::parsers::rio::nquads::parse(&parsed_content)?
+            }
             crate::ontology::OntologyFormat::N3 => crate::parsers::rio::n3::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::TriG => crate::parsers::rio::trig::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::TriX => crate::parsers::rio::trix::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::JsonLd => crate::parsers::rio::jsonld::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::RdfJson => crate::parsers::rio::rdf_json::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::Rdfa => crate::parsers::rio::rdfa::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::BinaryRdf => crate::parsers::rio::binary_rdf::parse(&parsed_content)?,
-            crate::ontology::OntologyFormat::Hdt => crate::parsers::rio::hdt::parse(&parsed_content)?,
+            crate::ontology::OntologyFormat::TriG => {
+                crate::parsers::rio::trig::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::TriX => {
+                crate::parsers::rio::trix::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::JsonLd => {
+                crate::parsers::rio::jsonld::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::RdfJson => {
+                crate::parsers::rio::rdf_json::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::Rdfa => {
+                crate::parsers::rio::rdfa::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::BinaryRdf => {
+                crate::parsers::rio::binary_rdf::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::Hdt => {
+                crate::parsers::rio::hdt::parse(&parsed_content)?
+            }
             crate::ontology::OntologyFormat::Turtle => {
                 let parser = turtle::TurtleParser::new();
                 parser.parse(&parsed_content)?

@@ -9,7 +9,7 @@ use std::{
     path::Path,
 };
 
-use super::common::OntologySerializer;
+use super::common::{OntologySerializer, SerializerConfig};
 use crate::{
     Error, Result,
     ontology::Ontology,
@@ -527,28 +527,58 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 }
 
 /// N-Triples format serializer implementing the common serialization interface
-#[derive(Debug, Clone, Default)]
-pub struct NTriplesSerializer;
+#[derive(Debug, Clone)]
+pub struct NTriplesSerializer {
+    config: SerializerConfig,
+}
 
 impl NTriplesSerializer {
-    /// Create a new `NTriplesSerializer` instance
+    /// Create a new `NTriplesSerializer` instance with default configuration
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self {
+            config: SerializerConfig::default(),
+        }
+    }
+
+    /// Create a new serializer with explicit configuration
+    #[must_use]
+    pub fn with_config(config: SerializerConfig) -> Self {
+        Self { config }
+    }
+}
+
+impl Default for NTriplesSerializer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl OntologySerializer for NTriplesSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        self.serialize_with_config(ontology, &self.config)
+    }
+}
+
+impl NTriplesSerializer {
+    /// Serialize with explicit configuration
+    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> std::result::Result<String, Error> {
         let mut content = String::new();
 
+        if config.add_banner {
+            content.push_str(&super::common::generate_banner());
+            content.push('\n');
+        }
+
+        let indent = " ".repeat(config.indent_size);
+
         for (subject, class) in ontology.classes() {
-            content.push_str(&format!("{} rdf:type {} .\n", subject, class.iri));
+            content.push_str(&format!("{indent}{} rdf:type {} .\n", subject, class.iri));
         }
 
         for (_subject, individual) in ontology.individuals() {
             if let Some(iri) = individual.iri() {
-                content.push_str(&format!("{iri} rdf:type Individual .\n"));
+                content.push_str(&format!("{indent}{iri} rdf:type Individual .\n"));
             }
         }
 

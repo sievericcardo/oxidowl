@@ -6,18 +6,17 @@
 pub mod providers;
 
 use self::providers::AxiomCreationProvider;
-use crate::ontology::{
-    AnnotationProperty, AnonymousIndividual, Class, DataProperty, DataRange, ObjectProperty, IRI,
-};
-use crate::ontology::axioms::{
-    AxiomId, Entity, EntityType,
-};
+use crate::ontology::axioms::{AxiomId, Entity, EntityType};
 use crate::ontology::concepts::ClassExpression;
 use crate::ontology::individuals::{Individual, NamedIndividual};
 use crate::ontology::{Annotation, AnnotationValue, Literal};
+use crate::ontology::{
+    AnnotationProperty, AnonymousIndividual, Class, DataProperty, DataRange, Datatype, IRI,
+    ObjectProperty,
+};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // ── DataFactory ──────────────────────────────────────────────────────────────
 
@@ -33,6 +32,7 @@ pub struct DataFactory {
     data_property_cache: RwLock<HashMap<IRI, DataProperty>>,
     individual_cache: RwLock<HashMap<IRI, NamedIndividual>>,
     annotation_property_cache: RwLock<HashMap<IRI, AnnotationProperty>>,
+    datatype_cache: RwLock<HashMap<IRI, Datatype>>,
     next_axiom_id: AtomicU64,
 }
 
@@ -54,6 +54,7 @@ impl DataFactory {
             data_property_cache: RwLock::new(HashMap::new()),
             individual_cache: RwLock::new(HashMap::new()),
             annotation_property_cache: RwLock::new(HashMap::new()),
+            datatype_cache: RwLock::new(HashMap::new()),
             next_axiom_id: AtomicU64::new(1),
         }
     }
@@ -65,7 +66,10 @@ impl DataFactory {
         let mut s = HashMap::with_capacity(5);
         s.insert(
             "classes",
-            self.class_cache.read().unwrap_or_else(|e| e.into_inner()).len(),
+            self.class_cache
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .len(),
         );
         s.insert(
             "object_properties",
@@ -95,10 +99,23 @@ impl DataFactory {
                 .unwrap_or_else(|e| e.into_inner())
                 .len(),
         );
+        s.insert(
+            "datatypes",
+            self.datatype_cache
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .len(),
+        );
         s
     }
 
     // ── Entity creation (with interning) ─────────────────────────────────
+
+    /// Generate a fresh, monotonically increasing axiom ID.
+    #[must_use]
+    pub fn next_id(&self) -> AxiomId {
+        self.next_axiom_id.fetch_add(1, Ordering::Relaxed)
+    }
 
     /// Get or create a named class for the given IRI.
     pub fn get_class(&self, iri: &IRI) -> Class {
@@ -116,12 +133,18 @@ impl DataFactory {
 
     /// Get or create an object property for the given IRI.
     pub fn get_object_property(&self, iri: &IRI) -> ObjectProperty {
-        let cache = self.object_property_cache.read().unwrap_or_else(|e| e.into_inner());
+        let cache = self
+            .object_property_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(prop) = cache.get(iri) {
             return prop.clone();
         }
         drop(cache);
-        let mut cache = self.object_property_cache.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = self
+            .object_property_cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         cache
             .entry(iri.clone())
             .or_insert_with(|| ObjectProperty { iri: iri.clone() })
@@ -130,12 +153,18 @@ impl DataFactory {
 
     /// Get or create a data property for the given IRI.
     pub fn get_data_property(&self, iri: &IRI) -> DataProperty {
-        let cache = self.data_property_cache.read().unwrap_or_else(|e| e.into_inner());
+        let cache = self
+            .data_property_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(prop) = cache.get(iri) {
             return prop.clone();
         }
         drop(cache);
-        let mut cache = self.data_property_cache.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = self
+            .data_property_cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         cache
             .entry(iri.clone())
             .or_insert_with(|| DataProperty { iri: iri.clone() })
@@ -144,12 +173,18 @@ impl DataFactory {
 
     /// Get or create a named individual for the given IRI.
     pub fn get_named_individual(&self, iri: &IRI) -> NamedIndividual {
-        let cache = self.individual_cache.read().unwrap_or_else(|e| e.into_inner());
+        let cache = self
+            .individual_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(ind) = cache.get(iri) {
             return ind.clone();
         }
         drop(cache);
-        let mut cache = self.individual_cache.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = self
+            .individual_cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         cache
             .entry(iri.clone())
             .or_insert_with(|| NamedIndividual { iri: iri.clone() })
@@ -167,21 +202,53 @@ impl DataFactory {
 
     /// Get or create an annotation property for the given IRI.
     pub fn get_annotation_property(&self, iri: &IRI) -> AnnotationProperty {
-        let cache = self.annotation_property_cache.read().unwrap_or_else(|e| e.into_inner());
+        let cache = self
+            .annotation_property_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(prop) = cache.get(iri) {
             return prop.clone();
         }
         drop(cache);
-        let mut cache = self.annotation_property_cache.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = self
+            .annotation_property_cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         cache
             .entry(iri.clone())
             .or_insert_with(|| AnnotationProperty { iri: iri.clone() })
             .clone()
     }
 
+    /// Get or create a named datatype for the given IRI.
+    pub fn get_owl_datatype(&self, iri: &IRI) -> Datatype {
+        let cache = self
+            .datatype_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(dt) = cache.get(iri) {
+            return dt.clone();
+        }
+        drop(cache);
+        let mut cache = self
+            .datatype_cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        cache
+            .entry(iri.clone())
+            .or_insert_with(|| Datatype { iri: iri.clone() })
+            .clone()
+    }
+
+    /// Get a datatype (interned) for the given IRI.
+    #[must_use]
+    pub fn get_datatype(&self, iri: &IRI) -> Datatype {
+        self.get_owl_datatype(iri)
+    }
+
     /// Get a datatype data range for the given IRI.
     #[must_use]
-    pub fn get_datatype(&self, iri: &IRI) -> DataRange {
+    pub fn get_datatype_range(&self, iri: &IRI) -> DataRange {
         DataRange::Datatype(iri.clone())
     }
 
@@ -209,19 +276,181 @@ impl DataFactory {
     /// Create a boolean literal.
     #[must_use]
     pub fn get_boolean_literal(&self, value: bool) -> Literal {
-        Literal::new(value.to_string())
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::BOOLEAN),
+        )
     }
 
     /// Create an integer literal.
     #[must_use]
     pub fn get_integer_literal(&self, value: i64) -> Literal {
-        Literal::new(value.to_string())
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::INTEGER),
+        )
     }
 
     /// Create a double literal.
     #[must_use]
     pub fn get_double_literal(&self, value: f64) -> Literal {
-        Literal::new(value.to_string())
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::DOUBLE),
+        )
+    }
+
+    /// Create a float literal typed with xsd:float.
+    #[must_use]
+    pub fn get_float_literal(&self, value: f32) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::FLOAT),
+        )
+    }
+
+    /// Create a long literal typed with xsd:long.
+    #[must_use]
+    pub fn get_long_literal(&self, value: i64) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::LONG),
+        )
+    }
+
+    /// Create a short literal typed with xsd:short.
+    #[must_use]
+    pub fn get_short_literal(&self, value: i16) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::SHORT),
+        )
+    }
+
+    /// Create a byte literal typed with xsd:byte.
+    #[must_use]
+    pub fn get_byte_literal(&self, value: i8) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::BYTE),
+        )
+    }
+
+    /// Create an unsigned byte literal typed with xsd:unsignedByte.
+    #[must_use]
+    pub fn get_unsigned_byte_literal(&self, value: u8) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::UNSIGNED_BYTE),
+        )
+    }
+
+    /// Create an unsigned short literal typed with xsd:unsignedShort.
+    #[must_use]
+    pub fn get_unsigned_short_literal(&self, value: u16) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::UNSIGNED_SHORT),
+        )
+    }
+
+    /// Create an unsigned int literal typed with xsd:unsignedInt.
+    #[must_use]
+    pub fn get_unsigned_int_literal(&self, value: u32) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::UNSIGNED_INT),
+        )
+    }
+
+    /// Create an unsigned long literal typed with xsd:unsignedLong.
+    #[must_use]
+    pub fn get_unsigned_long_literal(&self, value: u64) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::UNSIGNED_LONG),
+        )
+    }
+
+    /// Create a positive integer literal typed with xsd:positiveInteger.
+    #[must_use]
+    pub fn get_positive_integer_literal(&self, value: u64) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::POSITIVE_INTEGER),
+        )
+    }
+
+    /// Create a negative integer literal typed with xsd:negativeInteger.
+    #[must_use]
+    pub fn get_negative_integer_literal(&self, value: i64) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::NEGATIVE_INTEGER),
+        )
+    }
+
+    /// Create a non-negative integer literal typed with xsd:nonNegativeInteger.
+    #[must_use]
+    pub fn get_non_negative_integer_literal(&self, value: u64) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::NON_NEGATIVE_INTEGER),
+        )
+    }
+
+    /// Create a non-positive integer literal typed with xsd:nonPositiveInteger.
+    #[must_use]
+    pub fn get_non_positive_integer_literal(&self, value: i64) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::NON_POSITIVE_INTEGER),
+        )
+    }
+
+    /// Create an owl:real literal.
+    #[must_use]
+    pub fn get_owl_real_literal(&self, value: &str) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::owl::REAL),
+        )
+    }
+
+    /// Create an owl:rational literal.
+    #[must_use]
+    pub fn get_owl_rational_literal(&self, value: &str) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::owl::RATIONAL),
+        )
+    }
+
+    /// Create a dateTime literal typed with xsd:dateTime.
+    #[must_use]
+    pub fn get_date_time_literal(&self, value: &str) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::DATE_TIME),
+        )
+    }
+
+    /// Create a date literal typed with xsd:date.
+    #[must_use]
+    pub fn get_date_literal(&self, value: &str) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::DATE),
+        )
+    }
+
+    /// Create a time literal typed with xsd:time.
+    #[must_use]
+    pub fn get_time_literal(&self, value: &str) -> Literal {
+        Literal::with_datatype(
+            value.to_string(),
+            IRI::new(crate::ontology::vocabulary::xsd::TIME),
+        )
     }
 
     /// Create a typed literal (lexical form + datatype IRI).
@@ -244,6 +473,22 @@ impl DataFactory {
         Annotation {
             property,
             value: AnnotationValue::IRI(iri_value),
+            annotations: Vec::new(),
+        }
+    }
+
+    /// Create an annotation with an IRI value and nested annotations.
+    #[must_use]
+    pub fn get_annotation_with_annotations(
+        &self,
+        property: AnnotationProperty,
+        iri_value: IRI,
+        annotations: Vec<Annotation>,
+    ) -> Annotation {
+        Annotation {
+            property,
+            value: AnnotationValue::IRI(iri_value),
+            annotations,
         }
     }
 
@@ -257,6 +502,22 @@ impl DataFactory {
         Annotation {
             property,
             value: AnnotationValue::Literal(literal),
+            annotations: Vec::new(),
+        }
+    }
+
+    /// Create an annotation with a literal value and nested annotations.
+    #[must_use]
+    pub fn get_annotation_literal_with_annotations(
+        &self,
+        property: AnnotationProperty,
+        literal: Literal,
+        annotations: Vec<Annotation>,
+    ) -> Annotation {
+        Annotation {
+            property,
+            value: AnnotationValue::Literal(literal),
+            annotations,
         }
     }
 
@@ -450,6 +711,356 @@ impl DataFactory {
             filler,
         }
     }
+    // ── Axiom Creation ───────────────────────────────────────────────────
+
+    /// Create a declaration axiom.
+    #[must_use]
+    pub fn get_declaration_axiom(&self, entity: Entity) -> crate::ontology::axioms::DeclarationAxiom {
+        crate::ontology::axioms::DeclarationAxiom {
+            id: self.next_id(),
+            entity,
+        }
+    }
+
+    /// Create a SubClassOf axiom.
+    #[must_use]
+    pub fn get_sub_class_of_axiom(
+        &self,
+        subclass: ClassExpression,
+        superclass: ClassExpression,
+    ) -> crate::ontology::axioms::SubClassOfAxiom {
+        crate::ontology::axioms::SubClassOfAxiom {
+            id: self.next_id(),
+            subclass,
+            superclass,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an EquivalentClasses axiom.
+    #[must_use]
+    pub fn get_equivalent_classes_axiom(
+        &self,
+        classes: Vec<ClassExpression>,
+    ) -> crate::ontology::axioms::EquivalentClassesAxiom {
+        crate::ontology::axioms::EquivalentClassesAxiom {
+            id: self.next_id(),
+            classes,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a DisjointClasses axiom.
+    #[must_use]
+    pub fn get_disjoint_classes_axiom(
+        &self,
+        classes: Vec<ClassExpression>,
+    ) -> crate::ontology::axioms::DisjointClassesAxiom {
+        crate::ontology::axioms::DisjointClassesAxiom {
+            id: self.next_id(),
+            classes,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a DisjointUnion axiom.
+    #[must_use]
+    pub fn get_disjoint_union_axiom(
+        &self,
+        class: ClassExpression,
+        disjoint_classes: Vec<ClassExpression>,
+    ) -> crate::ontology::axioms::DisjointUnionAxiom {
+        crate::ontology::axioms::DisjointUnionAxiom {
+            id: self.next_id(),
+            class,
+            disjoint_classes,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a SubObjectPropertyOf axiom.
+    #[must_use]
+    pub fn get_sub_object_property_of_axiom(
+        &self,
+        sub_property: crate::ontology::ObjectPropertyExpression,
+        super_property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::SubObjectPropertyOfAxiom {
+        crate::ontology::axioms::SubObjectPropertyOfAxiom {
+            id: self.next_id(),
+            sub_property,
+            super_property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a SubDataPropertyOf axiom.
+    #[must_use]
+    pub fn get_sub_data_property_of_axiom(
+        &self,
+        sub_property: crate::ontology::DataPropertyExpression,
+        super_property: crate::ontology::DataPropertyExpression,
+    ) -> crate::ontology::axioms::SubDataPropertyOfAxiom {
+        crate::ontology::axioms::SubDataPropertyOfAxiom {
+            id: self.next_id(),
+            sub_property,
+            super_property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a ClassAssertion axiom.
+    #[must_use]
+    pub fn get_class_assertion_axiom(
+        &self,
+        class: ClassExpression,
+        individual: Individual,
+    ) -> crate::ontology::axioms::ClassAssertionAxiom {
+        crate::ontology::axioms::ClassAssertionAxiom {
+            id: self.next_id(),
+            class,
+            individual,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an ObjectPropertyAssertion axiom.
+    #[must_use]
+    pub fn get_object_property_assertion_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+        source: Individual,
+        target: Individual,
+    ) -> crate::ontology::axioms::ObjectPropertyAssertionAxiom {
+        crate::ontology::axioms::ObjectPropertyAssertionAxiom {
+            id: self.next_id(),
+            source,
+            target,
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a DataPropertyAssertion axiom.
+    #[must_use]
+    pub fn get_data_property_assertion_axiom(
+        &self,
+        property: crate::ontology::DataPropertyExpression,
+        individual: Individual,
+        value: Literal,
+    ) -> crate::ontology::axioms::DataPropertyAssertionAxiom {
+        crate::ontology::axioms::DataPropertyAssertionAxiom {
+            id: self.next_id(),
+            individual,
+            property,
+            value,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a SameIndividual axiom.
+    #[must_use]
+    pub fn get_same_individual_axiom(
+        &self,
+        individuals: Vec<Individual>,
+    ) -> crate::ontology::axioms::SameIndividualAxiom {
+        crate::ontology::axioms::SameIndividualAxiom {
+            id: self.next_id(),
+            individuals,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a DifferentIndividuals axiom.
+    #[must_use]
+    pub fn get_different_individuals_axiom(
+        &self,
+        individuals: Vec<Individual>,
+    ) -> crate::ontology::axioms::DifferentIndividualsAxiom {
+        crate::ontology::axioms::DifferentIndividualsAxiom {
+            id: self.next_id(),
+            individuals,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a FunctionalObjectProperty axiom.
+    #[must_use]
+    pub fn get_functional_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::FunctionalObjectPropertyAxiom {
+        crate::ontology::axioms::FunctionalObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a FunctionalDataProperty axiom.
+    #[must_use]
+    pub fn get_functional_data_property_axiom(
+        &self,
+        property: crate::ontology::DataPropertyExpression,
+    ) -> crate::ontology::axioms::FunctionalDataPropertyAxiom {
+        crate::ontology::axioms::FunctionalDataPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a TransitiveObjectProperty axiom.
+    #[must_use]
+    pub fn get_transitive_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::TransitiveObjectPropertyAxiom {
+        crate::ontology::axioms::TransitiveObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a SymmetricObjectProperty axiom.
+    #[must_use]
+    pub fn get_symmetric_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::SymmetricObjectPropertyAxiom {
+        crate::ontology::axioms::SymmetricObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an AsymmetricObjectProperty axiom.
+    #[must_use]
+    pub fn get_asymmetric_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::AsymmetricObjectPropertyAxiom {
+        crate::ontology::axioms::AsymmetricObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a ReflexiveObjectProperty axiom.
+    #[must_use]
+    pub fn get_reflexive_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::ReflexiveObjectPropertyAxiom {
+        crate::ontology::axioms::ReflexiveObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an IrreflexiveObjectProperty axiom.
+    #[must_use]
+    pub fn get_irreflexive_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::IrreflexiveObjectPropertyAxiom {
+        crate::ontology::axioms::IrreflexiveObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an InverseFunctionalObjectProperty axiom.
+    #[must_use]
+    pub fn get_inverse_functional_object_property_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::InverseFunctionalObjectPropertyAxiom {
+        crate::ontology::axioms::InverseFunctionalObjectPropertyAxiom {
+            id: self.next_id(),
+            property,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an InverseObjectProperties axiom.
+    #[must_use]
+    pub fn get_inverse_object_properties_axiom(
+        &self,
+        property1: crate::ontology::ObjectPropertyExpression,
+        property2: crate::ontology::ObjectPropertyExpression,
+    ) -> crate::ontology::axioms::InverseObjectPropertiesAxiom {
+        crate::ontology::axioms::InverseObjectPropertiesAxiom {
+            id: self.next_id(),
+            property1,
+            property2,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an ObjectPropertyDomain axiom.
+    #[must_use]
+    pub fn get_object_property_domain_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+        domain: ClassExpression,
+    ) -> crate::ontology::axioms::ObjectPropertyDomainAxiom {
+        crate::ontology::axioms::ObjectPropertyDomainAxiom {
+            id: self.next_id(),
+            property,
+            domain,
+            annotations: vec![],
+        }
+    }
+
+    /// Create an ObjectPropertyRange axiom.
+    #[must_use]
+    pub fn get_object_property_range_axiom(
+        &self,
+        property: crate::ontology::ObjectPropertyExpression,
+        range: ClassExpression,
+    ) -> crate::ontology::axioms::ObjectPropertyRangeAxiom {
+        crate::ontology::axioms::ObjectPropertyRangeAxiom {
+            id: self.next_id(),
+            property,
+            range,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a DataPropertyDomain axiom.
+    #[must_use]
+    pub fn get_data_property_domain_axiom(
+        &self,
+        property: crate::ontology::DataPropertyExpression,
+        domain: ClassExpression,
+    ) -> crate::ontology::axioms::DataPropertyDomainAxiom {
+        crate::ontology::axioms::DataPropertyDomainAxiom {
+            id: self.next_id(),
+            property,
+            domain,
+            annotations: vec![],
+        }
+    }
+
+    /// Create a DataPropertyRange axiom.
+    #[must_use]
+    pub fn get_data_property_range_axiom(
+        &self,
+        property: crate::ontology::DataPropertyExpression,
+        range: DataRange,
+    ) -> crate::ontology::axioms::DataPropertyRangeAxiom {
+        crate::ontology::axioms::DataPropertyRangeAxiom {
+            id: self.next_id(),
+            property,
+            range,
+            annotations: vec![],
+        }
+    }
 }
 
 impl Default for DataFactory {
@@ -489,8 +1100,8 @@ impl providers::IndividualProvider for DataFactory {
 }
 
 impl providers::DatatypeProvider for DataFactory {
-    fn get_datatype(&self, iri: &IRI) -> DataRange {
-        self.get_datatype(iri)
+    fn get_datatype(&self, iri: &IRI) -> Datatype {
+        self.get_owl_datatype(iri)
     }
 }
 

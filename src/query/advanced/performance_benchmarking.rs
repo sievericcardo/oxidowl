@@ -1289,7 +1289,7 @@ impl BenchmarkSuiteManager {
     ) -> Result<Ontology, BenchmarkError> {
         // Create a mock ontology with the specified number of concepts
         let mut ontology = Ontology::new();
-        ontology.iri = Some(IRI::new(&format!(
+        ontology.id.ontology_iri = Some(IRI::new(&format!(
             "http://example.org/{}",
             name.replace(' ', "_")
         )));

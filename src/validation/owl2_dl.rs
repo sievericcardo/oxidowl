@@ -92,6 +92,39 @@ pub enum ValidationErrorType {
     InvalidDirectionalLiteral,
     /// RDF 1.2: Malformed blank node label
     InvalidBlankNodeLabel,
+    // ── Non-Simple Property Restrictions (OWL 2 Section 11.1) ──
+    NonSimplePropertyInFunctionalProperty,
+    NonSimplePropertyInInverseFunctionalProperty,
+    NonSimplePropertyInIrreflexiveProperty,
+    NonSimplePropertyInAsymmetricProperty,
+    NonSimplePropertyInDisjointProperties,
+    NonSimplePropertyInObjectHasSelf,
+    // ── Property Chain / Cycle ──
+    UseOfPropertyInChainCausesCycle,
+    LastPropertyInChainNotInImposedRange,
+    // ── IRI Validation ──
+    UseOfNonAbsoluteIRI,
+    OntologyIRINotAbsolute,
+    OntologyVersionIRINotAbsolute,
+    // ── Illegal Punning ──
+    IllegalPunning,
+    DatatypeIRIAlsoUsedAsClassIRI,
+    // ── Reserved Vocabulary ──
+    UseOfReservedVocabularyForClassIRI,
+    UseOfReservedVocabularyForObjectPropertyIRI,
+    UseOfReservedVocabularyForDataPropertyIRI,
+    UseOfReservedVocabularyForAnnotationPropertyIRI,
+    UseOfReservedVocabularyForIndividualIRI,
+    UseOfReservedVocabularyForOntologyIRI,
+    UseOfReservedVocabularyForVersionIRI,
+    // ── Expression Position Violations ──
+    UseOfNonSubClassExpression,
+    UseOfNonSuperClassExpression,
+    UseOfNonEquivalentClassExpression,
+    // ── Other DL Restrictions ──
+    UseOfTopDataPropertyAsSubProperty,
+    LexicalNotInLexicalSpace,
+    UseOfBuiltInDatatypeInDatatypeDefinition,
 }
 
 impl std::fmt::Display for ValidationErrorType {
@@ -198,6 +231,84 @@ impl std::fmt::Display for ValidationErrorType {
             }
             ValidationErrorType::InvalidBlankNodeLabel => {
                 write!(f, "Invalid blank node label")
+            }
+            ValidationErrorType::NonSimplePropertyInFunctionalProperty => {
+                write!(f, "Non-simple property in functional property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInInverseFunctionalProperty => {
+                write!(f, "Non-simple property in inverse-functional property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInIrreflexiveProperty => {
+                write!(f, "Non-simple property in irreflexive property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInAsymmetricProperty => {
+                write!(f, "Non-simple property in asymmetric property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInDisjointProperties => {
+                write!(f, "Non-simple property in disjoint property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInObjectHasSelf => {
+                write!(f, "Non-simple property in ObjectHasSelf restriction")
+            }
+            ValidationErrorType::UseOfPropertyInChainCausesCycle => {
+                write!(f, "Property in chain causes cycle")
+            }
+            ValidationErrorType::LastPropertyInChainNotInImposedRange => {
+                write!(f, "Last property in property chain not in imposed range")
+            }
+            ValidationErrorType::UseOfNonAbsoluteIRI => {
+                write!(f, "Use of non-absolute IRI")
+            }
+            ValidationErrorType::OntologyIRINotAbsolute => {
+                write!(f, "Ontology IRI is not absolute")
+            }
+            ValidationErrorType::OntologyVersionIRINotAbsolute => {
+                write!(f, "Ontology version IRI is not absolute")
+            }
+            ValidationErrorType::IllegalPunning => {
+                write!(f, "Illegal punning detected")
+            }
+            ValidationErrorType::DatatypeIRIAlsoUsedAsClassIRI => {
+                write!(f, "Datatype IRI also used as class IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForClassIRI => {
+                write!(f, "Use of reserved vocabulary for class IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForObjectPropertyIRI => {
+                write!(f, "Use of reserved vocabulary for object property IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForDataPropertyIRI => {
+                write!(f, "Use of reserved vocabulary for data property IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForAnnotationPropertyIRI => {
+                write!(f, "Use of reserved vocabulary for annotation property IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForIndividualIRI => {
+                write!(f, "Use of reserved vocabulary for individual IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForOntologyIRI => {
+                write!(f, "Use of reserved vocabulary for ontology IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForVersionIRI => {
+                write!(f, "Use of reserved vocabulary for version IRI")
+            }
+            ValidationErrorType::UseOfNonSubClassExpression => {
+                write!(f, "Invalid expression in subclass position")
+            }
+            ValidationErrorType::UseOfNonSuperClassExpression => {
+                write!(f, "Invalid expression in superclass position")
+            }
+            ValidationErrorType::UseOfNonEquivalentClassExpression => {
+                write!(f, "Invalid expression in equivalent class position")
+            }
+            ValidationErrorType::UseOfTopDataPropertyAsSubProperty => {
+                write!(f, "Use of top data property as sub-property")
+            }
+            ValidationErrorType::LexicalNotInLexicalSpace => {
+                write!(f, "Lexical form not in lexical space of datatype")
+            }
+            ValidationErrorType::UseOfBuiltInDatatypeInDatatypeDefinition => {
+                write!(f, "Use of built-in datatype in datatype definition")
             }
         }
     }

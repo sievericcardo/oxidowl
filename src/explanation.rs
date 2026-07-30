@@ -9,14 +9,16 @@ pub mod blackbox;
 pub mod converter;
 pub mod generator;
 pub mod hst;
+pub mod ordering;
+pub mod renderer;
 
 use crate::{
     Result,
     core::tableau::NodeId,
-    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression},
+    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, OntologyRef},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 /// Main explanation service
 #[derive(Debug)]
@@ -291,9 +293,18 @@ pub enum InferenceRule {
 }
 
 /// Justification computer for finding minimal axiom sets
-#[derive(Debug)]
 pub struct JustificationComputer {
     cache: std::sync::Mutex<HashMap<String, Vec<Axiom>>>,
+    reasoner_factory: Option<Arc<dyn crate::reasoner_api::ReasonerFactory>>,
+}
+
+impl std::fmt::Debug for JustificationComputer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JustificationComputer")
+            .field("cache", &self.cache)
+            .field("reasoner_factory", &self.reasoner_factory.as_ref().map(|_| "ReasonerFactory"))
+            .finish()
+    }
 }
 
 impl JustificationComputer {
@@ -302,6 +313,19 @@ impl JustificationComputer {
     pub fn new() -> Self {
         Self {
             cache: std::sync::Mutex::new(HashMap::new()),
+            reasoner_factory: None,
+        }
+    }
+
+    /// Create a new justification computer with a reasoner factory
+    /// for proper entailment checking.
+    #[must_use]
+    pub fn new_with_factory(
+        reasoner_factory: Arc<dyn crate::reasoner_api::ReasonerFactory>,
+    ) -> Self {
+        Self {
+            cache: std::sync::Mutex::new(HashMap::new()),
+            reasoner_factory: Some(reasoner_factory),
         }
     }
 
@@ -343,17 +367,43 @@ impl JustificationComputer {
         Ok(minimal_set)
     }
 
-    /// Check if entailment still holds with a subset of axioms (simplified check)
+    /// Check entailment using reasoner if available, returning None if not available
+    fn check_entailment_via_reasoner(
+        &self,
+        axioms: &[Axiom],
+        entailment: &Axiom,
+    ) -> Option<bool> {
+        let factory = self.reasoner_factory.as_ref()?;
+        let mut o = crate::ontology::Ontology::new();
+        for ax in axioms {
+            o.add_axiom(ax.clone());
+        }
+        let onto = OntologyRef::new(std::sync::RwLock::new(o));
+        let reasoner = factory
+            .create_reasoner(&onto, &Default::default())
+            .ok()?;
+        reasoner.is_entailed(entailment).ok()
+    }
+
+    /// Check if entailment still holds with a subset of axioms
     fn still_entails_without(
         &self,
         axioms: &[Axiom],
         subclass: &ClassExpression,
         superclass: &ClassExpression,
     ) -> bool {
-        // Simplified entailment check
-        // In practice, this would use a proper reasoner
+        // First try reasoner-based entailment check if factory is available
+        let entailment = Axiom::SubClassOf(crate::ontology::axioms::SubClassOfAxiom {
+            id: 0,
+            subclass: subclass.clone(),
+            superclass: superclass.clone(),
+            annotations: vec![],
+        });
+        if let Some(result) = self.check_entailment_via_reasoner(axioms, &entailment) {
+            return result;
+        }
 
-        // Check direct SubClassOf axioms
+        // Fall back to structural axiom comparison (conservative approach)
         for axiom in axioms {
             if let Axiom::SubClassOf(axiom_data) = axiom {
                 if &axiom_data.subclass == subclass && &axiom_data.superclass == superclass {

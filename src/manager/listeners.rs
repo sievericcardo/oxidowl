@@ -79,3 +79,36 @@ pub struct NoOpChangeListener;
 impl OntologyChangeListener for NoOpChangeListener {
     fn on_changes(&self, _changes: &[OntologyChange]) {}
 }
+
+pub trait MissingImportListener: Send + Sync {
+    fn on_missing_import(&self, iri: &crate::ontology::IRI);
+}
+
+pub trait ImportProgressListener: Send + Sync {
+    fn on_import_start(&self, iri: &crate::ontology::IRI);
+
+    fn on_import_complete(&self, iri: &crate::ontology::IRI);
+}
+
+pub trait ReasonerChangeAwareListener: OntologyChangeListener {
+    fn set_reasoner_source(&self, source: String);
+}
+
+/// Called when a change batch is vetoed (not applied).
+/// This lets listeners inspect changes before they're committed.
+pub trait OntologyChangesVetoedListener: Send + Sync {
+    fn changes_vetoed(&self, changes: &[OntologyChange], reason: &Error);
+}
+
+/// Called when ontologies are loaded or unloaded from the manager.
+pub trait OntologyLoaderListener: Send + Sync {
+    fn on_ontology_loaded(&self, iri: &crate::ontology::IRI);
+    fn on_ontology_unloaded(&self, iri: &crate::ontology::IRI);
+}
+
+/// Called during long-running change application to track progress.
+pub trait OntologyChangeProgressListener: Send + Sync {
+    fn on_changes_started(&self, total_changes: usize);
+    fn on_change_applied(&self, index: usize, total: usize);
+    fn on_changes_finished(&self, successful: bool);
+}

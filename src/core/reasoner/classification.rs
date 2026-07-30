@@ -229,7 +229,8 @@ impl ClassificationService {
 
         // Extract ontology IRI before dropping the read lock
         let ontology_iri = ontology_guard
-            .iri
+            .id
+            .ontology_iri
             .as_ref()
             .map(std::string::ToString::to_string);
 
@@ -272,7 +273,9 @@ impl ClassificationService {
         info!(
             "Classification completed in {:?} ({}x speedup expected from saturation)",
             reasoning_time,
-            (classes.len() * classes.len()).checked_div(tableau_checks).unwrap_or(1)
+            (classes.len() * classes.len())
+                .checked_div(tableau_checks)
+                .unwrap_or(1)
         );
         Ok(result)
     }

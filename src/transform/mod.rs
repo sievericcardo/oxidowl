@@ -3,21 +3,20 @@
 //! Provides `OWLObjectTransformer`, `OWLEntityRenamer`, `OWLEntityRemover`,
 //! NNF converter, and DL expressivity checker.
 
-pub mod nnf;
+pub mod cnf;
 pub mod expressivity;
+pub mod nnf;
 
-use crate::ontology::{
-    ClassExpression, DataPropertyExpression, DataRange, Individual,
-    ObjectPropertyExpression, OntologyRef,
-    Annotation, AnnotationValue, IRI,
-};
 use crate::ontology::axioms::*;
+use crate::ontology::{
+    Annotation, AnnotationValue, ClassExpression, DataPropertyExpression, DataRange, IRI,
+    Individual, ObjectPropertyExpression, OntologyRef,
+};
 
-use crate::searcher::{EntityIndex, EntitySearcher};
-use crate::manager::changes::OntologyChange;
 use crate::Result;
+use crate::manager::changes::OntologyChange;
+use crate::searcher::EntityIndex;
 use std::collections::{HashMap, HashSet};
-
 
 // ── OWLObjectTransformer ─────────────────────────────────────────────────────
 
@@ -25,7 +24,8 @@ use std::collections::{HashMap, HashSet};
 /// an axiom, producing a transformed axiom.
 pub struct OWLObjectTransformer {
     ce_fn: Box<dyn Fn(&ClassExpression) -> Option<ClassExpression> + Send + Sync>,
-    ope_fn: Box<dyn Fn(&ObjectPropertyExpression) -> Option<ObjectPropertyExpression> + Send + Sync>,
+    ope_fn:
+        Box<dyn Fn(&ObjectPropertyExpression) -> Option<ObjectPropertyExpression> + Send + Sync>,
     dpe_fn: Box<dyn Fn(&DataPropertyExpression) -> Option<DataPropertyExpression> + Send + Sync>,
     ind_fn: Box<dyn Fn(&Individual) -> Option<Individual> + Send + Sync>,
     #[allow(dead_code)]
@@ -34,7 +34,10 @@ pub struct OWLObjectTransformer {
 
 impl OWLObjectTransformer {
     /// Create a transformer that applies `f` to all class expressions.
-    pub fn new_ce<F>(f: F) -> Self where F: Fn(&ClassExpression) -> Option<ClassExpression> + Send + Sync + 'static {
+    pub fn new_ce<F>(f: F) -> Self
+    where
+        F: Fn(&ClassExpression) -> Option<ClassExpression> + Send + Sync + 'static,
+    {
         Self {
             ce_fn: Box::new(f),
             ope_fn: Box::new(|x| Some(x.clone())),
@@ -47,73 +50,451 @@ impl OWLObjectTransformer {
     /// Transform an axiom, applying all registered functions to sub-objects.
     pub fn transform_axiom(&self, axiom: &Axiom) -> Option<Axiom> {
         Some(match axiom {
-            Axiom::Declaration(d) => Axiom::Declaration(DeclarationAxiom { id: d.id, entity: d.entity.clone() }),
+            Axiom::Declaration(d) => Axiom::Declaration(DeclarationAxiom {
+                id: d.id,
+                entity: d.entity.clone(),
+            }),
             Axiom::SubClassOf(a) => Axiom::SubClassOf(SubClassOfAxiom {
                 subclass: (self.ce_fn)(&a.subclass)?,
                 superclass: (self.ce_fn)(&a.superclass)?,
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
             Axiom::EquivalentClasses(a) => Axiom::EquivalentClasses(EquivalentClassesAxiom {
                 classes: a.classes.iter().filter_map(|c| (self.ce_fn)(c)).collect(),
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
             Axiom::DisjointClasses(a) => Axiom::DisjointClasses(DisjointClassesAxiom {
                 classes: a.classes.iter().filter_map(|c| (self.ce_fn)(c)).collect(),
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
+                id: a.id,
+            }),
+            Axiom::DisjointUnion(a) => Axiom::DisjointUnion(DisjointUnionAxiom {
+                class: (self.ce_fn)(&a.class)?,
+                disjoint_classes: a
+                    .disjoint_classes
+                    .iter()
+                    .filter_map(|c| (self.ce_fn)(c))
+                    .collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
             Axiom::ClassAssertion(a) => Axiom::ClassAssertion(ClassAssertionAxiom {
                 class: (self.ce_fn)(&a.class)?,
                 individual: (self.ind_fn)(&a.individual)?,
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
             Axiom::SubObjectPropertyOf(a) => Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
                 sub_property: (self.ope_fn)(&a.sub_property)?,
                 super_property: (self.ope_fn)(&a.super_property)?,
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
-            Axiom::ObjectPropertyAssertion(a) => Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-                property: (self.ope_fn)(&a.property)?,
-                source: (self.ind_fn)(&a.source)?,
-                target: (self.ind_fn)(&a.target)?,
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
-                id: a.id,
-            }),
-            Axiom::ObjectPropertyDomain(a) => Axiom::ObjectPropertyDomain(ObjectPropertyDomainAxiom {
-                property: (self.ope_fn)(&a.property)?,
-                domain: (self.ce_fn)(&a.domain)?,
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
-                id: a.id,
-            }),
+            Axiom::EquivalentObjectProperties(a) => {
+                Axiom::EquivalentObjectProperties(EquivalentObjectPropertiesAxiom {
+                    properties: a
+                        .properties
+                        .iter()
+                        .filter_map(|p| (self.ope_fn)(p))
+                        .collect(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::DisjointObjectProperties(a) => {
+                Axiom::DisjointObjectProperties(DisjointObjectPropertiesAxiom {
+                    properties: a
+                        .properties
+                        .iter()
+                        .filter_map(|p| (self.ope_fn)(p))
+                        .collect(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::InverseObjectProperties(a) => {
+                Axiom::InverseObjectProperties(InverseObjectPropertiesAxiom {
+                    property1: (self.ope_fn)(&a.property1)?,
+                    property2: (self.ope_fn)(&a.property2)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::ObjectPropertyDomain(a) => {
+                Axiom::ObjectPropertyDomain(ObjectPropertyDomainAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    domain: (self.ce_fn)(&a.domain)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
             Axiom::ObjectPropertyRange(a) => Axiom::ObjectPropertyRange(ObjectPropertyRangeAxiom {
                 property: (self.ope_fn)(&a.property)?,
                 range: (self.ce_fn)(&a.range)?,
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
-            Axiom::DataPropertyAssertion(a) => Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+            Axiom::ObjectPropertyAssertion(a) => {
+                Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    source: (self.ind_fn)(&a.source)?,
+                    target: (self.ind_fn)(&a.target)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::DataPropertyAssertion(a) => {
+                Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+                    property: (self.dpe_fn)(&a.property)?,
+                    individual: (self.ind_fn)(&a.individual)?,
+                    value: a.value.clone(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::FunctionalObjectProperty(a) => {
+                Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::InverseFunctionalObjectProperty(a) => {
+                Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::ReflexiveObjectProperty(a) => {
+                Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::IrreflexiveObjectProperty(a) => {
+                Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::SymmetricObjectProperty(a) => {
+                Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::AsymmetricObjectProperty(a) => {
+                Axiom::AsymmetricObjectProperty(AsymmetricObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::TransitiveObjectProperty(a) => {
+                Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::SubDataPropertyOf(a) => Axiom::SubDataPropertyOf(SubDataPropertyOfAxiom {
+                sub_property: (self.dpe_fn)(&a.sub_property)?,
+                super_property: (self.dpe_fn)(&a.super_property)?,
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
+                id: a.id,
+            }),
+            Axiom::EquivalentDataProperties(a) => {
+                Axiom::EquivalentDataProperties(EquivalentDataPropertiesAxiom {
+                    properties: a
+                        .properties
+                        .iter()
+                        .filter_map(|p| (self.dpe_fn)(p))
+                        .collect(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::DisjointDataProperties(a) => {
+                Axiom::DisjointDataProperties(DisjointDataPropertiesAxiom {
+                    properties: a
+                        .properties
+                        .iter()
+                        .filter_map(|p| (self.dpe_fn)(p))
+                        .collect(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::DataPropertyDomain(a) => Axiom::DataPropertyDomain(DataPropertyDomainAxiom {
                 property: (self.dpe_fn)(&a.property)?,
-                individual: (self.ind_fn)(&a.individual)?,
-                value: a.value.clone(),
-                annotations: a.annotations.iter().filter_map(|ann| self.transform_annotation(ann)).collect(),
+                domain: (self.ce_fn)(&a.domain)?,
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
                 id: a.id,
             }),
-            other => other.clone(),
+            Axiom::DataPropertyRange(a) => Axiom::DataPropertyRange(DataPropertyRangeAxiom {
+                property: (self.dpe_fn)(&a.property)?,
+                range: a.range.clone(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
+                id: a.id,
+            }),
+            Axiom::FunctionalDataProperty(a) => {
+                Axiom::FunctionalDataProperty(FunctionalDataPropertyAxiom {
+                    property: (self.dpe_fn)(&a.property)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::SameIndividual(a) => Axiom::SameIndividual(SameIndividualAxiom {
+                individuals: a
+                    .individuals
+                    .iter()
+                    .filter_map(|i| (self.ind_fn)(i))
+                    .collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
+                id: a.id,
+            }),
+            Axiom::DifferentIndividuals(a) => {
+                Axiom::DifferentIndividuals(DifferentIndividualsAxiom {
+                    individuals: a
+                        .individuals
+                        .iter()
+                        .filter_map(|i| (self.ind_fn)(i))
+                        .collect(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::NegativeObjectPropertyAssertion(a) => {
+                Axiom::NegativeObjectPropertyAssertion(NegativeObjectPropertyAssertionAxiom {
+                    property: (self.ope_fn)(&a.property)?,
+                    source: (self.ind_fn)(&a.source)?,
+                    target: (self.ind_fn)(&a.target)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::NegativeDataPropertyAssertion(a) => {
+                Axiom::NegativeDataPropertyAssertion(NegativeDataPropertyAssertionAxiom {
+                    property: (self.dpe_fn)(&a.property)?,
+                    individual: (self.ind_fn)(&a.individual)?,
+                    value: a.value.clone(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::AnnotationAssertion(a) => Axiom::AnnotationAssertion(AnnotationAssertionAxiom {
+                subject: a.subject.clone(),
+                property: a.property.clone(),
+                value: a.value.clone(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
+                id: a.id,
+            }),
+            Axiom::SubAnnotationPropertyOf(a) => {
+                Axiom::SubAnnotationPropertyOf(SubAnnotationPropertyOfAxiom {
+                    sub_property: a.sub_property.clone(),
+                    super_property: a.super_property.clone(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::AnnotationPropertyDomain(a) => {
+                Axiom::AnnotationPropertyDomain(AnnotationPropertyDomainAxiom {
+                    property: a.property.clone(),
+                    domain: (self.ce_fn)(&a.domain)?,
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::AnnotationPropertyRange(a) => {
+                Axiom::AnnotationPropertyRange(AnnotationPropertyRangeAxiom {
+                    property: a.property.clone(),
+                    range: a.range.clone(),
+                    annotations: a
+                        .annotations
+                        .iter()
+                        .filter_map(|ann| self.transform_annotation(ann))
+                        .collect(),
+                    id: a.id,
+                })
+            }
+            Axiom::HasKey(a) => Axiom::HasKey(HasKeyAxiom {
+                class: (self.ce_fn)(&a.class)?,
+                object_properties: a
+                    .object_properties
+                    .iter()
+                    .filter_map(|p| (self.ope_fn)(p))
+                    .collect(),
+                data_properties: a
+                    .data_properties
+                    .iter()
+                    .filter_map(|p| (self.dpe_fn)(p))
+                    .collect(),
+                annotations: a
+                    .annotations
+                    .iter()
+                    .filter_map(|ann| self.transform_annotation(ann))
+                    .collect(),
+                id: a.id,
+            }),
+            Axiom::DatatypeDefinition(a) => Axiom::DatatypeDefinition(a.clone()),
+            Axiom::Rule(a) => Axiom::Rule(a.clone()),
         })
     }
 
     fn transform_annotation(&self, ann: &Annotation) -> Option<Annotation> {
+        let nested: Vec<Annotation> = ann
+            .annotations
+            .iter()
+            .filter_map(|a| self.transform_annotation(a))
+            .collect();
         Some(Annotation {
             property: ann.property.clone(),
             value: match &ann.value {
                 AnnotationValue::IRI(iri) => AnnotationValue::IRI(iri.clone()),
                 AnnotationValue::Literal(lit) => AnnotationValue::Literal(lit.clone()),
-                AnnotationValue::AnonymousIndividual(a) => AnnotationValue::AnonymousIndividual(a.clone()),
+                AnnotationValue::AnonymousIndividual(a) => {
+                    AnnotationValue::AnonymousIndividual(a.clone())
+                }
             },
+            annotations: nested,
         })
     }
 }
@@ -127,42 +508,669 @@ pub struct OWLEntityRenamer {
 
 impl OWLEntityRenamer {
     #[must_use]
-    pub fn new() -> Self { Self { mappings: HashMap::new() } }
+    pub fn new() -> Self {
+        Self {
+            mappings: HashMap::new(),
+        }
+    }
 
     /// Map an old IRI to a new IRI for a specific entity type (punning-aware).
     pub fn add_rename(&mut self, old_iri: IRI, new_iri: IRI, entity_type: EntityType) {
         self.mappings.insert((old_iri, entity_type), new_iri);
     }
 
+    /// Look up the replacement IRI for an old IRI and entity type pair.
+    fn lookup(&self, iri: &IRI, entity_type: EntityType) -> Option<&IRI> {
+        self.mappings.get(&(iri.clone(), entity_type))
+    }
+
+    fn rename_in_class_expression(&self, ce: &ClassExpression) -> ClassExpression {
+        match ce {
+            ClassExpression::Class(cls) => {
+                if let Some(new_iri) = self.lookup(&cls.iri, EntityType::Class) {
+                    ClassExpression::Class(crate::ontology::Class {
+                        iri: new_iri.clone(),
+                    })
+                } else {
+                    ce.clone()
+                }
+            }
+            ClassExpression::ObjectIntersectionOf(ops) => {
+                ClassExpression::ObjectIntersectionOf(
+                    ops.iter()
+                        .map(|op| self.rename_in_class_expression(op))
+                        .collect(),
+                )
+            }
+            ClassExpression::ObjectUnionOf(ops) => ClassExpression::ObjectUnionOf(
+                ops.iter()
+                    .map(|op| self.rename_in_class_expression(op))
+                    .collect(),
+            ),
+            ClassExpression::ObjectComplementOf(op) => {
+                ClassExpression::ObjectComplementOf(Box::new(
+                    self.rename_in_class_expression(op),
+                ))
+            }
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                ClassExpression::ObjectSomeValuesFrom {
+                    property: self.rename_in_ope(property),
+                    filler: Box::new(self.rename_in_class_expression(filler)),
+                }
+            }
+            ClassExpression::ObjectAllValuesFrom { property, filler } => {
+                ClassExpression::ObjectAllValuesFrom {
+                    property: self.rename_in_ope(property),
+                    filler: Box::new(self.rename_in_class_expression(filler)),
+                }
+            }
+            ClassExpression::ObjectHasValue { property, value } => {
+                ClassExpression::ObjectHasValue {
+                    property: self.rename_in_ope(property),
+                    value: self.rename_in_individual(value),
+                }
+            }
+            ClassExpression::ObjectHasSelf { property } => ClassExpression::ObjectHasSelf {
+                property: self.rename_in_ope(property),
+            },
+            ClassExpression::ObjectMinCardinality {
+                cardinality,
+                property,
+                filler,
+            } => ClassExpression::ObjectMinCardinality {
+                cardinality: *cardinality,
+                property: self.rename_in_ope(property),
+                filler: Box::new(self.rename_in_class_expression(filler)),
+            },
+            ClassExpression::ObjectMaxCardinality {
+                cardinality,
+                property,
+                filler,
+            } => ClassExpression::ObjectMaxCardinality {
+                cardinality: *cardinality,
+                property: self.rename_in_ope(property),
+                filler: Box::new(self.rename_in_class_expression(filler)),
+            },
+            ClassExpression::ObjectExactCardinality {
+                cardinality,
+                property,
+                filler,
+            } => ClassExpression::ObjectExactCardinality {
+                cardinality: *cardinality,
+                property: self.rename_in_ope(property),
+                filler: Box::new(self.rename_in_class_expression(filler)),
+            },
+            ClassExpression::ObjectOneOf(inds) => ClassExpression::ObjectOneOf(
+                inds.iter()
+                    .map(|i| self.rename_in_individual(i))
+                    .collect(),
+            ),
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                ClassExpression::DataSomeValuesFrom {
+                    property: self.rename_in_dpe(property),
+                    filler: filler.clone(),
+                }
+            }
+            ClassExpression::DataAllValuesFrom { property, filler } => {
+                ClassExpression::DataAllValuesFrom {
+                    property: self.rename_in_dpe(property),
+                    filler: filler.clone(),
+                }
+            }
+            ClassExpression::DataHasValue { property, value } => {
+                ClassExpression::DataHasValue {
+                    property: self.rename_in_dpe(property),
+                    value: value.clone(),
+                }
+            }
+            ClassExpression::DataMinCardinality {
+                cardinality,
+                property,
+                filler,
+            } => ClassExpression::DataMinCardinality {
+                cardinality: *cardinality,
+                property: self.rename_in_dpe(property),
+                filler: filler.clone(),
+            },
+            ClassExpression::DataMaxCardinality {
+                cardinality,
+                property,
+                filler,
+            } => ClassExpression::DataMaxCardinality {
+                cardinality: *cardinality,
+                property: self.rename_in_dpe(property),
+                filler: filler.clone(),
+            },
+            ClassExpression::DataExactCardinality {
+                cardinality,
+                property,
+                filler,
+            } => ClassExpression::DataExactCardinality {
+                cardinality: *cardinality,
+                property: self.rename_in_dpe(property),
+                filler: filler.clone(),
+            },
+        }
+    }
+
+    fn rename_in_ope(
+        &self,
+        ope: &ObjectPropertyExpression,
+    ) -> ObjectPropertyExpression {
+        match ope {
+            ObjectPropertyExpression::ObjectProperty(p) => {
+                if let Some(new_iri) = self.lookup(&p.iri, EntityType::ObjectProperty) {
+                    ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                        iri: new_iri.clone(),
+                    })
+                } else {
+                    ope.clone()
+                }
+            }
+            ObjectPropertyExpression::InverseObjectProperty(p) => {
+                if let Some(new_iri) = self.lookup(&p.iri, EntityType::ObjectProperty) {
+                    ObjectPropertyExpression::InverseObjectProperty(
+                        crate::ontology::ObjectProperty {
+                            iri: new_iri.clone(),
+                        },
+                    )
+                } else {
+                    ope.clone()
+                }
+            }
+            ObjectPropertyExpression::PropertyChain(chain) => {
+                ObjectPropertyExpression::PropertyChain(
+                    chain.iter().map(|p| self.rename_in_ope(p)).collect(),
+                )
+            }
+        }
+    }
+
+    fn rename_in_dpe(
+        &self,
+        dpe: &DataPropertyExpression,
+    ) -> DataPropertyExpression {
+        match dpe {
+            DataPropertyExpression::DataProperty(p) => {
+                if let Some(new_iri) = self.lookup(&p.iri, EntityType::DataProperty) {
+                    DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
+                        iri: new_iri.clone(),
+                    })
+                } else {
+                    dpe.clone()
+                }
+            }
+        }
+    }
+
+    fn rename_in_individual(&self, ind: &Individual) -> Individual {
+        match ind {
+            Individual::Named(ni) => {
+                if let Some(new_iri) = self.lookup(&ni.iri, EntityType::NamedIndividual) {
+                    Individual::Named(crate::ontology::NamedIndividual {
+                        iri: new_iri.clone(),
+                    })
+                } else {
+                    ind.clone()
+                }
+            }
+            Individual::Anonymous(_) => ind.clone(),
+        }
+    }
+
+    fn rename_in_axiom(&self, axiom: &Axiom) -> Axiom {
+        match axiom {
+            Axiom::Declaration(d) => {
+                let new_entity = match &d.entity {
+                    Entity::Class(iri) => {
+                        if let Some(new_iri) = self.lookup(iri, EntityType::Class) {
+                            Entity::Class(new_iri.clone())
+                        } else {
+                            d.entity.clone()
+                        }
+                    }
+                    Entity::ObjectProperty(iri) => {
+                        if let Some(new_iri) = self.lookup(iri, EntityType::ObjectProperty) {
+                            Entity::ObjectProperty(new_iri.clone())
+                        } else {
+                            d.entity.clone()
+                        }
+                    }
+                    Entity::DataProperty(iri) => {
+                        if let Some(new_iri) = self.lookup(iri, EntityType::DataProperty) {
+                            Entity::DataProperty(new_iri.clone())
+                        } else {
+                            d.entity.clone()
+                        }
+                    }
+                    Entity::AnnotationProperty(iri) => {
+                        if let Some(new_iri) = self.lookup(iri, EntityType::AnnotationProperty) {
+                            Entity::AnnotationProperty(new_iri.clone())
+                        } else {
+                            d.entity.clone()
+                        }
+                    }
+                    Entity::NamedIndividual(iri) => {
+                        if let Some(new_iri) = self.lookup(iri, EntityType::NamedIndividual) {
+                            Entity::NamedIndividual(new_iri.clone())
+                        } else {
+                            d.entity.clone()
+                        }
+                    }
+                    Entity::Datatype(iri) => {
+                        if let Some(new_iri) = self.lookup(iri, EntityType::Datatype) {
+                            Entity::Datatype(new_iri.clone())
+                        } else {
+                            d.entity.clone()
+                        }
+                    }
+                };
+                Axiom::Declaration(DeclarationAxiom {
+                    id: d.id,
+                    entity: new_entity,
+                })
+            }
+            Axiom::SubClassOf(a) => Axiom::SubClassOf(SubClassOfAxiom {
+                id: a.id,
+                subclass: self.rename_in_class_expression(&a.subclass),
+                superclass: self.rename_in_class_expression(&a.superclass),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::EquivalentClasses(a) => Axiom::EquivalentClasses(EquivalentClassesAxiom {
+                id: a.id,
+                classes: a
+                    .classes
+                    .iter()
+                    .map(|c| self.rename_in_class_expression(c))
+                    .collect(),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::DisjointClasses(a) => Axiom::DisjointClasses(DisjointClassesAxiom {
+                id: a.id,
+                classes: a
+                    .classes
+                    .iter()
+                    .map(|c| self.rename_in_class_expression(c))
+                    .collect(),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::DisjointUnion(a) => Axiom::DisjointUnion(DisjointUnionAxiom {
+                id: a.id,
+                class: self.rename_in_class_expression(&a.class),
+                disjoint_classes: a
+                    .disjoint_classes
+                    .iter()
+                    .map(|c| self.rename_in_class_expression(c))
+                    .collect(),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::SubObjectPropertyOf(a) => {
+                Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
+                    id: a.id,
+                    sub_property: self.rename_in_ope(&a.sub_property),
+                    super_property: self.rename_in_ope(&a.super_property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::EquivalentObjectProperties(a) => {
+                Axiom::EquivalentObjectProperties(EquivalentObjectPropertiesAxiom {
+                    id: a.id,
+                    properties: a
+                        .properties
+                        .iter()
+                        .map(|p| self.rename_in_ope(p))
+                        .collect(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::DisjointObjectProperties(a) => {
+                Axiom::DisjointObjectProperties(DisjointObjectPropertiesAxiom {
+                    id: a.id,
+                    properties: a
+                        .properties
+                        .iter()
+                        .map(|p| self.rename_in_ope(p))
+                        .collect(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::InverseObjectProperties(a) => {
+                Axiom::InverseObjectProperties(InverseObjectPropertiesAxiom {
+                    id: a.id,
+                    property1: self.rename_in_ope(&a.property1),
+                    property2: self.rename_in_ope(&a.property2),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::ObjectPropertyDomain(a) => {
+                Axiom::ObjectPropertyDomain(ObjectPropertyDomainAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    domain: self.rename_in_class_expression(&a.domain),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::ObjectPropertyRange(a) => {
+                Axiom::ObjectPropertyRange(ObjectPropertyRangeAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    range: self.rename_in_class_expression(&a.range),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::FunctionalObjectProperty(a) => {
+                Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::InverseFunctionalObjectProperty(a) => {
+                Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::ReflexiveObjectProperty(a) => {
+                Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::IrreflexiveObjectProperty(a) => {
+                Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::SymmetricObjectProperty(a) => {
+                Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::AsymmetricObjectProperty(a) => {
+                Axiom::AsymmetricObjectProperty(AsymmetricObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::TransitiveObjectProperty(a) => {
+                Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::SubDataPropertyOf(a) => Axiom::SubDataPropertyOf(SubDataPropertyOfAxiom {
+                id: a.id,
+                sub_property: self.rename_in_dpe(&a.sub_property),
+                super_property: self.rename_in_dpe(&a.super_property),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::EquivalentDataProperties(a) => {
+                Axiom::EquivalentDataProperties(EquivalentDataPropertiesAxiom {
+                    id: a.id,
+                    properties: a
+                        .properties
+                        .iter()
+                        .map(|p| self.rename_in_dpe(p))
+                        .collect(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::DisjointDataProperties(a) => {
+                Axiom::DisjointDataProperties(DisjointDataPropertiesAxiom {
+                    id: a.id,
+                    properties: a
+                        .properties
+                        .iter()
+                        .map(|p| self.rename_in_dpe(p))
+                        .collect(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::DataPropertyDomain(a) => {
+                Axiom::DataPropertyDomain(DataPropertyDomainAxiom {
+                    id: a.id,
+                    property: self.rename_in_dpe(&a.property),
+                    domain: self.rename_in_class_expression(&a.domain),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::DataPropertyRange(a) => Axiom::DataPropertyRange(DataPropertyRangeAxiom {
+                id: a.id,
+                property: self.rename_in_dpe(&a.property),
+                range: a.range.clone(),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::FunctionalDataProperty(a) => {
+                Axiom::FunctionalDataProperty(FunctionalDataPropertyAxiom {
+                    id: a.id,
+                    property: self.rename_in_dpe(&a.property),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::SameIndividual(a) => Axiom::SameIndividual(SameIndividualAxiom {
+                id: a.id,
+                individuals: a
+                    .individuals
+                    .iter()
+                    .map(|i| self.rename_in_individual(i))
+                    .collect(),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::DifferentIndividuals(a) => {
+                Axiom::DifferentIndividuals(DifferentIndividualsAxiom {
+                    id: a.id,
+                    individuals: a
+                        .individuals
+                        .iter()
+                        .map(|i| self.rename_in_individual(i))
+                        .collect(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::ClassAssertion(a) => Axiom::ClassAssertion(ClassAssertionAxiom {
+                id: a.id,
+                class: self.rename_in_class_expression(&a.class),
+                individual: self.rename_in_individual(&a.individual),
+                annotations: a.annotations.clone(),
+            }),
+            Axiom::ObjectPropertyAssertion(a) => {
+                Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    source: self.rename_in_individual(&a.source),
+                    target: self.rename_in_individual(&a.target),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::DataPropertyAssertion(a) => {
+                Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+                    id: a.id,
+                    property: self.rename_in_dpe(&a.property),
+                    individual: self.rename_in_individual(&a.individual),
+                    value: a.value.clone(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::NegativeObjectPropertyAssertion(a) => {
+                Axiom::NegativeObjectPropertyAssertion(NegativeObjectPropertyAssertionAxiom {
+                    id: a.id,
+                    property: self.rename_in_ope(&a.property),
+                    source: self.rename_in_individual(&a.source),
+                    target: self.rename_in_individual(&a.target),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::NegativeDataPropertyAssertion(a) => {
+                Axiom::NegativeDataPropertyAssertion(NegativeDataPropertyAssertionAxiom {
+                    id: a.id,
+                    property: self.rename_in_dpe(&a.property),
+                    individual: self.rename_in_individual(&a.individual),
+                    value: a.value.clone(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::HasKey(a) => Axiom::HasKey(HasKeyAxiom {
+                id: a.id,
+                class: self.rename_in_class_expression(&a.class),
+                object_properties: a
+                    .object_properties
+                    .iter()
+                    .map(|p| self.rename_in_ope(p))
+                    .collect(),
+                data_properties: a
+                    .data_properties
+                    .iter()
+                    .map(|p| self.rename_in_dpe(p))
+                    .collect(),
+                annotations: a.annotations.clone(),
+            }),
+            other => self.rename_in_annotation_axiom(other),
+        }
+    }
+
+    fn rename_in_annotation_axiom(&self, axiom: &Axiom) -> Axiom {
+        match axiom {
+            Axiom::AnnotationAssertion(a) => {
+                let subject = match &a.subject {
+                    crate::ontology::AnnotationSubject::IRI(iri) => {
+                        crate::ontology::AnnotationSubject::IRI(
+                            self.lookup(iri, EntityType::NamedIndividual)
+                                .or_else(|| self.lookup(iri, EntityType::Class))
+                                .cloned()
+                                .unwrap_or_else(|| iri.clone()),
+                        )
+                    }
+                    other => other.clone(),
+                };
+                let property = if let Some(new_iri) =
+                    self.lookup(&a.property.iri, EntityType::AnnotationProperty)
+                {
+                    crate::ontology::AnnotationProperty {
+                        iri: new_iri.clone(),
+                    }
+                } else {
+                    a.property.clone()
+                };
+                Axiom::AnnotationAssertion(AnnotationAssertionAxiom {
+                    id: a.id,
+                    subject,
+                    property,
+                    value: a.value.clone(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::SubAnnotationPropertyOf(a) => {
+                Axiom::SubAnnotationPropertyOf(SubAnnotationPropertyOfAxiom {
+                    id: a.id,
+                    sub_property: if let Some(new_iri) =
+                        self.lookup(&a.sub_property.iri, EntityType::AnnotationProperty)
+                    {
+                        crate::ontology::AnnotationProperty {
+                            iri: new_iri.clone(),
+                        }
+                    } else {
+                        a.sub_property.clone()
+                    },
+                    super_property: if let Some(new_iri) =
+                        self.lookup(&a.super_property.iri, EntityType::AnnotationProperty)
+                    {
+                        crate::ontology::AnnotationProperty {
+                            iri: new_iri.clone(),
+                        }
+                    } else {
+                        a.super_property.clone()
+                    },
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::AnnotationPropertyDomain(a) => {
+                Axiom::AnnotationPropertyDomain(AnnotationPropertyDomainAxiom {
+                    id: a.id,
+                    property: if let Some(new_iri) =
+                        self.lookup(&a.property.iri, EntityType::AnnotationProperty)
+                    {
+                        crate::ontology::AnnotationProperty {
+                            iri: new_iri.clone(),
+                        }
+                    } else {
+                        a.property.clone()
+                    },
+                    domain: self.rename_in_class_expression(&a.domain),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::AnnotationPropertyRange(a) => {
+                Axiom::AnnotationPropertyRange(AnnotationPropertyRangeAxiom {
+                    id: a.id,
+                    property: if let Some(new_iri) =
+                        self.lookup(&a.property.iri, EntityType::AnnotationProperty)
+                    {
+                        crate::ontology::AnnotationProperty {
+                            iri: new_iri.clone(),
+                        }
+                    } else {
+                        a.property.clone()
+                    },
+                    range: a.range.clone(),
+                    annotations: a.annotations.clone(),
+                })
+            }
+            Axiom::DatatypeDefinition(a) => Axiom::DatatypeDefinition(a.clone()),
+            Axiom::Rule(a) => Axiom::Rule(a.clone()),
+            other => other.clone(),
+        }
+    }
+
     /// Generate change operations that rename all matching entities.
     pub fn rename_ontology(&self, ontology: &OntologyRef) -> Result<Vec<OntologyChange>> {
-        let guard = ontology.read().map_err(|e| crate::Error::Internal { message: format!("{e}") })?;
+        let guard = ontology.read().map_err(|e| crate::Error::Internal {
+            message: format!("{e}"),
+        })?;
         let index = EntityIndex::from_ontology(&guard);
-        let _searcher = EntitySearcher::new(&guard, &index);
-        let ontology_iri = guard.get_iri().cloned().unwrap_or_else(|| IRI::new("urn:anon"));
+        let ontology_iri = guard
+            .get_iri()
+            .cloned()
+            .unwrap_or_else(|| IRI::new("urn:anon"));
         drop(guard);
 
         let mut changes = Vec::new();
-        // Collect all axioms referencing old IRIs, create remove+add pairs
         let mut seen_ids = HashSet::new();
         for ((old_iri, _et), _new_iri) in &self.mappings {
             for id in index.ids_for_entity(old_iri) {
-                if !seen_ids.insert(id) { continue; }
+                if !seen_ids.insert(id) {
+                    continue;
+                }
                 if let Some(ax) = index.get_axiom(id) {
+                    let original = (**ax).clone();
+                    let renamed = self.rename_in_axiom(&original);
                     changes.push(OntologyChange::RemoveAxiom {
                         ontology_iri: ontology_iri.clone(),
-                        axiom: (**ax).clone(),
+                        axiom: original,
+                    });
+                    changes.push(OntologyChange::AddAxiom {
+                        ontology_iri: ontology_iri.clone(),
+                        axiom: renamed,
                     });
                 }
             }
         }
-        // For now, return just the remove changes (add would require full rename)
         Ok(changes)
     }
 }
 
 impl Default for OWLEntityRenamer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ── OWLEntityRemover ─────────────────────────────────────────────────────────
@@ -176,7 +1184,10 @@ pub struct OWLEntityRemover {
 impl OWLEntityRemover {
     #[must_use]
     pub fn new() -> Self {
-        Self { entities_to_remove: HashSet::new(), remove_declarations: true }
+        Self {
+            entities_to_remove: HashSet::new(),
+            remove_declarations: true,
+        }
     }
 
     /// Add an entity to be removed.
@@ -186,16 +1197,23 @@ impl OWLEntityRemover {
 
     /// Generate RemoveAxiom changes for all axioms mentioning target entities.
     pub fn remove_entities(&self, ontology: &OntologyRef) -> Result<Vec<OntologyChange>> {
-        let guard = ontology.read().map_err(|e| crate::Error::Internal { message: format!("{e}") })?;
+        let guard = ontology.read().map_err(|e| crate::Error::Internal {
+            message: format!("{e}"),
+        })?;
         let index = EntityIndex::from_ontology(&guard);
-        let ontology_iri = guard.get_iri().cloned().unwrap_or_else(|| IRI::new("urn:anon"));
+        let ontology_iri = guard
+            .get_iri()
+            .cloned()
+            .unwrap_or_else(|| IRI::new("urn:anon"));
         drop(guard);
 
         let mut seen_ids = HashSet::new();
         let mut changes = Vec::new();
         for (iri, _et) in &self.entities_to_remove {
             for id in index.ids_for_entity(iri) {
-                if !seen_ids.insert(id) { continue; }
+                if !seen_ids.insert(id) {
+                    continue;
+                }
                 if let Some(ax) = index.get_axiom(id) {
                     let is_decl = matches!(ax.as_ref(), Axiom::Declaration(_));
                     if !is_decl || self.remove_declarations {
@@ -212,5 +1230,7 @@ impl OWLEntityRemover {
 }
 
 impl Default for OWLEntityRemover {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

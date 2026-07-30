@@ -10,10 +10,10 @@ use std::{
     path::Path,
 };
 
-use super::common::OntologySerializer;
+use super::common::{OntologySerializer, SerializerConfig};
 use crate::{
     Error, Result,
-    ontology::Ontology,
+    ontology::{IRI, Ontology},
     semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple, vocabulary::*},
 };
 
@@ -202,7 +202,7 @@ impl RdfXmlParser {
     }
 
     /// Extract namespace declarations from RDF/XML
-    fn extract_namespaces(&self, content: &str, _ontology: &mut Ontology) -> Result<()> {
+    fn extract_namespaces(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for xmlns declarations
         for line in content.lines() {
             if line.contains("xmlns") {
@@ -217,8 +217,7 @@ impl RdfXmlParser {
                     let uri = &line[ns_start + eq_pos + quote_start + 1
                         ..ns_start + eq_pos + quote_start + 1 + quote_end];
 
-                    // Add to ontology prefixes if the ontology supports it
-                    // For now, we'll store this information internally
+                    ontology.add_prefix(prefix.to_string(), IRI::new(uri));
                     log::debug!("Found namespace: {prefix} -> {uri}");
                 }
             }
@@ -843,47 +842,67 @@ impl Default for RdfXmlParser {
 
 /// RDF/XML Serializer
 #[derive(Debug, Clone)]
-pub struct RdfXmlSerializer {}
+pub struct RdfXmlSerializer {
+    config: SerializerConfig,
+}
 
 impl RdfXmlSerializer {
-    /// Create a new RDF/XML serializer
+    /// Create a new RDF/XML serializer with default configuration
     #[must_use]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            config: SerializerConfig::default(),
+        }
     }
-}
 
-impl Default for RdfXmlSerializer {
-    fn default() -> Self {
-        Self::new()
+    /// Create a new RDF/XML serializer with explicit configuration
+    #[must_use]
+    pub fn with_config(config: SerializerConfig) -> Self {
+        Self { config }
     }
-}
 
-impl OntologySerializer for RdfXmlSerializer {
-    fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+    /// Serialize with a specific configuration
+    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> std::result::Result<String, Error> {
         let mut result = String::new();
+        let indent = " ".repeat(config.indent_size);
+
+        if config.add_banner {
+            result.push_str(&crate::parsers::common::generate_banner());
+            result.push('\n');
+        }
 
         // XML header and RDF root
         result.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         result.push_str("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
         result.push_str("         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"\n");
-        result.push_str("         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">\n");
+        result.push_str("         xmlns:owl=\"http://www.w3.org/2002/07/owl#\"");
+        for (pfx, ns) in &config.namespace_map {
+            result.push_str(&format!("\n         xmlns:{pfx}=\"{ns}\""));
+        }
+        // Also emit ontology prefixes
+        for (pfx, iri) in &ontology.prefixes {
+            if !config.namespace_map.contains_key(pfx) {
+                result.push_str(&format!("\n         xmlns:{pfx}=\"{iri}\""));
+            }
+        }
+        result.push_str(">\n");
 
         // Ontology declaration
-        result.push_str("  <!-- Ontology Declaration -->\n");
+        result.push_str(&format!("{}<!-- Ontology Declaration -->\n", indent));
         let iri_str = ontology
-            .iri
+            .id
+            .ontology_iri
             .as_ref()
             .map_or("http://example.org/ontology", crate::ontology::IRI::as_str);
-        result.push_str(&format!("  <owl:Ontology rdf:about=\"{iri_str}\" />\n\n"));
+        result.push_str(&format!("{}<owl:Ontology rdf:about=\"{iri_str}\" />\n\n", indent));
 
         // Serialize classes
         if !ontology.classes().is_empty() {
-            result.push_str("  <!-- Class Declarations -->\n");
+            result.push_str(&format!("{}<!-- Class Declarations -->\n", indent));
             for (_, class) in ontology.classes() {
                 result.push_str(&format!(
-                    "  <owl:Class rdf:about=\"{}\" />\n",
-                    class.iri.as_str()
+                    "{}<owl:Class rdf:about=\"{}\" />\n",
+                    indent, class.iri.as_str()
                 ));
             }
             result.push('\n');
@@ -892,11 +911,11 @@ impl OntologySerializer for RdfXmlSerializer {
         // Serialize object properties
         let object_properties = ontology.object_properties();
         if !object_properties.is_empty() {
-            result.push_str("  <!-- Object Property Declarations -->\n");
+            result.push_str(&format!("{}<!-- Object Property Declarations -->\n", indent));
             for prop in object_properties {
                 result.push_str(&format!(
-                    "  <owl:ObjectProperty rdf:about=\"{}\" />\n",
-                    prop.iri.as_str()
+                    "{}<owl:ObjectProperty rdf:about=\"{}\" />\n",
+                    indent, prop.iri.as_str()
                 ));
             }
             result.push('\n');
@@ -924,11 +943,11 @@ impl OntologySerializer for RdfXmlSerializer {
         }
 
         if !data_properties.is_empty() {
-            result.push_str("  <!-- Data Property Declarations -->\n");
+            result.push_str(&format!("{}<!-- Data Property Declarations -->\n", indent));
             for prop in data_properties {
                 result.push_str(&format!(
-                    "  <owl:DatatypeProperty rdf:about=\"{}\" />\n",
-                    prop.iri.as_str()
+                    "{}<owl:DatatypeProperty rdf:about=\"{}\" />\n",
+                    indent, prop.iri.as_str()
                 ));
             }
             result.push('\n');
@@ -936,12 +955,12 @@ impl OntologySerializer for RdfXmlSerializer {
 
         // Serialize individuals
         if !ontology.individuals().is_empty() {
-            result.push_str("  <!-- Individual Declarations -->\n");
+            result.push_str(&format!("{}<!-- Individual Declarations -->\n", indent));
             for (_, individual) in ontology.individuals() {
                 if let crate::ontology::Individual::Named(named) = individual {
                     result.push_str(&format!(
-                        "  <owl:NamedIndividual rdf:about=\"{}\" />\n",
-                        named.iri.as_str()
+                        "{}<owl:NamedIndividual rdf:about=\"{}\" />\n",
+                        indent, named.iri.as_str()
                     ));
                 }
             }
@@ -950,6 +969,18 @@ impl OntologySerializer for RdfXmlSerializer {
 
         result.push_str("</rdf:RDF>\n");
         Ok(result)
+    }
+}
+
+impl Default for RdfXmlSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OntologySerializer for RdfXmlSerializer {
+    fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        self.serialize_with_config(ontology, &self.config)
     }
 }
 

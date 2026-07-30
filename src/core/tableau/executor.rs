@@ -250,7 +250,10 @@ impl TableauExecutor {
                     if let Some(first_disjunct) = disjuncts.first() {
                         let concept_label = ConceptLabel::Complex(Box::new(first_disjunct.clone()));
                         tableau.add_concept_to_node(node_id, concept_label)?;
-                        debug!("Applied OR rule at node {node_id}: selected first of {} disjunct(s)", disjuncts.len());
+                        debug!(
+                            "Applied OR rule at node {node_id}: selected first of {} disjunct(s)",
+                            disjuncts.len()
+                        );
                     }
                 }
                 _ => {

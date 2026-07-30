@@ -1,16 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use crate::{
-        DataFactory, OntologyChange, ChangeHistory, OntologyManager,
-        OntologyLoader,
-    };
     use crate::factory::providers::AxiomCreationProvider;
     use crate::manager::iri_mapper::{
-        SimpleIRIMapper, NonMappingOntologyIRIMapper, CompositeIRIMapper, OntologyIRIMapper,
+        CompositeIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper, SimpleIRIMapper,
     };
     use crate::manager::listeners::LoggingChangeListener;
-    use crate::ontology::{IRI, OntologyFormat, ClassExpression};
     use crate::ontology::axioms::{Axiom, EntityType, SubClassOfAxiom};
+    use crate::ontology::{ClassExpression, IRI, OntologyFormat};
+    use crate::{
+        ChangeApplied, ChangeHistory, DataFactory, OntologyChange, OntologyLoader, OntologyManager,
+    };
     use std::sync::{Arc, RwLock};
 
     fn make_test_axiom(factory: &DataFactory) -> SubClassOfAxiom {
@@ -38,7 +37,10 @@ mod tests {
         let doc_iri = IRI::new("file:///tmp/ont.owl");
         let mapper = SimpleIRIMapper::new(onto_iri.clone(), doc_iri.clone());
         assert_eq!(mapper.get_document_iri(&onto_iri), Some(doc_iri));
-        assert_eq!(mapper.get_document_iri(&IRI::new("http://other.org/other")), None);
+        assert_eq!(
+            mapper.get_document_iri(&IRI::new("http://other.org/other")),
+            None
+        );
         assert_eq!(mapper.name(), "Simple(http://example.org/ont)");
     }
 
@@ -53,9 +55,18 @@ mod tests {
         let m1 = SimpleIRIMapper::new(IRI::new("http://a.org/ont"), IRI::new("file:///a.owl"));
         let m2 = SimpleIRIMapper::new(IRI::new("http://b.org/ont"), IRI::new("file:///b.owl"));
         let composite = CompositeIRIMapper::new(vec![Box::new(m1), Box::new(m2)]);
-        assert_eq!(composite.get_document_iri(&IRI::new("http://a.org/ont")), Some(IRI::new("file:///a.owl")));
-        assert_eq!(composite.get_document_iri(&IRI::new("http://b.org/ont")), Some(IRI::new("file:///b.owl")));
-        assert_eq!(composite.get_document_iri(&IRI::new("http://c.org/ont")), None);
+        assert_eq!(
+            composite.get_document_iri(&IRI::new("http://a.org/ont")),
+            Some(IRI::new("file:///a.owl"))
+        );
+        assert_eq!(
+            composite.get_document_iri(&IRI::new("http://b.org/ont")),
+            Some(IRI::new("file:///b.owl"))
+        );
+        assert_eq!(
+            composite.get_document_iri(&IRI::new("http://c.org/ont")),
+            None
+        );
     }
 
     // ── DataFactory Tests ────────────────────────────────────────────────────
@@ -84,7 +95,8 @@ mod tests {
         assert_eq!(b.value, "true");
         let i = factory.get_integer_literal(42);
         assert_eq!(i.value, "42");
-        let t = factory.get_typed_literal("42", &IRI::new("http://www.w3.org/2001/XMLSchema#integer"));
+        let t =
+            factory.get_typed_literal("42", &IRI::new("http://www.w3.org/2001/XMLSchema#integer"));
         assert!(t.datatype.is_some());
         let l = factory.get_lang_literal("hello", "en");
         assert_eq!(l.language.as_deref(), Some("en"));
@@ -97,7 +109,9 @@ mod tests {
         let as_class = factory.get_entity(&iri, &EntityType::Class);
         let as_prop = factory.get_entity(&iri, &EntityType::ObjectProperty);
         assert!(matches!(as_class, crate::ontology::axioms::Entity::Class(ref i) if i == &iri));
-        assert!(matches!(as_prop, crate::ontology::axioms::Entity::ObjectProperty(ref i) if i == &iri));
+        assert!(
+            matches!(as_prop, crate::ontology::axioms::Entity::ObjectProperty(ref i) if i == &iri)
+        );
     }
 
     #[test]
@@ -108,7 +122,10 @@ mod tests {
         let ce1 = ClassExpression::Class(c1);
         let ce2 = ClassExpression::Class(c2);
         let intersection = factory.get_object_intersection_of(vec![ce1.clone(), ce2.clone()]);
-        assert!(matches!(intersection, ClassExpression::ObjectIntersectionOf(_)));
+        assert!(matches!(
+            intersection,
+            ClassExpression::ObjectIntersectionOf(_)
+        ));
         let union = factory.get_object_union_of(vec![ce1.clone(), ce2.clone()]);
         assert!(matches!(union, ClassExpression::ObjectUnionOf(_)));
         let comp = factory.get_object_complement_of(ce1.clone());
@@ -168,9 +185,21 @@ mod tests {
         manager.add_import(iri1.clone(), iri2.clone());
         manager.add_import(iri2.clone(), iri3.clone());
         let closure = manager.get_imports_closure(&o1).unwrap();
-        assert!(closure.iter().any(|r| r.read().unwrap().get_iri().cloned() == Some(iri1.clone())));
-        assert!(closure.iter().any(|r| r.read().unwrap().get_iri().cloned() == Some(iri2.clone())));
-        assert!(closure.iter().any(|r| r.read().unwrap().get_iri().cloned() == Some(iri3.clone())));
+        assert!(
+            closure
+                .iter()
+                .any(|r| r.read().unwrap().get_iri().cloned() == Some(iri1.clone()))
+        );
+        assert!(
+            closure
+                .iter()
+                .any(|r| r.read().unwrap().get_iri().cloned() == Some(iri2.clone()))
+        );
+        assert!(
+            closure
+                .iter()
+                .any(|r| r.read().unwrap().get_iri().cloned() == Some(iri3.clone()))
+        );
     }
 
     // ── OntologyChange Tests ─────────────────────────────────────────────────
@@ -181,7 +210,10 @@ mod tests {
         let factory = DataFactory::new();
         let ax = make_test_axiom(&factory);
         let add = make_add_change(&iri, ax.clone());
-        let rem = OntologyChange::RemoveAxiom { ontology_iri: iri.clone(), axiom: Axiom::SubClassOf(ax) };
+        let rem = OntologyChange::RemoveAxiom {
+            ontology_iri: iri.clone(),
+            axiom: Axiom::SubClassOf(ax),
+        };
         assert!(add.is_axiom_change());
         assert!(rem.is_axiom_change());
         assert!(add.is_add_change());
@@ -237,7 +269,10 @@ mod tests {
         let factory = DataFactory::new();
         let ax = make_test_axiom(&factory);
         for _ in 0..5 {
-            history.record(vec![make_add_change(&IRI::new("http://ex.org/ont"), ax.clone())]);
+            history.record(vec![make_add_change(
+                &IRI::new("http://ex.org/ont"),
+                ax.clone(),
+            )]);
         }
         assert_eq!(history.total_batches(), 3);
     }
@@ -252,7 +287,7 @@ mod tests {
         let ont = manager.create_ontology(iri.clone());
         let ax = make_test_axiom(manager.get_data_factory());
         let change = make_add_change(&iri, ax);
-        manager.apply_change(change).unwrap();
+        assert_eq!(manager.apply_change(change), ChangeApplied::Successfully);
         assert_eq!(ont.read().unwrap().axioms().len(), 1);
     }
 
@@ -267,7 +302,7 @@ mod tests {
             new_iri: new_iri.clone(),
             new_version_iri: None,
         };
-        manager.apply_change(change).unwrap();
+        manager.apply_change(change);
         assert!(!manager.contains_ontology(&old_iri));
         assert!(manager.contains_ontology(&new_iri));
     }

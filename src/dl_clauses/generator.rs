@@ -183,7 +183,6 @@ impl DLClauseGenerator {
         // 2. Redundancy removal — eliminate subsumed clauses
         // 3. Purity-based simplification — clauses with predicates not appearing elsewhere
 
-
         let initial_count = clauses.len();
 
         // Remove tautologies (clauses where head and body contain the same positive atom)

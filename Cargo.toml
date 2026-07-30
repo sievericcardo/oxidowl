@@ -102,6 +102,9 @@ toml = "1.1.2"
 # HTTP client for fetching ontologies
 reqwest = { version = "0.13.4", features = ["json", "blocking"], optional = true }
 
+# Zip archive support for ontology imports
+zip = { version = "2", optional = true }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [
     "Win32_System_ProcessStatus",
@@ -131,6 +134,7 @@ sparql-store = ["oxigraph"]
 explanations = []
 ml = ["candle-core", "candle-nn"]  # Machine learning features
 http-imports = ["reqwest"]  # HTTP import fetching for ontologies
+zip-imports = ["zip"]  # Zip archive support for ontology imports
 # owl-integration = ["owlapi", "rdf", "sophia"]  # Disabled until proper deps are available
 # Kani formal verification harnesses (enabled by `cargo kani` or `--features kani`)
 kani = []

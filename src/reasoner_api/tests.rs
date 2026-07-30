@@ -1,28 +1,32 @@
 #[cfg(test)]
 mod tests {
-    use crate::{
-        OWLReasoner, ReasonerFactory, TableauReasonerFactory,
-        StructuralReasoner, StructuralReasonerFactory,
-        Node, NodeSet, InferenceType,
-        OWLReasonerConfiguration, BufferingMode,
-    };
-    use crate::ontology::{
-        Class, ClassExpression, Individual,
-        ObjectProperty, ObjectPropertyExpression, Ontology, OntologyRef, IRI,
-    };
     use crate::ontology::axioms::{
-        Axiom, ClassAssertionAxiom, EquivalentClassesAxiom,
-        SubClassOfAxiom, SameIndividualAxiom,
+        Axiom, ClassAssertionAxiom, EquivalentClassesAxiom, SameIndividualAxiom, SubClassOfAxiom,
     };
     use crate::ontology::individuals::NamedIndividual;
+    use crate::ontology::{
+        Class, ClassExpression, IRI, Individual, ObjectProperty, ObjectPropertyExpression,
+        Ontology, OntologyRef,
+    };
+    use crate::{
+        BufferingMode, InferenceType, Node, NodeSet, OWLReasoner, OWLReasonerConfiguration,
+        ReasonerFactory, StructuralReasoner, StructuralReasonerFactory, TableauReasonerFactory,
+    };
     use std::sync::{Arc, RwLock};
 
     fn make_simple_ontology() -> Ontology {
         let mut o = Ontology::new();
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
         o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-            id: 1, subclass: a, superclass: b, annotations: vec![],
+            id: 1,
+            subclass: a,
+            superclass: b,
+            annotations: vec![],
         }));
         o
     }
@@ -102,7 +106,9 @@ mod tests {
         let o = make_simple_ontology();
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
         // B is superclass of A, so get_sub_classes(B) should return A
-        let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
         let subs = reasoner.get_sub_classes(&b, false).unwrap();
         assert!(!subs.is_empty());
         let flat = subs.get_flattened();
@@ -119,7 +125,9 @@ mod tests {
         let o = make_simple_ontology();
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
         // A is subclass of B, so get_super_classes(A) should return B
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
         let sups = reasoner.get_super_classes(&a, false).unwrap();
         assert!(!sups.is_empty());
         assert!(sups.get_flattened().iter().any(|c| {
@@ -133,10 +141,17 @@ mod tests {
     #[test]
     fn test_structural_instances() {
         let mut o = Ontology::new();
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let ind = Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/ind"),
+        });
         o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-            id: 1, class: a.clone(), individual: ind.clone(), annotations: vec![],
+            id: 1,
+            class: a.clone(),
+            individual: ind.clone(),
+            annotations: vec![],
         }));
 
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
@@ -148,10 +163,17 @@ mod tests {
     #[test]
     fn test_structural_types() {
         let mut o = Ontology::new();
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let ind = Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/ind"),
+        });
         o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-            id: 1, class: a.clone(), individual: ind.clone(), annotations: vec![],
+            id: 1,
+            class: a.clone(),
+            individual: ind.clone(),
+            annotations: vec![],
         }));
 
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
@@ -163,10 +185,16 @@ mod tests {
     #[test]
     fn test_structural_equivalent_classes() {
         let mut o = Ontology::new();
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
         o.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
-            id: 1, classes: vec![a.clone(), b.clone()], annotations: vec![],
+            id: 1,
+            classes: vec![a.clone(), b.clone()],
+            annotations: vec![],
         }));
 
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
@@ -178,10 +206,16 @@ mod tests {
     #[test]
     fn test_structural_same_individuals() {
         let mut o = Ontology::new();
-        let i1 = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i1") });
-        let i2 = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i2") });
+        let i1 = Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/i1"),
+        });
+        let i2 = Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/i2"),
+        });
         o.add_axiom(Axiom::SameIndividual(SameIndividualAxiom {
-            id: 1, individuals: vec![i1.clone(), i2.clone()], annotations: vec![],
+            id: 1,
+            individuals: vec![i1.clone(), i2.clone()],
+            annotations: vec![],
         }));
 
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
@@ -194,10 +228,17 @@ mod tests {
     fn test_structural_is_entailed() {
         let o = make_simple_ontology();
         let reasoner = StructuralReasoner::new(make_onto_ref(o));
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
         let ax = Axiom::SubClassOf(SubClassOfAxiom {
-            id: 1, subclass: a, superclass: b, annotations: vec![],
+            id: 1,
+            subclass: a,
+            superclass: b,
+            annotations: vec![],
         });
         assert!(reasoner.is_entailed(&ax).unwrap());
     }
@@ -207,7 +248,9 @@ mod tests {
         let o = make_simple_ontology();
         let onto_ref = make_onto_ref(o);
         let factory = StructuralReasonerFactory;
-        let reasoner = factory.create_reasoner(&onto_ref, &OWLReasonerConfiguration::default()).unwrap();
+        let reasoner = factory
+            .create_reasoner(&onto_ref, &OWLReasonerConfiguration::default())
+            .unwrap();
         assert!(reasoner.is_consistent().unwrap());
         assert_eq!(factory.get_reasoner_name(), "Oxidowl Structural Reasoner");
     }
@@ -219,7 +262,9 @@ mod tests {
         let o = make_simple_ontology();
         let onto_ref = make_onto_ref(o);
         let factory = TableauReasonerFactory;
-        let reasoner = factory.create_reasoner(&onto_ref, &OWLReasonerConfiguration::default()).unwrap();
+        let reasoner = factory
+            .create_reasoner(&onto_ref, &OWLReasonerConfiguration::default())
+            .unwrap();
         assert!(reasoner.is_consistent().unwrap());
         assert_eq!(factory.get_reasoner_name(), "Oxidowl Tableau Reasoner");
     }
@@ -229,13 +274,21 @@ mod tests {
         let o = make_simple_ontology();
         let onto_ref = make_onto_ref(o);
         let factory = StructuralReasonerFactory;
-        let reasoner = factory.create_reasoner(&onto_ref, &OWLReasonerConfiguration::default()).unwrap();
+        let reasoner = factory
+            .create_reasoner(&onto_ref, &OWLReasonerConfiguration::default())
+            .unwrap();
 
         let top_op = reasoner.get_top_object_property();
-        assert!(matches!(top_op, ObjectPropertyExpression::ObjectProperty(_)));
+        assert!(matches!(
+            top_op,
+            ObjectPropertyExpression::ObjectProperty(_)
+        ));
 
         let bot_op = reasoner.get_bottom_object_property();
-        assert!(matches!(bot_op, ObjectPropertyExpression::ObjectProperty(_)));
+        assert!(matches!(
+            bot_op,
+            ObjectPropertyExpression::ObjectProperty(_)
+        ));
     }
 
     #[test]
@@ -243,13 +296,18 @@ mod tests {
         let o = make_simple_ontology();
         let onto_ref = make_onto_ref(o);
         let factory = StructuralReasonerFactory;
-        let reasoner = factory.create_reasoner(&onto_ref, &OWLReasonerConfiguration::default()).unwrap();
+        let reasoner = factory
+            .create_reasoner(&onto_ref, &OWLReasonerConfiguration::default())
+            .unwrap();
 
         let prop = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
             iri: IRI::new("http://ex.org/prop"),
         });
         let inv = reasoner.get_inverse_object_properties(&prop).unwrap();
-        assert!(matches!(inv.get_representative_element(), ObjectPropertyExpression::InverseObjectProperty(_)));
+        assert!(matches!(
+            inv.get_representative_element(),
+            ObjectPropertyExpression::InverseObjectProperty(_)
+        ));
     }
 
     #[test]
@@ -261,6 +319,9 @@ mod tests {
 
     #[test]
     fn test_inference_types() {
-        assert_eq!(InferenceType::ClassHierarchy as u8, InferenceType::ClassHierarchy as u8);
+        assert_eq!(
+            InferenceType::ClassHierarchy as u8,
+            InferenceType::ClassHierarchy as u8
+        );
     }
 }

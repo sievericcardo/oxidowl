@@ -19,22 +19,16 @@ impl NNFConverter {
             ClassExpression::Class(_) => expr.clone(),
 
             // ¬¬C → C
-            ClassExpression::ObjectComplementOf(inner) => {
-                self.complement_to_nnf(inner)
-            }
+            ClassExpression::ObjectComplementOf(inner) => self.complement_to_nnf(inner),
 
             // ¬(C ⊓ D) → ¬C ⊔ ¬D
-            ClassExpression::ObjectIntersectionOf(ops) => {
-                ClassExpression::ObjectIntersectionOf(
-                    ops.iter().map(|op| self.to_nnf(op)).collect(),
-                )
-            }
+            ClassExpression::ObjectIntersectionOf(ops) => ClassExpression::ObjectIntersectionOf(
+                ops.iter().map(|op| self.to_nnf(op)).collect(),
+            ),
 
             // ¬(C ⊔ D) → ¬C ⊓ ¬D
             ClassExpression::ObjectUnionOf(ops) => {
-                ClassExpression::ObjectUnionOf(
-                    ops.iter().map(|op| self.to_nnf(op)).collect(),
-                )
+                ClassExpression::ObjectUnionOf(ops.iter().map(|op| self.to_nnf(op)).collect())
             }
 
             // ¬(∃R.C) → ∀R.¬C
@@ -62,39 +56,43 @@ impl NNFConverter {
             }
 
             // ¬(∃R.Self) → ∀R.¬Self (treated as primitive)
-            ClassExpression::ObjectHasSelf { property } => {
-                ClassExpression::ObjectHasSelf { property: property.clone() }
-            }
+            ClassExpression::ObjectHasSelf { property } => ClassExpression::ObjectHasSelf {
+                property: property.clone(),
+            },
 
             // Cardinality: ¬(≥ n R.C) → ≤ (n-1) R.C for n ≥ 1
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectMinCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: Box::new(self.to_nnf(filler)),
-                }
-            }
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::ObjectMinCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: Box::new(self.to_nnf(filler)),
+            },
 
             // ¬(≤ n R.C) → ≥ (n+1) R.C
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectMaxCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: Box::new(self.to_nnf(filler)),
-                }
-            }
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::ObjectMaxCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: Box::new(self.to_nnf(filler)),
+            },
 
-            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectExactCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: Box::new(self.to_nnf(filler)),
-                }
-            }
+            ClassExpression::ObjectExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::ObjectExactCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: Box::new(self.to_nnf(filler)),
+            },
 
-            ClassExpression::ObjectOneOf(inds) => {
-                ClassExpression::ObjectOneOf(inds.clone())
-            }
+            ClassExpression::ObjectOneOf(inds) => ClassExpression::ObjectOneOf(inds.clone()),
 
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 ClassExpression::DataSomeValuesFrom {
@@ -110,36 +108,40 @@ impl NNFConverter {
                 }
             }
 
-            ClassExpression::DataHasValue { property, value } => {
-                ClassExpression::DataHasValue {
-                    property: property.clone(),
-                    value: value.clone(),
-                }
-            }
+            ClassExpression::DataHasValue { property, value } => ClassExpression::DataHasValue {
+                property: property.clone(),
+                value: value.clone(),
+            },
 
-            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
-                ClassExpression::DataMinCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: filler.clone(),
-                }
-            }
+            ClassExpression::DataMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::DataMinCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: filler.clone(),
+            },
 
-            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
-                ClassExpression::DataMaxCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: filler.clone(),
-                }
-            }
+            ClassExpression::DataMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::DataMaxCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: filler.clone(),
+            },
 
-            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
-                ClassExpression::DataExactCardinality {
-                    property: property.clone(),
-                    cardinality: *cardinality,
-                    filler: filler.clone(),
-                }
-            }
+            ClassExpression::DataExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::DataExactCardinality {
+                property: property.clone(),
+                cardinality: *cardinality,
+                filler: filler.clone(),
+            },
         }
     }
 
@@ -150,32 +152,28 @@ impl NNFConverter {
             ClassExpression::ObjectComplementOf(inner2) => self.to_nnf(inner2),
 
             // ¬(C ⊓ D) → ¬C ⊔ ¬D
-            ClassExpression::ObjectIntersectionOf(ops) => {
-                ClassExpression::ObjectUnionOf(
-                    ops.iter()
-                        .map(|op| ClassExpression::ObjectComplementOf(Box::new(op.clone())))
-                        .map(|neg| self.to_nnf(&neg))
-                        .collect(),
-                )
-            }
+            ClassExpression::ObjectIntersectionOf(ops) => ClassExpression::ObjectUnionOf(
+                ops.iter()
+                    .map(|op| ClassExpression::ObjectComplementOf(Box::new(op.clone())))
+                    .map(|neg| self.to_nnf(&neg))
+                    .collect(),
+            ),
 
             // ¬(C ⊔ D) → ¬C ⊓ ¬D
-            ClassExpression::ObjectUnionOf(ops) => {
-                ClassExpression::ObjectIntersectionOf(
-                    ops.iter()
-                        .map(|op| ClassExpression::ObjectComplementOf(Box::new(op.clone())))
-                        .map(|neg| self.to_nnf(&neg))
-                        .collect(),
-                )
-            }
+            ClassExpression::ObjectUnionOf(ops) => ClassExpression::ObjectIntersectionOf(
+                ops.iter()
+                    .map(|op| ClassExpression::ObjectComplementOf(Box::new(op.clone())))
+                    .map(|neg| self.to_nnf(&neg))
+                    .collect(),
+            ),
 
             // ¬(∃R.C) → ∀R.¬C
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 ClassExpression::ObjectAllValuesFrom {
                     property: property.clone(),
-                    filler: Box::new(self.to_nnf(
-                        &ClassExpression::ObjectComplementOf(Box::new((**filler).clone()))
-                    )),
+                    filler: Box::new(self.to_nnf(&ClassExpression::ObjectComplementOf(Box::new(
+                        (**filler).clone(),
+                    )))),
                 }
             }
 
@@ -183,9 +181,9 @@ impl NNFConverter {
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 ClassExpression::ObjectSomeValuesFrom {
                     property: property.clone(),
-                    filler: Box::new(self.to_nnf(
-                        &ClassExpression::ObjectComplementOf(Box::new((**filler).clone()))
-                    )),
+                    filler: Box::new(self.to_nnf(&ClassExpression::ObjectComplementOf(Box::new(
+                        (**filler).clone(),
+                    )))),
                 }
             }
 
@@ -194,13 +192,17 @@ impl NNFConverter {
                 ClassExpression::ObjectAllValuesFrom {
                     property: property.clone(),
                     filler: Box::new(ClassExpression::ObjectComplementOf(Box::new(
-                        ClassExpression::ObjectOneOf(vec![value.clone()])
+                        ClassExpression::ObjectOneOf(vec![value.clone()]),
                     ))),
                 }
             }
 
             // ¬(≥ n R.C) → ≤ (n-1) R.C for n ≥ 1
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 if *cardinality > 0 {
                     ClassExpression::ObjectMaxCardinality {
                         property: property.clone(),
@@ -209,20 +211,26 @@ impl NNFConverter {
                     }
                 } else {
                     // ¬(≥0 R.C) → ⊥
-                    ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectComplementOf(Box::new(
-                        ClassExpression::Class(crate::ontology::Class { iri: IRI::owl_nothing() })
-                    ))))
+                    ClassExpression::ObjectComplementOf(Box::new(
+                        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::Class(
+                            crate::ontology::Class {
+                                iri: IRI::owl_nothing(),
+                            },
+                        ))),
+                    ))
                 }
             }
 
             // ¬(≤ n R.C) → ≥ (n+1) R.C
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
-                ClassExpression::ObjectMinCardinality {
-                    property: property.clone(),
-                    cardinality: cardinality + 1,
-                    filler: Box::new(self.to_nnf(filler)),
-                }
-            }
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => ClassExpression::ObjectMinCardinality {
+                property: property.clone(),
+                cardinality: cardinality + 1,
+                filler: Box::new(self.to_nnf(filler)),
+            },
 
             // Named class ¬C → just wrap (already in NNF form)
             _ => ClassExpression::ObjectComplementOf(Box::new(self.to_nnf(inner))),

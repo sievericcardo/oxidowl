@@ -350,7 +350,7 @@ impl HypertableauExpansion {
                     prop.iri.as_str().to_string()
                 }
                 crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
-                    return Ok(result) // Property chains need role composition expansion
+                    return Ok(result); // Property chains need role composition expansion
                 }
             };
 
@@ -523,7 +523,11 @@ impl HypertableauExpansion {
                     trace!("Clash detected via negation: {label} and ¬{label} in node {node_id}");
                     return true;
                 }
-                if node.labels.iter().any(|l| l.contains("Complement") && l.contains(label)) {
+                if node
+                    .labels
+                    .iter()
+                    .any(|l| l.contains("Complement") && l.contains(label))
+                {
                     trace!("Clash detected via complement: {label} in node {node_id}");
                     return true;
                 }

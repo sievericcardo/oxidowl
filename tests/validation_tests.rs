@@ -30,10 +30,10 @@ fn test_basic_ontology_creation() {
 
     let mut ontology = Ontology::new();
     let test_iri = IRI::new("http://example.org/test");
-    ontology.iri = Some(test_iri);
+    ontology.set_iri(test_iri);
 
     assert!(ontology.axioms.is_empty());
-    assert!(ontology.iri.is_some());
+    assert!(ontology.id.ontology_iri.is_some());
 
     println!("✓ Basic ontology creation successful");
 }

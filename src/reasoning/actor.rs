@@ -840,7 +840,7 @@ impl ReasoningActor {
         if let Some(ont_ref) = self.reasoner.get_ontology().cloned() {
             let ontology =
                 crate::core::lock_helpers::read_lock(&ont_ref, "actor: serializing ontology")?;
-            TurtleSerializer
+            TurtleSerializer::new()
                 .serialize(&ontology)
                 .map_err(|e| Error::reasoning(format!("Turtle serialization failed: {e}")))
         } else {

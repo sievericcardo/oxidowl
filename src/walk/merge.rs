@@ -1,9 +1,9 @@
 //! OWL Ontology Merger — combines multiple ontologies into one.
 
-use crate::ontology::{Ontology, OntologyRef, IRI};
-use crate::ontology::axioms::AxiomTrait;
-use crate::manager::OntologyManager;
 use crate::Result;
+use crate::manager::OntologyManager;
+use crate::ontology::axioms::AxiomTrait;
+use crate::ontology::{IRI, Ontology, OntologyRef};
 use std::collections::HashSet;
 
 /// Merges multiple source ontologies into a single target ontology.
@@ -17,7 +17,11 @@ impl OWLOntologyMerger {
     /// Create a merger that produces an ontology with the given target IRI.
     #[must_use]
     pub fn new(target_iri: IRI) -> Self {
-        Self { target_iri, copy_annotations: true, create_imports: false }
+        Self {
+            target_iri,
+            copy_annotations: true,
+            create_imports: false,
+        }
     }
 
     /// Whether to copy annotations from source ontologies.
@@ -46,8 +50,8 @@ impl OWLOntologyMerger {
         let mut seen_axiom_ids = HashSet::new();
 
         for source_ref in sources {
-            let guard = source_ref.read().map_err(|e| {
-                crate::Error::Internal { message: format!("Lock poisoned: {e}") }
+            let guard = source_ref.read().map_err(|e| crate::Error::Internal {
+                message: format!("Lock poisoned: {e}"),
             })?;
 
             // Copy axioms (deduplicate by ID)
@@ -68,12 +72,15 @@ impl OWLOntologyMerger {
             // Optionally create import declarations
             if self.create_imports {
                 if let Some(iri) = guard.get_iri() {
-                    merged.imports.push(iri.clone());
+                    merged.imports.push(crate::ontology::ImportsDeclaration {
+                        imported_ontology_iri: iri.clone(),
+                    });
                 }
             }
         }
 
-        let ont_ref = manager.create_ontology_with_axioms(self.target_iri.clone(), merged.axioms.clone());
+        let ont_ref =
+            manager.create_ontology_with_axioms(self.target_iri.clone(), merged.axioms.clone());
         Ok(ont_ref)
     }
 }

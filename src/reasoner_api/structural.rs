@@ -4,16 +4,22 @@
 //! indexed axiom sets. Useful for testing, pre-checks, and fallback.
 
 use super::{Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory};
-use crate::ontology::{
-    ClassExpression, DataPropertyExpression, DataRange, Individual,
-    ObjectPropertyExpression, OntologyRef,
-};
+use crate::Result;
 use crate::ontology::axioms::Axiom;
 use crate::ontology::axioms::{
-    ClassAssertionAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
-    EquivalentClassesAxiom, SameIndividualAxiom, SubClassOfAxiom,
+    ClassAssertionAxiom, DataPropertyAssertionAxiom, DataPropertyDomainAxiom,
+    DataPropertyRangeAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
+    DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom,
+    EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
+    EquivalentObjectPropertiesAxiom, InverseObjectPropertiesAxiom,
+    ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom,
+    ObjectPropertyRangeAxiom, SameIndividualAxiom, SubClassOfAxiom,
+    SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
 };
-use crate::Result;
+use crate::ontology::{
+    ClassExpression, DataPropertyExpression, DataRange, Individual, NamedIndividual,
+    ObjectPropertyExpression, OntologyRef,
+};
 use std::collections::{HashMap, HashSet};
 
 /// A fast, non-logical reasoner that works purely on asserted axioms.
@@ -34,6 +40,36 @@ struct AxiomIndex {
     class_assertions: HashMap<Individual, Vec<ClassAssertionAxiom>>,
     same_individual: HashMap<Individual, Vec<SameIndividualAxiom>>,
     different_individual: HashMap<Individual, Vec<DifferentIndividualsAxiom>>,
+    object_property_assertions_by_source:
+        HashMap<NamedIndividual, Vec<ObjectPropertyAssertionAxiom>>,
+    data_property_assertions_by_individual:
+        HashMap<NamedIndividual, Vec<DataPropertyAssertionAxiom>>,
+    sub_object_property_by_sub:
+        HashMap<ObjectPropertyExpression, Vec<SubObjectPropertyOfAxiom>>,
+    sub_object_property_by_super:
+        HashMap<ObjectPropertyExpression, Vec<SubObjectPropertyOfAxiom>>,
+    equivalent_object_properties:
+        HashMap<ObjectPropertyExpression, Vec<EquivalentObjectPropertiesAxiom>>,
+    disjoint_object_properties:
+        HashMap<ObjectPropertyExpression, Vec<DisjointObjectPropertiesAxiom>>,
+    inverse_object_properties:
+        HashMap<ObjectPropertyExpression, Vec<InverseObjectPropertiesAxiom>>,
+    object_property_domains:
+        HashMap<ObjectPropertyExpression, Vec<ObjectPropertyDomainAxiom>>,
+    object_property_ranges:
+        HashMap<ObjectPropertyExpression, Vec<ObjectPropertyRangeAxiom>>,
+    sub_data_property_by_sub:
+        HashMap<DataPropertyExpression, Vec<SubDataPropertyOfAxiom>>,
+    sub_data_property_by_super:
+        HashMap<DataPropertyExpression, Vec<SubDataPropertyOfAxiom>>,
+    equivalent_data_properties:
+        HashMap<DataPropertyExpression, Vec<EquivalentDataPropertiesAxiom>>,
+    disjoint_data_properties:
+        HashMap<DataPropertyExpression, Vec<DisjointDataPropertiesAxiom>>,
+    data_property_domains:
+        HashMap<DataPropertyExpression, Vec<DataPropertyDomainAxiom>>,
+    data_property_ranges:
+        HashMap<DataPropertyExpression, Vec<DataPropertyRangeAxiom>>,
 }
 
 impl StructuralReasoner {
@@ -51,35 +87,183 @@ impl StructuralReasoner {
     /// Rebuild all axiom indices from the current ontology state.
     fn rebuild_index(&mut self) {
         self.index = AxiomIndex::default();
-        let Ok(guard) = self.ontology.read() else { return };
+        let Ok(guard) = self.ontology.read() else {
+            return;
+        };
         for axiom in guard.axioms() {
             match axiom {
                 Axiom::SubClassOf(a) => {
-                    self.index.subclass_by_lhs.entry(a.subclass.clone()).or_default().push(a.clone());
-                    self.index.subclass_by_rhs.entry(a.superclass.clone()).or_default().push(a.clone());
+                    self.index
+                        .subclass_by_lhs
+                        .entry(a.subclass.clone())
+                        .or_default()
+                        .push(a.clone());
+                    self.index
+                        .subclass_by_rhs
+                        .entry(a.superclass.clone())
+                        .or_default()
+                        .push(a.clone());
                 }
                 Axiom::EquivalentClasses(a) => {
                     for ce in &a.classes {
-                        self.index.equivalent_classes.entry(ce.clone()).or_default().push(a.clone());
+                        self.index
+                            .equivalent_classes
+                            .entry(ce.clone())
+                            .or_default()
+                            .push(a.clone());
                     }
                 }
                 Axiom::DisjointClasses(a) => {
                     for ce in &a.classes {
-                        self.index.disjoint_classes.entry(ce.clone()).or_default().push(a.clone());
+                        self.index
+                            .disjoint_classes
+                            .entry(ce.clone())
+                            .or_default()
+                            .push(a.clone());
                     }
                 }
                 Axiom::ClassAssertion(a) => {
-                    self.index.class_assertions.entry(a.individual.clone()).or_default().push(a.clone());
+                    self.index
+                        .class_assertions
+                        .entry(a.individual.clone())
+                        .or_default()
+                        .push(a.clone());
                 }
                 Axiom::SameIndividual(a) => {
                     for ind in &a.individuals {
-                        self.index.same_individual.entry(ind.clone()).or_default().push(a.clone());
+                        self.index
+                            .same_individual
+                            .entry(ind.clone())
+                            .or_default()
+                            .push(a.clone());
                     }
                 }
                 Axiom::DifferentIndividuals(a) => {
                     for ind in &a.individuals {
-                        self.index.different_individual.entry(ind.clone()).or_default().push(a.clone());
+                        self.index
+                            .different_individual
+                            .entry(ind.clone())
+                            .or_default()
+                            .push(a.clone());
                     }
+                }
+                Axiom::ObjectPropertyAssertion(a) => {
+                    if let Individual::Named(ni) = &a.source {
+                        self.index
+                            .object_property_assertions_by_source
+                            .entry(ni.clone())
+                            .or_default()
+                            .push(a.clone());
+                    }
+                }
+                Axiom::DataPropertyAssertion(a) => {
+                    if let Individual::Named(ni) = &a.individual {
+                        self.index
+                            .data_property_assertions_by_individual
+                            .entry(ni.clone())
+                            .or_default()
+                            .push(a.clone());
+                    }
+                }
+                Axiom::SubObjectPropertyOf(a) => {
+                    self.index
+                        .sub_object_property_by_sub
+                        .entry(a.sub_property.clone())
+                        .or_default()
+                        .push(a.clone());
+                    self.index
+                        .sub_object_property_by_super
+                        .entry(a.super_property.clone())
+                        .or_default()
+                        .push(a.clone());
+                }
+                Axiom::EquivalentObjectProperties(a) => {
+                    for prop in &a.properties {
+                        self.index
+                            .equivalent_object_properties
+                            .entry(prop.clone())
+                            .or_default()
+                            .push(a.clone());
+                    }
+                }
+                Axiom::DisjointObjectProperties(a) => {
+                    for prop in &a.properties {
+                        self.index
+                            .disjoint_object_properties
+                            .entry(prop.clone())
+                            .or_default()
+                            .push(a.clone());
+                    }
+                }
+                Axiom::InverseObjectProperties(a) => {
+                    self.index
+                        .inverse_object_properties
+                        .entry(a.property1.clone())
+                        .or_default()
+                        .push(a.clone());
+                    self.index
+                        .inverse_object_properties
+                        .entry(a.property2.clone())
+                        .or_default()
+                        .push(a.clone());
+                }
+                Axiom::ObjectPropertyDomain(a) => {
+                    self.index
+                        .object_property_domains
+                        .entry(a.property.clone())
+                        .or_default()
+                        .push(a.clone());
+                }
+                Axiom::ObjectPropertyRange(a) => {
+                    self.index
+                        .object_property_ranges
+                        .entry(a.property.clone())
+                        .or_default()
+                        .push(a.clone());
+                }
+                Axiom::SubDataPropertyOf(a) => {
+                    self.index
+                        .sub_data_property_by_sub
+                        .entry(a.sub_property.clone())
+                        .or_default()
+                        .push(a.clone());
+                    self.index
+                        .sub_data_property_by_super
+                        .entry(a.super_property.clone())
+                        .or_default()
+                        .push(a.clone());
+                }
+                Axiom::EquivalentDataProperties(a) => {
+                    for prop in &a.properties {
+                        self.index
+                            .equivalent_data_properties
+                            .entry(prop.clone())
+                            .or_default()
+                            .push(a.clone());
+                    }
+                }
+                Axiom::DisjointDataProperties(a) => {
+                    for prop in &a.properties {
+                        self.index
+                            .disjoint_data_properties
+                            .entry(prop.clone())
+                            .or_default()
+                            .push(a.clone());
+                    }
+                }
+                Axiom::DataPropertyDomain(a) => {
+                    self.index
+                        .data_property_domains
+                        .entry(a.property.clone())
+                        .or_default()
+                        .push(a.clone());
+                }
+                Axiom::DataPropertyRange(a) => {
+                    self.index
+                        .data_property_ranges
+                        .entry(a.property.clone())
+                        .or_default()
+                        .push(a.clone());
                 }
                 _ => {}
             }
@@ -88,7 +272,11 @@ impl StructuralReasoner {
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    fn collect_all_subclasses(&self, ce: &ClassExpression, visited: &mut HashSet<ClassExpression>) -> Vec<ClassExpression> {
+    fn collect_all_subclasses(
+        &self,
+        ce: &ClassExpression,
+        visited: &mut HashSet<ClassExpression>,
+    ) -> Vec<ClassExpression> {
         if !visited.insert(ce.clone()) {
             return vec![];
         }
@@ -105,7 +293,11 @@ impl StructuralReasoner {
         result
     }
 
-    fn collect_all_superclasses(&self, ce: &ClassExpression, visited: &mut HashSet<ClassExpression>) -> Vec<ClassExpression> {
+    fn collect_all_superclasses(
+        &self,
+        ce: &ClassExpression,
+        visited: &mut HashSet<ClassExpression>,
+    ) -> Vec<ClassExpression> {
         if !visited.insert(ce.clone()) {
             return vec![];
         }
@@ -115,6 +307,84 @@ impl StructuralReasoner {
                 let sup = &sc.superclass;
                 result.push(sup.clone());
                 let transitive = self.collect_all_superclasses(sup, visited);
+                result.extend(transitive);
+            }
+        }
+        result
+    }
+
+    fn collect_all_sub_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+        visited: &mut HashSet<ObjectPropertyExpression>,
+    ) -> Vec<ObjectPropertyExpression> {
+        if !visited.insert(prop.clone()) {
+            return vec![];
+        }
+        let mut result = Vec::new();
+        if let Some(axioms) = self.index.sub_object_property_by_super.get(prop) {
+            for ax in axioms {
+                result.push(ax.sub_property.clone());
+                let transitive = self.collect_all_sub_object_properties(&ax.sub_property, visited);
+                result.extend(transitive);
+            }
+        }
+        result
+    }
+
+    fn collect_all_super_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+        visited: &mut HashSet<ObjectPropertyExpression>,
+    ) -> Vec<ObjectPropertyExpression> {
+        if !visited.insert(prop.clone()) {
+            return vec![];
+        }
+        let mut result = Vec::new();
+        if let Some(axioms) = self.index.sub_object_property_by_sub.get(prop) {
+            for ax in axioms {
+                result.push(ax.super_property.clone());
+                let transitive =
+                    self.collect_all_super_object_properties(&ax.super_property, visited);
+                result.extend(transitive);
+            }
+        }
+        result
+    }
+
+    fn collect_all_sub_data_properties(
+        &self,
+        prop: &DataPropertyExpression,
+        visited: &mut HashSet<DataPropertyExpression>,
+    ) -> Vec<DataPropertyExpression> {
+        if !visited.insert(prop.clone()) {
+            return vec![];
+        }
+        let mut result = Vec::new();
+        if let Some(axioms) = self.index.sub_data_property_by_super.get(prop) {
+            for ax in axioms {
+                result.push(ax.sub_property.clone());
+                let transitive = self.collect_all_sub_data_properties(&ax.sub_property, visited);
+                result.extend(transitive);
+            }
+        }
+        result
+    }
+
+    fn collect_all_super_data_properties(
+        &self,
+        prop: &DataPropertyExpression,
+        visited: &mut HashSet<DataPropertyExpression>,
+    ) -> Vec<DataPropertyExpression> {
+        if !visited.insert(prop.clone()) {
+            return vec![];
+        }
+        let mut result = Vec::new();
+        if let Some(axioms) = self.index.sub_data_property_by_sub.get(prop) {
+            for ax in axioms {
+                result.push(ax.super_property.clone());
+                let transitive =
+                    self.collect_all_super_data_properties(&ax.super_property, visited);
                 result.extend(transitive);
             }
         }
@@ -142,11 +412,17 @@ impl OWLReasoner for StructuralReasoner {
 
     fn get_unsatisfiable_classes(&self) -> Result<Node<ClassExpression>> {
         Ok(Node::bottom_node(ClassExpression::Class(
-            crate::ontology::Class { iri: crate::ontology::IRI::owl_nothing() },
+            crate::ontology::Class {
+                iri: crate::ontology::IRI::owl_nothing(),
+            },
         )))
     }
 
-    fn get_sub_classes(&self, class: &ClassExpression, direct: bool) -> Result<NodeSet<ClassExpression>> {
+    fn get_sub_classes(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<NodeSet<ClassExpression>> {
         if direct {
             let mut nodes = HashSet::new();
             // Find axioms where `class` is the superclass, return the subclasses
@@ -162,7 +438,11 @@ impl OWLReasoner for StructuralReasoner {
         }
     }
 
-    fn get_super_classes(&self, class: &ClassExpression, direct: bool) -> Result<NodeSet<ClassExpression>> {
+    fn get_super_classes(
+        &self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<NodeSet<ClassExpression>> {
         if direct {
             let mut nodes = HashSet::new();
             // Find axioms where `class` is the subclass, return the superclasses
@@ -221,7 +501,11 @@ impl OWLReasoner for StructuralReasoner {
         Ok(NodeSet::new(nodes))
     }
 
-    fn get_types(&self, individual: &Individual, _direct: bool) -> Result<NodeSet<ClassExpression>> {
+    fn get_types(
+        &self,
+        individual: &Individual,
+        _direct: bool,
+    ) -> Result<NodeSet<ClassExpression>> {
         let mut nodes = HashSet::new();
         if let Some(assertions) = self.index.class_assertions.get(individual) {
             for ax in assertions {
@@ -270,40 +554,135 @@ impl OWLReasoner for StructuralReasoner {
         })
     }
 
-    fn get_sub_object_properties(&self, _prop: &ObjectPropertyExpression, _direct: bool) -> Result<NodeSet<ObjectPropertyExpression>> {
-        Ok(NodeSet::empty())
-    }
-
-    fn get_super_object_properties(&self, _prop: &ObjectPropertyExpression, _direct: bool) -> Result<NodeSet<ObjectPropertyExpression>> {
-        Ok(NodeSet::empty())
-    }
-
-    fn get_equivalent_object_properties(&self, prop: &ObjectPropertyExpression) -> Result<Node<ObjectPropertyExpression>> {
-        Ok(Node::singleton(prop.clone()))
-    }
-
-    fn get_disjoint_object_properties(&self, _prop: &ObjectPropertyExpression) -> Result<NodeSet<ObjectPropertyExpression>> {
-        Ok(NodeSet::empty())
-    }
-
-    fn get_inverse_object_properties(&self, prop: &ObjectPropertyExpression) -> Result<Node<ObjectPropertyExpression>> {
-        match prop {
-            ObjectPropertyExpression::ObjectProperty(p) => Ok(Node::singleton(
-                ObjectPropertyExpression::InverseObjectProperty(p.clone()),
-            )),
-            ObjectPropertyExpression::InverseObjectProperty(p) => Ok(Node::singleton(
-                ObjectPropertyExpression::ObjectProperty(p.clone()),
-            )),
-            ObjectPropertyExpression::PropertyChain(_) => Ok(Node::singleton(prop.clone())),
+    fn get_sub_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+        direct: bool,
+    ) -> Result<NodeSet<ObjectPropertyExpression>> {
+        if direct {
+            let mut nodes = HashSet::new();
+            if let Some(axioms) = self.index.sub_object_property_by_super.get(prop) {
+                for ax in axioms {
+                    nodes.insert(Node::singleton(ax.sub_property.clone()));
+                }
+            }
+            Ok(NodeSet::new(nodes))
+        } else {
+            let all = self.collect_all_sub_object_properties(prop, &mut HashSet::new());
+            Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
         }
     }
 
-    fn get_object_property_domains(&self, _prop: &ObjectPropertyExpression, _direct: bool) -> Result<NodeSet<ClassExpression>> {
-        Ok(NodeSet::empty())
+    fn get_super_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+        direct: bool,
+    ) -> Result<NodeSet<ObjectPropertyExpression>> {
+        if direct {
+            let mut nodes = HashSet::new();
+            if let Some(axioms) = self.index.sub_object_property_by_sub.get(prop) {
+                for ax in axioms {
+                    nodes.insert(Node::singleton(ax.super_property.clone()));
+                }
+            }
+            Ok(NodeSet::new(nodes))
+        } else {
+            let all = self.collect_all_super_object_properties(prop, &mut HashSet::new());
+            Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
+        }
     }
 
-    fn get_object_property_ranges(&self, _prop: &ObjectPropertyExpression, _direct: bool) -> Result<NodeSet<ClassExpression>> {
-        Ok(NodeSet::empty())
+    fn get_equivalent_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Result<Node<ObjectPropertyExpression>> {
+        let mut equivalents = HashSet::new();
+        if let Some(eqs) = self.index.equivalent_object_properties.get(prop) {
+            for eq in eqs {
+                for p in &eq.properties {
+                    equivalents.insert(p.clone());
+                }
+            }
+        }
+        if equivalents.is_empty() {
+            equivalents.insert(prop.clone());
+        }
+        Ok(Node::new(equivalents))
+    }
+
+    fn get_disjoint_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Result<NodeSet<ObjectPropertyExpression>> {
+        let mut disjoint = HashSet::new();
+        if let Some(entries) = self.index.disjoint_object_properties.get(prop) {
+            for da in entries {
+                for p in &da.properties {
+                    if p != prop {
+                        disjoint.insert(Node::singleton(p.clone()));
+                    }
+                }
+            }
+        }
+        Ok(NodeSet::new(disjoint))
+    }
+
+    fn get_inverse_object_properties(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Result<Node<ObjectPropertyExpression>> {
+        let mut inverses = HashSet::new();
+        if let Some(axioms) = self.index.inverse_object_properties.get(prop) {
+            for inv in axioms {
+                if &inv.property1 == prop {
+                    inverses.insert(inv.property2.clone());
+                }
+                if &inv.property2 == prop {
+                    inverses.insert(inv.property1.clone());
+                }
+            }
+        }
+        // Always include the structural inverse
+        match prop {
+            ObjectPropertyExpression::ObjectProperty(p) => {
+                inverses.insert(ObjectPropertyExpression::InverseObjectProperty(p.clone()));
+            }
+            ObjectPropertyExpression::InverseObjectProperty(p) => {
+                inverses.insert(ObjectPropertyExpression::ObjectProperty(p.clone()));
+            }
+            ObjectPropertyExpression::PropertyChain(_) => {
+                inverses.insert(prop.clone());
+            }
+        }
+        Ok(Node::new(inverses))
+    }
+
+    fn get_object_property_domains(
+        &self,
+        prop: &ObjectPropertyExpression,
+        _direct: bool,
+    ) -> Result<NodeSet<ClassExpression>> {
+        let mut nodes = HashSet::new();
+        if let Some(axioms) = self.index.object_property_domains.get(prop) {
+            for ax in axioms {
+                nodes.insert(Node::singleton(ax.domain.clone()));
+            }
+        }
+        Ok(NodeSet::new(nodes))
+    }
+
+    fn get_object_property_ranges(
+        &self,
+        prop: &ObjectPropertyExpression,
+        _direct: bool,
+    ) -> Result<NodeSet<ClassExpression>> {
+        let mut nodes = HashSet::new();
+        if let Some(axioms) = self.index.object_property_ranges.get(prop) {
+            for ax in axioms {
+                nodes.insert(Node::singleton(ax.range.clone()));
+            }
+        }
+        Ok(NodeSet::new(nodes))
     }
 
     fn get_top_data_property(&self) -> DataPropertyExpression {
@@ -318,28 +697,147 @@ impl OWLReasoner for StructuralReasoner {
         })
     }
 
-    fn get_sub_data_properties(&self, _prop: &DataPropertyExpression, _direct: bool) -> Result<NodeSet<DataPropertyExpression>> {
-        Ok(NodeSet::empty())
+    fn get_sub_data_properties(
+        &self,
+        prop: &DataPropertyExpression,
+        direct: bool,
+    ) -> Result<NodeSet<DataPropertyExpression>> {
+        if direct {
+            let mut nodes = HashSet::new();
+            if let Some(axioms) = self.index.sub_data_property_by_super.get(prop) {
+                for ax in axioms {
+                    nodes.insert(Node::singleton(ax.sub_property.clone()));
+                }
+            }
+            Ok(NodeSet::new(nodes))
+        } else {
+            let all = self.collect_all_sub_data_properties(prop, &mut HashSet::new());
+            Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
+        }
     }
 
-    fn get_super_data_properties(&self, _prop: &DataPropertyExpression, _direct: bool) -> Result<NodeSet<DataPropertyExpression>> {
-        Ok(NodeSet::empty())
+    fn get_super_data_properties(
+        &self,
+        prop: &DataPropertyExpression,
+        direct: bool,
+    ) -> Result<NodeSet<DataPropertyExpression>> {
+        if direct {
+            let mut nodes = HashSet::new();
+            if let Some(axioms) = self.index.sub_data_property_by_sub.get(prop) {
+                for ax in axioms {
+                    nodes.insert(Node::singleton(ax.super_property.clone()));
+                }
+            }
+            Ok(NodeSet::new(nodes))
+        } else {
+            let all = self.collect_all_super_data_properties(prop, &mut HashSet::new());
+            Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
+        }
     }
 
-    fn get_equivalent_data_properties(&self, prop: &DataPropertyExpression) -> Result<Node<DataPropertyExpression>> {
-        Ok(Node::singleton(prop.clone()))
+    fn get_equivalent_data_properties(
+        &self,
+        prop: &DataPropertyExpression,
+    ) -> Result<Node<DataPropertyExpression>> {
+        let mut equivalents = HashSet::new();
+        if let Some(eqs) = self.index.equivalent_data_properties.get(prop) {
+            for eq in eqs {
+                for p in &eq.properties {
+                    equivalents.insert(p.clone());
+                }
+            }
+        }
+        if equivalents.is_empty() {
+            equivalents.insert(prop.clone());
+        }
+        Ok(Node::new(equivalents))
     }
 
-    fn get_disjoint_data_properties(&self, _prop: &DataPropertyExpression) -> Result<NodeSet<DataPropertyExpression>> {
-        Ok(NodeSet::empty())
+    fn get_disjoint_data_properties(
+        &self,
+        prop: &DataPropertyExpression,
+    ) -> Result<NodeSet<DataPropertyExpression>> {
+        let mut disjoint = HashSet::new();
+        if let Some(entries) = self.index.disjoint_data_properties.get(prop) {
+            for da in entries {
+                for p in &da.properties {
+                    if p != prop {
+                        disjoint.insert(Node::singleton(p.clone()));
+                    }
+                }
+            }
+        }
+        Ok(NodeSet::new(disjoint))
     }
 
-    fn get_data_property_domains(&self, _prop: &DataPropertyExpression, _direct: bool) -> Result<NodeSet<ClassExpression>> {
-        Ok(NodeSet::empty())
+    fn get_data_property_domains(
+        &self,
+        prop: &DataPropertyExpression,
+        _direct: bool,
+    ) -> Result<NodeSet<ClassExpression>> {
+        let mut nodes = HashSet::new();
+        if let Some(axioms) = self.index.data_property_domains.get(prop) {
+            for ax in axioms {
+                nodes.insert(Node::singleton(ax.domain.clone()));
+            }
+        }
+        Ok(NodeSet::new(nodes))
     }
 
-    fn get_data_property_ranges(&self, _prop: &DataPropertyExpression, _direct: bool) -> Result<NodeSet<DataRange>> {
-        Ok(NodeSet::empty())
+    fn get_data_property_ranges(
+        &self,
+        prop: &DataPropertyExpression,
+        _direct: bool,
+    ) -> Result<NodeSet<DataRange>> {
+        let mut nodes = HashSet::new();
+        if let Some(axioms) = self.index.data_property_ranges.get(prop) {
+            for ax in axioms {
+                nodes.insert(Node::singleton(ax.range.clone()));
+            }
+        }
+        Ok(NodeSet::new(nodes))
+    }
+
+    fn get_object_property_values(
+        &self,
+        individual: &NamedIndividual,
+        property: &ObjectPropertyExpression,
+    ) -> Result<NodeSet<NamedIndividual>> {
+        let mut nodes = HashSet::new();
+        if let Some(axioms) = self
+            .index
+            .object_property_assertions_by_source
+            .get(individual)
+        {
+            for ax in axioms {
+                if &ax.property == property {
+                    if let Individual::Named(ni) = &ax.target {
+                        nodes.insert(Node::singleton(ni.clone()));
+                    }
+                }
+            }
+        }
+        Ok(NodeSet::new(nodes))
+    }
+
+    fn get_data_property_values(
+        &self,
+        individual: &NamedIndividual,
+        property: &DataPropertyExpression,
+    ) -> Result<NodeSet<crate::ontology::Literal>> {
+        let mut nodes = HashSet::new();
+        if let Some(axioms) = self
+            .index
+            .data_property_assertions_by_individual
+            .get(individual)
+        {
+            for ax in axioms {
+                if &ax.property == property {
+                    nodes.insert(Node::singleton(ax.value.clone()));
+                }
+            }
+        }
+        Ok(NodeSet::new(nodes))
     }
 
     fn is_entailed(&self, axiom: &Axiom) -> Result<bool> {
@@ -351,7 +849,8 @@ impl OWLReasoner for StructuralReasoner {
             Axiom::EquivalentClasses(a) => {
                 // Check if all classes are mutually subsumed
                 for i in 0..a.classes.len() {
-                    let supers_i = self.collect_all_superclasses(&a.classes[i], &mut HashSet::new());
+                    let supers_i =
+                        self.collect_all_superclasses(&a.classes[i], &mut HashSet::new());
                     for (j, _) in a.classes.iter().enumerate() {
                         if i != j && !supers_i.contains(&a.classes[j]) {
                             return Ok(false);

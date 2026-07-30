@@ -14,7 +14,10 @@ pub struct DecomposerConfig {
 
 impl Default for DecomposerConfig {
     fn default() -> Self {
-        Self { locality: LocalityClass::Star, timeout: None }
+        Self {
+            locality: LocalityClass::Star,
+            timeout: None,
+        }
     }
 }
 
@@ -27,7 +30,9 @@ pub struct AtomicDecomposer {
 
 impl AtomicDecomposer {
     #[must_use]
-    pub fn new(config: DecomposerConfig) -> Self { Self { config } }
+    pub fn new(config: DecomposerConfig) -> Self {
+        Self { config }
+    }
 
     /// Decompose an ontology into atoms using signature-based locality.
     #[must_use]
@@ -37,5 +42,7 @@ impl AtomicDecomposer {
 }
 
 impl Default for AtomicDecomposer {
-    fn default() -> Self { Self::new(DecomposerConfig::default()) }
+    fn default() -> Self {
+        Self::new(DecomposerConfig::default())
+    }
 }

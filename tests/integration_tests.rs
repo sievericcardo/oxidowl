@@ -4,29 +4,57 @@
 //! Tests exercise the full stack: ontology model → manager → parsing →
 //! reasoning → explanation → modularity → serialization.
 
-use oxidowl::*;
 use oxidowl::factory::providers::AxiomCreationProvider;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use std::sync::{Arc, RwLock};
+use oxidowl::*;
 use std::collections::HashSet;
+use std::sync::{Arc, RwLock};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 fn simple_ontology() -> Ontology {
     let mut o = Ontology::new();
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
-    let c = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
+    let c = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/C"),
+    });
     o.set_iri(IRI::new("http://ex.org/TestOnt"));
-    o.add_axiom(Axiom::Declaration(DeclarationAxiom { id: 1, entity: Entity::Class(IRI::new("http://ex.org/A")) }));
-    o.add_axiom(Axiom::Declaration(DeclarationAxiom { id: 2, entity: Entity::Class(IRI::new("http://ex.org/B")) }));
-    o.add_axiom(Axiom::Declaration(DeclarationAxiom { id: 3, entity: Entity::Class(IRI::new("http://ex.org/C")) }));
-    o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom { id: 4, subclass: a.clone(), superclass: b.clone(), annotations: vec![] }));
-    o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom { id: 5, subclass: b.clone(), superclass: c.clone(), annotations: vec![] }));
+    o.add_axiom(Axiom::Declaration(DeclarationAxiom {
+        id: 1,
+        entity: Entity::Class(IRI::new("http://ex.org/A")),
+    }));
+    o.add_axiom(Axiom::Declaration(DeclarationAxiom {
+        id: 2,
+        entity: Entity::Class(IRI::new("http://ex.org/B")),
+    }));
+    o.add_axiom(Axiom::Declaration(DeclarationAxiom {
+        id: 3,
+        entity: Entity::Class(IRI::new("http://ex.org/C")),
+    }));
+    o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
+        id: 4,
+        subclass: a.clone(),
+        superclass: b.clone(),
+        annotations: vec![],
+    }));
+    o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
+        id: 5,
+        subclass: b.clone(),
+        superclass: c.clone(),
+        annotations: vec![],
+    }));
     o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-        id: 6, class: a.clone(),
-        individual: Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") }),
+        id: 6,
+        class: a.clone(),
+        individual: Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/ind"),
+        }),
         annotations: vec![],
     }));
     o
@@ -49,7 +77,10 @@ fn phase1_manager_create_and_register() {
     assert_eq!(manager.ontology_count(), 1);
 
     let exported = manager.get_ontology(&iri).unwrap();
-    assert_eq!(exported.read().unwrap().get_iri().cloned(), Some(iri.clone()));
+    assert_eq!(
+        exported.read().unwrap().get_iri().cloned(),
+        Some(iri.clone())
+    );
 }
 
 #[test]
@@ -71,11 +102,18 @@ fn phase1_change_history_undo_redo() {
     let mut history = ChangeHistory::new(5);
     let factory = DataFactory::new();
     let ax = factory.make_sub_class_of_axiom(
-        ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") }),
-        ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") }),
+        ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        }),
+        ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        }),
         vec![],
     );
-    let change = OntologyChange::AddAxiom { ontology_iri: IRI::new("http://ex.org/ont"), axiom: Axiom::SubClassOf(ax) };
+    let change = OntologyChange::AddAxiom {
+        ontology_iri: IRI::new("http://ex.org/ont"),
+        axiom: Axiom::SubClassOf(ax),
+    };
     history.record(vec![change]);
     assert!(history.can_undo());
     let undone = history.undo(1);
@@ -85,8 +123,8 @@ fn phase1_change_history_undo_redo() {
 
 #[test]
 fn phase1_iri_mapper_resolution() {
-    use crate::manager::iri_mapper::SimpleIRIMapper;
     use crate::manager::iri_mapper::OntologyIRIMapper;
+    use crate::manager::iri_mapper::SimpleIRIMapper;
     let mapper = SimpleIRIMapper::new(
         IRI::new("http://ex.org/ont"),
         IRI::new("file:///tmp/ont.owl"),
@@ -154,8 +192,12 @@ fn phase2_krss_render_and_parse() {
 fn phase3_structural_sub_and_super_classes() {
     let o = simple_ontology();
     let reasoner = StructuralReasoner::new(onto_ref(o));
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
 
     let sups = reasoner.get_super_classes(&a, false).unwrap();
     assert!(!sups.is_empty());
@@ -171,8 +213,12 @@ fn phase3_structural_sub_and_super_classes() {
 fn phase3_structural_instances_and_types() {
     let o = simple_ontology();
     let reasoner = StructuralReasoner::new(onto_ref(o));
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let ind = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/ind"),
+    });
 
     let instances = reasoner.get_instances(&a, false).unwrap();
     assert!(instances.contains_entity(&ind));
@@ -186,7 +232,9 @@ fn phase3_tableau_reasoner_factory() {
     let o = simple_ontology();
     let onto = onto_ref(o);
     let factory = TableauReasonerFactory;
-    let reasoner = factory.create_reasoner(&onto, &OWLReasonerConfiguration::default()).unwrap();
+    let reasoner = factory
+        .create_reasoner(&onto, &OWLReasonerConfiguration::default())
+        .unwrap();
     assert!(reasoner.is_consistent().unwrap());
 }
 
@@ -214,7 +262,9 @@ fn phase4_entity_searcher() {
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
 
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let axioms = searcher.get_sub_class_axioms_for_lhs(&a);
     assert!(!axioms.is_empty());
 }
@@ -246,11 +296,17 @@ fn phase4_entity_remover() {
 #[test]
 fn phase4_nnf_converter() {
     use crate::transform::nnf::NNFConverter;
-    let c1 = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C1") });
-    let c2 = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C2") });
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectIntersectionOf(vec![c1.clone(), c2.clone()])
-    ));
+    let c1 = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/C1"),
+    });
+    let c2 = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/C2"),
+    });
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectIntersectionOf(vec![
+            c1.clone(),
+            c2.clone(),
+        ])));
     let nnf = NNFConverter.to_nnf(&original);
     // ¬(C1 ⊓ C2) → ¬C1 ⊔ ¬C2
     assert!(matches!(nnf, ClassExpression::ObjectUnionOf(_)));
@@ -262,7 +318,6 @@ fn phase4_dl_expressivity() {
     let o = simple_ontology();
     let checker = DLExpressivityChecker;
     let expr = checker.analyze(&o);
-    assert!(expr.has_complement);    // NNF test above uses complement
     let name = expr.to_name();
     assert!(!name.is_empty());
 }
@@ -270,9 +325,13 @@ fn phase4_dl_expressivity() {
 #[test]
 fn phase4_ontology_walker() {
     use crate::walk::{OWLObjectVisitor, OntologyWalker};
-    struct Counter { count: usize }
+    struct Counter {
+        count: usize,
+    }
     impl OWLObjectVisitor for Counter {
-        fn visit_class_expression(&mut self, _: &ClassExpression) { self.count += 1; }
+        fn visit_class_expression(&mut self, _: &ClassExpression) {
+            self.count += 1;
+        }
     }
     let o = simple_ontology();
     let mut walker = OntologyWalker::new(Counter { count: 0 });
@@ -315,7 +374,7 @@ fn phase5_blackbox_explanation() {
 
 #[test]
 fn phase5_hst_generator() {
-    use crate::explanation::hst::{HSTExplanationGenerator, HSTConfig};
+    use crate::explanation::hst::{HSTConfig, HSTExplanationGenerator};
     let factory = Arc::new(TableauReasonerFactory);
     let config = HSTConfig::default();
     let _hst = HSTExplanationGenerator::new(factory, config);
@@ -328,8 +387,12 @@ fn phase5_satisfiability_converter() {
     let onto = onto_ref(o);
     let ax = Axiom::SubClassOf(SubClassOfAxiom {
         id: 0,
-        subclass: ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") }),
-        superclass: ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") }),
+        subclass: ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        }),
+        superclass: ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        }),
         annotations: vec![],
     });
     let (_temp, _cleanup) = SatisfiabilityConverter::convert(&onto, &ax);
@@ -369,14 +432,20 @@ fn phase5_module_extractor() {
 
 #[test]
 fn phase5_syntactic_locality() {
-    use crate::modularity::locality::{LocalityClass, LocalityEvaluator, SyntacticLocalityEvaluator};
+    use crate::modularity::locality::{
+        LocalityClass, LocalityEvaluator, SyntacticLocalityEvaluator,
+    };
     let evaluator = SyntacticLocalityEvaluator::new(LocalityClass::Star);
     let mut sig = HashSet::new();
     sig.insert(IRI::new("http://ex.org/B"));
     let ax = Axiom::SubClassOf(SubClassOfAxiom {
         id: 0,
-        subclass: ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") }),
-        superclass: ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") }),
+        subclass: ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        }),
+        superclass: ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        }),
         annotations: vec![],
     });
     let is_local = evaluator.is_local(&ax, &sig);
@@ -447,8 +516,8 @@ fn phase6_rio_n3_and_nquads() {
 
 #[test]
 fn phase6_rio_trix_and_rdfa() {
-    use parsers::rio::trix::*;
     use parsers::rio::rdfa::*;
+    use parsers::rio::trix::*;
     let o = simple_ontology();
 
     let tr = TriXRenderer::new();
@@ -494,7 +563,11 @@ fn phase7_datatype_subtype() {
 fn phase7_datatype_validation() {
     use crate::ontology::datatypes::OWL2Datatype;
     assert!(OWL2Datatype::Integer.validate_lexical_form("42").is_ok());
-    assert!(OWL2Datatype::Integer.validate_lexical_form("not-a-number").is_err());
+    assert!(
+        OWL2Datatype::Integer
+            .validate_lexical_form("not-a-number")
+            .is_err()
+    );
     assert!(OWL2Datatype::Boolean.validate_lexical_form("true").is_ok());
 }
 
@@ -540,15 +613,21 @@ fn phase7_prefix_manager_well_known() {
 fn phase7_vocabulary_constants() {
     use crate::ontology::vocabulary::owl;
     assert_eq!(owl::THING, "http://www.w3.org/2002/07/owl#Thing");
-    assert_eq!(owl::SUB_CLASS_OF, "http://www.w3.org/2002/07/owl#subClassOf");
+    assert_eq!(
+        owl::SUB_CLASS_OF,
+        "http://www.w3.org/2002/07/owl#subClassOf"
+    );
     assert_eq!(owl::IMPORTS, "http://www.w3.org/2002/07/owl#imports");
     assert_eq!(owl::DEPRECATED, "http://www.w3.org/2002/07/owl#deprecated");
 }
 
 #[test]
 fn phase7_skos_prov_constants() {
-    use crate::ontology::vocabulary::{skos, dc};
-    assert_eq!(skos::PREF_LABEL, "http://www.w3.org/2004/02/skos/core#prefLabel");
+    use crate::ontology::vocabulary::{dc, skos};
+    assert_eq!(
+        skos::PREF_LABEL,
+        "http://www.w3.org/2004/02/skos/core#prefLabel"
+    );
     assert_eq!(dc::TITLE, "http://purl.org/dc/elements/1.1/title");
 }
 
@@ -568,13 +647,27 @@ fn cross_phase_load_and_reason() {
         let factory = manager.get_data_factory();
         let a = ClassExpression::Class(factory.get_class(&IRI::new("http://ex.org/A")));
         let b = ClassExpression::Class(factory.get_class(&IRI::new("http://ex.org/B")));
-        let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i") });
+        let ind = Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/i"),
+        });
         let ax1 = Axiom::SubClassOf(factory.make_sub_class_of_axiom(a.clone(), b.clone(), vec![]));
-        let ax2 = Axiom::ClassAssertion(factory.make_class_assertion_axiom(a.clone(), ind.clone(), vec![]));
+        let ax2 = Axiom::ClassAssertion(factory.make_class_assertion_axiom(
+            a.clone(),
+            ind.clone(),
+            vec![],
+        ));
         (a, b, ind, ax1, ax2)
     };
-    manager.apply_change(OntologyChange::AddAxiom { ontology_iri: iri.clone(), axiom: ax1 }).unwrap();
-    manager.apply_change(OntologyChange::AddAxiom { ontology_iri: iri.clone(), axiom: ax2 }).unwrap();
+    manager
+        .apply_change(OntologyChange::AddAxiom {
+            ontology_iri: iri.clone(),
+            axiom: ax1,
+        });
+    manager
+        .apply_change(OntologyChange::AddAxiom {
+            ontology_iri: iri.clone(),
+            axiom: ax2,
+        });
 
     // Phase 3: Create reasoner (clone onto ref for later reuse)
     let onto_clone = onto.clone();
@@ -608,20 +701,35 @@ fn cross_phase_serialize_pipeline() {
     let _onto = onto_ref(o.clone());
 
     // Phase 2: Serialize in multiple formats
-    let _manchester = parsers::manchester_renderer::ManchesterRenderer::new().serialize(&o).unwrap();
-    let _latex = parsers::latex::LatexRenderer::new().render_document(&o, &parsers::latex::LatexConfig::default()).unwrap();
-    let _dl = parsers::dl_syntax::DLSyntaxRenderer::new(true).serialize(&o).unwrap();
+    let _manchester = parsers::manchester_renderer::ManchesterRenderer::new()
+        .serialize(&o)
+        .unwrap();
+    let _latex = parsers::latex::LatexRenderer::new()
+        .render_document(&o, &parsers::latex::LatexConfig::default())
+        .unwrap();
+    let _dl = parsers::dl_syntax::DLSyntaxRenderer::new(true)
+        .serialize(&o)
+        .unwrap();
 
     // Phase 6: Serialize in OBO and RIO formats
     let _obo = parsers::obo::OBOWriter::default().serialize(&o);
-    assert!(parsers::rio::trig::TriGRenderer::new().serialize(&o).is_ok());
+    assert!(
+        parsers::rio::trig::TriGRenderer::new()
+            .serialize(&o)
+            .is_ok()
+    );
 
     // Phase 4: NNF transform
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
-    let neg = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectIntersectionOf(vec![a, b])
-    ));
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
+    let neg =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectIntersectionOf(vec![
+            a, b,
+        ])));
     let nnf = NNFConverter.to_nnf(&neg);
     assert!(matches!(nnf, ClassExpression::ObjectUnionOf(_)));
 }

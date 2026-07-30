@@ -2,10 +2,10 @@
 //! Works with any `OWLReasoner` implementation.
 
 use super::generator::{Explanation, ExplanationGenerator};
-use crate::ontology::axioms::{Axiom, AxiomTrait};
-use crate::ontology::OntologyRef;
-use crate::reasoner_api::ReasonerFactory;
 use crate::Result;
+use crate::ontology::OntologyRef;
+use crate::ontology::axioms::{Axiom, AxiomTrait};
+use crate::reasoner_api::ReasonerFactory;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,10 @@ pub struct BlackBoxConfig {
 
 impl Default for BlackBoxConfig {
     fn default() -> Self {
-        Self { timeout: None, max_explanations: 10 }
+        Self {
+            timeout: None,
+            max_explanations: 10,
+        }
     }
 }
 
@@ -30,6 +33,7 @@ impl Default for BlackBoxConfig {
 ///
 /// Time complexity: O(n²) reasoner calls in worst case, O(n log n) average.
 pub struct BlackBoxExplanation {
+    ontology: Option<OntologyRef>,
     reasoner_factory: Arc<dyn ReasonerFactory>,
     config: BlackBoxConfig,
 }
@@ -37,14 +41,37 @@ pub struct BlackBoxExplanation {
 impl BlackBoxExplanation {
     #[must_use]
     pub fn new(reasoner_factory: Arc<dyn ReasonerFactory>, config: BlackBoxConfig) -> Self {
-        Self { reasoner_factory, config }
+        Self {
+            ontology: None,
+            reasoner_factory,
+            config,
+        }
+    }
+
+    #[must_use]
+    pub fn new_with_ontology(
+        ontology: OntologyRef,
+        reasoner_factory: Arc<dyn ReasonerFactory>,
+        config: BlackBoxConfig,
+    ) -> Self {
+        Self {
+            ontology: Some(ontology),
+            reasoner_factory,
+            config,
+        }
     }
 
     /// Find a minimal justification for the given entailment.
-    fn compute_justification(&self, ontology: &OntologyRef, entailment: &Axiom) -> Result<Vec<Axiom>> {
+    fn compute_justification(
+        &self,
+        ontology: &OntologyRef,
+        entailment: &Axiom,
+    ) -> Result<Vec<Axiom>> {
         let _start = Instant::now();
         let axioms: Vec<Axiom> = {
-            let guard = ontology.read().map_err(|e| crate::Error::Internal { message: format!("{e}") })?;
+            let guard = ontology.read().map_err(|e| crate::Error::Internal {
+                message: format!("{e}"),
+            })?;
             guard.axioms().to_vec()
         };
 
@@ -56,7 +83,11 @@ impl BlackBoxExplanation {
             let ax = candidate.pop().unwrap();
             // Check: does ontology \ {ax} still entail?
             let test_onto = self.build_temp_ontology(
-                &axioms.iter().filter(|a| a.axiom_id() != ax.axiom_id()).cloned().collect::<Vec<_>>(),
+                &axioms
+                    .iter()
+                    .filter(|a| a.axiom_id() != ax.axiom_id())
+                    .cloned()
+                    .collect::<Vec<_>>(),
             )?;
             let reasoner = self.reasoner_factory.create_reasoner(
                 &test_onto,
@@ -73,15 +104,18 @@ impl BlackBoxExplanation {
         let mut minimal: Vec<Axiom> = Vec::new();
         for ax in essential {
             let all_essential: Vec<&Axiom> = minimal.iter().chain(std::iter::once(&ax)).collect();
-            let test_onto = self.build_temp_ontology(
-                &all_essential.into_iter().cloned().collect::<Vec<_>>(),
-            )?;
+            let test_onto =
+                self.build_temp_ontology(&all_essential.into_iter().cloned().collect::<Vec<_>>())?;
             let _reasoner = self.reasoner_factory.create_reasoner(
                 &test_onto,
                 &crate::reasoner_api::OWLReasonerConfiguration::default(),
             )?;
 
-            let current_set: Vec<Axiom> = minimal.iter().chain(std::iter::once(&ax)).cloned().collect();
+            let current_set: Vec<Axiom> = minimal
+                .iter()
+                .chain(std::iter::once(&ax))
+                .cloned()
+                .collect();
             let test_onto2 = self.build_temp_ontology(&current_set)?;
             let reasoner2 = self.reasoner_factory.create_reasoner(
                 &test_onto2,
@@ -106,17 +140,41 @@ impl BlackBoxExplanation {
 }
 
 impl ExplanationGenerator for BlackBoxExplanation {
-    fn get_explanation(&self, _entailment: &Axiom) -> Result<Explanation> {
-        // Standalone explanation requires an explicit ontology reference.
-        // Use find_justification() with an ontology reference, or
-        // use BlackBoxOWLDebugger for integrated reasoner+ontology access.
-        Err(crate::Error::Unsupported {
-            message: "BlackBoxExplanation requires an ontology reference — use BlackBoxOWLDebugger".into(),
-        })
+    fn get_explanation(&self, entailment: &Axiom) -> Result<Explanation> {
+        if let Some(ref ontology) = self.ontology {
+            let justification = self.compute_justification(ontology, entailment)?;
+            Ok(Explanation {
+                entailment: entailment.clone(),
+                justification,
+                is_minimal: true,
+                computation_time: Duration::default(),
+            })
+        } else {
+            Err(crate::Error::Unsupported {
+                message: "BlackBoxExplanation requires an ontology reference — use new_with_ontology"
+                    .into(),
+            })
+        }
     }
 
-    fn get_explanations(&self, entailment: &Axiom, _limit: usize) -> Result<Vec<Explanation>> {
-        self.get_explanation(entailment).map(|e| vec![e])
+    fn get_explanations(&self, entailment: &Axiom, limit: usize) -> Result<Vec<Explanation>> {
+        if let Some(ref ontology) = self.ontology {
+            let justification = self.compute_justification(ontology, entailment)?;
+            if limit == 0 || justification.is_empty() {
+                return Ok(vec![]);
+            }
+            Ok(vec![Explanation {
+                entailment: entailment.clone(),
+                justification,
+                is_minimal: true,
+                computation_time: Duration::default(),
+            }])
+        } else {
+            Err(crate::Error::Unsupported {
+                message: "BlackBoxExplanation requires an ontology reference — use new_with_ontology"
+                    .into(),
+            })
+        }
     }
 }
 

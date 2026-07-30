@@ -1,7 +1,7 @@
 //! Atomic Decomposition — atom-level modular structure.
 
 use crate::ontology::axioms::Axiom;
-use crate::ontology::{Ontology, IRI};
+use crate::ontology::{IRI, Ontology};
 use std::collections::{HashMap, HashSet};
 
 /// A set of axioms that always appear together in modules.
@@ -17,22 +17,29 @@ impl Atom {
     /// Get all axioms in this atom from the decomposition.
     #[must_use]
     pub fn get_axioms(&self, decomposition: &AtomicDecomposition) -> Vec<Axiom> {
-        self.axiom_positions.iter()
+        self.axiom_positions
+            .iter()
             .filter_map(|&pos| decomposition.axioms.get(pos).cloned())
             .collect()
     }
 
     /// Bottom atom: has dependencies (depends on other atoms).
     #[must_use]
-    pub fn is_bot_atom(&self) -> bool { !self.dependencies.is_empty() }
+    pub fn is_bot_atom(&self) -> bool {
+        !self.dependencies.is_empty()
+    }
 
     /// Top atom: nothing depends on it, no dependencies.
     #[must_use]
-    pub fn is_top_atom(&self) -> bool { self.dependencies.is_empty() }
+    pub fn is_top_atom(&self) -> bool {
+        self.dependencies.is_empty()
+    }
 
     /// Number of axioms in this atom.
     #[must_use]
-    pub fn get_size(&self) -> usize { self.axiom_positions.len() }
+    pub fn get_size(&self) -> usize {
+        self.axiom_positions.len()
+    }
 }
 
 /// The atomic decomposition of an ontology.
@@ -49,23 +56,34 @@ pub struct AtomicDecomposition {
 impl AtomicDecomposition {
     #[must_use]
     pub fn new(axioms: Vec<Axiom>) -> Self {
-        Self { atoms: Vec::new(), axioms, axiom_to_atom: HashMap::new(), signatures: HashMap::new() }
+        Self {
+            atoms: Vec::new(),
+            axioms,
+            axiom_to_atom: HashMap::new(),
+            signatures: HashMap::new(),
+        }
     }
 
     /// Number of atoms in the decomposition.
     #[must_use]
-    pub fn atom_count(&self) -> usize { self.atoms.len() }
+    pub fn atom_count(&self) -> usize {
+        self.atoms.len()
+    }
 
     /// Get axiom count.
     #[must_use]
-    pub fn axiom_count(&self) -> usize { self.axioms.len() }
+    pub fn axiom_count(&self) -> usize {
+        self.axioms.len()
+    }
 
     /// Get all axioms belonging to a given atom.
     #[must_use]
     pub fn get_atom_axioms(&self, atom_id: usize) -> Vec<&Axiom> {
-        self.atoms.get(atom_id)
+        self.atoms
+            .get(atom_id)
             .map(|atom| {
-                atom.axiom_positions.iter()
+                atom.axiom_positions
+                    .iter()
                     .filter_map(|&pos| self.axioms.get(pos))
                     .collect()
             })
@@ -81,7 +99,10 @@ impl AtomicDecomposition {
     /// Get all axioms that depend on this atom.
     #[must_use]
     pub fn dependent_atoms(&self, atom_id: usize) -> HashSet<usize> {
-        self.atoms.get(atom_id).map(|a| a.dependent_atoms.clone()).unwrap_or_default()
+        self.atoms
+            .get(atom_id)
+            .map(|a| a.dependent_atoms.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -89,9 +110,13 @@ impl AtomicDecomposition {
 /// Groups axioms that share entities into connected components (atoms).
 pub fn compute_atomic_decomposition(ontology: &Ontology) -> AtomicDecomposition {
     let axioms = ontology.axioms().to_vec();
-    if axioms.is_empty() { return AtomicDecomposition::new(vec![]); }
+    if axioms.is_empty() {
+        return AtomicDecomposition::new(vec![]);
+    }
 
-    let wrappers: Vec<crate::modularity::AxiomWrapper> = axioms.iter().enumerate()
+    let wrappers: Vec<crate::modularity::AxiomWrapper> = axioms
+        .iter()
+        .enumerate()
         .map(|(i, ax)| crate::modularity::AxiomWrapper {
             position: i,
             signature: crate::modularity::axiom_signature(ax),
@@ -107,7 +132,11 @@ pub fn compute_atomic_decomposition(ontology: &Ontology) -> AtomicDecomposition 
     let mut uf = UnionFind::new(n);
     for i in 0..n {
         for j in (i + 1)..n {
-            if wrappers[i].signature.iter().any(|iri| wrappers[j].signature.contains(iri)) {
+            if wrappers[i]
+                .signature
+                .iter()
+                .any(|iri| wrappers[j].signature.contains(iri))
+            {
                 uf.union(i, j);
             }
         }
@@ -123,12 +152,15 @@ pub fn compute_atomic_decomposition(ontology: &Ontology) -> AtomicDecomposition 
     let mut decomposition = AtomicDecomposition::new(axioms);
     let mut atom_id = 0;
     for component in &root_to_atom {
-        if component.is_empty() { continue; }
+        if component.is_empty() {
+            continue;
+        }
         let positions: HashSet<usize> = component.iter().copied().collect();
         for &pos in &positions {
             decomposition.axiom_to_atom.insert(pos, atom_id);
         }
-        let sig: HashSet<IRI> = positions.iter()
+        let sig: HashSet<IRI> = positions
+            .iter()
             .flat_map(|&pos| wrappers[pos].signature.iter().cloned())
             .collect();
         decomposition.signatures.insert(atom_id, sig);
@@ -143,10 +175,20 @@ pub fn compute_atomic_decomposition(ontology: &Ontology) -> AtomicDecomposition 
 
     // Compute dependencies: atom A depends on B if sig(B) ∩ sig(A) ≠ ∅
     for a in 0..atom_id {
-        let sig_a = decomposition.signatures.get(&a).cloned().unwrap_or_default();
+        let sig_a = decomposition
+            .signatures
+            .get(&a)
+            .cloned()
+            .unwrap_or_default();
         for b in 0..atom_id {
-            if a == b { continue; }
-            let sig_b = decomposition.signatures.get(&b).cloned().unwrap_or_default();
+            if a == b {
+                continue;
+            }
+            let sig_b = decomposition
+                .signatures
+                .get(&b)
+                .cloned()
+                .unwrap_or_default();
             if sig_a.iter().any(|iri| sig_b.contains(iri)) {
                 if let Some(atom) = decomposition.atoms.get_mut(a) {
                     atom.dependencies.insert(b);
@@ -170,7 +212,10 @@ struct UnionFind {
 
 impl UnionFind {
     fn new(n: usize) -> Self {
-        Self { parent: (0..n).collect(), rank: vec![0; n] }
+        Self {
+            parent: (0..n).collect(),
+            rank: vec![0; n],
+        }
     }
 
     fn find(&mut self, x: usize) -> usize {
@@ -183,7 +228,9 @@ impl UnionFind {
     fn union(&mut self, x: usize, y: usize) {
         let rx = self.find(x);
         let ry = self.find(y);
-        if rx == ry { return; }
+        if rx == ry {
+            return;
+        }
         if self.rank[rx] < self.rank[ry] {
             self.parent[rx] = ry;
         } else if self.rank[rx] > self.rank[ry] {

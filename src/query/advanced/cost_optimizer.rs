@@ -2302,7 +2302,10 @@ impl AdvancedQueryRewriter {
             let key = format!("{atom:?}");
             seen.insert(key)
         });
-        ConjunctiveQuery { body_atoms: atoms, ..query.clone() }
+        ConjunctiveQuery {
+            body_atoms: atoms,
+            ..query.clone()
+        }
     }
 
     fn push_filters_down(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
@@ -2315,33 +2318,42 @@ impl AdvancedQueryRewriter {
             QueryAtom::ObjectPropertyAtom { .. } => 2,
             _ => 3,
         });
-        ConjunctiveQuery { body_atoms: atoms, ..query.clone() }
+        ConjunctiveQuery {
+            body_atoms: atoms,
+            ..query.clone()
+        }
     }
 
     fn simplify_complex_expressions(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
         let atoms = query.body_atoms.clone();
-        let simplified: Vec<_> = atoms.into_iter().map(|atom| {
-            match atom {
-                QueryAtom::ClassAtom { variable, class_expression } => {
+        let simplified: Vec<_> = atoms
+            .into_iter()
+            .map(|atom| match atom {
+                QueryAtom::ClassAtom {
+                    variable,
+                    class_expression,
+                } => {
                     let simplified_ce = Self::simplify_ce(&class_expression);
-                    QueryAtom::ClassAtom { variable, class_expression: simplified_ce }
+                    QueryAtom::ClassAtom {
+                        variable,
+                        class_expression: simplified_ce,
+                    }
                 }
                 other => other,
-            }
-        }).collect();
-        ConjunctiveQuery { body_atoms: simplified, ..query.clone() }
+            })
+            .collect();
+        ConjunctiveQuery {
+            body_atoms: simplified,
+            ..query.clone()
+        }
     }
 
     fn simplify_ce(ce: &crate::ontology::ClassExpression) -> crate::ontology::ClassExpression {
         match ce {
-            crate::ontology::ClassExpression::ObjectComplementOf(inner) => {
-                match inner.as_ref() {
-                    crate::ontology::ClassExpression::ObjectComplementOf(inner2) => {
-                        (**inner2).clone()
-                    }
-                    _ => ce.clone(),
-                }
-            }
+            crate::ontology::ClassExpression::ObjectComplementOf(inner) => match inner.as_ref() {
+                crate::ontology::ClassExpression::ObjectComplementOf(inner2) => (**inner2).clone(),
+                _ => ce.clone(),
+            },
             _ => ce.clone(),
         }
     }

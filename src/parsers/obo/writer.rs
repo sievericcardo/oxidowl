@@ -1,8 +1,8 @@
 //! OBO Format Writer — serializes ontologies to OBO 1.4 format.
 
-use crate::ontology::Ontology;
-use crate::Result;
 use super::converter::Owl2Obo;
+use crate::Result;
+use crate::ontology::Ontology;
 
 /// Configuration for OBO output.
 #[derive(Debug, Clone)]
@@ -13,7 +13,13 @@ pub struct OBOOutputConfig {
 }
 
 impl Default for OBOOutputConfig {
-    fn default() -> Self { Self { include_stanza_comments: false, indent_level: 0, sort_stanzas: true } }
+    fn default() -> Self {
+        Self {
+            include_stanza_comments: false,
+            indent_level: 0,
+            sort_stanzas: true,
+        }
+    }
 }
 
 /// Writes ontologies in OBO format.
@@ -24,12 +30,18 @@ pub struct OBOWriter {
 }
 
 impl Default for OBOWriter {
-    fn default() -> Self { Self { config: OBOOutputConfig::default() } }
+    fn default() -> Self {
+        Self {
+            config: OBOOutputConfig::default(),
+        }
+    }
 }
 
 impl OBOWriter {
     #[must_use]
-    pub fn new(config: OBOOutputConfig) -> Self { Self { config } }
+    pub fn new(config: OBOOutputConfig) -> Self {
+        Self { config }
+    }
 
     /// Serialize an ontology to OBO string.
     pub fn serialize(&self, ontology: &Ontology) -> String {

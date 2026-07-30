@@ -1,38 +1,50 @@
 #[cfg(test)]
 mod phase2_tests {
-    use crate::ontology::{
-        Class, ClassExpression, Individual, ObjectProperty, ObjectPropertyExpression, Ontology, OntologyFormat, IRI,
-    };
+    use crate::Result;
     use crate::ontology::axioms::{
-        Axiom, ClassAssertionAxiom,
-        EquivalentClassesAxiom,
-        SubClassOfAxiom,
+        Axiom, ClassAssertionAxiom, EquivalentClassesAxiom, SubClassOfAxiom,
     };
     use crate::ontology::individuals::NamedIndividual;
+    use crate::ontology::{
+        Class, ClassExpression, IRI, Individual, ObjectProperty, ObjectPropertyExpression,
+        Ontology, OntologyFormat,
+    };
     use crate::parsers::{
-        manchester_renderer::ManchesterRenderer,
-        latex::LatexRenderer,
         dl_syntax::{DLSyntaxParser, DLSyntaxRenderer},
         krss::{KRSSParser, KRSSRenderer, KRSSVariant},
+        latex::LatexRenderer,
+        manchester_renderer::ManchesterRenderer,
     };
-    use crate::Result;
 
     fn make_test_ontology() -> Ontology {
         let mut o = Ontology::new();
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
-        let c = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
+        let c = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/C"),
+        });
         o.set_iri(IRI::new("http://ex.org/TestOnt"));
         o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-            id: 1, subclass: a.clone(), superclass: b.clone(), annotations: vec![],
+            id: 1,
+            subclass: a.clone(),
+            superclass: b.clone(),
+            annotations: vec![],
         }));
         o.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
-            id: 2, classes: vec![b.clone(), c.clone()], annotations: vec![],
+            id: 2,
+            classes: vec![b.clone(), c.clone()],
+            annotations: vec![],
         }));
         o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
             id: 3,
             class: a.clone(),
-            individual: Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") }),
+            individual: Individual::Named(NamedIndividual {
+                iri: IRI::new("http://ex.org/ind"),
+            }),
             annotations: vec![],
         }));
         o
@@ -64,7 +76,9 @@ mod phase2_tests {
     #[test]
     fn test_manchester_serialize_class_expression() {
         let renderer = ManchesterRenderer::new();
-        let class = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+        let class = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
         let rendered = renderer.render_ce(&class);
         assert!(rendered.contains("http://ex.org/A"));
     }
@@ -72,8 +86,12 @@ mod phase2_tests {
     #[test]
     fn test_manchester_serialize_intersection() {
         let renderer = ManchesterRenderer::new();
-        let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-        let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
         let intersection = ClassExpression::ObjectIntersectionOf(vec![a, b]);
         let rendered = renderer.render_ce(&intersection);
         assert!(rendered.contains(" and "));
@@ -82,9 +100,13 @@ mod phase2_tests {
     #[test]
     fn test_manchester_serialize_some_values() {
         let renderer = ManchesterRenderer::new();
-        let c = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C") });
+        let c = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/C"),
+        });
         let some = ClassExpression::ObjectSomeValuesFrom {
-            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: IRI::new("http://ex.org/prop") }),
+            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                iri: IRI::new("http://ex.org/prop"),
+            }),
             filler: Box::new(c),
         };
         let rendered = renderer.render_ce(&some);
@@ -94,9 +116,13 @@ mod phase2_tests {
     #[test]
     fn test_manchester_serialize_cardinality() {
         let renderer = ManchesterRenderer::new();
-        let c = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C") });
+        let c = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/C"),
+        });
         let min = ClassExpression::ObjectMinCardinality {
-            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: IRI::new("http://ex.org/prop") }),
+            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                iri: IRI::new("http://ex.org/prop"),
+            }),
             cardinality: 2,
             filler: Box::new(c),
         };
@@ -352,10 +378,22 @@ mod phase2_tests {
 
     #[test]
     fn test_format_detection() {
-        assert_eq!(OntologyFormat::from_extension("tex"), Some(OntologyFormat::Latex));
-        assert_eq!(OntologyFormat::from_extension("dl"), Some(OntologyFormat::DL));
-        assert_eq!(OntologyFormat::from_extension("krss"), Some(OntologyFormat::Krss));
-        assert_eq!(OntologyFormat::from_extension("krss2"), Some(OntologyFormat::Krss2));
+        assert_eq!(
+            OntologyFormat::from_extension("tex"),
+            Some(OntologyFormat::Latex)
+        );
+        assert_eq!(
+            OntologyFormat::from_extension("dl"),
+            Some(OntologyFormat::DL)
+        );
+        assert_eq!(
+            OntologyFormat::from_extension("krss"),
+            Some(OntologyFormat::Krss)
+        );
+        assert_eq!(
+            OntologyFormat::from_extension("krss2"),
+            Some(OntologyFormat::Krss2)
+        );
     }
 
     #[test]

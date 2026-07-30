@@ -761,6 +761,7 @@ impl HornedOwlAdapter {
             value: crate::ontology::AnnotationValue::Literal(crate::ontology::Literal::new(
                 "SWRL conversion infrastructure ready for horned-owl DLSafeRule axioms".to_string(),
             )),
+            annotations: Vec::new(),
         };
         ontology.annotations.push(swrl_comment);
 

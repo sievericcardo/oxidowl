@@ -85,7 +85,7 @@ impl ParserConfig {
 }
 
 // Re-export parser structs and functions
-pub use common::{OntologyParser, OntologySerializer};
+pub use common::{OntologyParser, OntologySerializer, SerializerConfig};
 pub use dl_syntax::{DLSyntaxParser, DLSyntaxRenderer};
 pub use functional::{
     FunctionalParser, FunctionalSyntaxSerializer, parse as parse_functional,
@@ -454,15 +454,9 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
             let parser = ManchesterParser::new(ManchesterParserConfig::default());
             parser.parse(&parsed_content)
         }
-        OntologyFormat::DL => {
-            dl_syntax::parse(&parsed_content)
-        }
-        OntologyFormat::Krss => {
-            krss::parse(&parsed_content)
-        }
-        OntologyFormat::Krss2 => {
-            krss::parse_krss2(&parsed_content)
-        }
+        OntologyFormat::DL => dl_syntax::parse(&parsed_content),
+        OntologyFormat::Krss => krss::parse(&parsed_content),
+        OntologyFormat::Krss2 => krss::parse_krss2(&parsed_content),
         OntologyFormat::Latex => Err(Error::ontology_parsing(
             "LaTeX is a write-only format (no parser available)",
         )),
@@ -485,7 +479,10 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 /// Public wrapper for format detection from content and path hint.
 /// Used by the OntologyLoader and other consumers.
 #[must_use]
-pub fn detect_format_from_content_public(_path: &std::path::Path, content: &str) -> crate::Result<OntologyFormat> {
+pub fn detect_format_from_content_public(
+    _path: &std::path::Path,
+    content: &str,
+) -> crate::Result<OntologyFormat> {
     let trimmed = content.trim();
 
     if trimmed.starts_with("###") || content.contains("\n###") {
@@ -537,8 +534,10 @@ pub fn detect_format_from_content_public(_path: &std::path::Path, content: &str)
         return Ok(OntologyFormat::Turtle);
     }
     if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-        if content.contains("owl:Ontology") || content.contains("<Ontology")
-            || content.contains("<Declaration") || content.contains("<Class")
+        if content.contains("owl:Ontology")
+            || content.contains("<Ontology")
+            || content.contains("<Declaration")
+            || content.contains("<Class")
         {
             return Ok(OntologyFormat::OwlXml);
         }
@@ -549,8 +548,7 @@ pub fn detect_format_from_content_public(_path: &std::path::Path, content: &str)
     }
 
     // Heuristic fallbacks
-    if (content.contains("Declaration") || content.contains("SubClassOf"))
-        && content.contains('(')
+    if (content.contains("Declaration") || content.contains("SubClassOf")) && content.contains('(')
     {
         return Ok(OntologyFormat::Functional);
     }
@@ -565,6 +563,45 @@ pub fn detect_format_from_content_public(_path: &std::path::Path, content: &str)
     }
 
     Ok(OntologyFormat::Functional)
+}
+
+/// Save ontology to a string using the specified format
+pub fn save_to_string(ontology: &Ontology, format: OntologyFormat) -> Result<String> {
+    match format {
+        OntologyFormat::OwlXml => OwlXmlSerializer::new().serialize(ontology),
+        OntologyFormat::Functional => FunctionalSyntaxSerializer.serialize(ontology),
+        OntologyFormat::RdfXml => RdfXmlSerializer::new().serialize(ontology),
+        OntologyFormat::Turtle => TurtleSerializer::new().serialize(ontology),
+        OntologyFormat::NTriples => NTriplesSerializer::new().serialize(ontology),
+        OntologyFormat::Manchester => {
+            let renderer = manchester_renderer::ManchesterRenderer::new();
+            renderer.serialize(ontology)
+        }
+        OntologyFormat::Latex => latex::serialize(ontology),
+        OntologyFormat::DL => dl_syntax::render_to_string(ontology, true),
+        OntologyFormat::Krss => krss::render_to_string(ontology),
+        OntologyFormat::Krss2 => krss::render_to_string_krss2(ontology),
+        OntologyFormat::Obo => {
+            let writer = obo::OBOWriter::new(obo::OBOOutputConfig::default());
+            Ok(writer.serialize(ontology))
+        }
+        OntologyFormat::NQuads => rio::nquads::NQuadsRenderer.serialize(ontology),
+        OntologyFormat::N3 => rio::n3::N3Renderer.serialize(ontology),
+        OntologyFormat::TriG => rio::trig::TriGRenderer.serialize(ontology),
+        OntologyFormat::TriX => rio::trix::TriXRenderer.serialize(ontology),
+        OntologyFormat::JsonLd => rio::jsonld::JsonLdRenderer.serialize(ontology),
+        OntologyFormat::RdfJson => rio::rdf_json::RdfJsonRenderer.serialize(ontology),
+        OntologyFormat::Rdfa => rio::rdfa::RDFaRenderer.serialize(ontology),
+        OntologyFormat::BinaryRdf => {
+            let bytes = rio::binary_rdf::BinaryRdfRenderer.serialize(ontology);
+            String::from_utf8(bytes)
+                .map_err(|e| Error::ontology_parsing(format!("Binary RDF serialization: {e}")))
+        }
+        OntologyFormat::Hdt => rio::hdt::HDTRenderer.serialize(ontology),
+        OntologyFormat::Auto => Err(Error::ontology_parsing(
+            "Auto format must be resolved to a specific format for string serialization",
+        )),
+    }
 }
 
 /// Save ontology to file using specified format
@@ -584,7 +621,8 @@ pub fn save_file<P: AsRef<Path>>(
         OntologyFormat::Manchester => {
             let renderer = manchester_renderer::ManchesterRenderer::new();
             let content = renderer.serialize(ontology)?;
-            std::fs::write(path, content).map_err(|e| Error::io(format!("Failed to write Manchester: {e}")))
+            std::fs::write(path, content)
+                .map_err(|e| Error::io(format!("Failed to write Manchester: {e}")))
         }
         OntologyFormat::Latex => latex::save_file(ontology, path),
         OntologyFormat::DL => dl_syntax::save_file(ontology, path),
@@ -597,7 +635,7 @@ pub fn save_file<P: AsRef<Path>>(
         OntologyFormat::TriX => rio::trix::save_file(ontology, path),
         OntologyFormat::JsonLd => rio::jsonld::save_file(ontology, path),
         OntologyFormat::RdfJson => rio::rdf_json::save_file(ontology, path),
-        OntologyFormat::Rdfa => Err(Error::ontology_parsing("RDFa is read-only")),
+        OntologyFormat::Rdfa => rio::rdfa::save_file(ontology, path),
         OntologyFormat::BinaryRdf => rio::binary_rdf::save_file(ontology, path),
         OntologyFormat::Hdt => rio::hdt::save_file(ontology, path),
         OntologyFormat::Auto => {
@@ -629,6 +667,40 @@ pub fn save_file<P: AsRef<Path>>(
             save_file(ontology, path, detected_format)
         }
     }
+}
+
+/// Save ontology to a gzip-compressed file using the specified format
+pub fn save_file_gzip<P: AsRef<Path>>(
+    ontology: &Ontology,
+    path: P,
+    format: OntologyFormat,
+) -> Result<()> {
+    let content = save_to_string(ontology, format)?;
+    let file = std::fs::File::create(path.as_ref())
+        .map_err(|e| Error::io(format!("Failed to create gzip file: {e}")))?;
+    let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+    std::io::Write::write_all(&mut encoder, content.as_bytes())
+        .map_err(|e| Error::io(format!("Failed to write gzip content: {e}")))?;
+    encoder
+        .finish()
+        .map_err(|e| Error::io(format!("Failed to finalize gzip: {e}")))?;
+    Ok(())
+}
+
+/// Save ontology to an xz-compressed file using the specified format
+///
+/// This is a stub that returns `Error::Unsupported` until the `xz2` crate is added.
+pub fn save_file_xz<P: AsRef<Path>>(
+    ontology: &Ontology,
+    path: P,
+    format: OntologyFormat,
+) -> Result<()> {
+    let _ = ontology;
+    let _ = path;
+    let _ = format;
+    Err(Error::Unsupported {
+        message: "XZ compression requires the 'xz2' crate. Install xz2 and enable xz-compression feature.".to_string(),
+    })
 }
 
 /// Factory for creating parsers based on format
@@ -713,13 +785,22 @@ impl ParserFactory {
             OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
                 ManchesterParserConfig::default(),
             ))),
-            OntologyFormat::Latex | OntologyFormat::DL | OntologyFormat::Krss | OntologyFormat::Krss2
-            | OntologyFormat::Obo | OntologyFormat::NQuads | OntologyFormat::N3
-            | OntologyFormat::TriG | OntologyFormat::TriX | OntologyFormat::JsonLd
-            | OntologyFormat::RdfJson | OntologyFormat::Rdfa | OntologyFormat::BinaryRdf
-            | OntologyFormat::Hdt => {
-                Err(Error::ontology_parsing("Format does not support Parser trait"))
-            }
+            OntologyFormat::Latex
+            | OntologyFormat::DL
+            | OntologyFormat::Krss
+            | OntologyFormat::Krss2
+            | OntologyFormat::Obo
+            | OntologyFormat::NQuads
+            | OntologyFormat::N3
+            | OntologyFormat::TriG
+            | OntologyFormat::TriX
+            | OntologyFormat::JsonLd
+            | OntologyFormat::RdfJson
+            | OntologyFormat::Rdfa
+            | OntologyFormat::BinaryRdf
+            | OntologyFormat::Hdt => Err(Error::ontology_parsing(
+                "Format does not support Parser trait",
+            )),
             OntologyFormat::Auto => Err(Error::ontology_parsing(
                 "Auto format should be resolved before creating parser",
             )),
@@ -838,6 +919,67 @@ impl Parser for KRSSParser {
         let content = std::fs::read_to_string(path)
             .map_err(|e| Error::ontology_parsing(format!("Failed to read file: {e}")))?;
         self.parse(&content)
+    }
+}
+
+// ── WriterConfig / OntologyStorer ────────────────────────────────────────────
+
+/// Configuration for ontology serialization/writing.
+#[derive(Debug, Clone)]
+pub struct WriterConfig {
+    pub banner_comments: bool,
+    pub indent_size: usize,
+    pub save_anonymous_individuals: bool,
+    pub use_prefixes: bool,
+}
+
+impl Default for WriterConfig {
+    fn default() -> Self {
+        Self {
+            banner_comments: true,
+            indent_size: 4,
+            save_anonymous_individuals: true,
+            use_prefixes: true,
+        }
+    }
+}
+
+/// A type-erased ontology storage backend.
+pub trait OntologyStorer {
+    fn can_store(&self, format: OntologyFormat) -> bool;
+    fn store_ontology(
+        &self,
+        ontology: &Ontology,
+        format: OntologyFormat,
+        writer: &mut dyn std::io::Write,
+        config: &WriterConfig,
+    ) -> Result<()>;
+}
+
+impl<T> OntologyStorer for T
+where
+    T: Serializer,
+{
+    fn can_store(&self, _format: OntologyFormat) -> bool {
+        true
+    }
+
+    fn store_ontology(
+        &self,
+        ontology: &Ontology,
+        format: OntologyFormat,
+        writer: &mut dyn std::io::Write,
+        _config: &WriterConfig,
+    ) -> Result<()> {
+        if !self.can_store(format) {
+            return Err(Error::Unsupported {
+                message: format!("Format {format:?} is not supported by this storer"),
+            });
+        }
+        let content = crate::parsers::save_to_string(ontology, format)?;
+        writer
+            .write_all(content.as_bytes())
+            .map_err(|e| Error::io(format!("Failed to write serialized ontology: {e}")))
     }
 }
 

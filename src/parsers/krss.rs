@@ -3,20 +3,19 @@
 //! KRSS (Knowledge Representation System Specification) is an older
 //! DL reasoner format. Supports both KRSS and KRSS2 variants.
 
-use crate::ontology::{
-    Class, ClassExpression, DataPropertyExpression, DataRange, Individual,
-    ObjectProperty, ObjectPropertyExpression, Ontology,
-};
+use crate::Result;
 use crate::ontology::axioms::{
-    Axiom, ClassAssertionAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
-    EquivalentClassesAxiom, ObjectPropertyAssertionAxiom, SameIndividualAxiom,
-    SubClassOfAxiom, DeclarationAxiom, Entity, TransitiveObjectPropertyAxiom,
-    SymmetricObjectPropertyAxiom, FunctionalObjectPropertyAxiom,
-    InverseFunctionalObjectPropertyAxiom, ReflexiveObjectPropertyAxiom,
-    IrreflexiveObjectPropertyAxiom,
+    Axiom, ClassAssertionAxiom, DeclarationAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
+    Entity, EquivalentClassesAxiom, FunctionalObjectPropertyAxiom,
+    InverseFunctionalObjectPropertyAxiom, IrreflexiveObjectPropertyAxiom,
+    ObjectPropertyAssertionAxiom, ReflexiveObjectPropertyAxiom, SameIndividualAxiom,
+    SubClassOfAxiom, SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
 };
 use crate::ontology::individuals::NamedIndividual;
-use crate::Result;
+use crate::ontology::{
+    Class, ClassExpression, DataPropertyExpression, DataRange, Individual, ObjectProperty,
+    ObjectPropertyExpression, Ontology,
+};
 use std::fmt::Write;
 
 /// KRSS variant selector.
@@ -27,7 +26,9 @@ pub enum KRSSVariant {
 }
 
 impl Default for KRSSVariant {
-    fn default() -> Self { Self::KRSS }
+    fn default() -> Self {
+        Self::KRSS
+    }
 }
 
 // ── KRSS Parser ──────────────────────────────────────────────────────────────
@@ -42,13 +43,19 @@ pub struct KRSSParser {
 }
 
 impl Default for KRSSParser {
-    fn default() -> Self { Self::new(KRSSVariant::KRSS) }
+    fn default() -> Self {
+        Self::new(KRSSVariant::KRSS)
+    }
 }
 
 impl KRSSParser {
     #[must_use]
     pub fn new(variant: KRSSVariant) -> Self {
-        Self { input: String::new(), pos: Cell::new(0), variant }
+        Self {
+            input: String::new(),
+            pos: Cell::new(0),
+            variant,
+        }
     }
 
     pub fn parse(&mut self, content: &str) -> Result<Ontology> {
@@ -57,8 +64,13 @@ impl KRSSParser {
         let mut ontology = Ontology::new();
         while self.pos.get() < self.input.len() {
             self.skip_ws();
-            if self.pos.get() >= self.input.len() { break; }
-            if self.peek() != Some('(') { self.pos.set(self.pos.get() + 1); continue; }
+            if self.pos.get() >= self.input.len() {
+                break;
+            }
+            if self.peek() != Some('(') {
+                self.pos.set(self.pos.get() + 1);
+                continue;
+            }
             self.consume(); // '('
             self.skip_ws();
             let cmd = self.parse_symbol();
@@ -74,8 +86,10 @@ impl KRSSParser {
                 "related" => self.parse_related(&mut ontology)?,
                 "equal" => self.parse_equal(&mut ontology)?,
                 "distinct" => self.parse_distinct(&mut ontology)?,
-                "transitive" | "symmetric" | "functional" | "inverse-functional"
-                | "reflexive" | "irreflexive" if self.variant == KRSSVariant::KRSS2 => {
+                "transitive" | "symmetric" | "functional" | "inverse-functional" | "reflexive"
+                | "irreflexive"
+                    if self.variant == KRSSVariant::KRSS2 =>
+                {
                     self.parse_property_characteristic(&mut ontology, &cmd)?
                 }
                 _ => { /* skip unknown */ }
@@ -89,10 +103,17 @@ impl KRSSParser {
         self.skip_ws();
         let name = self.parse_symbol();
         self.skip_ws();
-        if self.peek() == Some(')') { return Ok(()); }
+        if self.peek() == Some(')') {
+            return Ok(());
+        }
         let expr = self.parse_concept()?;
-        let cls = Class { iri: crate::ontology::IRI::new(&name) };
-        ontology.add_axiom(Axiom::Declaration(DeclarationAxiom { id: 1, entity: Entity::Class(cls.iri.clone()) }));
+        let cls = Class {
+            iri: crate::ontology::IRI::new(&name),
+        };
+        ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+            id: 1,
+            entity: Entity::Class(cls.iri.clone()),
+        }));
         if defined {
             ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
                 id: 1,
@@ -114,18 +135,27 @@ impl KRSSParser {
         self.skip_ws();
         let name = self.parse_symbol();
         let iri = crate::ontology::IRI::new(&name);
-        ontology.add_axiom(Axiom::Declaration(DeclarationAxiom { id: 1, entity: Entity::ObjectProperty(iri.clone()) }));
+        ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+            id: 1,
+            entity: Entity::ObjectProperty(iri.clone()),
+        }));
         self.skip_ws();
         while self.peek() == Some(':') {
             self.consume(); // ':'
             self.skip_ws();
             let parent = self.parse_symbol();
-            ontology.add_axiom(Axiom::SubObjectPropertyOf(crate::ontology::axioms::SubObjectPropertyOfAxiom {
-                id: 1,
-                sub_property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: iri.clone() }),
-                super_property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&parent) }),
-                annotations: vec![],
-            }));
+            ontology.add_axiom(Axiom::SubObjectPropertyOf(
+                crate::ontology::axioms::SubObjectPropertyOfAxiom {
+                    id: 1,
+                    sub_property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                        iri: iri.clone(),
+                    }),
+                    super_property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                        iri: crate::ontology::IRI::new(&parent),
+                    }),
+                    annotations: vec![],
+                },
+            ));
             self.skip_ws();
         }
         Ok(())
@@ -137,7 +167,10 @@ impl KRSSParser {
         self.skip_ws();
         let sup = self.parse_concept()?;
         ontology.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-            id: 1, subclass: sub, superclass: sup, annotations: vec![],
+            id: 1,
+            subclass: sub,
+            superclass: sup,
+            annotations: vec![],
         }));
         Ok(())
     }
@@ -148,7 +181,9 @@ impl KRSSParser {
         self.skip_ws();
         let b = self.parse_concept()?;
         ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
-            id: 1, classes: vec![a, b], annotations: vec![],
+            id: 1,
+            classes: vec![a, b],
+            annotations: vec![],
         }));
         Ok(())
     }
@@ -159,7 +194,9 @@ impl KRSSParser {
         self.skip_ws();
         let b = self.parse_concept()?;
         ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
-            id: 1, classes: vec![a, b], annotations: vec![],
+            id: 1,
+            classes: vec![a, b],
+            annotations: vec![],
         }));
         Ok(())
     }
@@ -172,7 +209,9 @@ impl KRSSParser {
         ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
             id: 1,
             class: concept,
-            individual: Individual::Named(NamedIndividual { iri: crate::ontology::IRI::new(&ind_name) }),
+            individual: Individual::Named(NamedIndividual {
+                iri: crate::ontology::IRI::new(&ind_name),
+            }),
             annotations: vec![],
         }));
         Ok(())
@@ -185,13 +224,21 @@ impl KRSSParser {
         let role = self.parse_symbol();
         self.skip_ws();
         let tgt = self.parse_symbol();
-        ontology.add_axiom(Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-            id: 1,
-            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&role) }),
-            source: Individual::Named(NamedIndividual { iri: crate::ontology::IRI::new(&src) }),
-            target: Individual::Named(NamedIndividual { iri: crate::ontology::IRI::new(&tgt) }),
-            annotations: vec![],
-        }));
+        ontology.add_axiom(Axiom::ObjectPropertyAssertion(
+            ObjectPropertyAssertionAxiom {
+                id: 1,
+                property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                    iri: crate::ontology::IRI::new(&role),
+                }),
+                source: Individual::Named(NamedIndividual {
+                    iri: crate::ontology::IRI::new(&src),
+                }),
+                target: Individual::Named(NamedIndividual {
+                    iri: crate::ontology::IRI::new(&tgt),
+                }),
+                annotations: vec![],
+            },
+        ));
         Ok(())
     }
 
@@ -201,13 +248,17 @@ impl KRSSParser {
         while self.peek() != Some(')') && self.pos.get() < self.input.len() {
             let name = self.parse_symbol();
             if !name.is_empty() {
-                inds.push(Individual::Named(NamedIndividual { iri: crate::ontology::IRI::new(&name) }));
+                inds.push(Individual::Named(NamedIndividual {
+                    iri: crate::ontology::IRI::new(&name),
+                }));
             }
             self.skip_ws();
         }
         if inds.len() >= 2 {
             ontology.add_axiom(Axiom::SameIndividual(SameIndividualAxiom {
-                id: 1, individuals: inds, annotations: vec![],
+                id: 1,
+                individuals: inds,
+                annotations: vec![],
             }));
         }
         Ok(())
@@ -219,30 +270,64 @@ impl KRSSParser {
         while self.peek() != Some(')') && self.pos.get() < self.input.len() {
             let name = self.parse_symbol();
             if !name.is_empty() {
-                inds.push(Individual::Named(NamedIndividual { iri: crate::ontology::IRI::new(&name) }));
+                inds.push(Individual::Named(NamedIndividual {
+                    iri: crate::ontology::IRI::new(&name),
+                }));
             }
             self.skip_ws();
         }
         if inds.len() >= 2 {
             ontology.add_axiom(Axiom::DifferentIndividuals(DifferentIndividualsAxiom {
-                id: 1, individuals: inds, annotations: vec![],
+                id: 1,
+                individuals: inds,
+                annotations: vec![],
             }));
         }
         Ok(())
     }
 
-    fn parse_property_characteristic(&self, ontology: &mut Ontology, characteristic: &str) -> Result<()> {
+    fn parse_property_characteristic(
+        &self,
+        ontology: &mut Ontology,
+        characteristic: &str,
+    ) -> Result<()> {
         self.skip_ws();
         let name = self.parse_symbol();
         let iri = crate::ontology::IRI::new(&name);
         let prop_expr = ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri });
         let axiom = match characteristic {
-            "transitive" => Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom { id: 1, property: prop_expr, annotations: vec![] }),
-            "symmetric" => Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom { id: 1, property: prop_expr, annotations: vec![] }),
-            "functional" => Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom { id: 1, property: prop_expr, annotations: vec![] }),
-            "inverse-functional" => Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom { id: 1, property: prop_expr, annotations: vec![] }),
-            "reflexive" => Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom { id: 1, property: prop_expr, annotations: vec![] }),
-            "irreflexive" => Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom { id: 1, property: prop_expr, annotations: vec![] }),
+            "transitive" => Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom {
+                id: 1,
+                property: prop_expr,
+                annotations: vec![],
+            }),
+            "symmetric" => Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
+                id: 1,
+                property: prop_expr,
+                annotations: vec![],
+            }),
+            "functional" => Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
+                id: 1,
+                property: prop_expr,
+                annotations: vec![],
+            }),
+            "inverse-functional" => {
+                Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
+                    id: 1,
+                    property: prop_expr,
+                    annotations: vec![],
+                })
+            }
+            "reflexive" => Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+                id: 1,
+                property: prop_expr,
+                annotations: vec![],
+            }),
+            "irreflexive" => Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
+                id: 1,
+                property: prop_expr,
+                annotations: vec![],
+            }),
             _ => return Ok(()),
         };
         ontology.add_axiom(axiom);
@@ -276,7 +361,9 @@ impl KRSSParser {
                     let role = self.parse_symbol();
                     let filler = self.parse_concept()?;
                     ClassExpression::ObjectSomeValuesFrom {
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&role) }),
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: crate::ontology::IRI::new(&role),
+                        }),
                         filler: Box::new(filler),
                     }
                 }
@@ -284,7 +371,9 @@ impl KRSSParser {
                     let role = self.parse_symbol();
                     let filler = self.parse_concept()?;
                     ClassExpression::ObjectAllValuesFrom {
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&role) }),
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: crate::ontology::IRI::new(&role),
+                        }),
                         filler: Box::new(filler),
                     }
                 }
@@ -293,7 +382,9 @@ impl KRSSParser {
                     let role = self.parse_symbol();
                     let filler = self.parse_concept()?;
                     ClassExpression::ObjectMinCardinality {
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&role) }),
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: crate::ontology::IRI::new(&role),
+                        }),
                         cardinality: n,
                         filler: Box::new(filler),
                     }
@@ -303,7 +394,9 @@ impl KRSSParser {
                     let role = self.parse_symbol();
                     let filler = self.parse_concept()?;
                     ClassExpression::ObjectMaxCardinality {
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&role) }),
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: crate::ontology::IRI::new(&role),
+                        }),
                         cardinality: n,
                         filler: Box::new(filler),
                     }
@@ -313,7 +406,9 @@ impl KRSSParser {
                     let role = self.parse_symbol();
                     let filler = self.parse_concept()?;
                     ClassExpression::ObjectExactCardinality {
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&role) }),
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: crate::ontology::IRI::new(&role),
+                        }),
                         cardinality: n,
                         filler: Box::new(filler),
                     }
@@ -323,7 +418,9 @@ impl KRSSParser {
                     while self.peek() != Some(')') {
                         let name = self.parse_symbol();
                         if !name.is_empty() {
-                            inds.push(Individual::Named(NamedIndividual { iri: crate::ontology::IRI::new(&name) }));
+                            inds.push(Individual::Named(NamedIndividual {
+                                iri: crate::ontology::IRI::new(&name),
+                            }));
                         }
                         self.skip_ws();
                     }
@@ -331,10 +428,16 @@ impl KRSSParser {
                 }
                 "inverse" if self.variant == KRSSVariant::KRSS2 => {
                     let name = self.parse_symbol();
-                    let _prop = ObjectPropertyExpression::InverseObjectProperty(ObjectProperty { iri: crate::ontology::IRI::new(&name) });
-                    ClassExpression::Class(Class { iri: crate::ontology::IRI::new("urn:dummy") })
+                    let _prop = ObjectPropertyExpression::InverseObjectProperty(ObjectProperty {
+                        iri: crate::ontology::IRI::new(&name),
+                    });
+                    ClassExpression::Class(Class {
+                        iri: crate::ontology::IRI::new("urn:dummy"),
+                    })
                 }
-                _ => ClassExpression::Class(Class { iri: crate::ontology::IRI::new(&op) }),
+                _ => ClassExpression::Class(Class {
+                    iri: crate::ontology::IRI::new(&op),
+                }),
             };
             self.skip_to_closing_paren();
             Ok(result)
@@ -342,8 +445,10 @@ impl KRSSParser {
             let name = self.parse_symbol();
             if name.is_empty() {
                 Ok(ClassExpression::Class(Class::thing()))
-                } else {
-                    Ok(ClassExpression::Class(Class { iri: crate::ontology::IRI::new(&name) }))
+            } else {
+                Ok(ClassExpression::Class(Class {
+                    iri: crate::ontology::IRI::new(&name),
+                }))
             }
         }
     }
@@ -357,7 +462,9 @@ impl KRSSParser {
             if c.is_ascii_digit() {
                 n = n * 10 + c.to_digit(10).unwrap();
                 self.pos.set(p + c.len_utf8());
-            } else { break; }
+            } else {
+                break;
+            }
         }
         n
     }
@@ -380,7 +487,11 @@ impl KRSSParser {
         while self.pos.get() < self.input.len() {
             let p = self.pos.get();
             let c = self.input.chars().nth(p).unwrap();
-            if c.is_whitespace() { self.pos.set(p + c.len_utf8()); } else { break; }
+            if c.is_whitespace() {
+                self.pos.set(p + c.len_utf8());
+            } else {
+                break;
+            }
         }
     }
 
@@ -389,8 +500,15 @@ impl KRSSParser {
         while self.pos.get() < self.input.len() && depth > 0 {
             let p = self.pos.get();
             let c = self.input.chars().nth(p).unwrap();
-            if c == '(' { depth += 1; }
-            else if c == ')' { depth -= 1; if depth == 0 { self.pos.set(p + 1); return; } }
+            if c == '(' {
+                depth += 1;
+            } else if c == ')' {
+                depth -= 1;
+                if depth == 0 {
+                    self.pos.set(p + 1);
+                    return;
+                }
+            }
             self.pos.set(p + c.len_utf8());
         }
     }
@@ -401,12 +519,18 @@ impl KRSSParser {
         while self.pos.get() < self.input.len() {
             let p = self.pos.get();
             let c = self.input.chars().nth(p).unwrap();
-            if c == '(' || c == ')' || c == ':' { break; }
+            if c == '(' || c == ')' || c == ':' {
+                break;
+            }
             if c.is_alphanumeric() || c == '-' || c == '_' {
                 name.push(c);
                 self.pos.set(p + c.len_utf8());
-            } else if c.is_whitespace() && !name.is_empty() { break; }
-            else { self.pos.set(p + c.len_utf8()); break; }
+            } else if c.is_whitespace() && !name.is_empty() {
+                break;
+            } else {
+                self.pos.set(p + c.len_utf8());
+                break;
+            }
         }
         name
     }
@@ -423,7 +547,10 @@ pub struct KRSSConfig {
 
 impl Default for KRSSConfig {
     fn default() -> Self {
-        Self { variant: KRSSVariant::KRSS, indent: 2 }
+        Self {
+            variant: KRSSVariant::KRSS,
+            indent: 2,
+        }
     }
 }
 
@@ -435,7 +562,9 @@ pub struct KRSSRenderer {
 impl KRSSRenderer {
     #[must_use]
     pub fn new(variant: KRSSVariant) -> Self {
-        Self { config: KRSSConfig { variant, indent: 2 } }
+        Self {
+            config: KRSSConfig { variant, indent: 2 },
+        }
     }
 
     pub fn serialize(&self, ontology: &Ontology) -> Result<String> {
@@ -486,16 +615,25 @@ impl KRSSRenderer {
                     );
                 }
                 Axiom::SameIndividual(a) => {
-                    let parts: Vec<String> = a.individuals.iter().map(|i| self.render_individual(i)).collect();
+                    let parts: Vec<String> = a
+                        .individuals
+                        .iter()
+                        .map(|i| self.render_individual(i))
+                        .collect();
                     let _ = writeln!(buf, "(equal {})", parts.join(" "));
                 }
                 Axiom::DifferentIndividuals(a) => {
-                    let parts: Vec<String> = a.individuals.iter().map(|i| self.render_individual(i)).collect();
+                    let parts: Vec<String> = a
+                        .individuals
+                        .iter()
+                        .map(|i| self.render_individual(i))
+                        .collect();
                     let _ = writeln!(buf, "(distinct {})", parts.join(" "));
                 }
                 Axiom::Declaration(decl) => {
                     if let Entity::ObjectProperty(iri) = &decl.entity {
-                        let _ = writeln!(buf, "(define-primitive-role {name})", name = iri.as_str());
+                        let _ =
+                            writeln!(buf, "(define-primitive-role {name})", name = iri.as_str());
                     }
                 }
                 Axiom::TransitiveObjectProperty(a) if self.config.variant == KRSSVariant::KRSS2 => {
@@ -533,32 +671,79 @@ impl KRSSRenderer {
                 format!("(not {})", self.render_ce(inner))
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
-                format!("(some {} {})", self.render_ope(property), self.render_ce(filler))
+                format!(
+                    "(some {} {})",
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
-                format!("(all {} {})", self.render_ope(property), self.render_ce(filler))
+                format!(
+                    "(all {} {})",
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
             ClassExpression::ObjectHasValue { property, value } => {
-                format!("(some {} {})", self.render_ope(property), self.render_individual(value))
+                format!(
+                    "(some {} {})",
+                    self.render_ope(property),
+                    self.render_individual(value)
+                )
             }
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
-                format!("(at-least {} {} {})", cardinality, self.render_ope(property), self.render_ce(filler))
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
+                format!(
+                    "(at-least {} {} {})",
+                    cardinality,
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
-                format!("(at-most {} {} {})", cardinality, self.render_ope(property), self.render_ce(filler))
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
+                format!(
+                    "(at-most {} {} {})",
+                    cardinality,
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
-            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
-                format!("(exactly {} {} {})", cardinality, self.render_ope(property), self.render_ce(filler))
+            ClassExpression::ObjectExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
+                format!(
+                    "(exactly {} {} {})",
+                    cardinality,
+                    self.render_ope(property),
+                    self.render_ce(filler)
+                )
             }
             ClassExpression::ObjectOneOf(inds) => {
                 let parts: Vec<String> = inds.iter().map(|i| self.render_individual(i)).collect();
                 format!("(one-of {})", parts.join(" "))
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
-                format!("(some {} {})", self.render_dpe(property), self.render_datarange(filler))
+                format!(
+                    "(some {} {})",
+                    self.render_dpe(property),
+                    self.render_datarange(filler)
+                )
             }
             ClassExpression::DataAllValuesFrom { property, filler } => {
-                format!("(all {} {})", self.render_dpe(property), self.render_datarange(filler))
+                format!(
+                    "(all {} {})",
+                    self.render_dpe(property),
+                    self.render_datarange(filler)
+                )
             }
             _ => format!("(concept {})", self.name("unknown")),
         }
@@ -567,7 +752,9 @@ impl KRSSRenderer {
     fn render_ope(&self, expr: &ObjectPropertyExpression) -> String {
         match expr {
             ObjectPropertyExpression::ObjectProperty(p) => self.name(&p.iri.to_string()),
-            ObjectPropertyExpression::InverseObjectProperty(p) => format!("(inv {})", self.name(&p.iri.to_string())),
+            ObjectPropertyExpression::InverseObjectProperty(p) => {
+                format!("(inv {})", self.name(&p.iri.to_string()))
+            }
             _ => self.name("role"),
         }
     }
@@ -594,10 +781,14 @@ impl KRSSRenderer {
 
     fn name(&self, iri: &str) -> String {
         if let Some(fragment) = iri.rsplit('#').next() {
-            if !fragment.is_empty() && fragment.len() < iri.len() { return fragment.to_string(); }
+            if !fragment.is_empty() && fragment.len() < iri.len() {
+                return fragment.to_string();
+            }
         }
         if let Some(last) = iri.rsplit('/').next() {
-            if !last.is_empty() && last.len() < iri.len() { return last.to_string(); }
+            if !last.is_empty() && last.len() < iri.len() {
+                return last.to_string();
+            }
         }
         iri.to_string()
     }
@@ -633,12 +824,14 @@ pub fn render_to_string_krss2(ontology: &Ontology) -> Result<String> {
 pub fn save_file<P: AsRef<std::path::Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let renderer = KRSSRenderer::new(KRSSVariant::KRSS);
     let content = renderer.serialize(ontology)?;
-    std::fs::write(path, content).map_err(|e| crate::Error::io(format!("Failed to write KRSS: {e}")))
+    std::fs::write(path, content)
+        .map_err(|e| crate::Error::io(format!("Failed to write KRSS: {e}")))
 }
 
 /// Save ontology as KRSS2 to a file.
 pub fn save_file_krss2<P: AsRef<std::path::Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let renderer = KRSSRenderer::new(KRSSVariant::KRSS2);
     let content = renderer.serialize(ontology)?;
-    std::fs::write(path, content).map_err(|e| crate::Error::io(format!("Failed to write KRSS2: {e}")))
+    std::fs::write(path, content)
+        .map_err(|e| crate::Error::io(format!("Failed to write KRSS2: {e}")))
 }

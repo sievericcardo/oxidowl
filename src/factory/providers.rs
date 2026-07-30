@@ -3,29 +3,27 @@
 //! These traits allow code to depend on only the entity creation methods
 //! they need, following the interface segregation principle.
 
-use crate::ontology::{
-    AnnotationProperty, AnonymousIndividual, Class, DataProperty, DataRange,
-    ObjectProperty, IRI,
-};
 use crate::ontology::axioms::{
     AnnotationAssertionAxiom, AnnotationPropertyDomainAxiom, AnnotationPropertyRangeAxiom,
-    AsymmetricObjectPropertyAxiom, AxiomId, ClassAssertionAxiom,
-    DataPropertyAssertionAxiom, DataPropertyDomainAxiom, DataPropertyRangeAxiom,
-    DeclarationAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
-    DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom, DisjointUnionAxiom,
-    Entity, EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
-    EquivalentObjectPropertiesAxiom, FunctionalDataPropertyAxiom,
-    FunctionalObjectPropertyAxiom, HasKeyAxiom, InverseFunctionalObjectPropertyAxiom,
-    InverseObjectPropertiesAxiom, IrreflexiveObjectPropertyAxiom,
-    NegativeDataPropertyAssertionAxiom, NegativeObjectPropertyAssertionAxiom,
-    ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom,
-    ReflexiveObjectPropertyAxiom, SameIndividualAxiom, SubAnnotationPropertyOfAxiom,
-    SubClassOfAxiom, SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
-    SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+    AsymmetricObjectPropertyAxiom, AxiomId, ClassAssertionAxiom, DataPropertyAssertionAxiom,
+    DataPropertyDomainAxiom, DataPropertyRangeAxiom, DeclarationAxiom, DifferentIndividualsAxiom,
+    DisjointClassesAxiom, DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom,
+    DisjointUnionAxiom, Entity, EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
+    EquivalentObjectPropertiesAxiom, FunctionalDataPropertyAxiom, FunctionalObjectPropertyAxiom,
+    HasKeyAxiom, InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
+    IrreflexiveObjectPropertyAxiom, NegativeDataPropertyAssertionAxiom,
+    NegativeObjectPropertyAssertionAxiom, ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom,
+    ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom, SameIndividualAxiom,
+    SubAnnotationPropertyOfAxiom, SubClassOfAxiom, SubDataPropertyOfAxiom,
+    SubObjectPropertyOfAxiom, SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
 };
 use crate::ontology::concepts::ClassExpression;
 use crate::ontology::individuals::{Individual, NamedIndividual};
 use crate::ontology::{Annotation, AnnotationSubject, AnnotationValue, Literal};
+use crate::ontology::{
+    AnnotationProperty, AnonymousIndividual, Class, DataProperty, DataRange, Datatype, IRI,
+    ObjectProperty,
+};
 
 // ── Entity Providers ─────────────────────────────────────────────────────────
 
@@ -47,7 +45,7 @@ pub trait IndividualProvider {
 }
 
 pub trait DatatypeProvider {
-    fn get_datatype(&self, iri: &IRI) -> DataRange;
+    fn get_datatype(&self, iri: &IRI) -> Datatype;
 }
 
 pub trait AnnotationPropertyProvider {
@@ -516,7 +514,9 @@ pub trait AxiomCreationProvider {
         AnnotationPropertyDomainAxiom {
             id: self.next_axiom_id(),
             property,
-            domain: crate::ontology::ClassExpression::Class(crate::ontology::concepts::Class { iri: domain }),
+            domain: crate::ontology::ClassExpression::Class(crate::ontology::concepts::Class {
+                iri: domain,
+            }),
             annotations,
         }
     }
@@ -557,5 +557,4 @@ pub trait AxiomCreationProvider {
             entity,
         }
     }
-
 }

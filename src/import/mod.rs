@@ -808,8 +808,8 @@ impl ImportManager {
         }
 
         // If source has a version IRI and target doesn't, inherit it
-        if target.version_iri.is_none() && source.version_iri.is_some() {
-            target.set_version_iri(source.version_iri.clone());
+        if target.id.version_iri.is_none() && source.id.version_iri.is_some() {
+            target.set_version_iri(source.id.version_iri.clone());
         }
 
         Ok(())

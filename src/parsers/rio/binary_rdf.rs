@@ -1,18 +1,23 @@
 //! Binary RDF Parser and Renderer.
 //! Compact binary serialization format for RDF data.
 
-use crate::ontology::Ontology;
 use crate::Result;
+use crate::ontology::Ontology;
 
 #[derive(Debug, Clone, Default)]
 pub struct BinaryRdfParser;
 
 impl BinaryRdfParser {
-    #[must_use] pub fn new() -> Self { Self }
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
 
     pub fn parse(&self, data: &[u8]) -> Result<Ontology> {
         let mut o = Ontology::new();
-        if data.len() < 4 { return Ok(o); }
+        if data.len() < 4 {
+            return Ok(o);
+        }
 
         // Parse BRDF header: magic "BRDF" + varint triple count
         if &data[..4] != b"BRDF" {
@@ -28,14 +33,18 @@ impl BinaryRdfParser {
         let mut dict = Vec::with_capacity(dict_size as usize);
         for _ in 0..dict_size as usize {
             let len = self.read_varint(data, &mut pos) as usize;
-            if pos + len > data.len() { break; }
+            if pos + len > data.len() {
+                break;
+            }
             dict.push(String::from_utf8_lossy(&data[pos..pos + len]).to_string());
             pos += len;
         }
 
         // Read triples as (s,p,o) integer IDs referencing dictionary
         for _ in 0..triple_count as usize {
-            if pos + 6 > data.len() { break; }
+            if pos + 6 > data.len() {
+                break;
+            }
             let s = self.read_varint(data, &mut pos) as usize;
             let p = self.read_varint(data, &mut pos) as usize;
             let o_idx = self.read_varint(data, &mut pos) as usize;
@@ -45,7 +54,7 @@ impl BinaryRdfParser {
                     crate::ontology::axioms::DeclarationAxiom {
                         id: 0,
                         entity: crate::ontology::axioms::Entity::Class(iri),
-                    }
+                    },
                 ));
             }
         }
@@ -60,13 +69,13 @@ impl BinaryRdfParser {
                     let parts: Vec<&str> = stripped.split_whitespace().collect();
                     if parts.len() >= 3 {
                         let iri = crate::ontology::IRI::new(
-                            parts[0].trim_matches(|c| c == '<' || c == '>')
+                            parts[0].trim_matches(|c| c == '<' || c == '>'),
                         );
                         o.add_axiom(crate::ontology::axioms::Axiom::Declaration(
                             crate::ontology::axioms::DeclarationAxiom {
                                 id: 0,
                                 entity: crate::ontology::axioms::Entity::Class(iri),
-                            }
+                            },
                         ));
                     }
                 }
@@ -82,7 +91,9 @@ impl BinaryRdfParser {
             let byte = data[*pos];
             *pos += 1;
             result |= ((byte & 0x7F) as u64) << shift;
-            if byte & 0x80 == 0 { break; }
+            if byte & 0x80 == 0 {
+                break;
+            }
             shift += 7;
         }
         result
@@ -92,17 +103,26 @@ impl BinaryRdfParser {
 #[derive(Debug, Clone, Default)]
 pub struct BinaryRdfRenderer;
 impl BinaryRdfRenderer {
-    #[must_use] pub fn new() -> Self { Self }
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
     pub fn serialize(&self, ontology: &Ontology) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         // Header
         buf.extend_from_slice(b"BRDF");
 
-        let axioms: Vec<_> = ontology.axioms().iter().filter_map(|a| {
-            if let crate::ontology::axioms::Axiom::Declaration(d) = a {
-                Some(d.entity.iri().to_string())
-            } else { None }
-        }).collect();
+        let axioms: Vec<_> = ontology
+            .axioms()
+            .iter()
+            .filter_map(|a| {
+                if let crate::ontology::axioms::Axiom::Declaration(d) = a {
+                    Some(d.entity.iri().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         // Write varint: triple count = axiom count * 3 (one IRI per position)
         let count = axioms.len() as u64;
@@ -138,7 +158,9 @@ impl BinaryRdfRenderer {
     }
 }
 
-pub fn parse(content: &str) -> Result<Ontology> { BinaryRdfParser::new().parse(content.as_bytes()) }
+pub fn parse(content: &str) -> Result<Ontology> {
+    BinaryRdfParser::new().parse(content.as_bytes())
+}
 pub fn save_file<P: AsRef<std::path::Path>>(ontology: &Ontology, path: P) -> Result<()> {
     let content = BinaryRdfRenderer::new().serialize(ontology);
     std::fs::write(path, content).map_err(|e| crate::Error::io(format!("BinaryRDF: {e}")))

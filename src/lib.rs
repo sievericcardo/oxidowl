@@ -109,30 +109,33 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+pub mod adapter;
 pub mod cache;
 pub mod cache_lockfree;
 pub mod cache_strategies;
 pub mod config;
 pub mod core;
 pub mod debug;
+pub mod distributed;
 pub mod dl_clauses;
 pub mod error;
 pub mod factory;
+pub mod functional_syntax_factory;
 pub mod import;
+pub mod inference;
 pub mod manager;
 pub mod modularity;
+pub mod ontology;
+pub mod owl_manager;
+pub mod parsers;
 pub mod performance;
 pub mod prelude;
-pub mod profiling;
-pub mod adapter;
-pub mod distributed;
-pub mod inference;
-pub mod ontology;
-pub mod parsers;
 pub mod profiles;
+pub mod profiling;
 pub mod query;
-pub mod reasoning;
 pub mod reasoner_api;
+pub mod reasoning;
+pub mod render;
 pub mod searcher;
 pub mod semantics;
 pub mod swrl;
@@ -163,17 +166,43 @@ pub use crate::adapter::{HornedOwlAdapter, RdfStarCapable};
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
 pub use crate::factory::DataFactory;
+pub use crate::functional_syntax_factory::FunctionalSyntaxFactory;
 pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
 pub use crate::manager::OntologyManager;
+pub use crate::manager::changes::{ChangeData, OntologyChange, OntologyDocumentTarget};
+pub use crate::manager::history::ChangeHistory;
 pub use crate::manager::iri_mapper::{
-    AutoIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper, SimpleIRIMapper,
+    AutoIRIMapper, CompositeIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper,
+    SimpleIRIMapper,
+};
+#[cfg(feature = "zip-imports")]
+pub use crate::manager::iri_mapper::ZipIRIMapper;
+pub use crate::manager::listeners::{
+    ImportProgressListener, LoggingChangeListener, MissingImportListener, NoOpChangeListener,
+    OntologyChangeListener, ReasonerChangeAwareListener,
 };
 pub use crate::manager::loader::OntologyLoader;
-pub use crate::manager::changes::{ChangeData, OntologyChange};
-pub use crate::manager::listeners::OntologyChangeListener;
-pub use crate::manager::history::ChangeHistory;
+pub use crate::manager::loader_config::{LoaderConfig, MissingImportStrategy};
+pub use crate::manager::sources::{
+    FileDocumentSource, GzipDocumentSource, GzipStringDocumentSource, OntologyDocumentSource,
+    StringDocumentSource, UrlDocumentSource,
+};
+pub use crate::manager::{ChangeApplied, ChangeBroadcastStrategy, ManagerConfig, OntologyManagerRef, Snapshot};
+pub use crate::owl_manager::OWLManager;
+pub use crate::parsers::{
+    DLSyntaxParser, DLSyntaxRenderer, ErrorVerbosity, FunctionalParser,
+    FunctionalSyntaxSerializer, KRSSParser, KRSSRenderer, KRSSVariant, LatexRenderer,
+    ManchesterParser, ManchesterParserConfig, ManchesterRenderer, NTriplesParser,
+    NTriplesSerializer, OwlXmlParser, OwlXmlSerializer, ParserConfig, ParserFactory,
+    RdfCompatibilityMode, RdfXmlParser, RdfXmlSerializer, SerializerConfig, SyntaxValidator,
+    TurtleParser, TurtleSerializer, save_file, save_file_gzip, save_to_string, parse_owl_xml_file,
+    parse_functional_file, parse_rdf_xml_file, parse_turtle_file, parse_ntriples_file,
+};
 pub use crate::profiles::{
-    OWL2Profile as ProfileType, ProfileValidator, el::ELValidator, validator::OWL2ProfileValidator,
+    OWL2Profile as ProfileType, ProfileDetectionResult, ProfileValidationReport, ProfileViolation,
+    ProfileViolationType, ProfileValidator, ValidationStatistics,
+    el::ELValidator, el_reasoner::ELReasoner, rl_reasoner::RLReasoner,
+    validator::OWL2ProfileValidator,
 };
 // Query system exports (both DL queries and advanced conjunctive queries)
 pub use crate::query::{
@@ -217,56 +246,91 @@ pub use crate::config::{PerformanceConfig, PerformanceProfile, ReasonerConfig, T
 #[cfg(feature = "sparql-store")]
 pub use crate::core::reasoner::extract_owl_rules_from_tbox;
 pub use crate::core::reasoner::{ReasoningResult, ReasoningTask, abox_classification_rules};
-pub use crate::error::{Error, Result};
-pub use crate::ontology::{
-    ClassExpression, IRI, Individual, Ontology, OntologyFormat, OntologyRef,
-};
-pub use crate::ontology::axioms::EntityType;
-pub use crate::reasoner_api::{
-    OWLReasoner, ReasonerFactory, TableauReasonerFactory, TableauOWLReasoner,
-    Node, NodeSet, InferenceType, InferenceDepth,
-    OWLReasonerConfiguration, BufferingMode, FreshEntityPolicy, IndividualNodeSetPolicy,
-    ReasonerProgressMonitor,
-};
-pub use crate::reasoner_api::structural::{StructuralReasoner, StructuralReasonerFactory};
-pub use crate::searcher::{EntityIndex, EntitySearcher};
-pub use crate::transform::{OWLObjectTransformer, OWLEntityRenamer, OWLEntityRemover};
-pub use crate::transform::nnf::NNFConverter;
-pub use crate::transform::expressivity::{DLExpressivity, DLExpressivityChecker};
-pub use crate::walk::{OWLObjectVisitor, OntologyWalker, StructureWalker};
-pub use crate::walk::merge::OWLOntologyMerger;
-pub use crate::inference::metrics::{OntologyMetrics, OwlMetric};
-pub use crate::inference::InferredAxiomGenerator;
-pub use crate::inference::{
-    InferredSubClassOfAxiomGenerator, InferredEquivalentClassAxiomGenerator,
-    InferredDisjointClassesAxiomGenerator, InferredClassAssertionAxiomGenerator,
-    InferredSubObjectPropertyAxiomGenerator, InferredSubDataPropertyAxiomGenerator,
-};
-pub use crate::explanation::generator::{Explanation as Justification, ExplanationGenerator};
-pub use crate::explanation::blackbox::{BlackBoxExplanation, BlackBoxConfig};
-pub use crate::explanation::hst::{HSTExplanationGenerator, HSTConfig};
-pub use crate::explanation::converter::SatisfiabilityConverter;
-pub use crate::debug::{OWLDebugger, BlackBoxOWLDebugger, DebuggerConfig};
 pub use crate::debug::definitions::DefinitionTracker;
-pub use crate::modularity::decomposition::{Atom, AtomicDecomposition};
+pub use crate::debug::{BlackBoxOWLDebugger, DebuggerConfig, OWLDebugger};
+pub use crate::error::{Error, Result};
+pub use crate::explanation::blackbox::{BlackBoxConfig, BlackBoxExplanation};
+pub use crate::explanation::converter::SatisfiabilityConverter;
+pub use crate::explanation::generator::{Explanation as Justification, ExplanationGenerator};
+pub use crate::explanation::ordering::{
+    CompositeExplanationOrderer, ExplanationOrderer, ExplanationProgressMonitor,
+    JustificationSizeOrderer, SilentExplanationProgressMonitor,
+};
+pub use crate::explanation::renderer::{
+    ConciseExplanationRenderer, ExplanationRenderer, SilentExplanationRenderer,
+};
+pub use crate::explanation::hst::{HSTConfig, HSTExplanationGenerator};
+pub use crate::inference::InferredAxiomGenerator;
+pub use crate::inference::metrics::{
+    AverageClassDepth, AverageNamedSuperclassCount, DLExpressivityMetric,
+    MaxNamedSuperclassCount, MaximumClassDepth, NumberOfAnnotationAxioms,
+    NumberOfAnnotationProperties, NumberOfAsymmetricPropertyAxioms, NumberOfAxioms,
+    NumberOfClasses, NumberOfDataProperties, NumberOfDatatypes,
+    NumberOfDisjointClassesAxioms, NumberOfEquivalentClassAxioms,
+    NumberOfFunctionalPropertyAxioms, NumberOfGCI, NumberOfHasKeyAxioms,
+    NumberOfImports, NumberOfIndividuals, NumberOfInverseFunctionalPropertyAxioms,
+    NumberOfIrreflexivePropertyAxioms, NumberOfLogicalAxioms, NumberOfObjectProperties,
+    NumberOfSubClassAxioms, NumberOfSWRLRules, NumberOfSymmetricPropertyAxioms,
+    NumberOfTransitivePropertyAxioms, OntologyMetrics, OwlMetric,
+};
+pub use crate::inference::{
+    InferredClassAssertionAxiomGenerator, InferredDisjointClassesAxiomGenerator,
+    InferredEquivalentClassAxiomGenerator, InferredSubClassOfAxiomGenerator,
+    InferredSubDataPropertyAxiomGenerator, InferredSubObjectPropertyAxiomGenerator,
+};
 pub use crate::modularity::decomposer::{AtomicDecomposer, DecomposerConfig};
-pub use crate::modularity::locality::{LocalityEvaluator, SyntacticLocalityEvaluator, LocalityClass};
+pub use crate::modularity::decomposition::{Atom, AtomicDecomposition};
 pub use crate::modularity::extractor::{ModuleExtractor, ModuleExtractorConfig, ModuleType};
+pub use crate::modularity::locality::{
+    LocalityClass, LocalityEvaluator, SyntacticLocalityEvaluator,
+};
 pub use crate::modularity::segmenter::OntologySegmenter;
-pub use crate::parsers::obo::{OBOParser, OBOParserConfig, OBOWriter, OBOOutputConfig, Obo2Owl, Owl2Obo};
+pub use crate::ontology::axioms::{
+    Axiom, AxiomTrait, AxiomType, EntityType, SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule,
+    SWRLVariable,
+};
+pub use crate::ontology::datatypes::{
+    ConstrainingFacet, DataRange, DatatypeCategory, DatatypeDefinitionAxiom, FacetRestriction,
+    OWL2Datatype, OWLFacet,
+};
+pub use crate::ontology::shortform::{
+    AnnotationValueShortFormProvider, BidirectionalShortFormProvider, OntologyIRIShortFormProvider,
+    QNameShortFormProvider, ShortFormProvider, SimpleShortFormProvider,
+};
+pub use crate::ontology::vocabulary::{Namespaces, PrefixManager};
+pub use crate::ontology::{
+    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, Class, ClassExpression,
+    DataProperty, DataPropertyExpression, IRI, ImportsDeclaration, Individual, Literal,
+    NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology, OntologyFormat,
+    OntologyID, OntologyRef, Signature,
+};
+pub use crate::parsers::obo::{
+    OBOOutputConfig, OBOParser, OBOParserConfig, OBOWriter, Obo2Owl, Owl2Obo,
+};
 pub use crate::parsers::rio::{
-    nquads::{NQuadsParser, NQuadsRenderer},
-    n3::{N3Parser, N3Renderer},
-    trig::{TriGParser, TriGRenderer},
-    trix::{TriXParser, TriXRenderer},
-    jsonld::{JsonLdParser, JsonLdRenderer},
-    rdf_json::{RdfJsonParser, RdfJsonRenderer},
-    rdfa::RDFaParser,
     binary_rdf::{BinaryRdfParser, BinaryRdfRenderer},
     hdt::{HDTParser, HDTRenderer},
+    jsonld::{JsonLdParser, JsonLdRenderer},
+    n3::{N3Parser, N3Renderer},
+    nquads::{NQuadsParser, NQuadsRenderer},
+    rdf_json::{RdfJsonParser, RdfJsonRenderer},
+    rdfa::RDFaParser,
+    trig::{TriGParser, TriGRenderer},
+    trix::{TriXParser, TriXRenderer},
 };
-pub use crate::ontology::datatypes::{DatatypeCategory, OWLFacet};
-pub use crate::ontology::vocabulary::{Namespaces, PrefixManager};
+pub use crate::reasoner_api::structural::{StructuralReasoner, StructuralReasonerFactory};
+pub use crate::reasoner_api::{
+    BufferingMode, FreshEntityPolicy, IndividualNodeSetPolicy, InferenceDepth, InferenceType, Node,
+    NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory, ReasonerProgressMonitor,
+    TableauOWLReasoner, TableauReasonerFactory,
+};
+pub use crate::render::{ConciseObjectRenderer, OWLObjectRenderer};
+pub use crate::searcher::{EntityIndex, EntitySearcher};
+pub use crate::transform::expressivity::{DLExpressivity, DLExpressivityChecker};
+pub use crate::transform::nnf::NNFConverter;
+pub use crate::transform::{OWLEntityRemover, OWLEntityRenamer, OWLObjectTransformer};
+pub use crate::walk::merge::OWLOntologyMerger;
+pub use crate::walk::{OWLObjectVisitor, OntologyWalker, StructureWalker};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = "Oxidowl";

@@ -1,8 +1,8 @@
 //! Ontology change model — types for tracking mutations to ontologies.
 
-use crate::ontology::{Annotation, IRI};
-use crate::ontology::axioms::{Axiom, AxiomTrait};
 use crate::ontology::axioms::AxiomId;
+use crate::ontology::axioms::{Axiom, AxiomTrait};
+use crate::ontology::{Annotation, IRI};
 
 /// A document IRI or target for saving.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -23,16 +23,10 @@ pub enum OntologyDocumentTarget {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OntologyChange {
     /// An axiom was added.
-    AddAxiom {
-        ontology_iri: IRI,
-        axiom: Axiom,
-    },
+    AddAxiom { ontology_iri: IRI, axiom: Axiom },
 
     /// An axiom was removed.
-    RemoveAxiom {
-        ontology_iri: IRI,
-        axiom: Axiom,
-    },
+    RemoveAxiom { ontology_iri: IRI, axiom: Axiom },
 
     /// An import declaration was added.
     AddImport {
@@ -74,7 +68,10 @@ pub enum ChangeData {
     Axiom(Axiom),
     Import(crate::import::ImportDeclaration),
     Annotation(Annotation),
-    OntologyId { new_iri: IRI, new_version_iri: Option<IRI> },
+    OntologyId {
+        new_iri: IRI,
+        new_version_iri: Option<IRI>,
+    },
 }
 
 impl OntologyChange {
@@ -134,9 +131,7 @@ impl OntologyChange {
     pub fn is_add_change(&self) -> bool {
         matches!(
             self,
-            Self::AddAxiom { .. }
-                | Self::AddImport { .. }
-                | Self::AddOntologyAnnotation { .. }
+            Self::AddAxiom { .. } | Self::AddImport { .. } | Self::AddOntologyAnnotation { .. }
         )
     }
 

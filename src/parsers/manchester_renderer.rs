@@ -3,16 +3,15 @@
 //! Renders OWL ontologies in Manchester OWL Syntax.
 //! Complements the existing `ManchesterParser` in `manchester.rs`.
 
-use crate::ontology::{
-    Annotation, AnnotationValue, ClassExpression, DataPropertyExpression,
-    DataRange, Individual, Literal, ObjectPropertyExpression, Ontology,
-};
+use crate::Result;
 use crate::ontology::axioms::{
-    Axiom, DisjointClassesAxiom, DisjointUnionAxiom,
-    Entity, EquivalentClassesAxiom, HasKeyAxiom,
+    Axiom, DisjointClassesAxiom, DisjointUnionAxiom, Entity, EquivalentClassesAxiom, HasKeyAxiom,
     SubClassOfAxiom,
 };
-use crate::Result;
+use crate::ontology::{
+    Annotation, AnnotationValue, ClassExpression, DataPropertyExpression, DataRange, Individual,
+    Literal, ObjectPropertyExpression, Ontology,
+};
 use std::fmt::Write;
 
 // ── ManchesterRenderer ───────────────────────────────────────────────────────
@@ -59,16 +58,28 @@ impl ManchesterRenderer {
     ) -> Result<String> {
         let mut buf = String::with_capacity(4096);
 
+        // Emit stored prefixes
+        for (prefix, iri) in &ontology.prefixes {
+            if prefix.is_empty() {
+                writeln!(buf, "Prefix: : <{iri}>\n").ok();
+            } else {
+                writeln!(buf, "Prefix: {prefix}: <{iri}>\n").ok();
+            }
+        }
+        if !ontology.prefixes.is_empty() {
+            buf.push('\n');
+        }
+
         if let Some(iri) = ontology.get_iri() {
             writeln!(buf, "Ontology: <{iri}>\n").ok();
         }
 
-        if let Some(viri) = &ontology.version_iri {
+        if let Some(viri) = &ontology.id.version_iri {
             writeln!(buf, "VersionIRI: <{viri}>\n").ok();
         }
 
         for imp in &ontology.imports {
-            writeln!(buf, "Import: <{imp}>\n").ok();
+            writeln!(buf, "Import: <{}>\n", imp.imported_ontology_iri).ok();
         }
 
         for ann in &ontology.annotations {
@@ -108,10 +119,9 @@ impl ManchesterRenderer {
     fn render_class_frames(&self, ontology: &Ontology, buf: &mut String, prefix: &str) {
         for axiom in ontology.axioms() {
             let rendered = match axiom {
-                Axiom::SubClassOf(a) => Some(format!(
-                    "{prefix}SubClassOf: {}",
-                    self.render_subclassof(a)
-                )),
+                Axiom::SubClassOf(a) => {
+                    Some(format!("{prefix}SubClassOf: {}", self.render_subclassof(a)))
+                }
                 Axiom::EquivalentClasses(a) => Some(format!(
                     "{prefix}EquivalentTo: {}",
                     self.render_equivalent_classes(a)
@@ -140,20 +150,19 @@ impl ManchesterRenderer {
     fn render_object_property_frames(&self, ontology: &Ontology, buf: &mut String, prefix: &str) {
         for axiom in ontology.axioms() {
             let rendered = match axiom {
-                Axiom::ObjectPropertyDomain(a) => Some(format!(
-                    "{prefix}Domain: {}",
-                    self.render_ce(&a.domain)
-                )),
-                Axiom::ObjectPropertyRange(a) => Some(format!(
-                    "{prefix}Range: {}",
-                    self.render_ce(&a.range)
-                )),
+                Axiom::ObjectPropertyDomain(a) => {
+                    Some(format!("{prefix}Domain: {}", self.render_ce(&a.domain)))
+                }
+                Axiom::ObjectPropertyRange(a) => {
+                    Some(format!("{prefix}Range: {}", self.render_ce(&a.range)))
+                }
                 Axiom::SubObjectPropertyOf(a) => Some(format!(
                     "{prefix}SubPropertyOf: {}",
                     self.render_ope(&a.super_property)
                 )),
                 Axiom::EquivalentObjectProperties(a) => {
-                    let props: Vec<String> = a.properties.iter().map(|p| self.render_ope(p)).collect();
+                    let props: Vec<String> =
+                        a.properties.iter().map(|p| self.render_ope(p)).collect();
                     Some(format!("{prefix}EquivalentTo: {}", props.join(", ")))
                 }
                 Axiom::InverseObjectProperties(a) => Some(format!(
@@ -161,7 +170,8 @@ impl ManchesterRenderer {
                     self.render_ope(&a.property2)
                 )),
                 Axiom::DisjointObjectProperties(a) => {
-                    let props: Vec<String> = a.properties.iter().map(|p| self.render_ope(p)).collect();
+                    let props: Vec<String> =
+                        a.properties.iter().map(|p| self.render_ope(p)).collect();
                     Some(format!("{prefix}DisjointWith: {}", props.join(", ")))
                 }
                 Axiom::FunctionalObjectProperty(_) => {
@@ -196,10 +206,9 @@ impl ManchesterRenderer {
     fn render_data_property_frames(&self, ontology: &Ontology, buf: &mut String, prefix: &str) {
         for axiom in ontology.axioms() {
             let rendered = match axiom {
-                Axiom::DataPropertyDomain(a) => Some(format!(
-                    "{prefix}Domain: {}",
-                    self.render_ce(&a.domain)
-                )),
+                Axiom::DataPropertyDomain(a) => {
+                    Some(format!("{prefix}Domain: {}", self.render_ce(&a.domain)))
+                }
                 Axiom::DataPropertyRange(a) => Some(format!(
                     "{prefix}Range: {}",
                     self.render_datarange(&a.range)
@@ -209,11 +218,13 @@ impl ManchesterRenderer {
                     self.render_dpe(&a.super_property)
                 )),
                 Axiom::EquivalentDataProperties(a) => {
-                    let props: Vec<String> = a.properties.iter().map(|p| self.render_dpe(p)).collect();
+                    let props: Vec<String> =
+                        a.properties.iter().map(|p| self.render_dpe(p)).collect();
                     Some(format!("{prefix}EquivalentTo: {}", props.join(", ")))
                 }
                 Axiom::DisjointDataProperties(a) => {
-                    let props: Vec<String> = a.properties.iter().map(|p| self.render_dpe(p)).collect();
+                    let props: Vec<String> =
+                        a.properties.iter().map(|p| self.render_dpe(p)).collect();
                     Some(format!("{prefix}DisjointWith: {}", props.join(", ")))
                 }
                 Axiom::FunctionalDataProperty(_) => {
@@ -230,10 +241,9 @@ impl ManchesterRenderer {
     fn render_individual_frames(&self, ontology: &Ontology, buf: &mut String, prefix: &str) {
         for axiom in ontology.axioms() {
             let rendered = match axiom {
-                Axiom::ClassAssertion(a) => Some(format!(
-                    "{prefix}Types: {}",
-                    self.render_ce(&a.class)
-                )),
+                Axiom::ClassAssertion(a) => {
+                    Some(format!("{prefix}Types: {}", self.render_ce(&a.class)))
+                }
                 Axiom::ObjectPropertyAssertion(a) => Some(format!(
                     "{prefix}Facts: {} {}",
                     self.render_ope(&a.property),
@@ -245,11 +255,19 @@ impl ManchesterRenderer {
                     self.render_literal(&a.value)
                 )),
                 Axiom::SameIndividual(a) => {
-                    let inds: Vec<String> = a.individuals.iter().map(|i| self.render_individual(i)).collect();
+                    let inds: Vec<String> = a
+                        .individuals
+                        .iter()
+                        .map(|i| self.render_individual(i))
+                        .collect();
                     Some(format!("{prefix}SameAs: {}", inds.join(", ")))
                 }
                 Axiom::DifferentIndividuals(a) => {
-                    let inds: Vec<String> = a.individuals.iter().map(|i| self.render_individual(i)).collect();
+                    let inds: Vec<String> = a
+                        .individuals
+                        .iter()
+                        .map(|i| self.render_individual(i))
+                        .collect();
                     Some(format!("{prefix}DifferentFrom: {}", inds.join(", ")))
                 }
                 Axiom::NegativeObjectPropertyAssertion(a) => Some(format!(
@@ -322,12 +340,24 @@ impl ManchesterRenderer {
     }
 
     fn render_disjoint_union(&self, ax: &DisjointUnionAxiom) -> String {
-        let parts: Vec<String> = ax.disjoint_classes.iter().map(|c| self.render_ce(c)).collect();
-        format!("{} DisjointUnionOf: {}", self.render_ce(&ax.class), parts.join(", "))
+        let parts: Vec<String> = ax
+            .disjoint_classes
+            .iter()
+            .map(|c| self.render_ce(c))
+            .collect();
+        format!(
+            "{} DisjointUnionOf: {}",
+            self.render_ce(&ax.class),
+            parts.join(", ")
+        )
     }
 
     fn render_has_key(&self, ax: &HasKeyAxiom) -> String {
-        let mut parts: Vec<String> = ax.object_properties.iter().map(|p| self.render_ope(p)).collect();
+        let mut parts: Vec<String> = ax
+            .object_properties
+            .iter()
+            .map(|p| self.render_ope(p))
+            .collect();
         parts.extend(ax.data_properties.iter().map(|p| self.render_dpe(p)));
         parts.join(", ")
     }
@@ -339,29 +369,51 @@ impl ManchesterRenderer {
         match expr {
             ClassExpression::Class(cls) => cls.iri.to_string(),
             ClassExpression::ObjectIntersectionOf(ops) => {
-                let inner: Vec<String> = ops.iter().map(|op| self.render_ce_with_prec(op, 1)).collect();
+                let inner: Vec<String> = ops
+                    .iter()
+                    .map(|op| self.render_ce_with_prec(op, 1))
+                    .collect();
                 inner.join(" and ")
             }
             ClassExpression::ObjectUnionOf(ops) => {
-                let inner: Vec<String> = ops.iter().map(|op| self.render_ce_with_prec(op, 0)).collect();
+                let inner: Vec<String> = ops
+                    .iter()
+                    .map(|op| self.render_ce_with_prec(op, 0))
+                    .collect();
                 inner.join(" or ")
             }
             ClassExpression::ObjectComplementOf(inner) => {
                 format!("not {}", self.render_ce_with_prec(inner, 0))
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
-                format!("{} some {}", self.render_ope(property), self.render_ce_with_prec(filler, 0))
+                format!(
+                    "{} some {}",
+                    self.render_ope(property),
+                    self.render_ce_with_prec(filler, 0)
+                )
             }
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
-                format!("{} only {}", self.render_ope(property), self.render_ce_with_prec(filler, 0))
+                format!(
+                    "{} only {}",
+                    self.render_ope(property),
+                    self.render_ce_with_prec(filler, 0)
+                )
             }
             ClassExpression::ObjectHasValue { property, value } => {
-                format!("{} value {}", self.render_ope(property), self.render_individual(value))
+                format!(
+                    "{} value {}",
+                    self.render_ope(property),
+                    self.render_individual(value)
+                )
             }
             ClassExpression::ObjectHasSelf { property } => {
                 format!("{} Self", self.render_ope(property))
             }
-            ClassExpression::ObjectMinCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "{} min {} {}",
                     self.render_ope(property),
@@ -369,7 +421,11 @@ impl ManchesterRenderer {
                     self.render_ce_with_prec(filler, 0)
                 )
             }
-            ClassExpression::ObjectMaxCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "{} max {} {}",
                     self.render_ope(property),
@@ -377,7 +433,11 @@ impl ManchesterRenderer {
                     self.render_ce_with_prec(filler, 0)
                 )
             }
-            ClassExpression::ObjectExactCardinality { property, cardinality, filler } => {
+            ClassExpression::ObjectExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "{} exactly {} {}",
                     self.render_ope(property),
@@ -390,15 +450,31 @@ impl ManchesterRenderer {
                 format!("{{{}}}", inner.join(", "))
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
-                format!("{} some {}", self.render_dpe(property), self.render_datarange(filler))
+                format!(
+                    "{} some {}",
+                    self.render_dpe(property),
+                    self.render_datarange(filler)
+                )
             }
             ClassExpression::DataAllValuesFrom { property, filler } => {
-                format!("{} only {}", self.render_dpe(property), self.render_datarange(filler))
+                format!(
+                    "{} only {}",
+                    self.render_dpe(property),
+                    self.render_datarange(filler)
+                )
             }
             ClassExpression::DataHasValue { property, value } => {
-                format!("{} value {}", self.render_dpe(property), self.render_literal(value))
+                format!(
+                    "{} value {}",
+                    self.render_dpe(property),
+                    self.render_literal(value)
+                )
             }
-            ClassExpression::DataMinCardinality { property, cardinality, filler } => {
+            ClassExpression::DataMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "{} min {} {}",
                     self.render_dpe(property),
@@ -406,7 +482,11 @@ impl ManchesterRenderer {
                     self.render_datarange(filler)
                 )
             }
-            ClassExpression::DataMaxCardinality { property, cardinality, filler } => {
+            ClassExpression::DataMaxCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "{} max {} {}",
                     self.render_dpe(property),
@@ -414,7 +494,11 @@ impl ManchesterRenderer {
                     self.render_datarange(filler)
                 )
             }
-            ClassExpression::DataExactCardinality { property, cardinality, filler } => {
+            ClassExpression::DataExactCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
                 format!(
                     "{} exactly {} {}",
                     self.render_dpe(property),
@@ -494,7 +578,10 @@ impl ManchesterRenderer {
                 let parts: Vec<String> = lits.iter().map(|l| self.render_literal(l)).collect();
                 format!("{{{}}}", parts.join(", "))
             }
-            DataRange::DatatypeRestriction { datatype, restrictions } => {
+            DataRange::DatatypeRestriction {
+                datatype,
+                restrictions,
+            } => {
                 let facets: Vec<String> = restrictions
                     .iter()
                     .map(|f| format!("{} {}", f.facet, self.render_literal(&f.value)))
@@ -515,8 +602,15 @@ impl ManchesterRenderer {
 
     fn render_swrl_atom(&self, atom: &crate::ontology::axioms::SWRLAtom) -> String {
         match atom {
-            crate::ontology::axioms::SWRLAtom::ClassAtom { predicate, argument } => {
-                format!("ClassAtom({}, {})", self.render_ce(predicate), self.render_swrl_arg_i(argument))
+            crate::ontology::axioms::SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => {
+                format!(
+                    "ClassAtom({}, {})",
+                    self.render_ce(predicate),
+                    self.render_swrl_arg_i(argument)
+                )
             }
             crate::ontology::axioms::SWRLAtom::ObjectPropertyAtom {
                 predicate,
@@ -546,7 +640,10 @@ impl ManchesterRenderer {
                 predicate,
                 arguments,
             } => {
-                let args: Vec<String> = arguments.iter().map(|a| self.render_swrl_arg_d(a)).collect();
+                let args: Vec<String> = arguments
+                    .iter()
+                    .map(|a| self.render_swrl_arg_d(a))
+                    .collect();
                 format!("BuiltInAtom({}, {})", predicate, args.join(", "))
             }
             crate::ontology::axioms::SWRLAtom::SameIndividualAtom {

@@ -3,8 +3,8 @@
 //! Abstracts over file paths, URLs, and compressed formats so the
 //! loader can handle them uniformly.
 
-use crate::ontology::{IRI, OntologyFormat};
 use crate::Result;
+use crate::ontology::{IRI, OntologyFormat};
 use std::io::Read;
 use std::path::PathBuf;
 
@@ -157,9 +157,9 @@ impl OntologyDocumentSource for UrlDocumentSource {
                 self.url
             )));
         }
-        response.text().map_err(|e| {
-            crate::Error::network(format!("Failed to read response body: {e}"))
-        })
+        response
+            .text()
+            .map_err(|e| crate::Error::network(format!("Failed to read response body: {e}")))
     }
 
     fn get_document_iri(&self) -> &IRI {

@@ -3,9 +3,12 @@
 //! Builds an inverted index from entity IRIs to axiom IDs, then
 //! provides filtering methods for every axiom type.
 
-use crate::ontology::{ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology, IRI};
-use crate::ontology::axioms::*;
 use crate::ontology::axioms::AxiomTrait;
+use crate::ontology::axioms::*;
+use crate::ontology::{
+    AnnotationProperty, ClassExpression, DataPropertyExpression, EntityType, IRI, Individual,
+    ObjectPropertyExpression, Ontology,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -77,77 +80,244 @@ pub fn axiom_extract_iris_public(axiom: &Axiom, out: &mut HashSet<IRI>) {
 
 fn axiom_extract_iris(axiom: &Axiom, out: &mut Vec<IRI>) {
     match axiom {
-        Axiom::Declaration(d) => { if let Some(iri) = entity_iri(&d.entity) { out.push(iri); } }
-        Axiom::SubClassOf(a) => { ce_extract_iris(&a.subclass, out); ce_extract_iris(&a.superclass, out); }
-        Axiom::EquivalentClasses(a) => { for c in &a.classes { ce_extract_iris(c, out); } }
-        Axiom::DisjointClasses(a) => { for c in &a.classes { ce_extract_iris(c, out); } }
-        Axiom::DisjointUnion(a) => { ce_extract_iris(&a.class, out); for c in &a.disjoint_classes { ce_extract_iris(c, out); } }
-        Axiom::SubObjectPropertyOf(a) => { ope_extract_iris(&a.sub_property, out); ope_extract_iris(&a.super_property, out); }
-        Axiom::EquivalentObjectProperties(a) => { for p in &a.properties { ope_extract_iris(p, out); } }
-        Axiom::DisjointObjectProperties(a) => { for p in &a.properties { ope_extract_iris(p, out); } }
-        Axiom::InverseObjectProperties(a) => { ope_extract_iris(&a.property1, out); ope_extract_iris(&a.property2, out); }
-        Axiom::ObjectPropertyDomain(a) => { ope_extract_iris(&a.property, out); ce_extract_iris(&a.domain, out); }
-        Axiom::ObjectPropertyRange(a) => { ope_extract_iris(&a.property, out); ce_extract_iris(&a.range, out); }
-        Axiom::FunctionalObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::InverseFunctionalObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::ReflexiveObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::IrreflexiveObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::SymmetricObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::AsymmetricObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::TransitiveObjectProperty(a) => { ope_extract_iris(&a.property, out); }
-        Axiom::SubDataPropertyOf(a) => { dpe_extract_iris(&a.sub_property, out); dpe_extract_iris(&a.super_property, out); }
-        Axiom::EquivalentDataProperties(a) => { for p in &a.properties { dpe_extract_iris(p, out); } }
-        Axiom::DisjointDataProperties(a) => { for p in &a.properties { dpe_extract_iris(p, out); } }
-        Axiom::DataPropertyDomain(a) => { dpe_extract_iris(&a.property, out); ce_extract_iris(&a.domain, out); }
-        Axiom::DataPropertyRange(a) => { dpe_extract_iris(&a.property, out); /* data range can be simple IRI */ }
-        Axiom::FunctionalDataProperty(a) => { dpe_extract_iris(&a.property, out); }
-        Axiom::ClassAssertion(a) => { ind_extract_iris(&a.individual, out); ce_extract_iris(&a.class, out); }
-        Axiom::ObjectPropertyAssertion(a) => { ope_extract_iris(&a.property, out); ind_extract_iris(&a.source, out); ind_extract_iris(&a.target, out); }
-        Axiom::DataPropertyAssertion(a) => { dpe_extract_iris(&a.property, out); ind_extract_iris(&a.individual, out); }
-        Axiom::NegativeObjectPropertyAssertion(a) => { ope_extract_iris(&a.property, out); ind_extract_iris(&a.source, out); ind_extract_iris(&a.target, out); }
-        Axiom::NegativeDataPropertyAssertion(a) => { dpe_extract_iris(&a.property, out); ind_extract_iris(&a.individual, out); }
-        Axiom::SameIndividual(a) => { for i in &a.individuals { ind_extract_iris(i, out); } }
-        Axiom::DifferentIndividuals(a) => { for i in &a.individuals { ind_extract_iris(i, out); } }
-        Axiom::AnnotationAssertion(a) => {
-            match &a.subject { crate::ontology::AnnotationSubject::IRI(iri) => out.push(iri.clone()), _ => {} }
+        Axiom::Declaration(d) => {
+            if let Some(iri) = entity_iri(&d.entity) {
+                out.push(iri);
+            }
         }
-        Axiom::SubAnnotationPropertyOf(a) => { out.push(a.sub_property.iri.clone()); out.push(a.super_property.iri.clone()); }
-        Axiom::AnnotationPropertyDomain(a) => { out.push(a.property.iri.clone()); }
-        Axiom::AnnotationPropertyRange(a) => { out.push(a.property.iri.clone()); }
-        Axiom::HasKey(a) => { ce_extract_iris(&a.class, out); for p in &a.object_properties { ope_extract_iris(p, out); } for p in &a.data_properties { dpe_extract_iris(p, out); } }
+        Axiom::SubClassOf(a) => {
+            ce_extract_iris(&a.subclass, out);
+            ce_extract_iris(&a.superclass, out);
+        }
+        Axiom::EquivalentClasses(a) => {
+            for c in &a.classes {
+                ce_extract_iris(c, out);
+            }
+        }
+        Axiom::DisjointClasses(a) => {
+            for c in &a.classes {
+                ce_extract_iris(c, out);
+            }
+        }
+        Axiom::DisjointUnion(a) => {
+            ce_extract_iris(&a.class, out);
+            for c in &a.disjoint_classes {
+                ce_extract_iris(c, out);
+            }
+        }
+        Axiom::SubObjectPropertyOf(a) => {
+            ope_extract_iris(&a.sub_property, out);
+            ope_extract_iris(&a.super_property, out);
+        }
+        Axiom::EquivalentObjectProperties(a) => {
+            for p in &a.properties {
+                ope_extract_iris(p, out);
+            }
+        }
+        Axiom::DisjointObjectProperties(a) => {
+            for p in &a.properties {
+                ope_extract_iris(p, out);
+            }
+        }
+        Axiom::InverseObjectProperties(a) => {
+            ope_extract_iris(&a.property1, out);
+            ope_extract_iris(&a.property2, out);
+        }
+        Axiom::ObjectPropertyDomain(a) => {
+            ope_extract_iris(&a.property, out);
+            ce_extract_iris(&a.domain, out);
+        }
+        Axiom::ObjectPropertyRange(a) => {
+            ope_extract_iris(&a.property, out);
+            ce_extract_iris(&a.range, out);
+        }
+        Axiom::FunctionalObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::InverseFunctionalObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::ReflexiveObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::IrreflexiveObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::SymmetricObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::AsymmetricObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::TransitiveObjectProperty(a) => {
+            ope_extract_iris(&a.property, out);
+        }
+        Axiom::SubDataPropertyOf(a) => {
+            dpe_extract_iris(&a.sub_property, out);
+            dpe_extract_iris(&a.super_property, out);
+        }
+        Axiom::EquivalentDataProperties(a) => {
+            for p in &a.properties {
+                dpe_extract_iris(p, out);
+            }
+        }
+        Axiom::DisjointDataProperties(a) => {
+            for p in &a.properties {
+                dpe_extract_iris(p, out);
+            }
+        }
+        Axiom::DataPropertyDomain(a) => {
+            dpe_extract_iris(&a.property, out);
+            ce_extract_iris(&a.domain, out);
+        }
+        Axiom::DataPropertyRange(a) => {
+            dpe_extract_iris(&a.property, out); /* data range can be simple IRI */
+        }
+        Axiom::FunctionalDataProperty(a) => {
+            dpe_extract_iris(&a.property, out);
+        }
+        Axiom::ClassAssertion(a) => {
+            ind_extract_iris(&a.individual, out);
+            ce_extract_iris(&a.class, out);
+        }
+        Axiom::ObjectPropertyAssertion(a) => {
+            ope_extract_iris(&a.property, out);
+            ind_extract_iris(&a.source, out);
+            ind_extract_iris(&a.target, out);
+        }
+        Axiom::DataPropertyAssertion(a) => {
+            dpe_extract_iris(&a.property, out);
+            ind_extract_iris(&a.individual, out);
+        }
+        Axiom::NegativeObjectPropertyAssertion(a) => {
+            ope_extract_iris(&a.property, out);
+            ind_extract_iris(&a.source, out);
+            ind_extract_iris(&a.target, out);
+        }
+        Axiom::NegativeDataPropertyAssertion(a) => {
+            dpe_extract_iris(&a.property, out);
+            ind_extract_iris(&a.individual, out);
+        }
+        Axiom::SameIndividual(a) => {
+            for i in &a.individuals {
+                ind_extract_iris(i, out);
+            }
+        }
+        Axiom::DifferentIndividuals(a) => {
+            for i in &a.individuals {
+                ind_extract_iris(i, out);
+            }
+        }
+        Axiom::AnnotationAssertion(a) => match &a.subject {
+            crate::ontology::AnnotationSubject::IRI(iri) => out.push(iri.clone()),
+            _ => {}
+        },
+        Axiom::SubAnnotationPropertyOf(a) => {
+            out.push(a.sub_property.iri.clone());
+            out.push(a.super_property.iri.clone());
+        }
+        Axiom::AnnotationPropertyDomain(a) => {
+            out.push(a.property.iri.clone());
+        }
+        Axiom::AnnotationPropertyRange(a) => {
+            out.push(a.property.iri.clone());
+        }
+        Axiom::HasKey(a) => {
+            ce_extract_iris(&a.class, out);
+            for p in &a.object_properties {
+                ope_extract_iris(p, out);
+            }
+            for p in &a.data_properties {
+                dpe_extract_iris(p, out);
+            }
+        }
         Axiom::DatatypeDefinition(_) => {}
         _ => {}
     }
 }
 
-fn entity_iri(e: &Entity) -> Option<IRI> { Some(e.iri().clone()) }
+fn entity_iri(e: &Entity) -> Option<IRI> {
+    Some(e.iri().clone())
+}
 
 fn ce_extract_iris(ce: &ClassExpression, out: &mut Vec<IRI>) {
     match ce {
         ClassExpression::Class(cls) => out.push(cls.iri.clone()),
-        ClassExpression::ObjectIntersectionOf(ops) | ClassExpression::ObjectUnionOf(ops) => { for op in ops { ce_extract_iris(op, out); } }
-        ClassExpression::ObjectComplementOf(op) => { ce_extract_iris(op, out); }
-        ClassExpression::ObjectSomeValuesFrom { property, filler } | ClassExpression::ObjectAllValuesFrom { property, filler } => { ope_extract_iris(property, out); ce_extract_iris(filler, out); }
-        ClassExpression::ObjectHasValue { property, value } => { ope_extract_iris(property, out); ind_extract_iris(value, out); }
-        ClassExpression::ObjectHasSelf { property } => { ope_extract_iris(property, out); }
-        ClassExpression::ObjectMinCardinality { property, filler, .. } | ClassExpression::ObjectMaxCardinality { property, filler, .. } | ClassExpression::ObjectExactCardinality { property, filler, .. } => { ope_extract_iris(property, out); ce_extract_iris(filler, out); }
-        ClassExpression::ObjectOneOf(inds) => { for ind in inds { ind_extract_iris(ind, out); } }
-        ClassExpression::DataSomeValuesFrom { property, .. } | ClassExpression::DataAllValuesFrom { property, .. } => { dpe_extract_iris(property, out); }
-        ClassExpression::DataHasValue { property, .. } => { dpe_extract_iris(property, out); }
-        ClassExpression::DataMinCardinality { property, .. } | ClassExpression::DataMaxCardinality { property, .. } | ClassExpression::DataExactCardinality { property, .. } => { dpe_extract_iris(property, out); }
+        ClassExpression::ObjectIntersectionOf(ops) | ClassExpression::ObjectUnionOf(ops) => {
+            for op in ops {
+                ce_extract_iris(op, out);
+            }
+        }
+        ClassExpression::ObjectComplementOf(op) => {
+            ce_extract_iris(op, out);
+        }
+        ClassExpression::ObjectSomeValuesFrom { property, filler }
+        | ClassExpression::ObjectAllValuesFrom { property, filler } => {
+            ope_extract_iris(property, out);
+            ce_extract_iris(filler, out);
+        }
+        ClassExpression::ObjectHasValue { property, value } => {
+            ope_extract_iris(property, out);
+            ind_extract_iris(value, out);
+        }
+        ClassExpression::ObjectHasSelf { property } => {
+            ope_extract_iris(property, out);
+        }
+        ClassExpression::ObjectMinCardinality {
+            property, filler, ..
+        }
+        | ClassExpression::ObjectMaxCardinality {
+            property, filler, ..
+        }
+        | ClassExpression::ObjectExactCardinality {
+            property, filler, ..
+        } => {
+            ope_extract_iris(property, out);
+            ce_extract_iris(filler, out);
+        }
+        ClassExpression::ObjectOneOf(inds) => {
+            for ind in inds {
+                ind_extract_iris(ind, out);
+            }
+        }
+        ClassExpression::DataSomeValuesFrom { property, .. }
+        | ClassExpression::DataAllValuesFrom { property, .. } => {
+            dpe_extract_iris(property, out);
+        }
+        ClassExpression::DataHasValue { property, .. } => {
+            dpe_extract_iris(property, out);
+        }
+        ClassExpression::DataMinCardinality { property, .. }
+        | ClassExpression::DataMaxCardinality { property, .. }
+        | ClassExpression::DataExactCardinality { property, .. } => {
+            dpe_extract_iris(property, out);
+        }
     }
 }
 
 fn ope_extract_iris(ope: &ObjectPropertyExpression, out: &mut Vec<IRI>) {
-    match ope { ObjectPropertyExpression::ObjectProperty(p) => out.push(p.iri.clone()), ObjectPropertyExpression::InverseObjectProperty(p) => out.push(p.iri.clone()), ObjectPropertyExpression::PropertyChain(chain) => { for p in chain { ope_extract_iris(p, out); } } }
+    match ope {
+        ObjectPropertyExpression::ObjectProperty(p) => out.push(p.iri.clone()),
+        ObjectPropertyExpression::InverseObjectProperty(p) => out.push(p.iri.clone()),
+        ObjectPropertyExpression::PropertyChain(chain) => {
+            for p in chain {
+                ope_extract_iris(p, out);
+            }
+        }
+    }
 }
 
 fn dpe_extract_iris(dpe: &DataPropertyExpression, out: &mut Vec<IRI>) {
-    match dpe { DataPropertyExpression::DataProperty(p) => out.push(p.iri.clone()) }
+    match dpe {
+        DataPropertyExpression::DataProperty(p) => out.push(p.iri.clone()),
+    }
 }
 
 fn ind_extract_iris(ind: &Individual, out: &mut Vec<IRI>) {
-    match ind { Individual::Named(n) => out.push(n.iri.clone()), Individual::Anonymous(_) => {} }
+    match ind {
+        Individual::Named(n) => out.push(n.iri.clone()),
+        Individual::Anonymous(_) => {}
+    }
 }
 
 // ── EntitySearcher ───────────────────────────────────────────────────────────
@@ -168,21 +338,37 @@ pub struct EntitySearcher<'a> {
 impl<'a> EntitySearcher<'a> {
     #[must_use]
     pub fn new(ontology: &'a Ontology, index: &'a EntityIndex) -> Self {
-        Self { _ontology: ontology, index }
+        Self {
+            _ontology: ontology,
+            index,
+        }
     }
 
     // ── Class Axioms ────────────────────────────────────────────────────
 
     pub fn get_sub_class_axioms_for_lhs(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
-        self.filter_axioms(class, |a| matches!(a, Axiom::SubClassOf(_) | Axiom::EquivalentClasses(_) | Axiom::DisjointClasses(_)))
+        self.filter_axioms(class, |a| {
+            matches!(
+                a,
+                Axiom::SubClassOf(_) | Axiom::EquivalentClasses(_) | Axiom::DisjointClasses(_)
+            )
+        })
     }
 
     pub fn get_sub_class_axioms_for_rhs(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
-        self.filter_axioms(class, |a| matches!(a, Axiom::SubClassOf(sc) if &sc.superclass == class))
+        self.filter_axioms(
+            class,
+            |a| matches!(a, Axiom::SubClassOf(sc) if &sc.superclass == class),
+        )
     }
 
     pub fn get_equivalent_classes_axioms(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
-        self.filter_axioms(class, |a| matches!(a, Axiom::EquivalentClasses(_) | Axiom::DisjointClasses(_) | Axiom::DisjointUnion(_)))
+        self.filter_axioms(class, |a| {
+            matches!(
+                a,
+                Axiom::EquivalentClasses(_) | Axiom::DisjointClasses(_) | Axiom::DisjointUnion(_)
+            )
+        })
     }
 
     pub fn get_disjoint_classes_axioms(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
@@ -199,37 +385,72 @@ impl<'a> EntitySearcher<'a> {
 
     // ── Object Property Axioms ──────────────────────────────────────────
 
-    pub fn get_object_property_domain_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_object_property_domain_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::ObjectPropertyDomain(_)))
     }
 
-    pub fn get_object_property_range_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_object_property_range_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::ObjectPropertyRange(_)))
     }
 
-    pub fn get_sub_object_property_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_sub_object_property_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::SubObjectPropertyOf(_)))
     }
 
-    pub fn get_equivalent_object_properties_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_equivalent_object_properties_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::EquivalentObjectProperties(_)))
     }
 
-    pub fn get_disjoint_object_properties_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_disjoint_object_properties_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::DisjointObjectProperties(_)))
     }
 
-    pub fn get_inverse_object_properties_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_inverse_object_properties_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::InverseObjectProperties(_)))
     }
 
-    pub fn get_object_property_characteristic_axioms(&self, prop: &ObjectPropertyExpression) -> Vec<Arc<Axiom>> {
-        self.filter_axioms_ope(prop, |a| matches!(a, Axiom::FunctionalObjectProperty(_) | Axiom::InverseFunctionalObjectProperty(_) | Axiom::ReflexiveObjectProperty(_) | Axiom::IrreflexiveObjectProperty(_) | Axiom::SymmetricObjectProperty(_) | Axiom::AsymmetricObjectProperty(_) | Axiom::TransitiveObjectProperty(_)))
+    pub fn get_object_property_characteristic_axioms(
+        &self,
+        prop: &ObjectPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
+        self.filter_axioms_ope(prop, |a| {
+            matches!(
+                a,
+                Axiom::FunctionalObjectProperty(_)
+                    | Axiom::InverseFunctionalObjectProperty(_)
+                    | Axiom::ReflexiveObjectProperty(_)
+                    | Axiom::IrreflexiveObjectProperty(_)
+                    | Axiom::SymmetricObjectProperty(_)
+                    | Axiom::AsymmetricObjectProperty(_)
+                    | Axiom::TransitiveObjectProperty(_)
+            )
+        })
     }
 
     // ── Data Property Axioms ────────────────────────────────────────────
 
-    pub fn get_data_property_domain_axioms(&self, prop: &DataPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_data_property_domain_axioms(
+        &self,
+        prop: &DataPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::DataPropertyDomain(_)))
     }
 
@@ -241,11 +462,17 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::SubDataPropertyOf(_)))
     }
 
-    pub fn get_equivalent_data_properties_axioms(&self, prop: &DataPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_equivalent_data_properties_axioms(
+        &self,
+        prop: &DataPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::EquivalentDataProperties(_)))
     }
 
-    pub fn get_disjoint_data_properties_axioms(&self, prop: &DataPropertyExpression) -> Vec<Arc<Axiom>> {
+    pub fn get_disjoint_data_properties_axioms(
+        &self,
+        prop: &DataPropertyExpression,
+    ) -> Vec<Arc<Axiom>> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::DisjointDataProperties(_)))
     }
 
@@ -256,19 +483,31 @@ impl<'a> EntitySearcher<'a> {
     }
 
     pub fn get_object_property_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
-        self.filter_axioms_ind(individual, |a| matches!(a, Axiom::ObjectPropertyAssertion(_)))
+        self.filter_axioms_ind(individual, |a| {
+            matches!(a, Axiom::ObjectPropertyAssertion(_))
+        })
     }
 
     pub fn get_data_property_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ind(individual, |a| matches!(a, Axiom::DataPropertyAssertion(_)))
     }
 
-    pub fn get_negative_object_property_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
-        self.filter_axioms_ind(individual, |a| matches!(a, Axiom::NegativeObjectPropertyAssertion(_)))
+    pub fn get_negative_object_property_assertion_axioms(
+        &self,
+        individual: &Individual,
+    ) -> Vec<Arc<Axiom>> {
+        self.filter_axioms_ind(individual, |a| {
+            matches!(a, Axiom::NegativeObjectPropertyAssertion(_))
+        })
     }
 
-    pub fn get_negative_data_property_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
-        self.filter_axioms_ind(individual, |a| matches!(a, Axiom::NegativeDataPropertyAssertion(_)))
+    pub fn get_negative_data_property_assertion_axioms(
+        &self,
+        individual: &Individual,
+    ) -> Vec<Arc<Axiom>> {
+        self.filter_axioms_ind(individual, |a| {
+            matches!(a, Axiom::NegativeDataPropertyAssertion(_))
+        })
     }
 
     pub fn get_different_individual_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
@@ -289,6 +528,66 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_by_iri(prop_iri, |a| matches!(a, Axiom::SubAnnotationPropertyOf(_)))
     }
 
+    pub fn get_annotation_property_domain_axioms(
+        &self,
+        prop: &AnnotationProperty,
+    ) -> Vec<Arc<Axiom>> {
+        self.filter_axioms_by_iri(&prop.iri, |a| {
+            matches!(a, Axiom::AnnotationPropertyDomain(_))
+        })
+    }
+
+    pub fn get_annotation_property_range_axioms(
+        &self,
+        prop: &AnnotationProperty,
+    ) -> Vec<Arc<Axiom>> {
+        self.filter_axioms_by_iri(&prop.iri, |a| {
+            matches!(a, Axiom::AnnotationPropertyRange(_))
+        })
+    }
+
+    pub fn get_datatype_definition_axioms(&self, datatype: &IRI) -> Vec<Arc<Axiom>> {
+        self.filter_axioms_by_iri(datatype, |a| matches!(a, Axiom::DatatypeDefinition(_)))
+    }
+
+    pub fn get_declaration_axioms_by_type(&self, entity_type: &EntityType) -> Vec<Arc<Axiom>> {
+        let mut result = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for (iri, ids) in &self.index.by_entity {
+            for id in ids {
+                if seen.contains(id) {
+                    continue;
+                }
+                seen.insert(*id);
+                if let Some(ax) = self.index.get_axiom(*id) {
+                    if let Axiom::Declaration(d) = ax.as_ref() {
+                        let matches = match entity_type {
+                            EntityType::Class => matches!(d.entity, Entity::Class(_)),
+                            EntityType::ObjectProperty => {
+                                matches!(d.entity, Entity::ObjectProperty(_))
+                            }
+                            EntityType::DataProperty => {
+                                matches!(d.entity, Entity::DataProperty(_))
+                            }
+                            EntityType::AnnotationProperty => {
+                                matches!(d.entity, Entity::AnnotationProperty(_))
+                            }
+                            EntityType::NamedIndividual => {
+                                matches!(d.entity, Entity::NamedIndividual(_))
+                            }
+                            EntityType::Datatype => matches!(d.entity, Entity::Datatype(_)),
+                        };
+                        if matches {
+                            result.push(ax.clone());
+                        }
+                    }
+                }
+            }
+            let _ = iri;
+        }
+        result
+    }
+
     // ── Declaration ─────────────────────────────────────────────────────
 
     pub fn get_declaration_axioms(&self, entity: &Entity) -> Vec<Arc<Axiom>> {
@@ -301,25 +600,41 @@ impl<'a> EntitySearcher<'a> {
 
     // ── Internal helpers ────────────────────────────────────────────────
 
-    fn filter_axioms<F: Fn(&Axiom) -> bool>(&self, ce: &ClassExpression, pred: F) -> Vec<Arc<Axiom>> {
+    fn filter_axioms<F: Fn(&Axiom) -> bool>(
+        &self,
+        ce: &ClassExpression,
+        pred: F,
+    ) -> Vec<Arc<Axiom>> {
         let mut iris = Vec::new();
         ce_extract_iris(ce, &mut iris);
         self.filter_by_iris(&iris, pred)
     }
 
-    fn filter_axioms_ope<F: Fn(&Axiom) -> bool>(&self, prop: &ObjectPropertyExpression, pred: F) -> Vec<Arc<Axiom>> {
+    fn filter_axioms_ope<F: Fn(&Axiom) -> bool>(
+        &self,
+        prop: &ObjectPropertyExpression,
+        pred: F,
+    ) -> Vec<Arc<Axiom>> {
         let mut iris = Vec::new();
         ope_extract_iris(prop, &mut iris);
         self.filter_by_iris(&iris, pred)
     }
 
-    fn filter_axioms_dpe<F: Fn(&Axiom) -> bool>(&self, prop: &DataPropertyExpression, pred: F) -> Vec<Arc<Axiom>> {
+    fn filter_axioms_dpe<F: Fn(&Axiom) -> bool>(
+        &self,
+        prop: &DataPropertyExpression,
+        pred: F,
+    ) -> Vec<Arc<Axiom>> {
         let mut iris = Vec::new();
         dpe_extract_iris(prop, &mut iris);
         self.filter_by_iris(&iris, pred)
     }
 
-    fn filter_axioms_ind<F: Fn(&Axiom) -> bool>(&self, ind: &Individual, pred: F) -> Vec<Arc<Axiom>> {
+    fn filter_axioms_ind<F: Fn(&Axiom) -> bool>(
+        &self,
+        ind: &Individual,
+        pred: F,
+    ) -> Vec<Arc<Axiom>> {
         let mut iris = Vec::new();
         ind_extract_iris(ind, &mut iris);
         self.filter_by_iris(&iris, pred)

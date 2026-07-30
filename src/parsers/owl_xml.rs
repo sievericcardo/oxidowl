@@ -9,7 +9,7 @@ use crate::{
         DeclarationAxiom, Entity, IRI, Individual, NamedIndividual, ObjectProperty,
         ObjectPropertyExpression, Ontology, axioms::DisjointUnionAxiom,
     },
-    parsers::common::OntologySerializer,
+    parsers::common::{OntologySerializer, SerializerConfig},
 };
 use std::{
     fs::File,
@@ -162,7 +162,7 @@ pub fn parse(content: &str) -> Result<Ontology> {
     // Extract ontology IRI if present and use as base for resolving relative IRIs
     let base_iri = if let Some(iri) = root.attribute("ontologyIRI") {
         if let Ok(url) = url::Url::parse(iri) {
-            ontology.iri = Some(url.clone().into());
+            ontology.id.ontology_iri = Some(url.clone().into());
             Some(url)
         } else {
             None
@@ -1176,13 +1176,24 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 }
 
 /// OWL XML serializer using common infrastructure
-pub struct OwlXmlSerializer;
+#[derive(Debug, Clone)]
+pub struct OwlXmlSerializer {
+    config: SerializerConfig,
+}
 
 impl OwlXmlSerializer {
-    /// Create a new OWL XML serializer
+    /// Create a new OWL XML serializer with default configuration
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self {
+            config: SerializerConfig::default(),
+        }
+    }
+
+    /// Create a new OWL XML serializer with explicit configuration
+    #[must_use]
+    pub fn with_config(config: SerializerConfig) -> Self {
+        Self { config }
     }
 }
 
@@ -1195,7 +1206,20 @@ impl Default for OwlXmlSerializer {
 impl OntologySerializer for OwlXmlSerializer {
     /// Serialize an ontology to OWL XML format string
     fn serialize(&self, ontology: &Ontology) -> Result<String> {
+        self.serialize_with_config(ontology, &self.config)
+    }
+}
+
+impl OwlXmlSerializer {
+    /// Serialize with explicit configuration
+    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> Result<String> {
+        let indent = " ".repeat(config.indent_size);
         let mut output = String::new();
+
+        if config.add_banner {
+            output.push_str(&crate::parsers::common::generate_banner());
+            output.push('\n');
+        }
 
         // Write XML declaration and namespace declarations
         output.push_str("<?xml version=\"1.0\"?>\n");
@@ -1204,13 +1228,21 @@ impl OntologySerializer for OwlXmlSerializer {
         output.push_str("         xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
         output.push_str("         xmlns:xml=\"http://www.w3.org/XML/1998/namespace\"\n");
         output.push_str("         xmlns:xsd=\"http://www.w3.org/2001/XMLSchema#\"\n");
-        output.push_str("         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"\n");
+        output.push_str("         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\"");
+        for (pfx, ns) in &config.namespace_map {
+            output.push_str(&format!("\n         xmlns:{pfx}=\"{ns}\""));
+        }
+        for (pfx, iri) in &ontology.prefixes {
+            if !config.namespace_map.contains_key(pfx) {
+                output.push_str(&format!("\n         xmlns:{pfx}=\"{iri}\""));
+            }
+        }
 
         // Add ontology IRI and version IRI if present
         if let Some(onto_iri) = ontology.get_iri() {
-            output.push_str(&format!("         ontologyIRI=\"{onto_iri}\""));
-            if let Some(version_iri) = &ontology.version_iri {
-                output.push_str(&format!("\n         versionIRI=\"{version_iri}\""));
+            output.push_str(&format!("\n{indent}ontologyIRI=\"{onto_iri}\""));
+            if let Some(version_iri) = &ontology.id.version_iri {
+                output.push_str(&format!("\n{indent}versionIRI=\"{version_iri}\""));
             }
             output.push_str(">\n");
         } else {
@@ -1219,17 +1251,20 @@ impl OntologySerializer for OwlXmlSerializer {
 
         // Write imports
         for import in &ontology.imports {
-            output.push_str(&format!("  <Import>{import}</Import>\n"));
+            output.push_str(&format!(
+                "{indent}<Import>{}</Import>\n",
+                import.imported_ontology_iri
+            ));
         }
 
         // Write ontology annotations
         for annotation in &ontology.annotations {
-            output.push_str(&format!("  {}\n", serialize_annotation_xml(annotation, 1)));
+            output.push_str(&format!("{indent}{}\n", serialize_annotation_xml(annotation, 1)));
         }
 
         // Write axioms
         for axiom in ontology.axioms() {
-            output.push_str(&format!("  {}\n", serialize_axiom_xml(axiom)));
+            output.push_str(&format!("{indent}{}\n", serialize_axiom_xml(axiom)));
         }
 
         output.push_str("</Ontology>\n");

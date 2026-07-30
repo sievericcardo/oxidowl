@@ -434,7 +434,7 @@ impl FunctionalParser {
 
         match tokens[position].as_str() {
             "Prefix" => {
-                position = self.parse_prefix(tokens, position, prefixes)?;
+                position = self.parse_prefix(tokens, position, prefixes, ontology)?;
             }
             "Ontology" => {
                 position = self
@@ -511,6 +511,7 @@ impl FunctionalParser {
         tokens: &[String],
         mut position: usize,
         prefixes: &mut std::collections::HashMap<String, String>,
+        ontology: &mut Ontology,
     ) -> Result<usize> {
         position += 1; // Skip "Prefix"
         if position < tokens.len() && tokens[position] == "(" {
@@ -528,7 +529,8 @@ impl FunctionalParser {
                     let iri = tokens[position + 1]
                         .trim_matches(['<', '>'].as_ref())
                         .to_string();
-                    prefixes.insert(prefix_name, iri);
+                    prefixes.insert(prefix_name.clone(), iri.clone());
+                    ontology.add_prefix(prefix_name, crate::ontology::IRI::new(&iri));
                     position += 2;
                 } else if tokens[position].contains(":=") {
                     // Single token format: "prefix:=<IRI>"
@@ -538,7 +540,8 @@ impl FunctionalParser {
                         let iri = prefix_def[eq_pos + 2..]
                             .trim_matches(['<', '>'].as_ref())
                             .to_string();
-                        prefixes.insert(prefix_name, iri);
+                        prefixes.insert(prefix_name.clone(), iri.clone());
+                        ontology.add_prefix(prefix_name, crate::ontology::IRI::new(&iri));
                     }
                     position += 1;
                 } else {
@@ -2750,9 +2753,21 @@ impl OntologySerializer for FunctionalSyntaxSerializer {
     fn serialize(&self, ontology: &Ontology) -> Result<String> {
         let mut content = String::new();
 
+        // Write prefix declarations from stored prefixes
+        for (prefix, iri) in &ontology.prefixes {
+            if prefix.is_empty() {
+                content.push_str(&format!("Prefix(:=<{iri}>)\n"));
+            } else {
+                content.push_str(&format!("Prefix({prefix}:=<{iri}>)\n"));
+            }
+        }
+        if !ontology.prefixes.is_empty() {
+            content.push('\n');
+        }
+
         // Write ontology header
         if let Some(onto_iri) = ontology.get_iri() {
-            if let Some(version_iri) = &ontology.version_iri {
+            if let Some(version_iri) = &ontology.id.version_iri {
                 content.push_str(&format!("Ontology(<{onto_iri}> <{version_iri}>\n"));
             } else {
                 content.push_str(&format!("Ontology(<{onto_iri}>\n"));
@@ -2763,7 +2778,7 @@ impl OntologySerializer for FunctionalSyntaxSerializer {
 
         // Write imports
         for import in &ontology.imports {
-            content.push_str(&format!("  Import(<{import}>)\n"));
+            content.push_str(&format!("  Import(<{}>)\n", import.imported_ontology_iri));
         }
 
         // Write annotations
