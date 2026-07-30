@@ -129,6 +129,7 @@ pub mod parsers;
 pub mod profiles;
 pub mod query;
 pub mod reasoning;
+pub mod reasoner_api;
 pub mod semantics;
 pub mod swrl;
 pub mod validation;
@@ -215,6 +216,13 @@ pub use crate::ontology::{
     ClassExpression, IRI, Individual, Ontology, OntologyFormat, OntologyRef,
 };
 pub use crate::ontology::axioms::EntityType;
+pub use crate::reasoner_api::{
+    OWLReasoner, ReasonerFactory, TableauReasonerFactory, TableauOWLReasoner,
+    Node, NodeSet, InferenceType, InferenceDepth,
+    OWLReasonerConfiguration, BufferingMode, FreshEntityPolicy, IndividualNodeSetPolicy,
+    ReasonerProgressMonitor,
+};
+pub use crate::reasoner_api::structural::{StructuralReasoner, StructuralReasonerFactory};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = "Oxidowl";

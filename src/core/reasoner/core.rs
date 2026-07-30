@@ -968,6 +968,20 @@ impl Reasoner {
                 );
                 parser.parse(&parsed_content)?
             }
+            crate::ontology::OntologyFormat::DL => {
+                crate::parsers::dl_syntax::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::Krss => {
+                crate::parsers::krss::parse(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::Krss2 => {
+                crate::parsers::krss::parse_krss2(&parsed_content)?
+            }
+            crate::ontology::OntologyFormat::Latex => {
+                return Err(crate::Error::Unsupported {
+                    message: "LaTeX is a write-only format".to_string(),
+                });
+            }
             crate::ontology::OntologyFormat::Turtle => {
                 let parser = turtle::TurtleParser::new();
                 parser.parse(&parsed_content)?

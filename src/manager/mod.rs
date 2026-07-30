@@ -524,6 +524,26 @@ impl OntologyManager {
         let reapplied = history.redo(n);
         Ok(reapplied)
     }
+
+    // ── Reasoner Integration ─────────────────────────────────────────────
+
+    /// Create a tableau-based reasoner for the given ontology.
+    pub fn create_reasoner(&self, ontology: &OntologyRef) -> Result<Box<dyn crate::reasoner_api::OWLReasoner>> {
+        use crate::reasoner_api::ReasonerFactory;
+        let factory = crate::reasoner_api::TableauReasonerFactory;
+        let config = crate::reasoner_api::OWLReasonerConfiguration::default();
+        factory.create_reasoner(ontology, &config)
+    }
+
+    /// Create a reasoner with a specific factory.
+    pub fn create_reasoner_with_factory(
+        &self,
+        ontology: &OntologyRef,
+        factory: &dyn crate::reasoner_api::ReasonerFactory,
+    ) -> Result<Box<dyn crate::reasoner_api::OWLReasoner>> {
+        let config = crate::reasoner_api::OWLReasonerConfiguration::default();
+        factory.create_reasoner(ontology, &config)
+    }
 }
 
 impl Default for OntologyManager {

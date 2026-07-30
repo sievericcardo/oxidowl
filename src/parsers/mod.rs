@@ -3,8 +3,12 @@
 //! This module contains parsers and serializers for various OWL 2 DL formats.
 
 pub mod common;
+pub mod dl_syntax;
 pub mod functional;
+pub mod krss;
+pub mod latex;
 pub mod manchester;
+pub mod manchester_renderer;
 pub mod ntriples;
 pub mod owl_xml;
 pub mod rdf_xml;
@@ -80,11 +84,15 @@ impl ParserConfig {
 
 // Re-export parser structs and functions
 pub use common::{OntologyParser, OntologySerializer};
+pub use dl_syntax::{DLSyntaxParser, DLSyntaxRenderer};
 pub use functional::{
     FunctionalParser, FunctionalSyntaxSerializer, parse as parse_functional,
     parse_file as parse_functional_file, save_file as save_functional_file,
 };
+pub use krss::{KRSSParser, KRSSRenderer, KRSSVariant};
+pub use latex::LatexRenderer;
 pub use manchester::{ManchesterParser, ManchesterParserConfig};
+pub use manchester_renderer::ManchesterRenderer;
 pub use ntriples::{
     NTriplesParser, NTriplesSerializer, parse as parse_ntriples, parse_file as parse_ntriples_file,
     save_file as save_ntriples_file,
@@ -102,6 +110,9 @@ pub use turtle::{
     save_file as save_turtle_file,
 };
 pub use validation::SyntaxValidator;
+
+#[cfg(test)]
+mod phase2_tests;
 
 use crate::{
     Error, Result,
@@ -441,6 +452,18 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
             let parser = ManchesterParser::new(ManchesterParserConfig::default());
             parser.parse(&parsed_content)
         }
+        OntologyFormat::DL => {
+            dl_syntax::parse(&parsed_content)
+        }
+        OntologyFormat::Krss => {
+            krss::parse(&parsed_content)
+        }
+        OntologyFormat::Krss2 => {
+            krss::parse_krss2(&parsed_content)
+        }
+        OntologyFormat::Latex => Err(Error::ontology_parsing(
+            "LaTeX is a write-only format (no parser available)",
+        )),
         OntologyFormat::Auto => Err(Error::ontology_parsing(
             "Auto format should have been resolved",
         )),
@@ -546,13 +569,17 @@ pub fn save_file<P: AsRef<Path>>(
         OntologyFormat::RdfXml => rdf_xml::save_file(ontology, path),
         OntologyFormat::Turtle => turtle::save_file(ontology, path),
         OntologyFormat::NTriples => ntriples::save_file(ontology, path),
-        OntologyFormat::Manchester => Err(Error::ontology_parsing(
-            "Manchester syntax serialization not yet implemented",
-        )),
+        OntologyFormat::Manchester => {
+            let renderer = manchester_renderer::ManchesterRenderer::new();
+            let content = renderer.serialize(ontology)?;
+            std::fs::write(path, content).map_err(|e| Error::io(format!("Failed to write Manchester: {e}")))
+        }
+        OntologyFormat::Latex => latex::save_file(ontology, path),
+        OntologyFormat::DL => dl_syntax::save_file(ontology, path),
+        OntologyFormat::Krss => krss::save_file(ontology, path),
+        OntologyFormat::Krss2 => krss::save_file_krss2(ontology, path),
         OntologyFormat::Auto => {
-            // Auto-detect from file extension
             let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-
             let detected_format = match extension.to_lowercase().as_str() {
                 "owl" | "owx" => OntologyFormat::OwlXml,
                 "rdf" | "xml" => OntologyFormat::RdfXml,
@@ -560,10 +587,13 @@ pub fn save_file<P: AsRef<Path>>(
                 "nt" => OntologyFormat::NTriples,
                 "ofn" => OntologyFormat::Functional,
                 "omn" | "man" => OntologyFormat::Manchester,
-                "txt" => OntologyFormat::Functional, // Default .txt to Functional
-                _ => OntologyFormat::OwlXml,         // Default fallback
+                "tex" | "latex" => OntologyFormat::Latex,
+                "dl" => OntologyFormat::DL,
+                "krss" => OntologyFormat::Krss,
+                "krss2" => OntologyFormat::Krss2,
+                "txt" => OntologyFormat::Functional,
+                _ => OntologyFormat::OwlXml,
             };
-
             save_file(ontology, path, detected_format)
         }
     }
@@ -651,6 +681,9 @@ impl ParserFactory {
             OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
                 ManchesterParserConfig::default(),
             ))),
+            OntologyFormat::Latex | OntologyFormat::DL | OntologyFormat::Krss | OntologyFormat::Krss2 => {
+                Err(Error::ontology_parsing("Format does not support parsing"))
+            }
             OntologyFormat::Auto => Err(Error::ontology_parsing(
                 "Auto format should be resolved before creating parser",
             )),
@@ -739,6 +772,30 @@ impl Parser for ManchesterParser {
         parser
             .parse_string(input)
             .map_err(|e| Error::ontology_parsing(format!("Manchester parsing error: {e:?}")))
+    }
+
+    fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| Error::ontology_parsing(format!("Failed to read file: {e}")))?;
+        self.parse(&content)
+    }
+}
+
+impl Parser for DLSyntaxParser {
+    fn parse(&self, input: &str) -> Result<Ontology> {
+        dl_syntax::parse(input)
+    }
+
+    fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| Error::ontology_parsing(format!("Failed to read file: {e}")))?;
+        self.parse(&content)
+    }
+}
+
+impl Parser for KRSSParser {
+    fn parse(&self, input: &str) -> Result<Ontology> {
+        krss::parse(input)
     }
 
     fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {

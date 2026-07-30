@@ -1072,6 +1072,14 @@ pub enum OntologyFormat {
     NTriples,
     /// Manchester Syntax
     Manchester,
+    /// LaTeX (write-only)
+    Latex,
+    /// DL Syntax
+    DL,
+    /// KRSS
+    Krss,
+    /// KRSS2
+    Krss2,
 }
 
 impl OntologyFormat {
@@ -1086,6 +1094,10 @@ impl OntologyFormat {
             OntologyFormat::Turtle => "ttl",
             OntologyFormat::NTriples => "nt",
             OntologyFormat::Manchester => "omn",
+            OntologyFormat::Latex => "tex",
+            OntologyFormat::DL => "dl",
+            OntologyFormat::Krss => "krss",
+            OntologyFormat::Krss2 => "krss2",
         }
     }
 
@@ -1100,6 +1112,10 @@ impl OntologyFormat {
             OntologyFormat::Turtle => "text/turtle",
             OntologyFormat::NTriples => "application/n-triples",
             OntologyFormat::Manchester => "text/owl-manchester",
+            OntologyFormat::Latex => "application/x-latex",
+            OntologyFormat::DL => "text/owl-dl",
+            OntologyFormat::Krss => "text/krss",
+            OntologyFormat::Krss2 => "text/krss2",
         }
     }
 
@@ -1114,6 +1130,10 @@ impl OntologyFormat {
             OntologyFormat::Turtle => "ttl",
             OntologyFormat::NTriples => "nt",
             OntologyFormat::Manchester => "omn",
+            OntologyFormat::Latex => "latex",
+            OntologyFormat::DL => "dl",
+            OntologyFormat::Krss => "krss",
+            OntologyFormat::Krss2 => "krss2",
         }
     }
 
@@ -1127,6 +1147,10 @@ impl OntologyFormat {
             "ttl" => Some(OntologyFormat::Turtle),
             "nt" => Some(OntologyFormat::NTriples),
             "omn" => Some(OntologyFormat::Manchester),
+            "tex" | "latex" => Some(OntologyFormat::Latex),
+            "dl" => Some(OntologyFormat::DL),
+            "krss" => Some(OntologyFormat::Krss),
+            "krss2" => Some(OntologyFormat::Krss2),
             _ => None,
         }
     }
