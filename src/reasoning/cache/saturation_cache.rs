@@ -93,6 +93,14 @@ impl SaturationCache {
     pub fn total_facts(&self) -> usize {
         self.cache.iter().map(|e| e.value().len()).sum()
     }
+
+    /// Clear all cached subsumption facts.
+    pub fn clear(&self) {
+        self.cache.clear();
+        self.inverted.clear();
+        self.hits.store(0, Ordering::Relaxed);
+        self.misses.store(0, Ordering::Relaxed);
+    }
 }
 
 impl Default for SaturationCache {

@@ -42,22 +42,25 @@ fn structural_reasoner_sub_classes() {
     let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
     let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
 
-    let subs = reasoner.get_sub_classes(&a, false).unwrap();
-    assert!(!subs.is_empty());
+    // A ⊑ B, so B's subclasses should include A
+    let subs = reasoner.get_sub_classes(&b, false).unwrap();
+    assert!(!subs.is_empty(), "B should have subclasses (A ⊑ B)");
     let flattened = subs.get_flattened();
-    assert!(flattened.contains(&b));
+    assert!(flattened.contains(&a), "A should be a subclass of B");
 }
 
 #[test]
 fn structural_reasoner_super_classes() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
     let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let c = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C") });
 
+    // A ⊑ B ⊑ C, so B's superclasses should include C
     let sups = reasoner.get_super_classes(&b, false).unwrap();
+    assert!(!sups.is_empty(), "B should have superclasses (B ⊑ C)");
     let flattened = sups.get_flattened();
-    assert!(flattened.contains(&a));
+    assert!(flattened.contains(&c), "C should be a superclass of B");
 }
 
 #[test]

@@ -3,7 +3,7 @@
 //! This module implements comprehensive parsing of OWL 2 ontologies from Turtle format.
 //! It handles complex turtle syntax including disjoint unions, lists, blank nodes, and multi-line statements.
 
-use super::common::{OntologySerializer, SerializerConfig};
+use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{
@@ -12,8 +12,15 @@ use crate::{
         Ontology,
         axioms::{
             Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom,
-            DisjointUnionAxiom, Entity, EquivalentClassesAxiom, ObjectPropertyAssertionAxiom,
-            SubClassOfAxiom,
+            DisjointClassesAxiom, DisjointUnionAxiom, Entity, EquivalentClassesAxiom,
+            ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            FunctionalObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+            SymmetricObjectPropertyAxiom, AsymmetricObjectPropertyAxiom,
+            ReflexiveObjectPropertyAxiom, IrreflexiveObjectPropertyAxiom,
+            InverseFunctionalObjectPropertyAxiom,
+            ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom,
+            SameIndividualAxiom, DifferentIndividualsAxiom,
+            SubObjectPropertyOfAxiom, InverseObjectPropertiesAxiom,
         },
     },
     semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
@@ -427,7 +434,7 @@ impl TurtleParser {
 
         // Handle prefix declarations
         if trimmed.starts_with("@prefix") {
-            return self.parse_prefix_declaration(trimmed, state, ontology);
+            return self.parse_prefix_declaration(trimmed, state);
         }
 
         // Handle base declarations
@@ -447,7 +454,7 @@ impl TurtleParser {
     }
 
     /// Enhanced prefix declaration parsing
-    fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState, ontology: &mut Ontology) -> Result<()> {
+    fn parse_prefix_declaration(&self, statement: &str, state: &mut ParseState) -> Result<()> {
         // @prefix prefix: <uri> .
         // Find the IRI within angle brackets
         if let Some(start) = statement.find('<')
@@ -462,7 +469,6 @@ impl TurtleParser {
                 state
                     .prefixes
                     .insert(prefix_name.to_string(), uri.to_string());
-                ontology.add_prefix(prefix_name.to_string(), IRI::new(uri));
             }
         }
         Ok(())
@@ -521,7 +527,11 @@ impl TurtleParser {
         if tokens.len() >= 3 {
             let subject = self.resolve_token(&tokens[0], state)?;
             let predicate = self.resolve_token(&tokens[1], state)?;
-            let object = self.resolve_token(&tokens[2], state)?;
+            let object = if matches!(&tokens[2], Token::Literal(_)) {
+                format!("\"{}\"", self.resolve_token(&tokens[2], state)?)
+            } else {
+                self.resolve_token(&tokens[2], state)?
+            };
 
             self.process_enhanced_triple(ontology, subject, predicate, object)?;
         }
@@ -2620,22 +2630,106 @@ impl TurtleParser {
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => {
                 match object.as_str() {
                     "http://www.w3.org/2002/07/owl#Class" => {
-                        // Class declaration
-                        let _class = Class::new(IRI::new(&subject));
                         let decl_axiom = DeclarationAxiom {
                             id: generate_axiom_id(),
                             entity: Entity::Class(IRI::new(&subject)),
                         };
                         ontology.add_axiom(Axiom::Declaration(decl_axiom));
                     }
+                    "http://www.w3.org/2002/07/owl#Ontology" => {
+                        ontology.set_iri(IRI::new(&subject));
+                    }
                     "http://www.w3.org/2002/07/owl#ObjectProperty" => {
-                        // Object property declaration
                         let _property = ObjectProperty::new(IRI::new(&subject));
                         let decl_axiom = DeclarationAxiom {
                             id: generate_axiom_id(),
                             entity: Entity::ObjectProperty(IRI::new(&subject)),
                         };
                         ontology.add_axiom(Axiom::Declaration(decl_axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#DatatypeProperty" => {
+                        let decl_axiom = DeclarationAxiom {
+                            id: generate_axiom_id(),
+                            entity: Entity::DataProperty(IRI::new(&subject)),
+                        };
+                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#AnnotationProperty" => {
+                        let decl_axiom = DeclarationAxiom {
+                            id: generate_axiom_id(),
+                            entity: Entity::AnnotationProperty(IRI::new(&subject)),
+                        };
+                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#NamedIndividual" => {
+                        let decl_axiom = DeclarationAxiom {
+                            id: generate_axiom_id(),
+                            entity: Entity::NamedIndividual(IRI::new(&subject)),
+                        };
+                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#FunctionalProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = FunctionalObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::FunctionalObjectProperty(axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#TransitiveProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = TransitiveObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::TransitiveObjectProperty(axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#SymmetricProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = SymmetricObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::SymmetricObjectProperty(axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#AsymmetricProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = AsymmetricObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::AsymmetricObjectProperty(axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#ReflexiveProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = ReflexiveObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::ReflexiveObjectProperty(axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#IrreflexiveProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = IrreflexiveObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::IrreflexiveObjectProperty(axiom));
+                    }
+                    "http://www.w3.org/2002/07/owl#InverseFunctionalProperty" => {
+                        let prop = ObjectProperty::new(IRI::new(&subject))?;
+                        let axiom = InverseFunctionalObjectPropertyAxiom {
+                            id: generate_axiom_id(),
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::InverseFunctionalObjectProperty(axiom));
                     }
                     _ => {
                         // Class assertion
@@ -2667,22 +2761,114 @@ impl TurtleParser {
                 println!("Creating enhanced SubClassOf axiom: {subject} rdfs:subClassOf {object}");
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
             }
+            "http://www.w3.org/2002/07/owl#equivalentClass" => {
+                let class1 = Class::new(IRI::new(&subject));
+                let class2 = Class::new(IRI::new(&object));
+                let axiom = EquivalentClassesAxiom {
+                    id: generate_axiom_id(),
+                    classes: vec![
+                        ClassExpression::Class(class1),
+                        ClassExpression::Class(class2),
+                    ],
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::EquivalentClasses(axiom));
+            }
+            "http://www.w3.org/2002/07/owl#disjointWith" => {
+                let class1 = Class::new(IRI::new(&subject));
+                let class2 = Class::new(IRI::new(&object));
+                let axiom = DisjointClassesAxiom {
+                    id: generate_axiom_id(),
+                    classes: vec![
+                        ClassExpression::Class(class1),
+                        ClassExpression::Class(class2),
+                    ],
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::DisjointClasses(axiom));
+            }
+            "http://www.w3.org/2000/01/rdf-schema#domain" => {
+                let prop = ObjectProperty::new(IRI::new(&subject))?;
+                let domain = ClassExpression::Class(Class::new(IRI::new(&object)));
+                let axiom = ObjectPropertyDomainAxiom {
+                    id: generate_axiom_id(),
+                    property: ObjectPropertyExpression::ObjectProperty(prop),
+                    domain,
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::ObjectPropertyDomain(axiom));
+            }
+            "http://www.w3.org/2000/01/rdf-schema#range" => {
+                let prop = ObjectProperty::new(IRI::new(&subject))?;
+                let range = ClassExpression::Class(Class::new(IRI::new(&object)));
+                let axiom = ObjectPropertyRangeAxiom {
+                    id: generate_axiom_id(),
+                    property: ObjectPropertyExpression::ObjectProperty(prop),
+                    range,
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::ObjectPropertyRange(axiom));
+            }
+            "http://www.w3.org/2002/07/owl#sameAs" => {
+                let ind1 = Individual::Named(NamedIndividual { iri: IRI::new(&subject) });
+                let ind2 = Individual::Named(NamedIndividual { iri: IRI::new(&object) });
+                let axiom = SameIndividualAxiom {
+                    id: generate_axiom_id(),
+                    individuals: vec![ind1, ind2],
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::SameIndividual(axiom));
+            }
+            "http://www.w3.org/2002/07/owl#differentFrom" => {
+                let ind1 = Individual::Named(NamedIndividual { iri: IRI::new(&subject) });
+                let ind2 = Individual::Named(NamedIndividual { iri: IRI::new(&object) });
+                let axiom = DifferentIndividualsAxiom {
+                    id: generate_axiom_id(),
+                    individuals: vec![ind1, ind2],
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::DifferentIndividuals(axiom));
+            }
+            "http://www.w3.org/2000/01/rdf-schema#subPropertyOf" => {
+                let sub_prop = ObjectProperty::new(IRI::new(&subject))?;
+                let sup_prop = ObjectProperty::new(IRI::new(&object))?;
+                let axiom = SubObjectPropertyOfAxiom {
+                    id: generate_axiom_id(),
+                    sub_property: ObjectPropertyExpression::ObjectProperty(sub_prop),
+                    super_property: ObjectPropertyExpression::ObjectProperty(sup_prop),
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::SubObjectPropertyOf(axiom));
+            }
+            "http://www.w3.org/2002/07/owl#inverseOf" => {
+                let prop1 = ObjectProperty::new(IRI::new(&subject))?;
+                let prop2 = ObjectProperty::new(IRI::new(&object))?;
+                let axiom = InverseObjectPropertiesAxiom {
+                    id: generate_axiom_id(),
+                    property1: ObjectPropertyExpression::ObjectProperty(prop1),
+                    property2: ObjectPropertyExpression::ObjectProperty(prop2),
+                    annotations: vec![],
+                };
+                ontology.add_axiom(Axiom::InverseObjectProperties(axiom));
+            }
             "http://www.w3.org/2002/07/owl#hasKey" => {
+                // owl:hasKey requires list syntax: owl:hasKey ( properties )
                 if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
                     return Err(Error::ontology_parsing(
                         "owl:hasKey requires list syntax: owl:hasKey ( property1 property2 ... )",
                     ));
                 }
-                // hasKey validated; full axiom creation requires resolving the RDF list
-                // which is deferred to post-processing in the triple-to-axiom conversion phase
+                // For now, just validate - full hasKey axiom support would go here
             }
             "http://www.w3.org/2002/07/owl#propertyChainAxiom" => {
+                // owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( prop1 prop2 ... )
+                // If object is not a list (rdf:first/rest), it's invalid
                 if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
                     return Err(Error::ontology_parsing(
                         "owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( property1 property2 ... )",
                     ));
                 }
-                // propertyChainAxiom validated; full axiom creation deferred to post-processing
+                // For now, just validate - full property chain axiom support would go here
             }
             _ => {
                 // Detect if object is a literal (data property) or an individual (object property)
@@ -2795,81 +2981,42 @@ pub fn parse_file_with_config<P: AsRef<Path>>(
 }
 
 /// Turtle format serializer implementing the common serialization interface
-#[derive(Debug, Clone)]
-pub struct TurtleSerializer {
-    config: SerializerConfig,
-}
+#[derive(Debug, Clone, Default)]
+pub struct TurtleSerializer;
 
 impl TurtleSerializer {
-    /// Create a new `TurtleSerializer` instance with default configuration
+    /// Create a new `TurtleSerializer` instance
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            config: SerializerConfig::default(),
-        }
-    }
-
-    /// Create a new serializer with explicit configuration
-    #[must_use]
-    pub fn with_config(config: SerializerConfig) -> Self {
-        Self { config }
-    }
-}
-
-impl Default for TurtleSerializer {
-    fn default() -> Self {
-        Self::new()
+        Self
     }
 }
 
 impl OntologySerializer for TurtleSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
-        self.serialize_with_config(ontology, &self.config)
-    }
-}
-
-impl TurtleSerializer {
-    /// Serialize with explicit configuration
-    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> std::result::Result<String, Error> {
         let mut content = String::new();
 
-        if config.add_banner {
-            content.push_str(&super::common::generate_banner());
-            content.push('\n');
-        }
-
-        // Emit stored prefixes from ontology
-        if !ontology.prefixes.is_empty() {
-            for (pfx, iri) in &ontology.prefixes {
-                content.push_str(&format!("@prefix {pfx}: <{iri}> .\n"));
-            }
-            content.push('\n');
-        } else {
-            // Default prefixes
-            content.push_str("@prefix : <http://example.org/> .\n");
-            content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
-            content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
-            content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
-            content.push('\n');
-        }
+        // Add standard prefixes
+        content.push_str("@prefix : <http://example.org/> .\n");
+        content.push_str("@prefix owl: <http://www.w3.org/2002/07/owl#> .\n");
+        content.push_str("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n");
+        content.push_str("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
+        content.push('\n');
 
         // Write ontology declaration
         if let Some(iri) = ontology.get_iri() {
             content.push_str(&format!("<{iri}> rdf:type owl:Ontology .\n\n"));
         }
 
-        // Use config indent
-        let indent = " ".repeat(config.indent_size);
-
         // Write class declarations
         for (iri, _class) in ontology.classes() {
-            content.push_str(&format!("{indent}<{iri}> rdf:type owl:Class .\n"));
+            content.push_str(&format!("<{iri}> rdf:type owl:Class .\n"));
         }
         content.push('\n');
 
         // Write object property declarations
         for prop in ontology.object_properties() {
-            content.push_str(&format!("{indent}<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
+            content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", prop.iri));
         }
         content.push('\n');
 
@@ -2881,7 +3028,7 @@ impl TurtleSerializer {
                         (&sub.subclass, &sub.superclass)
                     {
                         content.push_str(&format!(
-                            "{indent}<{}> rdfs:subClassOf <{}> .\n",
+                            "<{}> rdfs:subClassOf <{}> .\n",
                             subclass.iri, superclass.iri
                         ));
                     }
@@ -2891,7 +3038,7 @@ impl TurtleSerializer {
                         && let Some(individual_iri) = assertion.individual.iri()
                     {
                         content.push_str(&format!(
-                            "{indent}<{}> rdf:type <{}> .\n",
+                            "<{}> rdf:type <{}> .\n",
                             individual_iri, class.iri
                         ));
                     }
@@ -2903,15 +3050,88 @@ impl TurtleSerializer {
                             (assertion.source.iri(), assertion.target.iri())
                     {
                         content.push_str(&format!(
-                            "{indent}<{}> <{}> <{}> .\n",
+                            "<{}> <{}> <{}> .\n",
                             source_iri, prop.iri, target_iri
                         ));
                     }
                 }
+                crate::ontology::Axiom::DataPropertyAssertion(dpa) => {
+                    if let (
+                        crate::ontology::DataPropertyExpression::DataProperty(dp),
+                        crate::ontology::Individual::Named(ind),
+                    ) = (&dpa.property, &dpa.individual)
+                    {
+                        let lit_str = if let Some(dt) = &dpa.value.datatype {
+                            format!("\"{}\"^^{}", dpa.value.value, dt)
+                        } else if let Some(lang) = &dpa.value.language {
+                            format!("\"{}\"@{}", dpa.value.value, lang)
+                        } else {
+                            format!("\"{}\"", dpa.value.value)
+                        };
+                        content.push_str(&format!("<{}> <{}> {lit_str} .\n", ind.iri, dp.iri));
+                    }
+                }
+                crate::ontology::Axiom::FunctionalObjectProperty(fp) => {
+                    if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &fp.property {
+                        content.push_str(&format!("<{}> rdf:type owl:FunctionalProperty .\n", prop.iri));
+                    }
+                }
+                crate::ontology::Axiom::TransitiveObjectProperty(tp) => {
+                    if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &tp.property {
+                        content.push_str(&format!("<{}> rdf:type owl:TransitiveProperty .\n", prop.iri));
+                    }
+                }
+                crate::ontology::Axiom::EquivalentClasses(eq) => {
+                    if eq.classes.len() >= 2 {
+                        if let (
+                            crate::ontology::ClassExpression::Class(c1),
+                            crate::ontology::ClassExpression::Class(c2),
+                        ) = (&eq.classes[0], &eq.classes[1])
+                        {
+                            content.push_str(&format!("<{}> owl:equivalentClass <{}> .\n", c1.iri, c2.iri));
+                        }
+                    }
+                }
+                crate::ontology::Axiom::DisjointClasses(dj) => {
+                    if dj.classes.len() >= 2 {
+                        if let (
+                            crate::ontology::ClassExpression::Class(c1),
+                            crate::ontology::ClassExpression::Class(c2),
+                        ) = (&dj.classes[0], &dj.classes[1])
+                        {
+                            content.push_str(&format!("<{}> owl:disjointWith <{}> .\n", c1.iri, c2.iri));
+                        }
+                    }
+                }
                 _ => {
-                    // Render other axiom types with a standardized comment pattern
-                    let rendered = format!("# axiom: {axiom:?}\n");
-                    content.push_str(&rendered);
+                    let name = match axiom {
+                        crate::ontology::Axiom::Declaration(decl) => {
+                            match &decl.entity {
+                                crate::ontology::Entity::Class(iri) => {
+                                    content.push_str(&format!("<{}> rdf:type owl:Class .\n", iri.as_str()));
+                                    "Declaration"
+                                }
+                                crate::ontology::Entity::ObjectProperty(iri) => {
+                                    content.push_str(&format!("<{}> rdf:type owl:ObjectProperty .\n", iri.as_str()));
+                                    "Declaration"
+                                }
+                                crate::ontology::Entity::DataProperty(iri) => {
+                                    content.push_str(&format!("<{}> rdf:type owl:DatatypeProperty .\n", iri.as_str()));
+                                    "Declaration"
+                                }
+                                crate::ontology::Entity::NamedIndividual(iri) => {
+                                    content.push_str(&format!("<{}> rdf:type owl:NamedIndividual .\n", iri.as_str()));
+                                    "Declaration"
+                                }
+                                crate::ontology::Entity::AnnotationProperty(iri) => {
+                                    content.push_str(&format!("<{}> rdf:type owl:AnnotationProperty .\n", iri.as_str()));
+                                    "Declaration"
+                                }
+                                _ => "Declaration",
+                            }
+                        }
+                        _ => "Other",
+                    };
                 }
             }
         }

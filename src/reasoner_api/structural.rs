@@ -88,6 +88,7 @@ impl StructuralReasoner {
     fn rebuild_index(&mut self) {
         self.index = AxiomIndex::default();
         let Ok(guard) = self.ontology.read() else {
+            eprintln!("StructuralReasoner: ontology lock poisoned, index will be empty");
             return;
         };
         for axiom in guard.axioms() {

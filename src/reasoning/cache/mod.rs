@@ -91,10 +91,11 @@ impl MultiLevelCacheManager {
 
     /// Full reset of every cache layer (used after axiom removal).
     pub fn reset_all(&self) {
+        self.unsat.clear();
+        self.expander.clear();
+        self.completion_graph.clear();
+        self.saturation.clear();
         self.consequences.invalidate_all();
-        // Currently no direct clear API on DashMap-based caches; a fresh instance
-        // would be needed for full reset. For production use, wrap in Arc<RwLock<>>
-        // and replace the inner value. This is left as a TODO for the integration step.
     }
 }
 

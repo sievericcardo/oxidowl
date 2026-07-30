@@ -196,6 +196,18 @@ impl NTriplesParser {
                                 );
                                 ontology.add_axiom(axiom);
                             }
+                        } else if obj_iri.as_str() == "http://www.w3.org/2002/07/owl#ObjectProperty" {
+                            if let Some(subj_iri) = subject.as_iri() {
+                                let axiom = crate::ontology::Axiom::Declaration(
+                                    crate::ontology::DeclarationAxiom {
+                                        id: ontology.next_axiom_id(),
+                                        entity: crate::ontology::Entity::ObjectProperty(
+                                            crate::ontology::IRI::new(subj_iri.as_str()),
+                                        ),
+                                    },
+                                );
+                                ontology.add_axiom(axiom);
+                            }
                         } else {
                             // Class assertion: individual is instance of class
                             if let Some(subj_iri) = subject.as_iri() {
@@ -263,7 +275,25 @@ impl NTriplesParser {
                     }
                 }
                 _ => {
-                    // For other predicates, RDF graph storage is sufficient
+                    // ObjectPropertyAssertion or DataPropertyAssertion
+                    if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
+                        let axiom = crate::ontology::Axiom::ObjectPropertyAssertion(
+                            crate::ontology::ObjectPropertyAssertionAxiom {
+                                id: ontology.next_axiom_id(),
+                                property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                                    crate::ontology::ObjectProperty { iri: crate::ontology::IRI::new(pred_iri.as_str()) },
+                                ),
+                                source: crate::ontology::Individual::Named(
+                                    crate::ontology::NamedIndividual { iri: crate::ontology::IRI::new(subj_iri.as_str()) },
+                                ),
+                                target: crate::ontology::Individual::Named(
+                                    crate::ontology::NamedIndividual { iri: crate::ontology::IRI::new(obj_iri.as_str()) },
+                                ),
+                                annotations: vec![],
+                            },
+                        );
+                        ontology.add_axiom(axiom);
+                    }
                 }
             }
         }
@@ -527,62 +557,52 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 }
 
 /// N-Triples format serializer implementing the common serialization interface
-#[derive(Debug, Clone)]
-pub struct NTriplesSerializer {
-    config: SerializerConfig,
-}
+#[derive(Debug, Clone, Default)]
+pub struct NTriplesSerializer;
 
 impl NTriplesSerializer {
-    /// Create a new `NTriplesSerializer` instance with default configuration
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            config: SerializerConfig::default(),
+        Self
+    }
+
+    pub fn serialize_with_config(&self, ontology: &Ontology, _config: &SerializerConfig) -> std::result::Result<String, Error> {
+        let mut content = String::new();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(sub) => {
+                    if let (crate::ontology::ClassExpression::Class(a), crate::ontology::ClassExpression::Class(b)) = (&sub.subclass, &sub.superclass) {
+                        content.push_str(&format!("<{}> <http://www.w3.org/2000/01/rdf-schema#subClassOf> <{}> .\n", a.iri, b.iri));
+                    }
+                }
+                crate::ontology::Axiom::ClassAssertion(ca) => {
+                    if let (crate::ontology::ClassExpression::Class(cls), crate::ontology::Individual::Named(ind)) = (&ca.class, &ca.individual) {
+                        content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <{}> .\n", ind.iri, cls.iri));
+                    }
+                }
+                crate::ontology::Axiom::ObjectPropertyAssertion(opa) => {
+                    if let (crate::ontology::ObjectPropertyExpression::ObjectProperty(prop), crate::ontology::Individual::Named(src), crate::ontology::Individual::Named(tgt)) = (&opa.property, &opa.source, &opa.target) {
+                        content.push_str(&format!("<{}> <{}> <{}> .\n", src.iri, prop.iri, tgt.iri));
+                    }
+                }
+                crate::ontology::Axiom::Declaration(decl) => {
+                    match &decl.entity {
+                        crate::ontology::Entity::Class(iri) => content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .\n", iri.as_str())),
+                        crate::ontology::Entity::ObjectProperty(iri) => content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#ObjectProperty> .\n", iri.as_str())),
+                        crate::ontology::Entity::NamedIndividual(iri) => content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#NamedIndividual> .\n", iri.as_str())),
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
         }
-    }
-
-    /// Create a new serializer with explicit configuration
-    #[must_use]
-    pub fn with_config(config: SerializerConfig) -> Self {
-        Self { config }
-    }
-}
-
-impl Default for NTriplesSerializer {
-    fn default() -> Self {
-        Self::new()
+        Ok(content)
     }
 }
 
 impl OntologySerializer for NTriplesSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
-        self.serialize_with_config(ontology, &self.config)
-    }
-}
-
-impl NTriplesSerializer {
-    /// Serialize with explicit configuration
-    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> std::result::Result<String, Error> {
-        let mut content = String::new();
-
-        if config.add_banner {
-            content.push_str(&super::common::generate_banner());
-            content.push('\n');
-        }
-
-        let indent = " ".repeat(config.indent_size);
-
-        for (subject, class) in ontology.classes() {
-            content.push_str(&format!("{indent}{} rdf:type {} .\n", subject, class.iri));
-        }
-
-        for (_subject, individual) in ontology.individuals() {
-            if let Some(iri) = individual.iri() {
-                content.push_str(&format!("{indent}{iri} rdf:type Individual .\n"));
-            }
-        }
-
-        Ok(content)
+        self.serialize_with_config(ontology, &SerializerConfig::default())
     }
 }
 

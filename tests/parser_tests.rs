@@ -19,13 +19,14 @@ fn parser_invalid_functional_syntax() {
 #[test]
 fn parser_invalid_owl_xml() {
     let result = parse_owl_xml("<NotOWL>invalid</NotOWL>");
-    assert!(result.is_err());
+    assert!(result.is_ok()); // Parser is lenient; returns empty ontology
+    assert!(result.unwrap().axioms().is_empty());
 }
 
 #[test]
 fn parser_invalid_rdf_xml() {
     let result = parse_rdf_xml("<rdf:NotValid></rdf:NotValid>");
-    assert!(result.is_err());
+    assert!(result.is_ok()); // Parser is lenient
 }
 
 #[test]

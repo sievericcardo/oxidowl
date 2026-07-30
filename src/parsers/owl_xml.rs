@@ -1378,6 +1378,51 @@ fn serialize_axiom_xml(axiom: &Axiom) -> String {
             }
             _ => "<InverseFunctionalObjectProperty><!-- Complex property expression --></InverseFunctionalObjectProperty>".to_string(),
         },
+        Axiom::TransitiveObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<TransitiveObjectProperty>{}</TransitiveObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
+            }
+            _ => "<TransitiveObjectProperty><!-- Complex property expression --></TransitiveObjectProperty>".to_string(),
+        },
+        Axiom::SymmetricObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<SymmetricObjectProperty>{}</SymmetricObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
+            }
+            _ => "<SymmetricObjectProperty><!-- Complex property expression --></SymmetricObjectProperty>".to_string(),
+        },
+        Axiom::AsymmetricObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<AsymmetricObjectProperty>{}</AsymmetricObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
+            }
+            _ => "<AsymmetricObjectProperty><!-- Complex property expression --></AsymmetricObjectProperty>".to_string(),
+        },
+        Axiom::ReflexiveObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<ReflexiveObjectProperty>{}</ReflexiveObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
+            }
+            _ => "<ReflexiveObjectProperty><!-- Complex property expression --></ReflexiveObjectProperty>".to_string(),
+        },
+        Axiom::IrreflexiveObjectProperty(axiom) => match &axiom.property {
+            crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
+                format!(
+                    "<IrreflexiveObjectProperty>{}</IrreflexiveObjectProperty>",
+                    serialize_object_property_xml(prop)
+                )
+            }
+            _ => "<IrreflexiveObjectProperty><!-- Complex property expression --></IrreflexiveObjectProperty>".to_string(),
+        },
         Axiom::DataPropertyAssertion(axiom) => {
             format!(
                 "<DataPropertyAssertion>{}{}{}</DataPropertyAssertion>",

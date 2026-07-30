@@ -29,7 +29,7 @@ fn inverse_object_property() {
     let prop = ObjectProperty { iri: IRI::new("http://ex.org/P") };
     let inv = ObjectPropertyExpression::InverseObjectProperty(prop.clone());
     assert!(inv.is_inverse());
-    assert_eq!(inv.as_object_property().unwrap().iri.as_str(), "http://ex.org/P");
+    assert_eq!(inv.get_named_property().iri.as_str(), "http://ex.org/P");
 }
 
 #[test]

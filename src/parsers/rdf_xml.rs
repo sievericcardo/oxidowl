@@ -888,7 +888,7 @@ impl RdfXmlSerializer {
         result.push_str(">\n");
 
         // Ontology declaration
-        result.push_str(&format!("{}<!-- Ontology Declaration -->\n", indent));
+        result.push('\n');
         let iri_str = ontology
             .id
             .ontology_iri
@@ -898,7 +898,6 @@ impl RdfXmlSerializer {
 
         // Serialize classes
         if !ontology.classes().is_empty() {
-            result.push_str(&format!("{}<!-- Class Declarations -->\n", indent));
             for (_, class) in ontology.classes() {
                 result.push_str(&format!(
                     "{}<owl:Class rdf:about=\"{}\" />\n",
@@ -911,7 +910,7 @@ impl RdfXmlSerializer {
         // Serialize object properties
         let object_properties = ontology.object_properties();
         if !object_properties.is_empty() {
-            result.push_str(&format!("{}<!-- Object Property Declarations -->\n", indent));
+            result.push_str(&format!("{}Object Property Declarations\n", indent));
             for prop in object_properties {
                 result.push_str(&format!(
                     "{}<owl:ObjectProperty rdf:about=\"{}\" />\n",
@@ -942,8 +941,77 @@ impl RdfXmlSerializer {
             }
         }
 
+        // ── Axiom Serialization ─────────────────────────────────────────
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(sub) => {
+                    if let (
+                        crate::ontology::ClassExpression::Class(subclass),
+                        crate::ontology::ClassExpression::Class(superclass),
+                    ) = (&sub.subclass, &sub.superclass)
+                    {
+                        result.push_str(&format!("{indent}<rdf:Description rdf:about=\"{}\">\n", subclass.iri));
+                        result.push_str(&format!("{indent}  <rdfs:subClassOf rdf:resource=\"{}\"/>\n", superclass.iri));
+                        result.push_str(&format!("{indent}</rdf:Description>\n"));
+                    }
+                }
+                crate::ontology::Axiom::ClassAssertion(ca) => {
+                    if let (
+                        crate::ontology::ClassExpression::Class(cls),
+                        crate::ontology::Individual::Named(ind),
+                    ) = (&ca.class, &ca.individual)
+                    {
+                        result.push_str(&format!("{indent}<rdf:Description rdf:about=\"{}\">\n", ind.iri));
+                        result.push_str(&format!("{indent}  <rdf:type rdf:resource=\"{}\"/>\n", cls.iri));
+                        result.push_str(&format!("{indent}</rdf:Description>\n"));
+                    }
+                }
+                crate::ontology::Axiom::ObjectPropertyAssertion(opa) => {
+                    if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) = &opa.property {
+                        if let (
+                            crate::ontology::Individual::Named(src),
+                            crate::ontology::Individual::Named(tgt),
+                        ) = (&opa.source, &opa.target)
+                        {
+                            result.push_str(&format!("{indent}<rdf:Description rdf:about=\"{}\">\n", src.iri));
+                            result.push_str(&format!("{indent}  <{} rdf:resource=\"{}\"/>\n", prop.iri, tgt.iri));
+                            result.push_str(&format!("{indent}</rdf:Description>\n"));
+                        }
+                    }
+                }
+                crate::ontology::Axiom::EquivalentClasses(eq) => {
+                    for i in 1..eq.classes.len() {
+                        if let (
+                            crate::ontology::ClassExpression::Class(c1),
+                            crate::ontology::ClassExpression::Class(c2),
+                        ) = (&eq.classes[0], &eq.classes[i])
+                        {
+                            result.push_str(&format!("{indent}<rdf:Description rdf:about=\"{}\">\n", c1.iri));
+                            result.push_str(&format!("{indent}  <owl:equivalentClass rdf:resource=\"{}\"/>\n", c2.iri));
+                            result.push_str(&format!("{indent}</rdf:Description>\n"));
+                        }
+                    }
+                }
+                crate::ontology::Axiom::DisjointClasses(dj) => {
+                    for i in 1..dj.classes.len() {
+                        if let (
+                            crate::ontology::ClassExpression::Class(c1),
+                            crate::ontology::ClassExpression::Class(c2),
+                        ) = (&dj.classes[0], &dj.classes[i])
+                        {
+                            result.push_str(&format!("{indent}<rdf:Description rdf:about=\"{}\">\n", c1.iri));
+                            result.push_str(&format!("{indent}  <owl:disjointWith rdf:resource=\"{}\"/>\n", c2.iri));
+                            result.push_str(&format!("{indent}</rdf:Description>\n"));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        result.push('\n');
+
         if !data_properties.is_empty() {
-            result.push_str(&format!("{}<!-- Data Property Declarations -->\n", indent));
+            result.push_str(&format!("{}Data Property Declarations\n", indent));
             for prop in data_properties {
                 result.push_str(&format!(
                     "{}<owl:DatatypeProperty rdf:about=\"{}\" />\n",
@@ -955,7 +1023,7 @@ impl RdfXmlSerializer {
 
         // Serialize individuals
         if !ontology.individuals().is_empty() {
-            result.push_str(&format!("{}<!-- Individual Declarations -->\n", indent));
+            result.push_str(&format!("{}Individual Declarations\n", indent));
             for (_, individual) in ontology.individuals() {
                 if let crate::ontology::Individual::Named(named) = individual {
                     result.push_str(&format!(
