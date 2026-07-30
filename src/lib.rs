@@ -110,29 +110,29 @@
 //! ```
 
 pub mod cache;
-pub mod cache_lockfree; // Lock-free cache using DashMap
-pub mod cache_strategies; // Advanced cache eviction strategies (LRU, LFU)
+pub mod cache_lockfree;
+pub mod cache_strategies;
 pub mod config;
 pub mod core;
-pub mod dl_clauses; // DL clause generation and dumping
+pub mod dl_clauses;
 pub mod error;
+pub mod factory;
 pub mod import;
-pub mod performance; // Performance monitoring and profiling
+pub mod manager;
+pub mod performance;
 pub mod prelude;
-pub mod profiling; // Flamegraph and heap profiling infrastructure // Common imports and type aliases for internal use // Import management and dependency resolution
-// pub mod network;
-pub mod adapter; // Horned-OWL adapter for enhanced parsing
+pub mod profiling;
+pub mod adapter;
 pub mod distributed;
 pub mod ontology;
-// pub mod ontology_lockfree; // Lock-free ontology access using ArcSwap - TODO: Create file
 pub mod parsers;
-pub mod profiles; // OWL 2 profiles support and validation
+pub mod profiles;
 pub mod query;
 pub mod reasoning;
-pub mod semantics; // RDF, RDFS, and OWL 2 semantics implementation
-pub mod swrl; // SWRL (Semantic Web Rule Language) support
-pub mod validation; // OWL 2 DL validation and profile checking
-pub mod visitor; // Visitor pattern for ontology traversal // Distributed query processing and cluster management
+pub mod semantics;
+pub mod swrl;
+pub mod validation;
+pub mod visitor;
 
 // Server interfaces (REST API, OWLlink, SPARQL)
 #[cfg(feature = "server")]
@@ -155,7 +155,16 @@ mod proofs;
 pub use crate::adapter::{HornedOwlAdapter, RdfStarCapable};
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
+pub use crate::factory::DataFactory;
 pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
+pub use crate::manager::OntologyManager;
+pub use crate::manager::iri_mapper::{
+    AutoIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper, SimpleIRIMapper,
+};
+pub use crate::manager::loader::OntologyLoader;
+pub use crate::manager::changes::{ChangeData, OntologyChange};
+pub use crate::manager::listeners::OntologyChangeListener;
+pub use crate::manager::history::ChangeHistory;
 pub use crate::profiles::{
     OWL2Profile as ProfileType, ProfileValidator, el::ELValidator, validator::OWL2ProfileValidator,
 };
@@ -205,6 +214,7 @@ pub use crate::error::{Error, Result};
 pub use crate::ontology::{
     ClassExpression, IRI, Individual, Ontology, OntologyFormat, OntologyRef,
 };
+pub use crate::ontology::axioms::EntityType;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = "Oxidowl";

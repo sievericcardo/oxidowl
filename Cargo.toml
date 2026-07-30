@@ -81,6 +81,9 @@ lazy_static = "1.5.0"
 # File I/O and path handling
 tempfile = "3.27.0"
 
+# Compression for ontology document sources
+flate2 = "1.0"
+
 # Machine Learning - Candle framework
 candle-core = { version = "0.10.2", optional = true }
 candle-nn = { version = "0.10.2", optional = true }

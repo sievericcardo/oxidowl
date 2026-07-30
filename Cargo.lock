@@ -2302,6 +2302,7 @@ dependencies = [
  "dhat",
  "enumset",
  "env_logger",
+ "flate2",
  "futures",
  "horned-owl",
  "im",

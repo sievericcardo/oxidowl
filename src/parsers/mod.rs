@@ -447,6 +447,91 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     }
 }
 
+/// Public wrapper for format detection from content and path hint.
+/// Used by the OntologyLoader and other consumers.
+#[must_use]
+pub fn detect_format_from_content_public(_path: &std::path::Path, content: &str) -> crate::Result<OntologyFormat> {
+    let trimmed = content.trim();
+
+    if trimmed.starts_with("###") || content.contains("\n###") {
+        for line in trimmed.lines() {
+            let line_trimmed = line.trim();
+            if line_trimmed.starts_with("###") {
+                let after_hash = line_trimmed.trim_start_matches("###").trim();
+                if after_hash.starts_with("invalid") || after_hash.starts_with("valid") {
+                    continue;
+                }
+                let format_name = after_hash.to_lowercase();
+                return match format_name.as_str() {
+                    "turtle" => Ok(OntologyFormat::Turtle),
+                    "rdf/xml" | "rdf-xml" => Ok(OntologyFormat::RdfXml),
+                    "owl/xml" | "owl-xml" => Ok(OntologyFormat::OwlXml),
+                    "functional" => Ok(OntologyFormat::Functional),
+                    "manchester" => Ok(OntologyFormat::Manchester),
+                    _ => Ok(OntologyFormat::Functional),
+                };
+            }
+        }
+    }
+
+    if trimmed.starts_with("Ontology(")
+        || trimmed.starts_with("Prefix(")
+        || trimmed.starts_with("Import(")
+        || content.contains("Declaration(")
+        || content.contains("SubClassOf(")
+        || (trimmed.starts_with("Import(") && content.contains("Ontology("))
+    {
+        return Ok(OntologyFormat::Functional);
+    }
+    if trimmed.starts_with("Prefix:")
+        || trimmed.starts_with("Ontology:")
+        || trimmed.starts_with("Class:")
+        || trimmed.starts_with("ObjectProperty:")
+        || trimmed.starts_with("DataProperty:")
+        || trimmed.starts_with("Individual:")
+        || content.contains("\nClass:")
+        || content.contains("\nObjectProperty:")
+    {
+        return Ok(OntologyFormat::Manchester);
+    }
+    if trimmed.starts_with("@prefix")
+        || trimmed.starts_with("@base")
+        || (content.contains("@prefix") && content.contains("<http"))
+        || (content.contains("rdf:type") && content.contains("owl:"))
+    {
+        return Ok(OntologyFormat::Turtle);
+    }
+    if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
+        if content.contains("owl:Ontology") || content.contains("<Ontology")
+            || content.contains("<Declaration") || content.contains("<Class")
+        {
+            return Ok(OntologyFormat::OwlXml);
+        }
+        if content.contains("rdf:RDF") {
+            return Ok(OntologyFormat::RdfXml);
+        }
+        return Ok(OntologyFormat::OwlXml);
+    }
+
+    // Heuristic fallbacks
+    if (content.contains("Declaration") || content.contains("SubClassOf"))
+        && content.contains('(')
+    {
+        return Ok(OntologyFormat::Functional);
+    }
+    if content.contains("Class:")
+        || content.contains("ObjectProperty:")
+        || content.contains("EquivalentTo:")
+    {
+        return Ok(OntologyFormat::Manchester);
+    }
+    if content.contains("@prefix") || (content.contains(':') && content.contains('.')) {
+        return Ok(OntologyFormat::Turtle);
+    }
+
+    Ok(OntologyFormat::Functional)
+}
+
 /// Save ontology to file using specified format
 pub fn save_file<P: AsRef<Path>>(
     ontology: &Ontology,
