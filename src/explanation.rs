@@ -150,8 +150,8 @@ impl ExplanationService {
 
         // Build intermediate nodes for transitive chains
         for axiom in justification {
-            if let Axiom::SubClassOf(sc) = axiom {
-                if &sc.subclass == subclass {
+            if let Axiom::SubClassOf(sc) = axiom
+                && &sc.subclass == subclass {
                     // Track this as an intermediate step: sub ⊑ intermediate
                     let chain_node = ProofNode {
                         id: id_counter,
@@ -182,7 +182,6 @@ impl ExplanationService {
                         return Ok(ProofTree { root, nodes });
                     }
                 }
-            }
         }
 
         // Fallback: simple root with all justification axioms as children
@@ -592,71 +591,58 @@ impl JustificationComputer {
 
         // 2. Direct subclass check
         for ax in axioms {
-            if let Axiom::SubClassOf(sc) = ax {
-                if &sc.subclass == subclass && &sc.superclass == superclass {
+            if let Axiom::SubClassOf(sc) = ax
+                && &sc.subclass == subclass && &sc.superclass == superclass {
                     return true;
                 }
-            }
         }
 
         // 3. Transitive subclass closure through remaining axioms
         for ax in axioms {
-            if let Axiom::SubClassOf(sc) = ax {
-                if &sc.subclass == subclass {
-                    if self.check_transitive_chain(&sc.superclass, superclass, axioms) {
+            if let Axiom::SubClassOf(sc) = ax
+                && &sc.subclass == subclass
+                    && self.check_transitive_chain(&sc.superclass, superclass, axioms) {
                         return true;
                     }
-                }
-            }
         }
 
         // 4. Equivalent classes check
         for ax in axioms {
-            if let Axiom::EquivalentClasses(ec) = ax {
-                if ec.classes.contains(subclass) && ec.classes.contains(superclass) {
+            if let Axiom::EquivalentClasses(ec) = ax
+                && ec.classes.contains(subclass) && ec.classes.contains(superclass) {
                     return true;
                 }
-            }
         }
 
         // 5. Property domain: A ⊑ ∃R.C implies A ⊑ domain(R) if domain(R)=C
         for ax in axioms {
-            if let Axiom::ObjectPropertyDomain(dom) = ax {
-                if &dom.domain == superclass {
+            if let Axiom::ObjectPropertyDomain(dom) = ax
+                && &dom.domain == superclass {
                     for sc in axioms {
-                        if let Axiom::SubClassOf(sub) = sc {
-                            if &sub.subclass == subclass {
-                                if let ClassExpression::ObjectSomeValuesFrom { property, .. } = &sub.superclass {
-                                    if *property == dom.property {
+                        if let Axiom::SubClassOf(sub) = sc
+                            && &sub.subclass == subclass
+                                && let ClassExpression::ObjectSomeValuesFrom { property, .. } = &sub.superclass
+                                    && *property == dom.property {
                                         return true;
                                     }
-                                }
-                            }
-                        }
                     }
                 }
-            }
         }
 
         // 6. Property range and subclass chains: A ⊑ ∀R.C and range(R)=D with C ⊑ D → A ⊑ D
         for ax in axioms {
-            if let Axiom::ObjectPropertyRange(range) = ax {
-                if &range.range == superclass {
+            if let Axiom::ObjectPropertyRange(range) = ax
+                && &range.range == superclass {
                     for sc in axioms {
-                        if let Axiom::SubClassOf(sub) = sc {
-                            if &sub.subclass == subclass {
-                                if let ClassExpression::ObjectAllValuesFrom { property, filler } = &sub.superclass {
-                                    if *property == range.property {
-                                        if filler.as_ref() == superclass || self.check_transitive_chain(filler, superclass, axioms) {
+                        if let Axiom::SubClassOf(sub) = sc
+                            && &sub.subclass == subclass
+                                && let ClassExpression::ObjectAllValuesFrom { property, filler } = &sub.superclass
+                                    && *property == range.property
+                                        && (filler.as_ref() == superclass || self.check_transitive_chain(filler, superclass, axioms)) {
                                             return true;
                                         }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
-            }
         }
 
         false
@@ -688,22 +674,19 @@ impl JustificationComputer {
         }
 
         for ax in axioms {
-            if let Axiom::SubClassOf(sc) = ax {
-                if &sc.subclass == from {
-                    if self.check_transitive_chain_impl(&sc.superclass, to, axioms, visited) {
+            if let Axiom::SubClassOf(sc) = ax
+                && &sc.subclass == from
+                    && self.check_transitive_chain_impl(&sc.superclass, to, axioms, visited) {
                         return true;
                     }
-                }
-            }
-            if let Axiom::EquivalentClasses(ec) = ax {
-                if ec.classes.contains(from) {
+            if let Axiom::EquivalentClasses(ec) = ax
+                && ec.classes.contains(from) {
                     for c in &ec.classes {
                         if c != from && self.check_transitive_chain_impl(c, to, axioms, visited) {
                             return true;
                         }
                     }
                 }
-            }
         }
         false
     }

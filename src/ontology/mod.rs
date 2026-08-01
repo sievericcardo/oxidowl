@@ -727,11 +727,10 @@ impl Ontology {
     pub fn get_classes_in_signature(&self) -> Vec<concepts::Class> {
         let mut classes = Vec::new();
         for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a {
-                if let axioms::Entity::Class(iri) = &d.entity {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::Class(iri) = &d.entity {
                     classes.push(concepts::Class { iri: iri.clone() });
                 }
-            }
         }
         classes
     }
@@ -744,11 +743,10 @@ impl Ontology {
     pub fn get_object_properties_in_signature(&self) -> Vec<ObjectProperty> {
         let mut props = Vec::new();
         for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a {
-                if let axioms::Entity::ObjectProperty(iri) = &d.entity {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::ObjectProperty(iri) = &d.entity {
                     props.push(ObjectProperty { iri: iri.clone() });
                 }
-            }
         }
         // OWL API v5 always includes owl:topObjectProperty when there are object properties
         if !props.is_empty() {
@@ -765,11 +763,10 @@ impl Ontology {
     pub fn get_data_properties_in_signature(&self) -> Vec<DataProperty> {
         let mut props = Vec::new();
         for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a {
-                if let axioms::Entity::DataProperty(iri) = &d.entity {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::DataProperty(iri) = &d.entity {
                     props.push(DataProperty { iri: iri.clone() });
                 }
-            }
         }
 
         // OWL API v5 includes owl:topDataProperty in the signature whenever it is
@@ -802,11 +799,10 @@ impl Ontology {
     pub fn get_individuals_in_signature(&self) -> Vec<individuals::NamedIndividual> {
         let mut inds = Vec::new();
         for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a {
-                if let axioms::Entity::NamedIndividual(iri) = &d.entity {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::NamedIndividual(iri) = &d.entity {
                     inds.push(individuals::NamedIndividual { iri: iri.clone() });
                 }
-            }
         }
         inds
     }
@@ -822,11 +818,10 @@ impl Ontology {
 
         // Step 1: collect explicitly declared datatypes
         for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a {
-                if let axioms::Entity::Datatype(iri) = &d.entity {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::Datatype(iri) = &d.entity {
                     dts.push(Datatype { iri: iri.clone() });
                 }
-            }
         }
 
         // Known OWL 2 / XSD built-in datatypes that should appear in the signature
@@ -937,11 +932,10 @@ impl Ontology {
     pub fn get_annotation_properties_in_signature(&self) -> Vec<AnnotationProperty> {
         let mut props = Vec::new();
         for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a {
-                if let axioms::Entity::AnnotationProperty(iri) = &d.entity {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::AnnotationProperty(iri) = &d.entity {
                     props.push(AnnotationProperty { iri: iri.clone() });
                 }
-            }
         }
 
         // Built-in annotation properties that should appear in the signature when used

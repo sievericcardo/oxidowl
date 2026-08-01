@@ -326,7 +326,7 @@ impl<V: OWLObjectVisitor> OntologyWalker<V> {
             crate::ontology::AnnotationValue::IRI(iri) => self.visitor.visit_iri(iri),
             crate::ontology::AnnotationValue::Literal(lit) => self.walk_lit(lit),
             crate::ontology::AnnotationValue::AnonymousIndividual(a) => {
-                self.visitor.visit_iri(&crate::ontology::IRI::new(&a.id))
+                self.visitor.visit_iri(&crate::ontology::IRI::new(&a.id));
             }
         }
     }

@@ -539,16 +539,14 @@ impl HypertableauExpansion {
 
     /// Check if two class expressions are complements of each other
     fn are_complements(a: &ClassExpression, b: &ClassExpression) -> bool {
-        if let ClassExpression::ObjectComplementOf(inner) = a {
-            if inner.as_ref() == b {
+        if let ClassExpression::ObjectComplementOf(inner) = a
+            && inner.as_ref() == b {
                 return true;
             }
-        }
-        if let ClassExpression::ObjectComplementOf(inner) = b {
-            if inner.as_ref() == a {
+        if let ClassExpression::ObjectComplementOf(inner) = b
+            && inner.as_ref() == a {
                 return true;
             }
-        }
         false
     }
 

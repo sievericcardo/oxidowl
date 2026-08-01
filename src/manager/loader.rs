@@ -200,7 +200,7 @@ impl OntologyLoader {
             manager.register_ontology(ont_ref.clone());
             if let Ok(guard) = ont_ref.read() {
                 for import in &guard.imports {
-                    let _ = manager.add_import(iri.clone(), import.imported_ontology_iri.clone());
+                    let () = manager.add_import(iri.clone(), import.imported_ontology_iri.clone());
                 }
             }
         }

@@ -1523,7 +1523,7 @@ impl Default for CacheConfig {
         Self {
             max_size_bytes: 512 * 1024 * 1024, // 512 MB
             max_entries: 10000,
-            default_ttl: Duration::from_secs(1 * 3600), // 1 hour
+            default_ttl: Duration::from_hours(1), // 1 hour
             enable_compression: true,
             compression_threshold: 1024, // 1 KB
             enable_statistics: true,
@@ -2014,7 +2014,7 @@ impl Default for StrategyLearningConfig {
             enable_online_learning: true,
             learning_rate: 0.01,
             batch_size: 32,
-            retraining_interval: Duration::from_secs(1 * 3600),
+            retraining_interval: Duration::from_hours(1),
             min_training_samples: 100,
         }
     }
@@ -2338,7 +2338,7 @@ impl Default for ParallelExecutionConfig {
             enable_parallel_execution: true,
             max_worker_threads: num_cpus::get(),
             work_queue_size: 1000,
-            task_timeout: Duration::from_secs(5 * 60), // 5 minutes
+            task_timeout: Duration::from_mins(5), // 5 minutes
             enable_work_stealing: true,
             enable_resource_monitoring: true,
         }

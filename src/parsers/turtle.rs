@@ -911,7 +911,7 @@ impl TurtleParser {
                         let is_ap = self.is_annotation_property(&predicate, ontology);
                         if is_ap {
                             let annotation_value = AnnotationValue::Literal(literal);
-                            if ontology.get_iri().map(|i| i.as_str()) == Some(subject.as_str()) {
+                            if ontology.get_iri().map(super::super::ontology::IRI::as_str) == Some(subject.as_str()) {
                                 // Ontology-level annotation
                                 let annotation = Annotation {
                                     property: AnnotationProperty { iri: IRI::new(&predicate) },
@@ -2768,11 +2768,10 @@ impl TurtleParser {
     // ── helper: check if a subject IRI is declared as a DatatypeProperty ────────
     fn is_data_property(&self, iri: &str, ontology: &Ontology) -> bool {
         ontology.axioms().iter().any(|a| {
-            if let Axiom::Declaration(d) = a {
-                if let Entity::DataProperty(dp_iri) = &d.entity {
+            if let Axiom::Declaration(d) = a
+                && let Entity::DataProperty(dp_iri) = &d.entity {
                     return dp_iri.as_str() == iri;
                 }
-            }
             false
         })
     }
@@ -2796,11 +2795,10 @@ impl TurtleParser {
         }
         // Any predicate declared as AnnotationProperty in the ontology
         ontology.axioms().iter().any(|a| {
-            if let Axiom::Declaration(d) = a {
-                if let Entity::AnnotationProperty(ap_iri) = &d.entity {
+            if let Axiom::Declaration(d) = a
+                && let Entity::AnnotationProperty(ap_iri) = &d.entity {
                     return ap_iri.as_str() == iri;
                 }
-            }
             false
         })
     }
@@ -2826,11 +2824,10 @@ impl TurtleParser {
             return;
         }
         let already_declared = ontology.axioms().iter().any(|a| {
-            if let Axiom::Declaration(d) = a {
-                if let Entity::AnnotationProperty(ap_iri) = &d.entity {
+            if let Axiom::Declaration(d) = a
+                && let Entity::AnnotationProperty(ap_iri) = &d.entity {
                     return ap_iri.as_str() == iri;
                 }
-            }
             false
         });
         if !already_declared {
@@ -3175,7 +3172,7 @@ impl TurtleParser {
                     };
 
                     // Ontology-level annotation vs entity annotation
-                    if ontology.get_iri().map(|i| i.as_str()) == Some(subject.as_str()) {
+                    if ontology.get_iri().map(super::super::ontology::IRI::as_str) == Some(subject.as_str()) {
                         let annotation = Annotation {
                             property: AnnotationProperty { iri: IRI::new(&predicate) },
                             value: annotation_value,
@@ -3415,29 +3412,27 @@ impl OntologySerializer for TurtleSerializer {
                     }
                 }
                 crate::ontology::Axiom::EquivalentClasses(eq) => {
-                    if eq.classes.len() >= 2 {
-                        if let (
+                    if eq.classes.len() >= 2
+                        && let (
                             crate::ontology::ClassExpression::Class(c1),
                             crate::ontology::ClassExpression::Class(c2),
                         ) = (&eq.classes[0], &eq.classes[1])
                         {
                             content.push_str(&format!("<{}> owl:equivalentClass <{}> .\n", c1.iri, c2.iri));
                         }
-                    }
                 }
                 crate::ontology::Axiom::DisjointClasses(dj) => {
-                    if dj.classes.len() >= 2 {
-                        if let (
+                    if dj.classes.len() >= 2
+                        && let (
                             crate::ontology::ClassExpression::Class(c1),
                             crate::ontology::ClassExpression::Class(c2),
                         ) = (&dj.classes[0], &dj.classes[1])
                         {
                             content.push_str(&format!("<{}> owl:disjointWith <{}> .\n", c1.iri, c2.iri));
                         }
-                    }
                 }
                 _ => {
-                    let name = match axiom {
+                    let _name = match axiom {
                         crate::ontology::Axiom::Declaration(decl) => {
                             match &decl.entity {
                                 crate::ontology::Entity::Class(iri) => {

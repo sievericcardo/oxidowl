@@ -173,8 +173,8 @@ impl EntailmentChecker {
                         let super_prop = &triple.object;
                         // rdfs5: transitivity of subPropertyOf
                         for t in &current {
-                            if let RdfTerm::Iri(ref t_pred) = t.predicate {
-                                if t_pred == &rdfs_subproperty_url
+                            if let RdfTerm::Iri(ref t_pred) = t.predicate
+                                && t_pred == &rdfs_subproperty_url
                                     && t.subject == triple.object
                                 {
                                     let new_triple = Triple::new(
@@ -186,7 +186,6 @@ impl EntailmentChecker {
                                         changed = true;
                                     }
                                 }
-                            }
                         }
                         // rdfs7: sub-property propagation
                         for t in &current {
@@ -203,11 +202,11 @@ impl EntailmentChecker {
                         }
                     }
                     // rdfs9: ?s rdf:type ?c . ?c rdfs:subClassOf ?d => ?s rdf:type ?d
-                    if pred == &rdf_type_url {
-                        if let RdfTerm::Iri(ref _class_iri) = triple.object {
+                    if pred == &rdf_type_url
+                        && let RdfTerm::Iri(ref _class_iri) = triple.object {
                             for t in &current {
-                                if let RdfTerm::Iri(ref t_pred) = t.predicate {
-                                    if t_pred == &rdfs_subclass_url
+                                if let RdfTerm::Iri(ref t_pred) = t.predicate
+                                    && t_pred == &rdfs_subclass_url
                                         && t.subject == triple.object
                                     {
                                         let new_triple = Triple::new(
@@ -219,15 +218,13 @@ impl EntailmentChecker {
                                             changed = true;
                                         }
                                     }
-                                }
                             }
                         }
-                    }
                     // rdfs11: ?c rdfs:subClassOf ?d . ?d rdfs:subClassOf ?e => ?c rdfs:subClassOf ?e
                     if pred == &rdfs_subclass_url {
                         for t in &current {
-                            if let RdfTerm::Iri(ref t_pred) = t.predicate {
-                                if t_pred == &rdfs_subclass_url
+                            if let RdfTerm::Iri(ref t_pred) = t.predicate
+                                && t_pred == &rdfs_subclass_url
                                     && t.subject == triple.object
                                 {
                                     let new_triple = Triple::new(
@@ -239,7 +236,6 @@ impl EntailmentChecker {
                                         changed = true;
                                     }
                                 }
-                            }
                         }
                     }
                 }

@@ -19,13 +19,12 @@ impl OwlMetric for NumberOfClasses {
     fn get_value(&self, ontology: &Ontology) -> f64 {
         let mut count = 0;
         for axiom in ontology.axioms() {
-            if let Axiom::Declaration(d) = axiom {
-                if matches!(d.entity, Entity::Class(_)) {
+            if let Axiom::Declaration(d) = axiom
+                && matches!(d.entity, Entity::Class(_)) {
                     count += 1;
                 }
-            }
         }
-        count as f64
+        f64::from(count)
     }
     fn get_name(&self) -> &'static str {
         "NumberOfClasses"
@@ -37,13 +36,12 @@ impl OwlMetric for NumberOfObjectProperties {
     fn get_value(&self, ontology: &Ontology) -> f64 {
         let mut count = 0;
         for axiom in ontology.axioms() {
-            if let Axiom::Declaration(d) = axiom {
-                if matches!(d.entity, Entity::ObjectProperty(_)) {
+            if let Axiom::Declaration(d) = axiom
+                && matches!(d.entity, Entity::ObjectProperty(_)) {
                     count += 1;
                 }
-            }
         }
-        count as f64
+        f64::from(count)
     }
     fn get_name(&self) -> &'static str {
         "NumberOfObjectProperties"
@@ -55,13 +53,12 @@ impl OwlMetric for NumberOfDataProperties {
     fn get_value(&self, ontology: &Ontology) -> f64 {
         let mut count = 0;
         for axiom in ontology.axioms() {
-            if let Axiom::Declaration(d) = axiom {
-                if matches!(d.entity, Entity::DataProperty(_)) {
+            if let Axiom::Declaration(d) = axiom
+                && matches!(d.entity, Entity::DataProperty(_)) {
                     count += 1;
                 }
-            }
         }
-        count as f64
+        f64::from(count)
     }
     fn get_name(&self) -> &'static str {
         "NumberOfDataProperties"
@@ -73,13 +70,12 @@ impl OwlMetric for NumberOfIndividuals {
     fn get_value(&self, ontology: &Ontology) -> f64 {
         let mut count = 0;
         for axiom in ontology.axioms() {
-            if let Axiom::Declaration(d) = axiom {
-                if matches!(d.entity, Entity::NamedIndividual(_)) {
+            if let Axiom::Declaration(d) = axiom
+                && matches!(d.entity, Entity::NamedIndividual(_)) {
                     count += 1;
                 }
-            }
         }
-        count as f64
+        f64::from(count)
     }
     fn get_name(&self) -> &'static str {
         "NumberOfIndividuals"
@@ -183,13 +179,12 @@ impl OwlMetric for NumberOfDatatypes {
     fn get_value(&self, ontology: &Ontology) -> f64 {
         let mut count = 0;
         for axiom in ontology.axioms() {
-            if let Axiom::Declaration(d) = axiom {
-                if matches!(d.entity, Entity::Datatype(_)) {
+            if let Axiom::Declaration(d) = axiom
+                && matches!(d.entity, Entity::Datatype(_)) {
                     count += 1;
                 }
-            }
         }
-        count as f64
+        f64::from(count)
     }
     fn get_name(&self) -> &'static str {
         "NumberOfDatatypes"
@@ -201,13 +196,12 @@ impl OwlMetric for NumberOfAnnotationProperties {
     fn get_value(&self, ontology: &Ontology) -> f64 {
         let mut count = 0;
         for axiom in ontology.axioms() {
-            if let Axiom::Declaration(d) = axiom {
-                if matches!(d.entity, Entity::AnnotationProperty(_)) {
+            if let Axiom::Declaration(d) = axiom
+                && matches!(d.entity, Entity::AnnotationProperty(_)) {
                     count += 1;
                 }
-            }
         }
-        count as f64
+        f64::from(count)
     }
     fn get_name(&self) -> &'static str {
         "NumberOfAnnotationProperties"
@@ -487,13 +481,12 @@ impl OntologyMetrics {
 fn collect_named_classes(ontology: &Ontology) -> Vec<ClassExpression> {
     let mut classes = Vec::new();
     for axiom in ontology.axioms() {
-        if let Axiom::Declaration(d) = axiom {
-            if let Entity::Class(iri) = &d.entity {
+        if let Axiom::Declaration(d) = axiom
+            && let Entity::Class(iri) = &d.entity {
                 classes.push(ClassExpression::Class(crate::ontology::Class {
                     iri: iri.clone(),
                 }));
             }
-        }
     }
     classes
 }
@@ -574,12 +567,18 @@ impl Metric for NumberOfAxiomsByType {
         "NumberOfAxiomsByType"
     }
     fn value(&self) -> f64 {
-        self.count as f64
+        f64::from(self.count)
     }
 }
 
 pub struct NumberOfGCIAxioms {
     pub count: u32,
+}
+
+impl Default for NumberOfGCIAxioms {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NumberOfGCIAxioms {
@@ -592,11 +591,10 @@ impl Metric for NumberOfGCIAxioms {
     fn compute(&mut self, ontology: &Ontology) {
         self.count = 0;
         for ax in ontology.axioms() {
-            if let Axiom::SubClassOf(sc) = ax {
-                if !matches!(&sc.subclass, ClassExpression::Class(_)) {
+            if let Axiom::SubClassOf(sc) = ax
+                && !matches!(&sc.subclass, ClassExpression::Class(_)) {
                     self.count += 1;
                 }
-            }
         }
     }
 
@@ -604,12 +602,18 @@ impl Metric for NumberOfGCIAxioms {
         "NumberOfGCIAxioms"
     }
     fn value(&self) -> f64 {
-        self.count as f64
+        f64::from(self.count)
     }
 }
 
 pub struct NumberOfHiddenGCI {
     pub count: u32,
+}
+
+impl Default for NumberOfHiddenGCI {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NumberOfHiddenGCI {
@@ -622,11 +626,10 @@ impl Metric for NumberOfHiddenGCI {
     fn compute(&mut self, ontology: &Ontology) {
         self.count = 0;
         for ax in ontology.axioms() {
-            if let Axiom::SubClassOf(sc) = ax {
-                if matches!(&sc.subclass, ClassExpression::ObjectIntersectionOf(_)) {
+            if let Axiom::SubClassOf(sc) = ax
+                && matches!(&sc.subclass, ClassExpression::ObjectIntersectionOf(_)) {
                     self.count += 1;
                 }
-            }
         }
     }
 
@@ -634,12 +637,18 @@ impl Metric for NumberOfHiddenGCI {
         "NumberOfHiddenGCI"
     }
     fn value(&self) -> f64 {
-        self.count as f64
+        f64::from(self.count)
     }
 }
 
 pub struct NumberOfSWRLRuleAxioms {
     pub count: u32,
+}
+
+impl Default for NumberOfSWRLRuleAxioms {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NumberOfSWRLRuleAxioms {
@@ -657,12 +666,18 @@ impl Metric for NumberOfSWRLRuleAxioms {
         "NumberOfSWRLRuleAxioms"
     }
     fn value(&self) -> f64 {
-        self.count as f64
+        f64::from(self.count)
     }
 }
 
 pub struct AverageNumberOfNamedSuperclasses {
     pub average: f64,
+}
+
+impl Default for AverageNumberOfNamedSuperclasses {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AverageNumberOfNamedSuperclasses {
@@ -715,6 +730,12 @@ pub struct MaxNumberOfNamedSuperclasses {
     pub max: u32,
 }
 
+impl Default for MaxNumberOfNamedSuperclasses {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MaxNumberOfNamedSuperclasses {
     pub fn new() -> Self {
         MaxNumberOfNamedSuperclasses { max: 0 }
@@ -750,7 +771,7 @@ impl Metric for MaxNumberOfNamedSuperclasses {
         "MaxNumberOfNamedSuperclasses"
     }
     fn value(&self) -> f64 {
-        self.max as f64
+        f64::from(self.max)
     }
 }
 
@@ -762,6 +783,12 @@ pub struct PerPropertyAxiomTypeCounts {
     pub asymmetric_count: u32,
     pub reflexive_count: u32,
     pub irreflexive_count: u32,
+}
+
+impl Default for PerPropertyAxiomTypeCounts {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PerPropertyAxiomTypeCounts {
@@ -800,6 +827,6 @@ impl Metric for PerPropertyAxiomTypeCounts {
         "PerPropertyAxiomTypeCounts"
     }
     fn value(&self) -> f64 {
-        self.functional_count as f64
+        f64::from(self.functional_count)
     }
 }

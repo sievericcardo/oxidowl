@@ -536,19 +536,17 @@ impl OWL2Datatype {
                     crate::Error::InvalidLiteral(format!("Not a valid number: {form}"))
                 })?;
             }
-            DatatypeCategory::Boolean => {
-                if form != "true" && form != "false" && form != "1" && form != "0" {
+            DatatypeCategory::Boolean
+                if form != "true" && form != "false" && form != "1" && form != "0" => {
                     return Err(crate::Error::InvalidLiteral(format!(
                         "Not a boolean: {form}"
                     )));
                 }
-            }
-            DatatypeCategory::Binary => {
+            DatatypeCategory::Binary
                 if self == &OWL2Datatype::HexBinary && !form.chars().all(|c| c.is_ascii_hexdigit())
-                {
+                => {
                     return Err(crate::Error::InvalidLiteral(format!("Not hex: {form}")));
                 }
-            }
             _ => {}
         }
         Ok(())

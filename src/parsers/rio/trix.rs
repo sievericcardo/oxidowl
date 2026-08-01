@@ -39,7 +39,7 @@ impl TriXParser {
                 let uris: Vec<String> = triple_node
                     .descendants()
                     .filter(|n| n.has_tag_name("uri"))
-                    .filter_map(|n| n.text().map(|s| s.to_string()))
+                    .filter_map(|n| n.text().map(std::string::ToString::to_string))
                     .collect();
                 if uris.len() >= 3 {
                     let subject = &uris[0];

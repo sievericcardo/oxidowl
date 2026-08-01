@@ -101,7 +101,7 @@ impl DLSyntaxParser {
 
         let op = self.peek_tok();
         match op.as_deref() {
-            Some("\u{2291}") | Some("sqsubseteq") => {
+            Some("\u{2291}" | "sqsubseteq") => {
                 self.consume_tok(&op.unwrap());
                 let rhs = self.parse_concept()?;
                 Ok(Axiom::SubClassOf(SubClassOfAxiom {
@@ -111,7 +111,7 @@ impl DLSyntaxParser {
                     annotations: vec![],
                 }))
             }
-            Some("\u{2261}") | Some("equiv") => {
+            Some("\u{2261}" | "equiv") => {
                 self.consume_tok(&op.unwrap());
                 let rhs = self.parse_concept()?;
                 Ok(Axiom::EquivalentClasses(EquivalentClassesAxiom {
@@ -275,12 +275,12 @@ impl DLSyntaxParser {
                 self.skip_whitespace();
                 let op = self.peek_tok();
                 match op.as_deref() {
-                    Some("\u{2293}") | Some("and") => {
+                    Some("\u{2293}" | "and") => {
                         self.consume_tok(&op.unwrap());
                         let rhs = self.parse_concept()?;
                         Ok(ClassExpression::ObjectIntersectionOf(vec![base, rhs]))
                     }
-                    Some("\u{2294}") | Some("or") => {
+                    Some("\u{2294}" | "or") => {
                         self.consume_tok(&op.unwrap());
                         let rhs = self.parse_concept()?;
                         Ok(ClassExpression::ObjectUnionOf(vec![base, rhs]))
@@ -379,7 +379,7 @@ impl DLSyntaxParser {
             Some("Thing".into())
         } else if rem.starts_with("Bottom") {
             Some("Bottom".into())
-        } else if rem.starts_with(".") {
+        } else if rem.starts_with('.') {
             Some(".".into())
         } else {
             None
@@ -764,16 +764,14 @@ impl DLSyntaxRenderer {
     }
 
     fn name(&self, iri: &str) -> String {
-        if let Some(fragment) = iri.rsplit('#').next() {
-            if !fragment.is_empty() && fragment.len() < iri.len() {
+        if let Some(fragment) = iri.rsplit('#').next()
+            && !fragment.is_empty() && fragment.len() < iri.len() {
                 return fragment.to_string();
             }
-        }
-        if let Some(last) = iri.rsplit('/').next() {
-            if !last.is_empty() && last.len() < iri.len() {
+        if let Some(last) = iri.rsplit('/').next()
+            && !last.is_empty() && last.len() < iri.len() {
                 return last.to_string();
             }
-        }
         iri.to_string()
     }
 }

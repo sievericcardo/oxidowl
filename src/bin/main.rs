@@ -1150,12 +1150,9 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
                 return Err(e);
             }
         };
-        let onto_ref = match reasoner.get_ontology().cloned() {
-            Some(r) => r,
-            None => {
-                println!("No ontology loaded in reasoner for entailment checking");
-                return Ok(());
-            }
+        let onto_ref = if let Some(r) = reasoner.get_ontology().cloned() { r } else {
+            println!("No ontology loaded in reasoner for entailment checking");
+            return Ok(());
         };
         let mut stats = oxidowl::core::reasoner::statistics::ReasoningStatistics::new();
         let mut all_entailed = true;

@@ -116,7 +116,7 @@ impl AutoIRIMapper {
 
     /// Ensure the directory has been scanned (lazy init).
     fn ensure_scanned(&self) {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if inner.scanned {
             return;
         }
@@ -125,7 +125,7 @@ impl AutoIRIMapper {
         let Ok(entries) = std::fs::read_dir(&self.directory) else {
             return;
         };
-        for entry in entries.filter_map(|e| e.ok()) {
+        for entry in entries.filter_map(std::result::Result::ok) {
             let path = entry.path();
             if !path.is_file() {
                 continue;
@@ -150,8 +150,8 @@ impl AutoIRIMapper {
         let content = std::fs::read_to_string(path).ok()?;
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology") {
-                if let Some(start) = trimmed.find('<')
+            if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology")
+                && let Some(start) = trimmed.find('<')
                     && let Some(end) = trimmed[start..].find('>')
                 {
                     let iri_str = &trimmed[start + 1..start + end];
@@ -159,7 +159,6 @@ impl AutoIRIMapper {
                         return Some(IRI::new(iri_str));
                     }
                 }
-            }
         }
         None
     }
@@ -168,7 +167,7 @@ impl AutoIRIMapper {
 impl OntologyIRIMapper for AutoIRIMapper {
     fn get_document_iri(&self, ontology_iri: &IRI) -> Option<IRI> {
         self.ensure_scanned();
-        let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.mapping.get(ontology_iri).cloned()
     }
 
@@ -246,7 +245,7 @@ impl ZipIRIMapper {
     /// Each entry whose name ends with `.owl`, `.rdf`, `.ttl`, `.ofn`, `.owx`,
     /// or `.omn` is considered a potential ontology file.
     pub fn new(zip_path: PathBuf) -> Self {
-        let mut mappings = HashMap::new();
+        let mappings = HashMap::new();
 
         if let Ok(file) = std::fs::File::open(&zip_path) {
             #[cfg(feature = "zip-imports")]
@@ -288,7 +287,7 @@ impl ZipIRIMapper {
     /// Returns the entry name if found.
     #[must_use]
     pub fn resolve(&self, ontology_iri: &IRI) -> Option<&str> {
-        self.mappings.get(ontology_iri).map(|s| s.as_str())
+        self.mappings.get(ontology_iri).map(std::string::String::as_str)
     }
 
     /// Get the underlying ZIP file path.

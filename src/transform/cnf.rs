@@ -27,7 +27,7 @@ impl ClausalNormalFormConverter {
     pub fn is_cnf(expr: &ClassExpression) -> bool {
         match expr {
             ClassExpression::ObjectIntersectionOf(conjuncts) => {
-                conjuncts.iter().all(|c| Self::is_clause(c))
+                conjuncts.iter().all(Self::is_clause)
             }
             _ => Self::is_clause(expr),
         }
@@ -38,7 +38,7 @@ impl ClausalNormalFormConverter {
     pub fn is_dnf(expr: &ClassExpression) -> bool {
         match expr {
             ClassExpression::ObjectUnionOf(disjuncts) => {
-                disjuncts.iter().all(|c| Self::is_cube(c))
+                disjuncts.iter().all(Self::is_cube)
             }
             _ => Self::is_cube(expr),
         }
@@ -46,7 +46,7 @@ impl ClausalNormalFormConverter {
 
     fn is_clause(expr: &ClassExpression) -> bool {
         match expr {
-            ClassExpression::ObjectUnionOf(operands) => operands.iter().all(|o| Self::is_literal(o)),
+            ClassExpression::ObjectUnionOf(operands) => operands.iter().all(Self::is_literal),
             _ => Self::is_literal(expr),
         }
     }
@@ -54,7 +54,7 @@ impl ClausalNormalFormConverter {
     fn is_cube(expr: &ClassExpression) -> bool {
         match expr {
             ClassExpression::ObjectIntersectionOf(operands) => {
-                operands.iter().all(|o| Self::is_literal(o))
+                operands.iter().all(Self::is_literal)
             }
             _ => Self::is_literal(expr),
         }
@@ -89,7 +89,7 @@ impl ClausalNormalFormConverter {
 
                         let simplified: Vec<ClassExpression> = distributed
                             .iter()
-                            .map(|d| Self::distribute_union_over_intersection(d))
+                            .map(Self::distribute_union_over_intersection)
                             .collect();
 
                         return ClassExpression::ObjectIntersectionOf(simplified);
@@ -100,7 +100,7 @@ impl ClausalNormalFormConverter {
             ClassExpression::ObjectIntersectionOf(conjuncts) => {
                 let processed: Vec<ClassExpression> = conjuncts
                     .iter()
-                    .map(|c| Self::distribute_union_over_intersection(c))
+                    .map(Self::distribute_union_over_intersection)
                     .collect();
                 ClassExpression::ObjectIntersectionOf(processed)
             }
@@ -133,7 +133,7 @@ impl ClausalNormalFormConverter {
 
                         let simplified: Vec<ClassExpression> = distributed
                             .iter()
-                            .map(|d| Self::distribute_intersection_over_union(d))
+                            .map(Self::distribute_intersection_over_union)
                             .collect();
 
                         return ClassExpression::ObjectUnionOf(simplified);
@@ -144,7 +144,7 @@ impl ClausalNormalFormConverter {
             ClassExpression::ObjectUnionOf(disjuncts) => {
                 let processed: Vec<ClassExpression> = disjuncts
                     .iter()
-                    .map(|d| Self::distribute_intersection_over_union(d))
+                    .map(Self::distribute_intersection_over_union)
                     .collect();
                 ClassExpression::ObjectUnionOf(processed)
             }

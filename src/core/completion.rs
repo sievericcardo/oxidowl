@@ -846,8 +846,7 @@ impl CompletionRuleSet {
                                     concepts: vec![concept.clone()],
                                     dependencies: Arc::clone(dependencies),
                                     explanation: format!(
-                                        "Data assertion value '{}' violates universal constraint on property '{}'",
-                                        val, prop_iri
+                                        "Data assertion value '{val}' violates universal constraint on property '{prop_iri}'"
                                     ),
                                 };
                                 result.clashes.push(clash);
@@ -1104,7 +1103,7 @@ impl CompletionRuleSet {
                     let num_digits = literal
                         .value
                         .chars()
-                        .filter(|c| c.is_ascii_digit())
+                        .filter(char::is_ascii_digit)
                         .count();
                     num_digits <= digits
                 } else {
@@ -1116,7 +1115,7 @@ impl CompletionRuleSet {
                     if let Some(dot_pos) = literal.value.find('.') {
                         literal.value[dot_pos + 1..]
                             .chars()
-                            .filter(|c| c.is_ascii_digit())
+                            .filter(char::is_ascii_digit)
                             .count()
                             <= digits
                     } else {

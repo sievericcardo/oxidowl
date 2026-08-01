@@ -231,8 +231,8 @@ impl ProfileValidator for GenericValidator {
             OWL2Profile::DL => {
                 let mut dl_validator =
                     crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
-                if let Ok(dl_report) = dl_validator.validate() {
-                    if !dl_report.is_valid {
+                if let Ok(dl_report) = dl_validator.validate()
+                    && !dl_report.is_valid {
                         for error in &dl_report.errors {
                             report.add_violation(crate::profiles::ProfileViolation::new(
                                 crate::profiles::ProfileViolationType::DisallowedAxiom(
@@ -242,7 +242,6 @@ impl ProfileValidator for GenericValidator {
                             ));
                         }
                     }
-                }
             }
             OWL2Profile::Full => {
                 // OWL 2 Full allows everything

@@ -481,7 +481,7 @@ impl RdfXmlParser {
                         let pred = self.resolve_element_iri(&name);
                         let obj = attrs.get("rdf:resource")
                             .or_else(|| attrs.iter().find(|(k,_)| k.ends_with(":resource")).map(|(_,v)| v));
-                        if let (Some(s), Some(o)) = (subject.as_ref().cloned(), obj) {
+                        if let (Some(s), Some(o)) = (subject.clone(), obj) {
                             process_owl_triple_inline(ontology, &s, &pred, o);
                         }
                     }
@@ -499,7 +499,7 @@ impl RdfXmlParser {
                         let obj = attrs.get("rdf:resource")
                             .or_else(|| attrs.iter().find(|(k,_)| k.ends_with(":resource")).map(|(_,v)| v))
                             .or_else(|| attrs.iter().find(|(k,_)| k.ends_with(":about") || *k == "about").map(|(_,v)| v));
-                        if let (Some(s), Some(o)) = (subject.as_ref().cloned(), obj) {
+                        if let (Some(s), Some(o)) = (subject.clone(), obj) {
                             process_owl_triple_inline(ontology, &s, &pred, o);
                         }
                     }
@@ -1058,7 +1058,7 @@ impl OntologySerializer for RdfXmlSerializer {
                     RdfTerm::Iri(url) => url.as_str().to_string(),
                     _ => continue,
                 };
-                result.push_str(&format!("  <rdf:Description rdf:about=\"{}\">\n", subj_str));
+                result.push_str(&format!("  <rdf:Description rdf:about=\"{subj_str}\">\n"));
                 match &triple.object {
                     RdfTerm::Iri(url) => {
                         result.push_str(&format!("    <{} rdf:resource=\"{}\"/>\n",
@@ -1191,7 +1191,7 @@ fn process_owl_triple_inline(
     predicate: &str,
     object: &str,
 ) {
-    use crate::ontology::axioms::*;
+    
     use crate::ontology::*;
     let id = ontology.next_axiom_id();
     match predicate {

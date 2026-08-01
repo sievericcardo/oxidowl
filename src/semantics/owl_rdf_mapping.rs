@@ -5,12 +5,10 @@
 //! delegate to this module instead of maintaining their own ad-hoc
 //! mapping code.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::vocabulary::*;
 use super::{RdfTerm, Triple};
-use crate::ontology::axioms::*;
 use crate::ontology::*;
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -260,12 +258,12 @@ pub fn axiom_to_triples(
             let mut key_items: Vec<RdfTerm> = a
                 .object_properties
                 .iter()
-                .map(|p| ope_to_term(p))
+                .map(ope_to_term)
                 .collect();
             key_items.extend(
                 a.data_properties
                     .iter()
-                    .map(|p| dpe_to_term(p)),
+                    .map(dpe_to_term),
             );
             let list_node = build_rdf_list(&key_items, counter, &mut triples);
             triples.push(triple(cls_term, iri_term(&OWL_HAS_KEY), list_node));

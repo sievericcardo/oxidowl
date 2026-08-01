@@ -64,6 +64,6 @@ impl SigIndex {
 #[must_use]
 pub fn axiom_signature(axiom: &Axiom) -> HashSet<IRI> {
     let mut sig = HashSet::new();
-    let _ = crate::searcher::axiom_extract_iris_public(axiom, &mut sig);
+    let () = crate::searcher::axiom_extract_iris_public(axiom, &mut sig);
     sig
 }

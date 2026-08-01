@@ -818,12 +818,11 @@ impl TableauOWLReasoner {
         // Build equivalence map: classes that are mutual sub/super
         for (sub, supers) in &classification.hierarchy {
             for sup in supers {
-                if let Some(sub_supers) = classification.hierarchy.get(sup) {
-                    if sub_supers.contains(sub) {
+                if let Some(sub_supers) = classification.hierarchy.get(sup)
+                    && sub_supers.contains(sub) {
                         eqm.entry(sub.clone()).or_default().insert(sup.clone());
                         eqm.entry(sup.clone()).or_default().insert(sub.clone());
                     }
-                }
             }
         }
 
@@ -1737,11 +1736,8 @@ impl OWLReasoner for TableauOWLReasoner {
 
     fn precompute_inferences(&self, inference_types: &[InferenceType]) -> Result<()> {
         for it in inference_types {
-            match it {
-                InferenceType::ClassHierarchy => {
-                    self.ensure_classified()?;
-                }
-                _ => {}
+            if it == &InferenceType::ClassHierarchy {
+                self.ensure_classified()?;
             }
         }
         Ok(())

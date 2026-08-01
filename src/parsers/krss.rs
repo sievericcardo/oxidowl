@@ -20,16 +20,13 @@ use std::fmt::Write;
 
 /// KRSS variant selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum KRSSVariant {
+    #[default]
     KRSS,
     KRSS2,
 }
 
-impl Default for KRSSVariant {
-    fn default() -> Self {
-        Self::KRSS
-    }
-}
 
 // ── KRSS Parser ──────────────────────────────────────────────────────────────
 
@@ -90,7 +87,7 @@ impl KRSSParser {
                 | "irreflexive"
                     if self.variant == KRSSVariant::KRSS2 =>
                 {
-                    self.parse_property_characteristic(&mut ontology, &cmd)?
+                    self.parse_property_characteristic(&mut ontology, &cmd)?;
                 }
                 _ => { /* skip unknown */ }
             }
@@ -780,16 +777,14 @@ impl KRSSRenderer {
     }
 
     fn name(&self, iri: &str) -> String {
-        if let Some(fragment) = iri.rsplit('#').next() {
-            if !fragment.is_empty() && fragment.len() < iri.len() {
+        if let Some(fragment) = iri.rsplit('#').next()
+            && !fragment.is_empty() && fragment.len() < iri.len() {
                 return fragment.to_string();
             }
-        }
-        if let Some(last) = iri.rsplit('/').next() {
-            if !last.is_empty() && last.len() < iri.len() {
+        if let Some(last) = iri.rsplit('/').next()
+            && !last.is_empty() && last.len() < iri.len() {
                 return last.to_string();
             }
-        }
         iri.to_string()
     }
 }

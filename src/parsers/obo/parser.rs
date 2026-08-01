@@ -32,18 +32,12 @@ pub struct OBOStanza {
 
 /// Parses OBO format content into stanzas and converts to OWL.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct OBOParser {
     #[allow(dead_code)]
     config: OBOParserConfig,
 }
 
-impl Default for OBOParser {
-    fn default() -> Self {
-        Self {
-            config: OBOParserConfig::default(),
-        }
-    }
-}
 
 impl OBOParser {
     #[must_use]
@@ -73,11 +67,10 @@ impl OBOParser {
             }
 
             if trimmed.starts_with('[') && trimmed.ends_with(']') {
-                if let Some(stanza) = current.take() {
-                    if !stanza.tags.is_empty() {
+                if let Some(stanza) = current.take()
+                    && !stanza.tags.is_empty() {
                         stanzas.push(stanza);
                     }
-                }
                 let stanza_type = trimmed[1..trimmed.len() - 1].trim().to_string();
                 current = Some(OBOStanza {
                     stanza_type,
@@ -100,11 +93,10 @@ impl OBOParser {
             }
         }
 
-        if let Some(stanza) = current {
-            if !stanza.tags.is_empty() {
+        if let Some(stanza) = current
+            && !stanza.tags.is_empty() {
                 stanzas.push(stanza);
             }
-        }
         stanzas
     }
 }

@@ -100,7 +100,7 @@ impl NQuadsParser {
 
             current_line = trimmed.to_string();
             let quote_count = current_line.matches('"').count();
-            if quote_count % 2 != 0 {
+            if !quote_count.is_multiple_of(2) {
                 in_literal = true;
                 continue;
             }

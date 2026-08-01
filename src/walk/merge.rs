@@ -70,13 +70,12 @@ impl OWLOntologyMerger {
             }
 
             // Optionally create import declarations
-            if self.create_imports {
-                if let Some(iri) = guard.get_iri() {
+            if self.create_imports
+                && let Some(iri) = guard.get_iri() {
                     merged.imports.push(crate::ontology::ImportsDeclaration {
                         imported_ontology_iri: iri.clone(),
                     });
                 }
-            }
         }
 
         let ont_ref =

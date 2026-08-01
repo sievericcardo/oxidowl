@@ -79,8 +79,8 @@ impl BlackBoxExplanation {
         let mut candidate = axioms.clone();
         let mut essential = Vec::new();
 
-        while !candidate.is_empty() {
-            let ax = candidate.pop().unwrap();
+        while let Some(ax) = candidate.pop() {
+            
             // Check: does ontology \ {ax} still entail?
             let test_onto = self.build_temp_ontology(
                 &axioms

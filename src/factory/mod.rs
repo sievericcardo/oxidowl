@@ -69,42 +69,42 @@ impl DataFactory {
             "classes",
             self.class_cache
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
         );
         s.insert(
             "object_properties",
             self.object_property_cache
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
         );
         s.insert(
             "data_properties",
             self.data_property_cache
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
         );
         s.insert(
             "individuals",
             self.individual_cache
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
         );
         s.insert(
             "annotation_properties",
             self.annotation_property_cache
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
         );
         s.insert(
             "datatypes",
             self.datatype_cache
                 .read()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
         );
         s
@@ -120,12 +120,12 @@ impl DataFactory {
 
     /// Get or create a named class for the given IRI.
     pub fn get_class(&self, iri: &IRI) -> Class {
-        let cache = self.class_cache.read().unwrap_or_else(|e| e.into_inner());
+        let cache = self.class_cache.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(cls) = cache.get(iri) {
             return cls.clone();
         }
         drop(cache);
-        let mut cache = self.class_cache.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = self.class_cache.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| Class { iri: iri.clone() })
@@ -137,7 +137,7 @@ impl DataFactory {
         let cache = self
             .object_property_cache
             .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(prop) = cache.get(iri) {
             return prop.clone();
         }
@@ -145,7 +145,7 @@ impl DataFactory {
         let mut cache = self
             .object_property_cache
             .write()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| ObjectProperty { iri: iri.clone() })
@@ -157,7 +157,7 @@ impl DataFactory {
         let cache = self
             .data_property_cache
             .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(prop) = cache.get(iri) {
             return prop.clone();
         }
@@ -165,7 +165,7 @@ impl DataFactory {
         let mut cache = self
             .data_property_cache
             .write()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| DataProperty { iri: iri.clone() })
@@ -177,7 +177,7 @@ impl DataFactory {
         let cache = self
             .individual_cache
             .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(ind) = cache.get(iri) {
             return ind.clone();
         }
@@ -185,7 +185,7 @@ impl DataFactory {
         let mut cache = self
             .individual_cache
             .write()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| NamedIndividual { iri: iri.clone() })
@@ -206,7 +206,7 @@ impl DataFactory {
         let cache = self
             .annotation_property_cache
             .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(prop) = cache.get(iri) {
             return prop.clone();
         }
@@ -214,7 +214,7 @@ impl DataFactory {
         let mut cache = self
             .annotation_property_cache
             .write()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| AnnotationProperty { iri: iri.clone() })
@@ -226,7 +226,7 @@ impl DataFactory {
         let cache = self
             .datatype_cache
             .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(dt) = cache.get(iri) {
             return dt.clone();
         }
@@ -234,7 +234,7 @@ impl DataFactory {
         let mut cache = self
             .datatype_cache
             .write()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| Datatype { iri: iri.clone() })

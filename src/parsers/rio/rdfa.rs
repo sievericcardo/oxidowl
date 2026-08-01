@@ -137,8 +137,8 @@ impl RDFaParser {
                 }
             }
 
-            if let Some(property) = extract_attr_value(trimmed, "property") {
-                if let Some(ref subj) = current_subject {
+            if let Some(property) = extract_attr_value(trimmed, "property")
+                && let Some(ref subj) = current_subject {
                     let resolved_prop = resolve_term(&property, &prefixes, current_vocab.as_deref());
                     if let Some(content_val) = extract_attr_value(trimmed, "content") {
                         let dt = extract_attr_value(trimmed, "datatype");
@@ -208,11 +208,10 @@ impl RDFaParser {
                         }
                     }
                 }
-            }
 
-            if let Some(rel) = extract_attr_value(trimmed, "rel") {
-                if let Some(ref subj) = current_subject {
-                    if let Some(resource_val) = extract_attr_value(trimmed, "resource") {
+            if let Some(rel) = extract_attr_value(trimmed, "rel")
+                && let Some(ref subj) = current_subject
+                    && let Some(resource_val) = extract_attr_value(trimmed, "resource") {
                         let resolved_rel = resolve_term(&rel, &prefixes, current_vocab.as_deref());
                         let resolved_res =
                             resolve_term(&resource_val, &prefixes, current_vocab.as_deref());
@@ -233,8 +232,6 @@ impl RDFaParser {
                             },
                         ));
                     }
-                }
-            }
         }
         Ok(o)
     }
@@ -274,26 +271,22 @@ impl RDFaRenderer {
                 Axiom::Declaration(d) => match &d.entity {
                     Entity::Class(iri) => {
                         buf.push_str(&format!(
-                            "  <div vocab=\"{OWL_NS}\" typeof=\"owl:Class\" resource=\"{iri}\"></div>\n",
-                            iri = iri
+                            "  <div vocab=\"{OWL_NS}\" typeof=\"owl:Class\" resource=\"{iri}\"></div>\n"
                         ));
                     }
                     Entity::ObjectProperty(iri) => {
                         buf.push_str(&format!(
-                            "  <div vocab=\"{OWL_NS}\" typeof=\"owl:ObjectProperty\" resource=\"{iri}\"></div>\n",
-                            iri = iri
+                            "  <div vocab=\"{OWL_NS}\" typeof=\"owl:ObjectProperty\" resource=\"{iri}\"></div>\n"
                         ));
                     }
                     Entity::DataProperty(iri) => {
                         buf.push_str(&format!(
-                            "  <div vocab=\"{OWL_NS}\" typeof=\"owl:DataProperty\" resource=\"{iri}\"></div>\n",
-                            iri = iri
+                            "  <div vocab=\"{OWL_NS}\" typeof=\"owl:DataProperty\" resource=\"{iri}\"></div>\n"
                         ));
                     }
                     Entity::NamedIndividual(iri) => {
                         buf.push_str(&format!(
-                            "  <div typeof=\"owl:NamedIndividual\" resource=\"{iri}\"></div>\n",
-                            iri = iri
+                            "  <div typeof=\"owl:NamedIndividual\" resource=\"{iri}\"></div>\n"
                         ));
                     }
                     _ => {}

@@ -1402,8 +1402,8 @@ impl SWRLBuiltIn for SubtractTimesBuiltIn {
             (SWRLValue::Literal(t1), SWRLValue::Literal(t2)) => {
                 let time1 = parse_time(&t1.value)?;
                 let time2 = parse_time(&t2.value)?;
-                let secs1 = time1.num_seconds_from_midnight() as i64;
-                let secs2 = time2.num_seconds_from_midnight() as i64;
+                let secs1 = i64::from(time1.num_seconds_from_midnight());
+                let secs2 = i64::from(time2.num_seconds_from_midnight());
                 let diff = secs1 - secs2;
                 Ok(SWRLValue::Literal(Literal::new(format_day_time_duration(
                     chrono::Duration::seconds(diff),
@@ -1454,7 +1454,7 @@ impl SWRLBuiltIn for MultiplyYearMonthDurationsBuiltIn {
             (SWRLValue::Literal(d), SWRLValue::Literal(f)) => {
                 let (y, m) = parse_year_month_duration(&d.value)?;
                 let factor: f64 = f.value.parse().map_err(|_| Error::reasoning("Invalid scalar"))?;
-                let total_months = ((y * 12 + m) as f64 * factor) as i32;
+                let total_months = (f64::from(y * 12 + m) * factor) as i32;
                 Ok(SWRLValue::Literal(Literal::new(format_year_month_duration(
                     total_months / 12, total_months % 12,
                 ))))
@@ -1482,7 +1482,7 @@ impl SWRLBuiltIn for DivideYearMonthDurationsBuiltIn {
                 if divisor == 0.0 {
                     return Err(Error::reasoning("Division by zero"));
                 }
-                let total_months = ((y * 12 + m) as f64 / divisor) as i32;
+                let total_months = (f64::from(y * 12 + m) / divisor) as i32;
                 Ok(SWRLValue::Literal(Literal::new(format_year_month_duration(
                     total_months / 12, total_months % 12,
                 ))))
@@ -1694,7 +1694,7 @@ impl SWRLBuiltIn for AddDayTimeDurationToTimeBuiltIn {
             (SWRLValue::Literal(t), SWRLValue::Literal(dur)) => {
                 let time = parse_time(&t.value)?;
                 let duration = parse_day_time_duration(&dur.value)?;
-                let secs = time.num_seconds_from_midnight() as i64 + duration.num_seconds();
+                let secs = i64::from(time.num_seconds_from_midnight()) + duration.num_seconds();
                 let wrapped = secs.rem_euclid(86400);
                 let h = wrapped / 3600;
                 let m = (wrapped % 3600) / 60;
@@ -1721,7 +1721,7 @@ impl SWRLBuiltIn for SubtractDayTimeDurationFromTimeBuiltIn {
             (SWRLValue::Literal(t), SWRLValue::Literal(dur)) => {
                 let time = parse_time(&t.value)?;
                 let duration = parse_day_time_duration(&dur.value)?;
-                let secs = time.num_seconds_from_midnight() as i64 - duration.num_seconds();
+                let secs = i64::from(time.num_seconds_from_midnight()) - duration.num_seconds();
                 let wrapped = secs.rem_euclid(86400);
                 let h = wrapped / 3600;
                 let m = (wrapped % 3600) / 60;

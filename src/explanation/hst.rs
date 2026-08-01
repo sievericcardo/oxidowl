@@ -75,13 +75,13 @@ impl HSTState {
             return false;
         }
         let mut sorted: Vec<AxiomId> = path_constraints.iter().copied().collect();
-        sorted.sort();
+        sorted.sort_unstable();
         self.visited_paths.contains(&sorted)
     }
 
     fn mark_path_visited(&mut self, path_constraints: &HashSet<AxiomId>) {
         let mut sorted: Vec<AxiomId> = path_constraints.iter().copied().collect();
-        sorted.sort();
+        sorted.sort_unstable();
         self.visited_paths.insert(sorted);
     }
 }
@@ -272,11 +272,10 @@ impl HSTExplanationGenerator {
         for ax in axioms.iter().filter(|a| essential.contains(&a.axiom_id())) {
             let test_set: Vec<Axiom> = minimal.iter().chain(std::iter::once(ax)).cloned().collect();
             let onto = Self::build_onto(&test_set);
-            if let Ok(reasoner) = self.factory.create_reasoner(&onto, &Default::default()) {
-                if reasoner.is_entailed(entailment).unwrap_or(false) {
+            if let Ok(reasoner) = self.factory.create_reasoner(&onto, &Default::default())
+                && reasoner.is_entailed(entailment).unwrap_or(false) {
                     minimal.push(ax.clone());
                 }
-            }
         }
 
         Ok(minimal)

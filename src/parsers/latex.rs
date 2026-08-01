@@ -346,9 +346,9 @@ impl LatexRenderer {
 
     fn format_formula(&self, numbered: bool, formula: &str) -> String {
         if numbered {
-            format!("\\begin{{equation}}\n  {}\n\\end{{equation}}", formula)
+            format!("\\begin{{equation}}\n  {formula}\n\\end{{equation}}")
         } else {
-            format!("\\[\n  {}\n\\]", formula)
+            format!("\\[\n  {formula}\n\\]")
         }
     }
 

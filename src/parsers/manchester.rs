@@ -1135,8 +1135,8 @@ impl ManchesterParser {
 
         // Try to split into property and value
         // Format: "prop value" or "not (prop value)"
-        if let Some(negated) = input.strip_prefix("not (") {
-            if let Some(inner) = negated.strip_suffix(')') {
+        if let Some(negated) = input.strip_prefix("not (")
+            && let Some(inner) = negated.strip_suffix(')') {
                 let inner = inner.trim();
                 if let Some(space_pos) = inner.find(' ') {
                     let prop_str = &inner[..space_pos];
@@ -1158,7 +1158,6 @@ impl ManchesterParser {
                     return Ok(axioms);
                 }
             }
-        }
 
         if let Some(space_pos) = input.find(' ') {
             let prop_str = &input[..space_pos];

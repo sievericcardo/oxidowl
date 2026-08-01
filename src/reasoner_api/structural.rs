@@ -811,11 +811,10 @@ impl OWLReasoner for StructuralReasoner {
             .get(individual)
         {
             for ax in axioms {
-                if &ax.property == property {
-                    if let Individual::Named(ni) = &ax.target {
+                if &ax.property == property
+                    && let Individual::Named(ni) = &ax.target {
                         nodes.insert(Node::singleton(ni.clone()));
                     }
-                }
             }
         }
         Ok(NodeSet::new(nodes))

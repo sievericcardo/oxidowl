@@ -2498,7 +2498,7 @@ impl OWLEntityRenamer {
 
         let mut changes = Vec::new();
         let mut seen_ids = HashSet::new();
-        for ((old_iri, _et), _new_iri) in &self.mappings {
+        for (old_iri, _et) in self.mappings.keys() {
             for id in index.ids_for_entity(old_iri) {
                 if !seen_ids.insert(id) {
                     continue;

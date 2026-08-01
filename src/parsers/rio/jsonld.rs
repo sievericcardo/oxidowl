@@ -41,16 +41,14 @@ fn parse_context(val: &Value, ctx: &mut HashMap<String, String>) {
                         ctx.insert(k.clone(), s.clone());
                     }
                     Value::Object(obj) => {
-                        if let Some(id_val) = obj.get("@id") {
-                            if let Some(s) = id_val.as_str() {
+                        if let Some(id_val) = obj.get("@id")
+                            && let Some(s) = id_val.as_str() {
                                 ctx.insert(k.clone(), s.to_string());
                             }
-                        }
-                        if let Some(type_val) = obj.get("@type") {
-                            if let Some(s) = type_val.as_str() {
+                        if let Some(type_val) = obj.get("@type")
+                            && let Some(s) = type_val.as_str() {
                                 ctx.insert(k.clone(), s.to_string());
                             }
-                        }
                     }
                     _ => {}
                 }
@@ -88,11 +86,10 @@ fn expand_term(term: &str, ctx: &HashMap<String, String>) -> String {
 }
 
 fn extract_id(node: &Value) -> Option<String> {
-    if let Some(id) = node.get("@id") {
-        if let Some(s) = id.as_str() {
+    if let Some(id) = node.get("@id")
+        && let Some(s) = id.as_str() {
             return Some(s.to_string());
         }
-    }
     None
 }
 
@@ -100,7 +97,7 @@ fn extract_type(node: &Value) -> Vec<String> {
     let mut types = Vec::new();
     if let Some(t) = node.get("@type") {
         match t {
-            Value::String(s) => types.push(s.to_string()),
+            Value::String(s) => types.push(s.clone()),
             Value::Array(arr) => {
                 for item in arr {
                     if let Some(s) = item.as_str() {
@@ -116,7 +113,7 @@ fn extract_type(node: &Value) -> Vec<String> {
 
 fn extract_value(node: &Value) -> Option<(String, Option<String>, Option<String>)> {
     if let Some(val) = node.get("@value") {
-        let value_str = val.as_str().map(|s| s.to_string()).unwrap_or_default();
+        let value_str = val.as_str().map(std::string::ToString::to_string).unwrap_or_default();
         let lang = node.get("@language").and_then(|v| v.as_str().map(String::from));
         let datatype = node.get("@datatype").and_then(|v| v.as_str().map(String::from));
         Some((value_str, lang, datatype))
@@ -457,15 +454,14 @@ impl JsonLdRenderer {
                     }
                 }
                 Axiom::AnnotationAssertion(a) => {
-                    if let AnnotationSubject::IRI(iri) = &a.subject {
-                        if let AnnotationValue::Literal(lit) = &a.value {
+                    if let AnnotationSubject::IRI(iri) = &a.subject
+                        && let AnnotationValue::Literal(lit) = &a.value {
                             items.push(format!(
                                 r#"{{"@id":"{iri}","{}":{{"@value":"{}"}}}}"#,
                                 a.property.iri,
                                 lit.value.replace('"', "\\\"")
                             ));
                         }
-                    }
                 }
                 _ => {}
             }

@@ -208,10 +208,7 @@ fn axiom_extract_iris(axiom: &Axiom, out: &mut Vec<IRI>) {
                 ind_extract_iris(i, out);
             }
         }
-        Axiom::AnnotationAssertion(a) => match &a.subject {
-            crate::ontology::AnnotationSubject::IRI(iri) => out.push(iri.clone()),
-            _ => {}
-        },
+        Axiom::AnnotationAssertion(a) => if let crate::ontology::AnnotationSubject::IRI(iri) = &a.subject { out.push(iri.clone()) },
         Axiom::SubAnnotationPropertyOf(a) => {
             out.push(a.sub_property.iri.clone());
             out.push(a.super_property.iri.clone());
@@ -559,8 +556,8 @@ impl<'a> EntitySearcher<'a> {
                     continue;
                 }
                 seen.insert(*id);
-                if let Some(ax) = self.index.get_axiom(*id) {
-                    if let Axiom::Declaration(d) = ax.as_ref() {
+                if let Some(ax) = self.index.get_axiom(*id)
+                    && let Axiom::Declaration(d) = ax.as_ref() {
                         let matches = match entity_type {
                             EntityType::Class => matches!(d.entity, Entity::Class(_)),
                             EntityType::ObjectProperty => {
@@ -581,7 +578,6 @@ impl<'a> EntitySearcher<'a> {
                             result.push(ax.clone());
                         }
                     }
-                }
             }
             let _ = iri;
         }
@@ -648,11 +644,10 @@ impl<'a> EntitySearcher<'a> {
         let mut result = Vec::new();
         for iri in iris {
             for id in self.index.ids_for_entity(iri) {
-                if let Some(ax) = self.index.get_axiom(id) {
-                    if pred(ax) && !result.iter().any(|r: &Arc<Axiom>| Arc::ptr_eq(r, ax)) {
+                if let Some(ax) = self.index.get_axiom(id)
+                    && pred(ax) && !result.iter().any(|r: &Arc<Axiom>| Arc::ptr_eq(r, ax)) {
                         result.push(ax.clone());
                     }
-                }
             }
         }
         result

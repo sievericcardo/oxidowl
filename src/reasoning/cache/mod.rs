@@ -57,10 +57,10 @@ impl MultiLevelCacheManager {
     pub fn new() -> Self {
         Self {
             unsat: UnsatCache::new(),
-            expander: SatExpanderCache::new(50_000, Duration::from_secs(1 * 3600)),
-            completion_graph: CompletionGraphCache::new(10_000, Duration::from_secs(1 * 3600)),
+            expander: SatExpanderCache::new(50_000, Duration::from_hours(1)),
+            completion_graph: CompletionGraphCache::new(10_000, Duration::from_hours(1)),
             saturation: SaturationCache::new(),
-            consequences: ConsequencesCache::new(Duration::from_secs(1 * 3600)),
+            consequences: ConsequencesCache::new(Duration::from_hours(1)),
         }
     }
 

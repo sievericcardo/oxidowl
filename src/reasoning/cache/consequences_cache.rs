@@ -230,7 +230,7 @@ impl ConsequencesCache {
 
 impl Default for ConsequencesCache {
     fn default() -> Self {
-        Self::new(Duration::from_secs(1 * 3600))
+        Self::new(Duration::from_hours(1))
     }
 }
 

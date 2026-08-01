@@ -527,11 +527,10 @@ impl PrefixManager {
     pub fn shorten(&self, iri: &str) -> Option<String> {
         // Try custom prefixes first, then known
         for (prefix, ns) in self.custom.iter().chain(self.known.iter()) {
-            if let Some(local) = iri.strip_prefix(ns.as_str()) {
-                if !local.is_empty() {
+            if let Some(local) = iri.strip_prefix(ns.as_str())
+                && !local.is_empty() {
                     return Some(format!("{prefix}:{local}"));
                 }
-            }
         }
         None
     }

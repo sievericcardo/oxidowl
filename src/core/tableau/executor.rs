@@ -128,8 +128,8 @@ impl TableauExecutor {
                     tableau.pending_queue = backtrack_point.saved_state.pending_queue;
 
                     // Apply the alternative choice
-                    if let super::Choice::Disjunction { concepts, .. } = &backtrack_point.choice {
-                        if let Some(label) = concepts.first() {
+                    if let super::Choice::Disjunction { concepts, .. } = &backtrack_point.choice
+                        && let Some(label) = concepts.first() {
                             tableau.add_concept_to_node(
                                 backtrack_point.node_id,
                                 label.clone(),
@@ -139,7 +139,6 @@ impl TableauExecutor {
                                 backtrack_point.node_id
                             );
                         }
-                    }
 
                     // Clear clashes since we rewound state
                     tableau.clash_detector = crate::core::tableau::ClashDetector::new();
@@ -274,7 +273,7 @@ impl TableauExecutor {
 
                     // Check if any disjunct is already present
                     if let Some(node) = tableau.nodes.get(node_id) {
-                        for disjunct in disjuncts.iter() {
+                        for disjunct in disjuncts {
                             let label = ConceptLabel::Complex(Box::new(disjunct.clone()));
                             if node.concepts.contains(&label) {
                                 debug!("OR rule: disjunct already present at node {node_id}");
@@ -314,8 +313,7 @@ impl TableauExecutor {
                             };
                             tableau.backtrack_stack.push(backtrack_point);
                             debug!(
-                                "OR rule at node {node_id}: pushed alternative disjunct {} as backtrack point",
-                                idx
+                                "OR rule at node {node_id}: pushed alternative disjunct {idx} as backtrack point"
                             );
                         }
                     }
@@ -879,29 +877,25 @@ impl TableauExecutor {
         let mut successors = Vec::new();
 
         // Forward edges: node_id --role--> target
-        if let Some(node) = tableau.nodes.get(node_id) {
-            if let Some(forward) = node.role_successors.get(&role_name) {
+        if let Some(node) = tableau.nodes.get(node_id)
+            && let Some(forward) = node.role_successors.get(&role_name) {
                 successors.extend(forward.iter().copied());
             }
-        }
 
         // Inverse edges: check all nodes for edges going TO node_id
         let inv_role_name = format!("inv({role_name})");
         for edge in &tableau.edges {
             if edge.to == node_id {
                 let edge_role = edge.role.to_string();
-                if edge_role == role_name || edge_role == inv_role_name {
-                    if !successors.contains(&edge.from) {
+                if (edge_role == role_name || edge_role == inv_role_name)
+                    && !successors.contains(&edge.from) {
                         successors.push(edge.from);
                     }
-                }
-                if let super::node::RoleLabel::Inverse(name) = &edge.role {
-                    if name == &role_name {
-                        if !successors.contains(&edge.from) {
+                if let super::node::RoleLabel::Inverse(name) = &edge.role
+                    && name == &role_name
+                        && !successors.contains(&edge.from) {
                             successors.push(edge.from);
                         }
-                    }
-                }
             }
         }
 

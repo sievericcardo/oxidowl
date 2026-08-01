@@ -101,8 +101,8 @@ impl HDTParser {
         // Parse triples as (s_id, p_id, o_id) integer triples referencing dictionary
         for line in content.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() == 3 {
-                if let (Ok(s_idx), Ok(_p_idx), Ok(_o_idx)) = (
+            if parts.len() == 3
+                && let (Ok(s_idx), Ok(_p_idx), Ok(_o_idx)) = (
                     parts[0].parse::<usize>(),
                     parts[1].parse::<usize>(),
                     parts[2].parse::<usize>(),
@@ -118,7 +118,6 @@ impl HDTParser {
                         entity: Entity::Class(iri),
                     }));
                 }
-            }
         }
 
         Ok(o)

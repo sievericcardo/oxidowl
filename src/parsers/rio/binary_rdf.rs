@@ -90,7 +90,7 @@ impl BinaryRdfParser {
         while *pos < data.len() && shift < 64 {
             let byte = data[*pos];
             *pos += 1;
-            result |= ((byte & 0x7F) as u64) << shift;
+            result |= u64::from(byte & 0x7F) << shift;
             if byte & 0x80 == 0 {
                 break;
             }
