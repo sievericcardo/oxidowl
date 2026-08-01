@@ -478,7 +478,6 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 
 /// Public wrapper for format detection from content and path hint.
 /// Used by the OntologyLoader and other consumers.
-#[must_use]
 pub fn detect_format_from_content_public(
     _path: &std::path::Path,
     content: &str,

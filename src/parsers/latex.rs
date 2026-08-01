@@ -235,9 +235,9 @@ impl LatexRenderer {
                     Some(format!("\\textit{{Sym}}({})", self.render_ope(&a.property)))
                 }
                 Axiom::InverseObjectProperties(a) => Some(format!(
-                    "{} \\equiv {}",
+                    "{} \\equiv {}^-",
                     self.render_ope(&a.property1),
-                    format!("{}^-", self.render_ope(&a.property2))
+                    self.render_ope(&a.property2)
                 )),
                 Axiom::ReflexiveObjectProperty(a) => {
                     Some(format!("\\textit{{Ref}}({})", self.render_ope(&a.property)))

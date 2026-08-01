@@ -28,8 +28,6 @@ fn parse_term(token: &str) -> (String, bool) {
         (trimmed.to_string(), false)
     } else if trimmed.starts_with('"') {
         (trimmed.to_string(), true)
-    } else if trimmed.contains(':') {
-        (trimmed.to_string(), false)
     } else {
         (trimmed.to_string(), false)
     }

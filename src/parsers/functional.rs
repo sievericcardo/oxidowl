@@ -1450,15 +1450,9 @@ impl FunctionalParser {
                 position += 1;
                 let subj = if position < tokens.len() {
                     let subj_token = &tokens[position];
-                    if subj_token.starts_with('<') {
-                        crate::ontology::AnnotationSubject::IRI(
-                            crate::ontology::IRI::new(&self.expand_iri(subj_token, prefixes)?),
-                        )
-                    } else {
-                        crate::ontology::AnnotationSubject::IRI(
-                            crate::ontology::IRI::new(&self.expand_iri(subj_token, prefixes)?),
-                        )
-                    }
+                    crate::ontology::AnnotationSubject::IRI(
+                        crate::ontology::IRI::new(&self.expand_iri(subj_token, prefixes)?),
+                    )
                 } else {
                     return Err(Error::ontology_parsing("Expected annotation subject".to_string()));
                 };
@@ -3453,6 +3447,7 @@ fn serialize_object_property_expression(
 /// Serialize an OPE in contexts where it can be an inverse or chain
 /// (e.g., SubObjectPropertyOf, ObjectPropertyDomain), wrapping named
 /// properties with ObjectProperty().
+#[allow(dead_code)]
 fn serialize_object_property_expression_full(
     ope: &crate::ontology::ObjectPropertyExpression,
 ) -> String {
@@ -3528,6 +3523,7 @@ fn serialize_facet(facet: &crate::ontology::IRI) -> String {
     format!("<{facet}>")
 }
 
+#[allow(dead_code)]
 fn serialize_facet_restriction(fr: &crate::ontology::FacetRestriction) -> String {
     format!(
         "FacetRestriction(<{}> {})",
@@ -3535,6 +3531,7 @@ fn serialize_facet_restriction(fr: &crate::ontology::FacetRestriction) -> String
     )
 }
 
+#[allow(dead_code)]
 fn serialize_annotation(ann: &crate::ontology::Annotation) -> String {
     let prop = serialize_annotation_property(&ann.property);
     let value = serialize_annotation_value(&ann.value);

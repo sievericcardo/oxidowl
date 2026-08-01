@@ -122,7 +122,7 @@ impl DLExpressivityChecker {
         expr
     }
 
-    fn check_axiom(&self, axiom: &crate::ontology::axioms::Axiom, expr: &mut DLExpressivity) {
+    fn check_axiom(self, axiom: &crate::ontology::axioms::Axiom, expr: &mut DLExpressivity) {
         use crate::ontology::axioms::Axiom;
         match axiom {
             Axiom::SubClassOf(a) => {
@@ -174,7 +174,7 @@ impl DLExpressivityChecker {
         }
     }
 
-    fn check_ce(&self, ce: &ClassExpression, expr: &mut DLExpressivity) {
+    fn check_ce(self, ce: &ClassExpression, expr: &mut DLExpressivity) {
         match ce {
             ClassExpression::Class(_) => {}
             ClassExpression::ObjectIntersectionOf(ops) => {
@@ -229,7 +229,7 @@ impl DLExpressivityChecker {
         }
     }
 
-    fn is_trivial_filler(&self, ce: &ClassExpression) -> bool {
+    fn is_trivial_filler(self, ce: &ClassExpression) -> bool {
         matches!(ce, ClassExpression::Class(c) if c.is_thing())
     }
 }

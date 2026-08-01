@@ -379,7 +379,6 @@ impl OntologyManager {
 
     /// Compute the imports closure for an ontology (all transitive imports).
     /// Performs BFS with cycle detection and depth limiting.
-    #[must_use]
     pub fn get_imports_closure(&self, ont_ref: &OntologyRef) -> Result<Vec<OntologyRef>> {
         let start_iri = {
             let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -723,7 +722,7 @@ impl OntologyManager {
             let ont_iri = change.ontology_iri();
             if let Some(listeners) = self.ontology_listeners.get(ont_iri) {
                 for listener in listeners {
-                    listener.on_changes(&[change.clone()]);
+                    listener.on_changes(std::slice::from_ref(change));
                 }
                 for listener in listeners {
                     listener.on_change_applied();
@@ -806,9 +805,9 @@ impl OntologyManager {
         let mut new_ont = Ontology::new();
         new_ont.set_iri(effective_iri.clone());
         new_ont.set_version_iri(source_guard.id.version_iri.clone());
-        new_ont.axioms = source_guard.axioms.clone();
-        new_ont.annotations = source_guard.annotations.clone();
-        new_ont.imports = source_guard.imports.clone();
+        new_ont.axioms.clone_from(&source_guard.axioms);
+        new_ont.annotations.clone_from(&source_guard.annotations);
+        new_ont.imports.clone_from(&source_guard.imports);
 
         let ont_ref = OntologyRef::new(RwLock::new(new_ont));
         self.imports_graph.entry(effective_iri.clone()).or_default();

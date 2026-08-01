@@ -40,7 +40,7 @@ impl TriGParser {
             }
             if rem.starts_with("GRAPH") || rem.starts_with("graph") {
                 rest = self.parse_graph_block(rem, merged)?;
-            } else if rem.starts_with('{') {
+            } else if let Some(stripped) = rem.strip_prefix('{') {
                 if let Some(end_pos) = Self::find_matching_brace(rem.as_bytes(), 0) {
                     let block = &rem[1..end_pos];
                     let onto = turtle::parse(block)?;
@@ -49,7 +49,7 @@ impl TriGParser {
                     }
                     rest = &rem[end_pos + 1..];
                 } else {
-                    rest = &rem[1..];
+                    rest = stripped;
                 }
             } else {
                 return Ok(rem);

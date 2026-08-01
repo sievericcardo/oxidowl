@@ -227,6 +227,7 @@ impl RdfXmlParser {
     }
 
     /// Extract class declarations
+    #[allow(dead_code)]
     fn extract_classes(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Enhanced RDF/XML class extraction with proper XML parsing
         // This follows the RDF/XML specification more closely
@@ -330,6 +331,7 @@ impl RdfXmlParser {
     }
 
     /// Check if attributes indicate this is a class
+    #[allow(dead_code)]
     fn has_class_type(&self, attributes: &std::collections::HashMap<String, String>) -> bool {
         // Check for rdf:type attribute pointing to owl:Class
         if let Some(type_val) = attributes.get("rdf:type") {
@@ -340,6 +342,7 @@ impl RdfXmlParser {
     }
 
     /// Add class declaration to ontology
+    #[allow(dead_code)]
     fn add_class_declaration(&self, class_iri: String, ontology: &mut Ontology) -> Result<()> {
         let iri = crate::ontology::IRI::new(&class_iri);
 
@@ -374,6 +377,7 @@ impl RdfXmlParser {
     }
 
     /// Extract property declarations
+    #[allow(dead_code)]
     fn extract_properties(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for owl:ObjectProperty and owl:DatatypeProperty declarations
         let obj_prop_patterns = [
@@ -400,6 +404,7 @@ impl RdfXmlParser {
     }
 
     /// Extract individual declarations
+    #[allow(dead_code)]
     fn extract_individuals(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for individual declarations and class assertions
         let individual_patterns = [
@@ -437,6 +442,7 @@ impl RdfXmlParser {
     }
 
     /// Extract axioms from RDF/XML
+    #[allow(dead_code)]
     fn extract_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for subclass relationships
         self.extract_subclass_axioms(content, ontology)?;
@@ -539,6 +545,7 @@ impl RdfXmlParser {
     // ══════════════════════════════════════════════════════════════════════════
 
     /// Extract subclass axioms
+    #[allow(dead_code)]
     fn extract_subclass_axioms(&self, content: &str, _ontology: &mut Ontology) -> Result<()> {
         // Look for rdfs:subClassOf relationships
         let subclass_pattern = r#"<rdfs:subClassOf rdf:resource="([^"]+)""#;
@@ -560,6 +567,7 @@ impl RdfXmlParser {
     }
 
     /// Extract property assertions
+    #[allow(dead_code)]
     fn extract_property_assertions(&self, _content: &str, _ontology: &mut Ontology) -> Result<()> {
         // This would involve more complex parsing to extract property assertions
         // from the RDF/XML structure

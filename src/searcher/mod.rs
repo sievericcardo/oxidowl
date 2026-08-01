@@ -71,8 +71,10 @@ impl EntityIndex {
 }
 
 /// Public wrapper for extracting IRIs from an axiom's signature.
-#[must_use]
-pub fn axiom_extract_iris_public(axiom: &Axiom, out: &mut HashSet<IRI>) {
+pub fn axiom_extract_iris_public<S: std::hash::BuildHasher>(
+    axiom: &Axiom,
+    out: &mut HashSet<IRI, S>,
+) {
     let mut vec = Vec::new();
     axiom_extract_iris(axiom, &mut vec);
     out.extend(vec);
@@ -637,7 +639,7 @@ impl<'a> EntitySearcher<'a> {
     }
 
     fn filter_axioms_by_iri<F: Fn(&Axiom) -> bool>(&self, iri: &IRI, pred: F) -> Vec<Arc<Axiom>> {
-        self.filter_by_iris(&[iri.clone()], pred)
+        self.filter_by_iris(std::slice::from_ref(iri), pred)
     }
 
     fn filter_by_iris<F: Fn(&Axiom) -> bool>(&self, iris: &[IRI], pred: F) -> Vec<Arc<Axiom>> {

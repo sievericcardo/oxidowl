@@ -1150,7 +1150,7 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
                 return Err(e);
             }
         };
-        let onto_ref = if let Some(r) = reasoner.get_ontology().cloned() { r } else {
+        let Some(onto_ref) = reasoner.get_ontology().cloned() else {
             println!("No ontology loaded in reasoner for entailment checking");
             return Ok(());
         };

@@ -1744,14 +1744,10 @@ impl OWLEntityRenamer {
                 argument,
             } => {
                 let p = Self::rename_dr(predicate, from, to);
-                if p.is_some() {
-                    Some(SWRLAtom::DataRangeAtom {
-                        predicate: p.unwrap(),
-                        argument: argument.clone(),
-                    })
-                } else {
-                    None
-                }
+                p.map(|p| SWRLAtom::DataRangeAtom {
+                    predicate: p,
+                    argument: argument.clone(),
+                })
             }
             SWRLAtom::SameIndividualAtom {
                 first_argument,

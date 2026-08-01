@@ -775,11 +775,8 @@ impl Ontology {
         const TOP_DATA_PROP: &str = "http://www.w3.org/2002/07/owl#topDataProperty";
         let references_top = self.axioms.iter().any(|a| {
             if let axioms::Axiom::SubDataPropertyOf(ax) = a {
-                if let DataPropertyExpression::DataProperty(p) = &ax.super_property {
-                    p.iri.as_str() == TOP_DATA_PROP
-                } else {
-                    false
-                }
+                let DataPropertyExpression::DataProperty(p) = &ax.super_property;
+                p.iri.as_str() == TOP_DATA_PROP
             } else {
                 false
             }

@@ -146,7 +146,7 @@ impl NNFConverter {
     }
 
     /// Process a complement by pushing negation inward.
-    fn complement_to_nnf(&self, inner: &ClassExpression) -> ClassExpression {
+    fn complement_to_nnf(self, inner: &ClassExpression) -> ClassExpression {
         match inner {
             // ¬¬C → C
             ClassExpression::ObjectComplementOf(inner2) => self.to_nnf(inner2),

@@ -520,9 +520,8 @@ impl JustificationComputer {
         superclass: &ClassExpression,
         ontology_axioms: &[Axiom],
     ) -> Result<Option<Vec<Axiom>>> {
-        let factory = match &self.reasoner_factory {
-            Some(f) => f,
-            None => return Ok(None),
+        let Some(factory) = &self.reasoner_factory else {
+            return Ok(None);
         };
 
         let mut o = crate::ontology::Ontology::new();

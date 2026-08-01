@@ -755,12 +755,10 @@ impl ManchesterParser {
         _next_id: &mut u64,
     ) -> Result<Vec<Axiom>, OxidowlError> {
         let dtype_iri = self.resolve_iri(name)?;
-        let mut axioms: Vec<Axiom> = Vec::new();
-
-        axioms.push(Axiom::Declaration(DeclarationAxiom {
+        let axioms: Vec<Axiom> = vec![Axiom::Declaration(DeclarationAxiom {
             id: 0,
             entity: Entity::Datatype(dtype_iri.clone()),
-        }));
+        })];
 
         *index += 1;
 

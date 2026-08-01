@@ -135,6 +135,7 @@ impl QLValidator {
     }
 
     /// Validate property expressions in the ontology
+    #[allow(dead_code)]
     fn validate_property_expressions(
         &self,
         ontology: &Ontology,

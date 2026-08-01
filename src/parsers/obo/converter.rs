@@ -316,6 +316,12 @@ impl Obo2Owl {
     }
 }
 
+impl Default for Obo2Owl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ── Owl2Obo ─────────────────────────────────────────────────────────────────
 
 /// Converts OWL axioms back to OBO stanzas.
@@ -371,5 +377,11 @@ impl Owl2Obo {
         } else {
             s.to_string()
         }
+    }
+}
+
+impl Default for Owl2Obo {
+    fn default() -> Self {
+        Self::new()
     }
 }

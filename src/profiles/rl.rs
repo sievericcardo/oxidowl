@@ -31,6 +31,7 @@ impl RLValidator {
     }
 
     /// Validate class expressions in the ontology
+    #[allow(dead_code)]
     fn validate_class_expressions(
         &self,
         ontology: &Ontology,
@@ -43,6 +44,7 @@ impl RLValidator {
     }
 
     /// Validate property expressions in the ontology
+    #[allow(dead_code)]
     fn validate_property_expressions(
         &self,
         ontology: &Ontology,
@@ -131,6 +133,7 @@ impl RLValidator {
     }
 
     /// Check for prohibited RL constructs
+    #[allow(dead_code)]
     fn check_prohibited_constructs(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
         let prohibited_constructs = self.get_prohibited_constructs();
 
@@ -146,6 +149,7 @@ impl RLValidator {
     }
 
     /// Get the set of constructs prohibited in OWL 2 RL
+    #[allow(dead_code)]
     fn get_prohibited_constructs(&self) -> HashSet<&'static str> {
         let mut prohibited = HashSet::new();
 
@@ -176,6 +180,7 @@ impl RLValidator {
     }
 
     /// Check class expressions within an axiom
+    #[allow(dead_code)]
     fn check_class_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -218,6 +223,7 @@ impl RLValidator {
     }
 
     /// Check property expressions within an axiom
+    #[allow(dead_code)]
     fn check_property_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -452,6 +458,7 @@ impl ProfileValidator for RLValidator {
 
 impl RLValidator {
     /// Validate overall ontology structure for RL compliance
+    #[allow(dead_code)]
     fn validate_ontology_structure(
         &self,
         ontology: &Ontology,
@@ -467,6 +474,7 @@ impl RLValidator {
     }
 
     /// Check for interactions between complex constructs that might violate RL
+    #[allow(dead_code)]
     fn check_complex_construct_interactions(
         &self,
         ontology: &Ontology,
@@ -486,6 +494,7 @@ impl RLValidator {
     }
 
     /// Check specific combinations of complex class expressions
+    #[allow(dead_code)]
     fn check_complex_subclass_combinations(
         &self,
         subclass: &ClassExpression,
@@ -507,6 +516,7 @@ impl RLValidator {
     }
 
     /// Check for Horn clause compliance
+    #[allow(dead_code)]
     fn check_horn_clause_compliance(
         &self,
         ontology: &Ontology,

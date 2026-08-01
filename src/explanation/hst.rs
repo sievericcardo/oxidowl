@@ -126,7 +126,7 @@ impl HSTExplanationGenerator {
     ///    b. If none exists, mark n as closed.
     ///    c. If j is already known, mark n as duplicate.
     ///    d. Otherwise add j to F, and for each axiom a in j, create child with
-    ///       path constraints h(n) ∪ {a} if not already covered.
+    ///    path constraints h(n) ∪ {a} if not already covered.
     /// 4. Return F when done or limit reached.
     pub fn find_justifications(
         &self,

@@ -135,18 +135,11 @@ impl DLSyntaxParser {
                 }))
             }
             _ => {
-                let name = self.parse_name();
-                if name.is_empty() {
-                    Ok(Axiom::Declaration(DeclarationAxiom {
-                        id: 1,
-                        entity: self.entity_from_ce(&lhs),
-                    }))
-                } else {
-                    Ok(Axiom::Declaration(DeclarationAxiom {
-                        id: 1,
-                        entity: self.entity_from_ce(&lhs),
-                    }))
-                }
+                let _ = self.parse_name();
+                Ok(Axiom::Declaration(DeclarationAxiom {
+                    id: 1,
+                    entity: self.entity_from_ce(&lhs),
+                }))
             }
         }
     }
@@ -299,7 +292,7 @@ impl DLSyntaxParser {
         let mut name = String::new();
         while self.pos < self.input.len() {
             let c = self.peek().unwrap();
-            if c.is_alphanumeric() || c == '_' || c == '-' || c == '_' || c == ':' {
+            if c.is_alphanumeric() || c == '_' || c == '-' || c == ':' {
                 name.push(c);
                 self.pos += c.len_utf8();
             } else {
