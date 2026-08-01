@@ -737,6 +737,9 @@ impl Ontology {
     }
 
     /// Get all object properties from the signature
+    ///
+    /// Includes `owl:topObjectProperty` if the ontology uses any object properties,
+    /// matching OWL API v5 behaviour.
     #[must_use]
     pub fn get_object_properties_in_signature(&self) -> Vec<ObjectProperty> {
         let mut props = Vec::new();
@@ -745,6 +748,13 @@ impl Ontology {
                 if let axioms::Entity::ObjectProperty(iri) = &d.entity {
                     props.push(ObjectProperty { iri: iri.clone() });
                 }
+            }
+        }
+        // OWL API v5 always includes owl:topObjectProperty when there are object properties
+        if !props.is_empty() {
+            let top_iri = IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty");
+            if !props.iter().any(|p| p.iri == top_iri) {
+                props.push(ObjectProperty { iri: top_iri });
             }
         }
         props
@@ -761,6 +771,29 @@ impl Ontology {
                 }
             }
         }
+
+        // OWL API v5 includes owl:topDataProperty in the signature whenever it is
+        // referenced as the super-property in a SubDataPropertyOf axiom, even if it
+        // was never explicitly declared.  Mirror that behaviour.
+        const TOP_DATA_PROP: &str = "http://www.w3.org/2002/07/owl#topDataProperty";
+        let references_top = self.axioms.iter().any(|a| {
+            if let axioms::Axiom::SubDataPropertyOf(ax) = a {
+                if let DataPropertyExpression::DataProperty(p) = &ax.super_property {
+                    p.iri.as_str() == TOP_DATA_PROP
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+        if references_top {
+            let top_iri = IRI::new(TOP_DATA_PROP);
+            if !props.iter().any(|p| p.iri == top_iri) {
+                props.push(DataProperty { iri: top_iri });
+            }
+        }
+
         props
     }
 
@@ -778,10 +811,16 @@ impl Ontology {
         inds
     }
 
-    /// Get all datatypes from the signature
+    /// Get all datatypes from the signature.
+    ///
+    /// Includes explicitly declared datatypes AND OWL 2 built-in XSD datatypes
+    /// that are actually *used* in the ontology (in `DataPropertyRange` axioms or
+    /// typed literals in `DataPropertyAssertion` axioms), matching OWL API v5.
     #[must_use]
     pub fn get_datatypes_in_signature(&self) -> Vec<Datatype> {
         let mut dts = Vec::new();
+
+        // Step 1: collect explicitly declared datatypes
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a {
                 if let axioms::Entity::Datatype(iri) = &d.entity {
@@ -789,10 +828,111 @@ impl Ontology {
                 }
             }
         }
+
+        // Known OWL 2 / XSD built-in datatypes that should appear in the signature
+        // when actually used.
+        const BUILTIN_DATATYPES: &[&str] = &[
+            "http://www.w3.org/2001/XMLSchema#string",
+            "http://www.w3.org/2001/XMLSchema#integer",
+            "http://www.w3.org/2001/XMLSchema#decimal",
+            "http://www.w3.org/2001/XMLSchema#double",
+            "http://www.w3.org/2001/XMLSchema#float",
+            "http://www.w3.org/2001/XMLSchema#boolean",
+            "http://www.w3.org/2001/XMLSchema#dateTime",
+            "http://www.w3.org/2001/XMLSchema#int",
+            "http://www.w3.org/2001/XMLSchema#long",
+            "http://www.w3.org/2001/XMLSchema#short",
+            "http://www.w3.org/2001/XMLSchema#date",
+            "http://www.w3.org/2001/XMLSchema#anyURI",
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+        ];
+        let builtin_set: std::collections::HashSet<&str> =
+            BUILTIN_DATATYPES.iter().copied().collect();
+
+        // Step 2: collect IRI strings of all used datatypes from axioms
+        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        /// Recursively gather datatype IRIs from a DataRange.
+        fn collect_from_range(range: &DataRange, out: &mut std::collections::HashSet<String>) {
+            match range {
+                DataRange::Datatype(iri) => {
+                    out.insert(iri.as_str().to_owned());
+                }
+                DataRange::DataIntersectionOf(rs) => {
+                    for r in rs {
+                        collect_from_range(r, out);
+                    }
+                }
+                DataRange::DataUnionOf(rs) => {
+                    for r in rs {
+                        collect_from_range(r, out);
+                    }
+                }
+                DataRange::DataComplementOf(inner) => collect_from_range(inner, out),
+                DataRange::DatatypeRestriction { datatype, .. } => {
+                    out.insert(datatype.as_str().to_owned());
+                }
+                DataRange::DataOneOf(_) => {}
+            }
+        }
+
+        for a in &self.axioms {
+            match a {
+                // DataPropertyRange axioms reference datatypes directly
+                axioms::Axiom::DataPropertyRange(ax) => {
+                    collect_from_range(&ax.range, &mut used);
+                }
+                // Typed literals in DataPropertyAssertion
+                axioms::Axiom::DataPropertyAssertion(ax) => {
+                    if let Some(url) = &ax.value.datatype {
+                        used.insert(url.to_string());
+                    }
+                }
+                // Typed literals in NegativeDataPropertyAssertion
+                axioms::Axiom::NegativeDataPropertyAssertion(ax) => {
+                    if let Some(url) = &ax.value.datatype {
+                        used.insert(url.to_string());
+                    }
+                }
+                // Typed literals in AnnotationAssertion — OWL API v5 includes any
+                // explicitly-typed literal's datatype in the ontology signature.
+                // Also include built-in datatype IRIs used as IRI-valued annotations
+                // (e.g. dcam:rangeIncludes xsd:date).
+                axioms::Axiom::AnnotationAssertion(ax) => {
+                    match &ax.value {
+                        AnnotationValue::Literal(lit) => {
+                            if let Some(url) = &lit.datatype {
+                                used.insert(url.to_string());
+                            }
+                        }
+                        AnnotationValue::IRI(iri) => {
+                            used.insert(iri.as_str().to_owned());
+                        }
+                        AnnotationValue::AnonymousIndividual(_) => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Step 3: add built-in datatypes that are actually used and not yet listed
+        for iri_str in &used {
+            if builtin_set.contains(iri_str.as_str()) {
+                let iri = IRI::new(iri_str);
+                if !dts.iter().any(|d| d.iri == iri) {
+                    dts.push(Datatype { iri });
+                }
+            }
+        }
+
         dts
     }
 
-    /// Get all annotation properties from the signature
+    /// Get all annotation properties from the signature.
+    ///
+    /// Includes explicitly declared annotation properties AND built-in RDFS/OWL
+    /// annotation properties that are actually *used* in `AnnotationAssertion`
+    /// axioms, matching OWL API v5 behaviour.
     #[must_use]
     pub fn get_annotation_properties_in_signature(&self) -> Vec<AnnotationProperty> {
         let mut props = Vec::new();
@@ -803,6 +943,33 @@ impl Ontology {
                 }
             }
         }
+
+        // Built-in annotation properties that should appear in the signature when used
+        const BUILTIN_ANNOTATION_PROPS: &[&str] = &[
+            "http://www.w3.org/2000/01/rdf-schema#label",
+            "http://www.w3.org/2000/01/rdf-schema#comment",
+            "http://www.w3.org/2000/01/rdf-schema#isDefinedBy",
+            "http://www.w3.org/2000/01/rdf-schema#seeAlso",
+            "http://www.w3.org/2002/07/owl#deprecated",
+            "http://www.w3.org/2002/07/owl#versionInfo",
+            "http://www.w3.org/2002/07/owl#priorVersion",
+        ];
+        let builtin_set: std::collections::HashSet<&str> =
+            BUILTIN_ANNOTATION_PROPS.iter().copied().collect();
+
+        // Scan AnnotationAssertion axioms and add built-in properties that are used
+        for a in &self.axioms {
+            if let axioms::Axiom::AnnotationAssertion(ax) = a {
+                let iri_str = ax.property.iri.as_str();
+                if builtin_set.contains(iri_str) {
+                    let iri = ax.property.iri.clone();
+                    if !props.iter().any(|p| p.iri == iri) {
+                        props.push(AnnotationProperty { iri });
+                    }
+                }
+            }
+        }
+
         props
     }
 

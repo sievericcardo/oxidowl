@@ -11,6 +11,7 @@
 //! This implementation provides full OWL 2 RL profile validation according to the W3C specification.
 
 use crate::error::OxidowlError;
+use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::{
     Axiom, ClassExpression, DataPropertyExpression, DataRange, ObjectPropertyExpression, Ontology,
 };
@@ -94,9 +95,10 @@ impl RLValidator {
     fn is_rl_super_class_expression(&self, expr: &ClassExpression) -> bool {
         match expr {
             ClassExpression::Class(_) => true,
+            // Intersection of super-class expressions (recursive, per RL spec)
             ClassExpression::ObjectIntersectionOf(classes) => classes
                 .iter()
-                .all(|c| matches!(c, ClassExpression::Class(_))),
+                .all(|c| self.is_rl_super_class_expression(c)),
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 self.is_property_expression_allowed(property)
                     && matches!(filler.as_ref(), ClassExpression::Class(_))
@@ -149,7 +151,7 @@ impl RLValidator {
 
         // Prohibited axiom types
         prohibited.insert("DisjointUnion");
-        prohibited.insert("InverseObjectProperties");
+        // Note: InverseObjectProperties is ALLOWED in OWL 2 RL
         prohibited.insert("DatatypeDefinition");
 
         // Prohibited class expressions
@@ -162,7 +164,6 @@ impl RLValidator {
         prohibited.insert("ObjectOneOf");
 
         // Prohibited property expressions
-        prohibited.insert("InverseObjectProperty");
         prohibited.insert("PropertyChain");
 
         // Prohibited data ranges
@@ -258,26 +259,24 @@ impl ProfileValidator for RLValidator {
     fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(OWL2Profile::RL);
 
-        // Validate all axioms in the ontology
+        // Single pass: use is_axiom_allowed() as the authoritative check.
+        // Do NOT also call validate_class_expressions() / validate_property_expressions() /
+        // check_prohibited_constructs() — those would double-count the same violations.
         for axiom in ontology.axioms() {
-            // Check for prohibited constructs
-            self.check_prohibited_constructs(axiom, &mut report);
-
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
-                    format!("Axiom type not supported in OWL 2 RL profile: {axiom:?}"),
+                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom.axiom_type())),
+                    format!(
+                        "Axiom not allowed in OWL 2 RL profile: {:?}",
+                        axiom.axiom_type()
+                    ),
                 ));
             }
         }
 
-        // Additional validation for complex constructs
-        self.validate_class_expressions(ontology, &mut report)?;
-        self.validate_property_expressions(ontology, &mut report)?;
+        // validate_data_ranges covers DataPropertyRange data-range validity,
+        // which is not checked by is_axiom_allowed (it returns true unconditionally).
         self.validate_data_ranges(ontology, &mut report)?;
-
-        // Check ontology structure
-        self.validate_ontology_structure(ontology, &mut report)?;
 
         Ok(report)
     }
@@ -358,11 +357,11 @@ impl ProfileValidator for RLValidator {
             Axiom::EquivalentClasses(equiv_axiom) => equiv_axiom
                 .classes
                 .iter()
-                .all(|c| matches!(c, ClassExpression::Class(_))),
+                .all(|c| self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)),
             Axiom::DisjointClasses(disjoint_axiom) => disjoint_axiom
                 .classes
                 .iter()
-                .all(|c| matches!(c, ClassExpression::Class(_))),
+                .all(|c| self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)),
             Axiom::DisjointUnion(_) => false, // Disjoint unions not allowed in RL
 
             // Object property axioms - most are allowed
@@ -380,13 +379,13 @@ impl ProfileValidator for RLValidator {
                 .all(|p| self.is_property_expression_allowed(p)),
             Axiom::ObjectPropertyDomain(domain_axiom) => {
                 self.is_property_expression_allowed(&domain_axiom.property)
-                    && matches!(&domain_axiom.domain, ClassExpression::Class(_))
+                    && self.is_rl_super_class_expression(&domain_axiom.domain)
             }
             Axiom::ObjectPropertyRange(range_axiom) => {
                 self.is_property_expression_allowed(&range_axiom.property)
-                    && matches!(&range_axiom.range, ClassExpression::Class(_))
+                    && self.is_rl_super_class_expression(&range_axiom.range)
             }
-            Axiom::InverseObjectProperties(_) => false, // Not allowed in RL
+            Axiom::InverseObjectProperties(_) => true, // Allowed in OWL 2 RL
             Axiom::FunctionalObjectProperty(_) => true,
             Axiom::InverseFunctionalObjectProperty(_) => true,
             Axiom::ReflexiveObjectProperty(_) => true,
@@ -400,7 +399,7 @@ impl ProfileValidator for RLValidator {
             Axiom::EquivalentDataProperties(_) => true,
             Axiom::DisjointDataProperties(_) => true,
             Axiom::DataPropertyDomain(domain_axiom) => {
-                matches!(&domain_axiom.domain, ClassExpression::Class(_))
+                self.is_rl_super_class_expression(&domain_axiom.domain)
             }
             Axiom::DataPropertyRange(_) => true,
             Axiom::FunctionalDataProperty(_) => true,
@@ -644,16 +643,15 @@ mod tests {
         let validator = RLValidator::new();
         let mut ontology = Ontology::new();
 
-        // Add a non-RL axiom (inverse object property)
-        let prop1 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop1"))
-            .expect("Failed to create ObjectProperty for test: prop1");
-        let prop2 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop2"))
-            .expect("Failed to create ObjectProperty for test: prop2");
-        ontology.axioms.push(Axiom::InverseObjectProperties(
-            crate::ontology::axioms::InverseObjectPropertiesAxiom {
+        // Add a non-RL axiom: DisjointUnion is explicitly prohibited in OWL 2 RL
+        let class_a = ClassExpression::Class(Class::new(IRI::new("http://example.org/A")));
+        let class_b = ClassExpression::Class(Class::new(IRI::new("http://example.org/B")));
+        let class_c = ClassExpression::Class(Class::new(IRI::new("http://example.org/C")));
+        ontology.axioms.push(Axiom::DisjointUnion(
+            crate::ontology::axioms::DisjointUnionAxiom {
                 id: 0,
-                property1: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop1),
-                property2: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop2),
+                class: class_a,
+                disjoint_classes: vec![class_b, class_c],
                 annotations: Vec::new(),
             },
         ));

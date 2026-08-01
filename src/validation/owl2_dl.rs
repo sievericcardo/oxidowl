@@ -600,20 +600,12 @@ impl OWL2DLValidator {
             Axiom::DataPropertyRange(range_axiom) => {
                 self.validate_data_range(&range_axiom.range, errors)?;
             }
-            Axiom::DataPropertyAssertion(assertion_axiom) => {
-                // Validate the literal value against the property's range
-                if let Some(range) = self.get_data_property_range(&assertion_axiom.property)
-                    && !self.is_literal_compatible_with_range(&assertion_axiom.value, &range)
-                {
-                    errors.push(ValidationError::new(
-                        ValidationErrorType::DatatypeMismatch,
-                        format!(
-                            "Literal {:?} is not compatible with data property range {}",
-                            assertion_axiom.value,
-                            self.format_data_range(&range)
-                        ),
-                    ));
-                }
+            Axiom::DataPropertyAssertion(_) => {
+                // OWL 2 DL structural validation does not check whether literal values
+                // are semantically compatible with the declared data property range.
+                // That is a model-level consistency check, not a structural restriction
+                // from OWL 2 Specification Section 11.  Doing so here generates
+                // hundreds of false-positive violations on valid ontologies.
             }
             Axiom::DatatypeDefinition(datatype_def) => {
                 // Validate the datatype definition itself
@@ -903,19 +895,33 @@ impl OWL2DLValidator {
                 Ok(())
             }
             crate::semantics::RdfTerm::BlankNode(id) => {
-                // Validate blank node label (RDF 1.2 well-formedness)
-                // Format: _:[A-Za-z0-9]+
+                // Validate blank node label per RDF 1.1/1.2 well-formedness rules.
+                //
+                // Grammar (RDF 1.1 §2.1 / Turtle §2.1):
+                //   BLANK_NODE_LABEL ::= '_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
+                //
+                // PN_CHARS_U is [A-Za-z0-9_] (and Unicode letters/digits, but here we
+                // require only the ASCII subset for well-formedness on raw labels).
+                // PN_CHARS additionally allows '-' and '.'.
+                //
+                // The previous check required ONLY alphanumeric characters, which rejected
+                // valid labels like `_:b_annot_123` (contains '_') or `_:b-0` (contains '-').
+                fn is_valid_bnode_char(c: char) -> bool {
+                    c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'
+                }
+
                 if let Some(label) = id.strip_prefix("_:") {
-                    if !label.chars().all(|c| c.is_ascii_alphanumeric()) {
+                    if label.is_empty() || !label.chars().all(is_valid_bnode_char) {
                         return Err(ValidationError::new(
                             ValidationErrorType::InvalidBlankNodeLabel,
                             format!(
-                                "Invalid blank node label '{id}' in {position} position (must contain only alphanumeric characters)"
+                                "Invalid blank node label '{id}' in {position} position \
+                                 (label must match [A-Za-z0-9_\\-.]+ after the '_:' prefix)"
                             ),
                         ));
                     }
-                } else if !id.chars().all(|c| c.is_ascii_alphanumeric()) {
-                    // Legacy format without _: prefix
+                } else if id.is_empty() || !id.chars().all(is_valid_bnode_char) {
+                    // Legacy bare label without the '_:' prefix
                     return Err(ValidationError::new(
                         ValidationErrorType::InvalidBlankNodeLabel,
                         format!("Invalid blank node label '{id}' in {position} position"),

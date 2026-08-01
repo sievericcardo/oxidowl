@@ -139,13 +139,13 @@ impl ELValidator {
         }
     }
 
-    /// Check if a property expression is simple (no property chains)
+    /// Check if a property expression is simple for OWL 2 EL.
+    ///
+    /// In OWL 2 EL, only named (non-inverse) object properties are allowed in
+    /// class expressions such as `ObjectSomeValuesFrom`.  Inverse property
+    /// expressions and property chains are NOT permitted.
     fn is_simple_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
-        matches!(
-            expr,
-            ObjectPropertyExpression::ObjectProperty(_)
-                | ObjectPropertyExpression::InverseObjectProperty(_)
-        )
+        matches!(expr, ObjectPropertyExpression::ObjectProperty(_))
     }
 
     /// Validate a data range for OWL 2 EL
@@ -248,6 +248,12 @@ impl ELValidator {
                 "Functional data properties not allowed in OWL 2 EL",
             )),
 
+            // Inverse object properties — OWL 2 EL does not permit them
+            Axiom::InverseObjectProperties(_) => Err(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("InverseObjectProperties".to_string()),
+                "Inverse object properties not allowed in OWL 2 EL",
+            )),
+
             // Other axioms - allow for now but could be restricted
             _ => Ok(()),
         }
@@ -287,6 +293,7 @@ impl ProfileValidator for ELValidator {
     }
 
     fn is_property_expression_allowed(&self, expr: &ObjectPropertyExpression) -> bool {
+        // OWL 2 EL only allows named (non-inverse) object property expressions
         self.is_simple_property_expression(expr)
     }
 

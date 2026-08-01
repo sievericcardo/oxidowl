@@ -11,6 +11,7 @@
 //! This implementation provides full OWL 2 QL profile validation according to the W3C specification.
 
 use crate::error::OxidowlError;
+use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
@@ -494,19 +495,23 @@ impl ProfileValidator for QLValidator {
     fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(OWL2Profile::QL);
 
-        // Validate all axioms in the ontology
+        // Primary validation pass via is_axiom_allowed()
         for axiom in ontology.axioms() {
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
-                    format!("Axiom type not supported in OWL 2 QL profile: {axiom:?}"),
+                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom.axiom_type())),
+                    format!(
+                        "Axiom not allowed in OWL 2 QL profile: {:?}",
+                        axiom.axiom_type()
+                    ),
                 ));
             }
         }
 
-        // Additional validation for complex constructs
+        // Additional expression-level checks not covered by is_axiom_allowed.
+        // (validate_property_expressions is intentionally omitted to avoid
+        // double-counting SubObjectPropertyOf violations already caught above.)
         self.validate_class_expressions(ontology, &mut report)?;
-        self.validate_property_expressions(ontology, &mut report)?;
         self.validate_data_ranges(ontology, &mut report)?;
 
         Ok(report)
@@ -612,24 +617,28 @@ impl ProfileValidator for QLValidator {
             Axiom::DisjointUnion(_) => false, // Disjoint unions not allowed in QL
 
             // Object property axioms
+            // SubObjectPropertyOf with a property chain is NOT in OWL 2 QL
             Axiom::SubObjectPropertyOf(subprop_axiom) => {
-                self.is_property_expression_allowed(&subprop_axiom.sub_property)
-                    && self.is_property_expression_allowed(&subprop_axiom.super_property)
+                !matches!(
+                    &subprop_axiom.sub_property,
+                    ObjectPropertyExpression::PropertyChain(_)
+                ) && self.is_ql_property_expression(&subprop_axiom.sub_property)
+                    && self.is_ql_property_expression(&subprop_axiom.super_property)
             }
             Axiom::EquivalentObjectProperties(equiv_axiom) => equiv_axiom
                 .properties
                 .iter()
-                .all(|p| self.is_property_expression_allowed(p)),
+                .all(|p| self.is_ql_property_expression(p)),
             Axiom::DisjointObjectProperties(disjoint_axiom) => disjoint_axiom
                 .properties
                 .iter()
-                .all(|p| self.is_property_expression_allowed(p)),
+                .all(|p| self.is_ql_property_expression(p)),
             Axiom::ObjectPropertyDomain(domain_axiom) => {
-                self.is_property_expression_allowed(&domain_axiom.property)
+                self.is_ql_property_expression(&domain_axiom.property)
                     && self.is_ql_basic_class_expression(&domain_axiom.domain)
             }
             Axiom::ObjectPropertyRange(range_axiom) => {
-                self.is_property_expression_allowed(&range_axiom.property)
+                self.is_ql_property_expression(&range_axiom.property)
                     && self.is_ql_basic_class_expression(&range_axiom.range)
             }
             Axiom::InverseObjectProperties(_) => false, // Not allowed in QL
@@ -656,7 +665,7 @@ impl ProfileValidator for QLValidator {
                 self.is_ql_basic_class_expression(&class_axiom.class)
             }
             Axiom::ObjectPropertyAssertion(prop_axiom) => {
-                self.is_property_expression_allowed(&prop_axiom.property)
+                self.is_ql_property_expression(&prop_axiom.property)
             }
             Axiom::NegativeObjectPropertyAssertion(_) => false, // Not allowed in QL
             Axiom::DataPropertyAssertion(_) => true,

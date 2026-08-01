@@ -139,7 +139,8 @@ fn test_el_violation_inverse() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(report.is_valid(), "Inverse properties in simple expressions allowed by current EL validator");
+    assert!(!report.is_valid(), "EL validator correctly rejects ObjectInverseOf in ObjectSomeValuesFrom per OWL 2 EL spec");
+    assert!(!report.violations.is_empty(), "Should have violations for inverse property expression");
 }
 
 #[test]

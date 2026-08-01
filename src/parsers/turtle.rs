@@ -7,13 +7,15 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{
+        Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue,
         Class, ClassExpression, DataProperty, DataPropertyExpression, DataRange, FacetRestriction,
         IRI, Individual, Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression,
         Ontology,
         axioms::{
-            Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom,
+            Axiom, AnnotationAssertionAxiom, ClassAssertionAxiom, DataPropertyAssertionAxiom,
+            DataPropertyDomainAxiom, DataPropertyRangeAxiom, DeclarationAxiom,
             DisjointClassesAxiom, DisjointUnionAxiom, Entity, EquivalentClassesAxiom,
-            ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            ObjectPropertyAssertionAxiom, SubClassOfAxiom, SubDataPropertyOfAxiom,
             FunctionalObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
             SymmetricObjectPropertyAxiom, AsymmetricObjectPropertyAxiom,
             ReflexiveObjectPropertyAxiom, IrreflexiveObjectPropertyAxiom,
@@ -32,6 +34,50 @@ fn generate_axiom_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(1);
     COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+/// Return true if `s` is a bare (unquoted) Turtle literal –
+/// i.e. an integer (`0`, `-1`), decimal (`3.14`), double (`1.0e5`),
+/// or boolean (`true` / `false`).
+/// These are NOT IRIs and must be treated as literal values.
+fn is_bare_literal(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    if s == "true" || s == "false" {
+        return true;
+    }
+    // Strip optional leading minus
+    let s = s.strip_prefix('-').unwrap_or(s);
+    if s.is_empty() {
+        return false;
+    }
+    // First character must be a digit or '.'
+    let first = s.chars().next().unwrap();
+    if !first.is_ascii_digit() && first != '.' {
+        return false;
+    }
+    // All remaining characters must be digits, '.', 'e', 'E', '+', '-'
+    s.chars()
+        .all(|c| c.is_ascii_digit() || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-')
+}
+
+/// Given a bare numeric/boolean literal string, return `(value, datatype_url)`.
+fn bare_literal_parts(s: &str) -> (String, Option<url::Url>) {
+    if s == "true" || s == "false" {
+        return (s.to_owned(), url::Url::parse("http://www.w3.org/2001/XMLSchema#boolean").ok());
+    }
+    let lower = s.to_lowercase();
+    if lower.contains('e') {
+        // double
+        (s.to_owned(), url::Url::parse("http://www.w3.org/2001/XMLSchema#double").ok())
+    } else if lower.contains('.') {
+        // decimal
+        (s.to_owned(), url::Url::parse("http://www.w3.org/2001/XMLSchema#decimal").ok())
+    } else {
+        // integer
+        (s.to_owned(), url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").ok())
+    }
 }
 
 /// Parse an IRI from a string, handling both absolute and relative URIs
@@ -385,31 +431,73 @@ impl TurtleParser {
         let mut paren_depth = 0;
         let mut angle_depth = 0; // Track < > brackets for IRIs
 
-        for ch in content.chars() {
+        // Collect chars for lookahead on '.'
+        let chars: Vec<char> = content.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+
+        while i < len {
+            let ch = chars[i];
             match ch {
-                '"' => in_string = !in_string,
-                '[' if !in_string => bracket_depth += 1,
-                ']' if !in_string => bracket_depth -= 1,
-                '(' if !in_string => paren_depth += 1,
-                ')' if !in_string => paren_depth -= 1,
+                '"' => {
+                    in_string = !in_string;
+                    current_statement.push(ch);
+                }
+                '[' if !in_string => {
+                    bracket_depth += 1;
+                    current_statement.push(ch);
+                }
+                ']' if !in_string => {
+                    bracket_depth -= 1;
+                    current_statement.push(ch);
+                }
+                '(' if !in_string => {
+                    paren_depth += 1;
+                    current_statement.push(ch);
+                }
+                ')' if !in_string => {
+                    paren_depth -= 1;
+                    current_statement.push(ch);
+                }
                 '<' if !in_string => {
                     angle_depth += 1;
+                    current_statement.push(ch);
                 }
                 '>' if !in_string => {
                     angle_depth -= 1;
+                    current_statement.push(ch);
                 }
                 '.' if !in_string && bracket_depth == 0 && paren_depth == 0 && angle_depth == 0 => {
-                    current_statement.push(ch);
-                    let stmt = current_statement.trim().to_string();
-                    if !stmt.is_empty() {
-                        statements.push(stmt);
+                    // Fix 1.6: A '.' is a statement terminator ONLY when followed by
+                    // whitespace, '#', or end-of-input.  If the next character is a
+                    // non-whitespace/non-comment character (e.g. a digit or letter in a
+                    // local name like bedreflyt:C71.2) treat the dot as an embedded
+                    // character within the token, NOT as a statement boundary.
+                    let next_is_continuation = if i + 1 < len {
+                        let next = chars[i + 1];
+                        !next.is_whitespace() && next != '#'
+                    } else {
+                        false
+                    };
+
+                    if next_is_continuation {
+                        // Embedded period in a prefixed-name local part
+                        current_statement.push(ch);
+                    } else {
+                        // Statement-ending period
+                        current_statement.push(ch);
+                        let stmt = current_statement.trim().to_string();
+                        if !stmt.is_empty() {
+                            statements.push(stmt);
+                        }
+                        current_statement.clear();
                     }
-                    current_statement.clear();
-                    continue;
                 }
-                _ => {}
+                _ => {
+                    current_statement.push(ch);
+                }
             }
-            current_statement.push(ch);
+            i += 1;
         }
 
         if !current_statement.trim().is_empty() {
@@ -756,7 +844,8 @@ impl TurtleParser {
                         continue;
                     }
                     Token::Literal(lit_value) => {
-                        // Handle literal values as data property assertions
+                        // Handle literal values – data property assertion OR
+                        // annotation assertion (Fix 1.4)
                         let literal_value = lit_value.clone();
                         start_index += 1; // Move past literal
 
@@ -811,32 +900,63 @@ impl TurtleParser {
                             (None, None)
                         };
 
-                        // Create DataPropertyAssertion
-                        let subject_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let data_property = DataProperty {
-                            iri: IRI::new(&predicate),
-                        };
+                        let literal_str = self.decode_escape_sequences(literal_value.trim_matches('"'));
                         let literal = Literal {
-                            value: self.decode_escape_sequences(literal_value.trim_matches('"')),
-                            language,
-                            datatype,
+                            value: literal_str,
+                            language: language.clone(),
+                            datatype: datatype.clone(),
                         };
 
-                        let axiom = DataPropertyAssertionAxiom {
-                            id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(
-                                data_property,
-                            ),
-                            individual: subject_ind,
-                            value: literal,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                        // Fix 1.4: check if predicate is an annotation property
+                        let is_ap = self.is_annotation_property(&predicate, ontology);
+                        if is_ap {
+                            let annotation_value = AnnotationValue::Literal(literal);
+                            if ontology.get_iri().map(|i| i.as_str()) == Some(subject.as_str()) {
+                                // Ontology-level annotation
+                                let annotation = Annotation {
+                                    property: AnnotationProperty { iri: IRI::new(&predicate) },
+                                    value: annotation_value,
+                                    annotations: vec![],
+                                };
+                                ontology.annotations.push(annotation);
+                            } else {
+                                // Fix 1.8: auto-declare annotation property
+                                self.ensure_annotation_property_declared(&predicate, ontology);
+                                let axiom = AnnotationAssertionAxiom {
+                                    id: generate_axiom_id(),
+                                    subject: AnnotationSubject::IRI(IRI::new(&subject)),
+                                    property: AnnotationProperty { iri: IRI::new(&predicate) },
+                                    value: annotation_value,
+                                    annotations: vec![],
+                                };
+                                ontology.add_axiom(Axiom::AnnotationAssertion(axiom));
+                            }
+                        } else {
+                            // DataPropertyAssertion
+                            let subject_ind = Individual::Named(NamedIndividual {
+                                iri: IRI::new(&subject),
+                            });
+                            let data_property = DataProperty {
+                                iri: IRI::new(&predicate),
+                            };
+
+                            let axiom = DataPropertyAssertionAxiom {
+                                id: generate_axiom_id(),
+                                property: crate::ontology::DataPropertyExpression::DataProperty(
+                                    data_property,
+                                ),
+                                individual: subject_ind,
+                                value: literal,
+                                annotations: vec![],
+                            };
+                            ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                        }
                         continue;
                     }
                     _ => {} // Continue with normal processing
+                    // Note: Token::Keyword bare-literals (integers, booleans, decimals)
+                    // fall through here and are handled via resolve_token +
+                    // process_enhanced_triple which uses the is_bare_literal() check.
                 }
             }
 
@@ -2166,6 +2286,19 @@ impl TurtleParser {
                         }
                     }
                 }
+                // Fix: handle backslash-escape sequences inside string literals.
+                // When we see `\` while building a literal, consume the next character
+                // as part of the literal too.  This prevents `\"` from prematurely
+                // closing the string, which was causing garbage tokens (and therefore
+                // 13 spurious AnnotationAssertion axioms) for ontologies containing
+                // strings like `\"2,5 meses\"` or `\"2.5 months\"`.
+                '\\' if in_literal => {
+                    current_token.push(ch);
+                    if i + 1 < chars.len() {
+                        i += 1;
+                        current_token.push(chars[i]);
+                    }
+                }
                 '"' => {
                     if in_literal {
                         current_token.push(ch);
@@ -2288,11 +2421,25 @@ impl TurtleParser {
                     i += 1; // skip the }
                 }
                 '.' if !in_iri && !in_literal => {
-                    if !current_token.is_empty() {
-                        self.add_token_from_string(&current_token, &mut tokens);
-                        current_token.clear();
+                    // Fix 1.6: If we're in the middle of an identifier token and the
+                    // next character is a local-name continuation char (letter, digit,
+                    // '_', '-', '%') the dot is part of the local name
+                    // (e.g. bedreflyt:C71.2).  Only emit a Period token when the dot
+                    // terminates the token.
+                    let next_is_local_name_char = i + 1 < chars.len() && {
+                        let next = chars[i + 1];
+                        next.is_alphanumeric() || next == '_' || next == '-' || next == '%'
+                    };
+                    if !current_token.is_empty() && next_is_local_name_char {
+                        // Embedded dot – stay in the current token
+                        current_token.push(ch);
+                    } else {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::Period);
                     }
-                    tokens.push(Token::Period);
                 }
                 ' ' | '\t' | '\n' | '\r' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
@@ -2618,6 +2765,83 @@ impl TurtleParser {
         }
     }
 
+    // ── helper: check if a subject IRI is declared as a DatatypeProperty ────────
+    fn is_data_property(&self, iri: &str, ontology: &Ontology) -> bool {
+        ontology.axioms().iter().any(|a| {
+            if let Axiom::Declaration(d) = a {
+                if let Entity::DataProperty(dp_iri) = &d.entity {
+                    return dp_iri.as_str() == iri;
+                }
+            }
+            false
+        })
+    }
+
+    // ── helper: check if a predicate IRI is a well-known or declared AnnotationProperty
+    fn is_annotation_property(&self, iri: &str, ontology: &Ontology) -> bool {
+        // Well-known OWL / RDFS annotation properties
+        if matches!(
+            iri,
+            "http://www.w3.org/2000/01/rdf-schema#label"
+                | "http://www.w3.org/2000/01/rdf-schema#comment"
+                | "http://www.w3.org/2000/01/rdf-schema#isDefinedBy"
+                | "http://www.w3.org/2000/01/rdf-schema#seeAlso"
+                | "http://www.w3.org/2002/07/owl#deprecated"
+                | "http://www.w3.org/2002/07/owl#priorVersion"
+                | "http://www.w3.org/2002/07/owl#backwardCompatibleWith"
+                | "http://www.w3.org/2002/07/owl#incompatibleWith"
+                | "http://www.w3.org/2002/07/owl#versionInfo"
+        ) {
+            return true;
+        }
+        // Any predicate declared as AnnotationProperty in the ontology
+        ontology.axioms().iter().any(|a| {
+            if let Axiom::Declaration(d) = a {
+                if let Entity::AnnotationProperty(ap_iri) = &d.entity {
+                    return ap_iri.as_str() == iri;
+                }
+            }
+            false
+        })
+    }
+
+    // ── Fix 1.8: auto-declare an AnnotationProperty if not already present ───────
+    fn ensure_annotation_property_declared(&self, iri: &str, ontology: &mut Ontology) {
+        // Do NOT auto-declare built-in OWL/RDFS annotation properties.  These are
+        // known to reasoners / the OWL API without an explicit Declaration axiom in
+        // the ontology; adding one would create extra Declarations that OWL API v5
+        // does not emit.
+        if matches!(
+            iri,
+            "http://www.w3.org/2000/01/rdf-schema#label"
+                | "http://www.w3.org/2000/01/rdf-schema#comment"
+                | "http://www.w3.org/2000/01/rdf-schema#isDefinedBy"
+                | "http://www.w3.org/2000/01/rdf-schema#seeAlso"
+                | "http://www.w3.org/2002/07/owl#deprecated"
+                | "http://www.w3.org/2002/07/owl#priorVersion"
+                | "http://www.w3.org/2002/07/owl#backwardCompatibleWith"
+                | "http://www.w3.org/2002/07/owl#incompatibleWith"
+                | "http://www.w3.org/2002/07/owl#versionInfo"
+        ) {
+            return;
+        }
+        let already_declared = ontology.axioms().iter().any(|a| {
+            if let Axiom::Declaration(d) = a {
+                if let Entity::AnnotationProperty(ap_iri) = &d.entity {
+                    return ap_iri.as_str() == iri;
+                }
+            }
+            false
+        });
+        if !already_declared {
+            let decl = DeclarationAxiom {
+                id: generate_axiom_id(),
+                entity: Entity::AnnotationProperty(IRI::new(iri)),
+            };
+            ontology.add_axiom(Axiom::Declaration(decl));
+        }
+    }
+
     /// Enhanced triple processing with better OWL support
     fn process_enhanced_triple(
         &self,
@@ -2748,6 +2972,14 @@ impl TurtleParser {
                     }
                 }
             }
+            "http://www.w3.org/2002/07/owl#versionIRI" => {
+                // Fix 1.1: record the version IRI on the ontology
+                ontology.set_version_iri(Some(IRI::new(&object)));
+            }
+            "http://www.w3.org/2002/07/owl#imports" => {
+                // Prevent owl:imports falling through to a spurious ObjectPropertyAssertion.
+                // (Full import-following is handled separately; here we just no-op.)
+            }
             "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
                 let subclass = Class::new(IRI::new(&subject));
                 let superclass = Class::new(IRI::new(&object));
@@ -2758,7 +2990,6 @@ impl TurtleParser {
                     superclass: ClassExpression::Class(superclass),
                     annotations: vec![],
                 };
-                println!("Creating enhanced SubClassOf axiom: {subject} rdfs:subClassOf {object}");
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
             }
             "http://www.w3.org/2002/07/owl#equivalentClass" => {
@@ -2788,26 +3019,53 @@ impl TurtleParser {
                 ontology.add_axiom(Axiom::DisjointClasses(axiom));
             }
             "http://www.w3.org/2000/01/rdf-schema#domain" => {
-                let prop = ObjectProperty::new(IRI::new(&subject))?;
-                let domain = ClassExpression::Class(Class::new(IRI::new(&object)));
-                let axiom = ObjectPropertyDomainAxiom {
-                    id: generate_axiom_id(),
-                    property: ObjectPropertyExpression::ObjectProperty(prop),
-                    domain,
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::ObjectPropertyDomain(axiom));
+                // Fix 1.2: route to DataPropertyDomain when the subject is a DatatypeProperty
+                if self.is_data_property(&subject, ontology) {
+                    let prop = DataProperty { iri: IRI::new(&subject) };
+                    let axiom = DataPropertyDomainAxiom {
+                        id: generate_axiom_id(),
+                        property: DataPropertyExpression::DataProperty(prop),
+                        domain: ClassExpression::Class(Class::new(IRI::new(&object))),
+                        annotations: vec![],
+                    };
+                    ontology.add_axiom(Axiom::DataPropertyDomain(axiom));
+                } else {
+                    let prop = ObjectProperty::new(IRI::new(&subject))?;
+                    let domain = ClassExpression::Class(Class::new(IRI::new(&object)));
+                    let axiom = ObjectPropertyDomainAxiom {
+                        id: generate_axiom_id(),
+                        property: ObjectPropertyExpression::ObjectProperty(prop),
+                        domain,
+                        annotations: vec![],
+                    };
+                    ontology.add_axiom(Axiom::ObjectPropertyDomain(axiom));
+                }
             }
             "http://www.w3.org/2000/01/rdf-schema#range" => {
-                let prop = ObjectProperty::new(IRI::new(&subject))?;
-                let range = ClassExpression::Class(Class::new(IRI::new(&object)));
-                let axiom = ObjectPropertyRangeAxiom {
-                    id: generate_axiom_id(),
-                    property: ObjectPropertyExpression::ObjectProperty(prop),
-                    range,
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::ObjectPropertyRange(axiom));
+                // Fix 1.2: route to DataPropertyRange when subject is DatatypeProperty
+                // or when the range is an XSD / RDF datatype IRI.
+                let is_xsd_range = object.starts_with("http://www.w3.org/2001/XMLSchema#")
+                    || object.starts_with("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+                if self.is_data_property(&subject, ontology) || is_xsd_range {
+                    let prop = DataProperty { iri: IRI::new(&subject) };
+                    let axiom = DataPropertyRangeAxiom {
+                        id: generate_axiom_id(),
+                        property: DataPropertyExpression::DataProperty(prop),
+                        range: DataRange::Datatype(IRI::new(&object)),
+                        annotations: vec![],
+                    };
+                    ontology.add_axiom(Axiom::DataPropertyRange(axiom));
+                } else {
+                    let prop = ObjectProperty::new(IRI::new(&subject))?;
+                    let range = ClassExpression::Class(Class::new(IRI::new(&object)));
+                    let axiom = ObjectPropertyRangeAxiom {
+                        id: generate_axiom_id(),
+                        property: ObjectPropertyExpression::ObjectProperty(prop),
+                        range,
+                        annotations: vec![],
+                    };
+                    ontology.add_axiom(Axiom::ObjectPropertyRange(axiom));
+                }
             }
             "http://www.w3.org/2002/07/owl#sameAs" => {
                 let ind1 = Individual::Named(NamedIndividual { iri: IRI::new(&subject) });
@@ -2830,15 +3088,28 @@ impl TurtleParser {
                 ontology.add_axiom(Axiom::DifferentIndividuals(axiom));
             }
             "http://www.w3.org/2000/01/rdf-schema#subPropertyOf" => {
-                let sub_prop = ObjectProperty::new(IRI::new(&subject))?;
-                let sup_prop = ObjectProperty::new(IRI::new(&object))?;
-                let axiom = SubObjectPropertyOfAxiom {
-                    id: generate_axiom_id(),
-                    sub_property: ObjectPropertyExpression::ObjectProperty(sub_prop),
-                    super_property: ObjectPropertyExpression::ObjectProperty(sup_prop),
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::SubObjectPropertyOf(axiom));
+                // Fix 1.3: route to SubDataPropertyOf when subject is a DatatypeProperty
+                if self.is_data_property(&subject, ontology) {
+                    let sub_prop = DataProperty { iri: IRI::new(&subject) };
+                    let sup_prop = DataProperty { iri: IRI::new(&object) };
+                    let axiom = SubDataPropertyOfAxiom {
+                        id: generate_axiom_id(),
+                        sub_property: DataPropertyExpression::DataProperty(sub_prop),
+                        super_property: DataPropertyExpression::DataProperty(sup_prop),
+                        annotations: vec![],
+                    };
+                    ontology.add_axiom(Axiom::SubDataPropertyOf(axiom));
+                } else {
+                    let sub_prop = ObjectProperty::new(IRI::new(&subject))?;
+                    let sup_prop = ObjectProperty::new(IRI::new(&object))?;
+                    let axiom = SubObjectPropertyOfAxiom {
+                        id: generate_axiom_id(),
+                        sub_property: ObjectPropertyExpression::ObjectProperty(sub_prop),
+                        super_property: ObjectPropertyExpression::ObjectProperty(sup_prop),
+                        annotations: vec![],
+                    };
+                    ontology.add_axiom(Axiom::SubObjectPropertyOf(axiom));
+                }
             }
             "http://www.w3.org/2002/07/owl#inverseOf" => {
                 let prop1 = ObjectProperty::new(IRI::new(&subject))?;
@@ -2852,84 +3123,146 @@ impl TurtleParser {
                 ontology.add_axiom(Axiom::InverseObjectProperties(axiom));
             }
             "http://www.w3.org/2002/07/owl#hasKey" => {
-                // owl:hasKey requires list syntax: owl:hasKey ( properties )
-                if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
-                    return Err(Error::ontology_parsing(
-                        "owl:hasKey requires list syntax: owl:hasKey ( property1 property2 ... )",
-                    ));
-                }
-                // For now, just validate - full hasKey axiom support would go here
+                // hasKey with non-list object – skip silently (Fix 1.7)
             }
             "http://www.w3.org/2002/07/owl#propertyChainAxiom" => {
-                // owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( prop1 prop2 ... )
-                // If object is not a list (rdf:first/rest), it's invalid
-                if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
-                    return Err(Error::ontology_parsing(
-                        "owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( property1 property2 ... )",
-                    ));
-                }
-                // For now, just validate - full property chain axiom support would go here
+                // propertyChainAxiom with non-list object – skip silently (Fix 1.7)
+            }
+            // ── Fix 1.7: other well-known OWL/RDFS structural predicates that must NOT
+            //    fall through to the ObjectPropertyAssertion default arm ──────────────
+            "http://www.w3.org/2002/07/owl#onProperty"
+            | "http://www.w3.org/2002/07/owl#allValuesFrom"
+            | "http://www.w3.org/2002/07/owl#someValuesFrom"
+            | "http://www.w3.org/2002/07/owl#hasValue"
+            | "http://www.w3.org/2002/07/owl#onClass"
+            | "http://www.w3.org/2002/07/owl#onDataRange"
+            | "http://www.w3.org/2002/07/owl#minCardinality"
+            | "http://www.w3.org/2002/07/owl#maxCardinality"
+            | "http://www.w3.org/2002/07/owl#cardinality"
+            | "http://www.w3.org/2002/07/owl#minQualifiedCardinality"
+            | "http://www.w3.org/2002/07/owl#maxQualifiedCardinality"
+            | "http://www.w3.org/2002/07/owl#qualifiedCardinality"
+            | "http://www.w3.org/2002/07/owl#distinctMembers"
+            | "http://www.w3.org/2002/07/owl#members"
+            | "http://www.w3.org/2002/07/owl#oneOf"
+            | "http://www.w3.org/2002/07/owl#unionOf"
+            | "http://www.w3.org/2002/07/owl#intersectionOf"
+            | "http://www.w3.org/2002/07/owl#complementOf"
+            | "http://www.w3.org/2002/07/owl#disjointUnionOf"
+            | "http://www.w3.org/2002/07/owl#withRestrictions"
+            | "http://www.w3.org/2002/07/owl#onDatatype"
+            | "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
+            | "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
+            | "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil" => {
+                // Structural RDF/OWL predicates – handled by the blank-node / list
+                // parsers.  Ignore here to prevent spurious ObjectPropertyAssertions.
             }
             _ => {
-                // Detect if object is a literal (data property) or an individual (object property)
-                let is_literal = object.starts_with('"') || object.contains("^^");
-
-                if is_literal {
-                    // DataPropertyAssertion
-                    let subject_ind = Individual::Named(NamedIndividual {
-                        iri: IRI::new(&subject),
-                    });
-                    let data_property = DataProperty {
-                        iri: IRI::new(&predicate),
-                    };
-
-                    // Parse literal value and datatype
-                    let (value, datatype) = if let Some(idx) = object.find("^^") {
-                        let val = object[..idx].trim_matches('"').to_string();
-                        let dt_str = object[idx + 2..].to_string();
-                        let dt_iri = IRI::new(&dt_str);
-                        let dt_url = dt_iri.to_url().ok();
-                        (val, dt_url)
+                // Fix 1.4: if the predicate is a (well-known or declared) annotation
+                // property, emit an AnnotationAssertionAxiom rather than a property
+                // assertion.  This covers IRI-valued annotations that are not already
+                // handled by the semicolon-statement literal path.
+                if self.is_annotation_property(&predicate, ontology) {
+                    let annotation_value = if object.starts_with('"') {
+                        // Strip surrounding quotes and create a plain literal
+                        let raw = object.trim_matches('"').to_string();
+                        AnnotationValue::Literal(Literal::new(raw))
+                    } else if object.is_empty() || object.starts_with("_:") {
+                        // Anonymous individual or empty – skip
+                        return Ok(());
                     } else {
-                        (object.trim_matches('"').to_string(), None)
+                        AnnotationValue::IRI(IRI::new(&object))
                     };
 
-                    let literal = Literal {
-                        value,
-                        language: None,
-                        datatype,
-                    };
-
-                    let axiom = DataPropertyAssertionAxiom {
-                        id: generate_axiom_id(),
-                        property: crate::ontology::DataPropertyExpression::DataProperty(
-                            data_property,
-                        ),
-                        individual: subject_ind,
-                        value: literal,
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                    // Ontology-level annotation vs entity annotation
+                    if ontology.get_iri().map(|i| i.as_str()) == Some(subject.as_str()) {
+                        let annotation = Annotation {
+                            property: AnnotationProperty { iri: IRI::new(&predicate) },
+                            value: annotation_value,
+                            annotations: vec![],
+                        };
+                        ontology.annotations.push(annotation);
+                    } else {
+                        // Fix 1.8: auto-declare the annotation property if needed
+                        self.ensure_annotation_property_declared(&predicate, ontology);
+                        let axiom = AnnotationAssertionAxiom {
+                            id: generate_axiom_id(),
+                            subject: AnnotationSubject::IRI(IRI::new(&subject)),
+                            property: AnnotationProperty { iri: IRI::new(&predicate) },
+                            value: annotation_value,
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::AnnotationAssertion(axiom));
+                    }
                 } else {
-                    // ObjectPropertyAssertion
-                    let subject_ind = Individual::Named(NamedIndividual {
-                        iri: IRI::new(&subject),
-                    });
-                    let object_ind = Individual::Named(NamedIndividual {
-                        iri: IRI::new(&object),
-                    });
-                    let property = ObjectProperty::new(IRI::new(&predicate))?;
+                    // Detect if object is a literal (data property) or an individual
+                    // (object property).  Cover three literal forms:
+                    //  1. Quoted string:  "value" or "value"^^datatype
+                    //  2. Bare numeric:   42, -3, 1.5, 1e6
+                    //  3. Bare boolean:   true / false
+                    let is_quoted_literal = object.starts_with('"') || object.contains("^^");
+                    let is_bare_num = !is_quoted_literal && is_bare_literal(&object);
+                    let is_literal = is_quoted_literal || is_bare_num;
 
-                    let axiom = ObjectPropertyAssertionAxiom {
-                        id: generate_axiom_id(),
-                        property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                            property,
-                        ),
-                        source: subject_ind,
-                        target: object_ind,
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::ObjectPropertyAssertion(axiom));
+                    if is_literal {
+                        // DataPropertyAssertion
+                        let subject_ind = Individual::Named(NamedIndividual {
+                            iri: IRI::new(&subject),
+                        });
+                        let data_property = DataProperty {
+                            iri: IRI::new(&predicate),
+                        };
+
+                        // Parse literal value and datatype
+                        let (value, datatype) = if let Some(idx) = object.find("^^") {
+                            let val = object[..idx].trim_matches('"').to_string();
+                            let dt_str = object[idx + 2..].to_string();
+                            let dt_iri = IRI::new(&dt_str);
+                            let dt_url = dt_iri.to_url().ok();
+                            (val, dt_url)
+                        } else if is_bare_num {
+                            bare_literal_parts(&object)
+                        } else {
+                            (object.trim_matches('"').to_string(), None)
+                        };
+
+                        let literal = Literal {
+                            value,
+                            language: None,
+                            datatype,
+                        };
+
+                        let axiom = DataPropertyAssertionAxiom {
+                            id: generate_axiom_id(),
+                            property: crate::ontology::DataPropertyExpression::DataProperty(
+                                data_property,
+                            ),
+                            individual: subject_ind,
+                            value: literal,
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                    } else {
+                        // ObjectPropertyAssertion
+                        let subject_ind = Individual::Named(NamedIndividual {
+                            iri: IRI::new(&subject),
+                        });
+                        let object_ind = Individual::Named(NamedIndividual {
+                            iri: IRI::new(&object),
+                        });
+                        let property = ObjectProperty::new(IRI::new(&predicate))?;
+
+                        let axiom = ObjectPropertyAssertionAxiom {
+                            id: generate_axiom_id(),
+                            property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                                property,
+                            ),
+                            source: subject_ind,
+                            target: object_ind,
+                            annotations: vec![],
+                        };
+                        ontology.add_axiom(Axiom::ObjectPropertyAssertion(axiom));
+                    }
                 }
             }
         }
