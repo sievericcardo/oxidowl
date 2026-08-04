@@ -16,7 +16,7 @@ use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(feature = "ml")]
 use candle_core::{Device, Tensor};
@@ -228,11 +228,12 @@ impl MLHeuristicsEngine {
                 message: format!("Failed to acquire predictor lock: {}", e),
             })?;
 
-            let model = if let Some(m) = predictor.as_ref() {
-                m
-            } else {
-                predictor.get_or_insert(CostPredictionModel::new()?)
-            };
+            if predictor.is_none() {
+                *predictor = Some(CostPredictionModel::new()?);
+            }
+            let model = predictor.as_mut().ok_or_else(|| Error::Internal {
+                message: "Cost prediction model not initialized".to_string(),
+            })?;
             model.train(&training_samples, self.config.learning_rate)?
         };
 
@@ -1177,6 +1178,11 @@ impl CostPredictionModel {
         })
     }
 
+    /// Returns the input feature dimension (number of features in each input vector).
+    pub fn feature_dimension(&self) -> usize {
+        18
+    }
+
     pub fn predict(&self, features: &QueryFeatures) -> Result<CostPrediction, Error> {
         let feature_vec = features.to_vector();
         let input =
@@ -1266,7 +1272,7 @@ impl CostPredictionModel {
 
                 for sample in batch {
                     batch_features.extend(sample.features.to_vector());
-                    batch_targets.push(sample.actual_cost as f32);
+                    batch_targets.push(sample.actual_time as f32);
                 }
 
                 let input = Tensor::from_vec(batch_features, &[batch.len(), 18], &self.device)
@@ -1339,18 +1345,17 @@ impl CostPredictionModel {
                 })?;
 
                 // Update parameters using SGD
-                for (name, var) in self.varmap.all_vars() {
+                for var in self.varmap.all_vars() {
                     if let Some(grad) = grads.get(&var) {
-                        let updated =
-                            var.sub(&(grad * learning_rate))
-                                .map_err(|e| Error::Internal {
-                                    message: format!("Parameter update failed for {}: {}", name, e),
-                                })?;
-                        self.varmap
-                            .set_var(&name, &updated)
-                            .map_err(|e| Error::Internal {
-                                message: format!("Failed to set variable {}: {}", name, e),
-                            })?;
+                        let lr_update = (grad * learning_rate).map_err(|e| Error::Internal {
+                            message: format!("Learning rate multiply failed: {}", e),
+                        })?;
+                        let updated = var.as_tensor().sub(&lr_update).map_err(|e| Error::Internal {
+                            message: format!("Parameter update failed: {}", e),
+                        })?;
+                        var.set(&updated).map_err(|e| Error::Internal {
+                            message: format!("Failed to update variable: {}", e),
+                        })?;
                     }
                 }
 
@@ -1390,7 +1395,7 @@ impl CostPredictionModel {
 
         for sample in samples {
             let pred = self.predict(&sample.features)?;
-            let actual = sample.actual_cost;
+            let actual = sample.actual_time;
 
             errors.push((pred.execution_time - actual).abs());
             actuals.push(actual);

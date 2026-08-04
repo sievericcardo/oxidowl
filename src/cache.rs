@@ -43,6 +43,11 @@ pub struct CacheEntry<T> {
     pub value: T,
     pub timestamp: Instant,
     pub hit_count: u64,
+    /// Version of the ontology at the time this entry was stored.
+    /// A value of `0` means "version tracking not enabled for this entry."
+    /// On lookup, if the ontology's current version differs from this field
+    /// the entry is treated as stale regardless of TTL.
+    pub ontology_version: u64,
 }
 
 /// Internal cache statistics tracking
@@ -54,12 +59,29 @@ pub struct CacheMetrics {
 }
 
 impl<T> CacheEntry<T> {
+    /// Create an entry without a version stamp (legacy / version-unaware path).
     #[must_use]
     pub fn new(value: T) -> Self {
         Self {
             value,
             timestamp: Instant::now(),
             hit_count: 0,
+            ontology_version: 0,
+        }
+    }
+
+    /// Create an entry stamped with the current ontology version.
+    ///
+    /// When retrieved via [`ConceptSatisfiabilityCache::get`], the caller's
+    /// `current_version` is compared against this field; a mismatch is treated
+    /// as a cache miss, achieving instant zero-staleness invalidation.
+    #[must_use]
+    pub fn with_version(value: T, version: u64) -> Self {
+        Self {
+            value,
+            timestamp: Instant::now(),
+            hit_count: 0,
+            ontology_version: version,
         }
     }
 
@@ -122,6 +144,9 @@ pub struct ConceptSatisfiabilityCache {
     cache: HashMap<ClassExpression, CacheEntry<bool>>,
     config: CacheConfig,
     metrics: CacheMetrics,
+    /// Ontology version at which this cache was last fully cleared.
+    /// Entries with `ontology_version < current_ontology_version` are stale.
+    current_ontology_version: u64,
 }
 
 impl ConceptSatisfiabilityCache {
@@ -131,6 +156,19 @@ impl ConceptSatisfiabilityCache {
             cache: HashMap::new(),
             config,
             metrics: CacheMetrics::default(),
+            current_ontology_version: 0,
+        }
+    }
+
+    /// Notify the cache that the ontology has advanced to `version`.
+    ///
+    /// All existing entries are immediately purged (zero-staleness guarantee).
+    /// No-op if `version` equals the current tracked version.
+    pub fn set_ontology_version(&mut self, version: u64) {
+        if version != self.current_ontology_version {
+            self.cache.clear();
+            self.metrics = CacheMetrics::default();
+            self.current_ontology_version = version;
         }
     }
 
@@ -140,7 +178,11 @@ impl ConceptSatisfiabilityCache {
             return None;
         }
         if let Some(entry) = self.cache.get_mut(expression) {
-            if entry.is_expired(self.config.ttl) {
+            // Version-stamp check: stale if the entry was computed under an
+            // older ontology version (and version tracking is active).
+            let version_stale = entry.ontology_version != 0
+                && entry.ontology_version != self.current_ontology_version;
+            if entry.is_expired(self.config.ttl) || version_stale {
                 self.cache.remove(expression);
                 self.metrics.misses += 1;
                 None
@@ -162,7 +204,14 @@ impl ConceptSatisfiabilityCache {
         if self.cache.len() >= self.config.max_size {
             self.evict_lru();
         }
-        self.cache.insert(expression, CacheEntry::new(result));
+        // Stamp the entry with the current ontology version so future lookups
+        // can detect staleness without relying solely on TTL.
+        let entry = if self.current_ontology_version > 0 {
+            CacheEntry::with_version(result, self.current_ontology_version)
+        } else {
+            CacheEntry::new(result)
+        };
+        self.cache.insert(expression, entry);
     }
 
     fn evict_lru(&mut self) {
@@ -455,6 +504,9 @@ pub struct CacheManager {
     config: CacheConfig,
     #[allow(dead_code)]
     memory_tracker: Option<Arc<MemoryTracker>>,
+    /// Last ontology version known to this cache manager.
+    /// Updated by [`Self::update_ontology_version`].
+    current_ontology_version: u64,
 }
 
 impl CacheManager {
@@ -473,6 +525,7 @@ impl CacheManager {
             quoted_triple_optimizer: QuotedTripleOptimizer::new(optimizer_config),
             config,
             memory_tracker: None,
+            current_ontology_version: 0,
         }
     }
 
@@ -492,6 +545,7 @@ impl CacheManager {
             quoted_triple_optimizer: QuotedTripleOptimizer::new(optimizer_config),
             config,
             memory_tracker: Some(memory_tracker),
+            current_ontology_version: 0,
         }
     }
 
@@ -508,6 +562,30 @@ impl CacheManager {
         self.concept_cache.clear();
         self.completion_graph_cache.clear();
         self.quoted_triple_optimizer.clear()
+    }
+
+    /// Version-stamped cache invalidation.
+    ///
+    /// Call this after **any** ontology mutation, passing the ontology's new
+    /// [`Ontology::version()`] value.  If `version` is greater than the last
+    /// recorded version, all caches are immediately cleared and the version
+    /// counter is updated.  Subsequent cache entries will be stamped with the
+    /// new version; stale entries (from the previous version) are rejected on
+    /// lookup without waiting for TTL expiry.
+    ///
+    /// This is the preferred way to invalidate caches after mutations — it
+    /// replaces the TTL-only eviction strategy with instant zero-staleness
+    /// invalidation.
+    pub fn update_ontology_version(&mut self, version: u64) -> crate::Result<()> {
+        if version > self.current_ontology_version {
+            // Version has advanced — all cached results are now stale.
+            self.clear_all()?;
+            self.current_ontology_version = version;
+            // Propagate the new version to the per-cache trackers so that
+            // future entries are stamped and future lookups can verify freshness.
+            self.concept_cache.set_ontology_version(version);
+        }
+        Ok(())
     }
 
     /// Get consistency result from cache

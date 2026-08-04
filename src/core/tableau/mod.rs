@@ -763,11 +763,11 @@ impl Tableau {
 
         // Update node connections
         if let Some(from_node) = self.nodes.get_mut(from) {
-            // Update role successors - we'll use the role string as key
+            // Update role successors — intern the role string so equal keys share one Arc.
             let role_str = role.to_string();
             from_node
                 .role_successors
-                .entry(role_str)
+                .entry(Arc::<str>::from(role_str.as_str()))
                 .or_insert_with(HashSet::new)
                 .insert(to);
         }

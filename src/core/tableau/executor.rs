@@ -361,7 +361,7 @@ impl TableauExecutor {
                     let has_successor = tableau
                         .nodes
                         .get(node_id)
-                        .and_then(|n| n.role_successors.get(&role_name))
+                        .and_then(|n| n.role_successors.get(role_name.as_str()))
                         .map(|succs| !succs.is_empty())
                         .unwrap_or(false);
 
@@ -440,7 +440,7 @@ impl TableauExecutor {
                             let count = tableau
                                 .nodes
                                 .get(node_id)
-                                .and_then(|n| n.role_successors.get(&role_name))
+                                .and_then(|n| n.role_successors.get(role_name.as_str()))
                                 .map(|succs| {
                                     succs
                                         .iter()
@@ -508,7 +508,7 @@ impl TableauExecutor {
                     let successors: Vec<NodeId> = tableau
                         .nodes
                         .get(node_id)
-                        .and_then(|n| n.role_successors.get(&role_name))
+                        .and_then(|n| n.role_successors.get(role_name.as_str()))
                         .map(|succs| succs.iter().copied().collect())
                         .unwrap_or_default();
 
@@ -555,7 +555,7 @@ impl TableauExecutor {
                     let existing_count = tableau
                         .nodes
                         .get(node_id)
-                        .and_then(|n| n.role_successors.get(&role_name))
+                        .and_then(|n| n.role_successors.get(role_name.as_str()))
                         .map(std::collections::HashSet::len)
                         .unwrap_or(0);
 
@@ -607,7 +607,7 @@ impl TableauExecutor {
                     let successors: Vec<NodeId> = tableau
                         .nodes
                         .get(node_id)
-                        .and_then(|n| n.role_successors.get(&role_name))
+                        .and_then(|n| n.role_successors.get(role_name.as_str()))
                         .map(|succs| {
                             // Filter successors that have the filler concept
                             let filler_label = ConceptLabel::Complex(filler.clone());
@@ -897,7 +897,7 @@ impl TableauExecutor {
 
         // Forward edges: node_id --role--> target
         if let Some(node) = tableau.nodes.get(node_id)
-            && let Some(forward) = node.role_successors.get(&role_name) {
+            && let Some(forward) = node.role_successors.get(role_name.as_str()) {
                 successors.extend(forward.iter().copied());
             }
 
@@ -1080,7 +1080,7 @@ impl TableauExecutor {
                     let has_data_edge = tableau
                         .nodes
                         .get(node_id)
-                        .and_then(|n| n.role_successors.get(&data_prop_name))
+                        .and_then(|n| n.role_successors.get(data_prop_name.as_str()))
                         .map(|succs| !succs.is_empty())
                         .unwrap_or(false);
 
@@ -1114,7 +1114,7 @@ impl TableauExecutor {
                     let data_successors: Vec<NodeId> = tableau
                         .nodes
                         .get(node_id)
-                        .and_then(|n| n.role_successors.get(&data_prop_name))
+                        .and_then(|n| n.role_successors.get(data_prop_name.as_str()))
                         .map(|succs| succs.iter().copied().collect())
                         .unwrap_or_default();
 

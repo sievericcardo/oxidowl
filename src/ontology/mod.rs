@@ -5,6 +5,44 @@
 use crate::{Error, Result};
 use url::Url;
 
+// ─── Global IRI intern pool (Phase 2.1) ─────────────────────────────────────
+
+/// Global IRI intern pool — deduplicates `Arc<str>` allocations across all ontologies.
+/// Maps IRI string → `Weak<str>` so interned IRIs are dropped when no longer referenced.
+///
+/// Guarded by the `cache` feature because it depends on `dashmap`.
+#[cfg(feature = "cache")]
+static IRI_INTERN_POOL: std::sync::OnceLock<
+    dashmap::DashMap<Box<str>, std::sync::Weak<str>>,
+> = std::sync::OnceLock::new();
+
+#[cfg(feature = "cache")]
+fn get_intern_pool() -> &'static dashmap::DashMap<Box<str>, std::sync::Weak<str>> {
+    IRI_INTERN_POOL.get_or_init(dashmap::DashMap::new)
+}
+
+/// Intern an IRI string, returning a shared `Arc<str>`.
+///
+/// If an equal IRI already exists in the pool the existing `Arc` is returned,
+/// avoiding a new heap allocation.  Stale `Weak` entries are evicted lazily
+/// whenever a new value is inserted for the same key.
+#[cfg(feature = "cache")]
+#[must_use]
+pub fn intern_iri(s: &str) -> std::sync::Arc<str> {
+    let pool = get_intern_pool();
+    // Fast path: check if already interned and still alive.
+    if let Some(weak) = pool.get(s) {
+        if let Some(strong) = weak.upgrade() {
+            return strong;
+        }
+    }
+    // Slow path: create new interned value and store the weak reference.
+    let arc: std::sync::Arc<str> = std::sync::Arc::from(s);
+    let weak = std::sync::Arc::downgrade(&arc);
+    pool.insert(s.into(), weak);
+    arc
+}
+
 pub mod axioms;
 pub mod concepts;
 pub mod datatypes;
@@ -38,11 +76,24 @@ pub struct IRI {
 }
 
 impl IRI {
-    /// Create a new IRI from a string
+    /// Create a new IRI from a string.
+    ///
+    /// When the `cache` feature is enabled the string is deduplicated through
+    /// the global IRI intern pool so that equal IRIs share a single `Arc`
+    /// allocation.  Without the feature a fresh `Arc` is allocated each time.
     #[must_use]
     pub fn new(value: &str) -> Self {
-        Self {
-            value: std::sync::Arc::from(value),
+        #[cfg(feature = "cache")]
+        {
+            Self {
+                value: intern_iri(value),
+            }
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            Self {
+                value: std::sync::Arc::from(value),
+            }
         }
     }
 
@@ -484,6 +535,11 @@ pub struct Ontology {
     pub prefixes: std::collections::HashMap<String, IRI>,
     /// Next axiom ID
     next_id: u64,
+    /// Monotonically increasing version counter.
+    /// Bumped on every mutation (`add_axiom`, `remove_axiom`).
+    /// Cache layers compare their recorded version against this value
+    /// to detect staleness instantly — no TTL wait required.
+    version: u64,
     /// RDF graph for RDF-star and RDF 1.2 support
     /// Contains triples that may include quoted triples (RDF-star) or RDF 1.2 features
     pub rdf_graph: Option<crate::semantics::RdfGraph>,
@@ -499,6 +555,7 @@ impl Ontology {
             id: OntologyID::new(),
             imports: Vec::new(),
             next_id: 1,
+            version: 1,
             prefixes: std::collections::HashMap::new(),
             rdf_graph: None,
         }
@@ -509,6 +566,26 @@ impl Ontology {
         let id = self.next_id;
         self.next_id += 1;
         id
+    }
+
+    /// Return the current version stamp.
+    ///
+    /// This counter starts at `1` and is incremented by every call to
+    /// [`add_axiom`](Self::add_axiom) or [`remove_axiom`](Self::remove_axiom).
+    /// Cache layers record the version at which they computed a result and
+    /// treat their entry as stale whenever the ontology version has advanced.
+    #[must_use]
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    /// Bump the version counter — call after **any** mutation.
+    ///
+    /// Using saturating arithmetic prevents overflow: after `u64::MAX` mutations
+    /// the counter stays at `u64::MAX`, which will cause all caches to remain
+    /// permanently stale (safe, just mildly wasteful for extreme edge cases).
+    pub fn bump_version(&mut self) {
+        self.version = self.version.saturating_add(1);
     }
 
     /// Set the ontology IRI
@@ -603,11 +680,13 @@ impl Ontology {
     /// Add an axiom to the ontology
     pub fn add_axiom(&mut self, axiom: axioms::Axiom) {
         self.axioms.push(axiom);
+        self.bump_version();
     }
 
     /// Remove an axiom from the ontology
     pub fn remove_axiom(&mut self, axiom: &axioms::Axiom) {
         self.axioms.retain(|a| a != axiom);
+        self.bump_version();
     }
 
     /// Get all axioms

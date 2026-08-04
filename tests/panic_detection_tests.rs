@@ -24,7 +24,7 @@ fn test_empty_collection_access_returns_error() {
     // In the old implementation, popping from empty queue would panic with unwrap()
     // Now it should return None, which we can handle
     assert!(tableau.pending_queue.is_empty());
-    let result = tableau.pending_queue.pop_front();
+    let result = Arc::make_mut(&mut tableau.pending_queue).pop_front();
     assert!(
         result.is_none(),
         "Popping from empty queue should return None"

@@ -146,6 +146,19 @@ impl ReasoningService {
         .await
     }
 
+    /// Batch subsumption check — processes N pairs in a single actor round-trip.
+    ///
+    /// This is much more efficient than N sequential `is_subsumed_by` calls
+    /// for large ontologies because it avoids N-1 extra channel round-trips.
+    /// Returns one `bool` per input pair in the same order.
+    pub async fn batch_check_subsumptions(
+        &self,
+        pairs: Vec<(ClassExpression, ClassExpression)>,
+    ) -> Result<Vec<bool>> {
+        self.send(|r| actor::ReasoningRequest::BatchSubsumptionCheck { pairs, reply: r })
+            .await
+    }
+
     /// Check equivalence of two class expressions
     pub async fn is_equivalent_to(
         &self,

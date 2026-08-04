@@ -127,7 +127,6 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use warp::{Filter, Reply};
 
 /// SPARQL server for ontology querying
-#[derive(Debug)]
 pub struct SparqlServer {
     /// Server port
     port: u16,
@@ -137,6 +136,15 @@ pub struct SparqlServer {
     reasoning_service: Arc<ReasoningService>,
     /// RDF store
     store: Arc<Store>,
+}
+
+impl std::fmt::Debug for SparqlServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SparqlServer")
+            .field("port", &self.port)
+            .field("bind_address", &self.bind_address)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SparqlServer {
@@ -157,6 +165,8 @@ impl SparqlServer {
 
         let store = self.store.clone();
         let reasoning_service = self.reasoning_service.clone();
+        let update_store = self.store.clone();
+        let graph_store = self.store.clone();
 
         // SPARQL query endpoint
         let sparql_query = warp::path("sparql")
@@ -170,7 +180,7 @@ impl SparqlServer {
         let sparql_update = warp::path("sparql-update")
             .and(warp::post())
             .and(warp::body::form())
-            .and(warp::any().map(move || self.store.clone()))
+            .and(warp::any().map(move || update_store.clone()))
             .and_then(handle_sparql_update);
 
         // Health check endpoint
@@ -179,7 +189,6 @@ impl SparqlServer {
             .map(|| warp::reply::json(&serde_json::json!({"status": "ok"})));
 
         // Graph export endpoint — returns the default graph as N-Triples (RDF 1.2)
-        let graph_store = self.store.clone();
         let graph_export = warp::path("graph")
             .and(warp::get())
             .and(warp::any().map(move || graph_store.clone()))
@@ -200,7 +209,7 @@ impl SparqlServer {
             .parse()
             .map_err(|e| Error::config(format!("Invalid server address: {}", e)))?;
 
-        let server = warp::serve(routes).bind(addr);
+        let server = warp::serve(routes).run(addr);
         let server_task = tokio::spawn(server);
 
         tracing::info!(
@@ -214,79 +223,33 @@ impl SparqlServer {
 
     /// Initialize the RDF store with ontology data
     async fn initialize_store(&self) -> Result<()> {
-        let reasoner = self.reasoning_service.get_reasoner().await?;
-        let ontology = reasoner
-            .read()
-            .map_err(|e| {
-                Error::lock_poisoned(format!("Failed to acquire read lock on reasoner: {}", e))
-            })?
-            .get_ontology()
-            .ok_or_else(|| Error::reasoning("Failed to get ontology from reasoner"))?;
-        let ontology_guard = ontology.read().map_err(|e| {
-            Error::lock_poisoned(format!("Failed to acquire read lock on ontology: {}", e))
-        })?;
-
+        // Populate the store with inferred class hierarchy from the reasoning service
+        let classification = self.reasoning_service.classify().await?;
         let store = &*self.store;
 
-        // Convert ontology axioms to RDF triples and add to store
-        for axiom in &ontology_guard.axioms {
-            let triples = self.axiom_to_triples(axiom)?;
-            for triple in triples {
-                let quad = Quad::new(
-                    triple.subject,
-                    triple.predicate,
-                    triple.object,
-                    GraphName::DefaultGraph,
-                );
-                store.insert(&quad).map_err(|e| Error::Sparql {
+        let rdfs_subclass =
+            NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf").map_err(|e| {
+                Error::Sparql {
                     message: e.to_string(),
-                })?;
-            }
-        }
+                }
+            })?;
 
-        // Add inferred triples from reasoning
-        let classification = self.reasoning_service.get_classification().await?;
         for (subclass, superclasses) in &classification.hierarchy {
-            for superclass in superclasses {
-                let sub_iri = NamedNode::new(subclass).map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-                let sup_iri = NamedNode::new(superclass).map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-                let rdfs_subclass = NamedNode::new(
-                    "http://www.w3.org/2000/01/rdf-schema#subClassOf",
-                )
-                .map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-
-                let triple = Triple::new(sub_iri, rdfs_subclass, sup_iri);
-                let quad = Quad::new(
-                    triple.subject,
-                    triple.predicate,
-                    triple.object,
-                    GraphName::DefaultGraph,
-                );
-                store.insert(&quad).map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-            }
-        }
-
-        // Add RDF-star triples from ontology's RDF graph
-        if let Some(rdf_graph) = ontology_guard.get_rdf_graph() {
-            for rdf_triple in rdf_graph.triples() {
-                if let Ok(oxigraph_quad) = self.convert_rdfstar_triple_to_quad(rdf_triple) {
-                    store.insert(&oxigraph_quad).map_err(|e| Error::Sparql {
-                        message: e.to_string(),
-                    })?;
+            if let Some(sub_iri) = self.class_expr_to_iri(subclass) {
+                for superclass in superclasses {
+                    if let Some(sup_iri) = self.class_expr_to_iri(superclass) {
+                        let quad = Quad::new(
+                            sub_iri.clone(),
+                            rdfs_subclass.clone(),
+                            sup_iri,
+                            GraphName::DefaultGraph,
+                        );
+                        store.insert(&quad).map_err(|e| Error::Sparql {
+                            message: e.to_string(),
+                        })?;
+                    }
                 }
             }
-            tracing::info!(
-                "Added {} RDF-star triples to SPARQL store",
-                rdf_graph.triples().len()
-            );
         }
 
         tracing::info!("Initialized SPARQL store with ontology data");
@@ -298,11 +261,12 @@ impl SparqlServer {
         let mut triples = Vec::new();
 
         match axiom {
-            Axiom::SubClassOf(sub, sup) => {
+            Axiom::SubClassOf(axiom) => {
                 // Convert class expressions to IRIs (simplified)
-                if let (Some(sub_iri), Some(sup_iri)) =
-                    (self.class_expr_to_iri(sub), self.class_expr_to_iri(sup))
-                {
+                if let (Some(sub_iri), Some(sup_iri)) = (
+                    self.class_expr_to_iri(&axiom.subclass),
+                    self.class_expr_to_iri(&axiom.superclass),
+                ) {
                     let rdfs_subclass = NamedNode::new(
                         "http://www.w3.org/2000/01/rdf-schema#subClassOf",
                     )
@@ -312,32 +276,43 @@ impl SparqlServer {
                     triples.push(Triple::new(sub_iri, rdfs_subclass, sup_iri));
                 }
             }
-            Axiom::ClassAssertion(class, individual) => {
-                if let Some(class_iri) = self.class_expr_to_iri(class) {
-                    let individual_iri =
-                        NamedNode::new(&individual.iri).map_err(|e| Error::Sparql {
+            Axiom::ClassAssertion(axiom) => {
+                if let Some(class_iri) = self.class_expr_to_iri(&axiom.class) {
+                    if let crate::ontology::Individual::Named(named) = &axiom.individual {
+                        let individual_iri =
+                            NamedNode::new(named.iri.as_str()).map_err(|e| Error::Sparql {
+                                message: e.to_string(),
+                            })?;
+                        let rdf_type = NamedNode::new(
+                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        )
+                        .map_err(|e| Error::Sparql {
                             message: e.to_string(),
                         })?;
-                    let rdf_type = NamedNode::new(
-                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-                    )
-                    .map_err(|e| Error::Sparql {
-                        message: e.to_string(),
-                    })?;
-                    triples.push(Triple::new(individual_iri, rdf_type, class_iri));
+                        triples.push(Triple::new(individual_iri, rdf_type, class_iri));
+                    }
                 }
             }
-            Axiom::ObjectPropertyAssertion(prop, subj, obj) => {
-                let prop_iri = NamedNode::new(&prop.to_string()).map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-                let subj_iri = NamedNode::new(&subj.iri).map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-                let obj_iri = NamedNode::new(&obj.iri).map_err(|e| Error::Sparql {
-                    message: e.to_string(),
-                })?;
-                triples.push(Triple::new(subj_iri, prop_iri, obj_iri));
+            Axiom::ObjectPropertyAssertion(axiom) => {
+                if let (
+                    crate::ontology::Individual::Named(source),
+                    crate::ontology::Individual::Named(target),
+                ) = (&axiom.source, &axiom.target)
+                {
+                    let prop_iri =
+                        NamedNode::new(&axiom.property.to_string()).map_err(|e| Error::Sparql {
+                            message: e.to_string(),
+                        })?;
+                    let subj_iri =
+                        NamedNode::new(source.iri.as_str()).map_err(|e| Error::Sparql {
+                            message: e.to_string(),
+                        })?;
+                    let obj_iri =
+                        NamedNode::new(target.iri.as_str()).map_err(|e| Error::Sparql {
+                            message: e.to_string(),
+                        })?;
+                    triples.push(Triple::new(subj_iri, prop_iri, obj_iri));
+                }
             }
             _ => {
                 // Handle other axiom types as needed
@@ -353,7 +328,9 @@ impl SparqlServer {
         class_expr: &crate::ontology::ClassExpression,
     ) -> Option<NamedNode> {
         match class_expr {
-            crate::ontology::ClassExpression::Class(class) => NamedNode::new(&class.iri).ok(),
+            crate::ontology::ClassExpression::Class(class) => {
+                NamedNode::new(class.iri.as_str()).ok()
+            }
             _ => None, // Complex expressions would need more sophisticated handling
         }
     }
@@ -376,8 +353,8 @@ impl SparqlServer {
     /// Convert oxidowl RdfTerm to Oxigraph NamedOrBlankNode (IRI or BlankNode only; QuotedTriple not supported in subject position)
     fn convert_rdf_term_to_oxigraph_subject(&self, term: &RdfTerm) -> Result<NamedOrBlankNode> {
         match term {
-            RdfTerm::IRI(iri) => {
-                let node = NamedNode::new(iri).map_err(|e| Error::Sparql {
+            RdfTerm::Iri(url) => {
+                let node = NamedNode::new(url.as_str()).map_err(|e| Error::Sparql {
                     message: e.to_string(),
                 })?;
                 Ok(NamedOrBlankNode::NamedNode(node))
@@ -405,7 +382,7 @@ impl SparqlServer {
     /// Convert oxidowl RdfTerm to Oxigraph NamedNode (predicate must be IRI)
     fn convert_rdf_term_to_oxigraph_predicate(&self, term: &RdfTerm) -> Result<NamedNode> {
         match term {
-            RdfTerm::IRI(iri) => NamedNode::new(iri).map_err(|e| Error::Sparql {
+            RdfTerm::Iri(url) => NamedNode::new(url.as_str()).map_err(|e| Error::Sparql {
                 message: e.to_string(),
             }),
             _ => Err(Error::Sparql {
@@ -417,8 +394,8 @@ impl SparqlServer {
     /// Convert oxidowl RdfTerm to Oxigraph Term (IRI, BlankNode, Literal, or Triple)
     fn convert_rdf_term_to_oxigraph_term(&self, term: &RdfTerm) -> Result<Term> {
         match term {
-            RdfTerm::IRI(iri) => {
-                let node = NamedNode::new(iri).map_err(|e| Error::Sparql {
+            RdfTerm::Iri(url) => {
+                let node = NamedNode::new(url.as_str()).map_err(|e| Error::Sparql {
                     message: e.to_string(),
                 })?;
                 Ok(Term::NamedNode(node))
@@ -433,6 +410,7 @@ impl SparqlServer {
                 value,
                 datatype,
                 language,
+                direction: _,
             } => {
                 let lit = if let Some(lang) = language {
                     oxigraph::model::Literal::new_language_tagged_literal(value, lang).map_err(
@@ -441,7 +419,7 @@ impl SparqlServer {
                         },
                     )?
                 } else if let Some(dt) = datatype {
-                    let dt_node = NamedNode::new(dt).map_err(|e| Error::Sparql {
+                    let dt_node = NamedNode::new(dt.as_str()).map_err(|e| Error::Sparql {
                         message: e.to_string(),
                     })?;
                     oxigraph::model::Literal::new_typed_literal(value, dt_node)
@@ -450,7 +428,7 @@ impl SparqlServer {
                 };
                 Ok(Term::Literal(lit))
             }
-            RdfTerm::QuotedTriple(_) => {
+            RdfTerm::QuotedTriple(_) | RdfTerm::TripleTerm(_) => {
                 // RDF-star quoted triples in object position require the rdf-12
                 // feature of oxrdf. This is not currently enabled.
                 Err(Error::Sparql {
@@ -670,7 +648,7 @@ fn term_to_sparql_value(term: &Term) -> SparqlValue {
         },
         Term::Literal(literal) => {
             let lang = literal.language().map(|l| l.to_string());
-            let datatype = if literal.datatype() == xsd::STRING {
+            let datatype = if literal.datatype() == xsd::STRING() {
                 None
             } else {
                 Some(literal.datatype().as_str().to_string())
@@ -682,22 +660,6 @@ fn term_to_sparql_value(term: &Term) -> SparqlValue {
                 lang,
                 datatype,
                 triple: None,
-            }
-        }
-        Term::Triple(triple_box) => {
-            // RDF-star: Serialize the quoted triple
-            let nested_triple = SparqlTriple {
-                subject: term_to_sparql_value(&triple_box.subject.into()),
-                predicate: term_to_sparql_value(&triple_box.predicate.into()),
-                object: term_to_sparql_value(&triple_box.object),
-            };
-
-            SparqlValue {
-                value_type: "triple".to_string(),
-                value: format!("<< {} >>", triple_to_ntriples_string(&**triple_box)),
-                lang: None,
-                datatype: None,
-                triple: Some(Box::new(nested_triple)),
             }
         }
         _ => SparqlValue {
@@ -730,13 +692,12 @@ fn term_to_ntriples_string(term: &Term) -> String {
         Term::Literal(lit) => {
             if let Some(lang) = lit.language() {
                 format!("\"{}\"@{}", lit.value(), lang)
-            } else if lit.datatype() != xsd::STRING {
+            } else if lit.datatype() != xsd::STRING() {
                 format!("\"{}\"^^<{}>", lit.value(), lit.datatype().as_str())
             } else {
                 format!("\"{}\"", lit.value())
             }
         }
-        Term::Triple(t) => format!("<< {} >>", triple_to_ntriples_string(t)),
         _ => term.to_string(),
     }
 }
@@ -749,10 +710,12 @@ impl warp::reject::Reject for SparqlError {}
 
 // XSD namespace constants
 mod xsd {
-    use oxigraph::model::NamedNode;
+    use oxigraph::model::NamedNodeRef;
 
-    pub const STRING: NamedNode =
-        NamedNode::new_unchecked("http://www.w3.org/2001/XMLSchema#string");
+    #[inline]
+    pub fn STRING() -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked("http://www.w3.org/2001/XMLSchema#string")
+    }
 }
 
 #[cfg(test)]
@@ -764,37 +727,39 @@ mod tests {
 
     #[test]
     fn test_convert_simple_rdf_triple() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         let triple = OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/alice".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/knows".to_string()),
-            object: RdfTerm::IRI("http://example.org/bob".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/alice").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/knows").unwrap()),
+            object: RdfTerm::Iri(url::Url::parse("http://example.org/bob").unwrap()),
         };
 
         let quad = server.convert_rdfstar_triple_to_quad(&triple);
         assert!(quad.is_ok());
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_convert_quoted_triple_as_subject() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         // Create inner quoted triple: << :alice :knows :bob >>
         let inner_triple = Box::new(OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/alice".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/knows".to_string()),
-            object: RdfTerm::IRI("http://example.org/bob".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/alice").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/knows").unwrap()),
+            object: RdfTerm::Iri(url::Url::parse("http://example.org/bob").unwrap()),
         });
 
         // Create outer triple: << :alice :knows :bob >> :certainty "0.95"
         let outer_triple = OxidowlTriple {
             subject: RdfTerm::QuotedTriple(inner_triple),
-            predicate: RdfTerm::IRI("http://example.org/certainty".to_string()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/certainty").unwrap()),
             object: RdfTerm::Literal {
                 value: "0.95".to_string(),
-                datatype: Some("http://www.w3.org/2001/XMLSchema#double".to_string()),
+                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#double").unwrap()),
                 language: None,
+                direction: None,
             },
         };
 
@@ -802,25 +767,27 @@ mod tests {
         assert!(quad.is_ok());
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_convert_quoted_triple_as_object() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         // Create quoted triple: << :doc1 :author "Smith" >>
         let inner_triple = Box::new(OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/doc1".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/author".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/doc1").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/author").unwrap()),
             object: RdfTerm::Literal {
                 value: "Smith".to_string(),
                 datatype: None,
                 language: None,
+                direction: None,
             },
         });
 
         // Create triple: :archive23 :contains << :doc1 :author "Smith" >>
         let outer_triple = OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/archive23".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/contains".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/archive23").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/contains").unwrap()),
             object: RdfTerm::QuotedTriple(inner_triple),
         };
 
@@ -828,29 +795,30 @@ mod tests {
         assert!(quad.is_ok());
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_convert_nested_quoted_triple() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         // Create innermost triple: << :a :b :c >>
         let innermost = Box::new(OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/a".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/b".to_string()),
-            object: RdfTerm::IRI("http://example.org/c".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/a").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/b").unwrap()),
+            object: RdfTerm::Iri(url::Url::parse("http://example.org/c").unwrap()),
         });
 
         // Create middle triple: << << :a :b :c >> :d :e >>
         let middle = Box::new(OxidowlTriple {
             subject: RdfTerm::QuotedTriple(innermost),
-            predicate: RdfTerm::IRI("http://example.org/d".to_string()),
-            object: RdfTerm::IRI("http://example.org/e".to_string()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/d").unwrap()),
+            object: RdfTerm::Iri(url::Url::parse("http://example.org/e").unwrap()),
         });
 
         // Create outer triple: << << << :a :b :c >> :d :e >> :f :g >> :h :i
         let outer = OxidowlTriple {
             subject: RdfTerm::QuotedTriple(middle),
-            predicate: RdfTerm::IRI("http://example.org/h".to_string()),
-            object: RdfTerm::IRI("http://example.org/i".to_string()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/h").unwrap()),
+            object: RdfTerm::Iri(url::Url::parse("http://example.org/i").unwrap()),
         };
 
         let quad = server.convert_rdfstar_triple_to_quad(&outer);
@@ -859,15 +827,16 @@ mod tests {
 
     #[test]
     fn test_convert_literal_with_language() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         let triple = OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/doc".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/title".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/doc").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/title").unwrap()),
             object: RdfTerm::Literal {
                 value: "Example Document".to_string(),
                 datatype: None,
                 language: Some("en".to_string()),
+                direction: None,
             },
         };
 
@@ -877,15 +846,16 @@ mod tests {
 
     #[test]
     fn test_convert_literal_with_datatype() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         let triple = OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/measurement".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/value".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/measurement").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/value").unwrap()),
             object: RdfTerm::Literal {
                 value: "42".to_string(),
-                datatype: Some("http://www.w3.org/2001/XMLSchema#integer".to_string()),
+                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap()),
                 language: None,
+                direction: None,
             },
         };
 
@@ -893,6 +863,7 @@ mod tests {
         assert!(quad.is_ok());
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_term_to_sparql_value_quoted_triple() {
         // Create an Oxigraph triple for RDF-star
@@ -917,6 +888,7 @@ mod tests {
         assert_eq!(nested.object.value, "http://example.org/bob");
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_term_to_ntriples_string_quoted_triple() {
         let subject = oxigraph::model::NamedNode::new("http://ex.org/s").unwrap();
@@ -933,11 +905,11 @@ mod tests {
 
     #[test]
     fn test_blank_node_conversion() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         let triple = OxidowlTriple {
             subject: RdfTerm::BlankNode("b0".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/property".to_string()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/property").unwrap()),
             object: RdfTerm::BlankNode("b1".to_string()),
         };
 
@@ -945,25 +917,27 @@ mod tests {
         assert!(quad.is_ok());
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_rdfstar_provenance_pattern() {
-        let server = create_test_server();
+        let (server, _rt) = create_test_server();
 
         // Pattern: << :doc1 :author "Smith" >> :source :archive23
         let inner = Box::new(OxidowlTriple {
-            subject: RdfTerm::IRI("http://example.org/doc1".to_string()),
-            predicate: RdfTerm::IRI("http://example.org/author".to_string()),
+            subject: RdfTerm::Iri(url::Url::parse("http://example.org/doc1").unwrap()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/author").unwrap()),
             object: RdfTerm::Literal {
                 value: "Smith".to_string(),
                 datatype: None,
                 language: None,
+                direction: None,
             },
         });
 
         let provenance = OxidowlTriple {
             subject: RdfTerm::QuotedTriple(inner),
-            predicate: RdfTerm::IRI("http://example.org/source".to_string()),
-            object: RdfTerm::IRI("http://example.org/archive23".to_string()),
+            predicate: RdfTerm::Iri(url::Url::parse("http://example.org/source").unwrap()),
+            object: RdfTerm::Iri(url::Url::parse("http://example.org/archive23").unwrap()),
         };
 
         let quad = server.convert_rdfstar_triple_to_quad(&provenance);
@@ -972,6 +946,7 @@ mod tests {
 
     // ========== SPARQL-star Query Execution Tests ==========
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_star_query_quoted_triple_as_subject() {
         use oxigraph::sparql::SparqlEvaluator;
@@ -1004,7 +979,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
 
             let certainty = bindings[0].get("certainty").unwrap();
@@ -1018,6 +993,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_star_query_with_variables_in_quoted_triple() {
         use oxigraph::sparql::SparqlEvaluator;
@@ -1052,7 +1028,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 2);
 
             // Check both results are present
@@ -1075,6 +1051,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_star_query_nested_quoted_triples() {
         use oxigraph::store::Store;
@@ -1106,7 +1083,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
 
             let source = bindings[0].get("source").unwrap();
@@ -1120,6 +1097,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_star_query_quoted_triple_as_object() {
         use oxigraph::store::Store;
@@ -1151,7 +1129,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
 
             let report = bindings[0].get("report").unwrap();
@@ -1165,6 +1143,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_star_construct_query() {
         use oxigraph::store::Store;
@@ -1199,7 +1178,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let constructed: Vec<_> = triples.collect::<Result<Vec<_>, _>>().unwrap();
+            let constructed: Vec<_> = triples.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             // The CONSTRUCT creates an RDF-star triple; verify at least one triple was produced
             assert_eq!(constructed.len(), 1);
         } else {
@@ -1207,6 +1186,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_star_filter_on_quoted_triple_property() {
         use oxigraph::store::Store;
@@ -1243,7 +1223,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 2); // pizza and pasta, not salad
 
             let foods: Vec<String> = bindings
@@ -1268,6 +1248,7 @@ mod tests {
 
     // ========== RDF-star Result Serialization Tests ==========
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_value_serialization_for_quoted_triple() {
         // Create a quoted triple: << :alice :knows :bob >>
@@ -1301,6 +1282,7 @@ mod tests {
         assert!(json.contains("\"subject\":{"));
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_value_json_format_for_nested_triple() {
         // Create a quoted triple: << :a :b :c >> and test its JSON representation.
@@ -1335,6 +1317,7 @@ mod tests {
         assert_eq!(object["value"], "http://ex.org/c");
     }
 
+    #[cfg(feature = "rdf-12")]
     #[test]
     fn test_sparql_results_with_quoted_triple_binding() {
         use oxigraph::store::Store;
@@ -1366,7 +1349,7 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
             assert_eq!(bindings.len(), 1);
 
             // Get the statement binding (should be a quoted triple)
@@ -1442,10 +1425,21 @@ mod tests {
         assert!(json.contains("\"value\":\"http://example.org/resource\""));
     }
 
-    // Helper function to create a test server
-    fn create_test_server() -> SparqlServer {
-        let ontology = Arc::new(Ontology::new());
-        let reasoning_service = Arc::new(ReasoningService::new(ontology));
-        SparqlServer::new(8082, "127.0.0.1".to_string(), reasoning_service)
+    // Helper function to create a test server (runs inside a tokio runtime)
+    fn create_test_server() -> (SparqlServer, tokio::runtime::Runtime) {
+        use crate::config::ReasonerConfig;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to build tokio runtime");
+        let ontology = Ontology::new();
+        let reasoning_service = Arc::new(
+            rt.block_on(async {
+                ReasoningService::new(ontology, ReasonerConfig::default())
+            })
+            .expect("Failed to create reasoning service"),
+        );
+        let server = SparqlServer::new(8082, "127.0.0.1".to_string(), reasoning_service);
+        (server, rt)
     }
 }

@@ -607,6 +607,141 @@ impl PerformanceReport {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 5.4 — Pre-warmed reasoning context
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Pre-warmed reasoning context for zero-latency server-mode queries.
+///
+/// `WarmContext::new()` eagerly classifies the ontology and builds reverse
+/// indexes for O(1) subclass lookups. All `query_*` methods operate on the
+/// cached in-memory structures without actor round-trips.
+pub struct WarmContext {
+    service: std::sync::Arc<crate::reasoning::ReasoningService>,
+    /// Forward: class → direct/indirect superclasses
+    classification: std::sync::Arc<crate::reasoning::ClassificationResult>,
+    /// Reverse: class → all subclasses (built from the forward index)
+    subclass_index:
+        std::collections::HashMap<crate::ontology::ClassExpression, std::collections::HashSet<crate::ontology::ClassExpression>>,
+    /// When this context was warmed
+    warmed_at: Instant,
+}
+
+impl WarmContext {
+    /// Warm the context — classifies the ontology and builds all indexes.
+    ///
+    /// This is the expensive call; all subsequent `query_*` methods are O(1).
+    pub async fn new(
+        service: std::sync::Arc<crate::reasoning::ReasoningService>,
+    ) -> crate::Result<Self> {
+        let start = Instant::now();
+        let classification = std::sync::Arc::new(service.classify().await?);
+
+        // Build reverse subclass index from the forward superclass hierarchy.
+        let mut subclass_index: std::collections::HashMap<
+            crate::ontology::ClassExpression,
+            std::collections::HashSet<crate::ontology::ClassExpression>,
+        > = std::collections::HashMap::new();
+        for (subclass, superclasses) in &classification.hierarchy {
+            for superclass in superclasses {
+                subclass_index
+                    .entry(superclass.clone())
+                    .or_default()
+                    .insert(subclass.clone());
+            }
+        }
+
+        log::info!(
+            "WarmContext: warmed in {:?} ({} classes indexed)",
+            start.elapsed(),
+            classification.hierarchy.len()
+        );
+
+        Ok(Self {
+            service,
+            classification,
+            subclass_index,
+            warmed_at: start,
+        })
+    }
+
+    /// Get all superclasses of a class (O(1) lookup).
+    #[must_use]
+    pub fn get_superclasses(
+        &self,
+        class: &crate::ontology::ClassExpression,
+    ) -> &std::collections::HashSet<crate::ontology::ClassExpression> {
+        static EMPTY: std::sync::LazyLock<
+            std::collections::HashSet<crate::ontology::ClassExpression>,
+        > = std::sync::LazyLock::new(std::collections::HashSet::new);
+        self.classification
+            .hierarchy
+            .get(class)
+            .unwrap_or(&*EMPTY)
+    }
+
+    /// Get all subclasses of a class (O(1) lookup via reverse index).
+    #[must_use]
+    pub fn get_subclasses(
+        &self,
+        class: &crate::ontology::ClassExpression,
+    ) -> &std::collections::HashSet<crate::ontology::ClassExpression> {
+        static EMPTY: std::sync::LazyLock<
+            std::collections::HashSet<crate::ontology::ClassExpression>,
+        > = std::sync::LazyLock::new(std::collections::HashSet::new);
+        self.subclass_index.get(class).unwrap_or(&*EMPTY)
+    }
+
+    /// Check if `subclass ⊑ superclass` (O(1) lookup).
+    #[must_use]
+    pub fn is_subsumed_by(
+        &self,
+        subclass: &crate::ontology::ClassExpression,
+        superclass: &crate::ontology::ClassExpression,
+    ) -> bool {
+        if subclass == superclass {
+            return true;
+        }
+        self.get_superclasses(subclass).contains(superclass)
+    }
+
+    /// Get the full classification result.
+    #[must_use]
+    pub fn classification(&self) -> &crate::reasoning::ClassificationResult {
+        &self.classification
+    }
+
+    /// Get the age of this warm context.
+    #[must_use]
+    pub fn age(&self) -> Duration {
+        self.warmed_at.elapsed()
+    }
+
+    /// Re-warm — re-classify and rebuild all indexes.
+    ///
+    /// Call this after ontology mutations to keep the cached indexes
+    /// consistent with the current ontology state.
+    pub async fn re_warm(&mut self) -> crate::Result<()> {
+        *self = Self::new(std::sync::Arc::clone(&self.service)).await?;
+        Ok(())
+    }
+
+    /// Delegate queries to the underlying service (for queries not served by the warm cache).
+    #[must_use]
+    pub fn service(&self) -> &std::sync::Arc<crate::reasoning::ReasoningService> {
+        &self.service
+    }
+}
+
+impl std::fmt::Debug for WarmContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WarmContext")
+            .field("class_count", &self.classification.hierarchy.len())
+            .field("age_secs", &self.warmed_at.elapsed().as_secs())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

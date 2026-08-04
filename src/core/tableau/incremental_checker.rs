@@ -99,7 +99,8 @@ impl NodeFingerprint {
             .map(|(role, successors)| {
                 let mut sorted_successors: Vec<NodeId> = successors.iter().copied().collect();
                 sorted_successors.sort_unstable();
-                (role.clone(), sorted_successors)
+                // Convert Arc<str> key to String so the Vec type stays (String, Vec<NodeId>)
+                (role.to_string(), sorted_successors)
             })
             .collect();
         role_edges.sort_by(|a, b| a.0.cmp(&b.0));
@@ -499,12 +500,12 @@ mod tests {
         let mut node1 = create_test_node(0, vec!["Person"]);
         node1
             .role_successors
-            .insert("knows".to_string(), vec![1, 2].into_iter().collect());
+            .insert(std::sync::Arc::from("knows"), vec![1, 2].into_iter().collect());
 
         let mut node2 = create_test_node(0, vec!["Person"]);
         node2
             .role_successors
-            .insert("knows".to_string(), vec![2, 1].into_iter().collect()); // Different order
+            .insert(std::sync::Arc::from("knows"), vec![2, 1].into_iter().collect()); // Different order
 
         let fp1 = NodeFingerprint::from_node(&node1);
         let fp2 = NodeFingerprint::from_node(&node2);

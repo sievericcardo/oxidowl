@@ -245,7 +245,7 @@ impl ZipIRIMapper {
     /// Each entry whose name ends with `.owl`, `.rdf`, `.ttl`, `.ofn`, `.owx`,
     /// or `.omn` is considered a potential ontology file.
     pub fn new(zip_path: PathBuf) -> Self {
-        let mappings = HashMap::new();
+        let mut mappings = HashMap::new();
 
         if let Ok(file) = std::fs::File::open(&zip_path) {
             #[cfg(feature = "zip-imports")]

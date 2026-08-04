@@ -33,7 +33,10 @@ pub struct TableauNode {
     pub concept_dependencies: HashMap<ConceptLabel, Arc<DependencySet>>,
 
     /// Role successors for this node
-    pub role_successors: HashMap<String, HashSet<NodeId>>,
+    ///
+    /// Keys are interned `Arc<str>` so multiple edges using the same role
+    /// name share a single allocation instead of duplicating the string.
+    pub role_successors: HashMap<Arc<str>, HashSet<NodeId>>,
 
     /// Status flags
     pub status: NodeStatus,
@@ -426,7 +429,7 @@ impl TableauNode {
     /// Add a role successor
     pub fn add_role_successor(&mut self, role: String, successor: NodeId) {
         self.role_successors
-            .entry(role)
+            .entry(Arc::from(role.as_str()))
             .or_default()
             .insert(successor);
     }
@@ -438,7 +441,7 @@ impl TableauNode {
     }
 
     /// Get all role successors
-    pub fn all_role_successors(&self) -> impl Iterator<Item = (&String, &HashSet<NodeId>)> {
+    pub fn all_role_successors(&self) -> impl Iterator<Item = (&Arc<str>, &HashSet<NodeId>)> {
         self.role_successors.iter()
     }
 

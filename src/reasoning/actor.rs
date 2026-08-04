@@ -151,6 +151,12 @@ pub enum ReasoningRequest {
     InvalidateAllCaches {
         reply: oneshot::Sender<Result<()>>,
     },
+    /// Batch subsumption check — tests all (subclass, superclass) pairs in a
+    /// single actor turn, avoiding N-1 extra channel round-trips.
+    BatchSubsumptionCheck {
+        pairs: Vec<(ClassExpression, ClassExpression)>,
+        reply: oneshot::Sender<Result<Vec<bool>>>,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -360,6 +366,9 @@ impl ReasoningActor {
                 tracing::debug!("All caches invalidated via actor request");
                 let _ = reply.send(Ok(()));
             }
+            ReasoningRequest::BatchSubsumptionCheck { pairs, reply } => {
+                let _ = reply.send(self.handle_batch_subsumption_check(&pairs));
+            }
         }
     }
 
@@ -464,6 +473,21 @@ impl ReasoningActor {
 
         log::info!("Subsumption check completed in {:?}", start.elapsed());
         Ok(result)
+    }
+
+    /// Batch subsumption check — processes N pairs in one actor turn.
+    ///
+    /// Each pair delegates to `handle_is_subsumed_by` so caching and timeout
+    /// logic is applied consistently.  The first `Err` from any pair is
+    /// propagated and the remaining pairs are skipped.
+    fn handle_batch_subsumption_check(
+        &mut self,
+        pairs: &[(ClassExpression, ClassExpression)],
+    ) -> Result<Vec<bool>> {
+        pairs
+            .iter()
+            .map(|(sub, sup)| self.handle_is_subsumed_by(sub, sup))
+            .collect()
     }
 
     fn handle_get_superclasses(
@@ -780,9 +804,15 @@ impl ReasoningActor {
 
         self.check_timeout(start, "Axiom addition")?;
 
-        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
-            self.cache_manager.clear_all()?;
-        }
+        // Version-stamped cache invalidation (Phase 3.3):
+        // Read the ontology's new version stamp and propagate it to the cache
+        // manager.  `update_ontology_version` clears all caches only when the
+        // version has advanced — avoiding a needless clear if (somehow) the
+        // version did not change.  This replaces the old TTL-only, single-feature
+        // guard and ensures *every* cache is invalidated after any mutation,
+        // regardless of which `CacheFeature` flags are enabled.
+        let ont_version = self.read_ontology_version();
+        self.cache_manager.update_ontology_version(ont_version)?;
 
         log::info!("Axioms added in {:?}", start.elapsed());
         Ok(())
@@ -803,12 +833,29 @@ impl ReasoningActor {
 
         self.check_timeout(start, "Axiom removal")?;
 
-        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
-            self.cache_manager.clear_all()?;
-        }
+        // Version-stamped cache invalidation (Phase 3.3): see handle_add_axioms.
+        let ont_version = self.read_ontology_version();
+        self.cache_manager.update_ontology_version(ont_version)?;
 
         log::info!("Axioms removed in {:?}", start.elapsed());
         Ok(())
+    }
+
+    /// Read the current version stamp from the loaded ontology.
+    ///
+    /// Returns `0` if no ontology is loaded or the read lock cannot be
+    /// acquired (both are treated as "version unknown" by the cache manager,
+    /// which then falls back to a full `clear_all`).
+    fn read_ontology_version(&self) -> u64 {
+        if let Some(ont_ref) = self.reasoner.get_ontology() {
+            if let Ok(guard) = crate::core::lock_helpers::read_lock(
+                ont_ref,
+                "actor: reading ontology version for cache invalidation",
+            ) {
+                return guard.version();
+            }
+        }
+        0
     }
 
     fn handle_get_statistics(&mut self) -> Result<ReasoningStatistics> {

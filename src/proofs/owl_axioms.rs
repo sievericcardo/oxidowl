@@ -12,6 +12,8 @@
 //! - `SWRLRule` safety: head variables ⊆ body variables.
 //! - Logical axiom classification (`is_logical()`).
 
+#![cfg(kani)]
+
 use crate::ontology::IRI;
 use crate::ontology::{
     Individual, ObjectProperty, ObjectPropertyExpression,
