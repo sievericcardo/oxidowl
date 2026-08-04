@@ -346,7 +346,8 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
 
     let format = match extension.to_lowercase().as_str() {
-        "owl" | "owx" => OntologyFormat::OwlXml,
+        // .owl files can be OWL/XML, OWL Functional Syntax, or RDF/XML — detect from content
+        "owl" | "owx" => detect_format_from_content(path)?,
         "rdf" => OntologyFormat::RdfXml,
         "xml" => detect_format_from_content(path)?, // XML could be OWL/XML or RDF/XML
         "ttl" => OntologyFormat::Turtle,

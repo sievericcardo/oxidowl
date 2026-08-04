@@ -197,6 +197,63 @@ impl Default for FastConceptHasher {
     }
 }
 
+/// Integer ordering key for `ClassExpression` variants — avoids `format!("{:?}")` allocation.
+#[inline]
+fn concept_variant_ord(c: &ClassExpression) -> u8 {
+    match c {
+        ClassExpression::Class(_) => 0,
+        ClassExpression::ObjectIntersectionOf(_) => 1,
+        ClassExpression::ObjectUnionOf(_) => 2,
+        ClassExpression::ObjectOneOf(_) => 3,
+        ClassExpression::ObjectSomeValuesFrom { .. } => 4,
+        ClassExpression::ObjectAllValuesFrom { .. } => 5,
+        ClassExpression::ObjectHasValue { .. } => 6,
+        ClassExpression::ObjectHasSelf { .. } => 7,
+        ClassExpression::ObjectMinCardinality { .. } => 8,
+        ClassExpression::ObjectMaxCardinality { .. } => 9,
+        ClassExpression::ObjectExactCardinality { .. } => 10,
+        ClassExpression::DataSomeValuesFrom { .. } => 11,
+        ClassExpression::DataAllValuesFrom { .. } => 12,
+        ClassExpression::DataHasValue { .. } => 13,
+        ClassExpression::DataMinCardinality { .. } => 14,
+        ClassExpression::DataMaxCardinality { .. } => 15,
+        ClassExpression::DataExactCardinality { .. } => 16,
+        ClassExpression::ObjectComplementOf(_) => 17,
+    }
+}
+
+/// Integer ordering key for `ObjectPropertyExpression` variants.
+#[inline]
+fn object_property_variant_ord(p: &ObjectPropertyExpression) -> u8 {
+    match p {
+        ObjectPropertyExpression::ObjectProperty(_) => 0,
+        ObjectPropertyExpression::InverseObjectProperty(_) => 1,
+        ObjectPropertyExpression::PropertyChain(_) => 2,
+    }
+}
+
+/// Integer ordering key for `DataRange` variants.
+#[inline]
+fn data_range_variant_ord(r: &DataRange) -> u8 {
+    match r {
+        DataRange::Datatype(_) => 0,
+        DataRange::DataIntersectionOf(_) => 1,
+        DataRange::DataUnionOf(_) => 2,
+        DataRange::DataComplementOf(_) => 3,
+        DataRange::DataOneOf(_) => 4,
+        DataRange::DatatypeRestriction { .. } => 5,
+    }
+}
+
+/// Integer ordering key for `Individual` variants.
+#[inline]
+fn individual_variant_ord(i: &Individual) -> u8 {
+    match i {
+        Individual::Named(_) => 0,
+        Individual::Anonymous(_) => 1,
+    }
+}
+
 /// Compare two concepts structurally (faster than Debug formatting)
 ///
 /// Precondition: Both concepts must be the same variant (same discriminant)
@@ -223,20 +280,15 @@ fn compare_concepts_with_depth(
 
     // Prevent stack overflow on deeply nested expressions
     if depth > MAX_COMPARISON_DEPTH {
-        // Fall back to discriminant-only comparison for very deep structures
-        let a_disc = std::mem::discriminant(a);
-        let b_disc = std::mem::discriminant(b);
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+        return concept_variant_ord(a).cmp(&concept_variant_ord(b));
     }
 
-    // CRITICAL: Check discriminants first to ensure total order
-    // This prevents different variants from being considered equal
-    let a_disc = std::mem::discriminant(a);
-    let b_disc = std::mem::discriminant(b);
+    // CRITICAL: Check variant order first to ensure total order
+    let a_ord = concept_variant_ord(a);
+    let b_ord = concept_variant_ord(b);
 
-    if a_disc != b_disc {
-        // Different variants - use discriminant ordering for total order
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+    if a_ord != b_ord {
+        return a_ord.cmp(&b_ord);
     }
 
     // Same variant - compare by content
@@ -479,16 +531,14 @@ fn compare_object_properties_with_depth(
 
     // Prevent stack overflow on deeply nested property chains
     if depth > MAX_COMPARISON_DEPTH {
-        let a_disc = std::mem::discriminant(a);
-        let b_disc = std::mem::discriminant(b);
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+        return object_property_variant_ord(a).cmp(&object_property_variant_ord(b));
     }
 
-    let a_disc = std::mem::discriminant(a);
-    let b_disc = std::mem::discriminant(b);
+    let a_ord = object_property_variant_ord(a);
+    let b_ord = object_property_variant_ord(b);
 
-    if a_disc != b_disc {
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+    if a_ord != b_ord {
+        return a_ord.cmp(&b_ord);
     }
 
     match (a, b) {
@@ -543,16 +593,14 @@ fn compare_data_ranges_with_depth(
 
     // Prevent stack overflow on deeply nested data ranges
     if depth > MAX_COMPARISON_DEPTH {
-        let a_disc = std::mem::discriminant(a);
-        let b_disc = std::mem::discriminant(b);
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+        return data_range_variant_ord(a).cmp(&data_range_variant_ord(b));
     }
 
-    let a_disc = std::mem::discriminant(a);
-    let b_disc = std::mem::discriminant(b);
+    let a_ord = data_range_variant_ord(a);
+    let b_ord = data_range_variant_ord(b);
 
-    if a_disc != b_disc {
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+    if a_ord != b_ord {
+        return a_ord.cmp(&b_ord);
     }
 
     match (a, b) {
@@ -617,11 +665,11 @@ fn compare_data_ranges_with_depth(
 fn compare_individuals(a: &Individual, b: &Individual) -> std::cmp::Ordering {
     use std::cmp::Ordering;
 
-    let a_disc = std::mem::discriminant(a);
-    let b_disc = std::mem::discriminant(b);
+    let a_ord = individual_variant_ord(a);
+    let b_ord = individual_variant_ord(b);
 
-    if a_disc != b_disc {
-        return format!("{a_disc:?}").cmp(&format!("{b_disc:?}"));
+    if a_ord != b_ord {
+        return a_ord.cmp(&b_ord);
     }
 
     match (a, b) {
@@ -654,15 +702,11 @@ pub fn compute_fast_signature(concepts: &ConceptSet) -> u64 {
     // with a canonical ordering based on hash values
     let mut sorted_concepts: Vec<_> = concepts.iter().collect();
     sorted_concepts.sort_by(|a, b| {
-        // Quick comparison using structural properties
-        let a_disc = std::mem::discriminant(*a);
-        let b_disc = std::mem::discriminant(*b);
-
-        if a_disc != b_disc {
-            // Different variants - use discriminant ordering
-            format!("{a_disc:?}").cmp(&format!("{b_disc:?}"))
+        let a_ord = concept_variant_ord(a);
+        let b_ord = concept_variant_ord(b);
+        if a_ord != b_ord {
+            a_ord.cmp(&b_ord)
         } else {
-            // Same variant - compare by content using structural comparison
             compare_concepts(a, b)
         }
     });
@@ -682,6 +726,19 @@ pub fn hash_concept(concept: &ClassExpression) -> u64 {
     let mut hasher = FastConceptHasher::new();
     hasher.hash_concept(concept);
     hasher.finish()
+}
+
+/// Return a stable sort key for a `ClassExpression` (used by persistent_collections).
+#[inline]
+#[must_use]
+pub fn concept_sort_key(c: &ClassExpression) -> u8 {
+    concept_variant_ord(c)
+}
+
+/// Structural comparison for same-variant `ClassExpression` values (used by persistent_collections).
+#[must_use]
+pub fn compare_concepts_for_sort(a: &ClassExpression, b: &ClassExpression) -> std::cmp::Ordering {
+    compare_concepts(a, b)
 }
 
 #[cfg(test)]

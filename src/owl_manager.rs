@@ -37,7 +37,12 @@ impl OWLManager {
 
     /// Load an ontology from a file, auto-detecting the format.
     pub fn load_ontology(path: &Path) -> Result<Ontology> {
-        crate::parsers::parse_owl_xml_file(path)
+        crate::parsers::parse_file_auto(path)
+    }
+
+    /// Load an ontology from a file path string, auto-detecting the format.
+    pub fn load_ontology_from_file(path: &str) -> Result<Ontology> {
+        crate::parsers::parse_file_auto(Path::new(path))
     }
 
     /// Load an ontology from a file into a shared reference.

@@ -151,7 +151,7 @@ impl ConceptSetPool {
 
         // Sort concepts to ensure consistent hashing
         let mut sorted: Vec<_> = set.iter().collect();
-        sorted.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        sorted.sort_by(|a, b| crate::core::fast_hashing::concept_sort_key(a).cmp(&crate::core::fast_hashing::concept_sort_key(b)).then_with(|| crate::core::fast_hashing::compare_concepts_for_sort(a, b)));
 
         for concept in sorted {
             concept.hash(&mut hasher);
