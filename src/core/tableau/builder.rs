@@ -251,7 +251,7 @@ impl TableauBuilder {
                             dependencies: Arc::new(DependencySet::new()),
                         };
 
-                        tableau.pending_queue.push_back(rule_app);
+                        Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
                     }
                 } else {
                     // Atomic concepts and other simple labels don't need rules

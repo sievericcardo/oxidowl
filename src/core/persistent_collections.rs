@@ -142,22 +142,24 @@ impl ConceptSetPool {
 
     /// Compute a hash for a concept set for deduplication
     ///
-    /// Uses FNV-1a hash for fast hashing of set contents.
+    /// Uses XOR-fold over per-element hashes so that the result is
+    /// order-independent (commutative), eliminating the previous O(n log n)
+    /// sort step while still producing a consistent fingerprint.
+    ///
+    /// Note: XOR has worse collision resistance than sorted-order hashing for
+    /// adversarial inputs, but is fine for concept sets in practice.
     fn compute_hash(set: &ConceptSet) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
-        let mut hasher = DefaultHasher::new();
-
-        // Sort concepts to ensure consistent hashing
-        let mut sorted: Vec<_> = set.iter().collect();
-        sorted.sort_by(|a, b| crate::core::fast_hashing::concept_sort_key(a).cmp(&crate::core::fast_hashing::concept_sort_key(b)).then_with(|| crate::core::fast_hashing::compare_concepts_for_sort(a, b)));
-
-        for concept in sorted {
+        // XOR-fold each element's hash — XOR is commutative so iteration order doesn't matter.
+        let mut combined: u64 = 0;
+        for concept in set.iter() {
+            let mut hasher = DefaultHasher::new();
             concept.hash(&mut hasher);
+            combined ^= hasher.finish();
         }
-
-        hasher.finish()
+        combined
     }
 }
 

@@ -66,7 +66,7 @@ pub struct Tableau {
     pub config: TableauConfig,
 
     /// Pending rule applications (priority queue)
-    pub pending_queue: VecDeque<RuleApplication>,
+    pub pending_queue: Arc<VecDeque<RuleApplication>>,
 
     /// Completion strategy
     pub completion_strategy: CompletionStrategy,
@@ -97,6 +97,10 @@ pub struct Tableau {
 
     /// Backtrack stack for non-deterministic choices
     backtrack_stack: Vec<BacktrackPoint>,
+
+    /// Nodes that received new concepts since the last clash detection pass.
+    /// Used to limit `detect_clashes` to only the nodes that changed.
+    pub dirty_nodes: Vec<NodeId>,
 
     /// Concept unfolding rules: maps a named-class IRI string to a list of complex class
     /// expressions that the class is subsumed by (from SubClassOf and EquivalentClasses axioms).
@@ -161,8 +165,8 @@ pub struct SavedState {
     /// Number of edges at this point
     pub edge_count: usize,
 
-    /// Pending queue state
-    pub pending_queue: VecDeque<RuleApplication>,
+    /// Pending queue state — Arc-wrapped for O(1) snapshot cost (copy-on-write)
+    pub pending_queue: Arc<VecDeque<RuleApplication>>,
 }
 
 impl Tableau {
@@ -184,7 +188,7 @@ impl Tableau {
                 quoted_triple_reasoning_depth: 2, // Allow 2 levels of nesting
                 enable_clause_optimization: true, // Enable clause optimization by default
             },
-            pending_queue: VecDeque::new(),
+            pending_queue: Arc::new(VecDeque::new()),
             completion_strategy: CompletionStrategy::default(),
             blocking_strategy: BlockingStrategy,
             expansion_strategy: DefaultExpansionStrategy::default(),
@@ -196,6 +200,7 @@ impl Tableau {
             individual_map: HashMap::new(),
             backtrack_stack: Vec::new(),
             concept_unfolding_rules: HashMap::new(),
+            dirty_nodes: Vec::new(),
         }
     }
 
@@ -371,7 +376,7 @@ impl Tableau {
                             priority: RulePriority::High,
                             dependencies: Arc::new(DependencySet::new()),
                         };
-                        self.pending_queue.push_back(rule_app);
+                        Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
                     }
                 }
             }
@@ -402,7 +407,7 @@ impl Tableau {
                             priority: RulePriority::High,
                             dependencies: Arc::new(DependencySet::new()),
                         };
-                        self.pending_queue.push_back(rule_app);
+                        Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
                     }
                 }
             }
@@ -433,7 +438,7 @@ impl Tableau {
                     priority: RulePriority::High,
                     dependencies: Arc::new(DependencySet::new()),
                 };
-                self.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
             }
 
             // Handle ClassAssertion axioms
@@ -541,7 +546,7 @@ impl Tableau {
                     priority: RulePriority::High,
                     dependencies: Arc::new(DependencySet::new()),
                 };
-                self.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
             }
             ClassExpression::ObjectUnionOf(_) => {
                 let rule_app = RuleApplication {
@@ -554,7 +559,7 @@ impl Tableau {
                     priority: RulePriority::Normal,
                     dependencies: Arc::new(DependencySet::new()),
                 };
-                self.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
             }
             ClassExpression::ObjectSomeValuesFrom { .. } => {
                 let rule_app = RuleApplication {
@@ -567,7 +572,7 @@ impl Tableau {
                     priority: RulePriority::Normal,
                     dependencies: Arc::new(DependencySet::new()),
                 };
-                self.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
             }
             ClassExpression::ObjectAllValuesFrom { .. } => {
                 let rule_app = RuleApplication {
@@ -580,7 +585,7 @@ impl Tableau {
                     priority: RulePriority::High,
                     dependencies: Arc::new(DependencySet::new()),
                 };
-                self.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut self.pending_queue).push_back(rule_app);
             }
             _ => {
                 // Atomic classes and other simple expressions don't need rules
@@ -664,13 +669,14 @@ impl Tableau {
     pub fn reset(&mut self) {
         self.nodes.clear();
         self.edges.clear();
-        self.pending_queue.clear();
+        self.pending_queue = Arc::new(VecDeque::new());
         self.clash_detector = ClashDetector::new();
         self.statistics = TableauStatistics::new();
         self.state = TableauState::Unknown;
         self.concept_cache.clear();
         self.role_cache.clear();
         self.individual_map.clear();
+        self.dirty_nodes.clear();
     }
 
     // Legacy methods for compatibility with existing code
@@ -700,7 +706,7 @@ impl Tableau {
 
     /// Get mutable pending queue  
     pub fn pending_queue_mut(&mut self) -> &mut VecDeque<RuleApplication> {
-        &mut self.pending_queue
+        Arc::make_mut(&mut self.pending_queue)
     }
 
     /// Get config
@@ -778,7 +784,10 @@ impl Tableau {
         }
 
         if let Some(node) = self.nodes.get_mut(node_id) {
-            node.concepts.insert(concept);
+            if node.concepts.insert(concept) {
+                // Only mark dirty if the concept was actually new
+                self.dirty_nodes.push(node_id);
+            }
         }
 
         Ok(())

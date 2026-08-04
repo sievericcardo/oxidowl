@@ -8,6 +8,7 @@ use url::Url;
 pub mod axioms;
 pub mod concepts;
 pub mod datatypes;
+pub mod indexes;
 pub mod individuals;
 pub mod owl_xml_vocabulary;
 pub mod properties;
@@ -18,6 +19,7 @@ pub mod vocabulary;
 pub use axioms::*;
 pub use concepts::*;
 pub use datatypes::*;
+pub use indexes::AxiomIndex;
 pub use individuals::*;
 pub use properties::*;
 
@@ -612,6 +614,15 @@ impl Ontology {
     #[must_use]
     pub fn axioms(&self) -> &[axioms::Axiom] {
         &self.axioms
+    }
+
+    /// Build a bidirectional axiom index from the current axiom set.
+    ///
+    /// The caller should build the index once and reuse it across multiple
+    /// queries rather than rebuilding it on every call.
+    #[must_use]
+    pub fn build_index(&self) -> indexes::AxiomIndex {
+        indexes::AxiomIndex::build(&self.axioms)
     }
 
     /// Check if the ontology is empty (no axioms and no annotations)

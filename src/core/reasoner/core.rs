@@ -179,37 +179,18 @@ impl Reasoner {
         subclass: &ClassExpression,
         superclass: &ClassExpression,
     ) -> Result<bool> {
-        // Enhanced subsumption checking using available reasoning mechanisms
-
-        // Quick syntactic check
+        // Syntactic identity check
         if subclass == superclass {
             return Ok(true);
         }
 
-        // Check for explicit subclass declarations in the ontology
         if let Some(ontology) = &self.ontology {
             let ontology_ref = read_lock(ontology, "core: reading ontology for is_subclass_of")?;
-            for axiom in ontology_ref.axioms() {
-                if let crate::ontology::Axiom::SubClassOf(subclass_axiom) = axiom
-                    && &subclass_axiom.subclass == subclass
-                    && &subclass_axiom.superclass == superclass
-                {
-                    return Ok(true);
-                }
-            }
 
-            // Check through equivalent classes
-            for axiom in ontology_ref.axioms() {
-                if let crate::ontology::Axiom::EquivalentClasses(equiv_axiom) = axiom
-                    && equiv_axiom.classes.contains(subclass)
-                    && equiv_axiom.classes.contains(superclass)
-                {
-                    return Ok(true);
-                }
-            }
+            // Build the index ONCE for this query (O(N) build, then O(1) per hop)
+            let index = ontology_ref.build_index();
 
-            // Transitive closure: BFS through SubClassOf and EquivalentClasses chains.
-            // Handles A ⊑ B, B ⊑ C → A ⊑ C (any depth).
+            // BFS through the subsumption hierarchy using index lookups
             let mut queue: std::collections::VecDeque<ClassExpression> =
                 std::collections::VecDeque::new();
             let mut visited: std::collections::HashSet<ClassExpression> =
@@ -218,34 +199,30 @@ impl Reasoner {
             visited.insert(subclass.clone());
 
             while let Some(current) = queue.pop_front() {
-                for axiom in ontology_ref.axioms() {
-                    match axiom {
-                        crate::ontology::Axiom::SubClassOf(ax) if ax.subclass == current => {
-                            if &ax.superclass == superclass {
-                                return Ok(true);
-                            }
-                            if !visited.contains(&ax.superclass) {
-                                visited.insert(ax.superclass.clone());
-                                queue.push_back(ax.superclass.clone());
-                            }
-                        }
-                        crate::ontology::Axiom::EquivalentClasses(eq)
-                            if eq.classes.contains(&current) =>
-                        {
-                            for cls in &eq.classes {
-                                if cls != &current && !visited.contains(cls) {
-                                    visited.insert(cls.clone());
-                                    queue.push_back(cls.clone());
-                                }
-                            }
-                        }
-                        _ => {}
+                // Check direct superclasses via SubClassOf index
+                for sup in index.direct_superclasses(&current) {
+                    if sup == superclass {
+                        return Ok(true);
+                    }
+                    if !visited.contains(sup) {
+                        visited.insert(sup.clone());
+                        queue.push_back(sup.clone());
+                    }
+                }
+                // Check equivalent classes via EquivalentClasses index
+                for eq in index.equivalent_classes(&current) {
+                    if eq == superclass {
+                        return Ok(true);
+                    }
+                    if !visited.contains(eq) {
+                        visited.insert(eq.clone());
+                        queue.push_back(eq.clone());
                     }
                 }
             }
         }
 
-        // Check using built-in OWL semantics
+        // Fallback: built-in OWL semantics (owl:Thing, owl:Nothing, intersections, etc.)
         self.check_semantic_subsumption(subclass, superclass)
     }
 
@@ -399,31 +376,12 @@ impl Reasoner {
     ) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = read_lock(ontology_ref, "core: reading ontology for get_superclasses")?;
-            let mut superclasses = Vec::new();
+            let index = ontology.build_index();
 
-            // Check all class expressions in the ontology for subsumption
-            for axiom in ontology.axioms() {
-                match axiom {
-                    crate::ontology::Axiom::SubClassOf(subclass_axiom)
-                        // If the subclass is our target class, the superclass is a superclass
-                        if self.classes_equivalent(&subclass_axiom.subclass, class)? => {
-                            superclasses.push(subclass_axiom.superclass.clone());
-                        }
-                    crate::ontology::Axiom::EquivalentClasses(equiv_axiom)
-                        // For equivalent classes, all others are both sub and superclasses
-                        if equiv_axiom
-                            .classes
-                            .iter()
-                            .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
-                        => {
-                            for other_class in &equiv_axiom.classes {
-                                if !self.classes_equivalent(other_class, class).unwrap_or(false) {
-                                    superclasses.push(other_class.clone());
-                                }
-                            }
-                        }
-                    _ => {}
-                }
+            let mut superclasses: Vec<ClassExpression> =
+                index.direct_superclasses(class).to_vec();
+            for eq in index.equivalent_classes(class) {
+                superclasses.push(eq.clone());
             }
 
             // Always add owl:Thing as superclass (unless the class is owl:Thing itself)
@@ -454,41 +412,19 @@ impl Reasoner {
     ) -> Result<Vec<ClassExpression>> {
         if let Some(ontology_ref) = &self.ontology {
             let ontology = read_lock(ontology_ref, "core: reading ontology for get_subclasses")?;
-            let mut subclasses = Vec::new();
+            let index = ontology.build_index();
 
-            // Check all class expressions in the ontology for subsumption
-            for axiom in ontology.axioms() {
-                match axiom {
-                    crate::ontology::Axiom::SubClassOf(subclass_axiom)
-                        // If the superclass is our target class, the subclass is a subclass
-                        if self.classes_equivalent(&subclass_axiom.superclass, class)? => {
-                            subclasses.push(subclass_axiom.subclass.clone());
-                        }
-                    crate::ontology::Axiom::EquivalentClasses(equiv_axiom)
-                        // For equivalent classes, all others are both sub and superclasses
-                        if equiv_axiom
-                            .classes
-                            .iter()
-                            .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
-                        => {
-                            for other_class in &equiv_axiom.classes {
-                                if !self.classes_equivalent(other_class, class).unwrap_or(false) {
-                                    subclasses.push(other_class.clone());
-                                }
-                            }
-                        }
-                    _ => {}
-                }
+            let mut subclasses: Vec<ClassExpression> =
+                index.direct_subclasses(class).to_vec();
+            for eq in index.equivalent_classes(class) {
+                subclasses.push(eq.clone());
             }
 
             // Always add owl:Nothing as subclass (unless the class is owl:Nothing itself)
             let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
                 crate::ontology::IRI::owl_nothing(),
             ));
-            if !self
-                .classes_equivalent(class, &owl_nothing)
-                .unwrap_or(false)
-            {
+            if !self.classes_equivalent(class, &owl_nothing).unwrap_or(false) {
                 subclasses.push(owl_nothing);
             }
 
@@ -511,32 +447,21 @@ impl Reasoner {
                 ontology_ref,
                 "core: reading ontology for get_equivalent_classes",
             )?;
-            let mut equivalent_classes = Vec::new();
+            let index = ontology.build_index();
 
-            // Check explicit equivalent class axioms
-            for axiom in ontology.axioms() {
-                if let crate::ontology::Axiom::EquivalentClasses(equiv_axiom) = axiom
-                    && equiv_axiom
-                        .classes
-                        .iter()
-                        .any(|c| self.classes_equivalent(c, class).unwrap_or(false))
-                {
-                    for other_class in &equiv_axiom.classes {
-                        if !self.classes_equivalent(other_class, class).unwrap_or(false) {
-                            equivalent_classes.push(other_class.clone());
-                        }
-                    }
-                }
-            }
+            // Explicit equivalences from EquivalentClasses axioms
+            let mut equivalent_classes: Vec<ClassExpression> =
+                index.equivalent_classes(class).to_vec();
 
-            // Check for implicit equivalences via bidirectional subsumption
+            // Check implicit equivalences via bidirectional subsumption
+            // (drop the lock first to avoid holding it during recursive calls)
+            drop(ontology);
+
             let all_classes = self.get_all_classes_in_ontology_internal()?;
             for other_class in all_classes {
-                if !self
-                    .classes_equivalent(&other_class, class)
-                    .unwrap_or(false)
+                if !self.classes_equivalent(&other_class, class).unwrap_or(false)
+                    && !equivalent_classes.contains(&other_class)
                 {
-                    // Check if both A ⊑ B and B ⊑ A
                     if self.is_subclass_of(class, &other_class)?
                         && self.is_subclass_of(&other_class, class)?
                     {

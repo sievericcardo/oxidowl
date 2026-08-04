@@ -22,6 +22,14 @@ use std::{sync::Arc, time::Instant};
 pub struct TableauExecutor;
 
 impl TableauExecutor {
+    /// Convert an ObjectPropertyExpression to a role name string using Display (not Debug).
+    /// Using Display avoids the extra `Atomic(...)` / `Inverse(...)` wrapping that Debug adds,
+    /// and is consistent between SOME-rule generation and ALL/AtLeast/AtMost lookups.
+    #[inline]
+    fn prop_to_role_name(prop: &crate::ontology::ObjectPropertyExpression) -> String {
+        prop.to_string()
+    }
+
     /// Convert `ConceptLabel` to `ClassExpression` for rule contexts
     fn concept_label_to_class_expression(concept: &ConceptLabel) -> Result<ClassExpression> {
         match concept {
@@ -80,6 +88,16 @@ impl TableauExecutor {
             .iter()
             .any(|n| n.node_type == NodeType::Nominal);
         if has_nominal_nodes {
+            // Seed dirty_nodes with all Nominal/Generated nodes so the initial detect_clashes
+            // checks them (ontology loading inserts concepts directly, bypassing add_concept_to_node)
+            tableau.dirty_nodes.extend(
+                tableau
+                    .nodes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, n)| n.node_type != NodeType::Root)
+                    .map(|(i, _)| i),
+            );
             Self::detect_clashes(tableau)?;
             if tableau.clash_detector.has_clashes() {
                 debug!("Clash detected in initial state, tableau is unsatisfiable");
@@ -100,7 +118,7 @@ impl TableauExecutor {
             }
 
             // Get next rule application
-            let rule_app = tableau.pending_queue.pop_front().ok_or_else(|| {
+            let rule_app = Arc::make_mut(&mut tableau.pending_queue).pop_front().ok_or_else(|| {
                 Error::internal("Tableau executor: pending queue empty despite non-empty check")
             })?;
 
@@ -140,8 +158,9 @@ impl TableauExecutor {
                             );
                         }
 
-                    // Clear clashes since we rewound state
+                    // Clear clashes and dirty tracking since we rewound state
                     tableau.clash_detector = crate::core::tableau::ClashDetector::new();
+                    tableau.dirty_nodes.clear();
                     continue;
                 }
 
@@ -338,7 +357,7 @@ impl TableauExecutor {
             match concept {
                 ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                     // Check if suitable successor already exists
-                    let role_name = format!("{property:?}"); // Simplified for now
+                    let role_name = Self::prop_to_role_name(property);
                     let has_successor = tableau
                         .nodes
                         .get(node_id)
@@ -373,7 +392,7 @@ impl TableauExecutor {
                                                 property: p,
                                                 filler: f,
                                             } = &**expr
-                                            && format!("{p:?}") == role_name
+                                            && Self::prop_to_role_name(p) == role_name
                                         {
                                             return Some(*f.clone());
                                         }
@@ -404,7 +423,7 @@ impl TableauExecutor {
                                                 cardinality,
                                                 filler: f,
                                             } = &**expr
-                                            && format!("{p:?}") == role_name
+                                            && Self::prop_to_role_name(p) == role_name
                                         {
                                             return Some((*cardinality, *f.clone()));
                                         }
@@ -483,7 +502,7 @@ impl TableauExecutor {
         if let RuleContext::Concept { concept, .. } = &rule_app.context {
             match concept {
                 ClassExpression::ObjectAllValuesFrom { property, filler } => {
-                    let role_name = format!("{property:?}");
+                    let role_name = Self::prop_to_role_name(property);
 
                     // Find all R-successors
                     let successors: Vec<NodeId> = tableau
@@ -530,7 +549,7 @@ impl TableauExecutor {
                     cardinality,
                     filler,
                 } => {
-                    let role_name = format!("{property:?}");
+                    let role_name = Self::prop_to_role_name(property);
 
                     // Count existing R-successors
                     let existing_count = tableau
@@ -582,7 +601,7 @@ impl TableauExecutor {
                     cardinality,
                     filler,
                 } => {
-                    let role_name = format!("{property:?}");
+                    let role_name = Self::prop_to_role_name(property);
 
                     // Get existing R-successors that satisfy the filler concept C
                     let successors: Vec<NodeId> = tableau
@@ -974,7 +993,7 @@ impl TableauExecutor {
             match concept {
                 ClassExpression::ObjectHasSelf { property } => {
                     // Create self-loop: add R-edge from node to itself
-                    let role_name = format!("{property:?}");
+                    let role_name = Self::prop_to_role_name(property);
                     let role_label = RoleLabel::Atomic(role_name);
                     tableau.add_edge(node_id, node_id, role_label)?;
                     debug!("Applied SELF rule at node {node_id}: created self-loop");
@@ -1055,7 +1074,7 @@ impl TableauExecutor {
             match concept {
                 ClassExpression::DataSomeValuesFrom { property, filler } => {
                     // Create a data value node satisfying the data range
-                    let data_prop_name = format!("{property:?}");
+                    let data_prop_name = property.to_string();
 
                     // Check if we already have a data property edge
                     let has_data_edge = tableau
@@ -1089,7 +1108,7 @@ impl TableauExecutor {
                 }
                 ClassExpression::DataAllValuesFrom { property, filler } => {
                     // Ensure all data values satisfy the data range
-                    let data_prop_name = format!("{property:?}");
+                    let data_prop_name = property.to_string();
 
                     // Get all data property successors
                     let data_successors: Vec<NodeId> = tableau
@@ -1118,7 +1137,7 @@ impl TableauExecutor {
                 }
                 ClassExpression::DataHasValue { property, value } => {
                     // Assert specific data value
-                    let data_prop_name = format!("{property:?}");
+                    let data_prop_name = property.to_string();
 
                     // Create a data value node with the specific value
                     let data_node_id = tableau.add_node(NodeType::Generated)?;
@@ -1471,12 +1490,27 @@ impl TableauExecutor {
         use super::equivalence::ConceptId;
         use crate::ontology::ClassExpression;
 
+        // Fast path: if no dirty nodes, no new concepts were added, so no new clashes possible.
+        if tableau.dirty_nodes.is_empty() {
+            return Ok(());
+        }
+
+        // Drain and deduplicate dirty node IDs.
+        let dirty: std::collections::HashSet<NodeId> = {
+            let v = std::mem::take(&mut tableau.dirty_nodes);
+            v.into_iter().collect()
+        };
+
         // Check Nominal and Generated nodes for clashes.
         // Nominal nodes represent named individuals (ABox assertions).
         // Generated nodes represent anonymous successors created by the SOME / AtLeast rules.
         // Root nodes are excluded because they encode TBox axioms as concept intersections
         // and those encodings may look like apparent clashes without being real ones.
         for (i, node) in tableau.nodes.iter().enumerate() {
+            // Skip nodes that haven't changed since last detection
+            if !dirty.contains(&i) {
+                continue;
+            }
             let check_disjointness = node.node_type == NodeType::Nominal;
             if node.node_type == NodeType::Root {
                 continue; // Skip root – TBox encoding artifacts would produce false positives
@@ -1655,7 +1689,7 @@ impl TableauExecutor {
                     RulePriority::Normal,
                     concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             ConceptLabel::Universal { .. } => {
                 // Queue ALL rule
@@ -1665,7 +1699,7 @@ impl TableauExecutor {
                     RulePriority::High,
                     concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             ConceptLabel::AtLeast { .. } => {
                 // Queue AT LEAST rule
@@ -1675,7 +1709,7 @@ impl TableauExecutor {
                     RulePriority::Normal,
                     concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             ConceptLabel::AtMost { .. } => {
                 // Queue AT MOST rule
@@ -1685,7 +1719,7 @@ impl TableauExecutor {
                     RulePriority::High,
                     concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             _ => {} // No rules for atomic concepts
         }
@@ -1711,7 +1745,7 @@ impl TableauExecutor {
                     RulePriority::High,
                     &concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             ClassExpression::ObjectUnionOf(_) => {
                 let concept = ConceptLabel::Complex(Box::new(class_expr.clone()));
@@ -1721,7 +1755,7 @@ impl TableauExecutor {
                     RulePriority::Low, // Non-deterministic
                     &concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             ClassExpression::ObjectSomeValuesFrom { .. } => {
                 let concept = ConceptLabel::Complex(Box::new(class_expr.clone()));
@@ -1731,7 +1765,7 @@ impl TableauExecutor {
                     RulePriority::Normal,
                     &concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             ClassExpression::ObjectAllValuesFrom { .. } => {
                 let concept = ConceptLabel::Complex(Box::new(class_expr.clone()));
@@ -1741,7 +1775,7 @@ impl TableauExecutor {
                     RulePriority::High,
                     &concept,
                 )?;
-                tableau.pending_queue.push_back(rule_app);
+                Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
             }
             _ => {} // Handle other expression types
         }
