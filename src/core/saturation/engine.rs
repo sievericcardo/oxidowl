@@ -420,6 +420,7 @@ impl SaturationEngine {
     }
 
     /// Saturate multiple concepts sequentially
+    #[allow(dead_code)]
     fn saturate_concepts_sequential(
         &self,
         concepts: &[ClassExpression],
@@ -441,6 +442,7 @@ impl SaturationEngine {
 
     /// Saturate multiple concepts in parallel
     #[cfg(feature = "parallel")]
+    #[allow(dead_code)]
     fn saturate_concepts_parallel(
         &self,
         concepts: &[ClassExpression],

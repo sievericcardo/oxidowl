@@ -16,7 +16,7 @@ use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 #[cfg(feature = "ml")]
 use candle_core::{Device, Tensor};
